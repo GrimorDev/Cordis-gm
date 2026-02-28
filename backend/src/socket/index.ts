@@ -2,7 +2,7 @@ import { Server as HttpServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
-import { setUserStatus, joinVoiceChannel, leaveVoiceChannel, getVoiceMembers } from '../redis/client';
+import { setUserStatus, joinVoiceChannel, leaveVoiceChannel } from '../redis/client';
 import { query } from '../db/pool';
 import { JwtPayload, ServerToClientEvents, ClientToServerEvents } from '../types';
 
@@ -14,7 +14,6 @@ interface SocketData {
   };
 }
 
-type CordisSocket = ReturnType<SocketServer<ClientToServerEvents, ServerToClientEvents>['sockets']['sockets']['get']> extends infer T ? NonNullable<T> : never;
 
 export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerEvents, ServerToClientEvents> {
   const io = new SocketServer<ClientToServerEvents, ServerToClientEvents>(httpServer, {
@@ -118,7 +117,6 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
 
     // ── 1-to-1 Calls (signaling) ─────────────────────────────────────
     socket.on('call_invite', ({ to_user_id, type }) => {
-      const { rows } = [] as any; // just emit
       io.to(`user:${to_user_id}`).emit('call_invite', {
         from: { id: user.id, username: user.username, avatar_url: null, status: 'online', custom_status: null },
         type,

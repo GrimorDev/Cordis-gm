@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { body, query as qv, validationResult } from 'express-validator';
+import { body, validationResult } from 'express-validator';
 import { query } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';

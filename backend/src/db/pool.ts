@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+import { Pool, QueryResultRow } from 'pg';
 import { config } from '../config';
 
 export const pool = new Pool({
@@ -17,7 +17,7 @@ pool.on('error', (err) => {
   process.exit(-1);
 });
 
-export const query = <T = any>(text: string, params?: any[]) =>
+export const query = <T extends QueryResultRow = any>(text: string, params?: any[]) =>
   pool.query<T>(text, params);
 
 export const getClient = () => pool.connect();
