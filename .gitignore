@@ -1,0 +1,22 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Backend specific
+backend/node_modules/
+backend/dist/
+backend/uploads/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
