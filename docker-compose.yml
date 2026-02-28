@@ -115,8 +115,9 @@ services:
     networks:
       - cordis-net
     healthcheck:
-      # CMD-SHELL wymagane żeby $$REDIS_PASSWORD był rozwinięty przez shell kontenera
-      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      # docker-compose interpoluje ${REDIS_PASSWORD:-redis_secret} w czasie parsowania
+      # więc hasło trafia literalnie do komendy - nie potrzeba ekspansji shellowej
+      test: ["CMD-SHELL", "redis-cli -a '${REDIS_PASSWORD:-redis_secret}' ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 10
