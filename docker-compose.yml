@@ -4,6 +4,13 @@ version: "3.9"
 #  Cordis – Docker Compose Stack
 #  Deploy via Portainer as a new Stack from GitHub repository
 #  Repository: https://github.com/GrimorDev/Cordis-gm
+#
+#  Required env vars (set in Portainer Stack → Environment):
+#    POSTGRES_PASSWORD  – hasło do PostgreSQL
+#    REDIS_PASSWORD     – hasło do Redis
+#    JWT_SECRET         – sekret JWT (min. 32 znaki)
+#    JWT_REFRESH_SECRET – sekret refresh token (min. 32 znaki)
+#    CORS_ORIGIN        – URL frontendu np. https://twoja-domena.com
 # ═══════════════════════════════════════════════════════════════════
 
 services:
@@ -26,8 +33,6 @@ services:
         condition: service_healthy
     networks:
       - cordis-net
-    labels:
-      - "traefik.enable=false"
 
   # ── Backend (Node.js API + Socket.IO) ────────────────────────────
   backend:
@@ -44,13 +49,13 @@ services:
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-cordis}
       POSTGRES_USER: ${POSTGRES_USER:-cordis}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cordis_secret}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_secret}
+      JWT_SECRET: ${JWT_SECRET:-change_me_jwt_secret_32_chars_min}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change_me_refresh_secret_32chars}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-30d}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
       UPLOAD_MAX_SIZE: ${UPLOAD_MAX_SIZE:-5242880}
@@ -64,11 +69,11 @@ services:
     networks:
       - cordis-net
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 20s
+      start_period: 30s
 
   # ── PostgreSQL ────────────────────────────────────────────────────
   postgres:
@@ -78,7 +83,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-cordis}
       POSTGRES_USER: ${POSTGRES_USER:-cordis}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cordis_secret}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -86,15 +91,12 @@ services:
     networks:
       - cordis-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cordis} -d ${POSTGRES_DB:-cordis}"]
+      # Najprostszy check - czy postgres odpowiada na porcie 5432
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432"]
       interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 30s
-    # Expose only internally (no external port for security)
-    # Uncomment for local dev access:
-    # ports:
-    #   - "5432:5432"
+      retries: 15
+      start_period: 60s
 
   # ── Redis ─────────────────────────────────────────────────────────
   redis:
@@ -103,7 +105,7 @@ services:
     restart: unless-stopped
     command: >
       redis-server
-      --requirepass ${REDIS_PASSWORD}
+      --requirepass ${REDIS_PASSWORD:-redis_secret}
       --appendonly yes
       --appendfsync everysec
       --maxmemory 256mb
@@ -113,11 +115,12 @@ services:
     networks:
       - cordis-net
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      # CMD-SHELL wymagane żeby $$REDIS_PASSWORD był rozwinięty przez shell kontenera
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 10s
+      start_period: 15s
 
 # ── Networks ──────────────────────────────────────────────────────────
 networks:
