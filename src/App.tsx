@@ -379,6 +379,13 @@ export default function App() {
   const [selCamera, setSelCamera]             = useState('');
   const [devicesOpen, setDevicesOpen]         = useState(false);
 
+  // App preferences (localStorage)
+  const [privacySettings, setPrivacySettings] = useState<Record<string,boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem('cordyn_privacy')||'{}'); } catch { return {}; }
+  });
+  const [accentColor, setAccentColor]         = useState<string>(() => localStorage.getItem('cordyn_accent')||'indigo');
+  const [compactMessages, setCompactMessages] = useState<boolean>(() => localStorage.getItem('cordyn_compact')==='true');
+
   // Status system
   const [statusPickerOpen, setStatusPickerOpen] = useState(false);
   const [isMicMuted, setIsMicMuted]           = useState(false);
@@ -531,6 +538,12 @@ export default function App() {
   // Sync myStatusRef when currentUser.status changes (e.g. on login)
   useEffect(() => { if (currentUser?.status) myStatusRef.current = currentUser.status; }, [currentUser?.status]);
 
+  // Apply accent CSS variable
+  useEffect(() => {
+    const map: Record<string,string> = { indigo:'99 102 241', violet:'139 92 246', pink:'236 72 153', blue:'59 130 246', emerald:'16 185 129' };
+    document.documentElement.style.setProperty('--accent-rgb', map[accentColor]||map.indigo);
+  }, [accentColor]);
+
   // ── Auto-idle (10 min brak aktywności) ───────────────────────────
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -667,6 +680,16 @@ export default function App() {
     setServerActivity(p => [{id, ...entry, time: new Date().toISOString()}, ...p].slice(0, 20));
   };
 
+  // ── Privacy helpers ───────────────────────────────────────────────
+  const PRIVACY_DEFAULTS: Record<string,boolean> = { status_visible:true, typing_visible:true, read_receipts:false, friend_requests:true };
+  const getPrivacy = (k: string) => privacySettings[k] ?? PRIVACY_DEFAULTS[k] ?? true;
+  const togglePrivacy = (k: string) => {
+    const next = {...privacySettings, [k]: !getPrivacy(k)};
+    setPrivacySettings(next);
+    localStorage.setItem('cordyn_privacy', JSON.stringify(next));
+    addToast('Ustawienia prywatności zapisane', 'success');
+  };
+
   // ── Status ────────────────────────────────────────────────────────
   const changeStatus = async (s: 'online'|'idle'|'dnd'|'offline', auto = false) => {
     try {
@@ -753,8 +776,11 @@ export default function App() {
       if (srvBannerFile) { banner = await uploadFile(srvBannerFile, 'servers'); setSrvBannerFile(null); }
       const upd = await serversApi.update(activeServer, { name: srvForm.name, description: srvForm.description, icon_url: icon, banner_url: banner });
       setServerList(p => p.map(s => s.id === activeServer ? { ...s, ...upd } : s));
+      // Update form with saved URLs so preview doesn't disappear
+      setSrvForm(p => ({...p, icon_url: upd.icon_url||icon, banner_url: upd.banner_url||banner}));
       const s = await serversApi.get(activeServer); setServerFull(s);
-    } catch (err) { console.error(err); }
+      addToast('Ustawienia serwera zapisane', 'success');
+    } catch (err) { addToast('Błąd zapisu ustawień serwera', 'error'); }
   };
 
   // ── Channel ─────────────────────────────────────────────────────
@@ -1603,7 +1629,7 @@ export default function App() {
                         <motion.div
                           initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: Math.min(idx * 0.012, 0.08), duration: 0.12 }}
-                          className="flex gap-3 group hover:bg-white/[0.02] px-3 py-1.5 rounded-xl -mx-3 transition-colors">
+                          className={`flex gap-3 group hover:bg-white/[0.02] px-3 rounded-xl -mx-3 transition-colors ${compactMessages?'py-0.5':'py-1.5'}`}>
                           <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} alt=""
                             onClick={()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar,status:(msg as MessageFull).sender_status})}
                             className="w-9 h-9 rounded-full object-cover shrink-0 cursor-pointer hover:opacity-80 transition-opacity mt-0.5"/>
@@ -2350,8 +2376,17 @@ export default function App() {
                         <input value={editProf?.username||''} onChange={e=>setEditProf((p:any)=>({...p,username:e.target.value}))} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}/>
                       </div>
                       <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Status</label>
-                        <input value={editProf?.custom_status||''} onChange={e=>setEditProf((p:any)=>({...p,custom_status:e.target.value}))} placeholder="Ustaw swój status..." className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}/>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Status niestandardowy</label>
+                        <div className="relative">
+                          <input value={editProf?.custom_status||''} onChange={e=>setEditProf((p:any)=>({...p,custom_status:e.target.value}))} placeholder="Np. Pracuję, Na przerwie..." className={`w-full ${gi} rounded-xl px-4 py-3 text-sm pr-10`}/>
+                          {editProf?.custom_status&&(
+                            <button type="button" onClick={()=>setEditProf((p:any)=>({...p,custom_status:''}))}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-300 transition-colors">
+                              <X size={14}/>
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-zinc-700 mt-1">Ten tekst pojawi się pod Twoją nazwą w pasku bocznym</p>
                       </div>
                       <div>
                         <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Bio</label>
@@ -2369,33 +2404,43 @@ export default function App() {
                     <motion.div key="appearance" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
                       className="flex flex-col gap-5">
                       <h3 className="text-sm font-bold text-white">Personalizacja wyglądu</h3>
-                      <div className={`${gi} rounded-2xl p-4 border flex items-center gap-3`}>
-                        <Info size={16} className="text-indigo-400 shrink-0"/>
-                        <p className="text-sm text-zinc-400">Motyw aplikacji oparty jest na ciemnym trybie. Więcej opcji personalizacji wkrótce.</p>
-                      </div>
+
+                      {/* Accent color */}
                       <div>
                         <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Kolor akcentu</label>
                         <div className="grid grid-cols-5 gap-2">
-                          {[
-                            {name:'Indigo',cls:'bg-indigo-500'},
-                            {name:'Fioletowy',cls:'bg-violet-500'},
-                            {name:'Różowy',cls:'bg-pink-500'},
-                            {name:'Niebieski',cls:'bg-blue-500'},
-                            {name:'Zielony',cls:'bg-emerald-500'},
-                          ].map(c=>(
-                            <button key={c.name} className={`h-10 rounded-xl ${c.cls} border-2 border-transparent hover:border-white/30 transition-all hover:scale-105 flex items-center justify-center`} title={c.name}>
-                              {c.name==='Indigo'&&<Check size={14} className="text-white"/>}
+                          {([
+                            {key:'indigo',  label:'Indigo',    hex:'#6366f1', cls:'bg-indigo-500'},
+                            {key:'violet',  label:'Fioletowy', hex:'#8b5cf6', cls:'bg-violet-500'},
+                            {key:'pink',    label:'Różowy',    hex:'#ec4899', cls:'bg-pink-500'},
+                            {key:'blue',    label:'Niebieski', hex:'#3b82f6', cls:'bg-blue-500'},
+                            {key:'emerald', label:'Zielony',   hex:'#10b981', cls:'bg-emerald-500'},
+                          ] as const).map(c=>(
+                            <button key={c.key} onClick={()=>{ setAccentColor(c.key); localStorage.setItem('cordyn_accent',c.key); addToast('Kolor akcentu zmieniony','success'); }}
+                              title={c.label}
+                              className={`h-10 rounded-xl ${c.cls} border-2 transition-all hover:scale-105 flex items-center justify-center ${accentColor===c.key?'border-white scale-105':'border-transparent'}`}>
+                              {accentColor===c.key&&<Check size={14} className="text-white"/>}
                             </button>
                           ))}
                         </div>
-                        <p className="text-xs text-zinc-600 mt-2">Wkrótce: pełna zmiana motywu kolorystycznego</p>
+                        <p className="text-[10px] text-zinc-700 mt-2">Zmiana dotyczy podświetlenia UI — pełny motyw wkrótce</p>
                       </div>
+
+                      {/* Message density */}
                       <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Rozmiar wiadomości</label>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Gęstość wiadomości</label>
                         <div className="flex flex-col gap-2">
-                          {['Komfortowy','Kompaktowy'].map((s,i)=>(
-                            <button key={s} className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-all ${i===0?'bg-indigo-500/10 border-indigo-500/30 text-white':'bg-white/[0.02] border-white/[0.05] text-zinc-400 hover:text-zinc-300'}`}>
-                              {s}{i===0&&<Check size={13} className="text-indigo-400"/>}
+                          {([
+                            {key:false, label:'Komfortowy', desc:'Większe odstępy, łatwiejsze czytanie'},
+                            {key:true,  label:'Kompaktowy',  desc:'Mniejsze odstępy, więcej wiadomości'},
+                          ] as const).map(opt=>(
+                            <button key={String(opt.key)} onClick={()=>{ setCompactMessages(opt.key); localStorage.setItem('cordyn_compact',String(opt.key)); addToast('Układ wiadomości zmieniony','success'); }}
+                              className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-all ${compactMessages===opt.key?'bg-indigo-500/10 border-indigo-500/30 text-white':'bg-white/[0.02] border-white/[0.05] text-zinc-400 hover:text-zinc-300'}`}>
+                              <div className="text-left">
+                                <p className="font-semibold">{opt.label}</p>
+                                <p className="text-[11px] text-zinc-600 mt-0.5">{opt.desc}</p>
+                              </div>
+                              {compactMessages===opt.key&&<Check size={13} className="text-indigo-400 shrink-0"/>}
                             </button>
                           ))}
                         </div>
@@ -2452,26 +2497,32 @@ export default function App() {
                     <motion.div key="privacy" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
                       className="flex flex-col gap-5">
                       <h3 className="text-sm font-bold text-white">Prywatność i bezpieczeństwo</h3>
-                      {[
-                        {label:'Status widoczny dla znajomych',desc:'Inni widzą czy jesteś online/offline/zajęty',on:true},
-                        {label:'Podgląd "pisze..."',desc:'Inni widzą gdy piszesz wiadomość',on:true},
-                        {label:'Potwierdzenia odczytu',desc:'Nadawca widzi że przeczytałeś wiadomość',on:false},
-                        {label:'Zaproszenia od nieznajomych',desc:'Osoby spoza twoich serwerów mogą dodać cię do znajomych',on:true},
-                      ].map(opt=>(
-                        <div key={opt.label} className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-3.5">
-                          <div>
-                            <p className="text-sm font-medium text-white">{opt.label}</p>
-                            <p className="text-xs text-zinc-600 mt-0.5">{opt.desc}</p>
+                      {([
+                        {key:'status_visible',  label:'Status widoczny dla innych',     desc:'Inni widzą czy jesteś online/offline/zaraz wracam'},
+                        {key:'typing_visible',  label:'Podgląd "pisze..."',              desc:'Inni widzą animację gdy piszesz wiadomość'},
+                        {key:'read_receipts',   label:'Potwierdzenia odczytu',           desc:'Nadawca widzi że przeczytałeś wiadomość prywatną'},
+                        {key:'friend_requests', label:'Zaproszenia od nieznajomych',     desc:'Osoby spoza twoich serwerów mogą cię zaprosić'},
+                      ] as const).map(opt=>{
+                        const on = getPrivacy(opt.key);
+                        return (
+                          <div key={opt.key} className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-3.5 hover:border-white/[0.09] transition-colors">
+                            <div className="flex-1 min-w-0 mr-4">
+                              <p className="text-sm font-medium text-white">{opt.label}</p>
+                              <p className="text-xs text-zinc-600 mt-0.5">{opt.desc}</p>
+                            </div>
+                            <button onClick={()=>togglePrivacy(opt.key)}
+                              className={`w-11 h-6 rounded-full transition-all shrink-0 relative ${on?'bg-indigo-500':'bg-zinc-700'}`}>
+                              <span className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200"
+                                style={{left: on ? 'calc(100% - 1.375rem)' : '0.125rem'}}/>
+                            </button>
                           </div>
-                          <button className={`w-11 h-6 rounded-full transition-all shrink-0 ml-4 ${opt.on?'bg-indigo-500':'bg-zinc-700'} relative`}>
-                            <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${opt.on?'left-5.5':'left-0.5'}`} style={{left:opt.on?'calc(100% - 1.375rem)':'0.125rem'}}/>
-                          </button>
-                        </div>
-                      ))}
+                        );
+                      })}
                       <div className="mt-2 p-4 bg-rose-500/5 border border-rose-500/15 rounded-2xl">
                         <h4 className="text-sm font-bold text-rose-400 mb-1">Strefa zagrożenia</h4>
                         <p className="text-xs text-zinc-500 mb-3">Trwałe akcje których nie można cofnąć</p>
-                        <button className="text-sm font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/15 border border-rose-500/20 px-4 py-2 rounded-xl transition-all">
+                        <button onClick={()=>addToast('Usuń konto — skontaktuj się z administratorem','warn')}
+                          className="text-sm font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/15 border border-rose-500/20 px-4 py-2 rounded-xl transition-all">
                           Usuń konto
                         </button>
                       </div>
