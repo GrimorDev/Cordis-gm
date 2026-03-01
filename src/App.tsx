@@ -276,6 +276,12 @@ export default function App() {
     if (!activeServer) return;
     setServerFull(null);
     setChannelMsgs([]);
+    // Izolacja per-serwer: czyść cały stan poprzedniego serwera
+    setSrvBannerFile(null);
+    setSrvIconFile(null);
+    setSrvSettOpen(false);     // zamknij ustawienia poprzedniego serwera
+    setInviteCode(null);       // kod zaproszenia jest per-serwer
+    setEditingRole(null);      // edytowana rola jest per-serwer
     serversApi.get(activeServer).then(s => {
       setServerFull(s);
       setSrvForm({ name: s.name, description: s.description||'', icon_url: s.icon_url||'', banner_url: s.banner_url||'' });
@@ -1294,7 +1300,7 @@ export default function App() {
                   {(currentUser?.id===selUser.id ? (profBannerPrev||currentUser?.banner_url) : selUser.banner_url) ? (
                     <img src={currentUser?.id===selUser.id?(profBannerPrev||currentUser?.banner_url!):selUser.banner_url} className="w-full h-full object-cover" alt=""/>
                   ) : (
-                    <div className={`w-full h-full bg-gradient-to-r ${editProf?.banner_color||'from-indigo-600 via-purple-600 to-pink-600'}`}/>
+                    <div className={`w-full h-full bg-gradient-to-r ${(currentUser?.id===selUser.id ? editProf?.banner_color : selUser?.banner_color)||'from-indigo-600 via-purple-600 to-pink-600'}`}/>
                   )}
                   {currentUser?.id===selUser.id&&(
                     <label className="absolute top-2 right-2 w-8 h-8 bg-black/50 hover:bg-black/70 rounded-xl flex items-center justify-center cursor-pointer transition-colors group">
