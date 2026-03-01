@@ -370,9 +370,12 @@ export default function App() {
   const screenStreamRef  = useRef<MediaStream|null>(null);
   const peerConnsRef     = useRef(new Map<string, RTCPeerConnection>());
   const speakStopRef     = useRef(new Map<string, ()=>void>()); // speaking detection cleanup
-  const currentUserRef   = useRef(currentUser);
-  const activeCallRef    = useRef(activeCall);
-  const voiceHandlerRef  = useRef<Record<string, (...a: any[]) => void>>({});
+  const currentUserRef      = useRef(currentUser);
+  const activeCallRef       = useRef(activeCall);
+  const activeDmUserIdRef   = useRef(activeDmUserId);
+  const activeViewRef       = useRef(activeView);
+  const callDurationRef     = useRef(0);
+  const voiceHandlerRef     = useRef<Record<string, (...a: any[]) => void>>({});
   // WebRTC state
   const [speakingUsers, setSpeakingUsers]     = useState(new Set<string>());
   const [devices, setDevices]                 = useState<MediaDeviceInfo[]>([]);
@@ -418,7 +421,23 @@ export default function App() {
     if (!isAuthenticated) return;
     const sock = connectSocket();
     sock.on('new_message', msg => setChannelMsgs(p => [...p, msg as MessageFull]));
-    sock.on('new_dm',      msg => setDmMsgs(p => [...p, msg as DmMessageFull]));
+    sock.on('new_dm', (msg: DmMessageFull) => {
+      const myId = currentUserRef.current?.id;
+      const otherUserId = msg.sender_id === myId ? activeDmUserIdRef.current : msg.sender_id;
+      const isActiveDm = activeViewRef.current === 'dms' &&
+        (activeDmUserIdRef.current === msg.sender_id || (msg.sender_id === myId && !!activeDmUserIdRef.current));
+      // Add to messages only for the active conversation (deduplicate by id)
+      if (isActiveDm) {
+        setDmMsgs(p => p.some(m => m.id === msg.id) ? p : [...p, msg]);
+      }
+      // Always refresh sidebar conversation list (updates last_message + shows new convs)
+      dmsApi.conversations().then(setDmConvs).catch(console.error);
+      // Toast notification when you're not looking at this DM
+      if (msg.sender_id !== myId && !isActiveDm) {
+        const preview = msg.content.length > 60 ? msg.content.slice(0, 60) + '…' : msg.content;
+        autoToast(`💬 ${msg.sender_username}: ${preview}`, 'info');
+      }
+    });
     sock.on('message_deleted', ({ id }) => setChannelMsgs(p => p.filter(m => m.id !== id)));
     sock.on('message_updated', ({ id, content, edited }) =>
       setChannelMsgs(p => p.map(m => m.id === id ? { ...m, content, edited } : m)));
@@ -479,6 +498,18 @@ export default function App() {
       autoToast('Połączenie odrzucone', 'error');
     });
     sock.on('call_ended', () => {
+      const call = activeCallRef.current;
+      const dur  = callDurationRef.current;
+      if (call && call.type !== 'voice_channel' && call.userId) {
+        const icon = call.type === 'dm_video' ? '📹' : '📞';
+        const typeName = call.type === 'dm_video' ? 'wideo' : 'głosowa';
+        setDmMsgs(p => [...p, {
+          id: `_sys_${Date.now()}`, conversation_id: '',
+          content: `${icon} Rozmowa ${typeName} zakończona · ${fmtDur(dur)}`,
+          edited: false, created_at: new Date().toISOString(),
+          sender_id: '__system__', sender_username: 'System', sender_avatar: null,
+        } as DmMessageFull]);
+      }
       setActiveCall(null); setShowCallPanel(false); setCallDuration(0);
       autoToast('Rozmowa zakończona', 'info');
     });
@@ -532,6 +563,18 @@ export default function App() {
     setReplyTo(null);
   }, [activeDmUserId]);
 
+  // ── Call duration timer ─────────────────────────────────────────
+  useEffect(() => {
+    if (!activeCall) {
+      if (callTimerRef.current) { clearInterval(callTimerRef.current); callTimerRef.current = null; }
+      return;
+    }
+    setCallDuration(0);
+    callTimerRef.current = setInterval(() => setCallDuration(d => d + 1), 1000);
+    return () => { if (callTimerRef.current) { clearInterval(callTimerRef.current); callTimerRef.current = null; } };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCall?.type, activeCall?.channelId, activeCall?.userId]);
+
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [channelMsgs, dmMsgs]);
 
   // ── Call timer ──────────────────────────────────────────────────
@@ -546,8 +589,11 @@ export default function App() {
   }, [!!activeCall]);
 
   // ── Sync refs ───────────────────────────────────────────────────
-  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
-  useEffect(() => { activeCallRef.current  = activeCall;  }, [activeCall]);
+  useEffect(() => { currentUserRef.current    = currentUser;    }, [currentUser]);
+  useEffect(() => { activeCallRef.current     = activeCall;     }, [activeCall]);
+  useEffect(() => { activeDmUserIdRef.current = activeDmUserId; }, [activeDmUserId]);
+  useEffect(() => { activeViewRef.current     = activeView;     }, [activeView]);
+  useEffect(() => { callDurationRef.current   = callDuration;   }, [callDuration]);
   // Sync myStatusRef when currentUser.status changes (e.g. on login)
   useEffect(() => { if (currentUser?.status) myStatusRef.current = currentUser.status; }, [currentUser?.status]);
 
@@ -1025,7 +1071,19 @@ export default function App() {
       // Optimistic: remove self from voiceUsers immediately
       if (currentUser) setVoiceUsers(p => ({ ...p, [activeCall.channelId!]: (p[activeCall.channelId!]||[]).filter(u=>u.id!==currentUser.id) }));
     }
-    if (activeCall?.userId) endCall(activeCall.userId);
+    if (activeCall?.userId) {
+      endCall(activeCall.userId);
+      // Add call ended system message to DM chat
+      const dur = callDurationRef.current;
+      const icon = activeCall.type === 'dm_video' ? '📹' : '📞';
+      const typeName = activeCall.type === 'dm_video' ? 'wideo' : 'głosowa';
+      setDmMsgs(p => [...p, {
+        id: `_sys_${Date.now()}`, conversation_id: '',
+        content: `${icon} Rozmowa ${typeName} zakończona · ${fmtDur(dur)}`,
+        edited: false, created_at: new Date().toISOString(),
+        sender_id: '__system__', sender_username: 'System', sender_avatar: null,
+      } as DmMessageFull]);
+    }
     cleanupWebRTC();
     setActiveCall(null); setShowCallPanel(false); setCallDuration(0);
   };
@@ -1734,6 +1792,27 @@ export default function App() {
                       if(d.toDateString()===yesterday.toDateString()) return 'Wczoraj';
                       return d.toLocaleDateString('pl-PL',{day:'numeric',month:'long',year:'numeric'});
                     })();
+                    // System message (call ended, etc.)
+                    if (msg.sender_id === '__system__') {
+                      return (
+                        <React.Fragment key={msg.id}>
+                          {showSep&&(
+                            <div className="flex items-center gap-3 my-4">
+                              <div className="flex-1 h-px bg-white/[0.07]"/>
+                              <span className="text-[11px] font-semibold text-zinc-600 uppercase tracking-widest shrink-0">{sepLabel}</span>
+                              <div className="flex-1 h-px bg-white/[0.07]"/>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-center my-3">
+                            <div className="px-4 py-2 bg-white/[0.04] border border-white/[0.06] rounded-full text-xs text-zinc-500 flex items-center gap-2">
+                              <Phone size={11} className="shrink-0 text-rose-400"/>
+                              <span>{msg.content}</span>
+                              <span className="text-zinc-700">{ft(msg.created_at)}</span>
+                            </div>
+                          </div>
+                        </React.Fragment>
+                      );
+                    }
                     return (
                       <React.Fragment key={msg.id}>
                         {showSep&&(
