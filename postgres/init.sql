@@ -11,11 +11,19 @@ CREATE TABLE IF NOT EXISTS users (
     email         VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     avatar_url    TEXT,
+    banner_url    TEXT,
     banner_color  VARCHAR(200) DEFAULT 'from-indigo-500 via-purple-500 to-pink-500',
     bio           TEXT,
     custom_status VARCHAR(128),
     status        VARCHAR(20)  DEFAULT 'offline'
                   CHECK (status IN ('online', 'idle', 'dnd', 'offline')),
+    -- User preferences (stored server-side, not localStorage)
+    accent_color            VARCHAR(20)  DEFAULT 'indigo',
+    compact_messages        BOOLEAN      DEFAULT FALSE,
+    privacy_status_visible  BOOLEAN      DEFAULT TRUE,
+    privacy_typing_visible  BOOLEAN      DEFAULT TRUE,
+    privacy_read_receipts   BOOLEAN      DEFAULT FALSE,
+    privacy_friend_requests BOOLEAN      DEFAULT TRUE,
     created_at    TIMESTAMPTZ  DEFAULT NOW(),
     updated_at    TIMESTAMPTZ  DEFAULT NOW()
 );
@@ -25,11 +33,13 @@ CREATE INDEX IF NOT EXISTS idx_users_email    ON users(email);
 
 -- ── Servers ───────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS servers (
-    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name       VARCHAR(100) NOT NULL,
-    icon_url   TEXT,
-    owner_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name        VARCHAR(100) NOT NULL,
+    description TEXT,
+    icon_url    TEXT,
+    banner_url  TEXT,
+    owner_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_servers_owner ON servers(owner_id);
@@ -164,3 +174,23 @@ CREATE TRIGGER users_updated_at
 CREATE TRIGGER messages_updated_at
     BEFORE UPDATE ON messages
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ── Migrations (safe for existing databases) ──────────────────────────
+-- Run ALTER TABLE ADD COLUMN IF NOT EXISTS so re-running init.sql on an
+-- existing DB adds any missing columns without destroying data.
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS banner_url TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS accent_color            VARCHAR(20)  DEFAULT 'indigo';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS compact_messages        BOOLEAN      DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_status_visible  BOOLEAN      DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_typing_visible  BOOLEAN      DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_read_receipts   BOOLEAN      DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_friend_requests BOOLEAN      DEFAULT TRUE;
+
+ALTER TABLE servers ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE servers ADD COLUMN IF NOT EXISTS banner_url  TEXT;
+
+ALTER TABLE messages    ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+ALTER TABLE messages    ADD COLUMN IF NOT EXISTS reply_to_id    UUID REFERENCES messages(id) ON DELETE SET NULL;
+ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS reply_to_id    UUID REFERENCES dm_messages(id) ON DELETE SET NULL;

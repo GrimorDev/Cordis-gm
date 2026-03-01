@@ -30,6 +30,13 @@ export interface UserProfile {
   avatar_url?: string | null; banner_url?: string | null;
   banner_color: string; bio?: string | null; custom_status?: string | null;
   status: 'online' | 'idle' | 'dnd' | 'offline'; created_at: string;
+  // User preferences (stored in DB)
+  accent_color?: string | null;
+  compact_messages?: boolean | null;
+  privacy_status_visible?: boolean | null;
+  privacy_typing_visible?: boolean | null;
+  privacy_read_receipts?: boolean | null;
+  privacy_friend_requests?: boolean | null;
 }
 export interface ServerData {
   id: string; name: string; description?: string | null;
@@ -111,8 +118,11 @@ export async function uploadFile(file: File, folder: string): Promise<string> {
 export const users = {
   get: (id: string) => req<UserProfile>('GET', `/users/${id}`),
   search: (q: string) => req<UserProfile[]>('GET', `/users/search/query?q=${encodeURIComponent(q)}`),
-  updateMe: (d: Partial<Pick<UserProfile, 'username' | 'bio' | 'custom_status' | 'banner_color' | 'banner_url'>>) =>
-    req<UserProfile>('PUT', '/users/me', d),
+  updateMe: (d: Partial<Pick<UserProfile,
+    'username' | 'bio' | 'custom_status' | 'banner_color' | 'banner_url' |
+    'accent_color' | 'compact_messages' |
+    'privacy_status_visible' | 'privacy_typing_visible' | 'privacy_read_receipts' | 'privacy_friend_requests'
+  >>) => req<UserProfile>('PUT', '/users/me', d),
   updateStatus: (s: string) => req<{ status: string }>('PUT', '/users/me/status', { status: s }),
   uploadAvatar: async (file: File): Promise<{ avatar_url: string }> => {
     const fd = new FormData(); fd.append('avatar', file);

@@ -40,7 +40,10 @@ router.post(
       const { rows } = await query(
         `INSERT INTO users (username, email, password_hash)
          VALUES ($1, $2, $3)
-         RETURNING id, username, email, avatar_url, banner_color, bio, custom_status, status, created_at`,
+         RETURNING id, username, email, avatar_url, banner_url, banner_color, bio, custom_status, status,
+                   accent_color, compact_messages,
+                   privacy_status_visible, privacy_typing_visible, privacy_read_receipts, privacy_friend_requests,
+                   created_at`,
         [username, email, password_hash]
       );
 
@@ -71,7 +74,9 @@ router.post(
 
     try {
       const { rows } = await query(
-        `SELECT id, username, email, password_hash, avatar_url, banner_color, bio, custom_status, status
+        `SELECT id, username, email, password_hash, avatar_url, banner_url, banner_color, bio, custom_status, status,
+                accent_color, compact_messages,
+                privacy_status_visible, privacy_typing_visible, privacy_read_receipts, privacy_friend_requests
          FROM users WHERE username = $1 OR email = $1`,
         [login]
       );
@@ -117,7 +122,10 @@ router.post('/logout', authMiddleware, async (req: AuthRequest, res: Response) =
 router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { rows } = await query(
-      `SELECT id, username, email, avatar_url, banner_color, bio, custom_status, status, created_at
+      `SELECT id, username, email, avatar_url, banner_url, banner_color, bio, custom_status, status,
+              accent_color, compact_messages,
+              privacy_status_visible, privacy_typing_visible, privacy_read_receipts, privacy_friend_requests,
+              created_at
        FROM users WHERE id = $1`,
       [req.user!.id]
     );

@@ -37,7 +37,10 @@ const bannerUpload = makeUpload('banners');
 router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { rows } = await query(
-      'SELECT id,username,avatar_url,banner_url,banner_color,bio,custom_status,status,created_at FROM users WHERE id=$1',
+      `SELECT id,username,avatar_url,banner_url,banner_color,bio,custom_status,status,
+              accent_color,compact_messages,
+              privacy_status_visible,privacy_typing_visible,privacy_read_receipts,privacy_friend_requests,
+              created_at FROM users WHERE id=$1`,
       [req.params.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'User not found' });
@@ -63,22 +66,38 @@ router.put('/me', authMiddleware,
   [
     body('username').optional().trim().isLength({ min: 2, max: 32 }).matches(/^[a-zA-Z0-9_]+$/),
     body('bio').optional().isLength({ max: 500 }),
-    body('custom_status').optional().isLength({ max: 128 }),
+    body('custom_status').optional({ nullable: true }).isLength({ max: 128 }),
     body('banner_color').optional().isLength({ max: 200 }),
-    body('banner_url').optional().isLength({ max: 500 }),
+    body('banner_url').optional({ nullable: true }).isLength({ max: 500 }),
+    body('accent_color').optional().isIn(['indigo','violet','pink','blue','emerald']),
+    body('compact_messages').optional().isBoolean(),
+    body('privacy_status_visible').optional().isBoolean(),
+    body('privacy_typing_visible').optional().isBoolean(),
+    body('privacy_read_receipts').optional().isBoolean(),
+    body('privacy_friend_requests').optional().isBoolean(),
   ],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-    const { username, bio, custom_status, banner_color, banner_url } = req.body;
+    const {
+      username, bio, custom_status, banner_color, banner_url,
+      accent_color, compact_messages,
+      privacy_status_visible, privacy_typing_visible, privacy_read_receipts, privacy_friend_requests,
+    } = req.body;
     const updates: string[] = [];
     const values: any[] = [];
     let idx = 1;
-    if (username    !== undefined) { updates.push(`username=$${idx++}`);     values.push(username); }
-    if (bio         !== undefined) { updates.push(`bio=$${idx++}`);          values.push(bio); }
-    if (custom_status !== undefined) { updates.push(`custom_status=$${idx++}`); values.push(custom_status); }
-    if (banner_color !== undefined) { updates.push(`banner_color=$${idx++}`); values.push(banner_color); }
-    if (banner_url  !== undefined) { updates.push(`banner_url=$${idx++}`);   values.push(banner_url); }
+    if (username              !== undefined) { updates.push(`username=$${idx++}`);              values.push(username); }
+    if (bio                   !== undefined) { updates.push(`bio=$${idx++}`);                   values.push(bio); }
+    if (custom_status         !== undefined) { updates.push(`custom_status=$${idx++}`);         values.push(custom_status); }
+    if (banner_color          !== undefined) { updates.push(`banner_color=$${idx++}`);          values.push(banner_color); }
+    if (banner_url            !== undefined) { updates.push(`banner_url=$${idx++}`);            values.push(banner_url); }
+    if (accent_color          !== undefined) { updates.push(`accent_color=$${idx++}`);          values.push(accent_color); }
+    if (compact_messages      !== undefined) { updates.push(`compact_messages=$${idx++}`);      values.push(compact_messages); }
+    if (privacy_status_visible  !== undefined) { updates.push(`privacy_status_visible=$${idx++}`);  values.push(privacy_status_visible); }
+    if (privacy_typing_visible  !== undefined) { updates.push(`privacy_typing_visible=$${idx++}`);  values.push(privacy_typing_visible); }
+    if (privacy_read_receipts   !== undefined) { updates.push(`privacy_read_receipts=$${idx++}`);   values.push(privacy_read_receipts); }
+    if (privacy_friend_requests !== undefined) { updates.push(`privacy_friend_requests=$${idx++}`); values.push(privacy_friend_requests); }
     if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update' });
     updates.push(`updated_at=NOW()`);
     values.push(req.user!.id);
@@ -89,7 +108,9 @@ router.put('/me', authMiddleware,
       }
       const { rows } = await query(
         `UPDATE users SET ${updates.join(',')} WHERE id=$${idx}
-         RETURNING id,username,email,avatar_url,banner_url,banner_color,bio,custom_status,status`,
+         RETURNING id,username,email,avatar_url,banner_url,banner_color,bio,custom_status,status,
+                   accent_color,compact_messages,
+                   privacy_status_visible,privacy_typing_visible,privacy_read_receipts,privacy_friend_requests`,
         values
       );
       return res.json(rows[0]);

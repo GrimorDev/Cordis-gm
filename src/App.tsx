@@ -379,12 +379,9 @@ export default function App() {
   const [selCamera, setSelCamera]             = useState('');
   const [devicesOpen, setDevicesOpen]         = useState(false);
 
-  // App preferences (localStorage)
-  const [privacySettings, setPrivacySettings] = useState<Record<string,boolean>>(() => {
-    try { return JSON.parse(localStorage.getItem('cordyn_privacy')||'{}'); } catch { return {}; }
-  });
-  const [accentColor, setAccentColor]         = useState<string>(() => localStorage.getItem('cordyn_accent')||'indigo');
-  const [compactMessages, setCompactMessages] = useState<boolean>(() => localStorage.getItem('cordyn_compact')==='true');
+  // App preferences — initialized from currentUser (DB), updated via users.updateMe()
+  const [accentColor, setAccentColor]         = useState<string>('indigo');
+  const [compactMessages, setCompactMessages] = useState<boolean>(false);
 
   // Status system
   const [statusPickerOpen, setStatusPickerOpen] = useState(false);
@@ -410,7 +407,7 @@ export default function App() {
   useEffect(() => {
     const token = getToken();
     if (!token) { setAuthLoading(false); return; }
-    auth.me().then(u => { setCurrentUser(u); setEditProf({...u}); setIsAuthenticated(true); })
+    auth.me().then(u => { setCurrentUser(u); setEditProf({...u}); setIsAuthenticated(true); applyUserPrefs(u); })
       .catch(() => clearToken()).finally(() => setAuthLoading(false));
   }, []);
 
@@ -680,14 +677,26 @@ export default function App() {
     setServerActivity(p => [{id, ...entry, time: new Date().toISOString()}, ...p].slice(0, 20));
   };
 
-  // ── Privacy helpers ───────────────────────────────────────────────
-  const PRIVACY_DEFAULTS: Record<string,boolean> = { status_visible:true, typing_visible:true, read_receipts:false, friend_requests:true };
-  const getPrivacy = (k: string) => privacySettings[k] ?? PRIVACY_DEFAULTS[k] ?? true;
-  const togglePrivacy = (k: string) => {
-    const next = {...privacySettings, [k]: !getPrivacy(k)};
-    setPrivacySettings(next);
-    localStorage.setItem('cordyn_privacy', JSON.stringify(next));
-    addToast('Ustawienia prywatności zapisane', 'success');
+  // ── Privacy helpers (read from currentUser, save to DB) ──────────
+  const getPrivacy = (k: 'privacy_status_visible'|'privacy_typing_visible'|'privacy_read_receipts'|'privacy_friend_requests') =>
+    currentUser?.[k] ?? (k === 'privacy_read_receipts' ? false : true);
+  const togglePrivacy = async (k: 'privacy_status_visible'|'privacy_typing_visible'|'privacy_read_receipts'|'privacy_friend_requests') => {
+    const next = !getPrivacy(k);
+    const upd = await users.updateMe({ [k]: next }).catch(() => null);
+    if (upd) { setCurrentUser(upd); setEditProf({...upd}); addToast('Ustawienia prywatności zapisane', 'success'); }
+    else addToast('Błąd zapisu ustawień', 'error');
+  };
+
+  // ── Appearance helpers (save to DB) ──────────────────────────────
+  const saveAccentColor = async (color: string) => {
+    const upd = await users.updateMe({ accent_color: color }).catch(() => null);
+    if (upd) { setCurrentUser(upd); setEditProf({...upd}); setAccentColor(color); addToast('Kolor akcentu zmieniony', 'success'); }
+    else addToast('Błąd zapisu', 'error');
+  };
+  const saveCompactMessages = async (compact: boolean) => {
+    const upd = await users.updateMe({ compact_messages: compact }).catch(() => null);
+    if (upd) { setCurrentUser(upd); setEditProf({...upd}); setCompactMessages(compact); addToast('Układ wiadomości zmieniony', 'success'); }
+    else addToast('Błąd zapisu', 'error');
   };
 
   // ── Status ────────────────────────────────────────────────────────
@@ -711,7 +720,13 @@ export default function App() {
   };
 
   // ── Auth ────────────────────────────────────────────────────────
-  const handleAuth = (u: UserProfile) => { setCurrentUser(u); setEditProf({...u}); setIsAuthenticated(true); };
+  const applyUserPrefs = (u: UserProfile) => {
+    setAccentColor(u.accent_color || 'indigo');
+    setCompactMessages(u.compact_messages ?? false);
+  };
+  const handleAuth = (u: UserProfile) => {
+    setCurrentUser(u); setEditProf({...u}); setIsAuthenticated(true); applyUserPrefs(u);
+  };
   const handleLogout = async () => {
     try { await auth.logout(); } catch {}
     clearToken(); disconnectSocket(); setIsAuthenticated(false); setCurrentUser(null);
@@ -2416,7 +2431,7 @@ export default function App() {
                             {key:'blue',    label:'Niebieski', hex:'#3b82f6', cls:'bg-blue-500'},
                             {key:'emerald', label:'Zielony',   hex:'#10b981', cls:'bg-emerald-500'},
                           ] as const).map(c=>(
-                            <button key={c.key} onClick={()=>{ setAccentColor(c.key); localStorage.setItem('cordyn_accent',c.key); addToast('Kolor akcentu zmieniony','success'); }}
+                            <button key={c.key} onClick={()=>saveAccentColor(c.key)}
                               title={c.label}
                               className={`h-10 rounded-xl ${c.cls} border-2 transition-all hover:scale-105 flex items-center justify-center ${accentColor===c.key?'border-white scale-105':'border-transparent'}`}>
                               {accentColor===c.key&&<Check size={14} className="text-white"/>}
@@ -2434,7 +2449,7 @@ export default function App() {
                             {key:false, label:'Komfortowy', desc:'Większe odstępy, łatwiejsze czytanie'},
                             {key:true,  label:'Kompaktowy',  desc:'Mniejsze odstępy, więcej wiadomości'},
                           ] as const).map(opt=>(
-                            <button key={String(opt.key)} onClick={()=>{ setCompactMessages(opt.key); localStorage.setItem('cordyn_compact',String(opt.key)); addToast('Układ wiadomości zmieniony','success'); }}
+                            <button key={String(opt.key)} onClick={()=>saveCompactMessages(opt.key)}
                               className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-all ${compactMessages===opt.key?'bg-indigo-500/10 border-indigo-500/30 text-white':'bg-white/[0.02] border-white/[0.05] text-zinc-400 hover:text-zinc-300'}`}>
                               <div className="text-left">
                                 <p className="font-semibold">{opt.label}</p>
@@ -2498,10 +2513,10 @@ export default function App() {
                       className="flex flex-col gap-5">
                       <h3 className="text-sm font-bold text-white">Prywatność i bezpieczeństwo</h3>
                       {([
-                        {key:'status_visible',  label:'Status widoczny dla innych',     desc:'Inni widzą czy jesteś online/offline/zaraz wracam'},
-                        {key:'typing_visible',  label:'Podgląd "pisze..."',              desc:'Inni widzą animację gdy piszesz wiadomość'},
-                        {key:'read_receipts',   label:'Potwierdzenia odczytu',           desc:'Nadawca widzi że przeczytałeś wiadomość prywatną'},
-                        {key:'friend_requests', label:'Zaproszenia od nieznajomych',     desc:'Osoby spoza twoich serwerów mogą cię zaprosić'},
+                        {key:'privacy_status_visible',  label:'Status widoczny dla innych',     desc:'Inni widzą czy jesteś online/offline/zaraz wracam'},
+                        {key:'privacy_typing_visible',  label:'Podgląd "pisze..."',              desc:'Inni widzą animację gdy piszesz wiadomość'},
+                        {key:'privacy_read_receipts',   label:'Potwierdzenia odczytu',           desc:'Nadawca widzi że przeczytałeś wiadomość prywatną'},
+                        {key:'privacy_friend_requests', label:'Zaproszenia od nieznajomych',     desc:'Osoby spoza twoich serwerów mogą cię zaprosić'},
                       ] as const).map(opt=>{
                         const on = getPrivacy(opt.key);
                         return (
