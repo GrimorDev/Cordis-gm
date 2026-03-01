@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Hash, Volume2, Video, Settings, Plus, Search, Bell, Users,
-  Mic, Smile, Paperclip, Send, Image, Reply,
-  Menu, X, Edit3, MessageCircle,
+  Mic, MicOff, VolumeX, Smile, Paperclip, Send, Image, Reply,
+  Menu, X, Edit3, MessageCircle, Minimize2,
   Shield, Trash2, Settings2, UserPlus, Check, X as XIcon,
-  LogOut, Loader2, Lock, Phone, MessageSquare, Upload, Zap, MoreHorizontal, ScreenShare
+  LogOut, Loader2, Lock, Phone, PhoneOff, MessageSquare, Upload, MoreHorizontal, ScreenShare,
+  CheckCircle2, AlertCircle, Info, AlertTriangle
 } from 'lucide-react';
 import {
   auth, users, serversApi, channelsApi, messagesApi, dmsApi, friendsApi,
@@ -15,7 +16,10 @@ import {
   type DmMessageFull, type FriendEntry, type FriendRequest,
   type ServerMember, ApiError
 } from './api';
-import { connectSocket, disconnectSocket, joinChannel, leaveChannel } from './socket';
+import {
+  connectSocket, disconnectSocket, joinChannel, leaveChannel,
+  joinVoiceChannel, leaveVoiceChannel, sendCallInvite, acceptCall, rejectCall, endCall,
+} from './socket';
 
 // ─── Glass constants ──────────────────────────────────────────────────────────
 const gp = 'bg-zinc-900/80 backdrop-blur-xl border border-white/[0.07] shadow-2xl';
@@ -55,6 +59,17 @@ const sc = (s: string) => {
 };
 
 const ft = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const fmtDur = (s: number) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+type Toast = { id: string; msg: string; type: 'info'|'success'|'error'|'warn'; onConfirm?: ()=>void };
+type CallState = {
+  type: 'voice_channel' | 'dm_voice' | 'dm_video';
+  channelId?: string; channelName?: string; serverId?: string;
+  userId?: string; username?: string;
+  isMuted: boolean; isDeafened: boolean; isCameraOn: boolean; isScreenSharing: boolean;
+};
+type VoiceUser = { id: string; username: string; avatar_url: string|null; status: string };
 
 // ─── AuthScreen ───────────────────────────────────────────────────────────────
 function AuthScreen({ onAuth }: { onAuth: (u: UserProfile, t: string) => void }) {
@@ -80,7 +95,7 @@ function AuthScreen({ onAuth }: { onAuth: (u: UserProfile, t: string) => void })
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={`w-full max-w-md ${gm} rounded-3xl p-8`}>
         <div className="text-center mb-8">
           <div className="w-14 h-14 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center mx-auto mb-4">
-            <Zap size={28} className="text-indigo-400" />
+            <MessageCircle size={28} className="text-indigo-400" />
           </div>
           <h1 className="text-2xl font-bold text-white">Cordis</h1>
           <p className="text-sm text-zinc-500 mt-1">Platforma dla twórców</p>
@@ -124,7 +139,12 @@ export default function App() {
   const [activeDmUserId, setActiveDmUserId]   = useState('');
   const [isMobileOpen, setIsMobileOpen]       = useState(false);
   const [activeView, setActiveView]           = useState<'servers'|'dms'|'friends'>('servers');
-  const [activeCall, setActiveCall]           = useState<{type:'voice'|'video';user:string}|null>(null);
+  const [activeCall, setActiveCall]           = useState<CallState|null>(null);
+  const [showCallPanel, setShowCallPanel]     = useState(false);
+  const [voiceUsers, setVoiceUsers]           = useState<Record<string, VoiceUser[]>>({});
+  const [incomingCall, setIncomingCall]       = useState<{from:{id:string,username:string,avatar_url:string|null},type:'voice'|'video',conversation_id:string}|null>(null);
+  const [callDuration, setCallDuration]       = useState(0);
+  const [toasts, setToasts]                   = useState<Toast[]>([]);
 
   const [serverList, setServerList]           = useState<ServerData[]>([]);
   const [serverFull, setServerFull]           = useState<ServerFull | null>(null);
@@ -175,9 +195,10 @@ export default function App() {
   const [editingRole, setEditingRole]         = useState<ServerRole|null>(null);
   const [roleForm, setRoleForm]               = useState({ name:'', color:'#5865f2', permissions:[] as string[] });
 
-  const bottomRef  = useRef<HTMLDivElement>(null);
-  const prevChRef  = useRef('');
-  const attachRef  = useRef<HTMLInputElement>(null);
+  const bottomRef    = useRef<HTMLDivElement>(null);
+  const prevChRef    = useRef('');
+  const attachRef    = useRef<HTMLInputElement>(null);
+  const callTimerRef = useRef<ReturnType<typeof setInterval>|null>(null);
 
   // ── Init ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -200,6 +221,31 @@ export default function App() {
       setFriends(p => p.map(f => f.id === user_id ? { ...f, status } : f));
       setDmConvs(p => p.map(d => d.other_user_id === user_id ? { ...d, other_status: status } : d));
       setMembers(p => p.map(m => m.id === user_id ? { ...m, status } : m));
+    });
+    // Voice channel events
+    sock.on('voice_user_joined', ({ channel_id, user }: any) => {
+      setVoiceUsers(p => ({ ...p, [channel_id]: [...(p[channel_id]||[]).filter((u:VoiceUser) => u.id !== user.id), user] }));
+    });
+    sock.on('voice_user_left', ({ channel_id, user_id }: any) => {
+      setVoiceUsers(p => ({ ...p, [channel_id]: (p[channel_id]||[]).filter((u:VoiceUser) => u.id !== user_id) }));
+    });
+    // DM call events
+    sock.on('call_invite', ({ from, type, conversation_id }: any) => {
+      setIncomingCall({ from, type, conversation_id });
+    });
+    const autoToast = (msg: string, type: Toast['type']) => {
+      const id = Math.random().toString(36).slice(2);
+      setToasts(p => [...p, { id, msg, type }]);
+      setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 4000);
+    };
+    sock.on('call_accepted', () => autoToast('Połączenie zaakceptowane', 'success'));
+    sock.on('call_rejected', () => {
+      setActiveCall(null); setShowCallPanel(false);
+      autoToast('Połączenie odrzucone', 'error');
+    });
+    sock.on('call_ended', () => {
+      setActiveCall(null); setShowCallPanel(false); setCallDuration(0);
+      autoToast('Rozmowa zakończona', 'info');
     });
     loadServers(); loadFriends(); loadDms();
     return () => { disconnectSocket(); };
@@ -239,6 +285,17 @@ export default function App() {
   }, [activeDmUserId]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [channelMsgs, dmMsgs]);
+
+  // ── Call timer ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (activeCall) {
+      callTimerRef.current = setInterval(() => setCallDuration(d => d + 1), 1000);
+    } else {
+      if (callTimerRef.current) { clearInterval(callTimerRef.current); callTimerRef.current = null; }
+      setCallDuration(0);
+    }
+    return () => { if (callTimerRef.current) clearInterval(callTimerRef.current); };
+  }, [!!activeCall]);
 
   // ── Loaders ─────────────────────────────────────────────────────
   const loadServers = () => serversApi.list().then(list => {
@@ -304,7 +361,7 @@ export default function App() {
       const s = await serversApi.join(joinCode.trim());
       setServerList(p => [...p, s]); setActiveServer(s.id); setActiveView('servers');
       setCreateSrvOpen(false); setJoinCode('');
-    } catch (err: any) { alert(err?.message || 'Nieprawidłowe zaproszenie'); }
+    } catch (err: any) { addToast(err?.message || 'Nieprawidłowe zaproszenie', 'error'); }
   };
   const handleSaveSrv = async () => {
     if (!activeServer) return;
@@ -327,13 +384,14 @@ export default function App() {
       const s = await serversApi.get(activeServer); setServerFull(s);
     } catch (err) { console.error(err); }
   };
-  const handleDeleteCh = async (id: string) => {
-    if (!confirm('Usunąć kanał?')) return;
-    try {
-      await channelsApi.delete(id);
-      const s = await serversApi.get(activeServer); setServerFull(s);
-      if (activeChannel === id) setActiveChannel('');
-    } catch (err) { console.error(err); }
+  const handleDeleteCh = (id: string) => {
+    confirmAction('Usunąć kanał?', async () => {
+      try {
+        await channelsApi.delete(id);
+        const s = await serversApi.get(activeServer); setServerFull(s);
+        if (activeChannel === id) setActiveChannel('');
+      } catch (err) { console.error(err); }
+    });
   };
   const openChEdit = (ch: ChannelData) => {
     setEditingCh(ch);
@@ -365,20 +423,24 @@ export default function App() {
       setRoleModalOpen(false);
     } catch (err) { console.error(err); }
   };
-  const handleDeleteRole = async (id: string) => {
-    if (!activeServer || !confirm('Usunąć rolę?')) return;
-    try { await serversApi.roles.delete(activeServer, id); setRoles(p => p.filter(r => r.id !== id)); }
-    catch (err) { console.error(err); }
+  const handleDeleteRole = (id: string) => {
+    if (!activeServer) return;
+    confirmAction('Usunąć rolę?', async () => {
+      try { await serversApi.roles.delete(activeServer, id); setRoles(p => p.filter(r => r.id !== id)); }
+      catch (err) { console.error(err); }
+    });
   };
   const handleSetMemberRole = async (userId: string, roleName: string) => {
     if (!activeServer) return;
     try { await serversApi.updateMemberRoles(activeServer, userId, { role_name: roleName }); setMembers(p => p.map(m => m.id === userId ? { ...m, role_name: roleName } : m)); }
     catch (err) { console.error(err); }
   };
-  const handleKick = async (userId: string) => {
-    if (!activeServer || !confirm('Wyrzucić użytkownika?')) return;
-    try { await serversApi.kickMember(activeServer, userId); setMembers(p => p.filter(m => m.id !== userId)); }
-    catch (err) { console.error(err); }
+  const handleKick = (userId: string) => {
+    if (!activeServer) return;
+    confirmAction('Wyrzucić użytkownika?', async () => {
+      try { await serversApi.kickMember(activeServer, userId); setMembers(p => p.filter(m => m.id !== userId)); }
+      catch (err) { console.error(err); }
+    });
   };
 
   // ── Invite ───────────────────────────────────────────────────────
@@ -390,8 +452,8 @@ export default function App() {
   // ── Friends ──────────────────────────────────────────────────────
   const handleAddFriend = async () => {
     if (!addFriendVal.trim()) return;
-    try { await friendsApi.sendRequest(addFriendVal.trim()); setAddFriendVal(''); loadFriends(); }
-    catch (err: any) { alert(err?.message || 'Błąd'); }
+    try { await friendsApi.sendRequest(addFriendVal.trim()); setAddFriendVal(''); loadFriends(); addToast('Zaproszenie wysłane!', 'success'); }
+    catch (err: any) { addToast(err?.message || 'Nie znaleziono użytkownika', 'error'); }
   };
   const handleFriendReq = async (id: string, action: 'accept'|'reject') => {
     try { await friendsApi.respondRequest(id, action); loadFriends(); }
@@ -423,8 +485,39 @@ export default function App() {
       setCurrentUser(upd); setEditProf({...upd}); setSelUser(upd); setProfileOpen(false);
     } catch (err) { console.error(err); }
   };
-  const startCall = (user: string, type: 'voice'|'video') => { setActiveCall({ user, type }); setProfileOpen(false); };
   const openDm = (userId: string) => { setActiveDmUserId(userId); setActiveView('dms'); setProfileOpen(false); };
+
+  // ── Toasts ────────────────────────────────────────────────────────
+  const addToast = (msg: string, type: Toast['type'] = 'info', onConfirm?: ()=>void) => {
+    const id = Math.random().toString(36).slice(2);
+    setToasts(p => [...p, { id, msg, type, onConfirm }]);
+    if (!onConfirm) setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 4000);
+    return id;
+  };
+  const rmToast = (id: string) => setToasts(p => p.filter(t => t.id !== id));
+  const confirmAction = (msg: string, fn: ()=>void) => addToast(msg, 'warn', fn);
+
+  // ── Voice / Call ──────────────────────────────────────────────────
+  const joinVoiceCh = (ch: ChannelData) => {
+    if (activeCall?.channelId && activeCall.channelId !== ch.id) leaveVoiceChannel(activeCall.channelId);
+    joinVoiceChannel(ch.id);
+    setActiveCall({ type: 'voice_channel', channelId: ch.id, channelName: ch.name, serverId: activeServer, isMuted: false, isDeafened: false, isCameraOn: false, isScreenSharing: false });
+    setShowCallPanel(true);
+  };
+  const hangupCall = () => {
+    if (activeCall?.channelId) leaveVoiceChannel(activeCall.channelId);
+    if (activeCall?.userId) endCall(activeCall.userId);
+    setActiveCall(null); setShowCallPanel(false); setCallDuration(0);
+  };
+  const startDmCall = (userId: string, username: string, type: 'voice'|'video') => {
+    sendCallInvite(userId, type);
+    setActiveCall({ type: type === 'voice' ? 'dm_voice' : 'dm_video', userId, username, isMuted: false, isDeafened: false, isCameraOn: false, isScreenSharing: false });
+    setActiveDmUserId(userId); setActiveView('dms'); setShowCallPanel(true); setProfileOpen(false);
+  };
+  const toggleMute    = () => setActiveCall(p => p ? {...p, isMuted: !p.isMuted} : p);
+  const toggleDeafen  = () => setActiveCall(p => p ? {...p, isDeafened: !p.isDeafened} : p);
+  const toggleCamera  = () => setActiveCall(p => p ? {...p, isCameraOn: !p.isCameraOn} : p);
+  const toggleScreen  = () => setActiveCall(p => p ? {...p, isScreenSharing: !p.isScreenSharing} : p);
 
   // ──────────────────────────────────────────────────────────────────
   if (authLoading) return <div className="fixed inset-0 bg-zinc-950 flex items-center justify-center"><Loader2 size={32} className="text-indigo-400 animate-spin" /></div>;
@@ -527,21 +620,42 @@ export default function App() {
                     {isAdmin&&<Plus size={12} className="text-zinc-600 hover:text-white cursor-pointer opacity-0 group-hover/cat:opacity-100 transition-opacity"
                       onClick={() => { setChCreateCatId(cat.id); setChCreateOpen(true); setNewChName(''); }}/>}
                   </div>
-                  {cat.channels.map(ch => (
-                    <button key={ch.id} onClick={() => { if(ch.type==='text'){setActiveChannel(ch.id);setIsMobileOpen(false);} }}
-                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg mb-0.5 group/ch transition-all ${activeChannel===ch.id&&ch.type==='text'?'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20':'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300 border border-transparent'}`}>
-                      <div className="flex items-center gap-2 truncate flex-1">
-                        {ch.type==='text'?<Hash size={14} className={`shrink-0 ${activeChannel===ch.id?'text-indigo-400':'text-zinc-600'}`}/>
-                          :<Volume2 size={14} className="shrink-0 text-zinc-600"/>}
-                        <span className="text-sm truncate">{ch.name}</span>
-                        {ch.is_private&&<Lock size={10} className="text-zinc-700 shrink-0"/>}
+                  {cat.channels.map(ch => {
+                    const isActiveVoice = activeCall?.channelId === ch.id;
+                    const chVoiceUsers  = voiceUsers[ch.id] || [];
+                    return (
+                      <div key={ch.id}>
+                        <button onClick={() => { ch.type==='text' ? (setActiveChannel(ch.id),setIsMobileOpen(false)) : joinVoiceCh(ch); }}
+                          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg mb-0.5 group/ch transition-all ${
+                            (activeChannel===ch.id&&ch.type==='text')||(isActiveVoice&&ch.type==='voice')
+                              ?'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                              :'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300 border border-transparent'}`}>
+                          <div className="flex items-center gap-2 truncate flex-1">
+                            {ch.type==='text'?<Hash size={14} className={`shrink-0 ${activeChannel===ch.id?'text-indigo-400':'text-zinc-600'}`}/>
+                              :<Volume2 size={14} className={`shrink-0 ${isActiveVoice?'text-emerald-400':'text-zinc-600'}`}/>}
+                            <span className="text-sm truncate">{ch.name}</span>
+                            {ch.is_private&&<Lock size={10} className="text-zinc-700 shrink-0"/>}
+                            {ch.type==='voice'&&chVoiceUsers.length>0&&<span className="text-[10px] text-emerald-500 ml-auto font-medium">{chVoiceUsers.length}</span>}
+                          </div>
+                          {isAdmin&&<div className="flex gap-1 opacity-0 group-hover/ch:opacity-100 transition-opacity">
+                            <Settings2 size={12} className="text-zinc-600 hover:text-zinc-300" onClick={e=>{e.stopPropagation();openChEdit(ch);}}/>
+                            <Trash2 size={12} className="text-zinc-600 hover:text-rose-400" onClick={e=>{e.stopPropagation();handleDeleteCh(ch.id);}}/>
+                          </div>}
+                        </button>
+                        {ch.type==='voice'&&chVoiceUsers.length>0&&(
+                          <div className="ml-6 mb-1">
+                            {chVoiceUsers.map(u=>(
+                              <div key={u.id} className="flex items-center gap-1.5 py-0.5 px-1">
+                                <img src={ava(u)} className="w-4 h-4 rounded-full object-cover" alt=""/>
+                                <span className="text-xs text-zinc-500 truncate">{u.username}</span>
+                                {u.id===currentUser?.id&&activeCall?.channelId===ch.id&&activeCall.isMuted&&<MicOff size={9} className="text-rose-400 shrink-0"/>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      {isAdmin&&<div className="flex gap-1 opacity-0 group-hover/ch:opacity-100 transition-opacity">
-                        <Settings2 size={12} className="text-zinc-600 hover:text-zinc-300" onClick={e=>{e.stopPropagation();openChEdit(ch);}}/>
-                        <Trash2 size={12} className="text-zinc-600 hover:text-rose-400" onClick={e=>{e.stopPropagation();handleDeleteCh(ch.id);}}/>
-                      </div>}
-                    </button>
-                  ))}
+                    );
+                  })}
                 </div>
               ))}
               {!serverFull&&activeServer&&<div className="flex justify-center py-8"><Loader2 size={18} className="text-zinc-600 animate-spin"/></div>}
@@ -594,7 +708,88 @@ export default function App() {
 
         {/* CENTER */}
         <section className={`flex-1 flex flex-col ${gp} rounded-2xl md:rounded-3xl overflow-hidden min-w-0`}>
-          {activeView==='servers' && !activeChannel ? (
+          {showCallPanel && activeCall ? (
+            /* ── CALL PANEL ─────────────────────────────────────────── */
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {/* Call header */}
+              <header className="h-13 border-b border-white/[0.05] flex items-center justify-between px-5 bg-zinc-950/40 backdrop-blur-md shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"/>
+                  {activeCall.type==='voice_channel'
+                    ? <><Volume2 size={15} className="text-emerald-400"/><span className="font-bold text-white text-sm">{activeCall.channelName}</span></>
+                    : activeCall.type==='dm_video'
+                      ? <><Video size={15} className="text-indigo-400"/><span className="font-bold text-white text-sm">{activeCall.username}</span></>
+                      : <><Phone size={15} className="text-indigo-400"/><span className="font-bold text-white text-sm">{activeCall.username}</span></>
+                  }
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-500 font-mono bg-zinc-950/60 px-2 py-0.5 rounded-lg">{fmtDur(callDuration)}</span>
+                  <button onClick={()=>setShowCallPanel(false)} title="Minimalizuj" className={`w-7 h-7 ${gb} rounded-lg flex items-center justify-center`}><Minimize2 size={13}/></button>
+                </div>
+              </header>
+              {/* Participants grid */}
+              <div className="flex-1 flex flex-wrap items-center justify-center gap-6 p-8 overflow-y-auto">
+                {/* Self */}
+                {currentUser&&(
+                  <div className="flex flex-col items-center gap-3">
+                    <div className={`relative p-1 rounded-3xl border-2 transition-all ${activeCall.isMuted?'border-rose-500/40':'border-emerald-500/40'}`}>
+                      <img src={ava(currentUser)} className="w-24 h-24 rounded-2xl object-cover" alt=""/>
+                      <div className={`absolute bottom-2 right-2 w-6 h-6 rounded-full flex items-center justify-center ${activeCall.isMuted?'bg-rose-500':'bg-emerald-500'}`}>
+                        {activeCall.isMuted?<MicOff size={11} className="text-white"/>:<Mic size={11} className="text-white"/>}
+                      </div>
+                      {activeCall.isCameraOn&&<div className="absolute top-2 left-2 bg-indigo-500 rounded-full p-0.5"><Video size={9} className="text-white"/></div>}
+                    </div>
+                    <div className="text-center"><p className="text-sm font-bold text-white">{currentUser.username}</p><p className="text-[10px] text-zinc-600">Ty</p></div>
+                  </div>
+                )}
+                {/* Other participants (voice channel only) */}
+                {activeCall.channelId&&(voiceUsers[activeCall.channelId]||[]).filter(u=>u.id!==currentUser?.id).map(u=>(
+                  <div key={u.id} className="flex flex-col items-center gap-3">
+                    <div className="relative p-1 rounded-3xl border-2 border-emerald-500/30">
+                      <img src={ava(u)} className="w-24 h-24 rounded-2xl object-cover" alt=""/>
+                      <div className="absolute bottom-2 right-2 w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center"><Mic size={11} className="text-white"/></div>
+                    </div>
+                    <p className="text-sm font-bold text-white">{u.username}</p>
+                  </div>
+                ))}
+                {/* DM call partner */}
+                {activeCall.userId&&activeCall.username&&(
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="relative p-1 rounded-3xl border-2 border-emerald-500/20">
+                      <div className="w-24 h-24 rounded-2xl bg-zinc-800 border border-white/[0.06] flex items-center justify-center text-4xl font-bold text-zinc-600">
+                        {activeCall.username.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="absolute bottom-2 right-2 w-6 h-6 rounded-full bg-zinc-700 flex items-center justify-center"><Mic size={11} className="text-zinc-400"/></div>
+                    </div>
+                    <p className="text-sm font-bold text-white">{activeCall.username}</p>
+                  </div>
+                )}
+              </div>
+              {/* Call controls */}
+              <div className="shrink-0 p-5 border-t border-white/[0.05] bg-zinc-950/40 flex items-center justify-center gap-3">
+                <button onClick={toggleMute} title={activeCall.isMuted?'Włącz mikrofon':'Wycisz mikrofon'}
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${activeCall.isMuted?'bg-rose-500 hover:bg-rose-400 text-white':gb}`}>
+                  {activeCall.isMuted?<MicOff size={18}/>:<Mic size={18}/>}
+                </button>
+                <button onClick={toggleDeafen} title={activeCall.isDeafened?'Włącz głośnik':'Wycisz głośnik'}
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${activeCall.isDeafened?'bg-rose-500 hover:bg-rose-400 text-white':gb}`}>
+                  {activeCall.isDeafened?<VolumeX size={18}/>:<Volume2 size={18}/>}
+                </button>
+                <button onClick={toggleCamera} title={activeCall.isCameraOn?'Wyłącz kamerę':'Włącz kamerę'}
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${activeCall.isCameraOn?'bg-indigo-500 hover:bg-indigo-400 text-white':gb}`}>
+                  <Video size={18}/>
+                </button>
+                <button onClick={toggleScreen} title={activeCall.isScreenSharing?'Zatrzymaj udostępnianie':'Udostępnij ekran'}
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${activeCall.isScreenSharing?'bg-indigo-500 hover:bg-indigo-400 text-white':gb}`}>
+                  <ScreenShare size={18}/>
+                </button>
+                <button onClick={hangupCall} title="Rozłącz"
+                  className="w-12 h-12 rounded-2xl bg-rose-500 hover:bg-rose-400 flex items-center justify-center text-white transition-colors">
+                  <PhoneOff size={18}/>
+                </button>
+              </div>
+            </div>
+          ) : activeView==='servers' && !activeChannel ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
               {!serverFull
                 ? <Loader2 size={28} className="text-indigo-400 animate-spin"/>
@@ -674,8 +869,8 @@ export default function App() {
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {activeView==='dms'&&activeDm&&<div className="flex gap-1.5 mr-2 border-r border-white/[0.07] pr-2.5">
-                    <button onClick={()=>startCall(activeDm.other_username,'voice')} className={`w-8 h-8 flex items-center justify-center rounded-xl ${gb}`}><Phone size={14}/></button>
-                    <button onClick={()=>startCall(activeDm.other_username,'video')} className={`w-8 h-8 flex items-center justify-center rounded-xl ${gb}`}><Video size={14}/></button>
+                    <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'voice')} className={`w-8 h-8 flex items-center justify-center rounded-xl ${gb}`}><Phone size={14}/></button>
+                    <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'video')} className={`w-8 h-8 flex items-center justify-center rounded-xl ${gb}`}><Video size={14}/></button>
                   </div>}
                   <div className="hidden lg:flex -space-x-2 mr-2">
                     {members.slice(0,3).map(m=><img key={m.id} src={ava(m)} className="w-6 h-6 rounded-full border-2 border-zinc-950 object-cover" alt="" title={m.username}/>)}
@@ -743,7 +938,7 @@ export default function App() {
                         </div>
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 self-start mt-1">
                           <button onClick={()=>setReplyTo(msg)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/[0.06] text-zinc-600 hover:text-zinc-300 transition-colors"><Reply size={12}/></button>
-                          {isOwn&&<button onClick={()=>{ if(confirm('Usunąć wiadomość?')){ if(activeView==='servers') messagesApi.delete(msg.id).catch(console.error); else dmsApi.deleteMessage(msg.id).catch(console.error); } }} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-500/10 text-zinc-600 hover:text-rose-400 transition-colors"><Trash2 size={12}/></button>}
+                          {isOwn&&<button onClick={()=>confirmAction('Usunąć wiadomość?', () => { if(activeView==='servers') messagesApi.delete(msg.id).catch(console.error); else dmsApi.deleteMessage(msg.id).catch(console.error); })} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-500/10 text-zinc-600 hover:text-rose-400 transition-colors"><Trash2 size={12}/></button>}
                         </div>
                       </motion.div>
                     );
@@ -805,19 +1000,6 @@ export default function App() {
 
         {/* RIGHT */}
         <aside className="hidden xl:flex w-60 shrink-0 flex-col gap-2.5">
-          {activeCall&&(
-            <div className={`${gp} rounded-3xl p-4`}>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"/><span className="text-sm font-bold text-white">{activeCall.type==='video'?'Video':'Voice'}</span></div>
-                <span className="text-xs text-zinc-600 font-mono">00:00</span>
-              </div>
-              <div className="flex gap-2">
-                <button className={`flex-1 h-8 ${gb} rounded-xl flex items-center justify-center`}><Mic size={14}/></button>
-                {activeCall.type==='video'&&<button className={`flex-1 h-8 ${gb} rounded-xl flex items-center justify-center`}><ScreenShare size={14}/></button>}
-                <button onClick={()=>setActiveCall(null)} className="flex-1 h-8 bg-rose-500 hover:bg-rose-400 rounded-xl flex items-center justify-center text-white transition-colors"><Phone size={14}/></button>
-              </div>
-            </div>
-          )}
           <div className={`${gp} rounded-3xl p-4 flex-1 overflow-y-auto`}>
             <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">Członkowie</h3>
             {members.slice(0,12).map(m=>(
@@ -891,8 +1073,8 @@ export default function App() {
                 ) : (
                   <div className="flex gap-2">
                     <button onClick={()=>openDm(selUser.id)} className="flex-1 bg-indigo-500 hover:bg-indigo-400 text-white font-semibold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 text-sm"><MessageSquare size={14}/> Wiadomość</button>
-                    <button onClick={()=>startCall(selUser.username,'voice')} className={`w-10 h-10 ${gb} rounded-xl flex items-center justify-center`}><Phone size={15}/></button>
-                    <button onClick={()=>startCall(selUser.username,'video')} className={`w-10 h-10 ${gb} rounded-xl flex items-center justify-center`}><Video size={15}/></button>
+                    <button onClick={()=>startDmCall(selUser.id,selUser.username,'voice')} className={`w-10 h-10 ${gb} rounded-xl flex items-center justify-center`}><Phone size={15}/></button>
+                    <button onClick={()=>startDmCall(selUser.id,selUser.username,'video')} className={`w-10 h-10 ${gb} rounded-xl flex items-center justify-center`}><Video size={15}/></button>
                   </div>
                 )}
               </div>
@@ -1161,6 +1343,89 @@ export default function App() {
                 </button>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── TOAST CONTAINER ─────────────────────────────────────────────── */}
+      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] flex flex-col items-center gap-2 pointer-events-none" style={{minWidth:'20rem',maxWidth:'28rem'}}>
+        <AnimatePresence>
+          {toasts.map(t => {
+            const toastIcon = t.type==='success'?<CheckCircle2 size={15}/>:t.type==='error'?<AlertCircle size={15}/>:t.type==='warn'?<AlertTriangle size={15}/>:<Info size={15}/>;
+            const toastCls = t.type==='success'?'bg-emerald-500/15 border-emerald-500/30 text-emerald-400':t.type==='error'?'bg-rose-500/15 border-rose-500/30 text-rose-400':t.type==='warn'?'bg-amber-500/15 border-amber-500/30 text-amber-400':'bg-zinc-900/95 border-white/[0.1] text-zinc-300';
+            return (
+              <motion.div key={t.id} initial={{opacity:0,y:-16,scale:0.95}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:-8,scale:0.95}} transition={{duration:0.2}}
+                className={`pointer-events-auto w-full flex items-center gap-3 px-4 py-3 rounded-2xl border shadow-2xl backdrop-blur-xl ${toastCls}`}>
+                <span className="shrink-0">{toastIcon}</span>
+                <span className="flex-1 text-sm font-medium">{t.msg}</span>
+                {t.onConfirm && <>
+                  <button onClick={()=>{t.onConfirm!();rmToast(t.id);}} className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition-colors">Tak</button>
+                  <button onClick={()=>rmToast(t.id)} className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/15 transition-colors">Nie</button>
+                </>}
+                {!t.onConfirm && <button onClick={()=>rmToast(t.id)} className="shrink-0 opacity-50 hover:opacity-100 transition-opacity"><X size={14}/></button>}
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
+
+      {/* ── MINIMIZED CALL WIDGET ────────────────────────────────────────── */}
+      <AnimatePresence>
+        {activeCall && !showCallPanel && (
+          <motion.div initial={{opacity:0,scale:0.8,y:20}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.8,y:20}}
+            className={`fixed bottom-5 right-5 z-[150] ${gm} rounded-2xl p-3 flex items-center gap-3 min-w-56 shadow-2xl`}>
+            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shrink-0"/>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-white truncate">
+                {activeCall.type==='voice_channel'?activeCall.channelName:activeCall.username}
+              </p>
+              <p className="text-[10px] text-zinc-500 font-mono">{fmtDur(callDuration)}</p>
+            </div>
+            <div className="flex gap-1.5 shrink-0">
+              <button onClick={toggleMute} title="Mikrofon" className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${activeCall.isMuted?'bg-rose-500 text-white':'bg-white/[0.06] text-zinc-400 hover:text-white'}`}>
+                {activeCall.isMuted?<MicOff size={13}/>:<Mic size={13}/>}
+              </button>
+              <button onClick={()=>setShowCallPanel(true)} title="Powróć do rozmowy" className="w-8 h-8 rounded-xl bg-indigo-500 hover:bg-indigo-400 flex items-center justify-center text-white transition-colors">
+                <Phone size={13}/>
+              </button>
+              <button onClick={hangupCall} title="Rozłącz" className="w-8 h-8 rounded-xl bg-rose-500 hover:bg-rose-400 flex items-center justify-center text-white transition-colors">
+                <PhoneOff size={13}/>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── INCOMING CALL ────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {incomingCall && (
+          <motion.div initial={{opacity:0,x:80}} animate={{opacity:1,x:0}} exit={{opacity:0,x:80}}
+            className={`fixed top-20 right-5 z-[160] ${gm} rounded-2xl p-4 min-w-64 shadow-2xl border border-indigo-500/20`}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="relative shrink-0">
+                <img src={incomingCall.from.avatar_url||`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(incomingCall.from.username)}&size=40`} className="w-10 h-10 rounded-full object-cover" alt=""/>
+                <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-indigo-500 rounded-full flex items-center justify-center">
+                  {incomingCall.type==='video'?<Video size={9} className="text-white"/>:<Phone size={9} className="text-white"/>}
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-white truncate">{incomingCall.from.username}</p>
+                <p className="text-xs text-zinc-500 animate-pulse">{incomingCall.type==='video'?'Połączenie wideo...':'Połączenie głosowe...'}</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={()=>{
+                acceptCall(incomingCall.conversation_id, incomingCall.from.id);
+                setActiveCall({type: incomingCall.type==='video'?'dm_video':'dm_voice', userId: incomingCall.from.id, username: incomingCall.from.username, isMuted:false,isDeafened:false,isCameraOn:false,isScreenSharing:false});
+                setActiveDmUserId(incomingCall.from.id); setActiveView('dms'); setShowCallPanel(true); setIncomingCall(null);
+              }} className="flex-1 h-9 bg-emerald-500 hover:bg-emerald-400 rounded-xl text-white font-semibold flex items-center justify-center gap-1.5 text-sm transition-colors">
+                <Phone size={14}/> Odbierz
+              </button>
+              <button onClick={()=>{rejectCall(incomingCall.from.id); setIncomingCall(null);}}
+                className="flex-1 h-9 bg-rose-500 hover:bg-rose-400 rounded-xl text-white font-semibold flex items-center justify-center gap-1.5 text-sm transition-colors">
+                <PhoneOff size={14}/> Odrzuć
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
