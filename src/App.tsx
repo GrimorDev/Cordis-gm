@@ -19,7 +19,12 @@ import {
 import {
   connectSocket, disconnectSocket, joinChannel, leaveChannel,
   joinVoiceChannel, leaveVoiceChannel, sendCallInvite, acceptCall, rejectCall, endCall,
+  getSocket,
 } from './socket';
+import {
+  makePeerConnection, attachRemoteAudio, detachRemoteAudio, muteAllRemote,
+  setOutputDevice, watchSpeaking, getMediaDevices,
+} from './webrtc';
 
 // ─── Glass constants ──────────────────────────────────────────────────────────
 const gp = 'bg-zinc-900/80 backdrop-blur-xl border border-white/[0.07] shadow-2xl';
@@ -195,10 +200,25 @@ export default function App() {
   const [editingRole, setEditingRole]         = useState<ServerRole|null>(null);
   const [roleForm, setRoleForm]               = useState({ name:'', color:'#5865f2', permissions:[] as string[] });
 
-  const bottomRef    = useRef<HTMLDivElement>(null);
-  const prevChRef    = useRef('');
-  const attachRef    = useRef<HTMLInputElement>(null);
-  const callTimerRef = useRef<ReturnType<typeof setInterval>|null>(null);
+  const bottomRef        = useRef<HTMLDivElement>(null);
+  const prevChRef        = useRef('');
+  const attachRef        = useRef<HTMLInputElement>(null);
+  const callTimerRef     = useRef<ReturnType<typeof setInterval>|null>(null);
+  // WebRTC refs
+  const localStreamRef   = useRef<MediaStream|null>(null);
+  const screenStreamRef  = useRef<MediaStream|null>(null);
+  const peerConnsRef     = useRef(new Map<string, RTCPeerConnection>());
+  const speakStopRef     = useRef(new Map<string, ()=>void>()); // speaking detection cleanup
+  const currentUserRef   = useRef(currentUser);
+  const activeCallRef    = useRef(activeCall);
+  const voiceHandlerRef  = useRef<Record<string, (...a: any[]) => void>>({});
+  // WebRTC state
+  const [speakingUsers, setSpeakingUsers]     = useState(new Set<string>());
+  const [devices, setDevices]                 = useState<MediaDeviceInfo[]>([]);
+  const [selMic, setSelMic]                   = useState('');
+  const [selSpeaker, setSelSpeaker]           = useState('');
+  const [selCamera, setSelCamera]             = useState('');
+  const [devicesOpen, setDevicesOpen]         = useState(false);
 
   // ── Init ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -222,13 +242,13 @@ export default function App() {
       setDmConvs(p => p.map(d => d.other_user_id === user_id ? { ...d, other_status: status } : d));
       setMembers(p => p.map(m => m.id === user_id ? { ...m, status } : m));
     });
-    // Voice channel events
-    sock.on('voice_user_joined', ({ channel_id, user }: any) => {
-      setVoiceUsers(p => ({ ...p, [channel_id]: [...(p[channel_id]||[]).filter((u:VoiceUser) => u.id !== user.id), user] }));
-    });
-    sock.on('voice_user_left', ({ channel_id, user_id }: any) => {
-      setVoiceUsers(p => ({ ...p, [channel_id]: (p[channel_id]||[]).filter((u:VoiceUser) => u.id !== user_id) }));
-    });
+    // Voice channel events (route through voiceHandlerRef for fresh closures)
+    sock.on('voice_user_joined', (d: any) => voiceHandlerRef.current.onUserJoined?.(d));
+    sock.on('voice_user_left',   (d: any) => voiceHandlerRef.current.onUserLeft?.(d));
+    // WebRTC signaling
+    sock.on('webrtc_offer',  (d: any) => voiceHandlerRef.current.onOffer?.(d));
+    sock.on('webrtc_answer', (d: any) => voiceHandlerRef.current.onAnswer?.(d));
+    sock.on('webrtc_ice',    (d: any) => voiceHandlerRef.current.onIce?.(d));
     // DM call events
     sock.on('call_invite', ({ from, type, conversation_id }: any) => {
       setIncomingCall({ from, type, conversation_id });
@@ -296,6 +316,83 @@ export default function App() {
     }
     return () => { if (callTimerRef.current) clearInterval(callTimerRef.current); };
   }, [!!activeCall]);
+
+  // ── Sync refs ───────────────────────────────────────────────────
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
+  useEffect(() => { activeCallRef.current  = activeCall;  }, [activeCall]);
+
+  // ── Enumerate devices ────────────────────────────────────────────
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    getMediaDevices().then(setDevices).catch(() => {});
+    navigator.mediaDevices.addEventListener('devicechange', () =>
+      getMediaDevices().then(setDevices).catch(() => {}));
+  }, [isAuthenticated]);
+
+  // ── WebRTC voice signaling handlers ─────────────────────────────
+  // These are updated via ref so socket callbacks always get latest version
+  const closePeer = (userId: string) => {
+    const pc = peerConnsRef.current.get(userId);
+    if (pc) { pc.close(); peerConnsRef.current.delete(userId); }
+    detachRemoteAudio(userId);
+    const stop = speakStopRef.current.get(userId);
+    if (stop) { stop(); speakStopRef.current.delete(userId); }
+    setSpeakingUsers(p => { const n = new Set(p); n.delete(userId); return n; });
+  };
+  const openPeer = async (remoteUserId: string, isInitiator: boolean, sdpOffer?: RTCSessionDescriptionInit) => {
+    const existing = peerConnsRef.current.get(remoteUserId);
+    if (existing) return existing;
+    const pc = makePeerConnection(
+      (c) => getSocket().emit('webrtc_ice', { to: remoteUserId, candidate: c }),
+      (e) => {
+        const stream = e.streams[0]; if (!stream) return;
+        attachRemoteAudio(remoteUserId, stream);
+        const stop = watchSpeaking(stream, (s) =>
+          setSpeakingUsers(p => { const n = new Set(p); s ? n.add(remoteUserId) : n.delete(remoteUserId); return n; }));
+        const old = speakStopRef.current.get(remoteUserId); if (old) old();
+        speakStopRef.current.set(remoteUserId, stop);
+      },
+    );
+    peerConnsRef.current.set(remoteUserId, pc);
+    if (localStreamRef.current)
+      localStreamRef.current.getTracks().forEach(t => pc.addTrack(t, localStreamRef.current!));
+    if (screenStreamRef.current)
+      screenStreamRef.current.getTracks().forEach(t => pc.addTrack(t, screenStreamRef.current!));
+    if (isInitiator) {
+      const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+      getSocket().emit('webrtc_offer', { to: remoteUserId, sdp: offer });
+    } else if (sdpOffer) {
+      await pc.setRemoteDescription(new RTCSessionDescription(sdpOffer));
+      const answer = await pc.createAnswer(); await pc.setLocalDescription(answer);
+      getSocket().emit('webrtc_answer', { to: remoteUserId, sdp: answer });
+    }
+    return pc;
+  };
+  useEffect(() => {
+    voiceHandlerRef.current = {
+      onUserJoined: async ({ channel_id, user }: any) => {
+        setVoiceUsers(p => ({ ...p, [channel_id]: [...(p[channel_id]||[]).filter((u:VoiceUser)=>u.id!==user.id), user] }));
+        const me = currentUserRef.current; const call = activeCallRef.current;
+        if (me && user.id !== me.id && call?.channelId === channel_id) {
+          await openPeer(user.id, true);
+        }
+      },
+      onUserLeft: ({ channel_id, user_id }: any) => {
+        setVoiceUsers(p => ({ ...p, [channel_id]: (p[channel_id]||[]).filter((u:VoiceUser)=>u.id!==user_id) }));
+        closePeer(user_id);
+      },
+      onOffer:  ({ from, sdp }: any) => openPeer(from, false, sdp),
+      onAnswer: async ({ from, sdp }: any) => {
+        const pc = peerConnsRef.current.get(from);
+        if (pc && pc.signalingState !== 'stable')
+          await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+      },
+      onIce: async ({ from, candidate }: any) => {
+        const pc = peerConnsRef.current.get(from);
+        if (pc) try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+      },
+    };
+  }); // runs every render to keep closures fresh
 
   // ── Loaders ─────────────────────────────────────────────────────
   const loadServers = () => serversApi.list().then(list => {
@@ -498,26 +595,118 @@ export default function App() {
   const confirmAction = (msg: string, fn: ()=>void) => addToast(msg, 'warn', fn);
 
   // ── Voice / Call ──────────────────────────────────────────────────
-  const joinVoiceCh = (ch: ChannelData) => {
-    if (activeCall?.channelId && activeCall.channelId !== ch.id) leaveVoiceChannel(activeCall.channelId);
+  const cleanupWebRTC = () => {
+    // Stop all peer connections
+    peerConnsRef.current.forEach((pc, uid) => { pc.close(); detachRemoteAudio(uid); });
+    peerConnsRef.current.clear();
+    // Stop local tracks
+    localStreamRef.current?.getTracks().forEach(t => t.stop()); localStreamRef.current = null;
+    screenStreamRef.current?.getTracks().forEach(t => t.stop()); screenStreamRef.current = null;
+    // Stop speaking detection
+    speakStopRef.current.forEach(fn => fn()); speakStopRef.current.clear();
+    setSpeakingUsers(new Set());
+  };
+
+  const acquireMic = async (deviceId?: string): Promise<MediaStream|null> => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+      });
+      // Replace old stream
+      const old = speakStopRef.current.get('self'); if (old) { old(); speakStopRef.current.delete('self'); }
+      localStreamRef.current?.getTracks().forEach(t => t.stop());
+      localStreamRef.current = stream;
+      // Self speaking detection
+      if (currentUserRef.current?.id) {
+        const uid = currentUserRef.current.id;
+        const stop = watchSpeaking(stream, s =>
+          setSpeakingUsers(p => { const n = new Set(p); s ? n.add(uid) : n.delete(uid); return n; }));
+        speakStopRef.current.set('self', stop);
+      }
+      // Pipe to existing peer connections
+      peerConnsRef.current.forEach(pc =>
+        stream.getTracks().forEach(t => { if (!pc.getSenders().find(s=>s.track?.kind===t.kind)) pc.addTrack(t, stream); }));
+      return stream;
+    } catch {
+      addToast('Brak dostępu do mikrofonu', 'error'); return null;
+    }
+  };
+
+  const joinVoiceCh = async (ch: ChannelData) => {
+    if (activeCall?.channelId && activeCall.channelId !== ch.id) {
+      leaveVoiceChannel(activeCall.channelId);
+      // Optimistic: remove self from old channel
+      if (currentUser) setVoiceUsers(p => ({ ...p, [activeCall.channelId!]: (p[activeCall.channelId!]||[]).filter(u=>u.id!==currentUser.id) }));
+      cleanupWebRTC();
+    }
+    await acquireMic(selMic || undefined);
     joinVoiceChannel(ch.id);
     setActiveCall({ type: 'voice_channel', channelId: ch.id, channelName: ch.name, serverId: activeServer, isMuted: false, isDeafened: false, isCameraOn: false, isScreenSharing: false });
     setShowCallPanel(true);
   };
+
   const hangupCall = () => {
-    if (activeCall?.channelId) leaveVoiceChannel(activeCall.channelId);
+    if (activeCall?.channelId) {
+      leaveVoiceChannel(activeCall.channelId);
+      // Optimistic: remove self from voiceUsers immediately
+      if (currentUser) setVoiceUsers(p => ({ ...p, [activeCall.channelId!]: (p[activeCall.channelId!]||[]).filter(u=>u.id!==currentUser.id) }));
+    }
     if (activeCall?.userId) endCall(activeCall.userId);
+    cleanupWebRTC();
     setActiveCall(null); setShowCallPanel(false); setCallDuration(0);
   };
-  const startDmCall = (userId: string, username: string, type: 'voice'|'video') => {
+
+  const startDmCall = async (userId: string, username: string, type: 'voice'|'video') => {
+    await acquireMic(selMic || undefined);
     sendCallInvite(userId, type);
     setActiveCall({ type: type === 'voice' ? 'dm_voice' : 'dm_video', userId, username, isMuted: false, isDeafened: false, isCameraOn: false, isScreenSharing: false });
     setActiveDmUserId(userId); setActiveView('dms'); setShowCallPanel(true); setProfileOpen(false);
   };
-  const toggleMute    = () => setActiveCall(p => p ? {...p, isMuted: !p.isMuted} : p);
-  const toggleDeafen  = () => setActiveCall(p => p ? {...p, isDeafened: !p.isDeafened} : p);
-  const toggleCamera  = () => setActiveCall(p => p ? {...p, isCameraOn: !p.isCameraOn} : p);
-  const toggleScreen  = () => setActiveCall(p => p ? {...p, isScreenSharing: !p.isScreenSharing} : p);
+
+  const toggleMute = () => {
+    const muted = !activeCall?.isMuted;
+    localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !muted; });
+    setActiveCall(p => p ? {...p, isMuted: muted} : p);
+  };
+  const toggleDeafen = () => {
+    const deaf = !activeCall?.isDeafened;
+    muteAllRemote(deaf);
+    setActiveCall(p => p ? {...p, isDeafened: deaf} : p);
+  };
+  const toggleCamera = async () => {
+    if (activeCall?.isCameraOn) {
+      localStreamRef.current?.getVideoTracks().forEach(t => { t.stop(); });
+      localStreamRef.current = localStreamRef.current ?
+        new MediaStream(localStreamRef.current.getAudioTracks()) : null;
+      setActiveCall(p => p ? {...p, isCameraOn: false} : p);
+    } else {
+      try {
+        const vs = await navigator.mediaDevices.getUserMedia({ video: selCamera ? { deviceId: { exact: selCamera } } : true });
+        vs.getVideoTracks().forEach(t => {
+          localStreamRef.current?.addTrack(t);
+          peerConnsRef.current.forEach(pc => { if (!pc.getSenders().find(s=>s.track?.kind==='video')) pc.addTrack(t, localStreamRef.current!); });
+        });
+        setActiveCall(p => p ? {...p, isCameraOn: true} : p);
+      } catch { addToast('Brak dostępu do kamery', 'error'); }
+    }
+  };
+  const toggleScreen = async () => {
+    if (activeCall?.isScreenSharing) {
+      screenStreamRef.current?.getTracks().forEach(t => t.stop());
+      screenStreamRef.current = null;
+      setActiveCall(p => p ? {...p, isScreenSharing: false} : p);
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        screenStreamRef.current = stream;
+        stream.getVideoTracks().forEach(t => {
+          peerConnsRef.current.forEach(pc => pc.addTrack(t, stream));
+          t.onended = () => { screenStreamRef.current = null; setActiveCall(p => p ? {...p, isScreenSharing: false} : p); };
+        });
+        setActiveCall(p => p ? {...p, isScreenSharing: true} : p);
+      } catch { addToast('Nie można udostępnić ekranu', 'error'); }
+    }
+  };
 
   // ──────────────────────────────────────────────────────────────────
   if (authLoading) return <div className="fixed inset-0 bg-zinc-950 flex items-center justify-center"><Loader2 size={32} className="text-indigo-400 animate-spin" /></div>;
@@ -644,13 +833,19 @@ export default function App() {
                         </button>
                         {ch.type==='voice'&&chVoiceUsers.length>0&&(
                           <div className="ml-6 mb-1">
-                            {chVoiceUsers.map(u=>(
-                              <div key={u.id} className="flex items-center gap-1.5 py-0.5 px-1">
-                                <img src={ava(u)} className="w-4 h-4 rounded-full object-cover" alt=""/>
-                                <span className="text-xs text-zinc-500 truncate">{u.username}</span>
-                                {u.id===currentUser?.id&&activeCall?.channelId===ch.id&&activeCall.isMuted&&<MicOff size={9} className="text-rose-400 shrink-0"/>}
-                              </div>
-                            ))}
+                            {chVoiceUsers.map(u=>{
+                              const isSpeaking = speakingUsers.has(u.id);
+                              const isMuted = u.id===currentUser?.id && activeCall?.channelId===ch.id && activeCall.isMuted;
+                              return (
+                                <div key={u.id} className="flex items-center gap-1.5 py-0.5 px-1">
+                                  <div className={`relative shrink-0 rounded-full transition-all duration-150 ${isSpeaking?'ring-1 ring-emerald-500 ring-offset-1 ring-offset-zinc-900':''}`}>
+                                    <img src={ava(u)} className="w-4 h-4 rounded-full object-cover block" alt=""/>
+                                  </div>
+                                  <span className={`text-xs truncate ${isSpeaking?'text-emerald-400':'text-zinc-500'}`}>{u.username}</span>
+                                  {isMuted&&<MicOff size={9} className="text-rose-400 shrink-0"/>}
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
@@ -730,63 +925,116 @@ export default function App() {
               {/* Participants grid */}
               <div className="flex-1 flex flex-wrap items-center justify-center gap-6 p-8 overflow-y-auto">
                 {/* Self */}
-                {currentUser&&(
-                  <div className="flex flex-col items-center gap-3">
-                    <div className={`relative p-1 rounded-3xl border-2 transition-all ${activeCall.isMuted?'border-rose-500/40':'border-emerald-500/40'}`}>
-                      <img src={ava(currentUser)} className="w-24 h-24 rounded-2xl object-cover" alt=""/>
-                      <div className={`absolute bottom-2 right-2 w-6 h-6 rounded-full flex items-center justify-center ${activeCall.isMuted?'bg-rose-500':'bg-emerald-500'}`}>
-                        {activeCall.isMuted?<MicOff size={11} className="text-white"/>:<Mic size={11} className="text-white"/>}
+                {currentUser&&(()=>{
+                  const selfSpeaking = speakingUsers.has(currentUser.id) && !activeCall.isMuted;
+                  return (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className={`relative p-1 rounded-3xl border-2 transition-all duration-150 ${selfSpeaking?'border-emerald-500 shadow-[0_0_12px_2px_rgba(16,185,129,0.45)]':activeCall.isMuted?'border-rose-500/40':'border-white/10'}`}>
+                        <img src={ava(currentUser)} className="w-24 h-24 rounded-2xl object-cover" alt=""/>
+                        <div className={`absolute bottom-2 right-2 w-6 h-6 rounded-full flex items-center justify-center ${activeCall.isMuted?'bg-rose-500':'bg-emerald-500'}`}>
+                          {activeCall.isMuted?<MicOff size={11} className="text-white"/>:<Mic size={11} className="text-white"/>}
+                        </div>
+                        {activeCall.isCameraOn&&<div className="absolute top-2 left-2 bg-indigo-500 rounded-full p-0.5"><Video size={9} className="text-white"/></div>}
                       </div>
-                      {activeCall.isCameraOn&&<div className="absolute top-2 left-2 bg-indigo-500 rounded-full p-0.5"><Video size={9} className="text-white"/></div>}
+                      <div className="text-center"><p className={`text-sm font-bold ${selfSpeaking?'text-emerald-400':'text-white'}`}>{currentUser.username}</p><p className="text-[10px] text-zinc-600">Ty</p></div>
                     </div>
-                    <div className="text-center"><p className="text-sm font-bold text-white">{currentUser.username}</p><p className="text-[10px] text-zinc-600">Ty</p></div>
-                  </div>
-                )}
+                  );
+                })()}
                 {/* Other participants (voice channel only) */}
-                {activeCall.channelId&&(voiceUsers[activeCall.channelId]||[]).filter(u=>u.id!==currentUser?.id).map(u=>(
-                  <div key={u.id} className="flex flex-col items-center gap-3">
-                    <div className="relative p-1 rounded-3xl border-2 border-emerald-500/30">
-                      <img src={ava(u)} className="w-24 h-24 rounded-2xl object-cover" alt=""/>
-                      <div className="absolute bottom-2 right-2 w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center"><Mic size={11} className="text-white"/></div>
-                    </div>
-                    <p className="text-sm font-bold text-white">{u.username}</p>
-                  </div>
-                ))}
-                {/* DM call partner */}
-                {activeCall.userId&&activeCall.username&&(
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="relative p-1 rounded-3xl border-2 border-emerald-500/20">
-                      <div className="w-24 h-24 rounded-2xl bg-zinc-800 border border-white/[0.06] flex items-center justify-center text-4xl font-bold text-zinc-600">
-                        {activeCall.username.charAt(0).toUpperCase()}
+                {activeCall.channelId&&(voiceUsers[activeCall.channelId]||[]).filter(u=>u.id!==currentUser?.id).map(u=>{
+                  const isSpeaking = speakingUsers.has(u.id);
+                  return (
+                    <div key={u.id} className="flex flex-col items-center gap-3">
+                      <div className={`relative p-1 rounded-3xl border-2 transition-all duration-150 ${isSpeaking?'border-emerald-500 shadow-[0_0_12px_2px_rgba(16,185,129,0.45)]':'border-white/10'}`}>
+                        <img src={ava(u)} className="w-24 h-24 rounded-2xl object-cover" alt=""/>
+                        <div className={`absolute bottom-2 right-2 w-6 h-6 rounded-full flex items-center justify-center ${isSpeaking?'bg-emerald-500':'bg-zinc-700'}`}>
+                          <Mic size={11} className="text-white"/>
+                        </div>
                       </div>
-                      <div className="absolute bottom-2 right-2 w-6 h-6 rounded-full bg-zinc-700 flex items-center justify-center"><Mic size={11} className="text-zinc-400"/></div>
+                      <p className={`text-sm font-bold ${isSpeaking?'text-emerald-400':'text-white'}`}>{u.username}</p>
                     </div>
-                    <p className="text-sm font-bold text-white">{activeCall.username}</p>
-                  </div>
-                )}
+                  );
+                })}
+                {/* DM call partner */}
+                {activeCall.userId&&activeCall.username&&(()=>{
+                  const partnerSpeaking = speakingUsers.has(activeCall.userId!);
+                  return (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className={`relative p-1 rounded-3xl border-2 transition-all duration-150 ${partnerSpeaking?'border-emerald-500 shadow-[0_0_12px_2px_rgba(16,185,129,0.45)]':'border-white/10'}`}>
+                        <div className="w-24 h-24 rounded-2xl bg-zinc-800 border border-white/[0.06] flex items-center justify-center text-4xl font-bold text-zinc-600">
+                          {activeCall.username.charAt(0).toUpperCase()}
+                        </div>
+                        <div className={`absolute bottom-2 right-2 w-6 h-6 rounded-full flex items-center justify-center ${partnerSpeaking?'bg-emerald-500':'bg-zinc-700'}`}>
+                          <Mic size={11} className="text-white"/>
+                        </div>
+                      </div>
+                      <p className={`text-sm font-bold ${partnerSpeaking?'text-emerald-400':'text-white'}`}>{activeCall.username}</p>
+                    </div>
+                  );
+                })()}
               </div>
               {/* Call controls */}
-              <div className="shrink-0 p-5 border-t border-white/[0.05] bg-zinc-950/40 flex items-center justify-center gap-3">
-                <button onClick={toggleMute} title={activeCall.isMuted?'Włącz mikrofon':'Wycisz mikrofon'}
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${activeCall.isMuted?'bg-rose-500 hover:bg-rose-400 text-white':gb}`}>
-                  {activeCall.isMuted?<MicOff size={18}/>:<Mic size={18}/>}
-                </button>
-                <button onClick={toggleDeafen} title={activeCall.isDeafened?'Włącz głośnik':'Wycisz głośnik'}
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${activeCall.isDeafened?'bg-rose-500 hover:bg-rose-400 text-white':gb}`}>
-                  {activeCall.isDeafened?<VolumeX size={18}/>:<Volume2 size={18}/>}
-                </button>
-                <button onClick={toggleCamera} title={activeCall.isCameraOn?'Wyłącz kamerę':'Włącz kamerę'}
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${activeCall.isCameraOn?'bg-indigo-500 hover:bg-indigo-400 text-white':gb}`}>
-                  <Video size={18}/>
-                </button>
-                <button onClick={toggleScreen} title={activeCall.isScreenSharing?'Zatrzymaj udostępnianie':'Udostępnij ekran'}
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${activeCall.isScreenSharing?'bg-indigo-500 hover:bg-indigo-400 text-white':gb}`}>
-                  <ScreenShare size={18}/>
-                </button>
-                <button onClick={hangupCall} title="Rozłącz"
-                  className="w-12 h-12 rounded-2xl bg-rose-500 hover:bg-rose-400 flex items-center justify-center text-white transition-colors">
-                  <PhoneOff size={18}/>
-                </button>
+              <div className="shrink-0 border-t border-white/[0.05] bg-zinc-950/40">
+                {/* Device settings panel */}
+                <AnimatePresence>
+                  {devicesOpen&&(
+                    <motion.div initial={{opacity:0,height:0}} animate={{opacity:1,height:'auto'}} exit={{opacity:0,height:0}}
+                      className="overflow-hidden border-b border-white/[0.05]">
+                      <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Mikrofon</label>
+                          <select value={selMic} onChange={async e=>{setSelMic(e.target.value);if(localStreamRef.current)await acquireMic(e.target.value||undefined);}}
+                            className="w-full bg-zinc-800/80 border border-white/[0.07] text-white text-xs rounded-lg px-2.5 py-2 outline-none">
+                            <option value="">Domyślny</option>
+                            {devices.filter(d=>d.kind==='audioinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`Mikrofon ${d.deviceId.slice(0,6)}`}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Głośnik</label>
+                          <select value={selSpeaker} onChange={async e=>{setSelSpeaker(e.target.value);await setOutputDevice(e.target.value);}}
+                            className="w-full bg-zinc-800/80 border border-white/[0.07] text-white text-xs rounded-lg px-2.5 py-2 outline-none">
+                            <option value="">Domyślny</option>
+                            {devices.filter(d=>d.kind==='audiooutput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`Głośnik ${d.deviceId.slice(0,6)}`}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Kamera</label>
+                          <select value={selCamera} onChange={e=>setSelCamera(e.target.value)}
+                            className="w-full bg-zinc-800/80 border border-white/[0.07] text-white text-xs rounded-lg px-2.5 py-2 outline-none">
+                            <option value="">Domyślna</option>
+                            {devices.filter(d=>d.kind==='videoinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`Kamera ${d.deviceId.slice(0,6)}`}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                <div className="p-5 flex items-center justify-center gap-3">
+                  <button onClick={toggleMute} title={activeCall.isMuted?'Włącz mikrofon':'Wycisz mikrofon'}
+                    className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${activeCall.isMuted?'bg-rose-500 hover:bg-rose-400 text-white':gb}`}>
+                    {activeCall.isMuted?<MicOff size={18}/>:<Mic size={18}/>}
+                  </button>
+                  <button onClick={toggleDeafen} title={activeCall.isDeafened?'Włącz głośnik':'Wycisz głośnik'}
+                    className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${activeCall.isDeafened?'bg-rose-500 hover:bg-rose-400 text-white':gb}`}>
+                    {activeCall.isDeafened?<VolumeX size={18}/>:<Volume2 size={18}/>}
+                  </button>
+                  <button onClick={toggleCamera} title={activeCall.isCameraOn?'Wyłącz kamerę':'Włącz kamerę'}
+                    className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${activeCall.isCameraOn?'bg-indigo-500 hover:bg-indigo-400 text-white':gb}`}>
+                    <Video size={18}/>
+                  </button>
+                  <button onClick={toggleScreen} title={activeCall.isScreenSharing?'Zatrzymaj udostępnianie':'Udostępnij ekran'}
+                    className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${activeCall.isScreenSharing?'bg-indigo-500 hover:bg-indigo-400 text-white':gb}`}>
+                    <ScreenShare size={18}/>
+                  </button>
+                  <button onClick={()=>setDevicesOpen(v=>!v)} title="Ustawienia urządzeń"
+                    className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${devicesOpen?'bg-zinc-600 text-white':gb}`}>
+                    <Settings size={18}/>
+                  </button>
+                  <button onClick={hangupCall} title="Rozłącz"
+                    className="w-12 h-12 rounded-2xl bg-rose-500 hover:bg-rose-400 flex items-center justify-center text-white transition-colors">
+                    <PhoneOff size={18}/>
+                  </button>
+                </div>
               </div>
             </div>
           ) : activeView==='servers' && !activeChannel ? (
