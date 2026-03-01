@@ -139,6 +139,7 @@ export default function App() {
   const [msgInput, setMsgInput]               = useState('');
   const [addFriendVal, setAddFriendVal]       = useState('');
   const [sending, setSending]                 = useState(false);
+  const [sendError, setSendError]             = useState('');
   const [replyTo, setReplyTo]                 = useState<MessageFull|DmMessageFull|null>(null);
   const [attachFile, setAttachFile]           = useState<File|null>(null);
   const [attachPreview, setAttachPreview]     = useState<string|null>(null);
@@ -207,11 +208,14 @@ export default function App() {
   // ── Server change ───────────────────────────────────────────────
   useEffect(() => {
     if (!activeServer) return;
+    setServerFull(null);
+    setChannelMsgs([]);
     serversApi.get(activeServer).then(s => {
       setServerFull(s);
       setSrvForm({ name: s.name, description: s.description||'', icon_url: s.icon_url||'', banner_url: s.banner_url||'' });
+      // Always auto-select first text channel when switching servers
       const first = s.categories.flatMap(c => c.channels).find(ch => ch.type === 'text');
-      if (first && !activeChannel) setActiveChannel(first.id);
+      setActiveChannel(first?.id || '');
     }).catch(console.error);
     serversApi.members(activeServer).then(setMembers).catch(console.error);
     serversApi.roles.list(activeServer).then(setRoles).catch(console.error);
@@ -257,11 +261,15 @@ export default function App() {
     e.preventDefault();
     const content = msgInput.trim();
     if ((!content && !attachFile) || sending) return;
-    setSending(true);
+    setSending(true); setSendError('');
     let attachUrl: string | undefined;
     if (attachFile) {
       try { attachUrl = await uploadFile(attachFile, 'attachments'); }
-      catch (err) { console.error(err); setSending(false); return; }
+      catch (err: any) {
+        const msg = err?.message || 'Błąd przesyłania pliku';
+        setSendError(msg.includes('413') || msg.includes('large') ? 'Plik za duży (max 5MB)' : `Błąd uploadu: ${msg}`);
+        setSending(false); return;
+      }
     }
     const finalContent = content;
     const opts = { reply_to_id: replyTo?.id, attachment_url: attachUrl };
@@ -269,7 +277,7 @@ export default function App() {
     try {
       if (activeView === 'dms' && activeDmUserId) await dmsApi.send(activeDmUserId, finalContent, opts);
       else if (activeChannel) await messagesApi.send(activeChannel, finalContent, opts);
-    } catch (err) { console.error(err); setMsgInput(finalContent); }
+    } catch (err: any) { setSendError(err?.message || 'Nie udało się wysłać'); setMsgInput(finalContent); }
     finally { setSending(false); }
   };
 
@@ -448,7 +456,7 @@ export default function App() {
             ))}
             <div className="w-px h-5 bg-white/[0.07] mx-0.5"/>
             {serverList.map(srv => (
-              <button key={srv.id} onClick={() => { setActiveServer(srv.id); setActiveView('servers'); }}
+              <button key={srv.id} onClick={() => { setActiveServer(srv.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); }}
                 className={`flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${activeServer===srv.id&&activeView==='servers'?'bg-white/[0.08] text-white border border-white/[0.08]':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] border border-transparent'}`}>
                 <span className="w-6 h-6 rounded-lg bg-zinc-800 flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden">
                   {srv.icon_url ? <img src={srv.icon_url} className="w-full h-full object-cover"/> : srv.name.charAt(0).toUpperCase()}
@@ -493,7 +501,7 @@ export default function App() {
             ))}
             <div className="w-px h-7 bg-white/[0.07] self-center mx-0.5"/>
             {serverList.map(s => (
-              <button key={s.id} onClick={() => { setActiveServer(s.id); setActiveView('servers'); setIsMobileOpen(false); }}
+              <button key={s.id} onClick={() => { setActiveServer(s.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); setIsMobileOpen(false); }}
                 className={`w-10 h-10 shrink-0 rounded-xl overflow-hidden border ${activeServer===s.id&&activeView==='servers'?'border-indigo-500/40':'border-white/[0.05]'}`}>
                 <span className="text-sm font-bold text-white flex w-full h-full items-center justify-center bg-zinc-800">{s.name.charAt(0)}</span>
               </button>
@@ -586,7 +594,18 @@ export default function App() {
 
         {/* CENTER */}
         <section className={`flex-1 flex flex-col ${gp} rounded-2xl md:rounded-3xl overflow-hidden min-w-0`}>
-          {activeView==='friends' ? (
+          {activeView==='servers' && !activeChannel ? (
+            <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
+              {!serverFull
+                ? <Loader2 size={28} className="text-indigo-400 animate-spin"/>
+                : <><div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center mb-2">
+                    <Hash size={26} className="text-zinc-600"/>
+                  </div>
+                  <h2 className="text-lg font-bold text-white">{serverFull.name}</h2>
+                  <p className="text-sm text-zinc-500">Wybierz kanał tekstowy z listy po lewej stronie.</p></>
+              }
+            </div>
+          ) : activeView==='friends' ? (
             <div className="flex-1 flex flex-col overflow-hidden">
               <div className="h-13 border-b border-white/[0.05] flex items-center px-5 shrink-0 bg-zinc-950/40 backdrop-blur-md z-10">
                 <Users size={17} className="text-zinc-500 mr-2.5"/><h1 className="text-sm font-bold text-white">Znajomi</h1>
@@ -755,6 +774,13 @@ export default function App() {
                   <div className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl ${gb} text-xs mb-2`}>
                     <Paperclip size={11}/> {attachFile.name}
                     <button onClick={()=>setAttachFile(null)} className="ml-1 text-zinc-500 hover:text-rose-400"><X size={10}/></button>
+                  </div>
+                )}
+                {sendError&&(
+                  <div className="flex items-center gap-1.5 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-1.5 mb-2 text-xs text-rose-400">
+                    <X size={11} className="shrink-0"/>
+                    <span className="flex-1">{sendError}</span>
+                    <button type="button" onClick={()=>setSendError('')} className="text-rose-500 hover:text-rose-300 ml-1"><X size={10}/></button>
                   </div>
                 )}
                 <form onSubmit={handleSend}>
