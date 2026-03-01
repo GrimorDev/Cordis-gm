@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git init)",
+      "Bash(git remote add origin https://github.com/GrimorDev/Cordis-gm.git)",
+      "Bash(git add src/ backend/ postgres/ nginx.conf Dockerfile docker-compose.yml .env.example .gitignore .dockerignore backend/.dockerignore vite.config.ts package.json tsconfig.json index.html)",
+      "Bash(git config user.email \"cordis@grimordev.local\")",
+      "Bash(git config user.name \"GrimorDev\")",
+      "Bash(git commit:*)",
+      "Bash(git branch -M main)",
+      "Bash(git push -u origin main)",
+      "Bash(git pull origin main --allow-unrelated-histories --no-edit)",
+      "Bash(git checkout --ours .env.example .gitignore package.json vite.config.ts)",
+      "Bash(git add .env.example .gitignore package.json vite.config.ts)",
+      "Bash(git push origin main)",
+      "Bash(npm install --package-lock-only)",
+      "Bash(git add package-lock.json backend/package-lock.json backend/Dockerfile)",
+      "Bash(git pull origin main --rebase)",
+      "Bash(npm install)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(npm run build)",
+      "Bash(git add backend/src/db/pool.ts backend/src/socket/index.ts backend/src/routes/messages.ts)",
+      "Bash(git add docker-compose.yml)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(git add Dockerfile docker-compose.yml src/App.tsx postgres/seed.sql backend/package-lock.json)",
+      "Bash(node -e \":*)",
+      "Bash(git add backend/src/index.ts backend/src/db/migrate.ts docker-compose.yml)",
+      "Bash(users does not exist\" when postgres volume already exists from prev:*)",
+      "Bash(git add src/App.tsx src/api.ts backend/src/db/migrate.ts backend/src/routes/upload.ts backend/src/routes/servers.ts backend/src/routes/channels.ts backend/src/routes/messages.ts backend/src/routes/dms.ts backend/src/routes/users.ts backend/src/index.ts)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(./node_modules/.bin/vite --version)",
+      "Bash(node --version)",
+      "Bash(node -e \"const {execSync} = require\\(''child_process''\\); console.log\\(execSync\\(''npm --version''\\).toString\\(\\)\\)\")",
+      "Bash(ls /e/Cordis-gm-main/node_modules/.bin/vite*)",
+      "Bash(ls /e/Cordis-gm-main/backend/node_modules/.bin/tsx*)",
+      "Bash(git add src/App.tsx)",
+      "Bash(git add src/App.tsx src/webrtc.ts)",
+      "Bash(git add -A)"
+    ]
+  }
+}

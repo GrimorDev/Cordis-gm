@@ -77,59 +77,210 @@ type CallState = {
 type VoiceUser = { id: string; username: string; avatar_url: string|null; status: string };
 
 // ─── AuthScreen ───────────────────────────────────────────────────────────────
+const AUTH_FEATURES = [
+  { icon: '💬', title: 'Wiadomości w czasie rzeczywistym', desc: 'Tekst, głos i wideo — wszystko w jednym miejscu' },
+  { icon: '🎙️', title: 'Kanały głosowe i wideo', desc: 'Dołącz do rozmów z jednym kliknięciem' },
+  { icon: '🛡️', title: 'Role i uprawnienia', desc: 'Pełna kontrola nad serwerem i członkami' },
+  { icon: '🚀', title: 'Szybkie i niezawodne', desc: 'Socket.IO + PostgreSQL dla stale aktualnych danych' },
+];
+
 function AuthScreen({ onAuth }: { onAuth: (u: UserProfile, t: string) => void }) {
   const [tab, setTab] = useState<'login' | 'register'>('login');
-  const [form, setForm] = useState({ login: '', username: '', email: '', password: '' });
+  const [form, setForm] = useState({ login: '', username: '', email: '', password: '', confirm: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPass, setShowPass] = useState(false);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setError(''); setLoading(true);
+    if (tab === 'register' && form.password !== form.confirm) {
+      setError('Hasła nie pasują do siebie'); setLoading(false); return;
+    }
     try {
       const res = tab === 'login'
         ? await auth.login({ login: form.login, password: form.password })
         : await auth.register({ username: form.username, email: form.email, password: form.password });
       setToken(res.token); onAuth(res.user, res.token);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Błąd połączenia');
+      setError(err instanceof ApiError ? err.message : 'Błąd połączenia z serwerem');
     } finally { setLoading(false); }
   };
+
   return (
-    <div className="fixed inset-0 flex items-center justify-center p-4 z-50"
-      style={{ background: 'radial-gradient(ellipse at 50% 0%,rgba(99,102,241,.22) 0%,transparent 70%),radial-gradient(ellipse at 80% 80%,rgba(139,92,246,.1) 0%,transparent 50%),#09090b' }}>
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={`w-full max-w-md ${gm} rounded-3xl p-8`}>
-        <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center mx-auto mb-4">
-            <MessageCircle size={28} className="text-indigo-400" />
+    <div className="fixed inset-0 flex overflow-hidden"
+      style={{ background: 'radial-gradient(ellipse at 20% 50%,rgba(99,102,241,.25) 0%,transparent 55%),radial-gradient(ellipse at 80% 20%,rgba(139,92,246,.18) 0%,transparent 50%),radial-gradient(ellipse at 60% 90%,rgba(79,70,229,.12) 0%,transparent 45%),#09090b' }}>
+
+      {/* Decorative blobs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-32 -left-32 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl"/>
+        <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl"/>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-900/5 rounded-full blur-3xl"/>
+      </div>
+
+      {/* Left panel — branding */}
+      <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5 }}
+        className="hidden lg:flex flex-col justify-between w-[52%] p-12 relative">
+        {/* Logo */}
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center overflow-hidden">
+            <img src="/cordyn.png" alt="Cordyn" className="w-8 h-8 object-contain"/>
           </div>
-          <h1 className="text-2xl font-bold text-white">Cordis</h1>
-          <p className="text-sm text-zinc-500 mt-1">Platforma dla twórców</p>
+          <span className="text-xl font-bold text-white tracking-tight">Cordyn</span>
         </div>
-        <div className="flex bg-white/[0.04] border border-white/[0.06] rounded-2xl p-1 mb-6">
-          {(['login','register'] as const).map(t => (
-            <button key={t} onClick={() => { setTab(t); setError(''); }}
-              className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all ${tab===t ? 'bg-indigo-500 text-white' : 'text-zinc-400 hover:text-white'}`}>
-              {t === 'login' ? 'Zaloguj się' : 'Rejestracja'}
-            </button>
-          ))}
+
+        {/* Hero text */}
+        <div className="flex-1 flex flex-col justify-center max-w-lg">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+            <div className="inline-flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/25 rounded-full px-4 py-1.5 mb-6">
+              <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"/>
+              <span className="text-sm text-indigo-300 font-medium">Platforma dla twórców i społeczności</span>
+            </div>
+            <h1 className="text-4xl xl:text-5xl font-black text-white leading-tight mb-4">
+              Twoja przestrzeń.<br/>
+              <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+                Twoje zasady.
+              </span>
+            </h1>
+            <p className="text-lg text-zinc-400 leading-relaxed mb-10">
+              Buduj społeczności, komunikuj się w czasie rzeczywistym i zarządzaj serwerami z pełną kontrolą.
+            </p>
+          </motion.div>
+
+          {/* Feature list */}
+          <div className="grid grid-cols-1 gap-3">
+            {AUTH_FEATURES.map((f, i) => (
+              <motion.div key={f.title} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.25 + i * 0.08 }}
+                className="flex items-start gap-4 bg-white/[0.03] border border-white/[0.05] rounded-2xl p-4 hover:bg-white/[0.05] transition-colors">
+                <span className="text-2xl shrink-0 mt-0.5">{f.icon}</span>
+                <div>
+                  <p className="text-sm font-semibold text-white">{f.title}</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">{f.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
         </div>
-        <form onSubmit={submit} className="flex flex-col gap-4">
-          {tab === 'login'
-            ? <input required value={form.login} onChange={set('login')} placeholder="Login lub email" className={`${gi} rounded-xl px-4 py-3 text-sm w-full`} />
-            : <>
-                <input required value={form.username} onChange={set('username')} placeholder="Nazwa użytkownika" pattern="[a-zA-Z0-9_]+" minLength={2} maxLength={32} className={`${gi} rounded-xl px-4 py-3 text-sm w-full`} />
-                <input required type="email" value={form.email} onChange={set('email')} placeholder="Email" className={`${gi} rounded-xl px-4 py-3 text-sm w-full`} />
-              </>
-          }
-          <input required type="password" value={form.password} onChange={set('password')} placeholder="Hasło" minLength={6} className={`${gi} rounded-xl px-4 py-3 text-sm w-full`} />
-          {error && <p className="text-rose-400 text-sm bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-2">{error}</p>}
-          <button type="submit" disabled={loading}
-            className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
-            {loading && <Loader2 size={18} className="animate-spin" />}
-            {tab === 'login' ? 'Zaloguj się' : 'Utwórz konto'}
-          </button>
-        </form>
+
+        {/* Footer */}
+        <p className="text-xs text-zinc-700">© 2025 Cordyn. Wszelkie prawa zastrzeżone.</p>
       </motion.div>
+
+      {/* Right panel — form */}
+      <div className="flex-1 flex items-center justify-center p-6 lg:p-12">
+        <motion.div initial={{ opacity: 0, y: 24, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+          className={`w-full max-w-sm ${gm} p-8`}>
+
+          {/* Mobile logo */}
+          <div className="lg:hidden flex items-center gap-2 mb-6">
+            <img src="/cordyn.png" alt="Cordyn" className="w-8 h-8 object-contain"/>
+            <span className="text-lg font-bold text-white">Cordyn</span>
+          </div>
+
+          {/* Header */}
+          <div className="mb-7">
+            <h2 className="text-2xl font-bold text-white mb-1">
+              {tab === 'login' ? 'Witaj z powrotem!' : 'Dołącz do Cordyn'}
+            </h2>
+            <p className="text-sm text-zinc-500">
+              {tab === 'login'
+                ? 'Zaloguj się na swoje konto, by kontynuować'
+                : 'Utwórz konto i zacznij budować społeczność'}
+            </p>
+          </div>
+
+          {/* Tab switch */}
+          <div className="flex bg-white/[0.04] border border-white/[0.06] rounded-2xl p-1 mb-6">
+            {(['login','register'] as const).map(t => (
+              <button key={t} onClick={() => { setTab(t); setError(''); }}
+                className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                  tab===t ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-zinc-400 hover:text-white'}`}>
+                {t === 'login' ? 'Logowanie' : 'Rejestracja'}
+              </button>
+            ))}
+          </div>
+
+          {/* Form */}
+          <form onSubmit={submit} className="flex flex-col gap-3.5">
+            <AnimatePresence mode="wait">
+              {tab === 'register' ? (
+                <motion.div key="reg" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }} className="flex flex-col gap-3.5 overflow-hidden">
+                  <div className="relative">
+                    <Users size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
+                    <input required value={form.username} onChange={set('username')} placeholder="Nazwa użytkownika"
+                      pattern="[a-zA-Z0-9_]+" minLength={2} maxLength={32}
+                      className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`} />
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 text-sm pointer-events-none">@</span>
+                    <input required type="email" value={form.email} onChange={set('email')} placeholder="Adres email"
+                      className={`${gi} rounded-xl pl-9 pr-4 py-3 text-sm w-full`} />
+                  </div>
+                </motion.div>
+              ) : (
+                <motion.div key="log" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <div className="relative">
+                    <MessageSquare size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
+                    <input required value={form.login} onChange={set('login')} placeholder="Login lub email"
+                      className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`} />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="relative">
+              <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
+              <input required type={showPass ? 'text' : 'password'} value={form.password} onChange={set('password')}
+                placeholder="Hasło" minLength={6}
+                className={`${gi} rounded-xl pl-10 pr-10 py-3 text-sm w-full`} />
+              <button type="button" onClick={() => setShowPass(v => !v)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                {showPass ? <VolumeX size={15}/> : <VolumeX size={15} className="opacity-50"/>}
+              </button>
+            </div>
+
+            {tab === 'register' && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }} className="relative overflow-hidden">
+                <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
+                <input required type={showPass ? 'text' : 'password'} value={form.confirm} onChange={set('confirm')}
+                  placeholder="Potwierdź hasło" minLength={6}
+                  className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`} />
+              </motion.div>
+            )}
+
+            <AnimatePresence>
+              {error && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="flex items-center gap-2 text-rose-400 text-sm bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-2.5 overflow-hidden">
+                  <AlertCircle size={15} className="shrink-0"/>
+                  <span>{error}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <button type="submit" disabled={loading}
+              className="relative overflow-hidden bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
+              {loading
+                ? <><Loader2 size={17} className="animate-spin"/> Ładowanie...</>
+                : tab === 'login' ? 'Zaloguj się →' : 'Utwórz konto →'
+              }
+            </button>
+          </form>
+
+          <p className="text-xs text-zinc-700 text-center mt-5">
+            {tab === 'login' ? 'Nie masz konta? ' : 'Masz już konto? '}
+            <button onClick={() => { setTab(tab === 'login' ? 'register' : 'login'); setError(''); }}
+              className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">
+              {tab === 'login' ? 'Zarejestruj się' : 'Zaloguj się'}
+            </button>
+          </p>
+        </motion.div>
+      </div>
     </div>
   );
 }
@@ -219,6 +370,10 @@ export default function App() {
   const [selSpeaker, setSelSpeaker]           = useState('');
   const [selCamera, setSelCamera]             = useState('');
   const [devicesOpen, setDevicesOpen]         = useState(false);
+
+  // App Settings
+  const [appSettOpen, setAppSettOpen]         = useState(false);
+  const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'devices'|'privacy'>('account');
 
   // ── Init ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -763,7 +918,10 @@ export default function App() {
             </button>
           </div>
         </div>
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white font-bold tracking-tight">Cordis</div>
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2">
+          <img src="/cordyn.png" alt="Cordyn" className="w-6 h-6 rounded-lg object-contain"/>
+          <span className="text-white font-bold tracking-tight text-sm">Cordyn</span>
+        </div>
         <div className="flex items-center gap-2">
           <div className="relative group hidden sm:block">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-indigo-400 transition-colors"/>
@@ -772,6 +930,11 @@ export default function App() {
           <button className={`relative w-9 h-9 flex items-center justify-center rounded-full ${gb}`}>
             <Bell size={16}/>
             {incoming.length>0&&<span className="absolute top-2 right-2.5 w-1.5 h-1.5 bg-rose-500 rounded-full border border-zinc-950"/>}
+          </button>
+          <button onClick={() => { setAppSettTab('account'); setAppSettOpen(true); }}
+            title="Ustawienia aplikacji"
+            className={`w-9 h-9 flex items-center justify-center rounded-full ${gb} hover:text-indigo-300 transition-colors shrink-0`}>
+            <Settings size={16}/>
           </button>
           <button onClick={openOwnProfile} className="w-9 h-9 rounded-full border border-white/[0.1] overflow-hidden hover:border-indigo-500/50 transition-colors shrink-0">
             <img src={currentUser ? ava(currentUser) : ''} alt="" className="w-full h-full object-cover"/>
@@ -813,8 +976,14 @@ export default function App() {
               {serverFull?.description&&<p className="text-xs text-zinc-600 mt-0.5 truncate">{serverFull.description}</p>}
             </div>
             <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
-              {serverFull?.categories.map(cat => (
-                <div key={cat.id} className="mb-4">
+              <AnimatePresence mode="wait">
+              {serverFull && <motion.div key={activeServer}
+                initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }} transition={{ duration: 0.18, ease: 'easeOut' }}>
+              {serverFull?.categories.map((cat, catIdx) => (
+                <motion.div key={cat.id} className="mb-4"
+                  initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: catIdx * 0.04, duration: 0.2 }}>
                   <div className="flex items-center justify-between px-2 mb-1 group/cat">
                     <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{cat.name}</span>
                     {isAdmin&&<Plus size={12} className="text-zinc-600 hover:text-white cursor-pointer opacity-0 group-hover/cat:opacity-100 transition-opacity"
@@ -862,8 +1031,10 @@ export default function App() {
                       </div>
                     );
                   })}
-                </div>
+                </motion.div>
               ))}
+              </motion.div>}
+              </AnimatePresence>
               {!serverFull&&activeServer&&<div className="flex justify-center py-8"><Loader2 size={18} className="text-zinc-600 animate-spin"/></div>}
             </div>
           </>}
@@ -1147,7 +1318,11 @@ export default function App() {
 
               {/* Messages */}
               <div className="flex-1 overflow-y-auto p-4 md:p-5 custom-scrollbar flex flex-col">
-                <div className="mt-auto flex flex-col gap-0.5">
+                <AnimatePresence mode="wait" initial={false}>
+                <motion.div key={`${activeServer}-${activeChannel}-${activeDmUserId}`}
+                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: 'easeOut' }}
+                  className="mt-auto flex flex-col gap-0.5">
                   <div className="text-center py-6 mb-2">
                     {activeView==='dms'&&activeDm ? (
                       <><img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className="w-14 h-14 rounded-full mx-auto mb-3 border-4 border-zinc-950 object-cover" alt=""/>
@@ -1209,7 +1384,8 @@ export default function App() {
                     );
                   })}
                   <div ref={bottomRef}/>
-                </div>
+                </motion.div>
+                </AnimatePresence>
               </div>
 
               {/* Input */}
@@ -1644,6 +1820,251 @@ export default function App() {
                 <button onClick={handleSaveRole} disabled={!roleForm.name.trim()} className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 text-white font-bold py-3 rounded-xl transition-colors">
                   {editingRole?'Zapisz zmiany':'Utwórz rolę'}
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── APP SETTINGS ────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {appSettOpen&&currentUser&&(
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={()=>setAppSettOpen(false)}>
+            <motion.div initial={{scale:0.96,opacity:0,y:12}} animate={{scale:1,opacity:1,y:0}} exit={{scale:0.96,opacity:0,y:12}}
+              transition={{duration:0.25,ease:[0.16,1,0.3,1]}}
+              onClick={e=>e.stopPropagation()} className={`${gm} w-full max-w-2xl max-h-[88vh] flex flex-col overflow-hidden`}>
+
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-5 border-b border-white/[0.06] shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center">
+                    <Settings size={15} className="text-indigo-400"/>
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-white leading-tight">Ustawienia</h2>
+                    <p className="text-xs text-zinc-600">{currentUser.username}</p>
+                  </div>
+                </div>
+                <button onClick={()=>setAppSettOpen(false)} className="text-zinc-600 hover:text-white transition-colors"><X size={18}/></button>
+              </div>
+
+              <div className="flex flex-1 overflow-hidden">
+                {/* Sidebar tabs */}
+                <div className="w-48 shrink-0 border-r border-white/[0.06] p-3 flex flex-col gap-0.5">
+                  {([
+                    {id:'account',label:'Konto',icon:<Users size={14}/>},
+                    {id:'appearance',label:'Wygląd',icon:<Image size={14}/>},
+                    {id:'devices',label:'Urządzenia',icon:<Mic size={14}/>},
+                    {id:'privacy',label:'Prywatność',icon:<Shield size={14}/>},
+                  ] as const).map(t=>(
+                    <button key={t.id} onClick={()=>setAppSettTab(t.id)}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left ${
+                        appSettTab===t.id?'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] border border-transparent'}`}>
+                      <span className={appSettTab===t.id?'text-indigo-400':'text-zinc-600'}>{t.icon}</span>
+                      {t.label}
+                    </button>
+                  ))}
+                  <div className="mt-auto pt-3 border-t border-white/[0.06]">
+                    <button onClick={()=>{setAppSettOpen(false);auth.logout().then(()=>{clearToken();setIsAuthenticated(false);setCurrentUser(null);}).catch(()=>{clearToken();setIsAuthenticated(false);setCurrentUser(null);});}}
+                      className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all w-full">
+                      <LogOut size={14}/> Wyloguj
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tab content */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+                  <AnimatePresence mode="wait">
+
+                  {/* ─── KONTO ─── */}
+                  {appSettTab==='account'&&(
+                    <motion.div key="account" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
+                      className="flex flex-col gap-5">
+                      <h3 className="text-sm font-bold text-white">Informacje o koncie</h3>
+
+                      {/* Avatar + banner preview */}
+                      <div className="rounded-2xl overflow-hidden border border-white/[0.07]">
+                        <div className="h-20 relative">
+                          {(profBannerPrev||currentUser.banner_url) ? (
+                            <img src={profBannerPrev||currentUser.banner_url!} className="w-full h-full object-cover" alt=""/>
+                          ) : (
+                            <div className={`w-full h-full bg-gradient-to-r ${editProf?.banner_color||'from-indigo-600 via-purple-600 to-pink-600'}`}/>
+                          )}
+                        </div>
+                        <div className="bg-zinc-900/80 px-4 pb-4 pt-0 relative">
+                          <div className="absolute -top-6 left-4">
+                            <img src={ava(currentUser)} className="w-12 h-12 rounded-2xl border-4 border-zinc-900 object-cover" alt=""/>
+                          </div>
+                          <div className="pt-8">
+                            <p className="font-bold text-white">{editProf?.username||currentUser.username}</p>
+                            <p className="text-xs text-zinc-500">{currentUser.email}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Avatar upload */}
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">Avatar</label>
+                        <label className={`flex items-center gap-2.5 cursor-pointer ${gi} rounded-xl px-4 py-3 text-sm hover:bg-white/[0.07] transition-all border`}>
+                          <Upload size={15} className="text-zinc-500 shrink-0"/>
+                          <span className="text-zinc-400">Zmień avatar</span>
+                          <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden"/>
+                        </label>
+                      </div>
+
+                      {/* Banner */}
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">Banner profilu</label>
+                        <label className={`flex items-center gap-2.5 cursor-pointer ${gi} rounded-xl px-4 py-3 text-sm hover:bg-white/[0.07] transition-all border mb-3`}>
+                          <Upload size={15} className="text-zinc-500 shrink-0"/>
+                          <span className="text-zinc-400">{profBannerPrev?'Zmieniono (niezapisane)':'Zmień banner'}</span>
+                          <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f){setProfBannerFile(f);setProfBannerPrev(URL.createObjectURL(f));}e.target.value='';}} className="hidden"/>
+                        </label>
+                        <div className="grid grid-cols-6 gap-2">
+                          {GRADIENTS.map(g=>(
+                            <button key={g} onClick={()=>setEditProf((p:any)=>({...p,banner_color:g}))}
+                              className={`h-7 rounded-xl bg-gradient-to-r ${g} border-2 transition-all ${editProf?.banner_color===g?'border-white scale-105':'border-transparent hover:scale-105'}`}/>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Fields */}
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Nazwa użytkownika</label>
+                        <input value={editProf?.username||''} onChange={e=>setEditProf((p:any)=>({...p,username:e.target.value}))} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}/>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Status</label>
+                        <input value={editProf?.custom_status||''} onChange={e=>setEditProf((p:any)=>({...p,custom_status:e.target.value}))} placeholder="Ustaw swój status..." className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}/>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Bio</label>
+                        <textarea value={editProf?.bio||''} onChange={e=>setEditProf((p:any)=>({...p,bio:e.target.value}))} rows={3} placeholder="Napisz coś o sobie..." className={`w-full ${gi} rounded-xl px-4 py-3 text-sm resize-none`}/>
+                      </div>
+                      <button onClick={async()=>{await handleSaveProfile();setAppSettOpen(false);setTimeout(()=>setAppSettOpen(true),50);setAppSettTab('account');}}
+                        className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">
+                        Zapisz zmiany
+                      </button>
+                    </motion.div>
+                  )}
+
+                  {/* ─── WYGLĄD ─── */}
+                  {appSettTab==='appearance'&&(
+                    <motion.div key="appearance" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
+                      className="flex flex-col gap-5">
+                      <h3 className="text-sm font-bold text-white">Personalizacja wyglądu</h3>
+                      <div className={`${gi} rounded-2xl p-4 border flex items-center gap-3`}>
+                        <Info size={16} className="text-indigo-400 shrink-0"/>
+                        <p className="text-sm text-zinc-400">Motyw aplikacji oparty jest na ciemnym trybie. Więcej opcji personalizacji wkrótce.</p>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Kolor akcentu</label>
+                        <div className="grid grid-cols-5 gap-2">
+                          {[
+                            {name:'Indigo',cls:'bg-indigo-500'},
+                            {name:'Fioletowy',cls:'bg-violet-500'},
+                            {name:'Różowy',cls:'bg-pink-500'},
+                            {name:'Niebieski',cls:'bg-blue-500'},
+                            {name:'Zielony',cls:'bg-emerald-500'},
+                          ].map(c=>(
+                            <button key={c.name} className={`h-10 rounded-xl ${c.cls} border-2 border-transparent hover:border-white/30 transition-all hover:scale-105 flex items-center justify-center`} title={c.name}>
+                              {c.name==='Indigo'&&<Check size={14} className="text-white"/>}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-xs text-zinc-600 mt-2">Wkrótce: pełna zmiana motywu kolorystycznego</p>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Rozmiar wiadomości</label>
+                        <div className="flex flex-col gap-2">
+                          {['Komfortowy','Kompaktowy'].map((s,i)=>(
+                            <button key={s} className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-all ${i===0?'bg-indigo-500/10 border-indigo-500/30 text-white':'bg-white/[0.02] border-white/[0.05] text-zinc-400 hover:text-zinc-300'}`}>
+                              {s}{i===0&&<Check size={13} className="text-indigo-400"/>}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* ─── URZĄDZENIA ─── */}
+                  {appSettTab==='devices'&&(
+                    <motion.div key="devices" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
+                      className="flex flex-col gap-5">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-white">Urządzenia audio/wideo</h3>
+                        <button onClick={()=>getMediaDevices().then(setDevices).catch(()=>{})}
+                          className={`text-xs ${gb} px-3 py-1.5 rounded-lg flex items-center gap-1.5`}>
+                          <Loader2 size={11}/> Odśwież
+                        </button>
+                      </div>
+                      {devices.length===0&&(
+                        <div className={`${gi} rounded-2xl p-4 border flex items-center gap-3`}>
+                          <AlertCircle size={16} className="text-amber-400 shrink-0"/>
+                          <div>
+                            <p className="text-sm text-zinc-300 font-medium">Brak dostępu do urządzeń</p>
+                            <p className="text-xs text-zinc-500 mt-0.5">Zezwól przeglądarce na dostęp do mikrofonu, aby zobaczyć urządzenia</p>
+                          </div>
+                        </div>
+                      )}
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">Mikrofon ({devices.filter(d=>d.kind==='audioinput').length})</label>
+                        <select value={selMic} onChange={e=>setSelMic(e.target.value)} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}>
+                          <option value="">Domyślny</option>
+                          {devices.filter(d=>d.kind==='audioinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`Mikrofon ${d.deviceId.slice(0,8)}`}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">Głośniki ({devices.filter(d=>d.kind==='audiooutput').length})</label>
+                        <select value={selSpeaker} onChange={e=>{setSelSpeaker(e.target.value);setOutputDevice(e.target.value).catch(()=>{});}} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}>
+                          <option value="">Domyślny</option>
+                          {devices.filter(d=>d.kind==='audiooutput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`Głośnik ${d.deviceId.slice(0,8)}`}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">Kamera ({devices.filter(d=>d.kind==='videoinput').length})</label>
+                        <select value={selCamera} onChange={e=>setSelCamera(e.target.value)} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}>
+                          <option value="">Domyślna</option>
+                          {devices.filter(d=>d.kind==='videoinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`Kamera ${d.deviceId.slice(0,8)}`}</option>)}
+                        </select>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* ─── PRYWATNOŚĆ ─── */}
+                  {appSettTab==='privacy'&&(
+                    <motion.div key="privacy" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
+                      className="flex flex-col gap-5">
+                      <h3 className="text-sm font-bold text-white">Prywatność i bezpieczeństwo</h3>
+                      {[
+                        {label:'Status widoczny dla znajomych',desc:'Inni widzą czy jesteś online/offline/zajęty',on:true},
+                        {label:'Podgląd "pisze..."',desc:'Inni widzą gdy piszesz wiadomość',on:true},
+                        {label:'Potwierdzenia odczytu',desc:'Nadawca widzi że przeczytałeś wiadomość',on:false},
+                        {label:'Zaproszenia od nieznajomych',desc:'Osoby spoza twoich serwerów mogą dodać cię do znajomych',on:true},
+                      ].map(opt=>(
+                        <div key={opt.label} className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-3.5">
+                          <div>
+                            <p className="text-sm font-medium text-white">{opt.label}</p>
+                            <p className="text-xs text-zinc-600 mt-0.5">{opt.desc}</p>
+                          </div>
+                          <button className={`w-11 h-6 rounded-full transition-all shrink-0 ml-4 ${opt.on?'bg-indigo-500':'bg-zinc-700'} relative`}>
+                            <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${opt.on?'left-5.5':'left-0.5'}`} style={{left:opt.on?'calc(100% - 1.375rem)':'0.125rem'}}/>
+                          </button>
+                        </div>
+                      ))}
+                      <div className="mt-2 p-4 bg-rose-500/5 border border-rose-500/15 rounded-2xl">
+                        <h4 className="text-sm font-bold text-rose-400 mb-1">Strefa zagrożenia</h4>
+                        <p className="text-xs text-zinc-500 mb-3">Trwałe akcje których nie można cofnąć</p>
+                        <button className="text-sm font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/15 border border-rose-500/20 px-4 py-2 rounded-xl transition-all">
+                          Usuń konto
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  </AnimatePresence>
+                </div>
               </div>
             </motion.div>
           </motion.div>
