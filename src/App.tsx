@@ -886,57 +886,66 @@ export default function App() {
   const messages = activeView === 'servers' ? channelMsgs : dmMsgs;
 
   return (
-    <div className="flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative"
-      style={{ background: 'radial-gradient(ellipse at 15% 60%,rgba(99,102,241,.18) 0%,transparent 55%),radial-gradient(ellipse at 85% 15%,rgba(139,92,246,.12) 0%,transparent 55%),radial-gradient(ellipse at 50% 100%,rgba(79,70,229,.08) 0%,transparent 50%),#09090b' }}>
+    <div className="flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-[#0a0a0a]">
 
-      {/* TOP NAV */}
-      <nav className="h-14 border-b border-white/[0.06] flex items-center justify-between px-4 md:px-6 bg-zinc-950/80 backdrop-blur-xl shrink-0 z-30 relative">
-        <div className="flex items-center gap-3">
-          <button onClick={() => setIsMobileOpen(v => !v)} className={`md:hidden w-9 h-9 flex items-center justify-center rounded-xl ${gb}`}>
+      {/* TOP NAV — browser-tab style */}
+      <nav className="h-11 border-b border-white/[0.07] flex items-center justify-between shrink-0 z-30 relative bg-[#111111]">
+        {/* Left: mobile toggle + server tabs */}
+        <div className="flex items-center h-full overflow-x-auto">
+          <button onClick={() => setIsMobileOpen(v => !v)} className="md:hidden w-9 h-9 flex items-center justify-center text-zinc-500 hover:text-white ml-2 shrink-0">
             {isMobileOpen ? <X size={18}/> : <Menu size={18}/>}
           </button>
-          <div className="hidden md:flex items-center gap-1 bg-white/[0.03] p-1 rounded-2xl border border-white/[0.05]">
-            {([{v:'friends' as const,i:<Users size={16}/>},{v:'dms' as const,i:<MessageCircle size={16}/>}]).map(({v,i}) => (
-              <button key={v} onClick={() => { setActiveView(v); setActiveServer(''); setActiveChannel(''); }}
-                className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all ${activeView===v?'bg-indigo-500 text-white':'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
+          {/* Friends / DM quick icons */}
+          <div className="hidden md:flex items-center h-full pl-2 gap-0.5 pr-2 border-r border-white/[0.07]">
+            {([{v:'friends' as const,i:<Users size={15}/>,label:'Znajomi'},{v:'dms' as const,i:<MessageCircle size={15}/>,label:'Wiadomości'}]).map(({v,i,label}) => (
+              <button key={v} title={label} onClick={() => { setActiveView(v); setActiveServer(''); setActiveChannel(''); }}
+                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${activeView===v?'bg-indigo-500/20 text-indigo-400':'text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06]'}`}>
                 {i}
               </button>
             ))}
-            <div className="w-px h-5 bg-white/[0.07] mx-0.5"/>
-            {serverList.map(srv => (
-              <button key={srv.id} onClick={() => { setActiveServer(srv.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); }}
-                className={`flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${activeServer===srv.id&&activeView==='servers'?'bg-white/[0.08] text-white border border-white/[0.08]':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] border border-transparent'}`}>
-                <span className="w-6 h-6 rounded-lg bg-zinc-800 flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden">
-                  {srv.icon_url ? <img src={srv.icon_url} className="w-full h-full object-cover"/> : srv.name.charAt(0).toUpperCase()}
-                </span>
-                <span className="hidden lg:inline">{srv.name}</span>
-              </button>
-            ))}
-            <div className="w-px h-5 bg-white/[0.07] mx-0.5"/>
-            <button onClick={() => setCreateSrvOpen(true)} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-white hover:bg-white/5 transition-colors">
-              <Plus size={16}/>
+          </div>
+          {/* Server tabs */}
+          <div className="hidden md:flex items-center h-full">
+            {serverList.map(srv => {
+              const isActive = activeServer===srv.id&&activeView==='servers';
+              return (
+                <button key={srv.id} onClick={() => { setActiveServer(srv.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); }}
+                  className={`flex items-center gap-2 h-full px-4 text-sm font-medium transition-all border-r border-white/[0.05] whitespace-nowrap relative group ${isActive?'text-white bg-[#0a0a0a]':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'}`}>
+                  {isActive&&<span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500"/>}
+                  <span className="w-5 h-5 rounded-md bg-zinc-800 flex items-center justify-center text-[11px] font-bold text-white shrink-0 overflow-hidden">
+                    {srv.icon_url ? <img src={srv.icon_url} className="w-full h-full object-cover" alt=""/> : srv.name.charAt(0).toUpperCase()}
+                  </span>
+                  <span className="max-w-[120px] truncate">{srv.name}</span>
+                </button>
+              );
+            })}
+            <button onClick={() => setCreateSrvOpen(true)}
+              className="flex items-center justify-center w-9 h-full text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.04] transition-all border-r border-white/[0.05]">
+              <Plus size={15}/>
             </button>
           </div>
         </div>
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2">
-          <img src="/cordyn.png" alt="Cordyn" className="w-6 h-6 rounded-lg object-contain"/>
+        {/* Center: branding */}
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none select-none">
+          <img src="/cordyn.png" alt="Cordyn" className="w-5 h-5 rounded-md object-contain opacity-80"/>
           <span className="text-white font-bold tracking-tight text-sm">Cordyn</span>
         </div>
-        <div className="flex items-center gap-2">
+        {/* Right: search + bell + settings + avatar */}
+        <div className="flex items-center gap-1.5 pr-3">
           <div className="relative group hidden sm:block">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-indigo-400 transition-colors"/>
-            <input placeholder="Szukaj..." className={`${gi} rounded-full pl-9 pr-4 py-1.5 text-sm w-32 lg:w-48 focus:w-40 lg:focus:w-64 transition-all duration-300`}/>
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-zinc-400 transition-colors"/>
+            <input placeholder="Szukaj..." className="bg-white/[0.05] border border-white/[0.07] text-white placeholder-zinc-600 outline-none focus:border-white/20 rounded-lg pl-8 pr-10 py-1.5 text-xs w-44 transition-all"/>
+            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-zinc-600 font-mono hidden lg:flex items-center gap-0.5"><span className="border border-zinc-700 rounded px-1 py-0.5">⌘</span><span className="border border-zinc-700 rounded px-1 py-0.5">K</span></span>
           </div>
-          <button className={`relative w-9 h-9 flex items-center justify-center rounded-full ${gb}`}>
-            <Bell size={16}/>
-            {incoming.length>0&&<span className="absolute top-2 right-2.5 w-1.5 h-1.5 bg-rose-500 rounded-full border border-zinc-950"/>}
+          <button className="relative w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all">
+            <Bell size={15}/>
+            {incoming.length>0&&<span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-rose-500 rounded-full border border-[#111]"/>}
           </button>
-          <button onClick={() => { setAppSettTab('account'); setAppSettOpen(true); }}
-            title="Ustawienia aplikacji"
-            className={`w-9 h-9 flex items-center justify-center rounded-full ${gb} hover:text-indigo-300 transition-colors shrink-0`}>
-            <Settings size={16}/>
+          <button onClick={() => { setAppSettTab('account'); setAppSettOpen(true); }} title="Ustawienia"
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all">
+            <Settings size={15}/>
           </button>
-          <button onClick={openOwnProfile} className="w-9 h-9 rounded-full border border-white/[0.1] overflow-hidden hover:border-indigo-500/50 transition-colors shrink-0">
+          <button onClick={openOwnProfile} className="w-7 h-7 rounded-full border border-white/[0.1] overflow-hidden hover:border-white/30 transition-all shrink-0">
             <img src={currentUser ? ava(currentUser) : ''} alt="" className="w-full h-full object-cover"/>
           </button>
         </div>
@@ -945,10 +954,10 @@ export default function App() {
       {isMobileOpen&&<div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-20 md:hidden" onClick={() => setIsMobileOpen(false)}/>}
 
       {/* WORKSPACE */}
-      <main className="flex-1 flex gap-2 md:gap-3 p-2 md:p-3 overflow-hidden relative">
+      <main className="flex-1 flex overflow-hidden relative">
 
         {/* LEFT */}
-        <aside className={`absolute md:relative z-30 md:z-0 w-64 shrink-0 flex flex-col ${gp} rounded-2xl md:rounded-3xl transition-transform duration-300 h-[calc(100%-1rem)] md:h-auto ${isMobileOpen?'translate-x-0':'-translate-x-[120%] md:translate-x-0'}`}>
+        <aside className={`absolute md:relative z-30 md:z-0 w-56 shrink-0 flex flex-col bg-[#111111] border-r border-white/[0.07] transition-transform duration-300 h-full ${isMobileOpen?'translate-x-0':'-translate-x-[120%] md:translate-x-0'}`}>
           {/* mobile server row */}
           <div className="md:hidden p-2 border-b border-white/[0.05] flex gap-1.5 overflow-x-auto">
             {([{v:'friends' as const,i:<Users size={16}/>},{v:'dms' as const,i:<MessageCircle size={16}/>}]).map(({v,i}) => (
@@ -967,72 +976,112 @@ export default function App() {
 
           {/* servers */}
           {activeView==='servers'&&<>
-            <div className="p-3.5 border-b border-white/[0.05] cursor-pointer hover:bg-white/[0.03] transition-colors group"
+            <div className="px-4 py-3 border-b border-white/[0.07] cursor-pointer hover:bg-white/[0.03] transition-colors group"
               onClick={() => { if(isAdmin){setSrvSettTab('overview');setSrvSettOpen(true);} }}>
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-bold text-white truncate">{serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'Serwer'}</h2>
-                {isAdmin&&<Settings2 size={14} className="text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0"/>}
+                {isAdmin&&<Settings2 size={13} className="text-zinc-700 group-hover:text-zinc-400 transition-colors shrink-0"/>}
               </div>
-              {serverFull?.description&&<p className="text-xs text-zinc-600 mt-0.5 truncate">{serverFull.description}</p>}
+              {serverFull?.description&&<p className="text-[11px] text-zinc-600 mt-0.5 truncate">{serverFull.description}</p>}
+              {!serverFull?.description&&<p className="text-[11px] text-zinc-700 mt-0.5">{isAdmin?'Kliknij — ustawienia serwera':'Witaj!'}</p>}
             </div>
-            <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto py-2 custom-scrollbar">
               <AnimatePresence mode="wait">
               {serverFull && <motion.div key={activeServer}
-                initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 10 }} transition={{ duration: 0.18, ease: 'easeOut' }}>
-              {serverFull?.categories.map((cat, catIdx) => (
-                <motion.div key={cat.id} className="mb-4"
-                  initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: catIdx * 0.04, duration: 0.2 }}>
-                  <div className="flex items-center justify-between px-2 mb-1 group/cat">
-                    <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{cat.name}</span>
-                    {isAdmin&&<Plus size={12} className="text-zinc-600 hover:text-white cursor-pointer opacity-0 group-hover/cat:opacity-100 transition-opacity"
-                      onClick={() => { setChCreateCatId(cat.id); setChCreateOpen(true); setNewChName(''); }}/>}
-                  </div>
-                  {cat.channels.map(ch => {
-                    const isActiveVoice = activeCall?.channelId === ch.id;
-                    const chVoiceUsers  = voiceUsers[ch.id] || [];
-                    return (
-                      <div key={ch.id}>
-                        <button onClick={() => { ch.type==='text' ? (setActiveChannel(ch.id),setIsMobileOpen(false)) : joinVoiceCh(ch); }}
-                          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg mb-0.5 group/ch transition-all ${
-                            (activeChannel===ch.id&&ch.type==='text')||(isActiveVoice&&ch.type==='voice')
-                              ?'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
-                              :'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300 border border-transparent'}`}>
-                          <div className="flex items-center gap-2 truncate flex-1">
-                            {ch.type==='text'?<Hash size={14} className={`shrink-0 ${activeChannel===ch.id?'text-indigo-400':'text-zinc-600'}`}/>
-                              :<Volume2 size={14} className={`shrink-0 ${isActiveVoice?'text-emerald-400':'text-zinc-600'}`}/>}
-                            <span className="text-sm truncate">{ch.name}</span>
-                            {ch.is_private&&<Lock size={10} className="text-zinc-700 shrink-0"/>}
-                            {ch.type==='voice'&&chVoiceUsers.length>0&&<span className="text-[10px] text-emerald-500 ml-auto font-medium">{chVoiceUsers.length}</span>}
-                          </div>
-                          {isAdmin&&<div className="flex gap-1 opacity-0 group-hover/ch:opacity-100 transition-opacity">
-                            <Settings2 size={12} className="text-zinc-600 hover:text-zinc-300" onClick={e=>{e.stopPropagation();openChEdit(ch);}}/>
-                            <Trash2 size={12} className="text-zinc-600 hover:text-rose-400" onClick={e=>{e.stopPropagation();handleDeleteCh(ch.id);}}/>
-                          </div>}
-                        </button>
-                        {ch.type==='voice'&&chVoiceUsers.length>0&&(
-                          <div className="ml-6 mb-1">
-                            {chVoiceUsers.map(u=>{
-                              const isSpeaking = speakingUsers.has(u.id);
-                              const isMuted = u.id===currentUser?.id && activeCall?.channelId===ch.id && activeCall.isMuted;
-                              return (
-                                <div key={u.id} className="flex items-center gap-1.5 py-0.5 px-1">
-                                  <div className={`relative shrink-0 rounded-full transition-all duration-150 ${isSpeaking?'ring-1 ring-emerald-500 ring-offset-1 ring-offset-zinc-900':''}`}>
-                                    <img src={ava(u)} className="w-4 h-4 rounded-full object-cover block" alt=""/>
-                                  </div>
-                                  <span className={`text-xs truncate ${isSpeaking?'text-emerald-400':'text-zinc-500'}`}>{u.username}</span>
-                                  {isMuted&&<MicOff size={9} className="text-rose-400 shrink-0"/>}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
+                initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 8 }} transition={{ duration: 0.16, ease: 'easeOut' }}>
+              {serverFull?.categories.map((cat, catIdx) => {
+                const textChs  = cat.channels.filter(c=>c.type==='text');
+                const voiceChs = cat.channels.filter(c=>c.type==='voice');
+                return (
+                  <motion.div key={cat.id} className="mb-1"
+                    initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: catIdx * 0.04, duration: 0.18 }}>
+
+                    {/* Text channels — SPACES */}
+                    {textChs.length>0&&<>
+                      <div className="flex items-center justify-between px-4 pt-3 pb-1 group/cat">
+                        <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{cat.name}</span>
+                        {isAdmin&&<Plus size={11} className="text-zinc-700 hover:text-zinc-400 cursor-pointer opacity-0 group-hover/cat:opacity-100 transition-opacity"
+                          onClick={() => { setChCreateCatId(cat.id); setChCreateOpen(true); setNewChName(''); setNewChType('text'); }}/>}
                       </div>
-                    );
-                  })}
-                </motion.div>
-              ))}
+                      {textChs.map(ch => {
+                        const isAct = activeChannel===ch.id;
+                        return (
+                          <div key={ch.id} className="px-2">
+                            <button onClick={() => { setActiveChannel(ch.id); setIsMobileOpen(false); }}
+                              className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md mb-0.5 group/ch transition-all ${
+                                isAct?'bg-white/[0.08] text-white':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300'}`}>
+                              <div className="flex items-center gap-2 truncate flex-1 min-w-0">
+                                <Hash size={13} className={`shrink-0 ${isAct?'text-zinc-300':'text-zinc-600'}`}/>
+                                <span className="text-[13px] font-medium truncate">{ch.name}</span>
+                                {ch.is_private&&<Lock size={9} className="text-zinc-700 shrink-0"/>}
+                              </div>
+                              {isAdmin&&<div className="flex gap-0.5 opacity-0 group-hover/ch:opacity-100 transition-opacity shrink-0">
+                                <button onClick={e=>{e.stopPropagation();openChEdit(ch);}} className="w-5 h-5 flex items-center justify-center rounded hover:bg-white/10"><Settings2 size={10}/></button>
+                                <button onClick={e=>{e.stopPropagation();handleDeleteCh(ch.id);}} className="w-5 h-5 flex items-center justify-center rounded hover:bg-rose-500/20 hover:text-rose-400"><Trash2 size={10}/></button>
+                              </div>}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </>}
+
+                    {/* Voice channels — VOICE ROOMS */}
+                    {voiceChs.length>0&&<>
+                      <div className="flex items-center justify-between px-4 pt-3 pb-1 group/vcat">
+                        <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Voice Rooms</span>
+                        {isAdmin&&<Plus size={11} className="text-zinc-700 hover:text-zinc-400 cursor-pointer opacity-0 group-hover/vcat:opacity-100 transition-opacity"
+                          onClick={() => { setChCreateCatId(cat.id); setChCreateOpen(true); setNewChName(''); setNewChType('voice'); }}/>}
+                      </div>
+                      {voiceChs.map(ch => {
+                        const isActiveVoice = activeCall?.channelId===ch.id;
+                        const chVoiceUsers  = voiceUsers[ch.id]||[];
+                        const hasUsers = chVoiceUsers.length>0;
+                        return (
+                          <div key={ch.id} className="px-2">
+                            <button onClick={() => joinVoiceCh(ch)}
+                              className={`w-full px-2 py-1.5 rounded-md mb-0.5 group/ch transition-all ${
+                                isActiveVoice?'bg-emerald-500/10 text-emerald-400':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300'}`}>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <Volume2 size={13} className={`shrink-0 ${isActiveVoice?'text-emerald-400':hasUsers?'text-zinc-400':'text-zinc-600'}`}/>
+                                  <span className="text-[13px] font-medium truncate">{ch.name}</span>
+                                </div>
+                                {/* Stacked avatars for voice users */}
+                                {hasUsers&&(
+                                  <div className="flex -space-x-1.5 shrink-0">
+                                    {chVoiceUsers.slice(0,3).map(u=>(
+                                      <img key={u.id} src={ava(u)} className={`w-4 h-4 rounded-full border ${isActiveVoice?'border-emerald-900':'border-[#111]'} object-cover`} alt="" title={u.username}/>
+                                    ))}
+                                    {chVoiceUsers.length>3&&<div className="w-4 h-4 rounded-full border border-[#111] bg-zinc-700 flex items-center justify-center text-[8px] font-bold text-white">+{chVoiceUsers.length-3}</div>}
+                                  </div>
+                                )}
+                              </div>
+                              {/* speaking users list */}
+                              {hasUsers&&<div className="mt-1 flex flex-col gap-0.5">
+                                {chVoiceUsers.map(u=>{
+                                  const isSpeaking=speakingUsers.has(u.id);
+                                  const isMuted=u.id===currentUser?.id&&activeCall?.channelId===ch.id&&activeCall.isMuted;
+                                  return (
+                                    <div key={u.id} className="flex items-center gap-1.5 pl-5">
+                                      <div className={`relative shrink-0 ${isSpeaking?'ring-1 ring-emerald-500 rounded-full':''}`}>
+                                        <img src={ava(u)} className="w-3.5 h-3.5 rounded-full object-cover" alt=""/>
+                                      </div>
+                                      <span className={`text-[11px] truncate ${isSpeaking?'text-emerald-400':'text-zinc-500'}`}>{u.username}</span>
+                                      {isMuted&&<MicOff size={8} className="text-rose-400 shrink-0"/>}
+                                    </div>
+                                  );
+                                })}
+                              </div>}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </>}
+                  </motion.div>
+                );
+              })}
               </motion.div>}
               </AnimatePresence>
               {!serverFull&&activeServer&&<div className="flex justify-center py-8"><Loader2 size={18} className="text-zinc-600 animate-spin"/></div>}
@@ -1062,29 +1111,29 @@ export default function App() {
 
           {activeView==='friends'&&<div className="p-3.5 border-b border-white/[0.05]"><h2 className="text-sm font-bold text-white">Znajomi</h2></div>}
 
-          {/* user bar */}
-          <div className="p-2 border-t border-white/[0.05]">
-            <div className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] p-2 rounded-xl">
-              <div className="flex items-center gap-2 overflow-hidden cursor-pointer group" onClick={openOwnProfile}>
-                <div className="relative shrink-0">
-                  <img src={currentUser?ava(currentUser):''} className="w-8 h-8 rounded-full object-cover" alt=""/>
-                  <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${sc(currentUser?.status??'offline')} border-2 border-zinc-950 rounded-full`}/>
-                </div>
-                <div className="flex flex-col truncate">
-                  <span className="text-sm font-bold text-white leading-none truncate group-hover:text-indigo-300 transition-colors">{currentUser?.username}</span>
-                  <span className="text-[10px] text-zinc-600 mt-0.5 truncate">{currentUser?.custom_status||currentUser?.status}</span>
-                </div>
+          {/* USER BAR — bottom of sidebar */}
+          <div className="shrink-0 px-3 py-2.5 border-t border-white/[0.07] bg-[#0f0f0f]">
+            <div className="flex items-center gap-2.5">
+              <div className="relative shrink-0 cursor-pointer" onClick={openOwnProfile}>
+                <img src={currentUser?ava(currentUser):''} className="w-8 h-8 rounded-full object-cover" alt=""/>
+                <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${sc(currentUser?.status??'offline')} border-2 border-[#0f0f0f] rounded-full`}/>
               </div>
-              <div className="flex gap-1 shrink-0">
-                <button className={`w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/[0.06] text-zinc-500 hover:text-zinc-300 transition-colors`}><Mic size={13}/></button>
-                <button onClick={handleLogout} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-500/20 text-zinc-500 hover:text-rose-400 transition-colors"><LogOut size={13}/></button>
+              <div className="flex-1 min-w-0 cursor-pointer" onClick={openOwnProfile}>
+                <p className="text-[13px] font-semibold text-white leading-tight truncate hover:text-zinc-300 transition-colors">{currentUser?.username}</p>
+                {(currentUser?.custom_status||currentUser?.status)&&
+                  <p className="text-[11px] text-zinc-500 truncate leading-tight mt-0.5">{currentUser?.custom_status||currentUser?.status}</p>}
+              </div>
+              <div className="flex items-center gap-0.5 shrink-0">
+                <button title="Wycisz mikrofon" className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all"><Mic size={13}/></button>
+                <button title="Ustawienia aplikacji" onClick={()=>{setAppSettTab('account');setAppSettOpen(true);}}
+                  className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all"><Settings size={13}/></button>
               </div>
             </div>
           </div>
         </aside>
 
         {/* CENTER */}
-        <section className={`flex-1 flex flex-col ${gp} rounded-2xl md:rounded-3xl overflow-hidden min-w-0`}>
+        <section className="flex-1 flex flex-col bg-[#0a0a0a] overflow-hidden min-w-0">
           {showCallPanel && activeCall ? (
             /* ── CALL PANEL ─────────────────────────────────────────── */
             <div className="flex-1 flex flex-col overflow-hidden">
@@ -1284,35 +1333,35 @@ export default function App() {
           ) : (
             <>
               {/* Chat header */}
-              <header className="h-13 border-b border-white/[0.05] flex items-center justify-between px-4 md:px-5 bg-zinc-950/40 backdrop-blur-md z-10 shrink-0">
+              <header className="h-12 border-b border-white/[0.07] flex items-center justify-between px-5 bg-[#0a0a0a] z-10 shrink-0">
                 <div className="flex items-center gap-2.5 min-w-0">
                   {activeView==='dms' ? (activeDm ? (
-                    <div className="flex items-center gap-2">
-                      <div className="relative"><img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className="w-7 h-7 rounded-full object-cover" alt=""/><div className={`absolute bottom-0 right-0 w-2 h-2 ${sc(activeDm.other_status)} border border-zinc-950 rounded-full`}/></div>
+                    <div className="flex items-center gap-2.5">
+                      <div className="relative"><img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className="w-7 h-7 rounded-full object-cover" alt=""/><div className={`absolute bottom-0 right-0 w-2 h-2 ${sc(activeDm.other_status)} border border-[#0a0a0a] rounded-full`}/></div>
                       <h3 className="font-bold text-white text-sm">{activeDm.other_username}</h3>
                     </div>
-                  ) : <h3 className="font-bold text-white text-sm">DM</h3>) : (
-                    <>
-                      <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 hidden sm:flex items-center justify-center shrink-0">
-                        <Hash size={15} className="text-indigo-400"/>
-                      </div>
-                      <div className="truncate">
-                        <h3 className="font-bold text-white text-sm">{activeCh?.name||activeChannel}</h3>
-                        {activeCh?.description&&<p className="text-[11px] text-zinc-600 truncate hidden sm:block">{activeCh.description}</p>}
-                      </div>
-                    </>
+                  ) : <h3 className="font-bold text-white text-sm">Wiadomości</h3>) : (
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Hash size={16} className="text-zinc-500 shrink-0"/>
+                      <h3 className="font-bold text-white text-sm truncate">{activeCh?.name||activeChannel}</h3>
+                      {activeCh?.description&&<span className="text-zinc-600 text-xs hidden lg:block">— {activeCh.description}</span>}
+                    </div>
                   )}
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {activeView==='dms'&&activeDm&&<div className="flex gap-1.5 mr-2 border-r border-white/[0.07] pr-2.5">
-                    <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'voice')} className={`w-8 h-8 flex items-center justify-center rounded-xl ${gb}`}><Phone size={14}/></button>
-                    <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'video')} className={`w-8 h-8 flex items-center justify-center rounded-xl ${gb}`}><Video size={14}/></button>
-                  </div>}
-                  <div className="hidden lg:flex -space-x-2 mr-2">
-                    {members.slice(0,3).map(m=><img key={m.id} src={ava(m)} className="w-6 h-6 rounded-full border-2 border-zinc-950 object-cover" alt="" title={m.username}/>)}
-                    {members.length>3&&<div className="w-6 h-6 rounded-full border-2 border-zinc-950 bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-white">+{members.length-3}</div>}
+                <div className="flex items-center gap-2 shrink-0">
+                  {activeView==='dms'&&activeDm&&<>
+                    <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'voice')} className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all"><Phone size={14}/></button>
+                    <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'video')} className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all"><Video size={14}/></button>
+                    <div className="w-px h-4 bg-white/[0.07]"/>
+                  </>}
+                  {/* Member avatars stacked */}
+                  <div className="hidden md:flex -space-x-2">
+                    {members.slice(0,4).map(m=>(
+                      <img key={m.id} src={ava(m)} className="w-6 h-6 rounded-full border-2 border-[#0a0a0a] object-cover" alt="" title={m.username}/>
+                    ))}
+                    {members.length>4&&<div className="w-6 h-6 rounded-full border-2 border-[#0a0a0a] bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-white">+{members.length-4}</div>}
                   </div>
-                  <button className={`w-8 h-8 flex items-center justify-center rounded-xl ${gb}`}><MoreHorizontal size={14}/></button>
+                  <button className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all"><MoreHorizontal size={14}/></button>
                 </div>
               </header>
 
@@ -1337,50 +1386,74 @@ export default function App() {
 
                   {(messages as (MessageFull|DmMessageFull)[]).map((msg, idx) => {
                     const isOwn = currentUser?.id === msg.sender_id;
+                    // Date separator
+                    const msgDate = new Date(msg.created_at).toDateString();
+                    const prevDate = idx>0 ? new Date(messages[idx-1].created_at).toDateString() : null;
+                    const showSep = idx===0 || msgDate!==prevDate;
+                    const sepLabel = (() => {
+                      const d=new Date(msg.created_at), today=new Date(), yesterday=new Date();
+                      yesterday.setDate(yesterday.getDate()-1);
+                      if(d.toDateString()===today.toDateString()) return 'Dzisiaj';
+                      if(d.toDateString()===yesterday.toDateString()) return 'Wczoraj';
+                      return d.toLocaleDateString('pl-PL',{day:'numeric',month:'long',year:'numeric'});
+                    })();
                     return (
-                      <motion.div key={msg.id}
-                        initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: Math.min(idx * 0.015, 0.1), duration: 0.12 }}
-                        className="flex gap-3 group hover:bg-white/[0.015] px-2 py-1 rounded-xl -mx-2 transition-colors">
-                        <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} alt=""
-                          onClick={()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar,status:(msg as MessageFull).sender_status})}
-                          className="w-9 h-9 rounded-xl object-cover shrink-0 cursor-pointer hover:opacity-80 transition-opacity mt-0.5"/>
-                        <div className="flex-1 min-w-0">
-                          {msg.reply_to_id&&msg.reply_content&&(
-                            <div className="flex items-center gap-1.5 mb-1 text-xs text-zinc-500 border-l-2 border-indigo-500/40 pl-2 py-0.5 bg-white/[0.02] rounded-r-lg">
-                              <Reply size={10} className="text-indigo-400 shrink-0"/>
-                              <span className="font-semibold text-zinc-400">{msg.reply_username}</span>
-                              <span className="truncate text-zinc-600">{msg.reply_content}</span>
-                            </div>
-                          )}
-                          <div className="flex items-baseline gap-2 mb-0.5 flex-wrap">
-                            <span className="font-bold text-white text-sm cursor-pointer hover:text-indigo-300 transition-colors"
-                              onClick={()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar})}>
-                              {msg.sender_username}
-                            </span>
-                            {(msg as MessageFull).sender_role&&<span className="text-[10px] text-zinc-600 bg-white/[0.04] px-1.5 py-0.5 rounded">{(msg as MessageFull).sender_role}</span>}
-                            <span className="text-[11px] text-zinc-700">{ft(msg.created_at)}</span>
-                            {(msg as MessageFull).edited&&<span className="text-[10px] text-zinc-700 italic">(edytowano)</span>}
+                      <React.Fragment key={msg.id}>
+                        {showSep&&(
+                          <div className="flex items-center gap-3 my-4">
+                            <div className="flex-1 h-px bg-white/[0.07]"/>
+                            <span className="text-[11px] font-semibold text-zinc-600 uppercase tracking-widest shrink-0">{sepLabel}</span>
+                            <div className="flex-1 h-px bg-white/[0.07]"/>
                           </div>
-                          <p className="text-sm text-zinc-300 leading-relaxed break-words">{msg.content}</p>
-                          {msg.attachment_url&&(
-                            <div className="mt-2 max-w-xs">
-                              {/\.(jpg|jpeg|png|gif|webp)$/i.test(msg.attachment_url) ? (
-                                <img src={msg.attachment_url} alt="attachment" className="rounded-xl max-h-56 object-contain border border-white/[0.06] cursor-pointer hover:opacity-90 transition-opacity"
-                                  onClick={()=>window.open(msg.attachment_url!,'_blank')}/>
-                              ) : (
-                                <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer" className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl ${gb} text-xs`}>
-                                  <Paperclip size={12}/> {msg.attachment_url.split('/').pop()}
-                                </a>
+                        )}
+                        <motion.div
+                          initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: Math.min(idx * 0.012, 0.08), duration: 0.12 }}
+                          className="flex gap-3 group hover:bg-white/[0.02] px-3 py-1.5 rounded-xl -mx-3 transition-colors">
+                          <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} alt=""
+                            onClick={()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar,status:(msg as MessageFull).sender_status})}
+                            className="w-9 h-9 rounded-full object-cover shrink-0 cursor-pointer hover:opacity-80 transition-opacity mt-0.5"/>
+                          <div className="flex-1 min-w-0">
+                            {msg.reply_to_id&&msg.reply_content&&(
+                              <div className="flex items-center gap-1.5 mb-1.5 text-xs text-zinc-500 border-l-2 border-zinc-600/50 pl-2.5 py-0.5">
+                                <Reply size={9} className="text-zinc-500 shrink-0"/>
+                                <span className="font-semibold text-zinc-500">{msg.reply_username}</span>
+                                <span className="truncate text-zinc-600">{msg.reply_content}</span>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                              <span className="font-bold text-white text-sm cursor-pointer hover:underline"
+                                onClick={()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar})}>
+                                {msg.sender_username}
+                              </span>
+                              {(msg as MessageFull).sender_role&&(
+                                <span className="text-[10px] font-semibold text-zinc-400 bg-zinc-800 px-2 py-0.5 rounded-full uppercase tracking-wide">
+                                  {(msg as MessageFull).sender_role}
+                                </span>
                               )}
+                              <span className="text-[11px] text-zinc-600">{ft(msg.created_at)}</span>
+                              {(msg as MessageFull).edited&&<span className="text-[10px] text-zinc-700 italic">(edytowano)</span>}
                             </div>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 self-start mt-1">
-                          <button onClick={()=>setReplyTo(msg)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/[0.06] text-zinc-600 hover:text-zinc-300 transition-colors"><Reply size={12}/></button>
-                          {isOwn&&<button onClick={()=>confirmAction('Usunąć wiadomość?', () => { if(activeView==='servers') messagesApi.delete(msg.id).catch(console.error); else dmsApi.deleteMessage(msg.id).catch(console.error); })} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-500/10 text-zinc-600 hover:text-rose-400 transition-colors"><Trash2 size={12}/></button>}
-                        </div>
-                      </motion.div>
+                            <p className="text-[13px] text-zinc-300 leading-relaxed break-words">{msg.content}</p>
+                            {msg.attachment_url&&(
+                              <div className="mt-2 max-w-sm">
+                                {/\.(jpg|jpeg|png|gif|webp)$/i.test(msg.attachment_url) ? (
+                                  <img src={msg.attachment_url} alt="attachment" className="rounded-xl max-h-64 object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                                    onClick={()=>window.open(msg.attachment_url!,'_blank')}/>
+                                ) : (
+                                  <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-900 border border-white/[0.08] text-xs text-zinc-400 hover:text-white transition-colors">
+                                    <Paperclip size={12}/> {msg.attachment_url.split('/').pop()}
+                                  </a>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 self-start mt-1">
+                            <button onClick={()=>setReplyTo(msg)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/[0.08] text-zinc-600 hover:text-zinc-300 transition-colors"><Reply size={11}/></button>
+                            {isOwn&&<button onClick={()=>confirmAction('Usunąć wiadomość?', () => { if(activeView==='servers') messagesApi.delete(msg.id).catch(console.error); else dmsApi.deleteMessage(msg.id).catch(console.error); })} className="w-6 h-6 flex items-center justify-center rounded hover:bg-rose-500/10 text-zinc-600 hover:text-rose-400 transition-colors"><Trash2 size={11}/></button>}
+                          </div>
+                        </motion.div>
+                      </React.Fragment>
                     );
                   })}
                   <div ref={bottomRef}/>
@@ -1389,47 +1462,58 @@ export default function App() {
               </div>
 
               {/* Input */}
-              <div className="shrink-0 p-3 bg-zinc-950/80 border-t border-white/[0.05]">
-                {replyTo&&(
-                  <div className="flex items-center justify-between bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-3 py-1.5 mb-2 text-xs">
-                    <div className="flex items-center gap-1.5 text-zinc-400 truncate">
-                      <Reply size={11} className="text-indigo-400 shrink-0"/>
-                      <span className="text-indigo-300 font-semibold">{replyTo.sender_username}</span>
-                      <span className="truncate text-zinc-600">{replyTo.content}</span>
-                    </div>
-                    <button onClick={()=>setReplyTo(null)} className="text-zinc-500 hover:text-white ml-2 shrink-0"><X size={12}/></button>
-                  </div>
-                )}
-                {attachPreview&&(
-                  <div className="relative inline-block mb-2">
-                    <img src={attachPreview} alt="" className="h-16 rounded-xl object-cover border border-white/[0.07]"/>
-                    <button onClick={()=>{setAttachFile(null);setAttachPreview(null);}} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-500 rounded-full flex items-center justify-center"><X size={10} className="text-white"/></button>
-                  </div>
-                )}
-                {attachFile&&!attachPreview&&(
-                  <div className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl ${gb} text-xs mb-2`}>
-                    <Paperclip size={11}/> {attachFile.name}
-                    <button onClick={()=>setAttachFile(null)} className="ml-1 text-zinc-500 hover:text-rose-400"><X size={10}/></button>
-                  </div>
-                )}
-                {sendError&&(
-                  <div className="flex items-center gap-1.5 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-1.5 mb-2 text-xs text-rose-400">
-                    <X size={11} className="shrink-0"/>
-                    <span className="flex-1">{sendError}</span>
-                    <button type="button" onClick={()=>setSendError('')} className="text-rose-500 hover:text-rose-300 ml-1"><X size={10}/></button>
-                  </div>
-                )}
+              <div className="shrink-0 px-4 pb-4 pt-2 bg-[#0a0a0a] border-t border-white/[0.07]">
+                {/* Reply / attach previews */}
+                <AnimatePresence>
+                  {replyTo&&(
+                    <motion.div initial={{opacity:0,height:0}} animate={{opacity:1,height:'auto'}} exit={{opacity:0,height:0}}
+                      className="flex items-center justify-between bg-zinc-900/70 border border-white/[0.07] rounded-lg px-3 py-1.5 mb-2 text-xs overflow-hidden">
+                      <div className="flex items-center gap-1.5 text-zinc-400 truncate">
+                        <Reply size={10} className="text-zinc-500 shrink-0"/>
+                        <span className="font-semibold text-zinc-300">{replyTo.sender_username}</span>
+                        <span className="truncate text-zinc-600">{replyTo.content}</span>
+                      </div>
+                      <button onClick={()=>setReplyTo(null)} className="text-zinc-600 hover:text-white ml-2 shrink-0"><X size={11}/></button>
+                    </motion.div>
+                  )}
+                  {attachPreview&&(
+                    <motion.div initial={{opacity:0,height:0}} animate={{opacity:1,height:'auto'}} exit={{opacity:0,height:0}} className="relative inline-block mb-2 overflow-hidden">
+                      <img src={attachPreview} alt="" className="h-16 rounded-lg object-cover"/>
+                      <button onClick={()=>{setAttachFile(null);setAttachPreview(null);}} className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 rounded-full flex items-center justify-center"><X size={9} className="text-white"/></button>
+                    </motion.div>
+                  )}
+                  {attachFile&&!attachPreview&&(
+                    <motion.div initial={{opacity:0,height:0}} animate={{opacity:1,height:'auto'}} exit={{opacity:0,height:0}} className="overflow-hidden mb-2">
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-white/[0.07] text-xs text-zinc-400">
+                        <Paperclip size={10}/> {attachFile.name}
+                        <button onClick={()=>setAttachFile(null)} className="ml-1 text-zinc-600 hover:text-rose-400"><X size={9}/></button>
+                      </div>
+                    </motion.div>
+                  )}
+                  {sendError&&(
+                    <motion.div initial={{opacity:0,height:0}} animate={{opacity:1,height:'auto'}} exit={{opacity:0,height:0}}
+                      className="flex items-center gap-1.5 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-1.5 mb-2 text-xs text-rose-400 overflow-hidden">
+                      <AlertCircle size={11} className="shrink-0"/>
+                      <span className="flex-1">{sendError}</span>
+                      <button type="button" onClick={()=>setSendError('')}><X size={10}/></button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                {/* Main input row */}
                 <form onSubmit={handleSend}>
-                  <div className={`flex items-center gap-2 ${gi} rounded-2xl px-3 py-2.5 border`}>
+                  <div className="flex items-center gap-3 bg-zinc-900/80 border border-white/[0.08] rounded-xl px-3 py-2.5 hover:border-white/[0.12] transition-colors focus-within:border-white/[0.15]">
                     <input type="file" ref={attachRef} onChange={handleAttach} accept="image/*" className="hidden"/>
-                    <button type="button" onClick={()=>attachRef.current?.click()} className="text-zinc-600 hover:text-zinc-400 transition-colors shrink-0"><Image size={17}/></button>
+                    <button type="button" onClick={()=>attachRef.current?.click()}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.07] transition-all shrink-0">
+                      <Plus size={16}/>
+                    </button>
                     <input type="text" value={msgInput} onChange={e=>setMsgInput(e.target.value)}
                       onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey) handleSend(e as any); }}
-                      placeholder={activeView==='dms'&&activeDm?`Wiadomość do ${activeDm.other_username}`:`Wiadomość w #${activeCh?.name||'...'}`}
-                      className="flex-1 bg-transparent text-sm text-zinc-200 placeholder-zinc-700 outline-none min-w-0"/>
-                    <button type="button" className="text-zinc-600 hover:text-zinc-400 transition-colors shrink-0"><Smile size={17}/></button>
+                      placeholder={activeView==='dms'&&activeDm?`Wiadomość do ${activeDm.other_username}...`:`Wiadomość w #${activeCh?.name||''}...`}
+                      className="flex-1 bg-transparent text-[13px] text-zinc-200 placeholder-zinc-700 outline-none min-w-0"/>
+                    <button type="button" className="text-zinc-600 hover:text-zinc-400 transition-colors shrink-0"><Smile size={16}/></button>
                     <button type="submit" disabled={(!msgInput.trim()&&!attachFile)||sending}
-                      className="w-8 h-8 rounded-xl bg-indigo-500 hover:bg-indigo-400 disabled:opacity-30 flex items-center justify-center text-white transition-colors shrink-0">
+                      className="w-8 h-8 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-25 disabled:cursor-not-allowed flex items-center justify-center text-white transition-all shrink-0 shadow-lg shadow-sky-500/20">
                       {sending?<Loader2 size={14} className="animate-spin"/>:<Send size={14}/>}
                     </button>
                   </div>
@@ -1439,23 +1523,97 @@ export default function App() {
           )}
         </section>
 
-        {/* RIGHT */}
-        <aside className="hidden xl:flex w-60 shrink-0 flex-col gap-2.5">
-          <div className={`${gp} rounded-3xl p-4 flex-1 overflow-y-auto`}>
-            <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">Członkowie</h3>
-            {members.slice(0,12).map(m=>(
-              <div key={m.id} className="flex items-center gap-2.5 mb-3 cursor-pointer group" onClick={()=>openProfile(m)}>
-                <div className="relative shrink-0">
-                  <img src={ava(m)} className="w-7 h-7 rounded-full object-cover" alt=""/>
-                  <div className={`absolute bottom-0 right-0 w-2 h-2 ${sc(m.status)} border border-zinc-950 rounded-full`}/>
+        {/* RIGHT — Live voice + Activity */}
+        <aside className="hidden xl:flex w-64 shrink-0 flex-col gap-0 bg-[#111111] border-l border-white/[0.07] overflow-y-auto custom-scrollbar">
+          {/* ─ LIVE VOICE BLOCK ─ */}
+          {activeView==='servers'&&(()=>{
+            // find first voice channel on current server with users
+            const allVoiceChs = serverFull?.categories.flatMap(c=>c.channels.filter(ch=>ch.type==='voice'))||[];
+            const liveCh = allVoiceChs.find(ch=>(voiceUsers[ch.id]||[]).length>0);
+            const liveUsers = liveCh ? (voiceUsers[liveCh.id]||[]) : [];
+            if(!liveCh&&!activeCall?.channelId) return null;
+            const displayCh = liveCh || activeCh;
+            const displayUsers = liveCh ? liveUsers : (activeCall?.channelId?(voiceUsers[activeCall.channelId]||[]):[]);
+            if(!displayCh) return null;
+            return (
+              <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}} className="p-4 border-b border-white/[0.07]">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"/>
+                    <span className="text-[12px] font-bold text-white">Live: {displayCh.name}</span>
+                  </div>
+                  {activeCall&&<span className="text-[11px] font-mono text-emerald-400 font-semibold">{fmtDur(callDuration)}</span>}
                 </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-zinc-300 truncate group-hover:text-white transition-colors">{m.username}</p>
-                  <p className="text-[10px] text-zinc-600 truncate">{m.role_name}</p>
-                </div>
+                {/* Participant thumbnails */}
+                {displayUsers.length>0&&(
+                  <div className="grid grid-cols-2 gap-1.5 mb-3">
+                    {displayUsers.slice(0,3).map(u=>{
+                      const isSpeaking=speakingUsers.has(u.id);
+                      return (
+                        <div key={u.id} className={`relative bg-zinc-900 rounded-xl overflow-hidden aspect-video flex items-center justify-center border ${isSpeaking?'border-emerald-500/60':'border-white/[0.07]'}`}>
+                          <img src={ava(u)} className="w-10 h-10 rounded-full object-cover" alt=""/>
+                          <div className="absolute bottom-0 left-0 right-0 px-1.5 pb-1 flex items-center gap-1">
+                            <div className={`w-1.5 h-1.5 rounded-full ${sc(u.status)} shrink-0`}/>
+                            <span className="text-[10px] font-semibold text-white truncate">{u.username}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {displayUsers.length>3&&(
+                      <div className="bg-zinc-900 rounded-xl aspect-video flex items-center justify-center border border-white/[0.07]">
+                        <span className="text-xs font-bold text-zinc-500">+{displayUsers.length-3} więcej</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Join button */}
+                <button onClick={()=>liveCh&&joinVoiceCh(liveCh)}
+                  className="w-full flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 border border-white/[0.08] text-white text-[13px] font-semibold py-2.5 rounded-xl transition-all">
+                  <Volume2 size={14} className="text-zinc-300"/>
+                  Dołącz
+                </button>
+              </motion.div>
+            );
+          })()}
+
+          {/* ─ ACTIVITY FEED ─ */}
+          <div className="p-4 flex-1">
+            <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">Aktywność</h3>
+            {activeView==='servers'&&channelMsgs.length>0 ? (
+              <div className="flex flex-col gap-3">
+                {channelMsgs.slice(-6).reverse().map(msg=>(
+                  <div key={msg.id} className="flex items-start gap-2.5 group cursor-pointer" onClick={()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar})}>
+                    <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} className="w-6 h-6 rounded-full object-cover shrink-0 mt-0.5" alt=""/>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] leading-snug text-zinc-400">
+                        <span className="font-semibold text-zinc-200 group-hover:text-white transition-colors">{msg.sender_username}</span>
+                        {' '}napisał w{' '}
+                        <span className="text-zinc-300 font-medium">#{activeCh?.name||'kanale'}</span>
+                      </p>
+                      <p className="text-[11px] text-zinc-600 truncate mt-0.5">"{msg.content.slice(0,50)}{msg.content.length>50?'…':''}"</p>
+                      <p className="text-[10px] text-zinc-700 mt-0.5">{ft(msg.created_at)}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-            {members.length===0&&!activeServer&&<p className="text-xs text-zinc-700">Brak serwera</p>}
+            ) : (
+              <div className="flex flex-col gap-3">
+                {members.slice(0,8).map(m=>(
+                  <div key={m.id} className="flex items-center gap-2.5 cursor-pointer group" onClick={()=>openProfile(m)}>
+                    <div className="relative shrink-0">
+                      <img src={ava(m)} className="w-6 h-6 rounded-full object-cover" alt=""/>
+                      <div className={`absolute bottom-0 right-0 w-2 h-2 ${sc(m.status)} border border-[#111] rounded-full`}/>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-medium text-zinc-400 truncate group-hover:text-zinc-200 transition-colors">{m.username}</p>
+                      <p className="text-[10px] text-zinc-700 truncate">{m.role_name||m.status}</p>
+                    </div>
+                  </div>
+                ))}
+                {!activeServer&&<p className="text-xs text-zinc-700">Wybierz serwer</p>}
+              </div>
+            )}
           </div>
         </aside>
       </main>
