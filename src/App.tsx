@@ -375,6 +375,14 @@ export default function App() {
   const [appSettOpen, setAppSettOpen]         = useState(false);
   const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'devices'|'privacy'>('account');
 
+  // Typing indicator
+  const [typingUsers, setTypingUsers]         = useState<Record<string,string>>({});
+  const typingTimersRef                        = useRef<Record<string,ReturnType<typeof setTimeout>>>({});
+  const typingEmitTimerRef                     = useRef<ReturnType<typeof setTimeout>|null>(null);
+
+  // Server activity log
+  const [serverActivity, setServerActivity]   = useState<{id:string;icon:string;text:string;time:string}[]>([]);
+
   // ── Init ────────────────────────────────────────────────────────
   useEffect(() => {
     const token = getToken();
@@ -398,8 +406,28 @@ export default function App() {
       setMembers(p => p.map(m => m.id === user_id ? { ...m, status } : m));
     });
     // Voice channel events (route through voiceHandlerRef for fresh closures)
-    sock.on('voice_user_joined', (d: any) => voiceHandlerRef.current.onUserJoined?.(d));
-    sock.on('voice_user_left',   (d: any) => voiceHandlerRef.current.onUserLeft?.(d));
+    sock.on('voice_user_joined', (d: any) => {
+      voiceHandlerRef.current.onUserJoined?.(d);
+      const act = { id: Date.now().toString()+Math.random().toString(36).slice(2), icon: '🎙️', text: `${d.user.username} dołączył do kanału głosowego`, time: new Date().toISOString() };
+      setServerActivity(p => [act, ...p].slice(0, 20));
+    });
+    sock.on('voice_user_left', (d: any) => {
+      voiceHandlerRef.current.onUserLeft?.(d);
+      const act = { id: Date.now().toString()+Math.random().toString(36).slice(2), icon: '🔇', text: `Użytkownik opuścił kanał głosowy`, time: new Date().toISOString() };
+      setServerActivity(p => [act, ...p].slice(0, 20));
+    });
+    // Typing indicators
+    sock.on('user_typing', ({user_id, username, channel_id}: any) => {
+      if (channel_id !== prevChRef.current) return;
+      clearTimeout(typingTimersRef.current[user_id]);
+      setTypingUsers(p => ({...p, [user_id]: username}));
+      typingTimersRef.current[user_id] = setTimeout(() =>
+        setTypingUsers(p => { const n={...p}; delete n[user_id]; return n; }), 3500);
+    });
+    sock.on('user_stop_typing', ({user_id}: any) => {
+      clearTimeout(typingTimersRef.current[user_id]);
+      setTypingUsers(p => { const n={...p}; delete n[user_id]; return n; });
+    });
     // WebRTC signaling
     sock.on('webrtc_offer',  (d: any) => voiceHandlerRef.current.onOffer?.(d));
     sock.on('webrtc_answer', (d: any) => voiceHandlerRef.current.onAnswer?.(d));
@@ -431,6 +459,8 @@ export default function App() {
     if (!activeServer) return;
     setServerFull(null);
     setChannelMsgs([]);
+    setServerActivity([]);
+    setTypingUsers({});
     // Izolacja per-serwer: czyść cały stan poprzedniego serwera
     setSrvBannerFile(null);
     setSrvIconFile(null);
@@ -454,6 +484,7 @@ export default function App() {
     if (prevChRef.current) leaveChannel(prevChRef.current);
     prevChRef.current = activeChannel;
     joinChannel(activeChannel);
+    setTypingUsers({});
     messagesApi.list(activeChannel).then(setChannelMsgs).catch(console.error);
     setReplyTo(null);
   }, [activeChannel, activeView]);
@@ -562,6 +593,10 @@ export default function App() {
   }).catch(console.error);
   const loadFriends = () => { friendsApi.list().then(setFriends).catch(console.error); friendsApi.requests().then(setFriendReqs).catch(console.error); };
   const loadDms    = () => dmsApi.conversations().then(setDmConvs).catch(console.error);
+  const addServerActivity = (entry: {icon:string;text:string}) => {
+    const id = Date.now().toString()+Math.random().toString(36).slice(2);
+    setServerActivity(p => [{id, ...entry, time: new Date().toISOString()}, ...p].slice(0, 20));
+  };
 
   // ── Auth ────────────────────────────────────────────────────────
   const handleAuth = (u: UserProfile) => { setCurrentUser(u); setEditProf({...u}); setIsAuthenticated(true); };
@@ -638,6 +673,7 @@ export default function App() {
     if (!newChName.trim() || !activeServer) return;
     try {
       await channelsApi.create({ server_id: activeServer, name: newChName.trim(), type: newChType, category_id: chCreateCatId || undefined });
+      addServerActivity({ icon: newChType==='voice'?'🎙️':'#️⃣', text: `Kanał #${newChName.trim()} został utworzony` });
       setChCreateOpen(false); setNewChName('');
       const s = await serversApi.get(activeServer); setServerFull(s);
     } catch (err) { console.error(err); }
@@ -734,14 +770,16 @@ export default function App() {
     const f = e.target.files?.[0]; if (!f) return;
     setProfBannerFile(f); setProfBannerPrev(URL.createObjectURL(f));
   };
-  const handleSaveProfile = async () => {
+  const handleSaveProfile = async (opts?: { closeProfileModal?: boolean }) => {
     if (!editProf) return;
     try {
       let bannerUrl = editProf.banner_url;
       if (profBannerFile) { const r = await users.uploadBanner(profBannerFile); bannerUrl = r.banner_url; setProfBannerFile(null); setProfBannerPrev(null); }
       const upd = await users.updateMe({ username: editProf.username, bio: editProf.bio, custom_status: editProf.custom_status, banner_color: editProf.banner_color, banner_url: bannerUrl });
-      setCurrentUser(upd); setEditProf({...upd}); setSelUser(upd); setProfileOpen(false);
-    } catch (err) { console.error(err); }
+      setCurrentUser(upd); setEditProf({...upd}); setSelUser(upd);
+      if (opts?.closeProfileModal !== false) setProfileOpen(false);
+      addToast('Profil zaktualizowany', 'success');
+    } catch (err) { addToast('Błąd zapisu profilu', 'error'); }
   };
   const openDm = (userId: string) => { setActiveDmUserId(userId); setActiveView('dms'); setProfileOpen(false); };
 
@@ -1499,6 +1537,25 @@ export default function App() {
                     </motion.div>
                   )}
                 </AnimatePresence>
+                {/* Typing indicator */}
+                <AnimatePresence>
+                  {activeView==='servers'&&(()=>{
+                    const typers=Object.entries(typingUsers).filter(([uid])=>uid!==currentUser?.id).map(([,n])=>n);
+                    if(!typers.length) return null;
+                    const txt=typers.length===1?`${typers[0]} pisze`:typers.length===2?`${typers[0]} i ${typers[1]} piszą`:`${typers.slice(0,-1).join(', ')} i ${typers.slice(-1)[0]} piszą`;
+                    return (
+                      <motion.div key="typing-ind" initial={{opacity:0,height:0}} animate={{opacity:1,height:'auto'}} exit={{opacity:0,height:0}}
+                        className="flex items-center gap-1.5 px-1 mb-1.5 overflow-hidden">
+                        <span className="text-[11px] text-zinc-500 leading-none">{txt}</span>
+                        <span className="flex gap-[3px] items-center">
+                          {[0,1,2].map(i=>(
+                            <span key={i} className="w-1 h-1 bg-zinc-500 rounded-full animate-bounce inline-block" style={{animationDelay:`${i*150}ms`}}/>
+                          ))}
+                        </span>
+                      </motion.div>
+                    );
+                  })()}
+                </AnimatePresence>
                 {/* Main input row */}
                 <form onSubmit={handleSend}>
                   <div className="flex items-center gap-3 bg-zinc-900/80 border border-white/[0.08] rounded-xl px-3 py-2.5 hover:border-white/[0.12] transition-colors focus-within:border-white/[0.15]">
@@ -1507,7 +1564,20 @@ export default function App() {
                       className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.07] transition-all shrink-0">
                       <Plus size={16}/>
                     </button>
-                    <input type="text" value={msgInput} onChange={e=>setMsgInput(e.target.value)}
+                    <input type="text" value={msgInput}
+                      onChange={e=>{
+                        const v=e.target.value; setMsgInput(v);
+                        if(activeChannel&&activeView==='servers'){
+                          if(v.trim()){
+                            getSocket()?.emit('typing_start',activeChannel);
+                            if(typingEmitTimerRef.current) clearTimeout(typingEmitTimerRef.current);
+                            typingEmitTimerRef.current=setTimeout(()=>getSocket()?.emit('typing_stop',activeChannel),2000);
+                          } else {
+                            if(typingEmitTimerRef.current){clearTimeout(typingEmitTimerRef.current);typingEmitTimerRef.current=null;}
+                            getSocket()?.emit('typing_stop',activeChannel);
+                          }
+                        }
+                      }}
                       onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey) handleSend(e as any); }}
                       placeholder={activeView==='dms'&&activeDm?`Wiadomość do ${activeDm.other_username}...`:`Wiadomość w #${activeCh?.name||''}...`}
                       className="flex-1 bg-transparent text-[13px] text-zinc-200 placeholder-zinc-700 outline-none min-w-0"/>
@@ -1578,43 +1648,74 @@ export default function App() {
           })()}
 
           {/* ─ ACTIVITY FEED ─ */}
-          <div className="p-4 flex-1">
-            <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">Aktywność</h3>
-            {activeView==='servers'&&channelMsgs.length>0 ? (
-              <div className="flex flex-col gap-3">
-                {channelMsgs.slice(-6).reverse().map(msg=>(
-                  <div key={msg.id} className="flex items-start gap-2.5 group cursor-pointer" onClick={()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar})}>
-                    <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} className="w-6 h-6 rounded-full object-cover shrink-0 mt-0.5" alt=""/>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[12px] leading-snug text-zinc-400">
-                        <span className="font-semibold text-zinc-200 group-hover:text-white transition-colors">{msg.sender_username}</span>
-                        {' '}napisał w{' '}
-                        <span className="text-zinc-300 font-medium">#{activeCh?.name||'kanale'}</span>
-                      </p>
-                      <p className="text-[11px] text-zinc-600 truncate mt-0.5">"{msg.content.slice(0,50)}{msg.content.length>50?'…':''}"</p>
-                      <p className="text-[10px] text-zinc-700 mt-0.5">{ft(msg.created_at)}</p>
+          {activeView==='servers'&&(
+            <div className="p-4 border-b border-white/[0.07] shrink-0">
+              <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">Aktywność</h3>
+              {serverActivity.length>0 ? (
+                <div className="flex flex-col gap-2.5">
+                  {serverActivity.slice(0,8).map(a=>(
+                    <div key={a.id} className="flex items-start gap-2">
+                      <span className="text-sm shrink-0 leading-none mt-0.5">{a.icon}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] text-zinc-400 leading-snug">{a.text}</p>
+                        <p className="text-[10px] text-zinc-700 mt-0.5">{ft(a.time)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-zinc-700 italic">Brak aktywności na serwerze</p>
+              )}
+            </div>
+          )}
+
+          {/* ─ MEMBERS ONLINE / OFFLINE ─ */}
+          {activeView==='servers'&&members.length>0&&(()=>{
+            const online  = members.filter(m=>m.status==='online'||m.status==='idle'||m.status==='dnd');
+            const offline = members.filter(m=>m.status==='offline'||!m.status);
+            return (
+              <div className="p-4 flex-1 overflow-y-auto custom-scrollbar">
+                {online.length>0&&(
+                  <div className="mb-4">
+                    <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Online — {online.length}</h3>
+                    <div className="flex flex-col gap-0.5">
+                      {online.map(m=>(
+                        <div key={m.id} className="flex items-center gap-2.5 cursor-pointer group px-2 py-1.5 rounded-xl hover:bg-white/[0.05] -mx-2 transition-colors" onClick={()=>openProfile(m)}>
+                          <div className="relative shrink-0">
+                            <img src={ava(m)} className="w-7 h-7 rounded-full object-cover" alt=""/>
+                            <div className={`absolute -bottom-px -right-px w-2.5 h-2.5 ${sc(m.status)} border-2 border-[#111111] rounded-full`}/>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[12px] font-semibold text-zinc-300 truncate group-hover:text-white transition-colors">{m.username}</p>
+                            {m.role_name&&<p className="text-[10px] text-zinc-600 truncate">{m.role_name}</p>}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {members.slice(0,8).map(m=>(
-                  <div key={m.id} className="flex items-center gap-2.5 cursor-pointer group" onClick={()=>openProfile(m)}>
-                    <div className="relative shrink-0">
-                      <img src={ava(m)} className="w-6 h-6 rounded-full object-cover" alt=""/>
-                      <div className={`absolute bottom-0 right-0 w-2 h-2 ${sc(m.status)} border border-[#111] rounded-full`}/>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[12px] font-medium text-zinc-400 truncate group-hover:text-zinc-200 transition-colors">{m.username}</p>
-                      <p className="text-[10px] text-zinc-700 truncate">{m.role_name||m.status}</p>
+                )}
+                {offline.length>0&&(
+                  <div>
+                    <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Offline — {offline.length}</h3>
+                    <div className="flex flex-col gap-0.5">
+                      {offline.map(m=>(
+                        <div key={m.id} className="flex items-center gap-2.5 cursor-pointer group px-2 py-1.5 rounded-xl hover:bg-white/[0.05] -mx-2 transition-colors" onClick={()=>openProfile(m)}>
+                          <div className="relative shrink-0">
+                            <img src={ava(m)} className="w-7 h-7 rounded-full object-cover opacity-40" alt=""/>
+                            <div className="absolute -bottom-px -right-px w-2.5 h-2.5 bg-zinc-600 border-2 border-[#111111] rounded-full"/>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[12px] font-medium text-zinc-600 truncate group-hover:text-zinc-400 transition-colors">{m.username}</p>
+                            {m.role_name&&<p className="text-[10px] text-zinc-700 truncate">{m.role_name}</p>}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ))}
-                {!activeServer&&<p className="text-xs text-zinc-700">Wybierz serwer</p>}
+                )}
               </div>
-            )}
-          </div>
+            );
+          })()}
         </aside>
       </main>
 
@@ -2100,7 +2201,7 @@ export default function App() {
                         <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Bio</label>
                         <textarea value={editProf?.bio||''} onChange={e=>setEditProf((p:any)=>({...p,bio:e.target.value}))} rows={3} placeholder="Napisz coś o sobie..." className={`w-full ${gi} rounded-xl px-4 py-3 text-sm resize-none`}/>
                       </div>
-                      <button onClick={async()=>{await handleSaveProfile();setAppSettOpen(false);setTimeout(()=>setAppSettOpen(true),50);setAppSettTab('account');}}
+                      <button onClick={()=>handleSaveProfile({ closeProfileModal: false })}
                         className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">
                         Zapisz zmiany
                       </button>
