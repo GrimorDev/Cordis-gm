@@ -162,6 +162,12 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
       io.to(`user:${to}`).emit('webrtc_ice', { from: user.id, candidate });
     });
 
+    // ── Voice state (mute/deafen) ────────────────────────────────────
+    socket.on('voice_state', ({ muted, deafened, channel_id, to_user_id }) => {
+      if (channel_id) socket.to(`voice:${channel_id}`).emit('voice_user_state', { user_id: user.id, muted, deafened });
+      if (to_user_id) io.to(`user:${to_user_id}`).emit('voice_user_state', { user_id: user.id, muted, deafened });
+    });
+
     // ── Screen share signaling ────────────────────────────────────────
     socket.on('screen_share_start', ({ to_user_id, channel_id }) => {
       if (to_user_id) io.to(`user:${to_user_id}`).emit('screen_share_start', { from: user.id });

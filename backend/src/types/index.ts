@@ -118,6 +118,7 @@ export interface ServerToClientEvents {
   friend_accepted: (data: { user: UserPublic }) => void;
   screen_share_start: (data: { from: string }) => void;
   screen_share_stop: (data: { from: string }) => void;
+  voice_user_state: (data: { user_id: string; muted: boolean; deafened: boolean }) => void;
   error: (data: { message: string }) => void;
 }
 
@@ -138,6 +139,7 @@ export interface ClientToServerEvents {
   webrtc_ice: (data: { to: string; candidate: RTCIceCandidateInit }) => void;
   screen_share_start: (data: { to_user_id?: string; channel_id?: string }) => void;
   screen_share_stop: (data: { to_user_id?: string; channel_id?: string }) => void;
+  voice_state: (data: { muted: boolean; deafened: boolean; channel_id?: string; to_user_id?: string }) => void;
 }
 
 export interface MessageWithSender extends Message {

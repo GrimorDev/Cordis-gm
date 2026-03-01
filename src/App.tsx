@@ -340,6 +340,9 @@ export default function App() {
   const [createSrvMode, setCreateSrvMode]     = useState<'create'|'join'>('create');
   const [createSrvName, setCreateSrvName]     = useState('');
   const [joinCode, setJoinCode]               = useState('');
+  const [createSrvIconFile, setCreateSrvIconFile]     = useState<File|null>(null);
+  const [createSrvIconPreview, setCreateSrvIconPreview] = useState<string|null>(null);
+  const createSrvIconRef = useRef<HTMLInputElement>(null);
 
   const [srvSettOpen, setSrvSettOpen]         = useState(false);
   const [srvSettTab, setSrvSettTab]           = useState<'overview'|'roles'|'members'|'invites'>('overview');
@@ -383,6 +386,9 @@ export default function App() {
   // Screen share state
   const [sharingUserId, setSharingUserId]     = useState<string|null>(null);
   const [screenShareTick, setScreenShareTick] = useState(0); // forces re-render when remote screen streams change
+
+  // Voice state of other participants (muted/deafened) - keyed by user id
+  const [voiceUserStates, setVoiceUserStates] = useState<Record<string, { muted: boolean; deafened: boolean }>>({});
 
   // WebRTC state
   const [speakingUsers, setSpeakingUsers]     = useState(new Set<string>());
@@ -491,6 +497,10 @@ export default function App() {
     sock.on('webrtc_offer',  (d: any) => voiceHandlerRef.current.onOffer?.(d));
     sock.on('webrtc_answer', (d: any) => voiceHandlerRef.current.onAnswer?.(d));
     sock.on('webrtc_ice',    (d: any) => voiceHandlerRef.current.onIce?.(d));
+    // Voice state of other participants (muted/deafened)
+    sock.on('voice_user_state' as any, ({ user_id, muted, deafened }: { user_id: string; muted: boolean; deafened: boolean }) => {
+      setVoiceUserStates(p => ({ ...p, [user_id]: { muted, deafened } }));
+    });
     // Screen share signaling
     sock.on('screen_share_start' as any, ({ from }: { from: string }) => {
       setSharingUserId(from);
@@ -690,6 +700,7 @@ export default function App() {
     const stop = speakStopRef.current.get(userId);
     if (stop) { stop(); speakStopRef.current.delete(userId); }
     setSpeakingUsers(p => { const n = new Set(p); n.delete(userId); return n; });
+    setVoiceUserStates(p => { const n = {...p}; delete n[userId]; return n; });
   };
   const openPeer = async (remoteUserId: string, isInitiator: boolean, sdpOffer?: RTCSessionDescriptionInit) => {
     const existing = peerConnsRef.current.get(remoteUserId);
@@ -886,8 +897,14 @@ export default function App() {
     if (!createSrvName.trim()) return;
     try {
       const s = await serversApi.create(createSrvName.trim());
+      if (createSrvIconFile) {
+        const iconUrl = await uploadFile(createSrvIconFile, 'servers');
+        await serversApi.update(s.id, { icon_url: iconUrl });
+        s.icon_url = iconUrl;
+      }
       setServerList(p => [...p, s]); setActiveServer(s.id); setActiveView('servers');
       setActiveChannel(''); setCreateSrvOpen(false); setCreateSrvName('');
+      setCreateSrvIconFile(null); setCreateSrvIconPreview(null);
     } catch (err) { console.error(err); }
   };
   const handleJoinServer = async () => {
@@ -1136,11 +1153,17 @@ export default function App() {
     const muted = !activeCall?.isMuted;
     localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !muted; });
     setActiveCall(p => p ? {...p, isMuted: muted} : p);
+    const call = activeCallRef.current;
+    if (call?.channelId) getSocket().emit('voice_state' as any, { muted, deafened: call.isDeafened, channel_id: call.channelId });
+    if (call?.userId)    getSocket().emit('voice_state' as any, { muted, deafened: call.isDeafened, to_user_id: call.userId });
   };
   const toggleDeafen = () => {
     const deaf = !activeCall?.isDeafened;
     muteAllRemote(deaf);
     setActiveCall(p => p ? {...p, isDeafened: deaf} : p);
+    const call = activeCallRef.current;
+    if (call?.channelId) getSocket().emit('voice_state' as any, { muted: call.isMuted, deafened: deaf, channel_id: call.channelId });
+    if (call?.userId)    getSocket().emit('voice_state' as any, { muted: call.isMuted, deafened: deaf, to_user_id: call.userId });
   };
   const toggleCamera = async () => {
     if (activeCall?.isCameraOn) {
@@ -1392,15 +1415,18 @@ export default function App() {
                               {/* speaking users list */}
                               {hasUsers&&<div className="mt-1 flex flex-col gap-0.5">
                                 {chVoiceUsers.map(u=>{
-                                  const isSpeaking=speakingUsers.has(u.id);
-                                  const isMuted=u.id===currentUser?.id&&activeCall?.channelId===ch.id&&activeCall.isMuted;
+                                  const isSpeaking = speakingUsers.has(u.id);
+                                  const isSelf     = u.id === currentUser?.id && activeCall?.channelId === ch.id;
+                                  const isMuted    = isSelf ? !!activeCall?.isMuted    : !!(voiceUserStates[u.id]?.muted);
+                                  const isDeafened = isSelf ? !!activeCall?.isDeafened : !!(voiceUserStates[u.id]?.deafened);
                                   return (
                                     <div key={u.id} className="flex items-center gap-1.5 pl-5">
-                                      <div className={`relative shrink-0 ${isSpeaking?'ring-1 ring-emerald-500 rounded-full':''}`}>
+                                      <div className={`relative shrink-0 ${isSpeaking&&!isMuted?'ring-1 ring-emerald-500 rounded-full':''}`}>
                                         <img src={ava(u)} className="w-3.5 h-3.5 rounded-full object-cover" alt=""/>
                                       </div>
-                                      <span className={`text-[11px] truncate ${isSpeaking?'text-emerald-400':'text-zinc-500'}`}>{u.username}</span>
-                                      {isMuted&&<MicOff size={8} className="text-rose-400 shrink-0"/>}
+                                      <span className={`text-[11px] truncate ${isSpeaking&&!isMuted?'text-emerald-400':isMuted?'text-rose-400/70':'text-zinc-500'}`}>{u.username}</span>
+                                      {isMuted    && <MicOff  size={8} className="text-rose-400 shrink-0"/>}
+                                      {isDeafened && <VolumeX size={8} className="text-rose-400 shrink-0"/>}
                                     </div>
                                   );
                                 })}
@@ -1582,28 +1608,38 @@ export default function App() {
 
                 const channelParticipants = activeCall.channelId ? (voiceUsers[activeCall.channelId]||[]).filter(u=>u.id!==currentUser?.id).map(u=>{
                   const isSpeaking = speakingUsers.has(u.id);
+                  const uMuted    = voiceUserStates[u.id]?.muted    ?? false;
+                  const uDeafened = voiceUserStates[u.id]?.deafened ?? false;
                   return (
                     <div key={u.id} className="flex flex-col items-center gap-2">
-                      <div className={`relative p-1 rounded-2xl border-2 transition-all duration-150 ${isSpeaking?'border-emerald-500 shadow-[0_0_12px_2px_rgba(16,185,129,0.45)]':'border-white/10'}`}>
+                      <div className={`relative p-1 rounded-2xl border-2 transition-all duration-150 ${isSpeaking&&!uMuted?'border-emerald-500 shadow-[0_0_12px_2px_rgba(16,185,129,0.45)]':uMuted?'border-rose-500/40':'border-white/10'}`}>
                         <img src={ava(u)} className={`${hasScreenShare?'w-14 h-14':'w-24 h-24'} rounded-xl object-cover`} alt=""/>
-                        <div className={`absolute bottom-1 right-1 w-5 h-5 rounded-full flex items-center justify-center ${isSpeaking?'bg-emerald-500':'bg-zinc-700'}`}><Mic size={9} className="text-white"/></div>
+                        <div className={`absolute bottom-1 right-1 w-5 h-5 rounded-full flex items-center justify-center ${uMuted?'bg-rose-500':isSpeaking?'bg-emerald-500':'bg-zinc-700'}`}>
+                          {uMuted ? <MicOff size={9} className="text-white"/> : <Mic size={9} className="text-white"/>}
+                        </div>
+                        {uDeafened && <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-rose-500 flex items-center justify-center"><VolumeX size={8} className="text-white"/></div>}
                       </div>
-                      <p className={`text-xs font-bold ${isSpeaking?'text-emerald-400':'text-white'}`}>{u.username}</p>
+                      <p className={`text-xs font-bold ${isSpeaking&&!uMuted?'text-emerald-400':uMuted?'text-rose-400':'text-white'}`}>{u.username}</p>
                     </div>
                   );
                 }) : [];
 
                 const dmPartnerBlock = activeCall.userId && activeCall.username ? (()=>{
                   const partnerSpeaking = speakingUsers.has(activeCall.userId!);
+                  const pMuted    = voiceUserStates[activeCall.userId!]?.muted    ?? false;
+                  const pDeafened = voiceUserStates[activeCall.userId!]?.deafened ?? false;
                   return (
                     <div key="partner" className="flex flex-col items-center gap-2">
-                      <div className={`relative p-1 rounded-2xl border-2 transition-all duration-150 ${partnerSpeaking?'border-emerald-500 shadow-[0_0_12px_2px_rgba(16,185,129,0.45)]':'border-white/10'}`}>
+                      <div className={`relative p-1 rounded-2xl border-2 transition-all duration-150 ${partnerSpeaking&&!pMuted?'border-emerald-500 shadow-[0_0_12px_2px_rgba(16,185,129,0.45)]':pMuted?'border-rose-500/40':'border-white/10'}`}>
                         <div className={`${hasScreenShare?'w-14 h-14':'w-24 h-24'} rounded-xl bg-zinc-800 border border-white/[0.06] flex items-center justify-center font-bold text-zinc-600 ${hasScreenShare?'text-2xl':'text-4xl'}`}>
                           {activeCall.username.charAt(0).toUpperCase()}
                         </div>
-                        <div className={`absolute bottom-1 right-1 w-5 h-5 rounded-full flex items-center justify-center ${partnerSpeaking?'bg-emerald-500':'bg-zinc-700'}`}><Mic size={9} className="text-white"/></div>
+                        <div className={`absolute bottom-1 right-1 w-5 h-5 rounded-full flex items-center justify-center ${pMuted?'bg-rose-500':partnerSpeaking?'bg-emerald-500':'bg-zinc-700'}`}>
+                          {pMuted ? <MicOff size={9} className="text-white"/> : <Mic size={9} className="text-white"/>}
+                        </div>
+                        {pDeafened && <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-rose-500 flex items-center justify-center"><VolumeX size={8} className="text-white"/></div>}
                       </div>
-                      <p className={`text-xs font-bold ${partnerSpeaking?'text-emerald-400':'text-white'}`}>{activeCall.username}</p>
+                      <p className={`text-xs font-bold ${partnerSpeaking&&!pMuted?'text-emerald-400':pMuted?'text-rose-400':'text-white'}`}>{activeCall.username}</p>
                     </div>
                   );
                 })() : null;
@@ -2318,25 +2354,106 @@ export default function App() {
       <AnimatePresence>
         {createSrvOpen&&(
           <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={()=>setCreateSrvOpen(false)}>
-            <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
-              onClick={e=>e.stopPropagation()} className={`${gm} rounded-3xl p-7 w-full max-w-md`}>
-              <div className="flex items-center justify-between mb-5"><h2 className="text-lg font-bold text-white">Serwer</h2><button onClick={()=>setCreateSrvOpen(false)} className="text-zinc-600 hover:text-white"><X size={17}/></button></div>
-              <div className="flex gap-1.5 mb-5 bg-white/[0.03] p-1 rounded-xl">
-                {(['create','join'] as const).map(m=><button key={m} onClick={()=>setCreateSrvMode(m)}
-                  className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${createSrvMode===m?'bg-indigo-500 text-white':'text-zinc-500 hover:text-white'}`}>{m==='create'?'Utwórz':'Dołącz'}</button>)}
+            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4"
+            onClick={()=>{ setCreateSrvOpen(false); setCreateSrvIconFile(null); setCreateSrvIconPreview(null); setCreateSrvName(''); setJoinCode(''); }}>
+            <motion.div initial={{scale:0.93,opacity:0,y:16}} animate={{scale:1,opacity:1,y:0}} exit={{scale:0.93,opacity:0,y:16}} transition={{type:'spring',stiffness:380,damping:32}}
+              onClick={e=>e.stopPropagation()} className={`${gm} rounded-3xl w-full max-w-sm overflow-hidden`}>
+
+              {/* Mode tabs */}
+              <div className="flex border-b border-white/[0.06]">
+                {(['create','join'] as const).map(m=>(
+                  <button key={m} onClick={()=>setCreateSrvMode(m)}
+                    className={`flex-1 py-4 text-sm font-bold transition-all relative ${createSrvMode===m?'text-white':'text-zinc-500 hover:text-zinc-300'}`}>
+                    {m==='create'?'Utwórz serwer':'Dołącz do serwera'}
+                    {createSrvMode===m&&<motion.div layoutId="srv-tab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500" transition={{type:'spring',stiffness:400,damping:30}}/>}
+                  </button>
+                ))}
               </div>
-              {createSrvMode==='create' ? (
-                <div className="flex flex-col gap-3">
-                  <input value={createSrvName} onChange={e=>setCreateSrvName(e.target.value)} placeholder="Nazwa serwera..." className={`${gi} rounded-xl px-4 py-3 text-sm w-full`}/>
-                  <button onClick={handleCreateServer} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">Utwórz</button>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  <input value={joinCode} onChange={e=>setJoinCode(e.target.value)} placeholder="Kod zaproszenia..." className={`${gi} rounded-xl px-4 py-3 text-sm w-full`}/>
-                  <button onClick={handleJoinServer} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">Dołącz</button>
-                </div>
-              )}
+
+              <AnimatePresence mode="wait">
+                {createSrvMode==='create' ? (
+                  <motion.div key="create" initial={{opacity:0,x:-16}} animate={{opacity:1,x:0}} exit={{opacity:0,x:16}} transition={{duration:0.18}}
+                    className="p-7 flex flex-col items-center gap-5">
+                    {/* Avatar upload */}
+                    <div className="flex flex-col items-center gap-2">
+                      <button onClick={()=>createSrvIconRef.current?.click()}
+                        className="relative w-24 h-24 rounded-2xl overflow-hidden group cursor-pointer border-2 border-dashed border-white/20 hover:border-indigo-500/60 transition-all bg-zinc-800/60">
+                        {createSrvIconPreview
+                          ? <img src={createSrvIconPreview} className="w-full h-full object-cover" alt=""/>
+                          : <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 text-zinc-500 group-hover:text-indigo-400 transition-colors">
+                              <Upload size={20}/>
+                              <span className="text-[10px] font-semibold">Avatar</span>
+                            </div>
+                        }
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <Upload size={16} className="text-white"/>
+                        </div>
+                      </button>
+                      <p className="text-[11px] text-zinc-600">Kliknij aby dodać avatar serwera</p>
+                    </div>
+                    <input ref={createSrvIconRef} type="file" accept="image/*" className="hidden"
+                      onChange={e=>{ const f=e.target.files?.[0]; if(f){setCreateSrvIconFile(f);setCreateSrvIconPreview(URL.createObjectURL(f));} e.target.value=''; }}/>
+
+                    {/* Server name */}
+                    <div className="w-full flex flex-col gap-1.5">
+                      <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Nazwa serwera</label>
+                      <input
+                        value={createSrvName}
+                        onChange={e=>setCreateSrvName(e.target.value)}
+                        onKeyDown={e=>{ if(e.key==='Enter' && createSrvName.trim()) handleCreateServer(); }}
+                        placeholder="Mój świetny serwer..."
+                        className={`${gi} rounded-xl px-4 py-3 text-sm w-full`}
+                        autoFocus
+                      />
+                    </div>
+
+                    {/* Buttons */}
+                    <div className="w-full flex gap-2 pt-1">
+                      <button onClick={()=>{ setCreateSrvOpen(false); setCreateSrvIconFile(null); setCreateSrvIconPreview(null); setCreateSrvName(''); }}
+                        className={`flex-1 ${gb} py-2.5 rounded-xl text-sm font-semibold transition-all`}>Anuluj</button>
+                      <button onClick={handleCreateServer} disabled={!createSrvName.trim()}
+                        className="flex-1 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-xl transition-colors">
+                        Utwórz
+                      </button>
+                    </div>
+                  </motion.div>
+                ) : (
+                  <motion.div key="join" initial={{opacity:0,x:16}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-16}} transition={{duration:0.18}}
+                    className="p-7 flex flex-col gap-5">
+                    {/* Illustration */}
+                    <div className="flex flex-col items-center gap-3 py-2">
+                      <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                        <Users size={28} className="text-indigo-400"/>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-bold text-white">Masz zaproszenie?</p>
+                        <p className="text-xs text-zinc-500 mt-0.5">Wpisz kod zaproszenia poniżej</p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Kod zaproszenia</label>
+                      <input
+                        value={joinCode}
+                        onChange={e=>setJoinCode(e.target.value)}
+                        onKeyDown={e=>{ if(e.key==='Enter' && joinCode.trim()) handleJoinServer(); }}
+                        placeholder="abc123xyz..."
+                        className={`${gi} rounded-xl px-4 py-3 text-sm w-full font-mono tracking-wider`}
+                        autoFocus
+                      />
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button onClick={()=>{ setCreateSrvOpen(false); setJoinCode(''); }}
+                        className={`flex-1 ${gb} py-2.5 rounded-xl text-sm font-semibold transition-all`}>Anuluj</button>
+                      <button onClick={handleJoinServer} disabled={!joinCode.trim()}
+                        className="flex-1 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-xl transition-colors">
+                        Dołącz
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           </motion.div>
         )}
