@@ -322,6 +322,8 @@ export default function App() {
 
   const [msgInput, setMsgInput]               = useState('');
   const [addFriendVal, setAddFriendVal]       = useState('');
+  const [friendSearchResult, setFriendSearchResult] = useState<UserProfile | null>(null);
+  const [friendSearchLoading, setFriendSearchLoading] = useState(false);
   const [sending, setSending]                 = useState(false);
   const [sendError, setSendError]             = useState('');
   const [replyTo, setReplyTo]                 = useState<MessageFull|DmMessageFull|null>(null);
@@ -447,6 +449,16 @@ export default function App() {
     sock.on('user_stop_typing', ({user_id}: any) => {
       clearTimeout(typingTimersRef.current[user_id]);
       setTypingUsers(p => { const n={...p}; delete n[user_id]; return n; });
+    });
+    // Friend notifications
+    sock.on('friend_request', ({ from }: { from: { id: string; username: string } }) => {
+      friendsApi.requests().then(setFriendReqs).catch(console.error);
+      autoToast(`${from.username} chce dodać Cię do znajomych!`, 'info');
+    });
+    sock.on('friend_accepted', ({ user: u }: { user: { id: string; username: string } }) => {
+      friendsApi.list().then(setFriends).catch(console.error);
+      friendsApi.requests().then(setFriendReqs).catch(console.error);
+      autoToast(`${u.username} zaakceptował(a) Twoje zaproszenie! 🎉`, 'success');
     });
     // WebRTC signaling
     sock.on('webrtc_offer',  (d: any) => voiceHandlerRef.current.onOffer?.(d));
@@ -672,6 +684,22 @@ export default function App() {
   }).catch(console.error);
   const loadFriends = () => { friendsApi.list().then(setFriends).catch(console.error); friendsApi.requests().then(setFriendReqs).catch(console.error); };
   const loadDms    = () => dmsApi.conversations().then(setDmConvs).catch(console.error);
+
+  // Friend search debounce
+  useEffect(() => {
+    const q = addFriendVal.trim();
+    if (q.length < 2) { setFriendSearchResult(null); setFriendSearchLoading(false); return; }
+    setFriendSearchLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const results = await users.search(q);
+        const exact = results.find(u => u.username.toLowerCase() === q.toLowerCase()) ?? results[0] ?? null;
+        setFriendSearchResult(exact);
+      } catch { setFriendSearchResult(null); }
+      finally { setFriendSearchLoading(false); }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [addFriendVal]);
   const addServerActivity = (entry: {icon:string;text:string}) => {
     const id = Date.now().toString()+Math.random().toString(36).slice(2);
     setServerActivity(p => [{id, ...entry, time: new Date().toISOString()}, ...p].slice(0, 20));
@@ -876,11 +904,19 @@ export default function App() {
   // ── Friends ──────────────────────────────────────────────────────
   const handleAddFriend = async () => {
     if (!addFriendVal.trim()) return;
-    try { await friendsApi.sendRequest(addFriendVal.trim()); setAddFriendVal(''); loadFriends(); addToast('Zaproszenie wysłane!', 'success'); }
+    try {
+      await friendsApi.sendRequest(addFriendVal.trim());
+      setAddFriendVal(''); setFriendSearchResult(null);
+      loadFriends(); addToast('Zaproszenie wysłane!', 'success');
+    }
     catch (err: any) { addToast(err?.message || 'Nie znaleziono użytkownika', 'error'); }
   };
   const handleFriendReq = async (id: string, action: 'accept'|'reject') => {
-    try { await friendsApi.respondRequest(id, action); loadFriends(); }
+    try {
+      await friendsApi.respondRequest(id, action);
+      loadFriends();
+      addToast(action === 'accept' ? 'Zaproszenie zaakceptowane!' : 'Zaproszenie odrzucone', action === 'accept' ? 'success' : 'info');
+    }
     catch (err) { console.error(err); }
   };
 
@@ -1050,7 +1086,8 @@ export default function App() {
   const activeCh = allChs.find(c => c.id === activeChannel);
   const activeDm = dmConvs.find(d => d.other_user_id === activeDmUserId);
   const isAdmin  = !!(serverFull?.my_role && ['Owner','Admin'].includes(serverFull.my_role));
-  const incoming = friendReqs.filter(r => r.addressee_id === currentUser?.id);
+  const incoming = friendReqs.filter(r => r.direction === 'incoming');
+  const outgoing = friendReqs.filter(r => r.direction === 'outgoing');
   const messages = activeView === 'servers' ? channelMsgs : dmMsgs;
 
   return (
@@ -1067,8 +1104,11 @@ export default function App() {
           <div className="hidden md:flex items-center h-full pl-2 gap-0.5 pr-2 border-r border-white/[0.07]">
             {([{v:'friends' as const,i:<Users size={15}/>,label:'Znajomi'},{v:'dms' as const,i:<MessageCircle size={15}/>,label:'Wiadomości'}]).map(({v,i,label}) => (
               <button key={v} title={label} onClick={() => { setActiveView(v); setActiveServer(''); setActiveChannel(''); }}
-                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${activeView===v?'bg-indigo-500/20 text-indigo-400':'text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06]'}`}>
+                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all relative ${activeView===v?'bg-indigo-500/20 text-indigo-400':'text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06]'}`}>
                 {i}
+                {v==='friends' && incoming.length > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 bg-rose-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5 leading-none">{incoming.length}</span>
+                )}
               </button>
             ))}
           </div>
@@ -1523,45 +1563,103 @@ export default function App() {
           ) : activeView==='friends' ? (
             <div className="flex-1 flex flex-col overflow-hidden">
               <div className="h-13 border-b border-white/[0.05] flex items-center px-5 shrink-0 bg-zinc-950/40 backdrop-blur-md z-10">
-                <Users size={17} className="text-zinc-500 mr-2.5"/><h1 className="text-sm font-bold text-white">Znajomi</h1>
+                <Users size={17} className="text-zinc-500 mr-2.5"/>
+                <h1 className="text-sm font-bold text-white">Znajomi</h1>
+                {incoming.length > 0 && <span className="ml-2 bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">{incoming.length} nowe</span>}
               </div>
               <div className="flex-1 p-5 overflow-y-auto custom-scrollbar">
                 <div className="max-w-2xl mx-auto">
+
+                  {/* ── Dodaj znajomego ── */}
                   <div className="mb-6">
                     <h2 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Dodaj znajomego</h2>
                     <div className="flex gap-2">
-                      <input value={addFriendVal} onChange={e=>setAddFriendVal(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAddFriend()} placeholder="Nazwa użytkownika..." className={`flex-1 ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
-                      <button onClick={handleAddFriend} className="bg-indigo-500 hover:bg-indigo-400 text-white px-4 py-2.5 rounded-xl font-semibold transition-colors flex items-center gap-1.5 text-sm"><UserPlus size={15}/> Dodaj</button>
+                      <input value={addFriendVal} onChange={e=>setAddFriendVal(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAddFriend()} placeholder="Wpisz dokładną nazwę użytkownika..." className={`flex-1 ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
+                      <button onClick={handleAddFriend} disabled={!addFriendVal.trim()} className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl font-semibold transition-colors flex items-center gap-1.5 text-sm shrink-0"><UserPlus size={15}/> Dodaj</button>
                     </div>
-                  </div>
-                  {incoming.length>0&&<div className="mb-6">
-                    <h2 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Oczekujące — {incoming.length}</h2>
-                    {incoming.map(r => (
-                      <div key={r.id} className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] p-3 rounded-xl mb-2">
-                        <div className="flex items-center gap-3">
-                          <img src={ava({avatar_url:r.avatar_url,username:r.username||'User'})} className="w-9 h-9 rounded-full object-cover" alt=""/>
-                          <span className="font-semibold text-white text-sm">{r.username}</span>
-                        </div>
-                        <div className="flex gap-2">
-                          <button onClick={()=>handleFriendReq(r.id,'accept')} className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 flex items-center justify-center"><Check size={15}/></button>
-                          <button onClick={()=>handleFriendReq(r.id,'reject')} className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 flex items-center justify-center"><XIcon size={15}/></button>
-                        </div>
+                    {/* Podpowiedź wyszukiwarki */}
+                    {friendSearchLoading && addFriendVal.trim().length >= 2 && (
+                      <div className="mt-2 px-4 py-3 bg-white/[0.03] border border-white/[0.05] rounded-xl flex items-center gap-2">
+                        <Loader2 size={14} className="animate-spin text-zinc-500 shrink-0"/>
+                        <span className="text-xs text-zinc-500">Szukam użytkownika...</span>
                       </div>
-                    ))}
-                  </div>}
+                    )}
+                    {!friendSearchLoading && friendSearchResult && addFriendVal.trim().length >= 2 && (
+                      <div className="mt-2 px-4 py-3 bg-white/[0.04] border border-indigo-500/25 rounded-xl flex items-center gap-3">
+                        <div className="relative shrink-0">
+                          <img src={ava(friendSearchResult)} className="w-10 h-10 rounded-full object-cover" alt=""/>
+                          <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${sc(friendSearchResult.status)} border-2 border-zinc-950 rounded-full`}/>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-white text-sm">{friendSearchResult.username}</p>
+                          <p className="text-xs text-zinc-500">{friendSearchResult.custom_status || friendSearchResult.status}</p>
+                        </div>
+                        <span className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wide shrink-0">Znaleziono ✓</span>
+                      </div>
+                    )}
+                    {!friendSearchLoading && !friendSearchResult && addFriendVal.trim().length >= 2 && (
+                      <div className="mt-2 px-4 py-3 bg-white/[0.03] border border-white/[0.05] rounded-xl">
+                        <p className="text-xs text-zinc-600">Nie znaleziono użytkownika „{addFriendVal.trim()}"</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── Przychodzące zaproszenia ── */}
+                  {incoming.length > 0 && (
+                    <div className="mb-6">
+                      <h2 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Przychodzące zaproszenia — {incoming.length}</h2>
+                      {incoming.map(r => (
+                        <div key={r.id} className="flex items-center justify-between bg-white/[0.03] border border-rose-500/10 p-3 rounded-xl mb-2">
+                          <div className="flex items-center gap-3">
+                            <img src={ava({avatar_url: r.from_avatar, username: r.from_username})} className="w-9 h-9 rounded-full object-cover" alt=""/>
+                            <div>
+                              <p className="font-semibold text-white text-sm">{r.from_username}</p>
+                              <p className="text-xs text-zinc-600">Chce dodać Cię do znajomych</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={()=>handleFriendReq(r.id,'accept')} title="Akceptuj" className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/25 flex items-center justify-center transition-colors"><Check size={15}/></button>
+                            <button onClick={()=>handleFriendReq(r.id,'reject')} title="Odrzuć" className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/25 flex items-center justify-center transition-colors"><XIcon size={15}/></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ── Wysłane zaproszenia ── */}
+                  {outgoing.length > 0 && (
+                    <div className="mb-6">
+                      <h2 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Wysłane zaproszenia — {outgoing.length}</h2>
+                      {outgoing.map(r => (
+                        <div key={r.id} className="flex items-center justify-between bg-white/[0.02] border border-white/[0.04] p-3 rounded-xl mb-2">
+                          <div className="flex items-center gap-3">
+                            <img src={ava({avatar_url: r.from_avatar, username: r.from_username})} className="w-9 h-9 rounded-full object-cover opacity-70" alt=""/>
+                            <div>
+                              <p className="font-semibold text-zinc-300 text-sm">{r.from_username}</p>
+                              <p className="text-xs text-zinc-600">Oczekuje na odpowiedź</p>
+                            </div>
+                          </div>
+                          <span className="text-[10px] text-zinc-600 font-medium uppercase tracking-wide">Oczekujące</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ── Lista znajomych ── */}
                   <div>
-                    <h2 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Wszyscy — {friends.length}</h2>
+                    <h2 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Wszyscy znajomi — {friends.length}</h2>
                     {friends.map(f => (
                       <div key={f.id} className="flex items-center justify-between bg-white/[0.02] border border-white/[0.04] p-3 rounded-xl mb-1.5 hover:bg-white/[0.04] transition-colors group">
                         <div className="flex items-center gap-3 cursor-pointer" onClick={()=>openProfile(f)}>
                           <div className="relative"><img src={ava(f)} className="w-9 h-9 rounded-full object-cover" alt=""/><div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${sc(f.status)} border-2 border-zinc-950 rounded-full`}/></div>
                           <div><p className="font-semibold text-white text-sm">{f.username}</p><p className="text-xs text-zinc-600">{f.custom_status||f.status}</p></div>
                         </div>
-                        <button onClick={()=>openDm(f.id)} className={`w-8 h-8 rounded-xl ${gb} flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity`}><MessageCircle size={15}/></button>
+                        <button onClick={()=>openDm(f.id)} title="Wyślij wiadomość" className={`w-8 h-8 rounded-xl ${gb} flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity`}><MessageCircle size={15}/></button>
                       </div>
                     ))}
-                    {friends.length===0&&<p className="text-sm text-zinc-700 py-4">Brak znajomych</p>}
+                    {friends.length===0&&<p className="text-sm text-zinc-700 py-4">Brak znajomych. Dodaj kogoś powyżej!</p>}
                   </div>
+
                 </div>
               </div>
             </div>

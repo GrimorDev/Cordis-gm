@@ -86,8 +86,12 @@ export interface FriendEntry {
   status: string; custom_status?: string | null;
 }
 export interface FriendRequest {
-  id: string; requester_id: string; addressee_id: string;
-  status: string; created_at: string; username?: string; avatar_url?: string | null;
+  id: string;
+  from_id: string;
+  from_username: string;
+  from_avatar?: string | null;
+  direction: 'incoming' | 'outgoing';
+  created_at: string;
 }
 export interface ServerMember {
   id: string; username: string; avatar_url?: string | null;
