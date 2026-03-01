@@ -116,6 +116,8 @@ export interface ServerToClientEvents {
   webrtc_ice: (data: { from: string; candidate: RTCIceCandidateInit }) => void;
   friend_request: (data: { from: UserPublic }) => void;
   friend_accepted: (data: { user: UserPublic }) => void;
+  screen_share_start: (data: { from: string }) => void;
+  screen_share_stop: (data: { from: string }) => void;
   error: (data: { message: string }) => void;
 }
 
@@ -134,6 +136,8 @@ export interface ClientToServerEvents {
   webrtc_offer: (data: { to: string; sdp: RTCSessionDescriptionInit }) => void;
   webrtc_answer: (data: { to: string; sdp: RTCSessionDescriptionInit }) => void;
   webrtc_ice: (data: { to: string; candidate: RTCIceCandidateInit }) => void;
+  screen_share_start: (data: { to_user_id?: string; channel_id?: string }) => void;
+  screen_share_stop: (data: { to_user_id?: string; channel_id?: string }) => void;
 }
 
 export interface MessageWithSender extends Message {
