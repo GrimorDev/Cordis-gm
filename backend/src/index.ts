@@ -19,6 +19,7 @@ import channelsRoutes from './routes/channels';
 import messagesRoutes from './routes/messages';
 import dmsRoutes from './routes/dms';
 import friendsRoutes from './routes/friends';
+import uploadRoutes from './routes/upload';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -67,6 +68,7 @@ app.use('/api/channels', channelsRoutes);
 app.use('/api/messages', messagesRoutes);
 app.use('/api/dms', dmsRoutes);
 app.use('/api/friends', friendsRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

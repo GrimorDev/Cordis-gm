@@ -1,312 +1,196 @@
-// Cordis API Service
-// Connects frontend to backend REST API
-
-const BASE_URL = '/api';
-
-// ── Token Management ─────────────────────────────────────────────────
-export const getToken = () => localStorage.getItem('cordis_token');
-export const setToken = (token: string) => localStorage.setItem('cordis_token', token);
-export const clearToken = () => localStorage.removeItem('cordis_token');
-
-// ── Base fetch ───────────────────────────────────────────────────────
-async function apiFetch<T>(
-  path: string,
-  options: RequestInit = {}
-): Promise<T> {
-  const token = getToken();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
-  };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
-
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: res.statusText }));
-    throw new ApiError(error.error || 'Request failed', res.status);
-  }
-
-  return res.json();
-}
+const BASE = '/api';
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number) {
-    super(message);
-    this.name = 'ApiError';
-  }
+  constructor(public status: number, message: string) { super(message); }
 }
 
-// ── Auth ─────────────────────────────────────────────────────────────
-export const auth = {
-  register: (data: { username: string; email: string; password: string }) =>
-    apiFetch<{ token: string; user: UserProfile }>('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+async function req<T>(method: string, path: string, body?: unknown, isFormData = false): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (body && !isFormData) headers['Content-Type'] = 'application/json';
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers,
+    body: isFormData ? (body as BodyInit) : body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, data.error || data.message || 'Error');
+  return data as T;
+}
 
-  login: (data: { login: string; password: string }) =>
-    apiFetch<{ token: string; user: UserProfile }>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+// ── Token ──────────────────────────────────────────────────────────────────
+export const getToken = () => localStorage.getItem('cordis_token');
+export const setToken = (t: string) => localStorage.setItem('cordis_token', t);
+export const clearToken = () => localStorage.removeItem('cordis_token');
 
-  logout: () =>
-    apiFetch('/auth/logout', { method: 'POST' }),
-
-  me: () =>
-    apiFetch<UserProfile>('/auth/me'),
-};
-
-// ── Users ─────────────────────────────────────────────────────────────
-export const users = {
-  get: (id: string) =>
-    apiFetch<UserPublic>(`/users/${id}`),
-
-  search: (q: string) =>
-    apiFetch<UserPublic[]>(`/users/search/query?q=${encodeURIComponent(q)}`),
-
-  updateMe: (data: Partial<{ username: string; bio: string; custom_status: string; banner_color: string }>) =>
-    apiFetch<UserProfile>('/users/me', { method: 'PUT', body: JSON.stringify(data) }),
-
-  updateStatus: (status: 'online' | 'idle' | 'dnd' | 'offline') =>
-    apiFetch('/users/me/status', { method: 'PUT', body: JSON.stringify({ status }) }),
-
-  uploadAvatar: (file: File) => {
-    const form = new FormData();
-    form.append('avatar', file);
-    const token = getToken();
-    return fetch(`${BASE_URL}/users/me/avatar`, {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: form,
-    }).then(r => r.json()) as Promise<{ avatar_url: string }>;
-  },
-};
-
-// ── Servers ───────────────────────────────────────────────────────────
-export const servers = {
-  list: () =>
-    apiFetch<ServerData[]>('/servers'),
-
-  get: (id: string) =>
-    apiFetch<ServerFull>(`/servers/${id}`),
-
-  create: (name: string) =>
-    apiFetch<ServerData>('/servers', { method: 'POST', body: JSON.stringify({ name }) }),
-
-  update: (id: string, data: { name?: string; icon_url?: string }) =>
-    apiFetch<ServerData>(`/servers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-
-  delete: (id: string) =>
-    apiFetch(`/servers/${id}`, { method: 'DELETE' }),
-
-  members: (id: string) =>
-    apiFetch<ServerMember[]>(`/servers/${id}/members`),
-
-  createInvite: (server_id: string, expires_in?: string) =>
-    apiFetch<{ code: string; expires_at: string | null }>('/servers/invite/create', {
-      method: 'POST',
-      body: JSON.stringify({ server_id, expires_in }),
-    }),
-
-  join: (code: string) =>
-    apiFetch<ServerData>(`/servers/join/${code}`, { method: 'POST' }),
-};
-
-// ── Channels ──────────────────────────────────────────────────────────
-export const channels = {
-  list: (serverId: string) =>
-    apiFetch<ChannelCategory[]>(`/channels/server/${serverId}`),
-
-  create: (data: { server_id: string; name: string; type: 'text' | 'voice'; category_id?: string; description?: string }) =>
-    apiFetch<Channel>('/channels', { method: 'POST', body: JSON.stringify(data) }),
-
-  update: (id: string, data: { name?: string; description?: string }) =>
-    apiFetch<Channel>(`/channels/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-
-  delete: (id: string) =>
-    apiFetch(`/channels/${id}`, { method: 'DELETE' }),
-
-  createCategory: (server_id: string, name: string) =>
-    apiFetch<ChannelCategory>('/channels/categories', { method: 'POST', body: JSON.stringify({ server_id, name }) }),
-};
-
-// ── Messages ──────────────────────────────────────────────────────────
-export const messages = {
-  list: (channelId: string, before?: string, limit = 50) => {
-    const params = new URLSearchParams({ limit: String(limit) });
-    if (before) params.append('before', before);
-    return apiFetch<MessageFull[]>(`/messages/channel/${channelId}?${params}`);
-  },
-
-  send: (channelId: string, content: string) =>
-    apiFetch<MessageFull>(`/messages/channel/${channelId}`, {
-      method: 'POST',
-      body: JSON.stringify({ content }),
-    }),
-
-  edit: (id: string, content: string) =>
-    apiFetch<MessageFull>(`/messages/${id}`, { method: 'PUT', body: JSON.stringify({ content }) }),
-
-  delete: (id: string) =>
-    apiFetch(`/messages/${id}`, { method: 'DELETE' }),
-
-  addReaction: (id: string, emoji: string) =>
-    apiFetch(`/messages/${id}/reactions`, { method: 'POST', body: JSON.stringify({ emoji }) }),
-
-  removeReaction: (id: string, emoji: string) =>
-    apiFetch(`/messages/${id}/reactions/${encodeURIComponent(emoji)}`, { method: 'DELETE' }),
-};
-
-// ── DMs ───────────────────────────────────────────────────────────────
-export const dms = {
-  conversations: () =>
-    apiFetch<DmConversation[]>('/dms/conversations'),
-
-  messages: (userId: string, before?: string, limit = 50) => {
-    const params = new URLSearchParams({ limit: String(limit) });
-    if (before) params.append('before', before);
-    return apiFetch<DmMessageFull[]>(`/dms/${userId}/messages?${params}`);
-  },
-
-  send: (userId: string, content: string) =>
-    apiFetch<DmMessageFull>(`/dms/${userId}/messages`, {
-      method: 'POST',
-      body: JSON.stringify({ content }),
-    }),
-
-  deleteMessage: (id: string) =>
-    apiFetch(`/dms/messages/${id}`, { method: 'DELETE' }),
-};
-
-// ── Friends ───────────────────────────────────────────────────────────
-export const friends = {
-  list: () =>
-    apiFetch<FriendEntry[]>('/friends'),
-
-  requests: () =>
-    apiFetch<FriendRequest[]>('/friends/requests'),
-
-  sendRequest: (username: string) =>
-    apiFetch('/friends/request', { method: 'POST', body: JSON.stringify({ username }) }),
-
-  respondRequest: (id: string, action: 'accept' | 'reject') =>
-    apiFetch(`/friends/request/${id}`, { method: 'PUT', body: JSON.stringify({ action }) }),
-
-  remove: (id: string) =>
-    apiFetch(`/friends/${id}`, { method: 'DELETE' }),
-};
-
-// ── Types ─────────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────
 export interface UserProfile {
-  id: string;
-  username: string;
-  email: string;
-  avatar_url: string | null;
-  banner_color: string;
-  bio: string | null;
-  custom_status: string | null;
-  status: 'online' | 'idle' | 'dnd' | 'offline';
-  created_at: string;
+  id: string; username: string; email: string;
+  avatar_url?: string | null; banner_url?: string | null;
+  banner_color: string; bio?: string | null; custom_status?: string | null;
+  status: 'online' | 'idle' | 'dnd' | 'offline'; created_at: string;
 }
-
-export interface UserPublic {
-  id: string;
-  username: string;
-  avatar_url: string | null;
-  status: string;
-  custom_status: string | null;
-}
-
 export interface ServerData {
-  id: string;
-  name: string;
-  icon_url: string | null;
-  owner_id: string;
-  created_at: string;
+  id: string; name: string; description?: string | null;
+  icon_url?: string | null; banner_url?: string | null;
+  owner_id: string; created_at: string;
 }
-
-export interface ServerFull extends ServerData {
-  my_role: string;
-  categories: ChannelCategory[];
+export interface ServerRole {
+  id: string; server_id: string; name: string; color: string;
+  permissions: string[]; position: number; created_at: string;
 }
-
-export interface ServerMember extends UserPublic {
-  role_name: string;
+export interface ChannelData {
+  id: string; server_id: string; category_id: string | null;
+  name: string; type: 'text' | 'voice'; description?: string | null;
+  is_private?: boolean; position: number;
+  allowed_roles?: { role_id: string; role_name: string; color: string }[];
 }
-
 export interface ChannelCategory {
-  id: string;
-  name: string;
-  position: number;
-  channels: Channel[];
+  id: string; name: string; position: number; channels: ChannelData[];
 }
-
-export interface Channel {
-  id: string;
-  server_id: string;
-  category_id: string | null;
-  name: string;
-  type: 'text' | 'voice';
-  description: string | null;
-  position: number;
+export interface ServerFull extends ServerData {
+  my_role: string; categories: ChannelCategory[];
 }
-
 export interface MessageFull {
-  id: string;
-  channel_id: string;
-  content: string;
-  edited: boolean;
-  created_at: string;
-  updated_at: string;
-  sender_id: string;
-  sender_username: string;
-  sender_avatar: string | null;
-  sender_status: string;
-  sender_role: string;
+  id: string; channel_id: string; content: string; edited: boolean;
+  created_at: string; updated_at: string;
+  attachment_url?: string | null; reply_to_id?: string | null;
+  reply_content?: string | null; reply_username?: string | null;
+  sender_id: string; sender_username: string;
+  sender_avatar?: string | null; sender_status?: string;
+  sender_role?: string | null;
 }
-
 export interface DmConversation {
-  id: string;
-  created_at: string;
-  other_user_id: string;
-  other_username: string;
-  other_avatar: string | null;
-  other_status: string;
-  other_custom_status: string | null;
-  last_message: string | null;
-  last_message_at: string | null;
+  id: string; created_at: string;
+  other_user_id: string; other_username: string;
+  other_avatar?: string | null; other_status: string;
+  other_custom_status?: string | null;
+  last_message?: string | null; last_message_at?: string | null;
 }
-
 export interface DmMessageFull {
-  id: string;
-  conversation_id: string;
-  content: string;
-  edited: boolean;
-  created_at: string;
-  sender_id: string;
-  sender_username: string;
-  sender_avatar: string | null;
+  id: string; conversation_id: string; content: string; edited: boolean;
+  created_at: string; attachment_url?: string | null;
+  reply_to_id?: string | null; reply_content?: string | null; reply_username?: string | null;
+  sender_id: string; sender_username: string; sender_avatar?: string | null;
 }
-
 export interface FriendEntry {
-  id: string;
-  username: string;
-  avatar_url: string | null;
-  status: string;
-  custom_status: string | null;
-  friendship_id: string;
+  id: string; username: string; avatar_url?: string | null;
+  status: string; custom_status?: string | null;
+}
+export interface FriendRequest {
+  id: string; requester_id: string; addressee_id: string;
+  status: string; created_at: string; username?: string; avatar_url?: string | null;
+}
+export interface ServerMember {
+  id: string; username: string; avatar_url?: string | null;
+  status: string; custom_status?: string | null;
+  role_name: string; joined_at: string;
+  roles: { role_id: string; name: string; color: string }[];
 }
 
-export interface FriendRequest {
-  id: string;
-  created_at: string;
-  from_id: string;
-  from_username: string;
-  from_avatar: string | null;
-  direction: 'incoming' | 'outgoing';
+// ── Auth ───────────────────────────────────────────────────────────────────
+export const auth = {
+  register: (d: { username: string; email: string; password: string }) =>
+    req<{ user: UserProfile; token: string }>('POST', '/auth/register', d),
+  login: (d: { login: string; password: string }) =>
+    req<{ user: UserProfile; token: string }>('POST', '/auth/login', d),
+  logout: () => req<void>('POST', '/auth/logout'),
+  me: () => req<UserProfile>('GET', '/auth/me'),
+};
+
+// ── Upload helper ──────────────────────────────────────────────────────────
+export async function uploadFile(file: File, folder: string): Promise<string> {
+  const fd = new FormData();
+  fd.append('file', file);
+  const data = await req<{ url: string }>('POST', `/upload?folder=${folder}`, fd, true);
+  return data.url;
 }
+
+// ── Users ──────────────────────────────────────────────────────────────────
+export const users = {
+  get: (id: string) => req<UserProfile>('GET', `/users/${id}`),
+  search: (q: string) => req<UserProfile[]>('GET', `/users/search/query?q=${encodeURIComponent(q)}`),
+  updateMe: (d: Partial<Pick<UserProfile, 'username' | 'bio' | 'custom_status' | 'banner_color' | 'banner_url'>>) =>
+    req<UserProfile>('PUT', '/users/me', d),
+  updateStatus: (s: string) => req<{ status: string }>('PUT', '/users/me/status', { status: s }),
+  uploadAvatar: async (file: File): Promise<{ avatar_url: string }> => {
+    const fd = new FormData(); fd.append('avatar', file);
+    return req<{ avatar_url: string }>('POST', '/users/me/avatar', fd, true);
+  },
+  uploadBanner: async (file: File): Promise<{ banner_url: string }> => {
+    const fd = new FormData(); fd.append('banner', file);
+    return req<{ banner_url: string }>('POST', '/users/me/banner', fd, true);
+  },
+};
+
+// ── Servers ────────────────────────────────────────────────────────────────
+export const serversApi = {
+  list: () => req<ServerData[]>('GET', '/servers'),
+  get: (id: string) => req<ServerFull>('GET', `/servers/${id}`),
+  create: (name: string) => req<ServerData>('POST', '/servers', { name }),
+  update: (id: string, d: Partial<Pick<ServerData, 'name' | 'description' | 'icon_url' | 'banner_url'>>) =>
+    req<ServerData>('PUT', `/servers/${id}`, d),
+  delete: (id: string) => req<void>('DELETE', `/servers/${id}`),
+  members: (id: string) => req<ServerMember[]>('GET', `/servers/${id}/members`),
+  updateMemberRoles: (serverId: string, userId: string, data: { role_ids?: string[]; role_name?: string }) =>
+    req<void>('PUT', `/servers/${serverId}/members/${userId}/roles`, data),
+  kickMember: (serverId: string, userId: string) =>
+    req<void>('DELETE', `/servers/${serverId}/members/${userId}`),
+  roles: {
+    list: (serverId: string) => req<ServerRole[]>('GET', `/servers/${serverId}/roles`),
+    create: (serverId: string, d: { name: string; color: string; permissions: string[] }) =>
+      req<ServerRole>('POST', `/servers/${serverId}/roles`, d),
+    update: (serverId: string, roleId: string, d: Partial<{ name: string; color: string; permissions: string[] }>) =>
+      req<ServerRole>('PUT', `/servers/${serverId}/roles/${roleId}`, d),
+    delete: (serverId: string, roleId: string) =>
+      req<void>('DELETE', `/servers/${serverId}/roles/${roleId}`),
+  },
+  createInvite: (serverId: string, expiresIn: string) =>
+    req<{ code: string; expires_at: string | null }>('POST', '/servers/invite/create', { server_id: serverId, expires_in: expiresIn }),
+  join: (code: string) => req<ServerData>('POST', `/servers/join/${code}`),
+};
+
+// ── Channels ───────────────────────────────────────────────────────────────
+export const channelsApi = {
+  list: (serverId: string) => req<ChannelCategory[]>('GET', `/channels/server/${serverId}`),
+  create: (d: { server_id: string; name: string; type: 'text' | 'voice'; category_id?: string }) =>
+    req<ChannelData>('POST', '/channels', d),
+  update: (id: string, d: Partial<Pick<ChannelData, 'name' | 'description' | 'is_private'>> & { role_ids?: string[] }) =>
+    req<ChannelData>('PUT', `/channels/${id}`, d),
+  delete: (id: string) => req<void>('DELETE', `/channels/${id}`),
+  createCategory: (server_id: string, name: string) =>
+    req<ChannelCategory>('POST', '/channels/categories', { server_id, name }),
+};
+
+// ── Messages ───────────────────────────────────────────────────────────────
+export const messagesApi = {
+  list: (channelId: string, before?: string) =>
+    req<MessageFull[]>('GET', `/messages/channel/${channelId}${before ? `?before=${before}` : ''}`),
+  send: (channelId: string, content: string, opts?: { reply_to_id?: string; attachment_url?: string }) =>
+    req<MessageFull>('POST', `/messages/channel/${channelId}`, { content, ...opts }),
+  edit: (id: string, content: string) => req<MessageFull>('PUT', `/messages/${id}`, { content }),
+  delete: (id: string) => req<void>('DELETE', `/messages/${id}`),
+  addReaction: (id: string, emoji: string) => req<void>('POST', `/messages/${id}/reactions`, { emoji }),
+  removeReaction: (id: string, emoji: string) => req<void>('DELETE', `/messages/${id}/reactions/${emoji}`),
+};
+
+// ── DMs ────────────────────────────────────────────────────────────────────
+export const dmsApi = {
+  conversations: () => req<DmConversation[]>('GET', '/dms/conversations'),
+  messages: (userId: string, before?: string) =>
+    req<DmMessageFull[]>('GET', `/dms/${userId}/messages${before ? `?before=${before}` : ''}`),
+  send: (userId: string, content: string, opts?: { reply_to_id?: string; attachment_url?: string }) =>
+    req<DmMessageFull>('POST', `/dms/${userId}/messages`, { content, ...opts }),
+  deleteMessage: (id: string) => req<void>('DELETE', `/dms/messages/${id}`),
+};
+
+// ── Friends ────────────────────────────────────────────────────────────────
+export const friendsApi = {
+  list: () => req<FriendEntry[]>('GET', '/friends'),
+  requests: () => req<FriendRequest[]>('GET', '/friends/requests'),
+  sendRequest: (username: string) => req<void>('POST', '/friends/request', { username }),
+  respondRequest: (id: string, action: 'accept' | 'reject') =>
+    req<void>('PUT', `/friends/request/${id}`, { action }),
+  remove: (id: string) => req<void>('DELETE', `/friends/${id}`),
+};
