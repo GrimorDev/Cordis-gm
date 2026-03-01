@@ -168,6 +168,10 @@ export const serversApi = {
 // ── Channels ───────────────────────────────────────────────────────────────
 export const channelsApi = {
   list: (serverId: string) => req<ChannelCategory[]>('GET', `/channels/server/${serverId}`),
+  voiceUsers: (serverId: string) =>
+    req<Record<string, { id: string; username: string; avatar_url: string | null; status: string }[]>>(
+      'GET', `/channels/server/${serverId}/voice-users`
+    ),
   create: (d: { server_id: string; name: string; type: 'text' | 'voice'; category_id?: string }) =>
     req<ChannelData>('POST', '/channels', d),
   update: (id: string, d: Partial<Pick<ChannelData, 'name' | 'description' | 'is_private'>> & { role_ids?: string[] }) =>

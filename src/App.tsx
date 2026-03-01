@@ -506,6 +506,10 @@ export default function App() {
       const first = s.categories.flatMap(c => c.channels).find(ch => ch.type === 'text');
       setActiveChannel(first?.id || '');
     }).catch(console.error);
+    // Load current voice channel occupants from Redis (initial state)
+    channelsApi.voiceUsers(activeServer).then(vu => {
+      setVoiceUsers(prev => ({ ...prev, ...vu }));
+    }).catch(console.error);
     serversApi.members(activeServer).then(setMembers).catch(console.error);
     serversApi.roles.list(activeServer).then(setRoles).catch(console.error);
   }, [activeServer]);

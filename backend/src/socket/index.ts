@@ -96,23 +96,33 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
     socket.on('voice_join', async (channelId) => {
       await joinVoiceChannel(channelId, user.id);
       socket.join(`voice:${channelId}`);
+      (socket.data as SocketData & { voiceChannelId?: string }).voiceChannelId = channelId;
 
-      const { rows: [u] } = await query(
-        `SELECT id, username, avatar_url, status FROM users WHERE id = $1`, [user.id]
-      );
-      io.to(`voice:${channelId}`).emit('voice_user_joined', {
-        channel_id: channelId,
-        user: { ...u, custom_status: null },
-      });
+      const [{ rows: [u] }, { rows: [ch] }] = await Promise.all([
+        query(`SELECT id, username, avatar_url, status FROM users WHERE id = $1`, [user.id]),
+        query(`SELECT server_id FROM channels WHERE id = $1`, [channelId]),
+      ]);
+      // Broadcast to all server members (includes voice participants) so everyone sees real-time voice state
+      if (ch?.server_id) {
+        io.to(`server:${ch.server_id}`).emit('voice_user_joined', {
+          channel_id: channelId,
+          user: { ...u, custom_status: null },
+        });
+      }
     });
 
     socket.on('voice_leave', async (channelId) => {
       await leaveVoiceChannel(channelId, user.id);
       socket.leave(`voice:${channelId}`);
-      io.to(`voice:${channelId}`).emit('voice_user_left', {
-        channel_id: channelId,
-        user_id: user.id,
-      });
+      (socket.data as SocketData & { voiceChannelId?: string }).voiceChannelId = undefined;
+
+      const { rows: [ch] } = await query(`SELECT server_id FROM channels WHERE id = $1`, [channelId]);
+      if (ch?.server_id) {
+        io.to(`server:${ch.server_id}`).emit('voice_user_left', {
+          channel_id: channelId,
+          user_id: user.id,
+        });
+      }
     });
 
     // ── 1-to-1 Calls (signaling) ─────────────────────────────────────
@@ -155,6 +165,19 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
     // ── Disconnect ───────────────────────────────────────────────────
     socket.on('disconnect', async () => {
       console.log(`Socket disconnected: ${user.username}`);
+
+      // Clean up voice channel if user disconnected while in one
+      const voiceChannelId = (socket.data as SocketData & { voiceChannelId?: string }).voiceChannelId;
+      if (voiceChannelId) {
+        await leaveVoiceChannel(voiceChannelId, user.id);
+        const { rows: [ch] } = await query(`SELECT server_id FROM channels WHERE id = $1`, [voiceChannelId]);
+        if (ch?.server_id) {
+          io.to(`server:${ch.server_id}`).emit('voice_user_left', {
+            channel_id: voiceChannelId,
+            user_id: user.id,
+          });
+        }
+      }
 
       // Check if user has any other active sockets
       const userSockets = await io.in(`user:${user.id}`).fetchSockets();

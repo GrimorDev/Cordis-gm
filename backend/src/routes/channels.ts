@@ -3,6 +3,7 @@ import { body, validationResult } from 'express-validator';
 import { query, getClient } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
+import { getVoiceMembers } from '../redis/client';
 
 const router = Router();
 
@@ -13,6 +14,30 @@ async function isMember(serverId: string, userId: string): Promise<string | null
   );
   return rows[0]?.role_name || null;
 }
+
+// GET /api/channels/server/:serverId/voice-users — current voice channel occupants (from Redis)
+router.get('/server/:serverId/voice-users', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const role = await isMember(req.params.serverId, req.user!.id);
+  if (!role) return res.status(403).json({ error: 'No access' });
+  try {
+    const { rows: vChs } = await query(
+      `SELECT id FROM channels WHERE server_id = $1 AND type = 'voice'`,
+      [req.params.serverId]
+    );
+    const result: Record<string, any[]> = {};
+    for (const ch of vChs) {
+      const memberIds = await getVoiceMembers(ch.id);
+      if (memberIds.length > 0) {
+        const { rows: users } = await query(
+          `SELECT id, username, avatar_url, status FROM users WHERE id = ANY($1::uuid[])`,
+          [memberIds]
+        );
+        if (users.length > 0) result[ch.id] = users;
+      }
+    }
+    return res.json(result);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
 
 // GET /api/channels/server/:serverId
 router.get('/server/:serverId', authMiddleware, async (req: AuthRequest, res: Response) => {
