@@ -325,7 +325,7 @@ export default function App() {
   useEffect(() => {
     if (!isAuthenticated) return;
     getMediaDevices().then(setDevices).catch(() => {});
-    navigator.mediaDevices.addEventListener('devicechange', () =>
+    navigator.mediaDevices?.addEventListener('devicechange', () =>
       getMediaDevices().then(setDevices).catch(() => {}));
   }, [isAuthenticated]);
 
