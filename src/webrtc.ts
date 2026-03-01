@@ -88,9 +88,12 @@ export function watchSpeaking(
 
 // ─── Device Enumeration ──────────────────────────────────────────────────────
 export async function getMediaDevices(): Promise<MediaDeviceInfo[]> {
+  if (!navigator.mediaDevices) return [];
   try {
-    // Need permission first to get labels
-    await navigator.mediaDevices.getUserMedia({ audio: true }).then(s => s.getTracks().forEach(t => t.stop())).catch(() => {});
+    // Request mic permission first — without it browsers return devices with empty labels
+    await navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(s => s.getTracks().forEach(t => t.stop()))
+      .catch(() => {});
     return navigator.mediaDevices.enumerateDevices();
   } catch { return []; }
 }

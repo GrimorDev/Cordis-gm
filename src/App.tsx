@@ -626,9 +626,14 @@ export default function App() {
       // Pipe to existing peer connections
       peerConnsRef.current.forEach(pc =>
         stream.getTracks().forEach(t => { if (!pc.getSenders().find(s=>s.track?.kind===t.kind)) pc.addTrack(t, stream); }));
+      // Re-enumerate after permission granted — now we get real device labels
+      getMediaDevices().then(setDevices).catch(() => {});
       return stream;
-    } catch {
-      addToast('Brak dostępu do mikrofonu', 'error'); return null;
+    } catch (err: any) {
+      const msg = err?.name === 'NotFoundError' ? 'Nie znaleziono mikrofonu'
+        : err?.name === 'NotAllowedError' ? 'Brak uprawnień do mikrofonu — zezwól w przeglądarce'
+        : 'Brak dostępu do mikrofonu';
+      addToast(msg, 'error'); return null;
     }
   };
 
@@ -1026,8 +1031,14 @@ export default function App() {
                     className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${activeCall.isScreenSharing?'bg-indigo-500 hover:bg-indigo-400 text-white':gb}`}>
                     <ScreenShare size={18}/>
                   </button>
-                  <button onClick={()=>setDevicesOpen(v=>!v)} title="Ustawienia urządzeń"
-                    className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${devicesOpen?'bg-zinc-600 text-white':gb}`}>
+                  <button onClick={async()=>{
+                    if (!devicesOpen) {
+                      // Request mic permission so we get real device labels
+                      await getMediaDevices().then(setDevices).catch(()=>{});
+                    }
+                    setDevicesOpen(v=>!v);
+                  }} title="Ustawienia urządzeń"
+                    className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${devicesOpen?'bg-zinc-700 text-white':gb}`}>
                     <Settings size={18}/>
                   </button>
                   <button onClick={hangupCall} title="Rozłącz"
@@ -1275,16 +1286,17 @@ export default function App() {
           <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
             className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={()=>setProfileOpen(false)}>
             <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
-              onClick={e=>e.stopPropagation()} className={`${gm} rounded-3xl w-full max-w-sm overflow-hidden`}>
-              <div className="h-24 relative overflow-hidden">
+              onClick={e=>e.stopPropagation()} className={`${gm} rounded-3xl w-full max-w-sm flex flex-col max-h-[90vh]`}>
+              {/* Banner — fixed */}
+              <div className="h-28 relative overflow-hidden rounded-t-3xl shrink-0">
                 {(currentUser?.id===selUser.id ? (profBannerPrev||currentUser?.banner_url) : selUser.banner_url) ? (
                   <img src={currentUser?.id===selUser.id?(profBannerPrev||currentUser?.banner_url!):selUser.banner_url} className="w-full h-full object-cover" alt=""/>
                 ) : (
                   <div className={`w-full h-full bg-gradient-to-r ${editProf?.banner_color||'from-indigo-600 via-purple-600 to-pink-600'}`}/>
                 )}
                 {currentUser?.id===selUser.id&&(
-                  <label className="absolute top-2 right-2 w-7 h-7 bg-black/50 hover:bg-black/70 rounded-lg flex items-center justify-center cursor-pointer transition-colors">
-                    <Upload size={12} className="text-white"/>
+                  <label className="absolute top-2 right-2 w-8 h-8 bg-black/50 hover:bg-black/70 rounded-xl flex items-center justify-center cursor-pointer transition-colors group">
+                    <Upload size={13} className="text-white"/>
                     <input type="file" accept="image/*" onChange={handleBannerSelect} className="hidden"/>
                   </label>
                 )}
@@ -1295,36 +1307,69 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              <div className="p-5 pt-11">
-                <div className="flex items-start justify-between mb-3">
-                  <div><h3 className="text-lg font-bold text-white">{selUser.username}</h3>{selUser.custom_status&&<p className="text-sm text-zinc-500">{selUser.custom_status}</p>}</div>
-                  <button onClick={()=>setProfileOpen(false)} className="text-zinc-600 hover:text-white transition-colors"><X size={17}/></button>
+              {/* Scrollable body */}
+              <div className="overflow-y-auto custom-scrollbar flex-1">
+                <div className="p-5 pt-12">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <h3 className="text-lg font-bold text-white leading-tight">{selUser.username}</h3>
+                      {selUser.custom_status&&<p className="text-sm text-zinc-400 mt-0.5">{selUser.custom_status}</p>}
+                    </div>
+                    <button onClick={()=>setProfileOpen(false)} className="text-zinc-600 hover:text-white transition-colors shrink-0 ml-2"><X size={17}/></button>
+                  </div>
+                  {selUser.bio&&<p className="text-sm text-zinc-400 mb-4 bg-white/[0.03] border border-white/[0.05] rounded-xl p-3 leading-relaxed">{selUser.bio}</p>}
+                  {currentUser?.id===selUser.id ? (
+                    <div className="flex flex-col gap-4">
+                      {/* Avatar + banner side by side */}
+                      <div className="flex gap-3">
+                        <div className="flex-1">
+                          <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Avatar</label>
+                          <label className={`flex items-center gap-2 cursor-pointer ${gi} rounded-xl px-3 py-2.5 border text-sm hover:bg-white/[0.06] transition-all`}>
+                            <Upload size={14} className="text-zinc-500 shrink-0"/>
+                            <span className="text-zinc-500 truncate text-xs">Zmień avatar</span>
+                            <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden"/>
+                          </label>
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Banner</label>
+                          <label className={`flex items-center gap-2 cursor-pointer ${gi} rounded-xl px-3 py-2.5 border text-sm hover:bg-white/[0.06] transition-all`}>
+                            <Upload size={14} className="text-zinc-500 shrink-0"/>
+                            <span className="text-zinc-500 truncate text-xs">Zmień banner</span>
+                            <input type="file" accept="image/*" onChange={handleBannerSelect} className="hidden"/>
+                          </label>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Nazwa użytkownika</label>
+                        <input value={editProf?.username||''} onChange={e=>setEditProf((p:any)=>({...p,username:e.target.value}))} className={`w-full ${gi} rounded-xl px-3 py-2.5 text-sm`}/>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Status</label>
+                        <input value={editProf?.custom_status||''} onChange={e=>setEditProf((p:any)=>({...p,custom_status:e.target.value}))} placeholder="Ustaw status..." className={`w-full ${gi} rounded-xl px-3 py-2.5 text-sm`}/>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Bio</label>
+                        <textarea value={editProf?.bio||''} onChange={e=>setEditProf((p:any)=>({...p,bio:e.target.value}))} rows={3} placeholder="Napisz coś o sobie..." className={`w-full ${gi} rounded-xl px-3 py-2.5 text-sm resize-none`}/>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">Kolor bannera</label>
+                        <div className="grid grid-cols-6 gap-2">
+                          {GRADIENTS.map(g=>(
+                            <button key={g} onClick={()=>setEditProf((p:any)=>({...p,banner_color:g}))}
+                              className={`h-8 rounded-lg bg-gradient-to-r ${g} border-2 transition-all ${editProf?.banner_color===g?'border-white scale-105':'border-transparent'}`}/>
+                          ))}
+                        </div>
+                      </div>
+                      <button onClick={handleSaveProfile} className="w-full bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors mt-1">Zapisz zmiany</button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button onClick={()=>openDm(selUser.id)} className="flex-1 bg-indigo-500 hover:bg-indigo-400 text-white font-semibold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 text-sm"><MessageSquare size={14}/> Wiadomość</button>
+                      <button onClick={()=>startDmCall(selUser.id,selUser.username,'voice')} className={`w-10 h-10 ${gb} rounded-xl flex items-center justify-center`}><Phone size={15}/></button>
+                      <button onClick={()=>startDmCall(selUser.id,selUser.username,'video')} className={`w-10 h-10 ${gb} rounded-xl flex items-center justify-center`}><Video size={15}/></button>
+                    </div>
+                  )}
                 </div>
-                {selUser.bio&&<p className="text-sm text-zinc-400 mb-4 bg-white/[0.03] border border-white/[0.05] rounded-xl p-3">{selUser.bio}</p>}
-                {currentUser?.id===selUser.id ? (
-                  <div className="flex flex-col gap-3">
-                    <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1 block">Nazwa</label>
-                      <input value={editProf?.username||''} onChange={e=>setEditProf((p:any)=>({...p,username:e.target.value}))} className={`w-full ${gi} rounded-xl px-3 py-2 text-sm`}/></div>
-                    <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1 block">Status</label>
-                      <input value={editProf?.custom_status||''} onChange={e=>setEditProf((p:any)=>({...p,custom_status:e.target.value}))} placeholder="Ustaw status..." className={`w-full ${gi} rounded-xl px-3 py-2 text-sm`}/></div>
-                    <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1 block">Bio</label>
-                      <textarea value={editProf?.bio||''} onChange={e=>setEditProf((p:any)=>({...p,bio:e.target.value}))} rows={2} className={`w-full ${gi} rounded-xl px-3 py-2 text-sm resize-none`}/></div>
-                    <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Kolor bannera</label>
-                      <div className="flex gap-1.5 flex-wrap">
-                        {GRADIENTS.map(g=><button key={g} onClick={()=>setEditProf((p:any)=>({...p,banner_color:g}))}
-                          className={`w-8 h-8 rounded-lg bg-gradient-to-r ${g} border-2 transition-all ${editProf?.banner_color===g?'border-white':'border-transparent'}`}/>)}
-                      </div></div>
-                    <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1 block">Avatar</label>
-                      <input type="file" accept="image/*" onChange={handleAvatarUpload} className="w-full text-xs text-zinc-500 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:bg-white/[0.06] file:text-zinc-300"/></div>
-                    <button onClick={handleSaveProfile} className="w-full bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-2.5 rounded-xl transition-colors">Zapisz</button>
-                  </div>
-                ) : (
-                  <div className="flex gap-2">
-                    <button onClick={()=>openDm(selUser.id)} className="flex-1 bg-indigo-500 hover:bg-indigo-400 text-white font-semibold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 text-sm"><MessageSquare size={14}/> Wiadomość</button>
-                    <button onClick={()=>startDmCall(selUser.id,selUser.username,'voice')} className={`w-10 h-10 ${gb} rounded-xl flex items-center justify-center`}><Phone size={15}/></button>
-                    <button onClick={()=>startDmCall(selUser.id,selUser.username,'video')} className={`w-10 h-10 ${gb} rounded-xl flex items-center justify-center`}><Video size={15}/></button>
-                  </div>
-                )}
               </div>
             </motion.div>
           </motion.div>
