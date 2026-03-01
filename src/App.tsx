@@ -18,10 +18,10 @@ import {
 import { connectSocket, disconnectSocket, joinChannel, leaveChannel } from './socket';
 
 // ─── Glass constants ──────────────────────────────────────────────────────────
-const gp = 'bg-zinc-950/70 backdrop-blur-xl border border-white/[0.06] shadow-2xl';
-const gm = 'bg-zinc-900/95 backdrop-blur-2xl border border-white/[0.1] shadow-2xl';
-const gi = 'bg-white/[0.04] border border-white/[0.08] text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 focus:bg-white/[0.06] transition-all';
-const gb = 'bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.09] text-zinc-300 hover:text-white transition-all';
+const gp = 'bg-zinc-900/80 backdrop-blur-xl border border-white/[0.07] shadow-2xl';
+const gm = 'bg-zinc-900/95 backdrop-blur-2xl border border-white/[0.1] shadow-2xl rounded-3xl';
+const gi = 'bg-white/[0.05] border border-white/[0.08] text-white placeholder-zinc-500 outline-none focus:border-indigo-500/60 focus:bg-white/[0.08] transition-all';
+const gb = 'bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.1] text-zinc-300 hover:text-white transition-all';
 
 const PERMISSIONS = [
   { id: 'administrator', label: 'Administrator' },
@@ -76,7 +76,7 @@ function AuthScreen({ onAuth }: { onAuth: (u: UserProfile, t: string) => void })
   };
   return (
     <div className="fixed inset-0 flex items-center justify-center p-4 z-50"
-      style={{ background: 'radial-gradient(ellipse at 50% 0%,rgba(99,102,241,.18) 0%,transparent 70%),#09090b' }}>
+      style={{ background: 'radial-gradient(ellipse at 50% 0%,rgba(99,102,241,.22) 0%,transparent 70%),radial-gradient(ellipse at 80% 80%,rgba(139,92,246,.1) 0%,transparent 50%),#09090b' }}>
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={`w-full max-w-md ${gm} rounded-3xl p-8`}>
         <div className="text-center mb-8">
           <div className="w-14 h-14 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center mx-auto mb-4">
@@ -431,7 +431,7 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative"
-      style={{ background: 'radial-gradient(ellipse at 20% 50%,rgba(99,102,241,.07) 0%,transparent 50%),radial-gradient(ellipse at 80% 20%,rgba(168,85,247,.05) 0%,transparent 50%),#09090b' }}>
+      style={{ background: 'radial-gradient(ellipse at 15% 60%,rgba(99,102,241,.18) 0%,transparent 55%),radial-gradient(ellipse at 85% 15%,rgba(139,92,246,.12) 0%,transparent 55%),radial-gradient(ellipse at 50% 100%,rgba(79,70,229,.08) 0%,transparent 50%),#09090b' }}>
 
       {/* TOP NAV */}
       <nav className="h-14 border-b border-white/[0.06] flex items-center justify-between px-4 md:px-6 bg-zinc-950/80 backdrop-blur-xl shrink-0 z-30 relative">
@@ -585,7 +585,7 @@ export default function App() {
         </aside>
 
         {/* CENTER */}
-        <section className={`flex-1 flex flex-col ${gp} rounded-2xl md:rounded-3xl overflow-hidden relative min-w-0`}>
+        <section className={`flex-1 flex flex-col ${gp} rounded-2xl md:rounded-3xl overflow-hidden min-w-0`}>
           {activeView==='friends' ? (
             <div className="flex-1 flex flex-col overflow-hidden">
               <div className="h-13 border-b border-white/[0.05] flex items-center px-5 shrink-0 bg-zinc-950/40 backdrop-blur-md z-10">
@@ -667,7 +667,7 @@ export default function App() {
               </header>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 md:p-5 custom-scrollbar flex flex-col pb-24">
+              <div className="flex-1 overflow-y-auto p-4 md:p-5 custom-scrollbar flex flex-col">
                 <div className="mt-auto flex flex-col gap-0.5">
                   <div className="text-center py-6 mb-2">
                     {activeView==='dms'&&activeDm ? (
@@ -734,7 +734,7 @@ export default function App() {
               </div>
 
               {/* Input */}
-              <div className="absolute bottom-0 left-0 right-0 p-3 bg-zinc-950/80 backdrop-blur-xl border-t border-white/[0.05]">
+              <div className="shrink-0 p-3 bg-zinc-950/80 border-t border-white/[0.05]">
                 {replyTo&&(
                   <div className="flex items-center justify-between bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-3 py-1.5 mb-2 text-xs">
                     <div className="flex items-center gap-1.5 text-zinc-400 truncate">

@@ -1,49 +1,18 @@
 @import "tailwindcss";
 
-@theme {
-  --color-black: #0A0E14;
-  --color-white: #FFFFFF;
-  
-  --color-zinc-100: #E6E1DC;
-  --color-zinc-200: #CCCAC2;
-  --color-zinc-300: #B3B1AD;
-  --color-zinc-400: #73828C;
-  --color-zinc-500: #5C6773;
-  --color-zinc-600: #3E4B59;
-  --color-zinc-700: #1F2430;
-  --color-zinc-800: #151A1E;
-  --color-zinc-900: #0F1419;
-
-  --color-indigo-400: #59C2FF;
-  --color-indigo-500: #39BAE6;
-  --color-indigo-600: #13A3D4;
-
-  --color-emerald-400: #D2E56D;
-  --color-emerald-500: #C2D94C;
-  --color-emerald-600: #A1B82B;
-
-  --color-rose-400: #FF6666;
-  --color-rose-500: #FF3333;
-  --color-rose-600: #D41919;
-
-  --color-amber-400: #FFC77A;
-  --color-amber-500: #FFB454;
-  --color-amber-600: #D99333;
-}
-
 @layer utilities {
   .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 4px;
+    height: 4px;
   }
   .custom-scrollbar::-webkit-scrollbar-track {
     background: transparent;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #151A1E;
+    background: rgba(255,255,255,0.08);
     border-radius: 10px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #3E4B59;
+    background: rgba(255,255,255,0.14);
   }
 }
