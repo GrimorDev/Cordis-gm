@@ -7,6 +7,7 @@ import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { config } from './config';
 import { pool } from './db/pool';
+import { runMigrations } from './db/migrate';
 import { redis } from './redis/client';
 import { initSocket } from './socket';
 
@@ -21,6 +22,9 @@ import friendsRoutes from './routes/friends';
 
 const app = express();
 const httpServer = http.createServer(app);
+
+// Trust Nginx proxy (required for express-rate-limit + X-Forwarded-For)
+app.set('trust proxy', 1);
 
 // ── Security & Middleware ────────────────────────────────────────────
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
@@ -98,12 +102,13 @@ async function start() {
     // Non-fatal - continue without Redis if needed
   }
 
-  // Test PostgreSQL connection
+  // Test PostgreSQL connection + run migrations
   try {
     await pool.query('SELECT 1');
     console.log('PostgreSQL connected');
+    await runMigrations();
   } catch (err) {
-    console.error('PostgreSQL connection failed:', err);
+    console.error('PostgreSQL connection/migration failed:', err);
     process.exit(1);
   }
 

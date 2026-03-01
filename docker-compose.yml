@@ -33,6 +33,12 @@ services:
         condition: service_healthy
     networks:
       - cordis-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health.txt || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 5
 
   # ── Backend (Node.js API + Socket.IO) ────────────────────────────
   backend:
