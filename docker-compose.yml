@@ -32,7 +32,8 @@ services:
       backend:
         condition: service_healthy
     networks:
-      - cordis-net
+      - default
+      - proxy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health.txt || exit 1"]
       interval: 30s
@@ -72,8 +73,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks:
-      - cordis-net
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:4000/health || exit 1"]
       interval: 30s
@@ -95,8 +94,6 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
       - ./postgres/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
-    networks:
-      - cordis-net
     healthcheck:
       # Najprostszy check - czy postgres odpowiada na porcie 5432
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432"]
@@ -119,8 +116,6 @@ services:
       --maxmemory-policy allkeys-lru
     volumes:
       - redis-data:/data
-    networks:
-      - cordis-net
     healthcheck:
       # docker-compose interpoluje ${REDIS_PASSWORD:-redis_secret} w czasie parsowania
       # więc hasło trafia literalnie do komendy - nie potrzeba ekspansji shellowej
@@ -132,8 +127,8 @@ services:
 
 # ── Networks ──────────────────────────────────────────────────────────
 networks:
-  cordis-net:
-    driver: bridge
+  proxy:
+    external: true
 
 # ── Volumes ───────────────────────────────────────────────────────────
 volumes:
