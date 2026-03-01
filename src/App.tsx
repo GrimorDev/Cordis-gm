@@ -1287,20 +1287,24 @@ export default function App() {
             className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={()=>setProfileOpen(false)}>
             <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
               onClick={e=>e.stopPropagation()} className={`${gm} rounded-3xl w-full max-w-sm flex flex-col max-h-[90vh]`}>
-              {/* Banner — fixed */}
-              <div className="h-28 relative overflow-hidden rounded-t-3xl shrink-0">
-                {(currentUser?.id===selUser.id ? (profBannerPrev||currentUser?.banner_url) : selUser.banner_url) ? (
-                  <img src={currentUser?.id===selUser.id?(profBannerPrev||currentUser?.banner_url!):selUser.banner_url} className="w-full h-full object-cover" alt=""/>
-                ) : (
-                  <div className={`w-full h-full bg-gradient-to-r ${editProf?.banner_color||'from-indigo-600 via-purple-600 to-pink-600'}`}/>
-                )}
-                {currentUser?.id===selUser.id&&(
-                  <label className="absolute top-2 right-2 w-8 h-8 bg-black/50 hover:bg-black/70 rounded-xl flex items-center justify-center cursor-pointer transition-colors group">
-                    <Upload size={13} className="text-white"/>
-                    <input type="file" accept="image/*" onChange={handleBannerSelect} className="hidden"/>
-                  </label>
-                )}
-                <div className="absolute bottom-0 left-5 translate-y-1/2">
+              {/* Banner wrapper — relative but NO overflow-hidden, so avatar can poke out below */}
+              <div className="relative shrink-0">
+                {/* Banner — overflow-hidden only on this inner div (clips the image/gradient) */}
+                <div className="h-28 relative overflow-hidden rounded-t-3xl">
+                  {(currentUser?.id===selUser.id ? (profBannerPrev||currentUser?.banner_url) : selUser.banner_url) ? (
+                    <img src={currentUser?.id===selUser.id?(profBannerPrev||currentUser?.banner_url!):selUser.banner_url} className="w-full h-full object-cover" alt=""/>
+                  ) : (
+                    <div className={`w-full h-full bg-gradient-to-r ${editProf?.banner_color||'from-indigo-600 via-purple-600 to-pink-600'}`}/>
+                  )}
+                  {currentUser?.id===selUser.id&&(
+                    <label className="absolute top-2 right-2 w-8 h-8 bg-black/50 hover:bg-black/70 rounded-xl flex items-center justify-center cursor-pointer transition-colors group">
+                      <Upload size={13} className="text-white"/>
+                      <input type="file" accept="image/*" onChange={handleBannerSelect} className="hidden"/>
+                    </label>
+                  )}
+                </div>
+                {/* Avatar — sibling to banner div, NOT inside overflow-hidden → no longer clipped */}
+                <div className="absolute bottom-0 left-5 translate-y-1/2 z-10">
                   <div className="relative">
                     <img src={ava(selUser)} className="w-16 h-16 rounded-2xl border-4 border-zinc-900 object-cover" alt=""/>
                     <div className={`absolute bottom-0 right-0 w-4 h-4 ${sc(selUser.status||'offline')} rounded-full border-2 border-zinc-900`}/>
