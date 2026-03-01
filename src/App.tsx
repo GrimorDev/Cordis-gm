@@ -52,6 +52,14 @@ const GRADIENTS = [
   'from-zinc-700 via-zinc-600 to-zinc-700',
 ];
 
+const STATUS_OPTIONS = [
+  { value: 'online'  as const, label: 'Dostępny',         color: 'bg-emerald-500', desc: 'Widoczny dla wszystkich' },
+  { value: 'idle'    as const, label: 'Zaraz wracam',      color: 'bg-amber-500',   desc: 'Chwilowo nieobecny' },
+  { value: 'dnd'     as const, label: 'Nie przeszkadzać',  color: 'bg-rose-500',    desc: 'Wyciszam powiadomienia' },
+  { value: 'offline' as const, label: 'Niewidoczny',       color: 'bg-zinc-500',    desc: 'Wyświetl się jako offline' },
+] as const;
+const IDLE_MS = 10 * 60 * 1000; // 10 min braku aktywności → idle
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const ava = (u: { avatar_url?: string | null; username: string }) =>
   u.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(u.username)}&size=40`;
@@ -371,6 +379,14 @@ export default function App() {
   const [selCamera, setSelCamera]             = useState('');
   const [devicesOpen, setDevicesOpen]         = useState(false);
 
+  // Status system
+  const [statusPickerOpen, setStatusPickerOpen] = useState(false);
+  const [isMicMuted, setIsMicMuted]           = useState(false);
+  const myStatusRef                            = useRef<string>('online');
+  const autoIdledRef                           = useRef(false); // true if idle was set automatically
+  const idleTimerRef                           = useRef<ReturnType<typeof setTimeout>|null>(null);
+  const statusPickerRef                        = useRef<HTMLDivElement>(null);
+
   // App Settings
   const [appSettOpen, setAppSettOpen]         = useState(false);
   const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'devices'|'privacy'>('account');
@@ -512,6 +528,59 @@ export default function App() {
   // ── Sync refs ───────────────────────────────────────────────────
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
   useEffect(() => { activeCallRef.current  = activeCall;  }, [activeCall]);
+  // Sync myStatusRef when currentUser.status changes (e.g. on login)
+  useEffect(() => { if (currentUser?.status) myStatusRef.current = currentUser.status; }, [currentUser?.status]);
+
+  // ── Auto-idle (10 min brak aktywności) ───────────────────────────
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const resetTimer = () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      // If we were auto-idled, come back online on any activity
+      if (autoIdledRef.current && myStatusRef.current === 'idle') {
+        changeStatus('online');
+      }
+      idleTimerRef.current = setTimeout(() => {
+        if (myStatusRef.current !== 'dnd' && myStatusRef.current !== 'offline') {
+          changeStatus('idle', true);
+        }
+      }, IDLE_MS);
+    };
+    window.addEventListener('mousemove', resetTimer, { passive: true });
+    window.addEventListener('keydown',   resetTimer, { passive: true });
+    window.addEventListener('click',     resetTimer, { passive: true });
+    resetTimer();
+    return () => {
+      window.removeEventListener('mousemove', resetTimer);
+      window.removeEventListener('keydown',   resetTimer);
+      window.removeEventListener('click',     resetTimer);
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
+
+  // ── Set online on login, offline/invisible on logout ────────────
+  useEffect(() => {
+    if (isAuthenticated && currentUser) {
+      // Only push online if user was previously offline/not set
+      if (!currentUser.status || currentUser.status === 'offline') {
+        changeStatus('online');
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
+
+  // ── Close status picker on outside click ────────────────────────
+  useEffect(() => {
+    if (!statusPickerOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (statusPickerRef.current && !statusPickerRef.current.contains(e.target as Node)) {
+        setStatusPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [statusPickerOpen]);
 
   // ── Enumerate devices ────────────────────────────────────────────
   useEffect(() => {
@@ -596,6 +665,26 @@ export default function App() {
   const addServerActivity = (entry: {icon:string;text:string}) => {
     const id = Date.now().toString()+Math.random().toString(36).slice(2);
     setServerActivity(p => [{id, ...entry, time: new Date().toISOString()}, ...p].slice(0, 20));
+  };
+
+  // ── Status ────────────────────────────────────────────────────────
+  const changeStatus = async (s: 'online'|'idle'|'dnd'|'offline', auto = false) => {
+    try {
+      await users.updateStatus(s);
+      myStatusRef.current = s;
+      autoIdledRef.current = auto;
+      setCurrentUser(p => p ? {...p, status: s} : p);
+    } catch { /* silent */ }
+  };
+
+  const handleMicToggle = () => {
+    if (activeCall) {
+      toggleMute();
+    } else {
+      const next = !isMicMuted;
+      setIsMicMuted(next);
+      localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !next; });
+    }
   };
 
   // ── Auth ────────────────────────────────────────────────────────
@@ -1150,19 +1239,86 @@ export default function App() {
           {activeView==='friends'&&<div className="p-3.5 border-b border-white/[0.05]"><h2 className="text-sm font-bold text-white">Znajomi</h2></div>}
 
           {/* USER BAR — bottom of sidebar */}
-          <div className="shrink-0 px-3 py-2.5 border-t border-white/[0.07] bg-[#0f0f0f]">
+          <div className="shrink-0 px-3 py-2.5 border-t border-white/[0.07] bg-[#0f0f0f] relative" ref={statusPickerRef}>
+
+            {/* Status picker popup */}
+            <AnimatePresence>
+              {statusPickerOpen&&(
+                <motion.div initial={{opacity:0,y:6,scale:0.95}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:6,scale:0.95}}
+                  transition={{duration:0.15,ease:[0.16,1,0.3,1]}}
+                  className="absolute bottom-full left-3 right-3 mb-2 bg-zinc-900 border border-white/[0.1] rounded-2xl shadow-2xl overflow-hidden z-50 p-1">
+
+                  {/* Call status row — auto, shown when in call */}
+                  {activeCall&&(
+                    <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 mb-1">
+                      <div className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0 flex items-center justify-center">
+                        <Phone size={6} className="text-white"/>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-semibold text-rose-400 leading-tight">W trakcie rozmowy</p>
+                        <p className="text-[10px] text-zinc-600">Ustawiany automatycznie</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {STATUS_OPTIONS.map(opt=>{
+                    const isCurrent = (currentUser?.status||'online')===opt.value && !activeCall;
+                    return (
+                      <button key={opt.value} onClick={()=>{ changeStatus(opt.value); setStatusPickerOpen(false); }}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition-colors text-left group ${isCurrent?'bg-white/[0.06]':'hover:bg-white/[0.05]'}`}>
+                        <div className={`w-2.5 h-2.5 rounded-full ${opt.color} shrink-0`}/>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] font-semibold text-zinc-200 leading-tight">{opt.label}</p>
+                          <p className="text-[10px] text-zinc-600">{opt.desc}</p>
+                        </div>
+                        {isCurrent&&<Check size={12} className="text-indigo-400 shrink-0"/>}
+                      </button>
+                    );
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <div className="flex items-center gap-2.5">
-              <div className="relative shrink-0 cursor-pointer" onClick={openOwnProfile}>
+              {/* Avatar + status dot — click opens picker */}
+              <div className="relative shrink-0 cursor-pointer" onClick={()=>setStatusPickerOpen(p=>!p)} title="Zmień status">
                 <img src={currentUser?ava(currentUser):''} className="w-8 h-8 rounded-full object-cover" alt=""/>
-                <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${sc(currentUser?.status??'offline')} border-2 border-[#0f0f0f] rounded-full`}/>
+                {/* Status dot — red phone when in call, else normal status */}
+                {activeCall ? (
+                  <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-rose-500 border-2 border-[#0f0f0f] rounded-full flex items-center justify-center">
+                    <Phone size={6} className="text-white"/>
+                  </div>
+                ) : (
+                  <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${sc(currentUser?.status??'offline')} border-2 border-[#0f0f0f] rounded-full`}/>
+                )}
               </div>
+
+              {/* Name + status label */}
               <div className="flex-1 min-w-0 cursor-pointer" onClick={openOwnProfile}>
                 <p className="text-[13px] font-semibold text-white leading-tight truncate hover:text-zinc-300 transition-colors">{currentUser?.username}</p>
-                {(currentUser?.custom_status||currentUser?.status)&&
-                  <p className="text-[11px] text-zinc-500 truncate leading-tight mt-0.5">{currentUser?.custom_status||currentUser?.status}</p>}
+                <p className="text-[11px] truncate leading-tight mt-0.5">
+                  {activeCall ? (
+                    <span className="text-rose-400">W trakcie rozmowy</span>
+                  ) : currentUser?.custom_status ? (
+                    <span className="text-zinc-500">{currentUser.custom_status}</span>
+                  ) : (
+                    <span className={`${sc(currentUser?.status??'offline').replace('bg-','text-')}`}>
+                      {STATUS_OPTIONS.find(o=>o.value===(currentUser?.status||'online'))?.label||'Dostępny'}
+                    </span>
+                  )}
+                </p>
               </div>
+
+              {/* Mic + Settings buttons */}
               <div className="flex items-center gap-0.5 shrink-0">
-                <button title="Wycisz mikrofon" className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all"><Mic size={13}/></button>
+                <button title={isMicMuted||activeCall?.isMuted?'Włącz mikrofon':'Wycisz mikrofon'}
+                  onClick={handleMicToggle}
+                  className={`w-7 h-7 flex items-center justify-center rounded-md transition-all ${
+                    (isMicMuted||(activeCall?.isMuted??false))
+                      ? 'text-rose-400 bg-rose-500/10 hover:bg-rose-500/20'
+                      : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07]'}`}>
+                  {(isMicMuted||(activeCall?.isMuted??false))?<MicOff size={13}/>:<Mic size={13}/>}
+                </button>
                 <button title="Ustawienia aplikacji" onClick={()=>{setAppSettTab('account');setAppSettOpen(true);}}
                   className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all"><Settings size={13}/></button>
               </div>
