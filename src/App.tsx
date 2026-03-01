@@ -947,7 +947,7 @@ export default function App() {
             {serverList.map(srv => {
               const isActive = activeServer===srv.id&&activeView==='servers';
               return (
-                <button key={srv.id} onClick={() => { setActiveServer(srv.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); }}
+                <button key={srv.id} onClick={() => { if(activeServer===srv.id&&activeView==='servers') return; setActiveServer(srv.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); }}
                   className={`flex items-center gap-2 h-full px-4 text-sm font-medium transition-all border-r border-white/[0.05] whitespace-nowrap relative group ${isActive?'text-white bg-[#0a0a0a]':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'}`}>
                   {isActive&&<span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500"/>}
                   <span className="w-5 h-5 rounded-md bg-zinc-800 flex items-center justify-center text-[11px] font-bold text-white shrink-0 overflow-hidden">
@@ -1004,7 +1004,7 @@ export default function App() {
             ))}
             <div className="w-px h-7 bg-white/[0.07] self-center mx-0.5"/>
             {serverList.map(s => (
-              <button key={s.id} onClick={() => { setActiveServer(s.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); setIsMobileOpen(false); }}
+              <button key={s.id} onClick={() => { if(activeServer===s.id&&activeView==='servers') return; setActiveServer(s.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); setIsMobileOpen(false); }}
                 className={`w-10 h-10 shrink-0 rounded-xl overflow-hidden border ${activeServer===s.id&&activeView==='servers'?'border-indigo-500/40':'border-white/[0.05]'}`}>
                 <span className="text-sm font-bold text-white flex w-full h-full items-center justify-center bg-zinc-800">{s.name.charAt(0)}</span>
               </button>
@@ -1538,24 +1538,22 @@ export default function App() {
                   )}
                 </AnimatePresence>
                 {/* Typing indicator */}
-                <AnimatePresence>
-                  {activeView==='servers'&&(()=>{
-                    const typers=Object.entries(typingUsers).filter(([uid])=>uid!==currentUser?.id).map(([,n])=>n);
-                    if(!typers.length) return null;
-                    const txt=typers.length===1?`${typers[0]} pisze`:typers.length===2?`${typers[0]} i ${typers[1]} piszą`:`${typers.slice(0,-1).join(', ')} i ${typers.slice(-1)[0]} piszą`;
-                    return (
-                      <motion.div key="typing-ind" initial={{opacity:0,height:0}} animate={{opacity:1,height:'auto'}} exit={{opacity:0,height:0}}
-                        className="flex items-center gap-1.5 px-1 mb-1.5 overflow-hidden">
-                        <span className="text-[11px] text-zinc-500 leading-none">{txt}</span>
-                        <span className="flex gap-[3px] items-center">
-                          {[0,1,2].map(i=>(
-                            <span key={i} className="w-1 h-1 bg-zinc-500 rounded-full animate-bounce inline-block" style={{animationDelay:`${i*150}ms`}}/>
-                          ))}
-                        </span>
-                      </motion.div>
-                    );
-                  })()}
-                </AnimatePresence>
+                {(()=>{
+                  if(activeView!=='servers') return null;
+                  const typers=Object.entries(typingUsers).filter(([uid])=>uid!==currentUser?.id).map(([,n])=>n);
+                  if(!typers.length) return null;
+                  const txt=typers.length===1?`${typers[0]} pisze`:typers.length===2?`${typers[0]} i ${typers[1]} piszą`:`${typers.slice(0,-1).join(', ')} i ${typers.slice(-1)[0]} piszą`;
+                  return (
+                    <div className="flex items-center gap-1.5 px-1 mb-1.5 min-h-[16px]">
+                      <span className="text-[11px] text-zinc-500 leading-none">{txt}</span>
+                      <span className="flex gap-[3px] items-center">
+                        {[0,1,2].map(i=>(
+                          <span key={i} className="w-1 h-1 bg-zinc-500 rounded-full animate-bounce inline-block" style={{animationDelay:`${i*150}ms`}}/>
+                        ))}
+                      </span>
+                    </div>
+                  );
+                })()}
                 {/* Main input row */}
                 <form onSubmit={handleSend}>
                   <div className="flex items-center gap-3 bg-zinc-900/80 border border-white/[0.08] rounded-xl px-3 py-2.5 hover:border-white/[0.12] transition-colors focus-within:border-white/[0.15]">
@@ -1601,7 +1599,9 @@ export default function App() {
             const allVoiceChs = serverFull?.categories.flatMap(c=>c.channels.filter(ch=>ch.type==='voice'))||[];
             const liveCh = allVoiceChs.find(ch=>(voiceUsers[ch.id]||[]).length>0);
             const liveUsers = liveCh ? (voiceUsers[liveCh.id]||[]) : [];
-            if(!liveCh&&!activeCall?.channelId) return null;
+            // Only show call block if the active call belongs to THIS server
+            const callOnThisServer = activeCall?.channelId && activeCall?.serverId===activeServer;
+            if(!liveCh&&!callOnThisServer) return null;
             const displayCh = liveCh || activeCh;
             const displayUsers = liveCh ? liveUsers : (activeCall?.channelId?(voiceUsers[activeCall.channelId]||[]):[]);
             if(!displayCh) return null;
