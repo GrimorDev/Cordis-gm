@@ -740,7 +740,18 @@ export default function App() {
         setVoiceUsers(p => ({ ...p, [channel_id]: (p[channel_id]||[]).filter((u:VoiceUser)=>u.id!==user_id) }));
         closePeer(user_id);
       },
-      onOffer:  ({ from, sdp }: any) => openPeer(from, false, sdp),
+      onOffer: async ({ from, sdp }: any) => {
+        const existing = peerConnsRef.current.get(from);
+        if (existing) {
+          // Renegotiation (e.g. remote peer added screen share track)
+          await existing.setRemoteDescription(new RTCSessionDescription(sdp));
+          const answer = await existing.createAnswer();
+          await existing.setLocalDescription(answer);
+          getSocket().emit('webrtc_answer', { to: from, sdp: answer });
+        } else {
+          await openPeer(from, false, sdp);
+        }
+      },
       onAnswer: async ({ from, sdp }: any) => {
         const pc = peerConnsRef.current.get(from);
         if (pc && pc.signalingState !== 'stable')
@@ -1164,7 +1175,18 @@ export default function App() {
         const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
         screenStreamRef.current = stream;
         stream.getVideoTracks().forEach(t => {
-          peerConnsRef.current.forEach(pc => pc.addTrack(t, stream));
+          // Add track + renegotiate each existing peer connection
+          peerConnsRef.current.forEach(async (pc, peerId) => {
+            pc.addTrack(t, stream);
+            // Must renegotiate so remote peer receives the new video track
+            try {
+              if (pc.signalingState === 'stable') {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                getSocket().emit('webrtc_offer', { to: peerId, sdp: offer });
+              }
+            } catch {}
+          });
           t.onended = () => {
             screenStreamRef.current = null;
             setActiveCall(p => p ? {...p, isScreenSharing: false} : p);
