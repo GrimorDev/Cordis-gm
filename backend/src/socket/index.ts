@@ -162,6 +162,17 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
       io.to(`user:${to}`).emit('webrtc_ice', { from: user.id, candidate });
     });
 
+    // ── Screen share signaling ────────────────────────────────────────
+    socket.on('screen_share_start', ({ to_user_id, channel_id }: any) => {
+      if (to_user_id) io.to(`user:${to_user_id}`).emit('screen_share_start' as any, { from: user.id });
+      if (channel_id) socket.to(`voice:${channel_id}`).emit('screen_share_start' as any, { from: user.id });
+    });
+
+    socket.on('screen_share_stop', ({ to_user_id, channel_id }: any) => {
+      if (to_user_id) io.to(`user:${to_user_id}`).emit('screen_share_stop' as any, { from: user.id });
+      if (channel_id) socket.to(`voice:${channel_id}`).emit('screen_share_stop' as any, { from: user.id });
+    });
+
     // ── Disconnect ───────────────────────────────────────────────────
     socket.on('disconnect', async () => {
       console.log(`Socket disconnected: ${user.username}`);

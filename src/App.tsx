@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Hash, Volume2, Video, Settings, Plus, Search, Bell, Users,
   Mic, MicOff, VolumeX, Smile, Paperclip, Send, Image, Reply,
-  Menu, X, Edit3, MessageCircle, Minimize2,
+  Menu, X, Edit3, MessageCircle, Minimize2, Maximize2,
   Shield, Trash2, Settings2, UserPlus, Check, X as XIcon,
   LogOut, Loader2, Lock, Phone, PhoneOff, MessageSquare, Upload, MoreHorizontal, ScreenShare,
   CheckCircle2, AlertCircle, Info, AlertTriangle
@@ -366,9 +366,10 @@ export default function App() {
   const attachRef        = useRef<HTMLInputElement>(null);
   const callTimerRef     = useRef<ReturnType<typeof setInterval>|null>(null);
   // WebRTC refs
-  const localStreamRef   = useRef<MediaStream|null>(null);
-  const screenStreamRef  = useRef<MediaStream|null>(null);
-  const peerConnsRef     = useRef(new Map<string, RTCPeerConnection>());
+  const localStreamRef          = useRef<MediaStream|null>(null);
+  const screenStreamRef         = useRef<MediaStream|null>(null);
+  const remoteScreenStreamsRef  = useRef(new Map<string, MediaStream>());
+  const peerConnsRef            = useRef(new Map<string, RTCPeerConnection>());
   const speakStopRef     = useRef(new Map<string, ()=>void>()); // speaking detection cleanup
   const currentUserRef      = useRef(currentUser);
   const activeCallRef       = useRef(activeCall);
@@ -376,6 +377,13 @@ export default function App() {
   const activeViewRef       = useRef(activeView);
   const callDurationRef     = useRef(0);
   const voiceHandlerRef     = useRef<Record<string, (...a: any[]) => void>>({});
+  // DM unread counts (keyed by other_user_id)
+  const [unreadDms, setUnreadDms]             = useState<Record<string, number>>({});
+
+  // Screen share state
+  const [sharingUserId, setSharingUserId]     = useState<string|null>(null);
+  const [screenShareTick, setScreenShareTick] = useState(0); // forces re-render when remote screen streams change
+
   // WebRTC state
   const [speakingUsers, setSpeakingUsers]     = useState(new Set<string>());
   const [devices, setDevices]                 = useState<MediaDeviceInfo[]>([]);
@@ -423,7 +431,6 @@ export default function App() {
     sock.on('new_message', msg => setChannelMsgs(p => [...p, msg as MessageFull]));
     sock.on('new_dm', (msg: DmMessageFull) => {
       const myId = currentUserRef.current?.id;
-      const otherUserId = msg.sender_id === myId ? activeDmUserIdRef.current : msg.sender_id;
       const isActiveDm = activeViewRef.current === 'dms' &&
         (activeDmUserIdRef.current === msg.sender_id || (msg.sender_id === myId && !!activeDmUserIdRef.current));
       // Add to messages only for the active conversation (deduplicate by id)
@@ -432,10 +439,11 @@ export default function App() {
       }
       // Always refresh sidebar conversation list (updates last_message + shows new convs)
       dmsApi.conversations().then(setDmConvs).catch(console.error);
-      // Toast notification when you're not looking at this DM
+      // Toast + unread count when not looking at this DM
       if (msg.sender_id !== myId && !isActiveDm) {
         const preview = msg.content.length > 60 ? msg.content.slice(0, 60) + '…' : msg.content;
         autoToast(`💬 ${msg.sender_username}: ${preview}`, 'info');
+        setUnreadDms(p => ({ ...p, [msg.sender_id]: (p[msg.sender_id] || 0) + 1 }));
       }
     });
     sock.on('message_deleted', ({ id }) => setChannelMsgs(p => p.filter(m => m.id !== id)));
@@ -483,6 +491,15 @@ export default function App() {
     sock.on('webrtc_offer',  (d: any) => voiceHandlerRef.current.onOffer?.(d));
     sock.on('webrtc_answer', (d: any) => voiceHandlerRef.current.onAnswer?.(d));
     sock.on('webrtc_ice',    (d: any) => voiceHandlerRef.current.onIce?.(d));
+    // Screen share signaling
+    sock.on('screen_share_start' as any, ({ from }: { from: string }) => {
+      setSharingUserId(from);
+    });
+    sock.on('screen_share_stop' as any, ({ from }: { from: string }) => {
+      setSharingUserId(null);
+      remoteScreenStreamsRef.current.delete(from);
+      setScreenShareTick(t => t + 1);
+    });
     // DM call events
     sock.on('call_invite', ({ from, type, conversation_id }: any) => {
       setIncomingCall({ from, type, conversation_id });
@@ -668,6 +685,8 @@ export default function App() {
     const pc = peerConnsRef.current.get(userId);
     if (pc) { pc.close(); peerConnsRef.current.delete(userId); }
     detachRemoteAudio(userId);
+    remoteScreenStreamsRef.current.delete(userId);
+    setScreenShareTick(t => t + 1);
     const stop = speakStopRef.current.get(userId);
     if (stop) { stop(); speakStopRef.current.delete(userId); }
     setSpeakingUsers(p => { const n = new Set(p); n.delete(userId); return n; });
@@ -679,11 +698,18 @@ export default function App() {
       (c) => getSocket().emit('webrtc_ice', { to: remoteUserId, candidate: c }),
       (e) => {
         const stream = e.streams[0]; if (!stream) return;
-        attachRemoteAudio(remoteUserId, stream);
-        const stop = watchSpeaking(stream, (s) =>
-          setSpeakingUsers(p => { const n = new Set(p); s ? n.add(remoteUserId) : n.delete(remoteUserId); return n; }));
-        const old = speakStopRef.current.get(remoteUserId); if (old) old();
-        speakStopRef.current.set(remoteUserId, stop);
+        if (e.track.kind === 'video') {
+          // Remote screen share track
+          remoteScreenStreamsRef.current.set(remoteUserId, stream);
+          setScreenShareTick(t => t + 1);
+        } else {
+          // Remote audio track
+          attachRemoteAudio(remoteUserId, stream);
+          const stop = watchSpeaking(stream, (s) =>
+            setSpeakingUsers(p => { const n = new Set(p); s ? n.add(remoteUserId) : n.delete(remoteUserId); return n; }));
+          const old = speakStopRef.current.get(remoteUserId); if (old) old();
+          speakStopRef.current.set(remoteUserId, stop);
+        }
       },
     );
     peerConnsRef.current.set(remoteUserId, pc);
@@ -1123,19 +1149,32 @@ export default function App() {
     }
   };
   const toggleScreen = async () => {
+    const emitScreenStop = () => {
+      const c = activeCallRef.current;
+      if (c?.userId)    getSocket().emit('screen_share_stop' as any, { to_user_id: c.userId });
+      if (c?.channelId) getSocket().emit('screen_share_stop' as any, { channel_id: c.channelId });
+    };
     if (activeCall?.isScreenSharing) {
       screenStreamRef.current?.getTracks().forEach(t => t.stop());
       screenStreamRef.current = null;
       setActiveCall(p => p ? {...p, isScreenSharing: false} : p);
+      emitScreenStop();
     } else {
       try {
         const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
         screenStreamRef.current = stream;
         stream.getVideoTracks().forEach(t => {
           peerConnsRef.current.forEach(pc => pc.addTrack(t, stream));
-          t.onended = () => { screenStreamRef.current = null; setActiveCall(p => p ? {...p, isScreenSharing: false} : p); };
+          t.onended = () => {
+            screenStreamRef.current = null;
+            setActiveCall(p => p ? {...p, isScreenSharing: false} : p);
+            emitScreenStop();
+          };
         });
         setActiveCall(p => p ? {...p, isScreenSharing: true} : p);
+        const call = activeCallRef.current;
+        if (call?.userId)    getSocket().emit('screen_share_start' as any, { to_user_id: call.userId });
+        if (call?.channelId) getSocket().emit('screen_share_start' as any, { channel_id: call.channelId });
       } catch { addToast('Nie można udostępnić ekranu', 'error'); }
     }
   };
@@ -1362,19 +1401,27 @@ export default function App() {
           {activeView==='dms'&&<>
             <div className="p-3.5 border-b border-white/[0.05]"><h2 className="text-sm font-bold text-white">Wiadomości</h2></div>
             <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
-              {dmConvs.map(dm => (
-                <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setIsMobileOpen(false); }}
-                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg mb-0.5 transition-all ${activeDmUserId===dm.other_user_id?'bg-indigo-500/10 border border-indigo-500/20 text-indigo-400':'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300 border border-transparent'}`}>
-                  <div className="relative shrink-0">
-                    <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className="w-8 h-8 rounded-full object-cover" alt=""/>
-                    <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${sc(dm.other_status)} border-2 border-zinc-950 rounded-full`}/>
-                  </div>
-                  <div className="flex-1 truncate text-left">
-                    <p className="text-sm font-medium truncate">{dm.other_username}</p>
-                    {dm.last_message&&<p className="text-[11px] text-zinc-600 truncate">{dm.last_message}</p>}
-                  </div>
-                </button>
-              ))}
+              {dmConvs.map(dm => {
+                const unread = unreadDms[dm.other_user_id] || 0;
+                return (
+                  <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); }}
+                    className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg mb-0.5 transition-all ${activeDmUserId===dm.other_user_id?'bg-indigo-500/10 border border-indigo-500/20 text-indigo-400':'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300 border border-transparent'}`}>
+                    <div className="relative shrink-0">
+                      <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className="w-8 h-8 rounded-full object-cover" alt=""/>
+                      <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${sc(dm.other_status)} border-2 border-zinc-950 rounded-full`}/>
+                    </div>
+                    <div className="flex-1 truncate text-left min-w-0">
+                      <p className={`text-sm font-medium truncate ${unread > 0 ? 'text-white' : ''}`}>{dm.other_username}</p>
+                      {dm.last_message&&<p className={`text-[11px] truncate ${unread > 0 ? 'text-zinc-300 font-medium' : 'text-zinc-600'}`}>{dm.last_message}</p>}
+                    </div>
+                    {unread > 0 && (
+                      <span className="shrink-0 min-w-[18px] h-[18px] bg-rose-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1 leading-none">
+                        {unread > 99 ? '99+' : unread}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
               {dmConvs.length===0&&<p className="text-xs text-zinc-700 px-3 py-4">Brak wiadomości</p>}
             </div>
           </>}
@@ -1490,57 +1537,103 @@ export default function App() {
                   <button onClick={()=>setShowCallPanel(false)} title="Minimalizuj" className={`w-7 h-7 ${gb} rounded-lg flex items-center justify-center`}><Minimize2 size={13}/></button>
                 </div>
               </header>
-              {/* Participants grid */}
-              <div className="flex-1 flex flex-wrap items-center justify-center gap-6 p-8 overflow-y-auto">
-                {/* Self */}
-                {currentUser&&(()=>{
+              {/* Participants + screen share area */}
+              {(()=>{
+                const remoteScreenEntries = [...remoteScreenStreamsRef.current.entries()];
+                const hasScreenShare = (activeCall.isScreenSharing && !!screenStreamRef.current) || remoteScreenEntries.length > 0;
+
+                // Participant avatar block (shared between layouts)
+                const selfBlock = currentUser ? (()=>{
                   const selfSpeaking = speakingUsers.has(currentUser.id) && !activeCall.isMuted;
                   return (
-                    <div className="flex flex-col items-center gap-3">
-                      <div className={`relative p-1 rounded-3xl border-2 transition-all duration-150 ${selfSpeaking?'border-emerald-500 shadow-[0_0_12px_2px_rgba(16,185,129,0.45)]':activeCall.isMuted?'border-rose-500/40':'border-white/10'}`}>
-                        <img src={ava(currentUser)} className="w-24 h-24 rounded-2xl object-cover" alt=""/>
-                        <div className={`absolute bottom-2 right-2 w-6 h-6 rounded-full flex items-center justify-center ${activeCall.isMuted?'bg-rose-500':'bg-emerald-500'}`}>
-                          {activeCall.isMuted?<MicOff size={11} className="text-white"/>:<Mic size={11} className="text-white"/>}
+                    <div key="self" className="flex flex-col items-center gap-2">
+                      <div className={`relative p-1 rounded-2xl border-2 transition-all duration-150 ${selfSpeaking?'border-emerald-500 shadow-[0_0_12px_2px_rgba(16,185,129,0.45)]':activeCall.isMuted?'border-rose-500/40':'border-white/10'}`}>
+                        <img src={ava(currentUser)} className={`${hasScreenShare?'w-14 h-14':'w-24 h-24'} rounded-xl object-cover`} alt=""/>
+                        <div className={`absolute bottom-1 right-1 w-5 h-5 rounded-full flex items-center justify-center ${activeCall.isMuted?'bg-rose-500':'bg-emerald-500'}`}>
+                          {activeCall.isMuted?<MicOff size={9} className="text-white"/>:<Mic size={9} className="text-white"/>}
                         </div>
-                        {activeCall.isCameraOn&&<div className="absolute top-2 left-2 bg-indigo-500 rounded-full p-0.5"><Video size={9} className="text-white"/></div>}
                       </div>
-                      <div className="text-center"><p className={`text-sm font-bold ${selfSpeaking?'text-emerald-400':'text-white'}`}>{currentUser.username}</p><p className="text-[10px] text-zinc-600">Ty</p></div>
+                      <p className={`text-xs font-bold ${selfSpeaking?'text-emerald-400':'text-white'}`}>{currentUser.username} <span className="text-zinc-600">(Ty)</span></p>
                     </div>
                   );
-                })()}
-                {/* Other participants (voice channel only) */}
-                {activeCall.channelId&&(voiceUsers[activeCall.channelId]||[]).filter(u=>u.id!==currentUser?.id).map(u=>{
+                })() : null;
+
+                const channelParticipants = activeCall.channelId ? (voiceUsers[activeCall.channelId]||[]).filter(u=>u.id!==currentUser?.id).map(u=>{
                   const isSpeaking = speakingUsers.has(u.id);
                   return (
-                    <div key={u.id} className="flex flex-col items-center gap-3">
-                      <div className={`relative p-1 rounded-3xl border-2 transition-all duration-150 ${isSpeaking?'border-emerald-500 shadow-[0_0_12px_2px_rgba(16,185,129,0.45)]':'border-white/10'}`}>
-                        <img src={ava(u)} className="w-24 h-24 rounded-2xl object-cover" alt=""/>
-                        <div className={`absolute bottom-2 right-2 w-6 h-6 rounded-full flex items-center justify-center ${isSpeaking?'bg-emerald-500':'bg-zinc-700'}`}>
-                          <Mic size={11} className="text-white"/>
-                        </div>
+                    <div key={u.id} className="flex flex-col items-center gap-2">
+                      <div className={`relative p-1 rounded-2xl border-2 transition-all duration-150 ${isSpeaking?'border-emerald-500 shadow-[0_0_12px_2px_rgba(16,185,129,0.45)]':'border-white/10'}`}>
+                        <img src={ava(u)} className={`${hasScreenShare?'w-14 h-14':'w-24 h-24'} rounded-xl object-cover`} alt=""/>
+                        <div className={`absolute bottom-1 right-1 w-5 h-5 rounded-full flex items-center justify-center ${isSpeaking?'bg-emerald-500':'bg-zinc-700'}`}><Mic size={9} className="text-white"/></div>
                       </div>
-                      <p className={`text-sm font-bold ${isSpeaking?'text-emerald-400':'text-white'}`}>{u.username}</p>
+                      <p className={`text-xs font-bold ${isSpeaking?'text-emerald-400':'text-white'}`}>{u.username}</p>
                     </div>
                   );
-                })}
-                {/* DM call partner */}
-                {activeCall.userId&&activeCall.username&&(()=>{
+                }) : [];
+
+                const dmPartnerBlock = activeCall.userId && activeCall.username ? (()=>{
                   const partnerSpeaking = speakingUsers.has(activeCall.userId!);
                   return (
-                    <div className="flex flex-col items-center gap-3">
-                      <div className={`relative p-1 rounded-3xl border-2 transition-all duration-150 ${partnerSpeaking?'border-emerald-500 shadow-[0_0_12px_2px_rgba(16,185,129,0.45)]':'border-white/10'}`}>
-                        <div className="w-24 h-24 rounded-2xl bg-zinc-800 border border-white/[0.06] flex items-center justify-center text-4xl font-bold text-zinc-600">
+                    <div key="partner" className="flex flex-col items-center gap-2">
+                      <div className={`relative p-1 rounded-2xl border-2 transition-all duration-150 ${partnerSpeaking?'border-emerald-500 shadow-[0_0_12px_2px_rgba(16,185,129,0.45)]':'border-white/10'}`}>
+                        <div className={`${hasScreenShare?'w-14 h-14':'w-24 h-24'} rounded-xl bg-zinc-800 border border-white/[0.06] flex items-center justify-center font-bold text-zinc-600 ${hasScreenShare?'text-2xl':'text-4xl'}`}>
                           {activeCall.username.charAt(0).toUpperCase()}
                         </div>
-                        <div className={`absolute bottom-2 right-2 w-6 h-6 rounded-full flex items-center justify-center ${partnerSpeaking?'bg-emerald-500':'bg-zinc-700'}`}>
-                          <Mic size={11} className="text-white"/>
-                        </div>
+                        <div className={`absolute bottom-1 right-1 w-5 h-5 rounded-full flex items-center justify-center ${partnerSpeaking?'bg-emerald-500':'bg-zinc-700'}`}><Mic size={9} className="text-white"/></div>
                       </div>
-                      <p className={`text-sm font-bold ${partnerSpeaking?'text-emerald-400':'text-white'}`}>{activeCall.username}</p>
+                      <p className={`text-xs font-bold ${partnerSpeaking?'text-emerald-400':'text-white'}`}>{activeCall.username}</p>
                     </div>
                   );
-                })()}
-              </div>
+                })() : null;
+
+                const allParticipants = [selfBlock, ...channelParticipants, dmPartnerBlock].filter(Boolean);
+
+                if (hasScreenShare) {
+                  // ── SCREEN SHARE LAYOUT ──────────────────────────────────────
+                  // Active screen share = big video on top, participants strip below
+                  const screenStream = activeCall.isScreenSharing && screenStreamRef.current
+                    ? screenStreamRef.current
+                    : remoteScreenEntries[0]?.[1] ?? null;
+                  const screenOwner = activeCall.isScreenSharing ? 'Ty' : (sharingUserId ? (activeCall.username || 'Rozmówca') : 'Rozmówca');
+                  return (
+                    <div className="flex-1 flex flex-col gap-3 p-4 overflow-hidden min-h-0">
+                      {/* Screen share video — main area */}
+                      <div className="relative flex-1 bg-black rounded-xl overflow-hidden min-h-0 group">
+                        {screenStream && (
+                          <video
+                            ref={el => { if (el && el.srcObject !== screenStream) { el.srcObject = screenStream; el.play().catch(()=>{}); } }}
+                            className="w-full h-full object-contain"
+                            autoPlay playsInline muted={activeCall.isScreenSharing}
+                          />
+                        )}
+                        {/* Label */}
+                        <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm rounded-lg px-2.5 py-1">
+                          <ScreenShare size={12} className="text-indigo-400"/>
+                          <span className="text-xs text-white font-medium">{screenOwner} udostępnia ekran</span>
+                        </div>
+                        {/* Fullscreen button */}
+                        <button
+                          onClick={() => { const el = document.querySelector('#screen-share-video') as HTMLVideoElement; el?.requestFullscreen?.(); }}
+                          className="absolute top-3 right-3 w-8 h-8 bg-black/60 backdrop-blur-sm rounded-lg flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Pełny ekran">
+                          <Maximize2 size={14}/>
+                        </button>
+                      </div>
+                      {/* Participants strip */}
+                      <div className="shrink-0 flex items-center justify-center gap-4 py-1">
+                        {allParticipants}
+                      </div>
+                    </div>
+                  );
+                }
+
+                // ── NORMAL GRID LAYOUT ───────────────────────────────────────
+                return (
+                  <div className="flex-1 flex flex-wrap items-center justify-center gap-6 p-8 overflow-y-auto">
+                    {allParticipants}
+                  </div>
+                );
+              })()}
               {/* Call controls */}
               <div className="shrink-0 border-t border-white/[0.05] bg-zinc-950/40">
                 {/* Device settings panel */}
