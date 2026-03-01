@@ -15,6 +15,12 @@ CREATE TABLE IF NOT EXISTS users (
     custom_status VARCHAR(128),
     status        VARCHAR(20)  DEFAULT 'offline'
                   CHECK (status IN ('online', 'idle', 'dnd', 'offline')),
+    accent_color            VARCHAR(20)  DEFAULT 'indigo',
+    compact_messages        BOOLEAN      DEFAULT FALSE,
+    privacy_status_visible  BOOLEAN      DEFAULT TRUE,
+    privacy_typing_visible  BOOLEAN      DEFAULT TRUE,
+    privacy_read_receipts   BOOLEAN      DEFAULT FALSE,
+    privacy_friend_requests BOOLEAN      DEFAULT TRUE,
     created_at    TIMESTAMPTZ  DEFAULT NOW(),
     updated_at    TIMESTAMPTZ  DEFAULT NOW()
 );
@@ -167,6 +173,12 @@ DO $$ BEGIN ALTER TABLE messages    ADD COLUMN reply_to_id   UUID REFERENCES mes
 DO $$ BEGIN ALTER TABLE messages    ADD COLUMN attachment_url TEXT;                                                         EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE dm_messages ADD COLUMN reply_to_id   UUID REFERENCES dm_messages(id) ON DELETE SET NULL;           EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE dm_messages ADD COLUMN attachment_url TEXT;                                                        EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN accent_color            VARCHAR(20)  DEFAULT 'indigo'; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN compact_messages        BOOLEAN      DEFAULT FALSE;    EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN privacy_status_visible  BOOLEAN      DEFAULT TRUE;     EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN privacy_typing_visible  BOOLEAN      DEFAULT TRUE;     EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN privacy_read_receipts   BOOLEAN      DEFAULT FALSE;    EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN privacy_friend_requests BOOLEAN      DEFAULT TRUE;     EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$
