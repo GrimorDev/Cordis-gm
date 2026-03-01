@@ -81,13 +81,18 @@ router.get('/:userId/messages', authMiddleware, async (req: AuthRequest, res: Re
 
 // POST /api/dms/:userId/messages
 router.post('/:userId/messages', authMiddleware,
-  [body('content').trim().isLength({ min: 1, max: 4000 })],
+  [body('content').trim().isLength({ min: 0, max: 4000 })],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const { reply_to_id, attachment_url } = req.body;
+    if (!req.body.content?.trim() && !attachment_url) {
+      return res.status(400).json({ error: 'Message must have content or attachment' });
+    }
+
     try {
       const conversationId = await getOrCreateConversation(req.user!.id, req.params.userId);
-      const { reply_to_id, attachment_url } = req.body;
       const { rows: [msg] } = await query(
         'INSERT INTO dm_messages (conversation_id,sender_id,content,reply_to_id,attachment_url) VALUES ($1,$2,$3,$4,$5) RETURNING *',
         [conversationId, req.user!.id, req.body.content, reply_to_id || null, attachment_url || null]

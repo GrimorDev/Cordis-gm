@@ -263,7 +263,7 @@ export default function App() {
       try { attachUrl = await uploadFile(attachFile, 'attachments'); }
       catch (err) { console.error(err); setSending(false); return; }
     }
-    const finalContent = content || (attachFile?.name || '.');
+    const finalContent = content;
     const opts = { reply_to_id: replyTo?.id, attachment_url: attachUrl };
     setMsgInput(''); setAttachFile(null); setAttachPreview(null); setReplyTo(null);
     try {
@@ -759,7 +759,7 @@ export default function App() {
                 )}
                 <form onSubmit={handleSend}>
                   <div className={`flex items-center gap-2 ${gi} rounded-2xl px-3 py-2.5 border`}>
-                    <input type="file" ref={attachRef} onChange={handleAttach} accept="image/*,video/*,.pdf,.doc,.docx" className="hidden"/>
+                    <input type="file" ref={attachRef} onChange={handleAttach} accept="image/*" className="hidden"/>
                     <button type="button" onClick={()=>attachRef.current?.click()} className="text-zinc-600 hover:text-zinc-400 transition-colors shrink-0"><Image size={17}/></button>
                     <input type="text" value={msgInput} onChange={e=>setMsgInput(e.target.value)}
                       onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey) handleSend(e as any); }}

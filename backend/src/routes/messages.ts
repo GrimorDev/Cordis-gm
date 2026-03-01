@@ -52,10 +52,16 @@ router.get('/channel/:channelId', authMiddleware, async (req: AuthRequest, res: 
 
 // POST /api/messages/channel/:channelId
 router.post('/channel/:channelId', authMiddleware,
-  [body('content').trim().isLength({ min: 1, max: 4000 })],
+  [body('content').trim().isLength({ min: 0, max: 4000 })],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const { reply_to_id, attachment_url } = req.body;
+    if (!req.body.content?.trim() && !attachment_url) {
+      return res.status(400).json({ error: 'Message must have content or attachment' });
+    }
+
     try {
       const { rows: [ch] } = await query('SELECT server_id FROM channels WHERE id = $1', [req.params.channelId]);
       if (!ch) return res.status(404).json({ error: 'Channel not found' });
@@ -64,8 +70,6 @@ router.post('/channel/:channelId', authMiddleware,
         [ch.server_id, req.user!.id]
       );
       if (!access.rowCount) return res.status(403).json({ error: 'No access' });
-
-      const { reply_to_id, attachment_url } = req.body;
       const { rows: [msg] } = await query(
         'INSERT INTO messages (channel_id, sender_id, content, reply_to_id, attachment_url) VALUES ($1,$2,$3,$4,$5) RETURNING *',
         [req.params.channelId, req.user!.id, req.body.content, reply_to_id || null, attachment_url || null]
