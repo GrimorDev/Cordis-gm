@@ -1497,14 +1497,15 @@ export default function App() {
 
           {/* servers */}
           {activeView==='servers'&&<>
-            <div className="px-4 py-3 border-b border-white/[0.07] cursor-pointer hover:bg-white/[0.03] transition-colors group"
+            <div className="px-4 py-3.5 border-b border-white/[0.07] cursor-pointer hover:bg-white/[0.04] transition-colors group"
               onClick={() => { if(isAdmin){setSrvSettTab('overview');setSrvSettOpen(true);} }}>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-bold text-white truncate">{serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'Serwer'}</h2>
-                {isAdmin&&<Settings2 size={13} className="text-zinc-700 group-hover:text-zinc-400 transition-colors shrink-0"/>}
+                {isAdmin&&<Settings2 size={13} className="text-zinc-700 group-hover:text-zinc-300 transition-colors shrink-0"/>}
               </div>
-              {serverFull?.description&&<p className="text-[11px] text-zinc-600 mt-0.5 truncate">{serverFull.description}</p>}
-              {!serverFull?.description&&<p className="text-[11px] text-zinc-700 mt-0.5">{isAdmin?'Kliknij — ustawienia serwera':'Witaj!'}</p>}
+              {serverFull?.description
+                ? <p className="text-[11px] text-zinc-500 mt-0.5 truncate">{serverFull.description}</p>
+                : <p className="text-[11px] text-zinc-700 mt-0.5">{isAdmin?'Kliknij — ustawienia serwera':'Witaj!'}</p>}
             </div>
             <div className="flex-1 overflow-y-auto py-2 custom-scrollbar">
               <AnimatePresence mode="wait">
@@ -1521,9 +1522,9 @@ export default function App() {
 
                     {/* Text channels — SPACES */}
                     {textChs.length>0&&<>
-                      <div className="flex items-center justify-between px-4 pt-3 pb-1 group/cat">
+                      <div className="flex items-center justify-between px-3 pt-4 pb-1.5 group/cat">
                         <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{cat.name}</span>
-                        {isAdmin&&<Plus size={11} className="text-zinc-700 hover:text-zinc-400 cursor-pointer opacity-0 group-hover/cat:opacity-100 transition-opacity"
+                        {isAdmin&&<Plus size={12} className="text-zinc-700 hover:text-zinc-300 cursor-pointer opacity-0 group-hover/cat:opacity-100 transition-all"
                           onClick={() => { setChCreateCatId(cat.id); setChCreateOpen(true); setNewChName(''); setNewChType('text'); }}/>}
                       </div>
                       {textChs.map(ch => {
@@ -1531,16 +1532,18 @@ export default function App() {
                         return (
                           <div key={ch.id} className="px-2">
                             <button onClick={() => { setActiveChannel(ch.id); setIsMobileOpen(false); }}
-                              className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md mb-0.5 group/ch transition-all ${
-                                isAct?'bg-white/[0.08] text-white':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300'}`}>
-                              <div className="flex items-center gap-2 truncate flex-1 min-w-0">
-                                <Hash size={13} className={`shrink-0 ${isAct?'text-zinc-300':'text-zinc-600'}`}/>
+                              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl mb-0.5 group/ch transition-all ${
+                                isAct
+                                  ? 'bg-white/[0.1] text-white shadow-sm'
+                                  : 'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200'}`}>
+                              <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
+                                <Hash size={14} className={`shrink-0 ${isAct?'text-indigo-400':'text-zinc-600'}`}/>
                                 <span className="text-[13px] font-medium truncate">{ch.name}</span>
                                 {ch.is_private&&<Lock size={9} className="text-zinc-700 shrink-0"/>}
                               </div>
                               {isAdmin&&<div className="flex gap-0.5 opacity-0 group-hover/ch:opacity-100 transition-opacity shrink-0">
-                                <button onClick={e=>{e.stopPropagation();openChEdit(ch);}} className="w-5 h-5 flex items-center justify-center rounded hover:bg-white/10"><Settings2 size={10}/></button>
-                                <button onClick={e=>{e.stopPropagation();handleDeleteCh(ch.id);}} className="w-5 h-5 flex items-center justify-center rounded hover:bg-rose-500/20 hover:text-rose-400"><Trash2 size={10}/></button>
+                                <button onClick={e=>{e.stopPropagation();openChEdit(ch);}} className="w-5 h-5 flex items-center justify-center rounded-lg hover:bg-white/10"><Settings2 size={10}/></button>
+                                <button onClick={e=>{e.stopPropagation();handleDeleteCh(ch.id);}} className="w-5 h-5 flex items-center justify-center rounded-lg hover:bg-rose-500/20 hover:text-rose-400"><Trash2 size={10}/></button>
                               </div>}
                             </button>
                           </div>
@@ -1550,9 +1553,9 @@ export default function App() {
 
                     {/* Voice channels — VOICE ROOMS */}
                     {voiceChs.length>0&&<>
-                      <div className="flex items-center justify-between px-4 pt-3 pb-1 group/vcat">
+                      <div className="flex items-center justify-between px-3 pt-4 pb-1.5 group/vcat">
                         <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Voice Rooms</span>
-                        {isAdmin&&<Plus size={11} className="text-zinc-700 hover:text-zinc-400 cursor-pointer opacity-0 group-hover/vcat:opacity-100 transition-opacity"
+                        {isAdmin&&<Plus size={12} className="text-zinc-700 hover:text-zinc-300 cursor-pointer opacity-0 group-hover/vcat:opacity-100 transition-all"
                           onClick={() => { setChCreateCatId(cat.id); setChCreateOpen(true); setNewChName(''); setNewChType('voice'); }}/>}
                       </div>
                       {voiceChs.map(ch => {
@@ -1562,8 +1565,8 @@ export default function App() {
                         return (
                           <div key={ch.id} className="px-2">
                             <button onClick={() => joinVoiceCh(ch)}
-                              className={`w-full px-2 py-1.5 rounded-md mb-0.5 group/ch transition-all ${
-                                isActiveVoice?'bg-emerald-500/10 text-emerald-400':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300'}`}>
+                              className={`w-full px-3 py-2 rounded-xl mb-0.5 group/ch transition-all ${
+                                isActiveVoice?'bg-emerald-500/10 text-emerald-400':'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200'}`}>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2 min-w-0">
                                   <Volume2 size={13} className={`shrink-0 ${isActiveVoice?'text-emerald-400':hasUsers?'text-zinc-400':'text-zinc-600'}`}/>
@@ -1614,20 +1617,21 @@ export default function App() {
 
           {/* dms */}
           {activeView==='dms'&&<>
-            <div className="p-3.5 border-b border-white/[0.05]"><h2 className="text-sm font-bold text-white">Wiadomości</h2></div>
+            <div className="px-4 py-3.5 border-b border-white/[0.05]"><h2 className="text-sm font-bold text-white">Wiadomości prywatne</h2></div>
             <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
               {dmConvs.map(dm => {
                 const unread = unreadDms[dm.other_user_id] || 0;
+                const isActive = activeDmUserId===dm.other_user_id;
                 return (
                   <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); }}
-                    className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg mb-0.5 transition-all ${activeDmUserId===dm.other_user_id?'bg-indigo-500/10 border border-indigo-500/20 text-indigo-400':'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300 border border-transparent'}`}>
+                    className={`w-full flex items-center gap-3 px-2.5 py-2 rounded-xl mb-0.5 transition-all ${isActive?'bg-indigo-500/10 border border-indigo-500/20':'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
                     <div className="relative shrink-0">
-                      <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className="w-8 h-8 rounded-full object-cover" alt=""/>
-                      <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${sc(dm.other_status)} border-2 border-zinc-950 rounded-full`}/>
+                      <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className="w-9 h-9 rounded-xl object-cover" alt=""/>
+                      <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 ${sc(dm.other_status)} border-2 border-[#111] rounded-full`}/>
                     </div>
                     <div className="flex-1 truncate text-left min-w-0">
-                      <p className={`text-sm font-medium truncate ${unread > 0 ? 'text-white' : ''}`}>{dm.other_username}</p>
-                      {dm.last_message&&<p className={`text-[11px] truncate ${unread > 0 ? 'text-zinc-300 font-medium' : 'text-zinc-600'}`}>{dm.last_message}</p>}
+                      <p className={`text-[13px] font-semibold truncate ${isActive?'text-indigo-300':unread>0?'text-white':'text-zinc-300'}`}>{dm.other_username}</p>
+                      {dm.last_message&&<p className={`text-[11px] truncate mt-0.5 ${unread>0?'text-zinc-300 font-medium':'text-zinc-600'}`}>{dm.last_message}</p>}
                     </div>
                     {unread > 0 && (
                       <span className="shrink-0 min-w-[18px] h-[18px] bg-rose-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1 leading-none">
@@ -1644,7 +1648,7 @@ export default function App() {
           {activeView==='friends'&&<div className="p-3.5 border-b border-white/[0.05]"><h2 className="text-sm font-bold text-white">Znajomi</h2></div>}
 
           {/* USER BAR — bottom of sidebar */}
-          <div className="shrink-0 px-3 py-2.5 border-t border-white/[0.07] bg-[#0f0f0f] relative" ref={statusPickerRef}>
+          <div className="shrink-0 px-2.5 py-2.5 border-t border-white/[0.07] bg-[#0f0f0f] relative" ref={statusPickerRef}>
 
             {/* Status picker popup */}
             <AnimatePresence>
@@ -1684,7 +1688,7 @@ export default function App() {
               )}
             </AnimatePresence>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 px-1 py-1 rounded-xl hover:bg-white/[0.05] transition-colors cursor-default">
               {/* Avatar + status dot — click opens picker */}
               <div className="relative shrink-0 cursor-pointer" onClick={()=>setStatusPickerOpen(p=>!p)} title="Zmień status">
                 <img src={currentUser?ava(currentUser):''} className="w-8 h-8 rounded-full object-cover" alt=""/>
@@ -2084,35 +2088,44 @@ export default function App() {
           ) : (
             <>
               {/* Chat header */}
-              <header className="h-12 border-b border-white/[0.07] flex items-center justify-between px-5 bg-[#0a0a0a] z-10 shrink-0">
-                <div className="flex items-center gap-2.5 min-w-0">
+              <header className="h-14 border-b border-white/[0.07] flex items-center justify-between px-5 bg-[#0a0a0a] z-10 shrink-0 gap-3">
+                <div className="flex items-center gap-3 min-w-0">
                   {activeView==='dms' ? (activeDm ? (
-                    <div className="flex items-center gap-2.5">
-                      <div className="relative"><img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className="w-7 h-7 rounded-full object-cover" alt=""/><div className={`absolute bottom-0 right-0 w-2 h-2 ${sc(activeDm.other_status)} border border-[#0a0a0a] rounded-full`}/></div>
-                      <h3 className="font-bold text-white text-sm">{activeDm.other_username}</h3>
+                    <div className="flex items-center gap-3">
+                      <div className="relative shrink-0">
+                        <img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className="w-8 h-8 rounded-xl object-cover" alt=""/>
+                        <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 ${sc(activeDm.other_status)} border-2 border-[#0a0a0a] rounded-full`}/>
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-white text-sm leading-tight">{activeDm.other_username}</h3>
+                        <p className="text-[11px] text-zinc-600 leading-tight capitalize">{activeDm.other_status||'offline'}</p>
+                      </div>
                     </div>
                   ) : <h3 className="font-bold text-white text-sm">Wiadomości</h3>) : (
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Hash size={16} className="text-zinc-500 shrink-0"/>
-                      <h3 className="font-bold text-white text-sm truncate">{activeCh?.name||activeChannel}</h3>
-                      {activeCh?.description&&<span className="text-zinc-600 text-xs hidden lg:block">— {activeCh.description}</span>}
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
+                        <Hash size={14} className="text-indigo-400"/>
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-white text-sm truncate">{activeCh?.name||activeChannel}</h3>
+                        {activeCh?.description&&<p className="text-[11px] text-zinc-600 truncate hidden lg:block">{activeCh.description}</p>}
+                      </div>
                     </div>
                   )}
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0">
                   {activeView==='dms'&&activeDm&&<>
-                    <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'voice')} className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all"><Phone size={14}/></button>
-                    <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'video')} className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all"><Video size={14}/></button>
-                    <div className="w-px h-4 bg-white/[0.07]"/>
+                    <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'voice')} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all"><Phone size={15}/></button>
+                    <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'video')} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-sky-400 hover:bg-sky-500/10 transition-all"><Video size={15}/></button>
+                    <div className="w-px h-4 bg-white/[0.07] mx-1"/>
                   </>}
-                  {/* Member avatars stacked */}
-                  <div className="hidden md:flex -space-x-2">
+                  <div className="hidden md:flex -space-x-2 mr-1">
                     {members.slice(0,4).map(m=>(
                       <img key={m.id} src={ava(m)} className="w-6 h-6 rounded-full border-2 border-[#0a0a0a] object-cover" alt="" title={m.username}/>
                     ))}
                     {members.length>4&&<div className="w-6 h-6 rounded-full border-2 border-[#0a0a0a] bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-white">+{members.length-4}</div>}
                   </div>
-                  <button className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all"><MoreHorizontal size={14}/></button>
+                  <button className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all"><MoreHorizontal size={15}/></button>
                 </div>
               </header>
 
@@ -2137,7 +2150,7 @@ export default function App() {
                 <motion.div key={`${activeServer}-${activeChannel}-${activeDmUserId}`}
                   initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: 'easeOut' }}
-                  className="mt-auto flex flex-col gap-0.5">
+                  className="mt-auto flex flex-col gap-1">
                   {!msgsLoading&&<div className="text-center py-8 mb-3">
                     {activeView==='dms'&&activeDm ? (
                       <>
@@ -2321,7 +2334,7 @@ export default function App() {
                   );
                   return (
                     <form onSubmit={handleSend}>
-                      <div className="flex items-center gap-3 bg-zinc-900/80 border border-white/[0.08] rounded-xl px-3 py-2.5 hover:border-white/[0.12] transition-colors focus-within:border-white/[0.15]">
+                      <div className="flex items-center gap-3 bg-zinc-900/90 border border-white/[0.09] rounded-2xl px-3 py-3 hover:border-white/[0.14] transition-colors focus-within:border-indigo-500/40 focus-within:bg-zinc-900">
                         <input type="file" ref={attachRef} onChange={handleAttach} accept="image/*" className="hidden"/>
                         <button type="button" onClick={()=>attachRef.current?.click()}
                           className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.07] transition-all shrink-0">
@@ -2416,17 +2429,15 @@ export default function App() {
 
           {/* ─ ACTIVITY FEED ─ */}
           {activeView==='servers'&&(
-            <div className="p-4 border-b border-white/[0.07] shrink-0">
-              <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                <span className="flex-1">Aktywność</span>
-              </h3>
+            <div className="px-4 py-4 border-b border-white/[0.07] shrink-0">
+              <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3">Aktywność</h3>
               {serverActivity.length>0 ? (
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1.5">
                   {serverActivity.slice(0,8).map(a=>(
-                    <div key={a.id} className="flex items-start gap-2.5 bg-white/[0.02] rounded-xl px-3 py-2 border border-white/[0.04]">
-                      <span className="text-base shrink-0 leading-none mt-0.5">{a.icon}</span>
+                    <div key={a.id} className="flex items-start gap-2.5 bg-white/[0.03] rounded-2xl px-3 py-2.5 border border-white/[0.05] hover:bg-white/[0.05] transition-colors">
+                      <span className="text-sm shrink-0 leading-none mt-0.5">{a.icon}</span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[11px] text-zinc-400 leading-snug">{a.text}</p>
+                        <p className="text-[11px] text-zinc-300 leading-snug">{a.text}</p>
                         <p className="text-[10px] text-zinc-600 mt-0.5">{ft(a.time)}</p>
                       </div>
                     </div>
@@ -2443,20 +2454,22 @@ export default function App() {
             const online  = members.filter(m=>m.status==='online'||m.status==='idle'||m.status==='dnd');
             const offline = members.filter(m=>m.status==='offline'||!m.status);
             return (
-              <div className="p-4 flex-1 overflow-y-auto custom-scrollbar">
+              <div className="px-3 py-4 flex-1 overflow-y-auto custom-scrollbar">
                 {online.length>0&&(
                   <div className="mb-5">
-                    <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2.5">Online — {online.length}</h3>
-                    <div className="flex flex-col gap-1">
+                    <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2.5 px-1">
+                      Online — {online.length}
+                    </h3>
+                    <div className="flex flex-col gap-0.5">
                       {online.map(m=>(
-                        <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2.5 py-2 rounded-xl hover:bg-white/[0.05] -mx-2.5 transition-all" onClick={()=>openProfile(m)}>
+                        <div key={m.id} className="flex items-center gap-2.5 cursor-pointer group px-2.5 py-2 rounded-xl hover:bg-white/[0.06] transition-all" onClick={()=>openProfile(m)}>
                           <div className="relative shrink-0">
                             <img src={ava(m)} className="w-8 h-8 rounded-xl object-cover" alt=""/>
                             <div className={`absolute -bottom-px -right-px w-2.5 h-2.5 ${sc(m.status)} border-2 border-[#111111] rounded-full`}/>
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-[13px] font-semibold text-zinc-300 truncate group-hover:text-white transition-colors">{m.username}</p>
-                            {m.role_name&&<p className="text-[10px] text-zinc-600 truncate">{m.role_name}</p>}
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[13px] font-semibold text-zinc-300 truncate group-hover:text-white transition-colors leading-tight">{m.username}</p>
+                            {m.role_name&&<p className="text-[10px] text-zinc-600 truncate leading-tight">{m.role_name}</p>}
                           </div>
                         </div>
                       ))}
@@ -2465,17 +2478,19 @@ export default function App() {
                 )}
                 {offline.length>0&&(
                   <div>
-                    <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2.5">Offline — {offline.length}</h3>
-                    <div className="flex flex-col gap-1">
+                    <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2.5 px-1">
+                      Offline — {offline.length}
+                    </h3>
+                    <div className="flex flex-col gap-0.5">
                       {offline.map(m=>(
-                        <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2.5 py-2 rounded-xl hover:bg-white/[0.05] -mx-2.5 transition-all" onClick={()=>openProfile(m)}>
+                        <div key={m.id} className="flex items-center gap-2.5 cursor-pointer group px-2.5 py-2 rounded-xl hover:bg-white/[0.05] transition-all" onClick={()=>openProfile(m)}>
                           <div className="relative shrink-0">
-                            <img src={ava(m)} className="w-8 h-8 rounded-xl object-cover opacity-40" alt=""/>
+                            <img src={ava(m)} className="w-8 h-8 rounded-xl object-cover opacity-35" alt=""/>
                             <div className="absolute -bottom-px -right-px w-2.5 h-2.5 bg-zinc-600 border-2 border-[#111111] rounded-full"/>
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-[13px] font-medium text-zinc-600 truncate group-hover:text-zinc-400 transition-colors">{m.username}</p>
-                            {m.role_name&&<p className="text-[10px] text-zinc-700 truncate">{m.role_name}</p>}
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[13px] font-medium text-zinc-600 truncate group-hover:text-zinc-400 transition-colors leading-tight">{m.username}</p>
+                            {m.role_name&&<p className="text-[10px] text-zinc-700 truncate leading-tight">{m.role_name}</p>}
                           </div>
                         </div>
                       ))}
@@ -2731,56 +2746,65 @@ export default function App() {
               <AnimatePresence mode="wait">
                 {createSrvMode==='create' ? (
                   <motion.div key="create" initial={{opacity:0,x:-16}} animate={{opacity:1,x:0}} exit={{opacity:0,x:16}} transition={{duration:0.18}}
-                    className="p-7 flex flex-col items-center gap-5">
-                    {/* Avatar upload */}
-                    <div className="flex flex-col items-center gap-2">
-                      <button onClick={()=>createSrvIconRef.current?.click()}
-                        className="relative w-24 h-24 rounded-2xl overflow-hidden group cursor-pointer border-2 border-dashed border-white/20 hover:border-indigo-500/60 transition-all bg-zinc-800/60">
-                        {createSrvIconPreview
-                          ? <img src={createSrvIconPreview} className="w-full h-full object-cover" alt=""/>
-                          : <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 text-zinc-500 group-hover:text-indigo-400 transition-colors">
-                              <Upload size={20}/>
-                              <span className="text-[10px] font-semibold">Avatar</span>
-                            </div>
-                        }
-                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <Upload size={16} className="text-white"/>
-                        </div>
-                      </button>
-                      <p className="text-[11px] text-zinc-600">Kliknij aby dodać avatar serwera</p>
+                    className="flex flex-col">
+                    {/* Gradient preview banner with avatar */}
+                    <div className="relative h-28 bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 overflow-hidden">
+                      <motion.div animate={{scale:[1,1.15,1]}} transition={{duration:6,repeat:Infinity,ease:'easeInOut'}}
+                        className="absolute -top-6 -right-6 w-32 h-32 rounded-full bg-white/10"/>
+                      <motion.div animate={{scale:[1,1.2,1]}} transition={{duration:8,repeat:Infinity,ease:'easeInOut',delay:2}}
+                        className="absolute -bottom-8 -left-8 w-40 h-40 rounded-full bg-white/10"/>
+                      {/* Icon centered in banner */}
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <button onClick={()=>createSrvIconRef.current?.click()}
+                          className="relative w-20 h-20 rounded-2xl overflow-hidden group cursor-pointer border-4 border-white/20 hover:border-white/50 transition-all shadow-2xl"
+                          style={{background: createSrvIconPreview ? 'transparent' : 'rgba(0,0,0,0.4)'}}>
+                          {createSrvIconPreview
+                            ? <img src={createSrvIconPreview} className="w-full h-full object-cover" alt=""/>
+                            : <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-white/70 group-hover:text-white transition-colors">
+                                <Upload size={20}/>
+                                <span className="text-[10px] font-bold">Logo</span>
+                              </div>
+                          }
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <Upload size={16} className="text-white"/>
+                          </div>
+                        </button>
+                      </div>
                     </div>
                     <input ref={createSrvIconRef} type="file" accept="image/*" className="hidden"
                       onChange={e=>{ const f=e.target.files?.[0]; if(f){setCreateSrvIconFile(f);setCreateSrvIconPreview(URL.createObjectURL(f));} e.target.value=''; }}/>
 
-                    {/* Server name */}
-                    <div className="w-full flex flex-col gap-1.5">
-                      <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Nazwa serwera</label>
-                      <input
-                        value={createSrvName}
-                        onChange={e=>setCreateSrvName(e.target.value)}
-                        onKeyDown={e=>{ if(e.key==='Enter' && createSrvName.trim()) handleCreateServer(); }}
-                        placeholder="Mój świetny serwer..."
-                        className={`${gi} rounded-xl px-4 py-3 text-sm w-full`}
-                        autoFocus
-                      />
-                    </div>
+                    <div className="p-6 flex flex-col gap-5">
+                      {/* Server name */}
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Nazwa serwera</label>
+                        <input
+                          value={createSrvName}
+                          onChange={e=>setCreateSrvName(e.target.value)}
+                          onKeyDown={e=>{ if(e.key==='Enter' && createSrvName.trim()) handleCreateServer(); }}
+                          placeholder="Mój świetny serwer..."
+                          className={`${gi} rounded-2xl px-4 py-3 text-sm w-full`}
+                          autoFocus
+                        />
+                      </div>
 
-                    {/* Buttons */}
-                    <div className="w-full flex gap-2 pt-1">
-                      <button onClick={()=>{ setCreateSrvOpen(false); setCreateSrvIconFile(null); setCreateSrvIconPreview(null); setCreateSrvName(''); }}
-                        className={`flex-1 ${gb} py-2.5 rounded-xl text-sm font-semibold transition-all`}>Anuluj</button>
-                      <button onClick={handleCreateServer} disabled={!createSrvName.trim()}
-                        className="flex-1 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-xl transition-colors">
-                        Utwórz
-                      </button>
+                      {/* Buttons */}
+                      <div className="flex gap-2.5">
+                        <button onClick={()=>{ setCreateSrvOpen(false); setCreateSrvIconFile(null); setCreateSrvIconPreview(null); setCreateSrvName(''); }}
+                          className={`flex-1 ${gb} py-2.5 rounded-2xl text-sm font-semibold transition-all`}>Anuluj</button>
+                        <button onClick={handleCreateServer} disabled={!createSrvName.trim()}
+                          className="flex-1 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-2xl transition-all shadow-lg shadow-indigo-500/25">
+                          Utwórz →
+                        </button>
+                      </div>
                     </div>
                   </motion.div>
                 ) : (
                   <motion.div key="join" initial={{opacity:0,x:16}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-16}} transition={{duration:0.18}}
-                    className="p-7 flex flex-col gap-5">
+                    className="p-6 flex flex-col gap-5">
                     {/* Illustration */}
                     <div className="flex flex-col items-center gap-3 py-2">
-                      <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500/20 to-indigo-500/20 border border-indigo-500/25 flex items-center justify-center shadow-lg shadow-indigo-500/10">
                         <Users size={28} className="text-indigo-400"/>
                       </div>
                       <div className="text-center">
@@ -2789,24 +2813,24 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Kod zaproszenia</label>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Kod zaproszenia</label>
                       <input
                         value={joinCode}
                         onChange={e=>setJoinCode(e.target.value)}
                         onKeyDown={e=>{ if(e.key==='Enter' && joinCode.trim()) handleJoinServer(); }}
                         placeholder="abc123xyz..."
-                        className={`${gi} rounded-xl px-4 py-3 text-sm w-full font-mono tracking-wider`}
+                        className={`${gi} rounded-2xl px-4 py-3 text-sm w-full font-mono tracking-wider`}
                         autoFocus
                       />
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex gap-2.5">
                       <button onClick={()=>{ setCreateSrvOpen(false); setJoinCode(''); }}
-                        className={`flex-1 ${gb} py-2.5 rounded-xl text-sm font-semibold transition-all`}>Anuluj</button>
+                        className={`flex-1 ${gb} py-2.5 rounded-2xl text-sm font-semibold transition-all`}>Anuluj</button>
                       <button onClick={handleJoinServer} disabled={!joinCode.trim()}
-                        className="flex-1 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-xl transition-colors">
-                        Dołącz
+                        className="flex-1 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-2xl transition-all shadow-lg shadow-indigo-500/25">
+                        Dołącz →
                       </button>
                     </div>
                   </motion.div>
