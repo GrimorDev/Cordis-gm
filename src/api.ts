@@ -30,6 +30,7 @@ export interface UserProfile {
   avatar_url?: string | null; banner_url?: string | null;
   banner_color: string; bio?: string | null; custom_status?: string | null;
   status: 'online' | 'idle' | 'dnd' | 'offline'; created_at: string;
+  mutual_friends_count?: number;
   // User preferences (stored in DB)
   accent_color?: string | null;
   compact_messages?: boolean | null;
@@ -146,6 +147,7 @@ export const serversApi = {
   update: (id: string, d: Partial<Pick<ServerData, 'name' | 'description' | 'icon_url' | 'banner_url'>>) =>
     req<ServerData>('PUT', `/servers/${id}`, d),
   delete: (id: string) => req<void>('DELETE', `/servers/${id}`),
+  leave: (id: string) => req<void>('POST', `/servers/${id}/leave`),
   members: (id: string) => req<ServerMember[]>('GET', `/servers/${id}/members`),
   updateMemberRoles: (serverId: string, userId: string, data: { role_ids?: string[]; role_name?: string }) =>
     req<void>('PUT', `/servers/${serverId}/members/${userId}/roles`, data),
@@ -200,6 +202,8 @@ export const dmsApi = {
     req<DmMessageFull[]>('GET', `/dms/${userId}/messages${before ? `?before=${before}` : ''}`),
   send: (userId: string, content: string, opts?: { reply_to_id?: string; attachment_url?: string }) =>
     req<DmMessageFull>('POST', `/dms/${userId}/messages`, { content, ...opts }),
+  sendSystem: (userId: string, content: string) =>
+    req<DmMessageFull>('POST', `/dms/${userId}/system-message`, { content }),
   deleteMessage: (id: string) => req<void>('DELETE', `/dms/messages/${id}`),
 };
 

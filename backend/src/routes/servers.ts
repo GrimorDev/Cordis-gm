@@ -148,6 +148,17 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// POST /api/servers/:id/leave
+router.post('/:id/leave', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { rows: [server] } = await query(`SELECT owner_id FROM servers WHERE id = $1`, [req.params.id]);
+    if (!server) return res.status(404).json({ error: 'Not found' });
+    if (server.owner_id === req.user!.id) return res.status(400).json({ error: 'Owner cannot leave – delete the server instead' });
+    await query('DELETE FROM server_members WHERE server_id = $1 AND user_id = $2', [req.params.id, req.user!.id]);
+    return res.json({ message: 'Left server' });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
 // DELETE /api/servers/:id
 router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {

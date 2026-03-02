@@ -343,6 +343,8 @@ export default function App() {
   const [createSrvIconFile, setCreateSrvIconFile]     = useState<File|null>(null);
   const [createSrvIconPreview, setCreateSrvIconPreview] = useState<string|null>(null);
   const createSrvIconRef = useRef<HTMLInputElement>(null);
+  const [srvContextMenu, setSrvContextMenu]   = useState<{ x: number; y: number; srv: ServerData } | null>(null);
+  const [deleteSrvConfirm, setDeleteSrvConfirm] = useState<{ id: string; name: string } | null>(null);
 
   const [srvSettOpen, setSrvSettOpen]         = useState(false);
   const [srvSettTab, setSrvSettTab]           = useState<'overview'|'roles'|'members'|'invites'>('overview');
@@ -382,6 +384,8 @@ export default function App() {
   const voiceHandlerRef     = useRef<Record<string, (...a: any[]) => void>>({});
   // DM unread counts (keyed by other_user_id)
   const [unreadDms, setUnreadDms]             = useState<Record<string, number>>({});
+  // DM partner full profile (for BIO panel)
+  const [dmPartnerProfile, setDmPartnerProfile] = useState<UserProfile | null>(null);
 
   // Screen share state
   const [sharingUserId, setSharingUserId]     = useState<string|null>(null);
@@ -525,18 +529,8 @@ export default function App() {
       autoToast('Połączenie odrzucone', 'error');
     });
     sock.on('call_ended', () => {
-      const call = activeCallRef.current;
-      const dur  = callDurationRef.current;
-      if (call && call.type !== 'voice_channel' && call.userId) {
-        const icon = call.type === 'dm_video' ? '📹' : '📞';
-        const typeName = call.type === 'dm_video' ? 'wideo' : 'głosowa';
-        setDmMsgs(p => [...p, {
-          id: `_sys_${Date.now()}`, conversation_id: '',
-          content: `${icon} Rozmowa ${typeName} zakończona · ${fmtDur(dur)}`,
-          edited: false, created_at: new Date().toISOString(),
-          sender_id: '__system__', sender_username: 'System', sender_avatar: null,
-        } as DmMessageFull]);
-      }
+      // System message is sent by the person who hangs up via dmsApi.sendSystem
+      // and arrives here via new_dm socket — no local insertion needed
       setActiveCall(null); setShowCallPanel(false); setCallDuration(0);
       autoToast('Rozmowa zakończona', 'info');
     });
@@ -587,6 +581,7 @@ export default function App() {
   useEffect(() => {
     if (!activeDmUserId) return;
     dmsApi.messages(activeDmUserId).then(setDmMsgs).catch(console.error);
+    users.get(activeDmUserId).then(setDmPartnerProfile).catch(console.error);
     setReplyTo(null);
   }, [activeDmUserId]);
 
@@ -915,6 +910,24 @@ export default function App() {
       setCreateSrvOpen(false); setJoinCode('');
     } catch (err: any) { addToast(err?.message || 'Nieprawidłowe zaproszenie', 'error'); }
   };
+  const handleLeaveServer = async (serverId: string) => {
+    try {
+      await serversApi.leave(serverId);
+      setServerList(p => p.filter(s => s.id !== serverId));
+      if (activeServer === serverId) { setActiveServer(''); setActiveView('friends'); setServerFull(null); setActiveChannel(''); }
+      setSrvContextMenu(null);
+      addToast('Opuściłeś serwer', 'success');
+    } catch (err: any) { addToast(err?.message || 'Błąd opuszczania serwera', 'error'); }
+  };
+  const handleDeleteServer = async (serverId: string) => {
+    try {
+      await serversApi.delete(serverId);
+      setServerList(p => p.filter(s => s.id !== serverId));
+      if (activeServer === serverId) { setActiveServer(''); setActiveView('friends'); setServerFull(null); setActiveChannel(''); }
+      setDeleteSrvConfirm(null);
+      addToast('Serwer został usunięty', 'success');
+    } catch (err: any) { addToast(err?.message || 'Błąd usuwania serwera', 'error'); }
+  };
   const handleSaveSrv = async () => {
     if (!activeServer) return;
     try {
@@ -1126,17 +1139,13 @@ export default function App() {
       if (currentUser) setVoiceUsers(p => ({ ...p, [activeCall.channelId!]: (p[activeCall.channelId!]||[]).filter(u=>u.id!==currentUser.id) }));
     }
     if (activeCall?.userId) {
-      endCall(activeCall.userId);
-      // Add call ended system message to DM chat
       const dur = callDurationRef.current;
       const icon = activeCall.type === 'dm_video' ? '📹' : '📞';
       const typeName = activeCall.type === 'dm_video' ? 'wideo' : 'głosowa';
-      setDmMsgs(p => [...p, {
-        id: `_sys_${Date.now()}`, conversation_id: '',
-        content: `${icon} Rozmowa ${typeName} zakończona · ${fmtDur(dur)}`,
-        edited: false, created_at: new Date().toISOString(),
-        sender_id: '__system__', sender_username: 'System', sender_avatar: null,
-      } as DmMessageFull]);
+      const content = `${icon} Rozmowa ${typeName} zakończona · ${fmtDur(dur)}`;
+      endCall(activeCall.userId);
+      // Persist system message to DB (will come back via new_dm socket to both parties)
+      dmsApi.sendSystem(activeCall.userId, content).catch(console.error);
     }
     cleanupWebRTC();
     setActiveCall(null); setShowCallPanel(false); setCallDuration(0);
@@ -1263,7 +1272,9 @@ export default function App() {
             {serverList.map(srv => {
               const isActive = activeServer===srv.id&&activeView==='servers';
               return (
-                <button key={srv.id} onClick={() => { if(activeServer===srv.id&&activeView==='servers') return; setActiveServer(srv.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); }}
+                <button key={srv.id}
+                  onClick={() => { if(activeServer===srv.id&&activeView==='servers') return; setActiveServer(srv.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); }}
+                  onContextMenu={e => { e.preventDefault(); setSrvContextMenu({ x: e.clientX, y: e.clientY, srv }); }}
                   className={`flex items-center gap-2 h-full px-4 text-sm font-medium transition-all border-r border-white/[0.05] whitespace-nowrap relative group ${isActive?'text-white bg-[#0a0a0a]':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'}`}>
                   {isActive&&<span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500"/>}
                   <span className="w-5 h-5 rounded-md bg-zinc-800 flex items-center justify-center text-[11px] font-bold text-white shrink-0 overflow-hidden">
@@ -1320,7 +1331,9 @@ export default function App() {
             ))}
             <div className="w-px h-7 bg-white/[0.07] self-center mx-0.5"/>
             {serverList.map(s => (
-              <button key={s.id} onClick={() => { if(activeServer===s.id&&activeView==='servers') return; setActiveServer(s.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); setIsMobileOpen(false); }}
+              <button key={s.id}
+                onClick={() => { if(activeServer===s.id&&activeView==='servers') return; setActiveServer(s.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); setIsMobileOpen(false); }}
+                onContextMenu={e=>{ e.preventDefault(); setSrvContextMenu({x:e.clientX,y:e.clientY,srv:s}); }}
                 className={`w-10 h-10 shrink-0 rounded-xl overflow-hidden border ${activeServer===s.id&&activeView==='servers'?'border-indigo-500/40':'border-white/[0.05]'}`}>
                 <span className="text-sm font-bold text-white flex w-full h-full items-center justify-center bg-zinc-800">{s.name.charAt(0)}</span>
               </button>
@@ -2084,37 +2097,49 @@ export default function App() {
                   );
                 })()}
                 {/* Main input row */}
-                <form onSubmit={handleSend}>
-                  <div className="flex items-center gap-3 bg-zinc-900/80 border border-white/[0.08] rounded-xl px-3 py-2.5 hover:border-white/[0.12] transition-colors focus-within:border-white/[0.15]">
-                    <input type="file" ref={attachRef} onChange={handleAttach} accept="image/*" className="hidden"/>
-                    <button type="button" onClick={()=>attachRef.current?.click()}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.07] transition-all shrink-0">
-                      <Plus size={16}/>
-                    </button>
-                    <input type="text" value={msgInput}
-                      onChange={e=>{
-                        const v=e.target.value; setMsgInput(v);
-                        if(activeChannel&&activeView==='servers'){
-                          if(v.trim()){
-                            getSocket()?.emit('typing_start',activeChannel);
-                            if(typingEmitTimerRef.current) clearTimeout(typingEmitTimerRef.current);
-                            typingEmitTimerRef.current=setTimeout(()=>getSocket()?.emit('typing_stop',activeChannel),2000);
-                          } else {
-                            if(typingEmitTimerRef.current){clearTimeout(typingEmitTimerRef.current);typingEmitTimerRef.current=null;}
-                            getSocket()?.emit('typing_stop',activeChannel);
-                          }
-                        }
-                      }}
-                      onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey) handleSend(e as any); }}
-                      placeholder={activeView==='dms'&&activeDm?`Wiadomość do ${activeDm.other_username}...`:`Wiadomość w #${activeCh?.name||''}...`}
-                      className="flex-1 bg-transparent text-[13px] text-zinc-200 placeholder-zinc-700 outline-none min-w-0"/>
-                    <button type="button" className="text-zinc-600 hover:text-zinc-400 transition-colors shrink-0"><Smile size={16}/></button>
-                    <button type="submit" disabled={(!msgInput.trim()&&!attachFile)||sending}
-                      className="w-8 h-8 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-25 disabled:cursor-not-allowed flex items-center justify-center text-white transition-all shrink-0 shadow-lg shadow-sky-500/20">
-                      {sending?<Loader2 size={14} className="animate-spin"/>:<Send size={14}/>}
-                    </button>
-                  </div>
-                </form>
+                {(()=>{
+                  const isDmView = activeView==='dms' && !!activeDmUserId;
+                  const isFriend = !isDmView || friends.some(f => f.id === activeDmUserId);
+                  if (!isFriend) return (
+                    <div className="flex items-center justify-center gap-2.5 py-3 px-4 bg-zinc-900/60 border border-white/[0.06] rounded-xl text-zinc-500 text-sm">
+                      <Lock size={14} className="text-zinc-600 shrink-0"/>
+                      <span>Możesz pisać tylko do znajomych — dodaj tę osobę do znajomych, aby wysłać wiadomość.</span>
+                    </div>
+                  );
+                  return (
+                    <form onSubmit={handleSend}>
+                      <div className="flex items-center gap-3 bg-zinc-900/80 border border-white/[0.08] rounded-xl px-3 py-2.5 hover:border-white/[0.12] transition-colors focus-within:border-white/[0.15]">
+                        <input type="file" ref={attachRef} onChange={handleAttach} accept="image/*" className="hidden"/>
+                        <button type="button" onClick={()=>attachRef.current?.click()}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.07] transition-all shrink-0">
+                          <Plus size={16}/>
+                        </button>
+                        <input type="text" value={msgInput}
+                          onChange={e=>{
+                            const v=e.target.value; setMsgInput(v);
+                            if(activeChannel&&activeView==='servers'){
+                              if(v.trim()){
+                                getSocket()?.emit('typing_start',activeChannel);
+                                if(typingEmitTimerRef.current) clearTimeout(typingEmitTimerRef.current);
+                                typingEmitTimerRef.current=setTimeout(()=>getSocket()?.emit('typing_stop',activeChannel),2000);
+                              } else {
+                                if(typingEmitTimerRef.current){clearTimeout(typingEmitTimerRef.current);typingEmitTimerRef.current=null;}
+                                getSocket()?.emit('typing_stop',activeChannel);
+                              }
+                            }
+                          }}
+                          onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey) handleSend(e as any); }}
+                          placeholder={activeView==='dms'&&activeDm?`Wiadomość do ${activeDm.other_username}...`:`Wiadomość w #${activeCh?.name||''}...`}
+                          className="flex-1 bg-transparent text-[13px] text-zinc-200 placeholder-zinc-700 outline-none min-w-0"/>
+                        <button type="button" className="text-zinc-600 hover:text-zinc-400 transition-colors shrink-0"><Smile size={16}/></button>
+                        <button type="submit" disabled={(!msgInput.trim()&&!attachFile)||sending}
+                          className="w-8 h-8 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-25 disabled:cursor-not-allowed flex items-center justify-center text-white transition-all shrink-0 shadow-lg shadow-sky-500/20">
+                          {sending?<Loader2 size={14} className="animate-spin"/>:<Send size={14}/>}
+                        </button>
+                      </div>
+                    </form>
+                  );
+                })()}
               </div>
             </>
           )}
@@ -2245,10 +2270,125 @@ export default function App() {
               </div>
             );
           })()}
+
+          {/* ─ DM PARTNER BIO PANEL ─ */}
+          {activeView==='dms'&&activeDm&&dmPartnerProfile&&(
+            <div className="flex flex-col">
+              {/* Banner */}
+              <div className="h-20 relative overflow-hidden shrink-0">
+                {dmPartnerProfile.banner_url ? (
+                  <img src={dmPartnerProfile.banner_url} className="w-full h-full object-cover" alt=""/>
+                ) : (
+                  <div className={`w-full h-full bg-gradient-to-br ${dmPartnerProfile.banner_color||'from-indigo-600 via-purple-600 to-pink-600'}`}/>
+                )}
+              </div>
+              {/* Avatar */}
+              <div className="px-4 pb-4 border-b border-white/[0.07]">
+                <div className="relative inline-block -mt-7 mb-3">
+                  <img src={ava(dmPartnerProfile)} className="w-14 h-14 rounded-2xl border-4 border-[#111111] object-cover" alt=""/>
+                  <div className={`absolute bottom-0.5 right-0.5 w-3.5 h-3.5 ${sc(activeDm.other_status)} border-2 border-[#111111] rounded-full`}/>
+                </div>
+                <h3 className="text-sm font-bold text-white leading-tight">{dmPartnerProfile.username}</h3>
+                {activeDm.other_custom_status&&(
+                  <p className="text-[11px] text-zinc-500 mt-0.5 truncate">{activeDm.other_custom_status}</p>
+                )}
+              </div>
+              {/* Info */}
+              <div className="p-4 flex flex-col gap-3 overflow-y-auto custom-scrollbar flex-1">
+                {dmPartnerProfile.bio&&(
+                  <div>
+                    <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5">O mnie</h4>
+                    <p className="text-[12px] text-zinc-400 leading-relaxed">{dmPartnerProfile.bio}</p>
+                  </div>
+                )}
+                <div>
+                  <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5">Dołączył/a</h4>
+                  <p className="text-[12px] text-zinc-400">
+                    {new Date(dmPartnerProfile.created_at).toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  </p>
+                </div>
+                {typeof dmPartnerProfile.mutual_friends_count === 'number' && dmPartnerProfile.mutual_friends_count > 0 && (
+                  <div>
+                    <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5">Wspólni znajomi</h4>
+                    <p className="text-[12px] text-zinc-400 flex items-center gap-1.5">
+                      <Users size={11} className="text-indigo-400"/>
+                      {dmPartnerProfile.mutual_friends_count} wspólnych znajomych
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </aside>
       </main>
 
       {/* ── MODALS ─────────────────────────────────────────────────────── */}
+
+      {/* Server context menu */}
+      {srvContextMenu&&(
+        <>
+          <div className="fixed inset-0 z-[90]" onClick={()=>setSrvContextMenu(null)}/>
+          <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:0.95}}
+            style={{position:'fixed',left:srvContextMenu.x,top:srvContextMenu.y}}
+            className="z-[91] bg-zinc-900 border border-white/[0.1] rounded-xl shadow-2xl py-1.5 min-w-[180px] overflow-hidden">
+            <button onClick={()=>{ setSrvContextMenu(null); setSrvSettTab('overview'); setSrvSettOpen(true); setActiveServer(srvContextMenu.srv.id); setActiveView('servers'); }}
+              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
+              <Settings2 size={13} className="text-zinc-500 shrink-0"/>
+              Ustawienia serwera
+            </button>
+            <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
+            {srvContextMenu.srv.owner_id===currentUser?.id ? (
+              <button onClick={()=>{ setDeleteSrvConfirm({id:srvContextMenu.srv.id,name:srvContextMenu.srv.name}); setSrvContextMenu(null); }}
+                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-rose-400 hover:bg-rose-500/10 transition-colors text-left">
+                <Trash2 size={13} className="shrink-0"/>
+                Usuń serwer
+              </button>
+            ) : (
+              <button onClick={()=>handleLeaveServer(srvContextMenu.srv.id)}
+                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-rose-400 hover:bg-rose-500/10 transition-colors text-left">
+                <LogOut size={13} className="shrink-0"/>
+                Opuść serwer
+              </button>
+            )}
+          </motion.div>
+        </>
+      )}
+
+      {/* Delete server confirmation */}
+      <AnimatePresence>
+        {deleteSrvConfirm&&(
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[92] p-4"
+            onClick={()=>setDeleteSrvConfirm(null)}>
+            <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
+              onClick={e=>e.stopPropagation()} className={`${gm} rounded-2xl w-full max-w-sm p-6`}>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center shrink-0">
+                  <Trash2 size={18} className="text-rose-400"/>
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">Usuń serwer</h3>
+                  <p className="text-zinc-500 text-xs mt-0.5">Ta operacja jest nieodwracalna</p>
+                </div>
+              </div>
+              <p className="text-sm text-zinc-400 mb-6 leading-relaxed">
+                Czy na pewno chcesz usunąć serwer <span className="font-semibold text-white">{deleteSrvConfirm.name}</span>?
+                Wszystkie kanały, wiadomości i dane zostaną trwale usunięte.
+              </p>
+              <div className="flex gap-2.5">
+                <button onClick={()=>setDeleteSrvConfirm(null)}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold ${gb} transition-all`}>
+                  Anuluj
+                </button>
+                <button onClick={()=>handleDeleteServer(deleteSrvConfirm.id)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-rose-500 hover:bg-rose-400 text-white transition-all">
+                  Usuń serwer
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Profile */}
       <AnimatePresence>

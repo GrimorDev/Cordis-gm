@@ -59,7 +59,7 @@ router.get('/:userId/messages', authMiddleware, async (req: AuthRequest, res: Re
     const conversationId = await getOrCreateConversation(req.user!.id, req.params.userId);
     let sql = `
       SELECT dm.id, dm.conversation_id, dm.content, dm.edited, dm.created_at,
-             dm.attachment_url, dm.reply_to_id,
+             dm.attachment_url, dm.reply_to_id, dm.is_system,
              u.id as sender_id, u.username as sender_username, u.avatar_url as sender_avatar,
              rm.content as reply_content, ru.username as reply_username
       FROM dm_messages dm
@@ -75,7 +75,10 @@ router.get('/:userId/messages', authMiddleware, async (req: AuthRequest, res: Re
     }
     sql += ` ORDER BY dm.created_at DESC LIMIT ${limit}`;
     const { rows } = await query(sql, params);
-    return res.json(rows.reverse());
+    const result = rows.map((r: any) =>
+      r.is_system ? { ...r, sender_id: '__system__', sender_username: 'System', sender_avatar: null } : r
+    );
+    return res.json(result.reverse());
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
@@ -92,6 +95,13 @@ router.post('/:userId/messages', authMiddleware,
     }
 
     try {
+      // Only friends can exchange DMs
+      const { rows: [friendship] } = await query(
+        `SELECT id FROM friends WHERE ((requester_id=$1 AND addressee_id=$2) OR (requester_id=$2 AND addressee_id=$1)) AND status='accepted'`,
+        [req.user!.id, req.params.userId]
+      );
+      if (!friendship) return res.status(403).json({ error: 'Możesz pisać tylko do znajomych' });
+
       const conversationId = await getOrCreateConversation(req.user!.id, req.params.userId);
       const { rows: [msg] } = await query(
         'INSERT INTO dm_messages (conversation_id,sender_id,content,reply_to_id,attachment_url) VALUES ($1,$2,$3,$4,$5) RETURNING *',
@@ -115,6 +125,26 @@ router.post('/:userId/messages', authMiddleware,
     } catch { return res.status(500).json({ error: 'Internal server error' }); }
   }
 );
+
+// POST /api/dms/:userId/system-message  (call ended, etc.)
+router.post('/:userId/system-message', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { content } = req.body;
+    if (!content?.trim()) return res.status(400).json({ error: 'Content required' });
+    const conversationId = await getOrCreateConversation(req.user!.id, req.params.userId);
+    const { rows: [msg] } = await query(
+      'INSERT INTO dm_messages (conversation_id,sender_id,content,is_system) VALUES ($1,$2,$3,true) RETURNING *',
+      [conversationId, req.user!.id, content.trim()]
+    );
+    const full = { ...msg, sender_id: '__system__', sender_username: 'System', sender_avatar: null };
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user:${req.params.userId}`).emit('new_dm', full);
+      io.to(`user:${req.user!.id}`).emit('new_dm', full);
+    }
+    return res.status(201).json(full);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
 
 // DELETE /api/dms/messages/:id
 router.delete('/messages/:id', authMiddleware, async (req: AuthRequest, res: Response) => {

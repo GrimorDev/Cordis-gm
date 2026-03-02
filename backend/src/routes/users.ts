@@ -40,8 +40,16 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
       `SELECT id,username,avatar_url,banner_url,banner_color,bio,custom_status,status,
               accent_color,compact_messages,
               privacy_status_visible,privacy_typing_visible,privacy_read_receipts,privacy_friend_requests,
-              created_at FROM users WHERE id=$1`,
-      [req.params.id]
+              created_at,
+              (SELECT COUNT(*)::int FROM (
+                SELECT CASE WHEN f.requester_id=$2 THEN f.addressee_id ELSE f.requester_id END as fid
+                FROM friends f WHERE (f.requester_id=$2 OR f.addressee_id=$2) AND f.status='accepted'
+              ) mf INNER JOIN (
+                SELECT CASE WHEN f.requester_id=$1 THEN f.addressee_id ELSE f.requester_id END as fid
+                FROM friends f WHERE (f.requester_id=$1 OR f.addressee_id=$1) AND f.status='accepted'
+              ) tf ON tf.fid=mf.fid) as mutual_friends_count
+       FROM users WHERE id=$1`,
+      [req.params.id, req.user!.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'User not found' });
     return res.json(rows[0]);
