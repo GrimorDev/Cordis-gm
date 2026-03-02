@@ -620,6 +620,7 @@ export default function App() {
   const [incomingCall, setIncomingCall]       = useState<{from:{id:string,username:string,avatar_url:string|null},type:'voice'|'video',conversation_id:string}|null>(null);
   const [callDuration, setCallDuration]       = useState(0);
   const [toasts, setToasts]                   = useState<Toast[]>([]);
+  const [isConnected, setIsConnected]         = useState(true);
 
   const [serverList, setServerList]           = useState<ServerData[]>([]);
   const [serverFull, setServerFull]           = useState<ServerFull | null>(null);
@@ -714,9 +715,9 @@ export default function App() {
   // WebRTC state
   const [speakingUsers, setSpeakingUsers]     = useState(new Set<string>());
   const [devices, setDevices]                 = useState<MediaDeviceInfo[]>([]);
-  const [selMic, setSelMic]                   = useState('');
-  const [selSpeaker, setSelSpeaker]           = useState('');
-  const [selCamera, setSelCamera]             = useState('');
+  const [selMic, setSelMic]                   = useState(() => localStorage.getItem('cordis_mic') || '');
+  const [selSpeaker, setSelSpeaker]           = useState(() => localStorage.getItem('cordis_speaker') || '');
+  const [selCamera, setSelCamera]             = useState(() => localStorage.getItem('cordis_camera') || '');
   const [devicesOpen, setDevicesOpen]         = useState(false);
 
   // App preferences — initialized from currentUser (DB), updated via users.updateMe()
@@ -852,6 +853,33 @@ export default function App() {
       setActiveCall(null); setShowCallPanel(false); setCallDuration(0);
       autoToast('Rozmowa zakończona', 'info');
     });
+    // ── Reconnection: re-join rooms + refresh data ──────────────────
+    sock.on('connect', () => {
+      setIsConnected(true);
+      // Re-join the current channel room — critical so new_message events arrive
+      if (prevChRef.current && activeViewRef.current === 'servers') {
+        joinChannel(prevChRef.current);
+        messagesApi.list(prevChRef.current).then(setChannelMsgs).catch(console.error);
+      }
+      // Re-fetch active DM conversation to fill any gap
+      if (activeDmUserIdRef.current) {
+        dmsApi.messages(activeDmUserIdRef.current).then(setDmMsgs).catch(console.error);
+      }
+      // Refresh list data
+      dmsApi.conversations().then(setDmConvs).catch(console.error);
+      // Reload server (roles/channels may have changed while disconnected)
+      if (activeServerRef.current) {
+        serversApi.get(activeServerRef.current).then(s => {
+          setServerFull(s);
+        }).catch(console.error);
+        serversApi.members(activeServerRef.current).then(setMembers).catch(console.error);
+      }
+      loadServers();
+      loadFriends();
+    });
+    sock.on('disconnect', () => setIsConnected(false));
+    sock.on('connect_error', () => setIsConnected(false));
+
     loadServers(); loadFriends(); loadDms();
     return () => { disconnectSocket(); };
   }, [isAuthenticated]);
@@ -1006,6 +1034,11 @@ export default function App() {
       getMediaDevices().then(setDevices).catch(() => {}));
   }, [isAuthenticated]);
 
+  // ── Persist selected devices across sessions ─────────────────────
+  useEffect(() => { if (selMic)     localStorage.setItem('cordis_mic',     selMic);     }, [selMic]);
+  useEffect(() => { if (selSpeaker) localStorage.setItem('cordis_speaker', selSpeaker); }, [selSpeaker]);
+  useEffect(() => { if (selCamera)  localStorage.setItem('cordis_camera',  selCamera);  }, [selCamera]);
+
   // ── WebRTC voice signaling handlers ─────────────────────────────
   // These are updated via ref so socket callbacks always get latest version
   const closePeer = (userId: string) => {
@@ -1095,7 +1128,7 @@ export default function App() {
   // ── Loaders ─────────────────────────────────────────────────────
   const loadServers = () => serversApi.list().then(list => {
     setServerList(list);
-    if (list.length > 0 && !activeServer) { setActiveServer(list[0].id); setActiveView('servers'); }
+    if (list.length > 0 && !activeServerRef.current) { setActiveServer(list[0].id); setActiveView('servers'); }
   }).catch(console.error);
   const loadFriends = () => { friendsApi.list().then(setFriends).catch(console.error); friendsApi.requests().then(setFriendReqs).catch(console.error); };
   const loadDms    = () => dmsApi.conversations().then(setDmConvs).catch(console.error);
@@ -3574,6 +3607,17 @@ export default function App() {
                 </div>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── RECONNECTING BANNER ──────────────────────────────────────────── */}
+      <AnimatePresence>
+        {isAuthenticated && !isConnected && (
+          <motion.div initial={{opacity:0,y:-40}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-40}} transition={{duration:0.25}}
+            className="fixed top-0 left-0 right-0 z-[300] flex items-center justify-center gap-2 py-2 px-4 bg-amber-500/90 backdrop-blur-sm text-black text-sm font-semibold">
+            <div className="w-3 h-3 border-2 border-black/40 border-t-black rounded-full animate-spin shrink-0"/>
+            Łączenie z serwerem…
           </motion.div>
         )}
       </AnimatePresence>
