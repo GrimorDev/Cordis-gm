@@ -481,10 +481,10 @@ function WelcomeModal({ username, onClose }: { username: string; onClose: () => 
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
         transition={{ type: 'spring', stiffness: 260, damping: 22 }}
-        className="relative w-full max-w-lg bg-zinc-900 border border-white/[0.08] rounded-3xl overflow-hidden shadow-2xl shadow-indigo-900/40">
+        className="relative w-full max-w-lg bg-zinc-900 border border-white/[0.08] rounded-3xl shadow-2xl shadow-indigo-900/40">
 
-        {/* Top gradient banner */}
-        <div className="relative h-36 bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 overflow-hidden">
+        {/* Top gradient banner — rounded-t-3xl + overflow-hidden only on banner */}
+        <div className="relative h-36 bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 overflow-hidden rounded-t-3xl">
           {/* Animated circles in banner */}
           <motion.div animate={{ scale: [1,1.2,1], opacity:[0.3,0.5,0.3] }} transition={{ duration:4, repeat:Infinity }}
             className="absolute -top-8 -right-8 w-40 h-40 rounded-full bg-white/10"/>
@@ -495,14 +495,15 @@ function WelcomeModal({ username, onClose }: { username: string; onClose: () => 
             className="absolute top-4 right-6 text-white/30">
             <Sparkles size={20}/>
           </motion.div>
-          {/* Party icon */}
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2
-            w-16 h-16 rounded-2xl bg-zinc-900 border-4 border-zinc-900
-            flex items-center justify-center shadow-xl">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600
-              flex items-center justify-center text-2xl shadow-lg shadow-indigo-500/40">
-              🎉
-            </div>
+        </div>
+
+        {/* Party icon — outside banner so overflow-hidden doesn't clip it */}
+        <div className="absolute top-[112px] left-1/2 -translate-x-1/2
+          w-16 h-16 rounded-2xl bg-zinc-900 border-4 border-zinc-900
+          flex items-center justify-center shadow-xl z-10">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600
+            flex items-center justify-center text-2xl shadow-lg shadow-indigo-500/40">
+            🎉
           </div>
         </div>
 
