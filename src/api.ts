@@ -103,7 +103,9 @@ export interface ServerMember {
 
 // ── Auth ───────────────────────────────────────────────────────────────────
 export const auth = {
-  register: (d: { username: string; email: string; password: string }) =>
+  sendCode: (email: string) =>
+    req<{ message: string }>('POST', '/auth/send-code', { email }),
+  register: (d: { username: string; email: string; password: string; code: string }) =>
     req<{ user: UserProfile; token: string }>('POST', '/auth/register', d),
   login: (d: { login: string; password: string }) =>
     req<{ user: UserProfile; token: string }>('POST', '/auth/login', d),

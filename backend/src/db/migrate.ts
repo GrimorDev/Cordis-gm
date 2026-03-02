@@ -199,6 +199,21 @@ $$ LANGUAGE plpgsql;
 
 DO $$ BEGIN CREATE TRIGGER users_updated_at    BEFORE UPDATE ON users    FOR EACH ROW EXECUTE FUNCTION update_updated_at(); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TRIGGER messages_updated_at BEFORE UPDATE ON messages FOR EACH ROW EXECUTE FUNCTION update_updated_at(); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Email verification
+DO $$ BEGIN ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+-- Existing users are auto-verified (they registered before this feature)
+UPDATE users SET email_verified = TRUE WHERE email_verified IS NULL OR email_verified = FALSE;
+
+CREATE TABLE IF NOT EXISTS email_verifications (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email      VARCHAR(255) NOT NULL,
+    code       VARCHAR(20)  NOT NULL,
+    used       BOOLEAN      DEFAULT FALSE,
+    expires_at TIMESTAMPTZ  NOT NULL,
+    created_at TIMESTAMPTZ  DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_email_verif_email ON email_verifications(email, created_at DESC);
 `;
 
 const SEED_SQL = `

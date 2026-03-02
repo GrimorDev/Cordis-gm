@@ -7,11 +7,57 @@ import { redis, KEYS, setUserStatus } from '../redis/client';
 import { config } from '../config';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
+import { generateCode, sendVerificationEmail } from '../services/email';
 
 const router = Router();
 
 const signToken = (payload: { id: string; username: string; email: string }) =>
   jwt.sign(payload, config.jwt.secret, { expiresIn: config.jwt.expiresIn } as any);
+
+// POST /api/auth/send-code — send email verification code
+router.post(
+  '/send-code',
+  [body('email').isEmail().normalizeEmail()],
+  async (req: Request, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: 'Podaj prawidłowy adres email' });
+
+    const { email } = req.body;
+
+    try {
+      // Don't allow sending code if email already registered
+      const taken = await query('SELECT id FROM users WHERE email = $1', [email]);
+      if (taken.rowCount! > 0) {
+        return res.status(409).json({ error: 'Ten adres email jest już zajęty' });
+      }
+
+      // Rate-limit: max 3 codes per email in last 10 minutes
+      const recent = await query(
+        `SELECT COUNT(*) FROM email_verifications
+         WHERE email = $1 AND created_at > NOW() - INTERVAL '10 minutes'`,
+        [email]
+      );
+      if (parseInt(recent.rows[0].count) >= 3) {
+        return res.status(429).json({ error: 'Zbyt wiele prób. Poczekaj chwilę przed wysłaniem nowego kodu.' });
+      }
+
+      const code = generateCode();
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+      await query(
+        'INSERT INTO email_verifications (email, code, expires_at) VALUES ($1, $2, $3)',
+        [email, code, expiresAt]
+      );
+
+      await sendVerificationEmail(email, code);
+
+      return res.json({ message: 'Kod weryfikacyjny wysłany na podany adres email' });
+    } catch (err) {
+      console.error('Send-code error:', err);
+      return res.status(500).json({ error: 'Nie udało się wysłać kodu. Sprawdź adres email i spróbuj ponownie.' });
+    }
+  }
+);
 
 // POST /api/auth/register
 router.post(
@@ -20,32 +66,50 @@ router.post(
     body('username').trim().isLength({ min: 2, max: 32 }).matches(/^[a-zA-Z0-9_]+$/),
     body('email').isEmail().normalizeEmail(),
     body('password').isLength({ min: 6, max: 128 }),
+    body('code').trim().notEmpty(),
   ],
   async (req: Request, res: Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    const { username, email, password } = req.body;
+    const { username, email, password, code } = req.body;
 
     try {
+      // Verify the code
+      const { rows: codeRows } = await query(
+        `SELECT id FROM email_verifications
+         WHERE email = $1 AND code = $2 AND used = FALSE AND expires_at > NOW()
+         ORDER BY created_at DESC LIMIT 1`,
+        [email, code]
+      );
+
+      if (!codeRows[0]) {
+        return res.status(400).json({ error: 'Nieprawidłowy lub wygasły kod weryfikacyjny' });
+      }
+
+      const codeId = codeRows[0].id;
+
       const existing = await query(
         'SELECT id FROM users WHERE username = $1 OR email = $2',
         [username, email]
       );
       if (existing.rowCount! > 0) {
-        return res.status(409).json({ error: 'Username or email already taken' });
+        return res.status(409).json({ error: 'Nazwa użytkownika lub email jest już zajęty' });
       }
 
       const password_hash = await bcrypt.hash(password, 12);
       const { rows } = await query(
-        `INSERT INTO users (username, email, password_hash)
-         VALUES ($1, $2, $3)
+        `INSERT INTO users (username, email, password_hash, email_verified)
+         VALUES ($1, $2, $3, TRUE)
          RETURNING id, username, email, avatar_url, banner_url, banner_color, bio, custom_status, status,
                    accent_color, compact_messages,
                    privacy_status_visible, privacy_typing_visible, privacy_read_receipts, privacy_friend_requests,
                    created_at`,
         [username, email, password_hash]
       );
+
+      // Mark code as used
+      await query('UPDATE email_verifications SET used = TRUE WHERE id = $1', [codeId]);
 
       const user = rows[0];
       const token = signToken({ id: user.id, username: user.username, email: user.email });

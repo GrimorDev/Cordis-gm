@@ -6,7 +6,8 @@ import {
   Menu, X, Edit3, MessageCircle, Minimize2, Maximize2,
   Shield, Trash2, Settings2, UserPlus, Check, X as XIcon,
   LogOut, Loader2, Lock, Phone, PhoneOff, MessageSquare, Upload, MoreHorizontal, ScreenShare,
-  CheckCircle2, AlertCircle, Info, AlertTriangle, PartyPopper, Sparkles, Zap, Globe
+  CheckCircle2, AlertCircle, Info, AlertTriangle, PartyPopper, Sparkles, Zap, Globe,
+  Eye, EyeOff
 } from 'lucide-react';
 import {
   auth, users, serversApi, channelsApi, messagesApi, dmsApi, friendsApi,
@@ -98,23 +99,55 @@ const AUTH_FEATURES = [
 
 function AuthScreen({ onAuth }: { onAuth: (u: UserProfile, t: string, isNew: boolean) => void }) {
   const [tab, setTab] = useState<'login' | 'register'>('login');
+  // Registration: 'form' = fill details, 'verify' = enter code
+  const [regStep, setRegStep] = useState<'form' | 'verify'>('form');
   const [form, setForm] = useState({ login: '', username: '', email: '', password: '', confirm: '' });
+  const [verifyCode, setVerifyCode] = useState('');
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault(); setError(''); setLoading(true);
-    if (tab === 'register' && form.password !== form.confirm) {
+  const switchTab = (t: 'login' | 'register') => {
+    setTab(t); setError(''); setInfo(''); setRegStep('form'); setVerifyCode('');
+  };
+
+  // Step 1: send verification code
+  const handleSendCode = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(''); setInfo(''); setLoading(true);
+    if (form.password !== form.confirm) {
       setError('Hasła nie pasują do siebie'); setLoading(false); return;
     }
     try {
-      const isNew = tab === 'register';
-      const res = tab === 'login'
-        ? await auth.login({ login: form.login, password: form.password })
-        : await auth.register({ username: form.username, email: form.email, password: form.password });
-      setToken(res.token); onAuth(res.user, res.token, isNew);
+      await auth.sendCode(form.email);
+      setRegStep('verify');
+      setInfo(`Kod weryfikacyjny wysłany na ${form.email}`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Błąd połączenia z serwerem');
+    } finally { setLoading(false); }
+  };
+
+  // Step 2: register with code
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(''); setLoading(true);
+    try {
+      const res = await auth.register({
+        username: form.username, email: form.email,
+        password: form.password, code: verifyCode.trim(),
+      });
+      setToken(res.token); onAuth(res.user, res.token, true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Błąd połączenia z serwerem');
+    } finally { setLoading(false); }
+  };
+
+  // Login submit
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(''); setLoading(true);
+    try {
+      const res = await auth.login({ login: form.login, password: form.password });
+      setToken(res.token); onAuth(res.user, res.token, false);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Błąd połączenia z serwerem');
     } finally { setLoading(false); }
@@ -252,7 +285,7 @@ function AuthScreen({ onAuth }: { onAuth: (u: UserProfile, t: string, isNew: boo
           {/* Tab switch */}
           <div className="flex bg-white/[0.04] border border-white/[0.06] rounded-2xl p-1 mb-6">
             {(['login','register'] as const).map(t => (
-              <button key={t} onClick={() => { setTab(t); setError(''); }}
+              <button key={t} onClick={() => switchTab(t)}
                 className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
                   tab===t ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-zinc-400 hover:text-white'}`}>
                 {t === 'login' ? 'Logowanie' : 'Rejestracja'}
@@ -260,79 +293,153 @@ function AuthScreen({ onAuth }: { onAuth: (u: UserProfile, t: string, isNew: boo
             ))}
           </div>
 
-          {/* Form */}
-          <form onSubmit={submit} className="flex flex-col gap-3.5">
-            <AnimatePresence mode="wait">
-              {tab === 'register' ? (
-                <motion.div key="reg" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }} className="flex flex-col gap-3.5 overflow-hidden">
-                  <div className="relative">
-                    <Users size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
-                    <input required value={form.username} onChange={set('username')} placeholder="Nazwa użytkownika"
-                      pattern="[a-zA-Z0-9_]+" minLength={2} maxLength={32}
-                      className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`} />
-                  </div>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 text-sm pointer-events-none">@</span>
-                    <input required type="email" value={form.email} onChange={set('email')} placeholder="Adres email"
-                      className={`${gi} rounded-xl pl-9 pr-4 py-3 text-sm w-full`} />
-                  </div>
-                </motion.div>
-              ) : (
-                <motion.div key="log" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                  <div className="relative">
-                    <MessageSquare size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
-                    <input required value={form.login} onChange={set('login')} placeholder="Login lub email"
-                      className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`} />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <div className="relative">
-              <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
-              <input required type={showPass ? 'text' : 'password'} value={form.password} onChange={set('password')}
-                placeholder="Hasło" minLength={6}
-                className={`${gi} rounded-xl pl-10 pr-10 py-3 text-sm w-full`} />
-              <button type="button" onClick={() => setShowPass(v => !v)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
-                {showPass ? <VolumeX size={15}/> : <VolumeX size={15} className="opacity-50"/>}
-              </button>
-            </div>
-
-            {tab === 'register' && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }} className="relative overflow-hidden">
-                <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
-                <input required type={showPass ? 'text' : 'password'} value={form.confirm} onChange={set('confirm')}
-                  placeholder="Potwierdź hasło" minLength={6}
-                  className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`} />
-              </motion.div>
+          <AnimatePresence mode="wait">
+            {/* ── LOGIN FORM ── */}
+            {tab === 'login' && (
+              <motion.form key="login-form" onSubmit={handleLogin}
+                initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}
+                transition={{ duration: 0.2 }} className="flex flex-col gap-3.5">
+                <div className="relative">
+                  <MessageSquare size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
+                  <input required value={form.login} onChange={set('login')} placeholder="Login lub email"
+                    className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`} />
+                </div>
+                <div className="relative">
+                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
+                  <input required type={showPass ? 'text' : 'password'} value={form.password} onChange={set('password')}
+                    placeholder="Hasło" minLength={6}
+                    className={`${gi} rounded-xl pl-10 pr-10 py-3 text-sm w-full`} />
+                  <button type="button" onClick={() => setShowPass(v => !v)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                    {showPass ? <Eye size={15}/> : <EyeOff size={15}/>}
+                  </button>
+                </div>
+                <AnimatePresence>
+                  {error && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="flex items-center gap-2 text-rose-400 text-sm bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-2.5 overflow-hidden">
+                      <AlertCircle size={15} className="shrink-0"/><span>{error}</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                <button type="submit" disabled={loading}
+                  className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
+                  {loading ? <><Loader2 size={17} className="animate-spin"/> Logowanie...</> : 'Zaloguj się →'}
+                </button>
+              </motion.form>
             )}
 
-            <AnimatePresence>
-              {error && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="flex items-center gap-2 text-rose-400 text-sm bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-2.5 overflow-hidden">
-                  <AlertCircle size={15} className="shrink-0"/>
-                  <span>{error}</span>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {/* ── REGISTER STEP 1: fill form ── */}
+            {tab === 'register' && regStep === 'form' && (
+              <motion.form key="reg-form" onSubmit={handleSendCode}
+                initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}
+                transition={{ duration: 0.2 }} className="flex flex-col gap-3.5">
+                <div className="relative">
+                  <Users size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
+                  <input required value={form.username} onChange={set('username')} placeholder="Nazwa użytkownika"
+                    pattern="[a-zA-Z0-9_]+" minLength={2} maxLength={32}
+                    className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`} />
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 text-sm pointer-events-none">@</span>
+                  <input required type="email" value={form.email} onChange={set('email')} placeholder="Adres email"
+                    className={`${gi} rounded-xl pl-9 pr-4 py-3 text-sm w-full`} />
+                </div>
+                <div className="relative">
+                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
+                  <input required type={showPass ? 'text' : 'password'} value={form.password} onChange={set('password')}
+                    placeholder="Hasło" minLength={6}
+                    className={`${gi} rounded-xl pl-10 pr-10 py-3 text-sm w-full`} />
+                  <button type="button" onClick={() => setShowPass(v => !v)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                    {showPass ? <Eye size={15}/> : <EyeOff size={15}/>}
+                  </button>
+                </div>
+                <div className="relative">
+                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
+                  <input required type={showPass ? 'text' : 'password'} value={form.confirm} onChange={set('confirm')}
+                    placeholder="Potwierdź hasło" minLength={6}
+                    className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`} />
+                </div>
+                <AnimatePresence>
+                  {error && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="flex items-center gap-2 text-rose-400 text-sm bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-2.5 overflow-hidden">
+                      <AlertCircle size={15} className="shrink-0"/><span>{error}</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                <button type="submit" disabled={loading}
+                  className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
+                  {loading ? <><Loader2 size={17} className="animate-spin"/> Wysyłanie kodu...</> : <>Wyślij kod weryfikacyjny →</>}
+                </button>
+              </motion.form>
+            )}
 
-            <button type="submit" disabled={loading}
-              className="relative overflow-hidden bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
-              {loading
-                ? <><Loader2 size={17} className="animate-spin"/> Ładowanie...</>
-                : tab === 'login' ? 'Zaloguj się →' : 'Utwórz konto →'
-              }
-            </button>
-          </form>
+            {/* ── REGISTER STEP 2: enter code ── */}
+            {tab === 'register' && regStep === 'verify' && (
+              <motion.form key="verify-form" onSubmit={handleRegister}
+                initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}
+                transition={{ duration: 0.2 }} className="flex flex-col gap-3.5">
+
+                {/* Email indicator */}
+                <div className="flex items-center gap-2.5 bg-indigo-500/10 border border-indigo-500/25 rounded-xl px-4 py-3">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center shrink-0">
+                    <span className="text-base">✉️</span>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-indigo-300 font-medium">Kod wysłany na:</p>
+                    <p className="text-sm text-white font-semibold truncate">{form.email}</p>
+                  </div>
+                </div>
+
+                {/* Code input */}
+                <div className="relative">
+                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none text-sm font-mono">#</div>
+                  <input
+                    required
+                    value={verifyCode}
+                    onChange={e => setVerifyCode(e.target.value)}
+                    placeholder="xx-xxx-xxx"
+                    maxLength={9}
+                    className={`${gi} rounded-xl pl-9 pr-4 py-3 text-sm w-full font-mono tracking-widest text-center uppercase`}
+                  />
+                </div>
+                <p className="text-xs text-zinc-600 text-center -mt-1">Sprawdź skrzynkę mailową · Ważny przez 15 minut</p>
+
+                <AnimatePresence>
+                  {(error || info) && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className={`flex items-center gap-2 text-sm rounded-xl px-4 py-2.5 overflow-hidden border ${
+                        error
+                          ? 'text-rose-400 bg-rose-500/10 border-rose-500/20'
+                          : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                      }`}>
+                      <AlertCircle size={15} className="shrink-0"/>
+                      <span>{error || info}</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <button type="submit" disabled={loading}
+                  className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
+                  {loading ? <><Loader2 size={17} className="animate-spin"/> Tworzenie konta...</> : 'Zarejestruj się →'}
+                </button>
+
+                <button type="button" onClick={() => { setRegStep('form'); setError(''); setInfo(''); setVerifyCode(''); }}
+                  className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors text-center">
+                  ← Zmień dane / wyślij kod ponownie
+                </button>
+              </motion.form>
+            )}
+          </AnimatePresence>
 
           <p className="text-xs text-zinc-700 text-center mt-5">
             {tab === 'login' ? 'Nie masz konta? ' : 'Masz już konto? '}
-            <button onClick={() => { setTab(tab === 'login' ? 'register' : 'login'); setError(''); }}
+            <button onClick={() => switchTab(tab === 'login' ? 'register' : 'login')}
               className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">
               {tab === 'login' ? 'Zarejestruj się' : 'Zaloguj się'}
             </button>
