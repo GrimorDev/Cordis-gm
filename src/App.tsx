@@ -6,7 +6,7 @@ import {
   Menu, X, Edit3, MessageCircle, Minimize2, Maximize2,
   Shield, Trash2, Settings2, UserPlus, Check, X as XIcon,
   LogOut, Loader2, Lock, Phone, PhoneOff, MessageSquare, Upload, MoreHorizontal, ScreenShare,
-  CheckCircle2, AlertCircle, Info, AlertTriangle
+  CheckCircle2, AlertCircle, Info, AlertTriangle, PartyPopper, Sparkles, Zap, Globe
 } from 'lucide-react';
 import {
   auth, users, serversApi, channelsApi, messagesApi, dmsApi, friendsApi,
@@ -96,7 +96,7 @@ const AUTH_FEATURES = [
     grad: 'from-amber-500 to-orange-500', iconBg: 'bg-amber-500/15', border: 'border-amber-500/25', glow: 'hover:shadow-amber-500/10' },
 ];
 
-function AuthScreen({ onAuth }: { onAuth: (u: UserProfile, t: string) => void }) {
+function AuthScreen({ onAuth }: { onAuth: (u: UserProfile, t: string, isNew: boolean) => void }) {
   const [tab, setTab] = useState<'login' | 'register'>('login');
   const [form, setForm] = useState({ login: '', username: '', email: '', password: '', confirm: '' });
   const [error, setError] = useState('');
@@ -110,10 +110,11 @@ function AuthScreen({ onAuth }: { onAuth: (u: UserProfile, t: string) => void })
       setError('Hasła nie pasują do siebie'); setLoading(false); return;
     }
     try {
+      const isNew = tab === 'register';
       const res = tab === 'login'
         ? await auth.login({ login: form.login, password: form.password })
         : await auth.register({ username: form.username, email: form.email, password: form.password });
-      setToken(res.token); onAuth(res.user, res.token);
+      setToken(res.token); onAuth(res.user, res.token, isNew);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Błąd połączenia z serwerem');
     } finally { setLoading(false); }
@@ -340,6 +341,97 @@ function AuthScreen({ onAuth }: { onAuth: (u: UserProfile, t: string) => void })
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── WelcomeModal ─────────────────────────────────────────────────────────────
+const WELCOME_TIPS = [
+  { icon: <MessageCircle size={18}/>, color: 'text-indigo-400', bg: 'bg-indigo-500/10', title: 'Wiadomości & kanały głosowe', desc: 'Dołącz do serwera lub napisz do znajomego — tekst, głos i wideo w jednym miejscu.' },
+  { icon: <Users size={18}/>, color: 'text-violet-400', bg: 'bg-violet-500/10', title: 'Znajomi & zaproszenia', desc: 'Wyszukaj znajomych po nazwie użytkownika i zaproś ich — ikona 👤 w pasku bocznym.' },
+  { icon: <Zap size={18}/>, color: 'text-amber-400', bg: 'bg-amber-500/10', title: 'Stwórz własny serwer', desc: 'Kliknij „+" w pasku serwerów, nadaj nazwę i zaproś ludzi kodem zaproszenia.' },
+  { icon: <Globe size={18}/>, color: 'text-emerald-400', bg: 'bg-emerald-500/10', title: 'Dostosuj profil', desc: 'Zmień avatar, baner, bio i status — ikonka ⚙️ przy swoim niku na dole.' },
+];
+
+function WelcomeModal({ username, onClose }: { username: string; onClose: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+      style={{ backdropFilter: 'blur(12px)', background: 'rgba(0,0,0,0.7)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+
+      <motion.div
+        initial={{ scale: 0.85, opacity: 0, y: 40 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.9, opacity: 0, y: 20 }}
+        transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+        className="relative w-full max-w-lg bg-zinc-900 border border-white/[0.08] rounded-3xl overflow-hidden shadow-2xl shadow-indigo-900/40">
+
+        {/* Top gradient banner */}
+        <div className="relative h-36 bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 overflow-hidden">
+          {/* Animated circles in banner */}
+          <motion.div animate={{ scale: [1,1.2,1], opacity:[0.3,0.5,0.3] }} transition={{ duration:4, repeat:Infinity }}
+            className="absolute -top-8 -right-8 w-40 h-40 rounded-full bg-white/10"/>
+          <motion.div animate={{ scale: [1,1.3,1], opacity:[0.2,0.4,0.2] }} transition={{ duration:6, repeat:Infinity, delay:1 }}
+            className="absolute -bottom-10 -left-10 w-48 h-48 rounded-full bg-white/10"/>
+          {/* Sparkle */}
+          <motion.div animate={{ rotate: 360 }} transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}
+            className="absolute top-4 right-6 text-white/30">
+            <Sparkles size={20}/>
+          </motion.div>
+          {/* Party icon */}
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2
+            w-16 h-16 rounded-2xl bg-zinc-900 border-4 border-zinc-900
+            flex items-center justify-center shadow-xl">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600
+              flex items-center justify-center text-2xl shadow-lg shadow-indigo-500/40">
+              🎉
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="px-8 pt-12 pb-8">
+          {/* Heading */}
+          <div className="text-center mb-6">
+            <h2 className="text-2xl font-black text-white mb-1">
+              Witaj, <span className="bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">{username}</span>! 🎉
+            </h2>
+            <p className="text-sm text-zinc-400">Twoje konto jest gotowe. Oto kilka wskazówek na start:</p>
+          </div>
+
+          {/* Tips */}
+          <div className="flex flex-col gap-3 mb-7">
+            {WELCOME_TIPS.map((tip, i) => (
+              <motion.div key={i}
+                initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.15 + i * 0.07 }}
+                className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.05] transition-colors">
+                <div className={`w-8 h-8 rounded-xl ${tip.bg} ${tip.color} flex items-center justify-center shrink-0 mt-0.5`}>
+                  {tip.icon}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white">{tip.title}</p>
+                  <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">{tip.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* CTA */}
+          <motion.button
+            whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+            onClick={onClose}
+            className="w-full py-3 rounded-2xl font-bold text-white text-sm
+              bg-gradient-to-r from-indigo-500 to-violet-600
+              hover:from-indigo-400 hover:to-violet-500
+              shadow-lg shadow-indigo-500/30 transition-all duration-200 flex items-center justify-center gap-2">
+            <PartyPopper size={16}/>
+            Zacznij przygodę z Cordyn!
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -903,8 +995,13 @@ export default function App() {
     setAccentColor(u.accent_color || 'indigo');
     setCompactMessages(u.compact_messages ?? false);
   };
-  const handleAuth = (u: UserProfile) => {
+  const [showWelcome, setShowWelcome] = useState(false);
+  const handleAuth = (u: UserProfile, _t: string, isNew = false) => {
     setCurrentUser(u); setEditProf({...u}); setIsAuthenticated(true); applyUserPrefs(u);
+    if (isNew) {
+      const key = `welcomed_${u.id}`;
+      if (!localStorage.getItem(key)) { setShowWelcome(true); localStorage.setItem(key, '1'); }
+    }
   };
   const handleLogout = async () => {
     try { await auth.logout(); } catch {}
@@ -1293,7 +1390,7 @@ export default function App() {
 
   // ──────────────────────────────────────────────────────────────────
   if (authLoading) return <div className="fixed inset-0 bg-zinc-950 flex items-center justify-center"><Loader2 size={32} className="text-indigo-400 animate-spin" /></div>;
-  if (!isAuthenticated) return <AuthScreen onAuth={(u, t) => handleAuth(u)} />;
+  if (!isAuthenticated) return <AuthScreen onAuth={(u, t, isNew) => handleAuth(u, t, isNew)} />;
 
   const allChs   = serverFull?.categories.flatMap(c => c.channels) ?? [];
   const activeCh = allChs.find(c => c.id === activeChannel);
@@ -3306,6 +3403,13 @@ export default function App() {
               </button>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Welcome Modal (nowy użytkownik) ────────────────────────── */}
+      <AnimatePresence>
+        {showWelcome && currentUser && (
+          <WelcomeModal username={currentUser.username} onClose={() => setShowWelcome(false)} />
         )}
       </AnimatePresence>
 
