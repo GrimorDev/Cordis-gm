@@ -386,6 +386,8 @@ export default function App() {
   const [unreadDms, setUnreadDms]             = useState<Record<string, number>>({});
   // DM partner full profile (for BIO panel)
   const [dmPartnerProfile, setDmPartnerProfile] = useState<UserProfile | null>(null);
+  // Messages loading
+  const [msgsLoading, setMsgsLoading]           = useState(false);
 
   // Screen share state
   const [sharingUserId, setSharingUserId]     = useState<string|null>(null);
@@ -573,14 +575,16 @@ export default function App() {
     prevChRef.current = activeChannel;
     joinChannel(activeChannel);
     setTypingUsers({});
-    messagesApi.list(activeChannel).then(setChannelMsgs).catch(console.error);
+    setChannelMsgs([]); setMsgsLoading(true);
+    messagesApi.list(activeChannel).then(setChannelMsgs).catch(console.error).finally(()=>setMsgsLoading(false));
     setReplyTo(null);
   }, [activeChannel, activeView]);
 
   // ── DM change ───────────────────────────────────────────────────
   useEffect(() => {
     if (!activeDmUserId) return;
-    dmsApi.messages(activeDmUserId).then(setDmMsgs).catch(console.error);
+    setDmMsgs([]); setMsgsLoading(true);
+    dmsApi.messages(activeDmUserId).then(setDmMsgs).catch(console.error).finally(()=>setMsgsLoading(false));
     users.get(activeDmUserId).then(setDmPartnerProfile).catch(console.error);
     setReplyTo(null);
   }, [activeDmUserId]);
@@ -1291,8 +1295,7 @@ export default function App() {
           </div>
         </div>
         {/* Center: branding */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none select-none">
-          <img src="/cordyn.png" alt="Cordyn" className="w-5 h-5 rounded-md object-contain opacity-80"/>
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none">
           <span className="text-white font-bold tracking-tight text-sm">Cordyn</span>
         </div>
         {/* Right: search + bell + settings + avatar */}
@@ -1926,22 +1929,43 @@ export default function App() {
 
               {/* Messages */}
               <div className="flex-1 overflow-y-auto p-4 md:p-5 custom-scrollbar flex flex-col">
+                {/* Loading skeleton */}
+                {msgsLoading&&(
+                  <div className="mt-auto flex flex-col gap-3 pb-2">
+                    {[1,2,3,4].map(i=>(
+                      <div key={i} className="flex gap-3.5 items-start animate-pulse">
+                        <div className="w-10 h-10 rounded-xl bg-white/[0.06] shrink-0"/>
+                        <div className="flex flex-col gap-2 flex-1">
+                          <div className="h-3 bg-white/[0.06] rounded-full w-24"/>
+                          <div className={`h-3.5 bg-white/[0.05] rounded-full`} style={{width:`${50+i*12}%`}}/>
+                          {i%2===0&&<div className="h-3.5 bg-white/[0.04] rounded-full w-2/3"/>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <AnimatePresence mode="wait" initial={false}>
                 <motion.div key={`${activeServer}-${activeChannel}-${activeDmUserId}`}
                   initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: 'easeOut' }}
                   className="mt-auto flex flex-col gap-0.5">
-                  <div className="text-center py-6 mb-2">
+                  {!msgsLoading&&<div className="text-center py-8 mb-3">
                     {activeView==='dms'&&activeDm ? (
-                      <><img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className="w-14 h-14 rounded-full mx-auto mb-3 border-4 border-zinc-950 object-cover" alt=""/>
-                        <h1 className="text-xl font-bold text-white mb-1">{activeDm.other_username}</h1>
-                        <p className="text-sm text-zinc-600">Początek Twojej rozmowy.</p></>
+                      <>
+                        <img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className="w-20 h-20 rounded-2xl mx-auto mb-4 border-4 border-zinc-950 object-cover shadow-2xl" alt=""/>
+                        <h1 className="text-2xl font-bold text-white mb-1">{activeDm.other_username}</h1>
+                        <p className="text-sm text-zinc-500">Początek Twojej rozmowy z <span className="text-zinc-400 font-medium">{activeDm.other_username}</span>.</p>
+                      </>
                     ) : (
-                      <><div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-white/[0.04] border border-white/[0.06] mb-3"><Hash size={22} className="text-zinc-500"/></div>
-                        <h1 className="text-xl font-bold text-white mb-1">#{activeCh?.name||activeChannel}</h1>
-                        <p className="text-sm text-zinc-600">Początek kanału.</p></>
+                      <>
+                        <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-600/20 to-purple-600/10 border border-indigo-500/20 mb-4 shadow-2xl">
+                          <Hash size={30} className="text-indigo-400"/>
+                        </div>
+                        <h1 className="text-2xl font-bold text-white mb-1"># {activeCh?.name||activeChannel}</h1>
+                        <p className="text-sm text-zinc-500">Początek kanału <span className="text-zinc-400 font-medium">#{activeCh?.name||activeChannel}</span>.</p>
+                      </>
                     )}
-                  </div>
+                  </div>}
 
                   {(messages as (MessageFull|DmMessageFull)[]).map((msg, idx) => {
                     const isOwn = currentUser?.id === msg.sender_id;
@@ -1988,11 +2012,11 @@ export default function App() {
                         )}
                         <motion.div
                           initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: Math.min(idx * 0.012, 0.08), duration: 0.12 }}
-                          className={`flex gap-3 group hover:bg-white/[0.02] px-3 rounded-xl -mx-3 transition-colors ${compactMessages?'py-0.5':'py-1.5'}`}>
+                          transition={{ delay: Math.min(idx * 0.012, 0.08), duration: 0.15 }}
+                          className={`flex gap-3.5 group hover:bg-white/[0.025] px-3 rounded-xl -mx-3 transition-colors ${compactMessages?'py-1':'py-2'}`}>
                           <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} alt=""
                             onClick={()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar,status:(msg as MessageFull).sender_status})}
-                            className="w-9 h-9 rounded-full object-cover shrink-0 cursor-pointer hover:opacity-80 transition-opacity mt-0.5"/>
+                            className="w-10 h-10 rounded-xl object-cover shrink-0 cursor-pointer hover:opacity-80 transition-opacity mt-0.5"/>
                           <div className="flex-1 min-w-0">
                             {msg.reply_to_id&&msg.reply_content&&(
                               <div className="flex items-center gap-1.5 mb-1.5 text-xs text-zinc-500 border-l-2 border-zinc-600/50 pl-2.5 py-0.5">
@@ -2014,7 +2038,7 @@ export default function App() {
                               <span className="text-[11px] text-zinc-600">{ft(msg.created_at)}</span>
                               {(msg as MessageFull).edited&&<span className="text-[10px] text-zinc-700 italic">(edytowano)</span>}
                             </div>
-                            <p className="text-[13px] text-zinc-300 leading-relaxed break-words">{msg.content}</p>
+                            <p className="text-sm text-zinc-200 leading-relaxed break-words">{msg.content}</p>
                             {msg.attachment_url&&(
                               <div className="mt-2 max-w-sm">
                                 {/\.(jpg|jpeg|png|gif|webp)$/i.test(msg.attachment_url) ? (
@@ -2204,15 +2228,17 @@ export default function App() {
           {/* ─ ACTIVITY FEED ─ */}
           {activeView==='servers'&&(
             <div className="p-4 border-b border-white/[0.07] shrink-0">
-              <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">Aktywność</h3>
+              <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                <span className="flex-1">Aktywność</span>
+              </h3>
               {serverActivity.length>0 ? (
-                <div className="flex flex-col gap-2.5">
+                <div className="flex flex-col gap-2">
                   {serverActivity.slice(0,8).map(a=>(
-                    <div key={a.id} className="flex items-start gap-2">
-                      <span className="text-sm shrink-0 leading-none mt-0.5">{a.icon}</span>
+                    <div key={a.id} className="flex items-start gap-2.5 bg-white/[0.02] rounded-xl px-3 py-2 border border-white/[0.04]">
+                      <span className="text-base shrink-0 leading-none mt-0.5">{a.icon}</span>
                       <div className="min-w-0 flex-1">
                         <p className="text-[11px] text-zinc-400 leading-snug">{a.text}</p>
-                        <p className="text-[10px] text-zinc-700 mt-0.5">{ft(a.time)}</p>
+                        <p className="text-[10px] text-zinc-600 mt-0.5">{ft(a.time)}</p>
                       </div>
                     </div>
                   ))}
@@ -2230,17 +2256,17 @@ export default function App() {
             return (
               <div className="p-4 flex-1 overflow-y-auto custom-scrollbar">
                 {online.length>0&&(
-                  <div className="mb-4">
-                    <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Online — {online.length}</h3>
-                    <div className="flex flex-col gap-0.5">
+                  <div className="mb-5">
+                    <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2.5">Online — {online.length}</h3>
+                    <div className="flex flex-col gap-1">
                       {online.map(m=>(
-                        <div key={m.id} className="flex items-center gap-2.5 cursor-pointer group px-2 py-1.5 rounded-xl hover:bg-white/[0.05] -mx-2 transition-colors" onClick={()=>openProfile(m)}>
+                        <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2.5 py-2 rounded-xl hover:bg-white/[0.05] -mx-2.5 transition-all" onClick={()=>openProfile(m)}>
                           <div className="relative shrink-0">
-                            <img src={ava(m)} className="w-7 h-7 rounded-full object-cover" alt=""/>
+                            <img src={ava(m)} className="w-8 h-8 rounded-xl object-cover" alt=""/>
                             <div className={`absolute -bottom-px -right-px w-2.5 h-2.5 ${sc(m.status)} border-2 border-[#111111] rounded-full`}/>
                           </div>
                           <div className="min-w-0">
-                            <p className="text-[12px] font-semibold text-zinc-300 truncate group-hover:text-white transition-colors">{m.username}</p>
+                            <p className="text-[13px] font-semibold text-zinc-300 truncate group-hover:text-white transition-colors">{m.username}</p>
                             {m.role_name&&<p className="text-[10px] text-zinc-600 truncate">{m.role_name}</p>}
                           </div>
                         </div>
@@ -2250,16 +2276,16 @@ export default function App() {
                 )}
                 {offline.length>0&&(
                   <div>
-                    <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Offline — {offline.length}</h3>
-                    <div className="flex flex-col gap-0.5">
+                    <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2.5">Offline — {offline.length}</h3>
+                    <div className="flex flex-col gap-1">
                       {offline.map(m=>(
-                        <div key={m.id} className="flex items-center gap-2.5 cursor-pointer group px-2 py-1.5 rounded-xl hover:bg-white/[0.05] -mx-2 transition-colors" onClick={()=>openProfile(m)}>
+                        <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2.5 py-2 rounded-xl hover:bg-white/[0.05] -mx-2.5 transition-all" onClick={()=>openProfile(m)}>
                           <div className="relative shrink-0">
-                            <img src={ava(m)} className="w-7 h-7 rounded-full object-cover opacity-40" alt=""/>
+                            <img src={ava(m)} className="w-8 h-8 rounded-xl object-cover opacity-40" alt=""/>
                             <div className="absolute -bottom-px -right-px w-2.5 h-2.5 bg-zinc-600 border-2 border-[#111111] rounded-full"/>
                           </div>
                           <div className="min-w-0">
-                            <p className="text-[12px] font-medium text-zinc-600 truncate group-hover:text-zinc-400 transition-colors">{m.username}</p>
+                            <p className="text-[13px] font-medium text-zinc-600 truncate group-hover:text-zinc-400 transition-colors">{m.username}</p>
                             {m.role_name&&<p className="text-[10px] text-zinc-700 truncate">{m.role_name}</p>}
                           </div>
                         </div>
@@ -2331,12 +2357,15 @@ export default function App() {
           <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:0.95}}
             style={{position:'fixed',left:srvContextMenu.x,top:srvContextMenu.y}}
             className="z-[91] bg-zinc-900 border border-white/[0.1] rounded-xl shadow-2xl py-1.5 min-w-[180px] overflow-hidden">
-            <button onClick={()=>{ setSrvContextMenu(null); setSrvSettTab('overview'); setSrvSettOpen(true); setActiveServer(srvContextMenu.srv.id); setActiveView('servers'); }}
-              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
-              <Settings2 size={13} className="text-zinc-500 shrink-0"/>
-              Ustawienia serwera
-            </button>
-            <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
+            {(srvContextMenu.srv.owner_id===currentUser?.id ||
+              (srvContextMenu.srv.id===activeServer && (serverFull?.my_role==='Admin'||serverFull?.my_role==='Owner'))) && (<>
+              <button onClick={()=>{ setSrvContextMenu(null); setSrvSettTab('overview'); setSrvSettOpen(true); setActiveServer(srvContextMenu.srv.id); setActiveView('servers'); }}
+                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
+                <Settings2 size={13} className="text-zinc-500 shrink-0"/>
+                Ustawienia serwera
+              </button>
+              <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
+            </>)}
             {srvContextMenu.srv.owner_id===currentUser?.id ? (
               <button onClick={()=>{ setDeleteSrvConfirm({id:srvContextMenu.srv.id,name:srvContextMenu.srv.name}); setSrvContextMenu(null); }}
                 className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-rose-400 hover:bg-rose-500/10 transition-colors text-left">
