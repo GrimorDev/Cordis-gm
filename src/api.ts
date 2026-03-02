@@ -47,6 +47,7 @@ export interface ServerData {
 export interface ServerRole {
   id: string; server_id: string; name: string; color: string;
   permissions: string[]; position: number; created_at: string;
+  is_default?: boolean;
 }
 export interface ChannelData {
   id: string; server_id: string; category_id: string | null;

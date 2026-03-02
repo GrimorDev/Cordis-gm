@@ -3129,14 +3129,21 @@ export default function App() {
                     {roles.length===0&&<p className="text-sm text-zinc-700">Brak ról</p>}
                     {roles.map(r=>(
                       <div key={r.id} className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] px-4 py-3 rounded-xl group">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
                           <div className="w-3 h-3 rounded-full shrink-0" style={{background:r.color}}/>
-                          <span className="text-sm font-semibold text-white">{r.name}</span>
-                          <span className="text-xs text-zinc-600">{(r.permissions||[]).length} uprawnień</span>
+                          <span className="text-sm font-semibold text-white truncate">{r.name}</span>
+                          {r.is_default&&(
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 text-amber-400 bg-amber-500/10 border border-amber-500/20">
+                              Domyślny
+                            </span>
+                          )}
+                          <span className="text-xs text-zinc-600 shrink-0">{(r.permissions||[]).length} uprawnień</span>
                         </div>
-                        <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                           <button onClick={()=>openEditRole(r)} className={`w-7 h-7 ${gb} rounded-lg flex items-center justify-center`}><Edit3 size={12}/></button>
-                          <button onClick={()=>handleDeleteRole(r.id)} className="w-7 h-7 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg flex items-center justify-center"><Trash2 size={12}/></button>
+                          {!r.is_default&&(
+                            <button onClick={()=>handleDeleteRole(r.id)} className="w-7 h-7 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg flex items-center justify-center"><Trash2 size={12}/></button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -3156,9 +3163,9 @@ export default function App() {
                             <>
                               <select value={m.role_name} onChange={e=>handleSetMemberRole(m.id,e.target.value)}
                                 className={`text-xs ${gi} rounded-lg px-2 py-1.5`}>
-                                <option value="Member">Member</option>
-                                <option value="Admin">Admin</option>
-                                {roles.map(r=><option key={r.id} value={r.name}>{r.name}</option>)}
+                                {roles.map(r=><option key={r.id} value={r.name}>{r.name}{r.is_default?' ★':''}</option>)}
+                                {!roles.some(r=>r.name==='Member')&&<option value="Member">Member</option>}
+                                {!roles.some(r=>r.name==='Admin')&&<option value="Admin">Admin</option>}
                               </select>
                               {m.id!==serverFull?.owner_id&&<button onClick={()=>handleKick(m.id)} className="w-7 h-7 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg flex items-center justify-center"><X size={12}/></button>}
                             </>

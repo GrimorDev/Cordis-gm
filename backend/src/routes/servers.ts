@@ -58,6 +58,22 @@ router.post('/', authMiddleware,
         `INSERT INTO server_members (server_id, user_id, role_name) VALUES ($1, $2, 'Owner')`,
         [server.id, req.user!.id]
       );
+      // Create default roles: Owner + Member
+      const { rows: [ownerRole] } = await client.query(
+        `INSERT INTO server_roles (server_id, name, color, permissions, is_default, position)
+         VALUES ($1, 'Owner', '#f59e0b', ARRAY['administrator']::TEXT[], TRUE, 100) RETURNING id`,
+        [server.id]
+      );
+      await client.query(
+        `INSERT INTO server_roles (server_id, name, color, permissions, is_default, position)
+         VALUES ($1, 'Member', '#5865f2', ARRAY[]::TEXT[], TRUE, 0) RETURNING id`,
+        [server.id]
+      );
+      // Assign creator to Owner role via member_roles
+      await client.query(
+        `INSERT INTO member_roles (server_id, user_id, role_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+        [server.id, req.user!.id, ownerRole.id]
+      );
       const { rows: [gc] } = await client.query(
         `INSERT INTO channel_categories (server_id, name, position) VALUES ($1, 'General', 0) RETURNING id`,
         [server.id]
@@ -234,6 +250,23 @@ router.put('/:id/members/:userId/roles', authMiddleware, async (req: AuthRequest
           `UPDATE server_members SET role_name = $1 WHERE server_id = $2 AND user_id = $3`,
           [role_name, req.params.id, req.params.userId]
         );
+        // Sync member_roles: find the named role in server_roles and update the member's primary role
+        if (!Array.isArray(role_ids)) {
+          const { rows: [sr] } = await client.query(
+            `SELECT id FROM server_roles WHERE server_id = $1 AND name = $2 LIMIT 1`,
+            [req.params.id, role_name]
+          );
+          if (sr) {
+            await client.query(
+              `DELETE FROM member_roles WHERE server_id = $1 AND user_id = $2`,
+              [req.params.id, req.params.userId]
+            );
+            await client.query(
+              `INSERT INTO member_roles (server_id, user_id, role_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+              [req.params.id, req.params.userId, sr.id]
+            );
+          }
+        }
       }
       if (Array.isArray(role_ids)) {
         await client.query(
@@ -333,6 +366,12 @@ router.delete('/:id/roles/:roleId', authMiddleware, async (req: AuthRequest, res
     if (!(await isAdminOrOwner(req.params.id, req.user!.id))) {
       return res.status(403).json({ error: 'Not authorized' });
     }
+    const { rows: [existing] } = await query(
+      `SELECT is_default FROM server_roles WHERE id = $1 AND server_id = $2`,
+      [req.params.roleId, req.params.id]
+    );
+    if (!existing) return res.status(404).json({ error: 'Role not found' });
+    if (existing.is_default) return res.status(400).json({ error: 'Nie można usunąć domyślnej roli' });
     await query(
       `DELETE FROM server_roles WHERE id = $1 AND server_id = $2`,
       [req.params.roleId, req.params.id]
@@ -382,6 +421,17 @@ router.post('/join/:code', authMiddleware, async (req: AuthRequest, res: Respons
       `INSERT INTO server_members (server_id, user_id, role_name) VALUES ($1, $2, 'Member')`,
       [invite.server_id, req.user!.id]
     );
+    // Assign to default Member role in member_roles if it exists
+    const { rows: [memberRole] } = await query(
+      `SELECT id FROM server_roles WHERE server_id = $1 AND is_default = TRUE AND name = 'Member' LIMIT 1`,
+      [invite.server_id]
+    );
+    if (memberRole) {
+      await query(
+        `INSERT INTO member_roles (server_id, user_id, role_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+        [invite.server_id, req.user!.id, memberRole.id]
+      );
+    }
     const [{ rows: [server] }, { rows: [u] }] = await Promise.all([
       query(`SELECT * FROM servers WHERE id = $1`, [invite.server_id]),
       query(`SELECT username FROM users WHERE id=$1`, [req.user!.id]),

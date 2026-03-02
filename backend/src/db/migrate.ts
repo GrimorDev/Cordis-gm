@@ -214,6 +214,9 @@ CREATE TABLE IF NOT EXISTS email_verifications (
     created_at TIMESTAMPTZ  DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_email_verif_email ON email_verifications(email, created_at DESC);
+
+-- Default role flag
+DO $$ BEGIN ALTER TABLE server_roles ADD COLUMN is_default BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 `;
 
 const SEED_SQL = `
