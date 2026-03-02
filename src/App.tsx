@@ -86,10 +86,14 @@ type VoiceUser = { id: string; username: string; avatar_url: string|null; status
 
 // ─── AuthScreen ───────────────────────────────────────────────────────────────
 const AUTH_FEATURES = [
-  { icon: '💬', title: 'Wiadomości w czasie rzeczywistym', desc: 'Tekst, głos i wideo — wszystko w jednym miejscu' },
-  { icon: '🎙️', title: 'Kanały głosowe i wideo', desc: 'Dołącz do rozmów z jednym kliknięciem' },
-  { icon: '🛡️', title: 'Role i uprawnienia', desc: 'Pełna kontrola nad serwerem i członkami' },
-  { icon: '🚀', title: 'Szybkie i niezawodne', desc: 'Socket.IO + PostgreSQL dla stale aktualnych danych' },
+  { icon: '💬', title: 'Wiadomości w czasie rzeczywistym', desc: 'Tekst, głos i wideo — wszystko w jednym miejscu',
+    grad: 'from-indigo-500 to-blue-500', iconBg: 'bg-indigo-500/15', border: 'border-indigo-500/25', glow: 'hover:shadow-indigo-500/10' },
+  { icon: '🎙️', title: 'Kanały głosowe i wideo', desc: 'Dołącz do rozmów z jednym kliknięciem',
+    grad: 'from-violet-500 to-purple-500', iconBg: 'bg-violet-500/15', border: 'border-violet-500/25', glow: 'hover:shadow-violet-500/10' },
+  { icon: '🛡️', title: 'Role i uprawnienia', desc: 'Pełna kontrola nad serwerem i członkami',
+    grad: 'from-emerald-500 to-teal-500', iconBg: 'bg-emerald-500/15', border: 'border-emerald-500/25', glow: 'hover:shadow-emerald-500/10' },
+  { icon: '🚀', title: 'Szybkie i niezawodne', desc: 'Socket.IO + PostgreSQL dla stale aktualnych danych',
+    grad: 'from-amber-500 to-orange-500', iconBg: 'bg-amber-500/15', border: 'border-amber-500/25', glow: 'hover:shadow-amber-500/10' },
 ];
 
 function AuthScreen({ onAuth }: { onAuth: (u: UserProfile, t: string) => void }) {
@@ -119,11 +123,35 @@ function AuthScreen({ onAuth }: { onAuth: (u: UserProfile, t: string) => void })
     <div className="fixed inset-0 flex overflow-hidden"
       style={{ background: 'radial-gradient(ellipse at 20% 50%,rgba(99,102,241,.25) 0%,transparent 55%),radial-gradient(ellipse at 80% 20%,rgba(139,92,246,.18) 0%,transparent 50%),radial-gradient(ellipse at 60% 90%,rgba(79,70,229,.12) 0%,transparent 45%),#09090b' }}>
 
-      {/* Decorative blobs */}
+      {/* Decorative animated blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-32 -left-32 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl"/>
-        <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl"/>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-900/5 rounded-full blur-3xl"/>
+        <motion.div animate={{ x: [0,40,-15,0], y: [0,-30,10,0], scale: [1,1.1,0.95,1] }}
+          transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute -top-32 -left-32 w-[500px] h-[500px] bg-indigo-600/15 rounded-full blur-3xl"/>
+        <motion.div animate={{ x: [0,-50,20,0], y: [0,25,-15,0], scale: [1,0.9,1.05,1] }}
+          transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
+          className="absolute -bottom-32 -right-32 w-[500px] h-[500px] bg-purple-600/15 rounded-full blur-3xl"/>
+        <motion.div animate={{ x: [0,20,-30,0], y: [0,-20,15,0], scale: [1,1.15,0.9,1] }}
+          transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut', delay: 5 }}
+          className="absolute top-1/3 right-1/4 w-72 h-72 bg-violet-500/10 rounded-full blur-3xl"/>
+        <motion.div animate={{ x: [0,-15,30,0], y: [0,30,-10,0], scale: [1,0.95,1.1,1] }}
+          transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+          className="absolute bottom-1/4 left-1/3 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl"/>
+        {/* Floating particles */}
+        {[
+          {x:'15%',y:'20%',size:3,dur:4,delay:0,color:'bg-indigo-400/40'},
+          {x:'75%',y:'15%',size:2,dur:6,delay:1,color:'bg-purple-400/40'},
+          {x:'85%',y:'60%',size:4,dur:5,delay:2,color:'bg-violet-400/30'},
+          {x:'10%',y:'70%',size:2,dur:7,delay:0.5,color:'bg-blue-400/40'},
+          {x:'50%',y:'80%',size:3,dur:4.5,delay:3,color:'bg-indigo-400/30'},
+          {x:'30%',y:'40%',size:2,dur:8,delay:1.5,color:'bg-purple-400/30'},
+        ].map((p,i) => (
+          <motion.div key={i}
+            animate={{ y: [0,-12,0], opacity: [0.4,1,0.4] }}
+            transition={{ duration: p.dur, repeat: Infinity, ease: 'easeInOut', delay: p.delay }}
+            className={`absolute rounded-full ${p.color}`}
+            style={{ left: p.x, top: p.y, width: p.size*4, height: p.size*4 }}/>
+        ))}
       </div>
 
       {/* Left panel — branding */}
@@ -155,35 +183,56 @@ function AuthScreen({ onAuth }: { onAuth: (u: UserProfile, t: string) => void })
             </p>
           </motion.div>
 
-          {/* Feature list */}
-          <div className="grid grid-cols-1 gap-3">
+          {/* Feature cards */}
+          <div className="grid grid-cols-2 gap-3">
             {AUTH_FEATURES.map((f, i) => (
-              <motion.div key={f.title} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.25 + i * 0.08 }}
-                className="flex items-start gap-4 bg-white/[0.03] border border-white/[0.05] rounded-2xl p-4 hover:bg-white/[0.05] transition-colors">
-                <span className="text-2xl shrink-0 mt-0.5">{f.icon}</span>
+              <motion.div key={f.title} initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ delay: 0.25 + i * 0.08, type: 'spring', stiffness: 200 }}
+                whileHover={{ y: -3, scale: 1.02 }}
+                className={`flex flex-col gap-3 border ${f.border} rounded-2xl p-4 cursor-default
+                  bg-white/[0.03] hover:bg-white/[0.06] transition-all duration-200 shadow-lg ${f.glow} hover:shadow-lg`}>
+                <div className={`w-10 h-10 rounded-xl ${f.iconBg} flex items-center justify-center text-xl`}>
+                  {f.icon}
+                </div>
                 <div>
-                  <p className="text-sm font-semibold text-white">{f.title}</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">{f.desc}</p>
+                  <p className={`text-sm font-bold bg-gradient-to-r ${f.grad} bg-clip-text text-transparent`}>{f.title}</p>
+                  <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">{f.desc}</p>
                 </div>
               </motion.div>
             ))}
           </div>
         </div>
 
+        {/* Stats row */}
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}
+          className="flex items-center gap-6 mt-8">
+          {[
+            { val: '100%', label: 'Open Source', color: 'text-indigo-400' },
+            { val: 'E2E', label: 'Szyfrowanie', color: 'text-violet-400' },
+            { val: '∞', label: 'Wiadomości', color: 'text-emerald-400' },
+          ].map(s => (
+            <div key={s.label}>
+              <p className={`text-lg font-black ${s.color}`}>{s.val}</p>
+              <p className="text-xs text-zinc-600">{s.label}</p>
+            </div>
+          ))}
+        </motion.div>
+
         {/* Footer */}
-        <p className="text-xs text-zinc-700">© 2025 Cordyn. Wszelkie prawa zastrzeżone.</p>
+        <p className="text-xs text-zinc-700 mt-4">© 2025 Cordyn. Wszelkie prawa zastrzeżone.</p>
       </motion.div>
 
       {/* Right panel — form */}
       <div className="flex-1 flex items-center justify-center p-6 lg:p-12">
+        {/* Glow behind form card */}
+        <div className="relative">
+          <div className="absolute inset-0 bg-indigo-500/10 blur-3xl rounded-full scale-150 pointer-events-none"/>
         <motion.div initial={{ opacity: 0, y: 24, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-          className={`w-full max-w-sm ${gm} p-8`}>
+          className={`relative w-full max-w-sm ${gm} p-8 shadow-2xl shadow-indigo-900/30`}>
 
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-2 mb-6">
-            <img src="/cordyn.png" alt="Cordyn" className="w-8 h-8 object-contain"/>
             <span className="text-lg font-bold text-white">Cordyn</span>
           </div>
 
@@ -288,6 +337,7 @@ function AuthScreen({ onAuth }: { onAuth: (u: UserProfile, t: string) => void })
             </button>
           </p>
         </motion.div>
+        </div>
       </div>
     </div>
   );
@@ -380,6 +430,7 @@ export default function App() {
   const activeCallRef       = useRef(activeCall);
   const activeDmUserIdRef   = useRef(activeDmUserId);
   const activeViewRef       = useRef(activeView);
+  const activeServerRef     = useRef(activeServer);
   const callDurationRef     = useRef(0);
   const voiceHandlerRef     = useRef<Record<string, (...a: any[]) => void>>({});
   // DM unread counts (keyed by other_user_id)
@@ -469,13 +520,14 @@ export default function App() {
     // Voice channel events (route through voiceHandlerRef for fresh closures)
     sock.on('voice_user_joined', (d: any) => {
       voiceHandlerRef.current.onUserJoined?.(d);
-      const act = { id: Date.now().toString()+Math.random().toString(36).slice(2), icon: '🎙️', text: `${d.user.username} dołączył do kanału głosowego`, time: new Date().toISOString() };
-      setServerActivity(p => [act, ...p].slice(0, 20));
     });
     sock.on('voice_user_left', (d: any) => {
       voiceHandlerRef.current.onUserLeft?.(d);
-      const act = { id: Date.now().toString()+Math.random().toString(36).slice(2), icon: '🔇', text: `Użytkownik opuścił kanał głosowy`, time: new Date().toISOString() };
-      setServerActivity(p => [act, ...p].slice(0, 20));
+    });
+    sock.on('server_activity' as any, (act: any) => {
+      if (activeServerRef.current === act.server_id) {
+        setServerActivity(p => [...p, act].slice(-20));
+      }
     });
     // Typing indicators
     sock.on('user_typing', ({user_id, username, channel_id}: any) => {
@@ -546,6 +598,7 @@ export default function App() {
     setServerFull(null);
     setChannelMsgs([]);
     setServerActivity([]);
+    serversApi.activity(activeServer).then(setServerActivity).catch(console.error);
     setTypingUsers({});
     // Izolacja per-serwer: czyść cały stan poprzedniego serwera
     setSrvBannerFile(null);
@@ -619,6 +672,7 @@ export default function App() {
   useEffect(() => { activeCallRef.current     = activeCall;     }, [activeCall]);
   useEffect(() => { activeDmUserIdRef.current = activeDmUserId; }, [activeDmUserId]);
   useEffect(() => { activeViewRef.current     = activeView;     }, [activeView]);
+  useEffect(() => { activeServerRef.current   = activeServer;   }, [activeServer]);
   useEffect(() => { callDurationRef.current   = callDuration;   }, [callDuration]);
   // Sync myStatusRef when currentUser.status changes (e.g. on login)
   useEffect(() => { if (currentUser?.status) myStatusRef.current = currentUser.status; }, [currentUser?.status]);
@@ -1788,6 +1842,44 @@ export default function App() {
                   <h2 className="text-lg font-bold text-white">{serverFull.name}</h2>
                   <p className="text-sm text-zinc-500">Wybierz kanał tekstowy z listy po lewej stronie.</p></>
               }
+            </div>
+          ) : activeView==='dms' && !activeDmUserId ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-8">
+              <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4}}
+                className="w-full max-w-sm flex flex-col items-center text-center">
+                <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-600/30 to-purple-600/20 border border-indigo-500/20 flex items-center justify-center mb-5 shadow-[0_0_40px_-8px_rgba(99,102,241,0.4)]">
+                  <MessageCircle size={34} className="text-indigo-400"/>
+                </div>
+                <h2 className="text-xl font-bold text-white mb-2">Wiadomości prywatne</h2>
+                <p className="text-sm text-zinc-500 mb-8 leading-relaxed max-w-xs">Wybierz znajomego, do którego chcesz napisać, lub zaproś nowych znajomych do Cordyna.</p>
+                {friends.length>0 ? (
+                  <div className="w-full">
+                    <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 text-left">Znajomi</h3>
+                    <div className="flex flex-col gap-1">
+                      {[...friends].sort((a,b)=>{const o=(s:string)=>['online','idle','dnd'].includes(s)?0:1;return o(a.status)-o(b.status);}).map(f=>(
+                        <button key={f.id} onClick={()=>openDm(f.id)}
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.06] transition-all group text-left w-full">
+                          <div className="relative shrink-0">
+                            <img src={ava(f)} className="w-9 h-9 rounded-xl object-cover" alt=""/>
+                            <div className={`absolute -bottom-px -right-px w-2.5 h-2.5 ${sc(f.status)} border-2 border-[#0a0a0a] rounded-full`}/>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-zinc-300 group-hover:text-white transition-colors truncate">{f.username}</p>
+                            {f.custom_status&&<p className="text-xs text-zinc-600 truncate">{f.custom_status}</p>}
+                          </div>
+                          <MessageCircle size={14} className="text-zinc-700 group-hover:text-indigo-400 transition-colors shrink-0"/>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={()=>setActiveView('friends')}
+                    className="bg-indigo-500 hover:bg-indigo-400 text-white px-6 py-2.5 rounded-xl font-semibold text-sm transition-colors flex items-center gap-2">
+                    <UserPlus size={15}/>
+                    Zaproś znajomych
+                  </button>
+                )}
+              </motion.div>
             </div>
           ) : activeView==='friends' ? (
             <div className="flex-1 flex flex-col overflow-hidden">

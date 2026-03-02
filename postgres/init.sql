@@ -195,3 +195,14 @@ ALTER TABLE messages    ADD COLUMN IF NOT EXISTS reply_to_id    UUID REFERENCES 
 ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS attachment_url TEXT;
 ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS reply_to_id    UUID REFERENCES dm_messages(id) ON DELETE SET NULL;
 ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS is_system      BOOLEAN DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS server_activity (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    server_id  UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    type       VARCHAR(50) NOT NULL,
+    username   VARCHAR(64),
+    icon       VARCHAR(10) NOT NULL DEFAULT '📋',
+    text       TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_server_activity ON server_activity(server_id, created_at DESC);

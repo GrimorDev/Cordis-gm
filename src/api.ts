@@ -165,6 +165,7 @@ export const serversApi = {
   createInvite: (serverId: string, expiresIn: string) =>
     req<{ code: string; expires_at: string | null }>('POST', '/servers/invite/create', { server_id: serverId, expires_in: expiresIn }),
   join: (code: string) => req<ServerData>('POST', `/servers/join/${code}`),
+  activity: (id: string) => req<{id:string;type:string;icon:string;text:string;time:string}[]>('GET', `/servers/${id}/activity`),
 };
 
 // ── Channels ───────────────────────────────────────────────────────────────

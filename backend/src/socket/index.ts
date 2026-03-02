@@ -100,14 +100,19 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
 
       const [{ rows: [u] }, { rows: [ch] }] = await Promise.all([
         query(`SELECT id, username, avatar_url, status FROM users WHERE id = $1`, [user.id]),
-        query(`SELECT server_id FROM channels WHERE id = $1`, [channelId]),
+        query(`SELECT server_id, name FROM channels WHERE id = $1`, [channelId]),
       ]);
-      // Broadcast to all server members (includes voice participants) so everyone sees real-time voice state
       if (ch?.server_id) {
         io.to(`server:${ch.server_id}`).emit('voice_user_joined', {
           channel_id: channelId,
           user: { ...u, custom_status: null },
         });
+        // Persist + broadcast activity
+        const { rows: [act] } = await query(
+          `INSERT INTO server_activity (server_id, type, username, icon, text) VALUES ($1,'voice_join',$2,'🎤',$3) RETURNING id, type, icon, text, created_at as time`,
+          [ch.server_id, user.username, `${user.username} dołączył/a do kanału głosowego`]
+        );
+        if (act) io.to(`server:${ch.server_id}`).emit('server_activity', { ...act, server_id: ch.server_id });
       }
     });
 
@@ -122,6 +127,11 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
           channel_id: channelId,
           user_id: user.id,
         });
+        const { rows: [act] } = await query(
+          `INSERT INTO server_activity (server_id, type, username, icon, text) VALUES ($1,'voice_leave',$2,'🚶',$3) RETURNING id, type, icon, text, created_at as time`,
+          [ch.server_id, user.username, `${user.username} opuścił/a kanał głosowy`]
+        );
+        if (act) io.to(`server:${ch.server_id}`).emit('server_activity', { ...act, server_id: ch.server_id });
       }
     });
 

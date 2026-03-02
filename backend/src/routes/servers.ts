@@ -148,13 +148,32 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// GET /api/servers/:id/activity
+router.get('/:id/activity', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!await isMember(req.params.id, req.user!.id)) return res.status(403).json({ error: 'Forbidden' });
+    const { rows } = await query(
+      `SELECT id, type, icon, text, created_at as time FROM server_activity WHERE server_id=$1 ORDER BY created_at DESC LIMIT 20`,
+      [req.params.id]
+    );
+    return res.json(rows.reverse());
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
 // POST /api/servers/:id/leave
 router.post('/:id/leave', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { rows: [server] } = await query(`SELECT owner_id FROM servers WHERE id = $1`, [req.params.id]);
+    const { rows: [server] } = await query(`SELECT owner_id, name FROM servers WHERE id = $1`, [req.params.id]);
     if (!server) return res.status(404).json({ error: 'Not found' });
     if (server.owner_id === req.user!.id) return res.status(400).json({ error: 'Owner cannot leave – delete the server instead' });
+    const { rows: [u] } = await query('SELECT username FROM users WHERE id=$1', [req.user!.id]);
     await query('DELETE FROM server_members WHERE server_id = $1 AND user_id = $2', [req.params.id, req.user!.id]);
+    const { rows: [act] } = await query(
+      `INSERT INTO server_activity (server_id, type, username, icon, text) VALUES ($1,'member_leave',$2,'🚪',$3) RETURNING id, type, icon, text, created_at as time`,
+      [req.params.id, u?.username, `${u?.username} opuścił/a serwer`]
+    );
+    const io = req.app.get('io');
+    if (io && act) io.to(`server:${req.params.id}`).emit('server_activity', { ...act, server_id: req.params.id });
     return res.json({ message: 'Left server' });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -363,7 +382,16 @@ router.post('/join/:code', authMiddleware, async (req: AuthRequest, res: Respons
       `INSERT INTO server_members (server_id, user_id, role_name) VALUES ($1, $2, 'Member')`,
       [invite.server_id, req.user!.id]
     );
-    const { rows: [server] } = await query(`SELECT * FROM servers WHERE id = $1`, [invite.server_id]);
+    const [{ rows: [server] }, { rows: [u] }] = await Promise.all([
+      query(`SELECT * FROM servers WHERE id = $1`, [invite.server_id]),
+      query(`SELECT username FROM users WHERE id=$1`, [req.user!.id]),
+    ]);
+    const { rows: [act] } = await query(
+      `INSERT INTO server_activity (server_id, type, username, icon, text) VALUES ($1,'member_join',$2,'👋',$3) RETURNING id, type, icon, text, created_at as time`,
+      [invite.server_id, u?.username, `${u?.username} dołączył/a do serwera`]
+    );
+    const io = req.app.get('io');
+    if (io && act) io.to(`server:${invite.server_id}`).emit('server_activity', { ...act, server_id: invite.server_id });
     return res.json(server);
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });

@@ -119,6 +119,7 @@ export interface ServerToClientEvents {
   screen_share_start: (data: { from: string }) => void;
   screen_share_stop: (data: { from: string }) => void;
   voice_user_state: (data: { user_id: string; muted: boolean; deafened: boolean }) => void;
+  server_activity: (data: { id: string; server_id: string; type: string; icon: string; text: string; time: string }) => void;
   error: (data: { message: string }) => void;
 }
 
