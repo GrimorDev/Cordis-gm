@@ -109,6 +109,15 @@ function AuthScreen({ onAuth }: { onAuth: (u: UserProfile, t: string, isNew: boo
   const [showPass, setShowPass] = useState(false);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
 
+  // Auto-format code as user types: "AB1XYZ789" → "AB-1XY-Z78" (xx-xxx-xxx)
+  const handleCodeInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
+    let formatted = raw;
+    if (raw.length > 2) formatted = raw.slice(0, 2) + '-' + raw.slice(2);
+    if (raw.length > 5) formatted = raw.slice(0, 2) + '-' + raw.slice(2, 5) + '-' + raw.slice(5);
+    setVerifyCode(formatted);
+  };
+
   const switchTab = (t: 'login' | 'register') => {
     setTab(t); setError(''); setInfo(''); setRegStep('form'); setVerifyCode('');
   };
@@ -401,10 +410,10 @@ function AuthScreen({ onAuth }: { onAuth: (u: UserProfile, t: string, isNew: boo
                   <input
                     required
                     value={verifyCode}
-                    onChange={e => setVerifyCode(e.target.value)}
+                    onChange={handleCodeInput}
                     placeholder="xx-xxx-xxx"
-                    maxLength={9}
-                    className={`${gi} rounded-xl pl-9 pr-4 py-3 text-sm w-full font-mono tracking-widest text-center uppercase`}
+                    maxLength={10}
+                    className={`${gi} rounded-xl pl-9 pr-4 py-3 text-sm w-full font-mono tracking-widest text-center`}
                   />
                 </div>
                 <p className="text-xs text-zinc-600 text-center -mt-1">Sprawdź skrzynkę mailową · Ważny przez 15 minut</p>
