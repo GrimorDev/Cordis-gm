@@ -68,6 +68,7 @@ export interface MessageFull {
   sender_id: string; sender_username: string;
   sender_avatar?: string | null; sender_status?: string;
   sender_role?: string | null;
+  sender_role_color?: string | null;
 }
 export interface DmConversation {
   id: string; created_at: string;

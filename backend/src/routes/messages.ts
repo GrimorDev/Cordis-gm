@@ -12,6 +12,10 @@ const MSG_JOIN = (serverIdParam: string, channelIdParam: string) => `
          u.id as sender_id, u.username as sender_username,
          u.avatar_url as sender_avatar, u.status as sender_status,
          sm.role_name as sender_role,
+         (SELECT sr.color FROM member_roles mr
+          JOIN server_roles sr ON sr.id = mr.role_id
+          WHERE mr.server_id = ${serverIdParam} AND mr.user_id = m.sender_id
+          ORDER BY sr.position DESC LIMIT 1) as sender_role_color,
          rm.content as reply_content,
          ru.username as reply_username, ru.id as reply_sender_id
   FROM messages m

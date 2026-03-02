@@ -86,6 +86,58 @@ type CallState = {
 type VoiceUser = { id: string; username: string; avatar_url: string|null; status: string };
 
 // ─── AuthScreen ───────────────────────────────────────────────────────────────
+// ─── Emoji Picker ─────────────────────────────────────────────────────────────
+const EMOJI_CATS = [
+  { icon: '😊', label: 'Emotki', emojis: ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😙','🥲','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔','😪','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','🤯','🤠','🥳','🥸','😎','🤓','😕','😟','🙁','☹️','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬'] },
+  { icon: '👋', label: 'Gesty', emojis: ['👋','🤚','🖐️','✋','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','🫶','🤲','🤝','🙏','✍️','💅','🤳','💪','🦾','🦿','🦵','🦶','👂','🦻','👃'] },
+  { icon: '❤️', label: 'Serca', emojis: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','❤️‍🔥','❤️‍🩹','💯','🔥','⭐','🌟','✨','💥','🎉','🎊','🏆','🥇','🎯'] },
+  { icon: '🐶', label: 'Zwierzęta', emojis: ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🦋','🐌','🐞','🐜','🐢','🐍','🦎','🐙','🦑','🦐','🦀','🐡','🐠','🐟','🐬','🐳','🦈','🐊','🐘','🦒','🦓','🦛','🐪','🦘','🐕','🐈','🐓','🦚','🦜'] },
+  { icon: '🍕', label: 'Jedzenie', emojis: ['🍎','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍑','🍒','🥝','🍅','🥑','🥦','🌽','🥕','🧄','🍆','🥔','🍞','🧀','🥚','🍳','🥞','🍔','🍟','🍕','🌮','🌯','🥙','🍣','🍜','🍛','🍲','🍦','🍧','🍨','🍰','🎂','🍩','🍪','🍫','🍬','🍭','☕','🧋','🍵','🥤','🍺','🍷','🥂','🍸','🍾'] },
+  { icon: '⚽', label: 'Aktywność', emojis: ['⚽','🏀','🏈','⚾','🎾','🏐','🎱','🏓','🥊','🎯','🎮','🕹️','🎲','🎰','🎭','🎬','🎤','🎧','🎸','🎹','🎷','🎺','🥁','🎨','🖼️','🎠','🎡','🎢','🎪','🎟️'] },
+  { icon: '✈️', label: 'Podróże', emojis: ['✈️','🚀','🛸','🚁','🚂','🚗','🚕','🚙','🚌','🏎️','🚲','🛴','🛵','⛵','🛥️','🚢','🌍','🌎','🌏','🏔️','🌋','🏖️','🏝️','🏙️','🌃','🌆','🌄','🌅','🌉','⛺','🏠','🏡','🏢','🏰','🗼','🗽','⛪','🕌','🕍'] },
+  { icon: '💡', label: 'Przedmioty', emojis: ['💡','🔦','💰','💎','💍','🔑','🗝️','🔒','🔓','⚙️','🔧','🔩','🧲','🪛','⛏️','🗡️','🛡️','💊','🩺','🧬','🔭','🔬','📱','💻','🖥️','⌨️','🖱️','📷','📸','📺','📻','📚','📖','✏️','📝','📌','📎','📦','💌','📬','🗒️','📅'] },
+  { icon: '#️⃣', label: 'Symbole', emojis: ['✅','❌','⚠️','❓','❗','‼️','💤','🔴','🟠','🟡','🟢','🔵','🟣','⚫','⚪','🔶','🔷','🔸','🔹','🔺','🔻','♻️','🚫','⛔','🔞','💯','🆕','🆗','🆙','🆒','🆓','🆖','📶','🔊','🔇','🔔','🔕','🔈','📣','📢','🔐','🗑️','⌛','⏳','⏰','📍','🏷️'],},
+] as const;
+
+function EmojiPicker({ onSelect, onClose }: { onSelect: (e: string) => void; onClose: () => void }) {
+  const [cat, setCat] = React.useState(0);
+  const ref = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [onClose]);
+  return (
+    <div ref={ref}
+      className="absolute bottom-full mb-2 right-0 w-80 bg-zinc-900 border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/50 overflow-hidden z-50">
+      {/* Category tabs */}
+      <div className="flex overflow-x-auto border-b border-white/[0.07] p-1.5 gap-0.5"
+        style={{ scrollbarWidth: 'none' }}>
+        {EMOJI_CATS.map((c, i) => (
+          <button key={i} onClick={() => setCat(i)} title={c.label}
+            className={`text-base px-2 py-1.5 rounded-xl shrink-0 transition-colors ${cat === i ? 'bg-indigo-500/20 text-white' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]'}`}>
+            {c.icon}
+          </button>
+        ))}
+      </div>
+      {/* Category label */}
+      <div className="px-3 pt-2 pb-0.5">
+        <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{EMOJI_CATS[cat].label}</p>
+      </div>
+      {/* Emoji grid */}
+      <div className="p-2 grid grid-cols-9 gap-0.5 max-h-52 overflow-y-auto"
+        style={{ scrollbarWidth: 'thin', scrollbarColor: '#3f3f46 transparent' }}>
+        {(EMOJI_CATS[cat].emojis as readonly string[]).map(emoji => (
+          <button key={emoji} onClick={() => { onSelect(emoji); }}
+            className="text-lg w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/[0.1] transition-colors hover:scale-110 active:scale-95">
+            {emoji}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const AUTH_FEATURES = [
   { icon: '💬', title: 'Wiadomości w czasie rzeczywistym', desc: 'Tekst, głos i wideo — wszystko w jednym miejscu',
     grad: 'from-indigo-500 to-blue-500', iconBg: 'bg-indigo-500/15', border: 'border-indigo-500/25', glow: 'hover:shadow-indigo-500/10' },
@@ -580,6 +632,8 @@ export default function App() {
   const [roles, setRoles]                     = useState<ServerRole[]>([]);
 
   const [msgInput, setMsgInput]               = useState('');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [searchQuery, setSearchQuery]         = useState('');
   const [addFriendVal, setAddFriendVal]       = useState('');
   const [friendSearchResult, setFriendSearchResult] = useState<UserProfile | null>(null);
   const [friendSearchLoading, setFriendSearchLoading] = useState(false);
@@ -602,6 +656,7 @@ export default function App() {
   const [createSrvIconFile, setCreateSrvIconFile]     = useState<File|null>(null);
   const [createSrvIconPreview, setCreateSrvIconPreview] = useState<string|null>(null);
   const createSrvIconRef = useRef<HTMLInputElement>(null);
+  const msgInputRef      = useRef<HTMLInputElement>(null);
   const [srvContextMenu, setSrvContextMenu]   = useState<{ x: number; y: number; srv: ServerData } | null>(null);
   const [deleteSrvConfirm, setDeleteSrvConfirm] = useState<{ id: string; name: string } | null>(null);
 
@@ -837,7 +892,7 @@ export default function App() {
     prevChRef.current = activeChannel;
     joinChannel(activeChannel);
     setTypingUsers({});
-    setChannelMsgs([]); setMsgsLoading(true);
+    setChannelMsgs([]); setMsgsLoading(true); setSearchQuery('');
     messagesApi.list(activeChannel).then(setChannelMsgs).catch(console.error).finally(()=>setMsgsLoading(false));
     setReplyTo(null);
   }, [activeChannel, activeView]);
@@ -845,7 +900,7 @@ export default function App() {
   // ── DM change ───────────────────────────────────────────────────
   useEffect(() => {
     if (!activeDmUserId) return;
-    setDmMsgs([]); setMsgsLoading(true);
+    setDmMsgs([]); setMsgsLoading(true); setSearchQuery('');
     dmsApi.messages(activeDmUserId).then(setDmMsgs).catch(console.error).finally(()=>setMsgsLoading(false));
     users.get(activeDmUserId).then(setDmPartnerProfile).catch(console.error);
     setReplyTo(null);
@@ -1124,6 +1179,16 @@ export default function App() {
     try { await auth.logout(); } catch {}
     clearToken(); disconnectSocket(); setIsAuthenticated(false); setCurrentUser(null);
     setServerList([]); setActiveServer(''); setActiveChannel('');
+  };
+
+  // ── Emoji insert at cursor ──────────────────────────────────────
+  const insertEmoji = (emoji: string) => {
+    const input = msgInputRef.current;
+    const pos = input?.selectionStart ?? msgInput.length;
+    const newVal = msgInput.slice(0, pos) + emoji + msgInput.slice(pos);
+    setMsgInput(newVal);
+    setShowEmojiPicker(false);
+    setTimeout(() => { input?.focus(); input?.setSelectionRange(pos + emoji.length, pos + emoji.length); }, 0);
   };
 
   // ── Send message ────────────────────────────────────────────────
@@ -1515,7 +1580,23 @@ export default function App() {
   const isAdmin  = !!(serverFull?.my_role && ['Owner','Admin'].includes(serverFull.my_role));
   const incoming = friendReqs.filter(r => r.direction === 'incoming');
   const outgoing = friendReqs.filter(r => r.direction === 'outgoing');
-  const messages = activeView === 'servers' ? channelMsgs : dmMsgs;
+  const allMessages = activeView === 'servers' ? channelMsgs : dmMsgs;
+  const messages = searchQuery.trim()
+    ? allMessages.filter(m => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
+    : allMessages;
+
+  // Highlight matching text in search results
+  const hlText = (text: string) => {
+    const q = searchQuery.trim();
+    if (!q) return <>{text}</>;
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+    return <>{parts.map((p, i) =>
+      p.toLowerCase() === q.toLowerCase()
+        ? <mark key={i} className="bg-yellow-400/25 text-yellow-200 rounded px-0.5">{p}</mark>
+        : p
+    )}</>;
+  };
 
   return (
     <div className="flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-[#0a0a0a]">
@@ -1570,7 +1651,8 @@ export default function App() {
         <div className="flex items-center gap-1.5 pr-3">
           <div className="relative group hidden sm:block">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-zinc-400 transition-colors"/>
-            <input placeholder="Szukaj..." className="bg-white/[0.05] border border-white/[0.07] text-white placeholder-zinc-600 outline-none focus:border-white/20 rounded-lg pl-8 pr-10 py-1.5 text-xs w-44 transition-all"/>
+            <input placeholder="Szukaj w wiadomościach..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              className="bg-white/[0.05] border border-white/[0.07] text-white placeholder-zinc-600 outline-none focus:border-indigo-500/40 rounded-lg pl-8 pr-10 py-1.5 text-xs w-44 focus:w-56 transition-all"/>
             <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-zinc-600 font-mono hidden lg:flex items-center gap-0.5"><span className="border border-zinc-700 rounded px-1 py-0.5">⌘</span><span className="border border-zinc-700 rounded px-1 py-0.5">K</span></span>
           </div>
           <button className="relative w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all">
@@ -2268,7 +2350,14 @@ export default function App() {
                   initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: 'easeOut' }}
                   className="mt-auto flex flex-col gap-1">
-                  {!msgsLoading&&<div className="text-center py-8 mb-3">
+                  {searchQuery.trim()&&(
+                    <div className="flex items-center gap-2 px-3 py-2 mb-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-300">
+                      <Search size={12} className="shrink-0"/>
+                      <span>Wyniki wyszukiwania: <strong className="text-white">„{searchQuery}"</strong> — {messages.length} {messages.length===1?'wiadomość':messages.length<5?'wiadomości':'wiadomości'}</span>
+                      <button onClick={()=>setSearchQuery('')} className="ml-auto text-indigo-400 hover:text-white transition-colors"><X size={12}/></button>
+                    </div>
+                  )}
+                  {!msgsLoading&&!searchQuery.trim()&&<div className="text-center py-8 mb-3">
                     {activeView==='dms'&&activeDm ? (
                       <>
                         <img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className="w-20 h-20 rounded-2xl mx-auto mb-4 border-4 border-zinc-950 object-cover shadow-2xl" alt=""/>
@@ -2345,19 +2434,25 @@ export default function App() {
                               </div>
                             )}
                             <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                              <span className="font-bold text-white text-sm cursor-pointer hover:underline"
+                              <span className="font-bold text-sm cursor-pointer hover:underline transition-opacity hover:opacity-80"
+                                style={{ color: (msg as MessageFull).sender_role_color || '#ffffff' }}
                                 onClick={()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar})}>
                                 {msg.sender_username}
                               </span>
                               {(msg as MessageFull).sender_role&&(
-                                <span className="text-[10px] font-semibold text-zinc-400 bg-zinc-800 px-2 py-0.5 rounded-full uppercase tracking-wide">
+                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide"
+                                  style={{
+                                    color: (msg as MessageFull).sender_role_color || '#a1a1aa',
+                                    background: `${(msg as MessageFull).sender_role_color || '#a1a1aa'}18`,
+                                    border: `1px solid ${(msg as MessageFull).sender_role_color || '#a1a1aa'}30`,
+                                  }}>
                                   {(msg as MessageFull).sender_role}
                                 </span>
                               )}
                               <span className="text-[11px] text-zinc-600">{ft(msg.created_at)}</span>
                               {(msg as MessageFull).edited&&<span className="text-[10px] text-zinc-700 italic">(edytowano)</span>}
                             </div>
-                            <p className="text-sm text-zinc-200 leading-relaxed break-words">{msg.content}</p>
+                            <p className="text-sm text-zinc-200 leading-relaxed break-words">{hlText(msg.content)}</p>
                             {msg.attachment_url&&(
                               <div className="mt-2 max-w-sm">
                                 {/\.(jpg|jpeg|png|gif|webp)$/i.test(msg.attachment_url) ? (
@@ -2457,7 +2552,7 @@ export default function App() {
                           className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.07] transition-all shrink-0">
                           <Plus size={16}/>
                         </button>
-                        <input type="text" value={msgInput}
+                        <input ref={msgInputRef} type="text" value={msgInput}
                           onChange={e=>{
                             const v=e.target.value; setMsgInput(v);
                             if(activeChannel&&activeView==='servers'){
@@ -2474,7 +2569,13 @@ export default function App() {
                           onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey) handleSend(e as any); }}
                           placeholder={activeView==='dms'&&activeDm?`Wiadomość do ${activeDm.other_username}...`:`Wiadomość w #${activeCh?.name||''}...`}
                           className="flex-1 bg-transparent text-[13px] text-zinc-200 placeholder-zinc-700 outline-none min-w-0"/>
-                        <button type="button" className="text-zinc-600 hover:text-zinc-400 transition-colors shrink-0"><Smile size={16}/></button>
+                        <div className="relative shrink-0">
+                          <button type="button" onClick={() => setShowEmojiPicker(v => !v)}
+                            className={`transition-colors ${showEmojiPicker ? 'text-indigo-400' : 'text-zinc-600 hover:text-zinc-400'}`}>
+                            <Smile size={16}/>
+                          </button>
+                          {showEmojiPicker && <EmojiPicker onSelect={insertEmoji} onClose={() => setShowEmojiPicker(false)}/>}
+                        </div>
                         <button type="submit" disabled={(!msgInput.trim()&&!attachFile)||sending}
                           className="w-8 h-8 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-25 disabled:cursor-not-allowed flex items-center justify-center text-white transition-all shrink-0 shadow-lg shadow-sky-500/20">
                           {sending?<Loader2 size={14} className="animate-spin"/>:<Send size={14}/>}
@@ -2585,7 +2686,10 @@ export default function App() {
                             <div className={`absolute -bottom-px -right-px w-2.5 h-2.5 ${sc(m.status)} border-2 border-[#111111] rounded-full`}/>
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-[13px] font-semibold text-zinc-300 truncate group-hover:text-white transition-colors leading-tight">{m.username}</p>
+                            <p className="text-[13px] font-semibold truncate group-hover:opacity-90 transition-colors leading-tight"
+                              style={{ color: m.roles?.[0]?.color || '#d4d4d8' }}>
+                              {m.username}
+                            </p>
                             {m.role_name&&<p className="text-[10px] text-zinc-600 truncate leading-tight">{m.role_name}</p>}
                           </div>
                         </div>
@@ -2606,7 +2710,10 @@ export default function App() {
                             <div className="absolute -bottom-px -right-px w-2.5 h-2.5 bg-zinc-600 border-2 border-[#111111] rounded-full"/>
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-[13px] font-medium text-zinc-600 truncate group-hover:text-zinc-400 transition-colors leading-tight">{m.username}</p>
+                            <p className="text-[13px] font-medium truncate group-hover:opacity-70 transition-colors leading-tight"
+                              style={{ color: m.roles?.[0]?.color ? `${m.roles[0].color}80` : '#52525b' }}>
+                              {m.username}
+                            </p>
                             {m.role_name&&<p className="text-[10px] text-zinc-700 truncate leading-tight">{m.role_name}</p>}
                           </div>
                         </div>
