@@ -775,16 +775,24 @@ export default function App() {
     });
     sock.on('new_dm', (msg: DmMessageFull) => {
       const myId = currentUserRef.current?.id;
-      const isActiveDm = activeViewRef.current === 'dms' &&
-        (activeDmUserIdRef.current === msg.sender_id || (msg.sender_id === myId && !!activeDmUserIdRef.current));
-      // Add to messages only for the active conversation (deduplicate by id)
-      if (isActiveDm) {
+      // "This DM belongs to the currently open conversation" — regardless of which view is active.
+      // activeDmUserIdRef holds the OTHER user's id; for received msgs the sender is the other user,
+      // for sent msgs (sender === me) the recipient is activeDmUserId.
+      const isOpenConversation =
+        activeDmUserIdRef.current === msg.sender_id ||
+        (msg.sender_id === myId && !!activeDmUserIdRef.current);
+      // "User is actively looking at this DM right now"
+      const isActivelyViewing = activeViewRef.current === 'dms' && isOpenConversation;
+
+      // Always add to dmMsgs if this conversation is open (even if in server view)
+      // so switching back shows messages without a reload
+      if (isOpenConversation) {
         setDmMsgs(p => p.some(m => m.id === msg.id) ? p : [...p, msg]);
       }
       // Always refresh sidebar conversation list (updates last_message + shows new convs)
       dmsApi.conversations().then(setDmConvs).catch(console.error);
-      // Toast + unread count when not looking at this DM
-      if (msg.sender_id !== myId && !isActiveDm) {
+      // Toast + unread count + sound only when NOT actively viewing this DM
+      if (msg.sender_id !== myId && !isActivelyViewing) {
         const preview = msg.content.length > 60 ? msg.content.slice(0, 60) + '…' : msg.content;
         autoToast(`💬 ${msg.sender_username}: ${preview}`, 'info');
         setUnreadDms(p => ({ ...p, [msg.sender_id]: (p[msg.sender_id] || 0) + 1 }));
@@ -811,8 +819,10 @@ export default function App() {
         setServerActivity(p => [...p, act].slice(-20));
       }
     });
-    // Typing indicators
+    // Typing indicators (server channels only)
     sock.on('user_typing', ({user_id, username, channel_id}: any) => {
+      // Ignore typing events if not in server view or wrong channel
+      if (activeViewRef.current !== 'servers') return;
       if (channel_id !== prevChRef.current) return;
       clearTimeout(typingTimersRef.current[user_id]);
       setTypingUsers(p => ({...p, [user_id]: username}));
@@ -1007,6 +1017,11 @@ export default function App() {
     serversApi.members(activeServer).then(setMembers).catch(console.error);
     serversApi.roles.list(activeServer).then(setRoles).catch(console.error);
   }, [activeServer]);
+
+  // ── Clear typing users when leaving server view ──────────────────
+  useEffect(() => {
+    if (activeView !== 'servers') setTypingUsers({});
+  }, [activeView]);
 
   // ── Channel change ──────────────────────────────────────────────
   useEffect(() => {
@@ -1754,15 +1769,23 @@ export default function App() {
           </button>
           {/* Friends / DM quick icons */}
           <div className="hidden md:flex items-center h-full pl-2 gap-0.5 pr-2 border-r border-white/[0.06]">
-            {([{v:'friends' as const,i:<Users size={15}/>,label:'Znajomi'},{v:'dms' as const,i:<MessageCircle size={15}/>,label:'Wiadomości'}]).map(({v,i,label}) => (
+            {([{v:'friends' as const,i:<Users size={15}/>,label:'Znajomi'},{v:'dms' as const,i:<MessageCircle size={15}/>,label:'Wiadomości'}]).map(({v,i,label}) => {
+              const totalUnreadDms = v==='dms' ? Object.values(unreadDms).reduce((a,b)=>a+b,0) : 0;
+              return (
               <button key={v} title={label} onClick={() => { setActiveView(v); setActiveServer(''); setActiveChannel(''); }}
                 className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-200 relative ${activeView===v?'bg-indigo-500/25 text-indigo-300 shadow-[0_0_12px_rgba(99,102,241,0.2)]':'text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06]'}`}>
                 {i}
                 {v==='friends' && incoming.length > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 bg-rose-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5 leading-none">{incoming.length}</span>
                 )}
+                {v==='dms' && totalUnreadDms > 0 && activeView!=='dms' && (
+                  <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 bg-rose-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5 leading-none shadow-[0_0_6px_rgba(239,68,68,0.6)]">
+                    {totalUnreadDms > 99 ? '99+' : totalUnreadDms}
+                  </span>
+                )}
               </button>
-            ))}
+              );
+            })}
           </div>
           {/* Server tabs */}
           <div className="hidden md:flex items-center h-full">
