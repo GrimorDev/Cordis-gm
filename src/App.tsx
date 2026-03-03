@@ -23,15 +23,21 @@ import {
   getSocket,
 } from './socket';
 import {
+  playDmNotification, startRing, stopRing,
+  startIncomingRing, stopIncomingRing,
+  playVoiceJoin, playVoiceLeave,
+  playCallAccepted, playCallEnded,
+} from './sounds';
+import {
   makePeerConnection, attachRemoteAudio, detachRemoteAudio, muteAllRemote,
   setOutputDevice, watchSpeaking, getMediaDevices,
 } from './webrtc';
 
 // ─── Glass constants ──────────────────────────────────────────────────────────
-const gp = 'bg-zinc-900/80 backdrop-blur-xl border border-white/[0.07] shadow-2xl';
-const gm = 'bg-zinc-900/95 backdrop-blur-2xl border border-white/[0.1] shadow-2xl rounded-3xl';
-const gi = 'bg-white/[0.05] border border-white/[0.08] text-white placeholder-zinc-500 outline-none focus:border-indigo-500/60 focus:bg-white/[0.08] transition-all';
-const gb = 'bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.1] text-zinc-300 hover:text-white transition-all';
+const gp = 'bg-[#16161e]/90 backdrop-blur-2xl border border-white/[0.08] shadow-2xl shadow-black/40';
+const gm = 'bg-[#16161e]/95 backdrop-blur-2xl border border-white/[0.09] shadow-2xl shadow-black/50 rounded-3xl';
+const gi = 'bg-white/[0.05] border border-white/[0.08] text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 focus:bg-white/[0.07] focus:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] transition-all rounded-xl';
+const gb = 'bg-white/[0.04] border border-white/[0.07] hover:bg-white/[0.08] text-zinc-400 hover:text-white hover:border-white/[0.12] transition-all active:scale-95';
 
 const PERMISSIONS = [
   { id: 'administrator', label: 'Administrator' },
@@ -109,7 +115,7 @@ function EmojiPicker({ onSelect, onClose }: { onSelect: (e: string) => void; onC
   }, [onClose]);
   return (
     <div ref={ref}
-      className="absolute bottom-full mb-2 right-0 w-80 bg-zinc-900 border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/50 overflow-hidden z-50">
+      className="absolute bottom-full mb-2 right-0 w-80 bg-[#1a1a26] border border-white/[0.1] rounded-3xl shadow-2xl shadow-black/60 overflow-hidden z-50">
       {/* Category tabs */}
       <div className="flex overflow-x-auto border-b border-white/[0.07] p-1.5 gap-0.5"
         style={{ scrollbarWidth: 'none' }}>
@@ -533,7 +539,7 @@ function WelcomeModal({ username, onClose }: { username: string; onClose: () => 
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
         transition={{ type: 'spring', stiffness: 260, damping: 22 }}
-        className="relative w-full max-w-lg bg-zinc-900 border border-white/[0.08] rounded-3xl shadow-2xl shadow-indigo-900/40">
+        className="relative w-full max-w-lg bg-[#16161e] border border-white/[0.1] rounded-3xl shadow-2xl shadow-indigo-900/30">
 
         {/* Top gradient banner — rounded-t-3xl + overflow-hidden only on banner */}
         <div className="relative h-36 bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 overflow-hidden rounded-t-3xl">
@@ -551,7 +557,7 @@ function WelcomeModal({ username, onClose }: { username: string; onClose: () => 
 
         {/* Party icon — outside banner so overflow-hidden doesn't clip it */}
         <div className="absolute top-[112px] left-1/2 -translate-x-1/2
-          w-16 h-16 rounded-2xl bg-zinc-900 border-4 border-zinc-900
+          w-16 h-16 rounded-2xl bg-[#16161e] border-4 border-[#16161e]
           flex items-center justify-center shadow-xl z-10">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600
             flex items-center justify-center text-2xl shadow-lg shadow-indigo-500/40">
@@ -782,6 +788,7 @@ export default function App() {
         const preview = msg.content.length > 60 ? msg.content.slice(0, 60) + '…' : msg.content;
         autoToast(`💬 ${msg.sender_username}: ${preview}`, 'info');
         setUnreadDms(p => ({ ...p, [msg.sender_id]: (p[msg.sender_id] || 0) + 1 }));
+        playDmNotification();
       }
     });
     sock.on('message_deleted', ({ id }) => setChannelMsgs(p => p.filter(m => m.id !== id)));
@@ -846,6 +853,7 @@ export default function App() {
     // DM call events
     sock.on('call_invite', ({ from, type, conversation_id }: any) => {
       setIncomingCall({ from, type, conversation_id });
+      startIncomingRing();
     });
     const autoToast = (msg: string, type: Toast['type']) => {
       const id = Math.random().toString(36).slice(2);
@@ -853,17 +861,24 @@ export default function App() {
       setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 4000);
     };
     sock.on('call_accepted', () => {
+      stopRing();
+      playCallAccepted();
       autoToast('Połączenie zaakceptowane', 'success');
       // Caller initiates WebRTC after recipient accepts
       voiceHandlerRef.current.onCallAccepted?.();
     });
     sock.on('call_rejected', () => {
+      stopRing();
+      playCallEnded();
       setActiveCall(null); setShowCallPanel(false);
       autoToast('Połączenie odrzucone', 'error');
     });
     sock.on('call_ended', () => {
       // System message is sent by the person who hangs up via dmsApi.sendSystem
       // and arrives here via new_dm socket — no local insertion needed
+      stopIncomingRing();
+      stopRing();
+      playCallEnded();
       setActiveCall(null); setShowCallPanel(false); setCallDuration(0);
       autoToast('Rozmowa zakończona', 'info');
     });
@@ -1585,6 +1600,7 @@ export default function App() {
     }
     await acquireMic(selMic || undefined);
     joinVoiceChannel(ch.id);
+    playVoiceJoin();
     setActiveCall({ type: 'voice_channel', channelId: ch.id, channelName: ch.name, serverId: activeServer, isMuted: false, isDeafened: false, isCameraOn: false, isScreenSharing: false });
     setShowCallPanel(true);
   };
@@ -1592,6 +1608,7 @@ export default function App() {
   const hangupCall = () => {
     if (activeCall?.channelId) {
       leaveVoiceChannel(activeCall.channelId);
+      playVoiceLeave();
       // Optimistic: remove self from voiceUsers immediately
       if (currentUser) setVoiceUsers(p => ({ ...p, [activeCall.channelId!]: (p[activeCall.channelId!]||[]).filter(u=>u.id!==currentUser.id) }));
     }
@@ -1601,6 +1618,9 @@ export default function App() {
       const typeName = activeCall.type === 'dm_video' ? 'wideo' : 'głosowa';
       const content = `${icon} Rozmowa ${typeName} zakończona · ${fmtDur(dur)}`;
       endCall(activeCall.userId);
+      stopRing();
+      stopIncomingRing();
+      playCallEnded();
       // Persist system message to DB (will come back via new_dm socket to both parties)
       dmsApi.sendSystem(activeCall.userId, content).catch(console.error);
     }
@@ -1611,6 +1631,7 @@ export default function App() {
   const startDmCall = async (userId: string, username: string, type: 'voice'|'video') => {
     await acquireMic(selMic || undefined);
     sendCallInvite(userId, type);
+    startRing();
     setActiveCall({ type: type === 'voice' ? 'dm_voice' : 'dm_video', userId, username, isMuted: false, isDeafened: false, isCameraOn: false, isScreenSharing: false });
     setActiveDmUserId(userId); setActiveView('dms'); setShowCallPanel(true); setProfileOpen(false);
   };
@@ -1694,7 +1715,7 @@ export default function App() {
   };
 
   // ──────────────────────────────────────────────────────────────────
-  if (authLoading) return <div className="fixed inset-0 bg-zinc-950 flex items-center justify-center"><Loader2 size={32} className="text-indigo-400 animate-spin" /></div>;
+  if (authLoading) return <div className="fixed inset-0 bg-[#0c0c11] flex items-center justify-center"><Loader2 size={32} className="text-indigo-400 animate-spin" /></div>;
   if (!isAuthenticated) return <AuthScreen onAuth={(u, t, isNew) => handleAuth(u, t, isNew)} />;
 
   const allChs   = serverFull?.categories.flatMap(c => c.channels) ?? [];
@@ -1722,20 +1743,20 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-[#0a0a0a]">
+    <div className="flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-[#0c0c11]">
 
       {/* TOP NAV — browser-tab style */}
-      <nav className="h-11 border-b border-white/[0.07] flex items-center justify-between shrink-0 z-30 relative bg-[#111111]">
+      <nav className="h-12 border-b border-white/[0.06] flex items-center justify-between shrink-0 z-30 relative bg-[#12121a]">
         {/* Left: mobile toggle + server tabs */}
         <div className="flex items-center h-full overflow-x-auto">
           <button onClick={() => setIsMobileOpen(v => !v)} className="md:hidden w-9 h-9 flex items-center justify-center text-zinc-500 hover:text-white ml-2 shrink-0">
             {isMobileOpen ? <X size={18}/> : <Menu size={18}/>}
           </button>
           {/* Friends / DM quick icons */}
-          <div className="hidden md:flex items-center h-full pl-2 gap-0.5 pr-2 border-r border-white/[0.07]">
+          <div className="hidden md:flex items-center h-full pl-2 gap-0.5 pr-2 border-r border-white/[0.06]">
             {([{v:'friends' as const,i:<Users size={15}/>,label:'Znajomi'},{v:'dms' as const,i:<MessageCircle size={15}/>,label:'Wiadomości'}]).map(({v,i,label}) => (
               <button key={v} title={label} onClick={() => { setActiveView(v); setActiveServer(''); setActiveChannel(''); }}
-                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all relative ${activeView===v?'bg-indigo-500/20 text-indigo-400':'text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06]'}`}>
+                className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-200 relative ${activeView===v?'bg-indigo-500/25 text-indigo-300 shadow-[0_0_12px_rgba(99,102,241,0.2)]':'text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06]'}`}>
                 {i}
                 {v==='friends' && incoming.length > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 bg-rose-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5 leading-none">{incoming.length}</span>
@@ -1751,9 +1772,9 @@ export default function App() {
                 <button key={srv.id}
                   onClick={() => { if(activeServer===srv.id&&activeView==='servers') return; setActiveServer(srv.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); }}
                   onContextMenu={e => { e.preventDefault(); setSrvContextMenu({ x: e.clientX, y: e.clientY, srv }); }}
-                  className={`flex items-center gap-2 h-full px-4 text-sm font-medium transition-all border-r border-white/[0.05] whitespace-nowrap relative group ${isActive?'text-white bg-[#0a0a0a]':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'}`}>
-                  {isActive&&<span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500"/>}
-                  <span className="w-5 h-5 rounded-md bg-zinc-800 flex items-center justify-center text-[11px] font-bold text-white shrink-0 overflow-hidden">
+                  className={`flex items-center gap-2 h-full px-4 text-sm font-medium transition-all duration-200 border-r border-white/[0.05] whitespace-nowrap relative group ${isActive?'text-white bg-[#0c0c11]':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'}`}>
+                  {isActive&&<motion.span layoutId="nav-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"/>}
+                  <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold text-white shrink-0 overflow-hidden transition-all duration-200 ${isActive?'bg-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.3)]':'bg-zinc-800'}`}>
                     {srv.icon_url ? <img src={srv.icon_url} className="w-full h-full object-cover" alt=""/> : srv.name.charAt(0).toUpperCase()}
                   </span>
                   <span className="max-w-[120px] truncate">{srv.name}</span>
@@ -1761,32 +1782,32 @@ export default function App() {
               );
             })}
             <button onClick={() => setCreateSrvOpen(true)}
-              className="flex items-center justify-center w-9 h-full text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.04] transition-all border-r border-white/[0.05]">
+              className="flex items-center justify-center w-9 h-full text-zinc-600 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all duration-200 border-r border-white/[0.05]">
               <Plus size={15}/>
             </button>
           </div>
         </div>
         {/* Center: branding */}
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none">
-          <span className="text-white font-bold tracking-tight text-sm">Cordyn</span>
+          <span className="text-white font-bold tracking-tight text-sm bg-clip-text">Cordis</span>
         </div>
         {/* Right: search + bell + settings + avatar */}
         <div className="flex items-center gap-1.5 pr-3">
           <div className="relative group hidden sm:block">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-zinc-400 transition-colors"/>
             <input placeholder="Szukaj w wiadomościach..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-              className="bg-white/[0.05] border border-white/[0.07] text-white placeholder-zinc-600 outline-none focus:border-indigo-500/40 rounded-lg pl-8 pr-10 py-1.5 text-xs w-44 focus:w-56 transition-all"/>
+              className="bg-white/[0.05] border border-white/[0.07] text-white placeholder-zinc-600 outline-none focus:border-indigo-500/40 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] rounded-xl pl-8 pr-10 py-1.5 text-xs w-44 focus:w-56 transition-all duration-300"/>
             <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-zinc-600 font-mono hidden lg:flex items-center gap-0.5"><span className="border border-zinc-700 rounded px-1 py-0.5">⌘</span><span className="border border-zinc-700 rounded px-1 py-0.5">K</span></span>
           </div>
-          <button className="relative w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all">
+          <button className="relative w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all">
             <Bell size={15}/>
-            {incoming.length>0&&<span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-rose-500 rounded-full border border-[#111]"/>}
+            {incoming.length>0&&<span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-rose-500 rounded-full border border-[#12121a]"/>}
           </button>
           <button onClick={() => { setAppSettTab('account'); setAppSettOpen(true); }} title="Ustawienia"
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all">
+            className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all">
             <Settings size={15}/>
           </button>
-          <button onClick={openOwnProfile} className="w-7 h-7 rounded-full border border-white/[0.1] overflow-hidden hover:border-white/30 transition-all shrink-0">
+          <button onClick={openOwnProfile} className="w-7 h-7 rounded-full border-2 border-white/[0.08] overflow-hidden hover:border-indigo-500/50 transition-all shrink-0 shadow-sm">
             <img src={currentUser ? ava(currentUser) : ''} alt="" className="w-full h-full object-cover"/>
           </button>
         </div>
@@ -1798,7 +1819,7 @@ export default function App() {
       <main className="flex-1 flex overflow-hidden relative">
 
         {/* LEFT */}
-        <aside className={`absolute md:relative z-30 md:z-0 w-56 shrink-0 flex flex-col bg-[#111111] border-r border-white/[0.07] transition-transform duration-300 h-full ${isMobileOpen?'translate-x-0':'-translate-x-[120%] md:translate-x-0'}`}>
+        <aside className={`absolute md:relative z-30 md:z-0 w-60 shrink-0 flex flex-col bg-[#12121a] border-r border-white/[0.06] transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] h-full ${isMobileOpen?'translate-x-0':'-translate-x-[120%] md:translate-x-0'}`}>
           {/* mobile server row */}
           <div className="md:hidden p-2 border-b border-white/[0.05] flex gap-1.5 overflow-x-auto">
             {([{v:'friends' as const,i:<Users size={16}/>},{v:'dms' as const,i:<MessageCircle size={16}/>}]).map(({v,i}) => (
@@ -1819,15 +1840,15 @@ export default function App() {
 
           {/* servers */}
           {activeView==='servers'&&<>
-            <div className="px-4 py-3.5 border-b border-white/[0.07] cursor-pointer hover:bg-white/[0.04] transition-colors group"
+            <div className="px-4 py-4 border-b border-white/[0.06] cursor-pointer hover:bg-white/[0.03] transition-colors group"
               onClick={() => { if(isAdmin){setSrvSettTab('overview');setSrvSettOpen(true);} }}>
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-bold text-white truncate">{serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'Serwer'}</h2>
-                {isAdmin&&<Settings2 size={13} className="text-zinc-700 group-hover:text-zinc-300 transition-colors shrink-0"/>}
+                {isAdmin&&<Settings2 size={13} className="text-zinc-700 group-hover:text-indigo-400 transition-colors shrink-0"/>}
               </div>
               {serverFull?.description
                 ? <p className="text-[11px] text-zinc-500 mt-0.5 truncate">{serverFull.description}</p>
-                : <p className="text-[11px] text-zinc-700 mt-0.5">{isAdmin?'Kliknij — ustawienia serwera':'Witaj!'}</p>}
+                : <p className="text-[11px] text-zinc-700 mt-0.5">{isAdmin?'Kliknij — ustawienia':'Witaj!'}</p>}
             </div>
             <div className="flex-1 overflow-y-auto py-2 custom-scrollbar">
               <AnimatePresence mode="wait">
@@ -1855,26 +1876,26 @@ export default function App() {
                         return (
                           <div key={ch.id} className="px-2">
                             <button onClick={() => { setActiveChannel(ch.id); setIsMobileOpen(false); }}
-                              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl mb-0.5 group/ch transition-all ${
+                              className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${
                                 isAct
-                                  ? 'bg-white/[0.1] text-white shadow-sm'
+                                  ? 'bg-indigo-500/15 text-white shadow-[0_0_12px_rgba(99,102,241,0.15)] border border-indigo-500/20'
                                   : unread > 0
-                                    ? 'text-white hover:bg-white/[0.06]'
-                                    : 'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200'}`}>
+                                    ? 'text-white hover:bg-white/[0.06] border border-transparent'
+                                    : 'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300 border border-transparent'}`}>
                               <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
-                                <Hash size={14} className={`shrink-0 ${isAct?'text-indigo-400':unread>0?'text-indigo-400':'text-zinc-600'}`}/>
-                                <span className={`text-[13px] truncate ${unread>0&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
+                                <Hash size={14} className={`shrink-0 transition-colors ${isAct?'text-indigo-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
+                                <span className={`text-[13px] truncate transition-colors ${unread>0&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
                                 {ch.is_private&&<Lock size={9} className="text-zinc-700 shrink-0"/>}
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
                                 {unread > 0 && !isAct && (
-                                  <span className="min-w-[18px] h-[18px] bg-indigo-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1 leading-none">
+                                  <span className="min-w-[18px] h-[18px] bg-indigo-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1 leading-none shadow-[0_0_8px_rgba(99,102,241,0.5)]">
                                     {unread > 99 ? '99+' : unread}
                                   </span>
                                 )}
                                 {isAdmin&&<div className="flex gap-0.5 opacity-0 group-hover/ch:opacity-100 transition-opacity">
-                                  <button onClick={e=>{e.stopPropagation();openChEdit(ch);}} className="w-5 h-5 flex items-center justify-center rounded-lg hover:bg-white/10"><Settings2 size={10}/></button>
-                                  <button onClick={e=>{e.stopPropagation();handleDeleteCh(ch.id);}} className="w-5 h-5 flex items-center justify-center rounded-lg hover:bg-rose-500/20 hover:text-rose-400"><Trash2 size={10}/></button>
+                                  <button onClick={e=>{e.stopPropagation();openChEdit(ch);}} className="w-5 h-5 flex items-center justify-center rounded-lg hover:bg-white/10 hover:text-zinc-200 transition-colors"><Settings2 size={10}/></button>
+                                  <button onClick={e=>{e.stopPropagation();handleDeleteCh(ch.id);}} className="w-5 h-5 flex items-center justify-center rounded-lg hover:bg-rose-500/20 hover:text-rose-400 transition-colors"><Trash2 size={10}/></button>
                                 </div>}
                               </div>
                             </button>
@@ -1897,8 +1918,8 @@ export default function App() {
                         return (
                           <div key={ch.id} className="px-2">
                             <button onClick={() => joinVoiceCh(ch)}
-                              className={`w-full px-3 py-2 rounded-xl mb-0.5 group/ch transition-all ${
-                                isActiveVoice?'bg-emerald-500/10 text-emerald-400':'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200'}`}>
+                              className={`w-full px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${
+                                isActiveVoice?'bg-emerald-500/12 text-emerald-400 border border-emerald-500/20 shadow-[0_0_12px_rgba(52,211,153,0.1)]':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300 border border-transparent'}`}>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2 min-w-0">
                                   <Volume2 size={13} className={`shrink-0 ${isActiveVoice?'text-emerald-400':hasUsers?'text-zinc-400':'text-zinc-600'}`}/>
@@ -1908,9 +1929,9 @@ export default function App() {
                                 {hasUsers&&(
                                   <div className="flex -space-x-1.5 shrink-0">
                                     {chVoiceUsers.slice(0,3).map(u=>(
-                                      <img key={u.id} src={ava(u)} className={`w-4 h-4 rounded-full border ${isActiveVoice?'border-emerald-900':'border-[#111]'} object-cover`} alt="" title={u.username}/>
+                                      <img key={u.id} src={ava(u)} className={`w-4 h-4 rounded-full border ${isActiveVoice?'border-emerald-900':'border-[#12121a]'} object-cover`} alt="" title={u.username}/>
                                     ))}
-                                    {chVoiceUsers.length>3&&<div className="w-4 h-4 rounded-full border border-[#111] bg-zinc-700 flex items-center justify-center text-[8px] font-bold text-white">+{chVoiceUsers.length-3}</div>}
+                                    {chVoiceUsers.length>3&&<div className="w-4 h-4 rounded-full border border-[#12121a] bg-zinc-700 flex items-center justify-center text-[8px] font-bold text-white">+{chVoiceUsers.length-3}</div>}
                                   </div>
                                 )}
                               </div>
@@ -1949,24 +1970,24 @@ export default function App() {
 
           {/* dms */}
           {activeView==='dms'&&<>
-            <div className="px-4 py-3.5 border-b border-white/[0.05]"><h2 className="text-sm font-bold text-white">Wiadomości prywatne</h2></div>
-            <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
+            <div className="px-4 py-4 border-b border-white/[0.06]"><h2 className="text-sm font-bold text-white">Wiadomości prywatne</h2></div>
+            <div className="flex-1 overflow-y-auto p-2.5 custom-scrollbar flex flex-col gap-0.5">
               {dmConvs.map(dm => {
                 const unread = unreadDms[dm.other_user_id] || 0;
                 const isActive = activeDmUserId===dm.other_user_id;
                 return (
                   <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); }}
-                    className={`w-full flex items-center gap-3 px-2.5 py-2 rounded-xl mb-0.5 transition-all ${isActive?'bg-indigo-500/10 border border-indigo-500/20':'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
+                    className={`w-full flex items-center gap-3 px-2.5 py-2.5 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/12 border border-indigo-500/20 shadow-[0_0_12px_rgba(99,102,241,0.12)]':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
                     <div className="relative shrink-0">
-                      <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className="w-9 h-9 rounded-xl object-cover" alt=""/>
-                      <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 ${sc(dm.other_status)} border-2 border-[#111] rounded-full`}/>
+                      <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className="w-9 h-9 rounded-2xl object-cover" alt=""/>
+                      <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 ${sc(dm.other_status)} border-2 border-[#12121a] rounded-full`}/>
                     </div>
                     <div className="flex-1 truncate text-left min-w-0">
-                      <p className={`text-[13px] font-semibold truncate ${isActive?'text-indigo-300':unread>0?'text-white':'text-zinc-300'}`}>{dm.other_username}</p>
+                      <p className={`text-[13px] font-semibold truncate ${isActive?'text-indigo-200':unread>0?'text-white':'text-zinc-300'}`}>{dm.other_username}</p>
                       {dm.last_message&&<p className={`text-[11px] truncate mt-0.5 ${unread>0?'text-zinc-300 font-medium':'text-zinc-600'}`}>{dm.last_message}</p>}
                     </div>
                     {unread > 0 && (
-                      <span className="shrink-0 min-w-[18px] h-[18px] bg-rose-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1 leading-none">
+                      <span className="shrink-0 min-w-[18px] h-[18px] bg-rose-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1 leading-none shadow-[0_0_8px_rgba(239,68,68,0.5)]">
                         {unread > 99 ? '99+' : unread}
                       </span>
                     )}
@@ -1980,14 +2001,14 @@ export default function App() {
           {activeView==='friends'&&<div className="p-3.5 border-b border-white/[0.05]"><h2 className="text-sm font-bold text-white">Znajomi</h2></div>}
 
           {/* USER BAR — bottom of sidebar */}
-          <div className="shrink-0 px-2.5 py-2.5 border-t border-white/[0.07] bg-[#0f0f0f] relative" ref={statusPickerRef}>
+          <div className="shrink-0 px-3 py-3 border-t border-white/[0.06] bg-[#0e0e16] relative" ref={statusPickerRef}>
 
             {/* Status picker popup */}
             <AnimatePresence>
               {statusPickerOpen&&(
                 <motion.div initial={{opacity:0,y:6,scale:0.95}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:6,scale:0.95}}
                   transition={{duration:0.15,ease:[0.16,1,0.3,1]}}
-                  className="absolute bottom-full left-3 right-3 mb-2 bg-zinc-900 border border-white/[0.1] rounded-2xl shadow-2xl overflow-hidden z-50 p-1">
+                  className="absolute bottom-full left-3 right-3 mb-2 bg-[#1a1a26] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden z-50 p-1">
 
                   {/* Call status row — auto, shown when in call */}
                   {activeCall&&(
@@ -2020,17 +2041,17 @@ export default function App() {
               )}
             </AnimatePresence>
 
-            <div className="flex items-center gap-2.5 px-1 py-1 rounded-xl hover:bg-white/[0.05] transition-colors cursor-default">
+            <div className="flex items-center gap-2.5 px-2 py-2 rounded-2xl hover:bg-white/[0.05] transition-colors cursor-default">
               {/* Avatar + status dot — click opens picker */}
               <div className="relative shrink-0 cursor-pointer" onClick={()=>setStatusPickerOpen(p=>!p)} title="Zmień status">
                 <img src={currentUser?ava(currentUser):''} className="w-8 h-8 rounded-full object-cover" alt=""/>
                 {/* Status dot — red phone when in call, else normal status */}
                 {activeCall ? (
-                  <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-rose-500 border-2 border-[#0f0f0f] rounded-full flex items-center justify-center">
+                  <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-rose-500 border-2 border-[#0e0e16] rounded-full flex items-center justify-center">
                     <Phone size={6} className="text-white"/>
                   </div>
                 ) : (
-                  <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${sc(currentUser?.status??'offline')} border-2 border-[#0f0f0f] rounded-full`}/>
+                  <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${sc(currentUser?.status??'offline')} border-2 border-[#0e0e16] rounded-full`}/>
                 )}
               </div>
 
@@ -2068,12 +2089,12 @@ export default function App() {
         </aside>
 
         {/* CENTER */}
-        <section className="flex-1 flex flex-col bg-[#0a0a0a] overflow-hidden min-w-0">
+        <section className="flex-1 flex flex-col bg-[#0c0c11] overflow-hidden min-w-0">
           {showCallPanel && activeCall ? (
             /* ── CALL PANEL ─────────────────────────────────────────── */
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Call header */}
-              <header className="h-13 border-b border-white/[0.05] flex items-center justify-between px-5 bg-zinc-950/40 backdrop-blur-md shrink-0">
+              <header className="h-14 border-b border-white/[0.06] flex items-center justify-between px-5 bg-[#0c0c11]/90 backdrop-blur-md shrink-0">
                 <div className="flex items-center gap-2.5">
                   <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"/>
                   {activeCall.type==='voice_channel'
@@ -2196,7 +2217,7 @@ export default function App() {
                 );
               })()}
               {/* Call controls */}
-              <div className="shrink-0 border-t border-white/[0.05] bg-zinc-950/40">
+              <div className="shrink-0 border-t border-white/[0.06] bg-[#0c0c11]/80 backdrop-blur-sm">
                 {/* Device settings panel */}
                 <AnimatePresence>
                   {devicesOpen&&(
@@ -2294,7 +2315,7 @@ export default function App() {
                           className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.06] transition-all group text-left w-full">
                           <div className="relative shrink-0">
                             <img src={ava(f)} className="w-9 h-9 rounded-xl object-cover" alt=""/>
-                            <div className={`absolute -bottom-px -right-px w-2.5 h-2.5 ${sc(f.status)} border-2 border-[#0a0a0a] rounded-full`}/>
+                            <div className={`absolute -bottom-px -right-px w-2.5 h-2.5 ${sc(f.status)} border-2 border-[#0c0c11] rounded-full`}/>
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-zinc-300 group-hover:text-white transition-colors truncate">{f.username}</p>
@@ -2316,20 +2337,20 @@ export default function App() {
             </div>
           ) : activeView==='friends' ? (
             <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="h-13 border-b border-white/[0.05] flex items-center px-5 shrink-0 bg-zinc-950/40 backdrop-blur-md z-10">
-                <Users size={17} className="text-zinc-500 mr-2.5"/>
+              <div className="h-14 border-b border-white/[0.06] flex items-center px-5 shrink-0 bg-[#0c0c11]/90 backdrop-blur-sm z-10">
+                <Users size={17} className="text-indigo-400 mr-2.5"/>
                 <h1 className="text-sm font-bold text-white">Znajomi</h1>
-                {incoming.length > 0 && <span className="ml-2 bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">{incoming.length} nowe</span>}
+                {incoming.length > 0 && <span className="ml-2 bg-rose-500 text-white text-[10px] font-bold px-2 py-1 rounded-full leading-none shadow-lg shadow-rose-500/30">{incoming.length} nowe</span>}
               </div>
-              <div className="flex-1 p-5 overflow-y-auto custom-scrollbar">
+              <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
                 <div className="max-w-2xl mx-auto">
 
                   {/* ── Dodaj znajomego ── */}
-                  <div className="mb-6">
-                    <h2 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Dodaj znajomego</h2>
+                  <div className="mb-8">
+                    <h2 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">Dodaj znajomego</h2>
                     <div className="flex gap-2">
-                      <input value={addFriendVal} onChange={e=>setAddFriendVal(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAddFriend()} placeholder="Wpisz dokładną nazwę użytkownika..." className={`flex-1 ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
-                      <button onClick={handleAddFriend} disabled={!addFriendVal.trim()} className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl font-semibold transition-colors flex items-center gap-1.5 text-sm shrink-0"><UserPlus size={15}/> Dodaj</button>
+                      <input value={addFriendVal} onChange={e=>setAddFriendVal(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAddFriend()} placeholder="Wpisz dokładną nazwę użytkownika..." className={`flex-1 ${gi} px-4 py-2.5 text-sm`}/>
+                      <button onClick={handleAddFriend} disabled={!addFriendVal.trim()} className="bg-indigo-500 hover:bg-indigo-400 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 text-sm shrink-0 shadow-lg shadow-indigo-500/20"><UserPlus size={15}/> Dodaj</button>
                     </div>
                     {/* Podpowiedź wyszukiwarki */}
                     {friendSearchLoading && addFriendVal.trim().length >= 2 && (
@@ -2360,34 +2381,37 @@ export default function App() {
 
                   {/* ── Przychodzące zaproszenia ── */}
                   {incoming.length > 0 && (
-                    <div className="mb-6">
-                      <h2 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Przychodzące zaproszenia — {incoming.length}</h2>
+                    <div className="mb-8">
+                      <h2 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">Przychodzące zaproszenia — {incoming.length}</h2>
+                      <div className="flex flex-col gap-2">
                       {incoming.map(r => (
-                        <div key={r.id} className="flex items-center justify-between bg-white/[0.03] border border-rose-500/10 p-3 rounded-xl mb-2">
+                        <div key={r.id} className="flex items-center justify-between bg-rose-500/5 border border-rose-500/15 p-3.5 rounded-2xl">
                           <div className="flex items-center gap-3">
-                            <img src={ava({avatar_url: r.from_avatar, username: r.from_username})} className="w-9 h-9 rounded-full object-cover" alt=""/>
+                            <img src={ava({avatar_url: r.from_avatar, username: r.from_username})} className="w-10 h-10 rounded-2xl object-cover" alt=""/>
                             <div>
                               <p className="font-semibold text-white text-sm">{r.from_username}</p>
                               <p className="text-xs text-zinc-600">Chce dodać Cię do znajomych</p>
                             </div>
                           </div>
                           <div className="flex gap-2">
-                            <button onClick={()=>handleFriendReq(r.id,'accept')} title="Akceptuj" className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/25 flex items-center justify-center transition-colors"><Check size={15}/></button>
-                            <button onClick={()=>handleFriendReq(r.id,'reject')} title="Odrzuć" className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/25 flex items-center justify-center transition-colors"><XIcon size={15}/></button>
+                            <button onClick={()=>handleFriendReq(r.id,'accept')} title="Akceptuj" className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 active:scale-90 flex items-center justify-center transition-all"><Check size={15}/></button>
+                            <button onClick={()=>handleFriendReq(r.id,'reject')} title="Odrzuć" className="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 active:scale-90 flex items-center justify-center transition-all"><XIcon size={15}/></button>
                           </div>
                         </div>
                       ))}
+                      </div>
                     </div>
                   )}
 
                   {/* ── Wysłane zaproszenia ── */}
                   {outgoing.length > 0 && (
-                    <div className="mb-6">
-                      <h2 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Wysłane zaproszenia — {outgoing.length}</h2>
+                    <div className="mb-8">
+                      <h2 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">Wysłane zaproszenia — {outgoing.length}</h2>
+                      <div className="flex flex-col gap-2">
                       {outgoing.map(r => (
-                        <div key={r.id} className="flex items-center justify-between bg-white/[0.02] border border-white/[0.04] p-3 rounded-xl mb-2">
+                        <div key={r.id} className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] p-3.5 rounded-2xl">
                           <div className="flex items-center gap-3">
-                            <img src={ava({avatar_url: r.from_avatar, username: r.from_username})} className="w-9 h-9 rounded-full object-cover opacity-70" alt=""/>
+                            <img src={ava({avatar_url: r.from_avatar, username: r.from_username})} className="w-10 h-10 rounded-2xl object-cover opacity-70" alt=""/>
                             <div>
                               <p className="font-semibold text-zinc-300 text-sm">{r.from_username}</p>
                               <p className="text-xs text-zinc-600">Oczekuje na odpowiedź</p>
@@ -2396,21 +2420,24 @@ export default function App() {
                           <span className="text-[10px] text-zinc-600 font-medium uppercase tracking-wide">Oczekujące</span>
                         </div>
                       ))}
+                      </div>
                     </div>
                   )}
 
                   {/* ── Lista znajomych ── */}
                   <div>
-                    <h2 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Wszyscy znajomi — {friends.length}</h2>
+                    <h2 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">Wszyscy znajomi — {friends.length}</h2>
+                    <div className="flex flex-col gap-1.5">
                     {friends.map(f => (
-                      <div key={f.id} className="flex items-center justify-between bg-white/[0.02] border border-white/[0.04] p-3 rounded-xl mb-1.5 hover:bg-white/[0.04] transition-colors group">
+                      <div key={f.id} className="flex items-center justify-between bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] hover:border-white/[0.07] p-3.5 rounded-2xl transition-all duration-150 group">
                         <div className="flex items-center gap-3 cursor-pointer" onClick={()=>openProfile(f)}>
-                          <div className="relative"><img src={ava(f)} className="w-9 h-9 rounded-full object-cover" alt=""/><div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${sc(f.status)} border-2 border-zinc-950 rounded-full`}/></div>
+                          <div className="relative"><img src={ava(f)} className="w-10 h-10 rounded-2xl object-cover" alt=""/><div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${sc(f.status)} border-2 border-[#0c0c11] rounded-full`}/></div>
                           <div><p className="font-semibold text-white text-sm">{f.username}</p><p className="text-xs text-zinc-600">{f.custom_status||f.status}</p></div>
                         </div>
-                        <button onClick={()=>openDm(f.id)} title="Wyślij wiadomość" className={`w-8 h-8 rounded-xl ${gb} flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity`}><MessageCircle size={15}/></button>
+                        <button onClick={()=>openDm(f.id)} title="Wyślij wiadomość" className={`w-8 h-8 rounded-xl ${gb} flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all active:scale-90`}><MessageCircle size={15}/></button>
                       </div>
                     ))}
+                    </div>
                     {friends.length===0&&<p className="text-sm text-zinc-700 py-4">Brak znajomych. Dodaj kogoś powyżej!</p>}
                   </div>
 
@@ -2420,49 +2447,51 @@ export default function App() {
           ) : (
             <>
               {/* Chat header */}
-              <header className="h-14 border-b border-white/[0.07] flex items-center justify-between px-5 bg-[#0a0a0a] z-10 shrink-0 gap-3">
+              <header className="h-14 border-b border-white/[0.06] flex items-center justify-between px-5 bg-[#0c0c11]/95 backdrop-blur-sm z-10 shrink-0 gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   {activeView==='dms' ? (activeDm ? (
                     <div className="flex items-center gap-3">
                       <div className="relative shrink-0">
-                        <img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className="w-8 h-8 rounded-xl object-cover" alt=""/>
-                        <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 ${sc(activeDm.other_status)} border-2 border-[#0a0a0a] rounded-full`}/>
+                        <img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className="w-8 h-8 rounded-2xl object-cover shadow-sm" alt=""/>
+                        <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 ${sc(activeDm.other_status)} border-2 border-[#0c0c11] rounded-full`}/>
                       </div>
                       <div>
                         <h3 className="font-bold text-white text-sm leading-tight">{activeDm.other_username}</h3>
-                        <p className="text-[11px] text-zinc-600 leading-tight capitalize">{activeDm.other_status||'offline'}</p>
+                        <p className="text-[11px] text-zinc-500 leading-tight capitalize">{activeDm.other_status||'offline'}</p>
                       </div>
                     </div>
                   ) : <h3 className="font-bold text-white text-sm">Wiadomości</h3>) : (
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-7 h-7 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
+                      <div className="w-7 h-7 rounded-xl bg-indigo-500/15 flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(99,102,241,0.15)]">
                         <Hash size={14} className="text-indigo-400"/>
                       </div>
                       <div className="min-w-0">
                         <h3 className="font-bold text-white text-sm truncate">{activeCh?.name||activeChannel}</h3>
-                        {activeCh?.description&&<p className="text-[11px] text-zinc-600 truncate hidden lg:block">{activeCh.description}</p>}
+                        {activeCh?.description&&<p className="text-[11px] text-zinc-500 truncate hidden lg:block">{activeCh.description}</p>}
                       </div>
                     </div>
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {activeView==='dms'&&activeDm&&<>
-                    <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'voice')} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all"><Phone size={15}/></button>
-                    <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'video')} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-sky-400 hover:bg-sky-500/10 transition-all"><Video size={15}/></button>
-                    <div className="w-px h-4 bg-white/[0.07] mx-1"/>
+                    <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'voice')} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all duration-150 active:scale-95"><Phone size={15}/></button>
+                    <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'video')} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-sky-400 hover:bg-sky-500/10 transition-all duration-150 active:scale-95"><Video size={15}/></button>
+                    <div className="w-px h-4 bg-white/[0.06] mx-1"/>
                   </>}
+                  {activeView==='servers'&&members.length>0&&(
                   <div className="hidden md:flex -space-x-2 mr-1">
                     {members.slice(0,4).map(m=>(
-                      <img key={m.id} src={ava(m)} className="w-6 h-6 rounded-full border-2 border-[#0a0a0a] object-cover" alt="" title={m.username}/>
+                      <img key={m.id} src={ava(m)} className="w-6 h-6 rounded-full border-2 border-[#0c0c11] object-cover hover:scale-110 transition-transform cursor-pointer" alt="" title={m.username}/>
                     ))}
-                    {members.length>4&&<div className="w-6 h-6 rounded-full border-2 border-[#0a0a0a] bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-white">+{members.length-4}</div>}
+                    {members.length>4&&<div className="w-6 h-6 rounded-full border-2 border-[#0c0c11] bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-white">+{members.length-4}</div>}
                   </div>
-                  <button className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all"><MoreHorizontal size={15}/></button>
+                  )}
+                  <button className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all duration-150"><MoreHorizontal size={15}/></button>
                 </div>
               </header>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 md:p-5 custom-scrollbar flex flex-col">
+              <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-5 custom-scrollbar flex flex-col">
                 {/* Loading skeleton */}
                 {msgsLoading&&(
                   <div className="mt-auto flex flex-col gap-3 pb-2">
@@ -2553,11 +2582,11 @@ export default function App() {
                         )}
                         <motion.div
                           initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: Math.min(idx * 0.012, 0.08), duration: 0.15 }}
-                          className={`flex gap-3.5 group hover:bg-white/[0.025] px-3 rounded-xl -mx-3 transition-colors ${compactMessages?'py-1':'py-2'}`}>
+                          transition={{ delay: Math.min(idx * 0.012, 0.08), duration: 0.18, ease: 'easeOut' }}
+                          className={`flex gap-3.5 group hover:bg-white/[0.03] px-3 rounded-2xl -mx-3 transition-all duration-100 ${compactMessages?'py-1':'py-2.5'}`}>
                           <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} alt=""
                             onClick={()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar,status:(msg as MessageFull).sender_status})}
-                            className="w-10 h-10 rounded-xl object-cover shrink-0 cursor-pointer hover:opacity-80 transition-opacity mt-0.5"/>
+                            className="w-10 h-10 rounded-2xl object-cover shrink-0 cursor-pointer hover:opacity-80 hover:scale-105 transition-all mt-0.5"/>
                           <div className="flex-1 min-w-0">
                             {msg.reply_to_id&&msg.reply_content&&(
                               <div className="flex items-center gap-1.5 mb-1.5 text-xs text-zinc-500 border-l-2 border-zinc-600/50 pl-2.5 py-0.5">
@@ -2630,12 +2659,12 @@ export default function App() {
               </div>
 
               {/* Input */}
-              <div className="shrink-0 px-4 pb-4 pt-2 bg-[#0a0a0a] border-t border-white/[0.07]">
+              <div className="shrink-0 px-4 md:px-6 pb-5 pt-3 bg-[#0c0c11] border-t border-white/[0.05]">
                 {/* Reply / attach previews */}
                 <AnimatePresence>
                   {replyTo&&(
                     <motion.div initial={{opacity:0,height:0}} animate={{opacity:1,height:'auto'}} exit={{opacity:0,height:0}}
-                      className="flex items-center justify-between bg-zinc-900/70 border border-white/[0.07] rounded-lg px-3 py-1.5 mb-2 text-xs overflow-hidden">
+                      className="flex items-center justify-between bg-[#1a1a26]/70 border border-white/[0.07] rounded-xl px-3 py-1.5 mb-2 text-xs overflow-hidden">
                       <div className="flex items-center gap-1.5 text-zinc-400 truncate">
                         <Reply size={10} className="text-zinc-500 shrink-0"/>
                         <span className="font-semibold text-zinc-300">{replyTo.sender_username}</span>
@@ -2679,10 +2708,10 @@ export default function App() {
                   );
                   return (
                     <form onSubmit={handleSend}>
-                      <div className="flex items-center gap-3 bg-zinc-900/90 border border-white/[0.09] rounded-2xl px-3 py-3 hover:border-white/[0.14] transition-colors focus-within:border-indigo-500/40 focus-within:bg-zinc-900">
+                      <div className="flex items-center gap-3 bg-[#1a1a26] border border-white/[0.08] rounded-2xl px-4 py-3.5 hover:border-white/[0.12] focus-within:border-indigo-500/40 focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] transition-all duration-200">
                         <input type="file" ref={attachRef} onChange={handleAttach} accept="image/*" className="hidden"/>
                         <button type="button" onClick={()=>attachRef.current?.click()}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.07] transition-all shrink-0">
+                          className="w-7 h-7 flex items-center justify-center rounded-xl text-zinc-600 hover:text-indigo-400 hover:bg-indigo-500/10 transition-all shrink-0 active:scale-90">
                           <Plus size={16}/>
                         </button>
                         <input ref={msgInputRef} type="text" value={msgInput}
@@ -2701,16 +2730,16 @@ export default function App() {
                           }}
                           onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey) handleSend(e as any); }}
                           placeholder={activeView==='dms'&&activeDm?`Wiadomość do ${activeDm.other_username}...`:`Wiadomość w #${activeCh?.name||''}...`}
-                          className="flex-1 bg-transparent text-[13px] text-zinc-200 placeholder-zinc-700 outline-none min-w-0"/>
+                          className="flex-1 bg-transparent text-[13px] text-zinc-200 placeholder-zinc-600 outline-none min-w-0"/>
                         <div className="relative shrink-0">
                           <button type="button" onClick={() => setShowEmojiPicker(v => !v)}
-                            className={`transition-colors ${showEmojiPicker ? 'text-indigo-400' : 'text-zinc-600 hover:text-zinc-400'}`}>
-                            <Smile size={16}/>
+                            className={`transition-all active:scale-90 ${showEmojiPicker ? 'text-indigo-400' : 'text-zinc-600 hover:text-zinc-400'}`}>
+                            <Smile size={17}/>
                           </button>
                           {showEmojiPicker && <EmojiPicker onSelect={insertEmoji} onClose={() => setShowEmojiPicker(false)}/>}
                         </div>
                         <button type="submit" disabled={(!msgInput.trim()&&!attachFile)||sending}
-                          className="w-8 h-8 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-25 disabled:cursor-not-allowed flex items-center justify-center text-white transition-all shrink-0 shadow-lg shadow-sky-500/20">
+                          className="w-8 h-8 rounded-xl bg-indigo-500 hover:bg-indigo-400 disabled:opacity-25 disabled:cursor-not-allowed flex items-center justify-center text-white transition-all duration-150 active:scale-90 shrink-0 shadow-lg shadow-indigo-500/25">
                           {sending?<Loader2 size={14} className="animate-spin"/>:<Send size={14}/>}
                         </button>
                       </div>
@@ -2723,7 +2752,7 @@ export default function App() {
         </section>
 
         {/* RIGHT — Live voice + Activity */}
-        <aside className="hidden xl:flex w-64 shrink-0 flex-col gap-0 bg-[#111111] border-l border-white/[0.07] overflow-y-auto custom-scrollbar">
+        <aside className="hidden xl:flex w-64 shrink-0 flex-col gap-0 bg-[#12121a] border-l border-white/[0.06] overflow-y-auto custom-scrollbar">
           {/* ─ LIVE VOICE BLOCK ─ */}
           {activeView==='servers'&&(()=>{
             // find first voice channel on current server with users
@@ -2917,7 +2946,7 @@ export default function App() {
           <div className="fixed inset-0 z-[90]" onClick={()=>setSrvContextMenu(null)}/>
           <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:0.95}}
             style={{position:'fixed',left:srvContextMenu.x,top:srvContextMenu.y}}
-            className="z-[91] bg-zinc-900 border border-white/[0.1] rounded-xl shadow-2xl py-1.5 min-w-[180px] overflow-hidden">
+            className="z-[91] bg-[#1a1a26] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 py-1.5 min-w-[180px] overflow-hidden">
             {(srvContextMenu.srv.owner_id===currentUser?.id ||
               (srvContextMenu.srv.id===activeServer && (serverFull?.my_role==='Admin'||serverFull?.my_role==='Owner'))) && (<>
               <button onClick={()=>{ setSrvContextMenu(null); setSrvSettTab('overview'); setSrvSettOpen(true); setActiveServer(srvContextMenu.srv.id); setActiveView('servers'); }}
@@ -3714,8 +3743,8 @@ export default function App() {
       {/* ── RECONNECTING BANNER ──────────────────────────────────────────── */}
       <AnimatePresence>
         {isAuthenticated && !isConnected && (
-          <motion.div initial={{opacity:0,y:-40}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-40}} transition={{duration:0.25}}
-            className="fixed top-0 left-0 right-0 z-[300] flex items-center justify-center gap-2 py-2 px-4 bg-amber-500/90 backdrop-blur-sm text-black text-sm font-semibold">
+          <motion.div initial={{opacity:0,y:-40}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-40}} transition={{duration:0.3,ease:[0.16,1,0.3,1]}}
+            className="fixed top-0 left-0 right-0 z-[300] flex items-center justify-center gap-2 py-2.5 px-4 bg-amber-500/95 backdrop-blur-sm text-black text-xs font-bold tracking-wide uppercase">
             <div className="w-3 h-3 border-2 border-black/40 border-t-black rounded-full animate-spin shrink-0"/>
             Łączenie z serwerem…
           </motion.div>
@@ -3727,10 +3756,10 @@ export default function App() {
         <AnimatePresence>
           {toasts.map(t => {
             const toastIcon = t.type==='success'?<CheckCircle2 size={15}/>:t.type==='error'?<AlertCircle size={15}/>:t.type==='warn'?<AlertTriangle size={15}/>:<Info size={15}/>;
-            const toastCls = t.type==='success'?'bg-emerald-500/15 border-emerald-500/30 text-emerald-400':t.type==='error'?'bg-rose-500/15 border-rose-500/30 text-rose-400':t.type==='warn'?'bg-amber-500/15 border-amber-500/30 text-amber-400':'bg-zinc-900/95 border-white/[0.1] text-zinc-300';
+            const toastCls = t.type==='success'?'bg-emerald-950/90 border-emerald-500/30 text-emerald-300 shadow-emerald-900/30':t.type==='error'?'bg-rose-950/90 border-rose-500/30 text-rose-300 shadow-rose-900/30':t.type==='warn'?'bg-amber-950/90 border-amber-500/30 text-amber-300 shadow-amber-900/30':'bg-[#1a1a26]/95 border-white/[0.1] text-zinc-300 shadow-black/50';
             return (
-              <motion.div key={t.id} initial={{opacity:0,y:-16,scale:0.95}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:-8,scale:0.95}} transition={{duration:0.2}}
-                className={`pointer-events-auto w-full flex items-center gap-3 px-4 py-3 rounded-2xl border shadow-2xl backdrop-blur-xl ${toastCls}`}>
+              <motion.div key={t.id} initial={{opacity:0,y:-20,scale:0.9}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,scale:0.9,y:-12}} transition={{duration:0.25,ease:[0.16,1,0.3,1]}}
+                className={`pointer-events-auto w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl border shadow-2xl backdrop-blur-2xl ${toastCls}`}>
                 <span className="shrink-0">{toastIcon}</span>
                 <span className="flex-1 text-sm font-medium">{t.msg}</span>
                 {t.onConfirm && <>
@@ -3747,23 +3776,24 @@ export default function App() {
       {/* ── MINIMIZED CALL WIDGET ────────────────────────────────────────── */}
       <AnimatePresence>
         {activeCall && !showCallPanel && (
-          <motion.div initial={{opacity:0,scale:0.8,y:20}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.8,y:20}}
-            className={`fixed bottom-5 right-5 z-[150] ${gm} rounded-2xl p-3 flex items-center gap-3 min-w-56 shadow-2xl`}>
-            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shrink-0"/>
+          <motion.div initial={{opacity:0,scale:0.85,y:24}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.85,y:20}}
+            transition={{duration:0.3,ease:[0.16,1,0.3,1]}}
+            className={`fixed bottom-6 right-6 z-[150] ${gm} p-4 flex items-center gap-3 min-w-60 shadow-2xl border-indigo-500/10`}>
+            <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse shrink-0 shadow-[0_0_8px_rgba(52,211,153,0.8)]"/>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-bold text-white truncate">
                 {activeCall.type==='voice_channel'?activeCall.channelName:activeCall.username}
               </p>
-              <p className="text-[10px] text-zinc-500 font-mono">{fmtDur(callDuration)}</p>
+              <p className="text-[10px] text-emerald-400/80 font-mono">{fmtDur(callDuration)}</p>
             </div>
             <div className="flex gap-1.5 shrink-0">
-              <button onClick={toggleMute} title="Mikrofon" className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${activeCall.isMuted?'bg-rose-500 text-white':'bg-white/[0.06] text-zinc-400 hover:text-white'}`}>
+              <button onClick={toggleMute} title="Mikrofon" className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all active:scale-90 ${activeCall.isMuted?'bg-rose-500 text-white shadow-lg shadow-rose-500/30':'bg-white/[0.07] text-zinc-400 hover:text-white hover:bg-white/[0.12]'}`}>
                 {activeCall.isMuted?<MicOff size={13}/>:<Mic size={13}/>}
               </button>
-              <button onClick={()=>setShowCallPanel(true)} title="Powróć do rozmowy" className="w-8 h-8 rounded-xl bg-indigo-500 hover:bg-indigo-400 flex items-center justify-center text-white transition-colors">
+              <button onClick={()=>setShowCallPanel(true)} title="Powróć do rozmowy" className="w-8 h-8 rounded-xl bg-indigo-500 hover:bg-indigo-400 active:scale-90 flex items-center justify-center text-white transition-all shadow-lg shadow-indigo-500/30">
                 <Phone size={13}/>
               </button>
-              <button onClick={hangupCall} title="Rozłącz" className="w-8 h-8 rounded-xl bg-rose-500 hover:bg-rose-400 flex items-center justify-center text-white transition-colors">
+              <button onClick={hangupCall} title="Rozłącz" className="w-8 h-8 rounded-xl bg-rose-500 hover:bg-rose-400 active:scale-90 flex items-center justify-center text-white transition-all shadow-lg shadow-rose-500/30">
                 <PhoneOff size={13}/>
               </button>
             </div>
@@ -3774,13 +3804,14 @@ export default function App() {
       {/* ── INCOMING CALL ────────────────────────────────────────────────── */}
       <AnimatePresence>
         {incomingCall && (
-          <motion.div initial={{opacity:0,x:80}} animate={{opacity:1,x:0}} exit={{opacity:0,x:80}}
-            className={`fixed top-20 right-5 z-[160] ${gm} rounded-2xl p-4 min-w-64 shadow-2xl border border-indigo-500/20`}>
-            <div className="flex items-center gap-3 mb-3">
+          <motion.div initial={{opacity:0,x:100,scale:0.95}} animate={{opacity:1,x:0,scale:1}} exit={{opacity:0,x:80,scale:0.95}}
+            transition={{duration:0.35,ease:[0.16,1,0.3,1]}}
+            className={`fixed top-20 right-6 z-[160] ${gm} p-5 min-w-[17rem] shadow-2xl border-indigo-500/25`}>
+            <div className="flex items-center gap-3 mb-4">
               <div className="relative shrink-0">
-                <img src={incomingCall.from.avatar_url||`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(incomingCall.from.username)}&size=40`} className="w-10 h-10 rounded-full object-cover" alt=""/>
-                <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-indigo-500 rounded-full flex items-center justify-center">
-                  {incomingCall.type==='video'?<Video size={9} className="text-white"/>:<Phone size={9} className="text-white"/>}
+                <img src={incomingCall.from.avatar_url||`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(incomingCall.from.username)}&size=40`} className="w-11 h-11 rounded-2xl object-cover shadow-lg" alt=""/>
+                <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/40">
+                  {incomingCall.type==='video'?<Video size={10} className="text-white"/>:<Phone size={10} className="text-white"/>}
                 </div>
               </div>
               <div className="flex-1 min-w-0">
@@ -3791,6 +3822,8 @@ export default function App() {
             <div className="flex gap-2">
               <button onClick={async ()=>{
                 // Acquire mic before notifying caller — ensures localStreamRef is set when offer arrives
+                stopIncomingRing();
+                playCallAccepted();
                 await acquireMic(selMic || undefined);
                 acceptCall(incomingCall.conversation_id, incomingCall.from.id);
                 setActiveCall({type: incomingCall.type==='video'?'dm_video':'dm_voice', userId: incomingCall.from.id, username: incomingCall.from.username, isMuted:false,isDeafened:false,isCameraOn:false,isScreenSharing:false});
@@ -3798,7 +3831,7 @@ export default function App() {
               }} className="flex-1 h-9 bg-emerald-500 hover:bg-emerald-400 rounded-xl text-white font-semibold flex items-center justify-center gap-1.5 text-sm transition-colors">
                 <Phone size={14}/> Odbierz
               </button>
-              <button onClick={()=>{rejectCall(incomingCall.from.id); setIncomingCall(null);}}
+              <button onClick={()=>{stopIncomingRing(); playCallEnded(); rejectCall(incomingCall.from.id); setIncomingCall(null);}}
                 className="flex-1 h-9 bg-rose-500 hover:bg-rose-400 rounded-xl text-white font-semibold flex items-center justify-center gap-1.5 text-sm transition-colors">
                 <PhoneOff size={14}/> Odrzuć
               </button>
