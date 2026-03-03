@@ -681,9 +681,23 @@ export default function App() {
   const [chCreateCatId, setChCreateCatId]     = useState('');
   const [newChName, setNewChName]             = useState('');
   const [newChType, setNewChType]             = useState<'text'|'voice'>('text');
+  const [newChPrivate, setNewChPrivate]       = useState(false);
   const [chEditOpen, setChEditOpen]           = useState(false);
   const [editingCh, setEditingCh]             = useState<ChannelData|null>(null);
   const [chForm, setChForm]                   = useState({ name:'', description:'', is_private:false, role_ids:[] as string[] });
+
+  // ── Server header dropdown ───────────────────────────────────────
+  const [srvDropOpen, setSrvDropOpen]         = useState(false);
+
+  // ── Create Category ──────────────────────────────────────────────
+  const [catCreateOpen, setCatCreateOpen]     = useState(false);
+  const [newCatName, setNewCatName]           = useState('');
+  const [newCatPrivate, setNewCatPrivate]     = useState(false);
+
+  // ── Invite Friends popup ─────────────────────────────────────────
+  const [inviteFriendsOpen, setInviteFriendsOpen] = useState(false);
+  const [inviteFriendsCode, setInviteFriendsCode] = useState<string|null>(null);
+  const [inviteSending, setInviteSending]     = useState<string|null>(null); // friend id being invited
 
   const [roleModalOpen, setRoleModalOpen]     = useState(false);
   const [editingRole, setEditingRole]         = useState<ServerRole|null>(null);
@@ -1465,12 +1479,47 @@ export default function App() {
   // ── Channel ─────────────────────────────────────────────────────
   const handleCreateCh = async () => {
     if (!newChName.trim() || !activeServer) return;
+    // forum/announcement → stored as 'text' in DB (subtype shown in UI only)
+    const dbType = newChType === 'voice' ? 'voice' : 'text';
     try {
-      await channelsApi.create({ server_id: activeServer, name: newChName.trim(), type: newChType, category_id: chCreateCatId || undefined });
+      await channelsApi.create({ server_id: activeServer, name: newChName.trim(), type: dbType, category_id: chCreateCatId || undefined });
       addServerActivity({ icon: newChType==='voice'?'🎙️':'#️⃣', text: `Kanał #${newChName.trim()} został utworzony` });
-      setChCreateOpen(false); setNewChName('');
+      setChCreateOpen(false); setNewChName(''); setNewChPrivate(false);
       const s = await serversApi.get(activeServer); setServerFull(s);
     } catch (err) { console.error(err); }
+  };
+
+  // ── Create Category ──────────────────────────────────────────────
+  const handleCreateCat = async () => {
+    if (!newCatName.trim() || !activeServer) return;
+    try {
+      await channelsApi.createCategory(activeServer, newCatName.trim());
+      setCatCreateOpen(false); setNewCatName(''); setNewCatPrivate(false);
+      const s = await serversApi.get(activeServer); setServerFull(s);
+    } catch (err) { console.error(err); }
+  };
+
+  // ── Invite Friends ───────────────────────────────────────────────
+  const openInviteFriends = async () => {
+    setSrvDropOpen(false); setInviteFriendsOpen(true);
+    if (!inviteFriendsCode) {
+      try { const r = await serversApi.createInvite(activeServer, '604800'); setInviteFriendsCode(r.code); }
+      catch (err) { console.error(err); }
+    }
+  };
+  const handleInviteFriend = async (friendId: string, friendUsername: string) => {
+    if (!inviteFriendsCode || !serverFull) return;
+    setInviteSending(friendId);
+    const srvName = serverFull.name;
+    const iconUrl = serverFull.icon_url || '';
+    // Special invite message format detected by renderer
+    const inviteMsg = `\x01INVITE\x01${activeServer}\x01${inviteFriendsCode}\x01${srvName}\x01${iconUrl}`;
+    try {
+      await dmsApi.send(friendId, inviteMsg);
+      addToast(`Zaproszenie wysłane do ${friendUsername}!`, 'success');
+    } catch (err: any) {
+      addToast(err?.message || 'Nie udało się wysłać zaproszenia', 'error');
+    } finally { setInviteSending(null); }
   };
   const handleDeleteCh = (id: string) => {
     confirmAction('Usunąć kanał?', async () => {
@@ -1895,15 +1944,67 @@ export default function App() {
 
           {/* servers */}
           {activeView==='servers'&&<>
-            <div className="px-4 py-4 border-b border-white/[0.06] cursor-pointer hover:bg-white/[0.03] transition-colors group"
-              onClick={() => { if(isAdmin){setSrvSettTab('overview');setSrvSettOpen(true);} }}>
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-bold text-white truncate">{serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'Serwer'}</h2>
-                {isAdmin&&<Settings2 size={13} className="text-zinc-700 group-hover:text-indigo-400 transition-colors shrink-0"/>}
+            {/* Server header with dropdown */}
+            <div className="relative border-b border-white/[0.06]">
+              <div className="px-4 py-3.5 cursor-pointer hover:bg-white/[0.03] transition-colors group"
+                onClick={() => setSrvDropOpen(p => !p)}>
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-bold text-white truncate">{serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'Serwer'}</h2>
+                  <motion.div animate={{ rotate: srvDropOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-zinc-500 group-hover:text-indigo-400 transition-colors shrink-0">
+                      <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </motion.div>
+                </div>
+                {serverFull?.description&&<p className="text-[11px] text-zinc-500 mt-0.5 truncate">{serverFull.description}</p>}
               </div>
-              {serverFull?.description
-                ? <p className="text-[11px] text-zinc-500 mt-0.5 truncate">{serverFull.description}</p>
-                : <p className="text-[11px] text-zinc-700 mt-0.5">{isAdmin?'Kliknij — ustawienia':'Witaj!'}</p>}
+              <AnimatePresence>
+              {srvDropOpen&&(
+                <>
+                  <div className="fixed inset-0 z-[39]" onClick={()=>setSrvDropOpen(false)}/>
+                  <motion.div initial={{opacity:0,y:-6,scale:0.97}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:-6,scale:0.97}}
+                    transition={{duration:0.15,ease:[0.16,1,0.3,1]}}
+                    className="absolute left-3 right-3 top-full mt-1 z-40 bg-[#1e1e2e] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 py-1.5 overflow-hidden">
+                    {isAdmin&&<>
+                      <button onClick={()=>{setSrvDropOpen(false);setChCreateCatId('');setChCreateOpen(true);setNewChName('');setNewChType('text');setNewChPrivate(false);}}
+                        className="w-full flex items-center gap-3 px-3.5 py-2.5 text-[13px] text-zinc-300 hover:bg-indigo-500/10 hover:text-white transition-colors text-left">
+                        <Hash size={14} className="text-indigo-400 shrink-0"/>
+                        Utwórz kanał
+                      </button>
+                      <button onClick={()=>{setSrvDropOpen(false);setNewCatName('');setNewCatPrivate(false);setCatCreateOpen(true);}}
+                        className="w-full flex items-center gap-3 px-3.5 py-2.5 text-[13px] text-zinc-300 hover:bg-indigo-500/10 hover:text-white transition-colors text-left">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-400 shrink-0">
+                          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        Utwórz kategorię
+                      </button>
+                      <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
+                    </>}
+                    <button onClick={openInviteFriends}
+                      className="w-full flex items-center gap-3 px-3.5 py-2.5 text-[13px] text-zinc-300 hover:bg-emerald-500/10 hover:text-emerald-300 transition-colors text-left">
+                      <UserPlus size={14} className="text-emerald-400 shrink-0"/>
+                      Zaproś znajomych
+                    </button>
+                    {isAdmin&&<>
+                      <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
+                      <button onClick={()=>{setSrvDropOpen(false);setSrvSettTab('overview');setSrvSettOpen(true);}}
+                        className="w-full flex items-center gap-3 px-3.5 py-2.5 text-[13px] text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
+                        <Settings2 size={14} className="text-zinc-500 shrink-0"/>
+                        Ustawienia serwera
+                      </button>
+                    </>}
+                    {serverFull?.my_role!=='Owner'&&<>
+                      <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
+                      <button onClick={()=>{setSrvDropOpen(false);handleLeaveServer(activeServer);}}
+                        className="w-full flex items-center gap-3 px-3.5 py-2.5 text-[13px] text-rose-400 hover:bg-rose-500/10 transition-colors text-left">
+                        <LogOut size={14} className="shrink-0"/>
+                        Opuść serwer
+                      </button>
+                    </>}
+                  </motion.div>
+                </>
+              )}
+              </AnimatePresence>
             </div>
             <div className="flex-1 overflow-y-auto py-2 custom-scrollbar">
               <AnimatePresence mode="wait">
@@ -2686,7 +2787,48 @@ export default function App() {
                                   <span>• Enter — <button type="button" onClick={() => submitEditMsg(msg)} className="text-indigo-400 hover:text-indigo-300 transition-colors">zapisz</button></span>
                                 </div>
                               </div>
-                            ) : (
+                            ) : msg.content.startsWith('\x01INVITE\x01') ? (() => {
+                              // ── Invite embed block ─────────────────────
+                              const [,srvId,code,srvName,iconUrl] = msg.content.split('\x01');
+                              const alreadyMember = serverList.some(s=>s.id===srvId);
+                              return (
+                                <div className="mt-1 max-w-xs bg-[#1e1e2e] border border-white/[0.1] rounded-2xl overflow-hidden shadow-xl">
+                                  {/* Banner gradient */}
+                                  <div className="h-10 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600"/>
+                                  <div className="px-4 pb-4 pt-2 flex items-end gap-3 -mt-5 relative">
+                                    {/* Server icon */}
+                                    {iconUrl ? (
+                                      <img src={iconUrl} className="w-12 h-12 rounded-2xl border-4 border-[#1e1e2e] object-cover shadow-lg shrink-0" alt=""/>
+                                    ) : (
+                                      <div className="w-12 h-12 rounded-2xl border-4 border-[#1e1e2e] bg-indigo-600 flex items-center justify-center text-xl font-bold text-white shadow-lg shrink-0">
+                                        {srvName?.[0]?.toUpperCase()||'S'}
+                                      </div>
+                                    )}
+                                    <div className="flex-1 min-w-0 pb-1">
+                                      <p className="text-[10px] text-zinc-500 font-medium uppercase tracking-widest">Zaproszenie na serwer</p>
+                                      <p className="text-sm font-bold text-white truncate">{srvName}</p>
+                                    </div>
+                                  </div>
+                                  <div className="px-4 pb-4">
+                                    {alreadyMember ? (
+                                      <div className="w-full py-2.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-xs text-center text-zinc-400 font-semibold">
+                                        Jesteś już członkiem
+                                      </div>
+                                    ) : (
+                                      <button onClick={async()=>{
+                                        try {
+                                          const s = await serversApi.join(code);
+                                          setServerList(p=>[...p,s]); setActiveServer(s.id); setActiveView('servers');
+                                          addToast(`Dołączono do serwera ${srvName}!`,'success');
+                                        } catch(err:any){ addToast(err?.message||'Nie udało się dołączyć','error'); }
+                                      }} className="w-full py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 active:scale-95 text-sm font-bold text-white transition-all shadow-lg shadow-indigo-500/25">
+                                        Dołącz do serwera →
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })() : (
                               <p className="text-sm text-zinc-200 leading-relaxed break-words">{hlText(msg.content)}</p>
                             )}
                             {msg.attachment_url&&(
@@ -3479,23 +3621,191 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Create Channel */}
+      {/* ── Create Channel (Discord-style) ─────────────────────────── */}
       <AnimatePresence>
         {chCreateOpen&&(
           <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
             className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={()=>setChCreateOpen(false)}>
             <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
-              onClick={e=>e.stopPropagation()} className={`${gm} rounded-3xl p-7 w-full max-w-md`}>
-              <div className="flex items-center justify-between mb-5"><h2 className="text-lg font-bold text-white">Nowy kanał</h2><button onClick={()=>setChCreateOpen(false)} className="text-zinc-600 hover:text-white"><X size={17}/></button></div>
-              <div className="flex flex-col gap-4">
-                <div className="flex gap-1.5 bg-white/[0.03] p-1 rounded-xl">
-                  {(['text','voice'] as const).map(t=><button key={t} onClick={()=>setNewChType(t)}
-                    className={`flex-1 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-1.5 transition-all ${newChType===t?'bg-indigo-500 text-white':'text-zinc-500 hover:text-white'}`}>
-                    {t==='text'?<><Hash size={14}/> Tekstowy</>:<><Volume2 size={14}/> Głosowy</>}
-                  </button>)}
+              onClick={e=>e.stopPropagation()} className={`${gm} p-7 w-full max-w-md`}>
+              <div className="flex items-center justify-between mb-1">
+                <h2 className="text-lg font-bold text-white">Utwórz kanał</h2>
+                <button onClick={()=>setChCreateOpen(false)} className="text-zinc-600 hover:text-white transition-colors"><X size={17}/></button>
+              </div>
+              <p className="text-[12px] text-zinc-500 mb-5">
+                {chCreateCatId ? `W kategorii: ${serverFull?.categories.find(c=>c.id===chCreateCatId)?.name||''}` : 'Bez kategorii'}
+              </p>
+
+              {/* Channel type list */}
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Rodzaj kanału</p>
+              <div className="flex flex-col gap-1.5 mb-5">
+                {([
+                  { type:'text',         icon:<Hash size={18}/>,         label:'Tekstowy',    desc:'Przesyłaj wiadomości, obrazy i emoji' },
+                  { type:'voice',        icon:<Volume2 size={18}/>,      label:'Głosowy',     desc:'Rozmawiaj na żywo głosem i wideo' },
+                  { type:'forum',        icon:<MessageSquare size={18}/>,label:'Forum',       desc:'Wątki dyskusyjne i zorganizowane tematy' },
+                  { type:'announcement', icon:<Bell size={18}/>,         label:'Ogłoszenia',  desc:'Ważne aktualizacje dla użytkowników' },
+                ] as const).map(({ type, icon, label, desc }) => (
+                  <button key={type} onClick={()=>setNewChType(type as any)}
+                    className={`flex items-center gap-4 px-4 py-3 rounded-2xl border transition-all text-left ${
+                      newChType===type
+                        ? 'bg-indigo-500/10 border-indigo-500/40 text-white'
+                        : 'bg-white/[0.02] border-white/[0.06] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.05]'
+                    }`}>
+                    <span className={newChType===type?'text-indigo-400':'text-zinc-500'}>{icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold leading-tight">{label}</p>
+                      <p className="text-[11px] text-zinc-500 leading-tight mt-0.5">{desc}</p>
+                    </div>
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${newChType===type?'border-indigo-500 bg-indigo-500':'border-zinc-600'}`}>
+                      {newChType===type&&<div className="w-1.5 h-1.5 rounded-full bg-white"/>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Name */}
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Nazwa kanału</p>
+              <div className="relative mb-4">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none">
+                  {newChType==='voice'?<Volume2 size={14}/>:<Hash size={14}/>}
+                </span>
+                <input autoFocus value={newChName}
+                  onChange={e=>setNewChName(e.target.value.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-_]/g,''))}
+                  onKeyDown={e=>e.key==='Enter'&&handleCreateCh()}
+                  placeholder={newChType==='voice'?'pokoj-glosowy':'ogolny'}
+                  className={`w-full ${gi} pl-8 pr-4 py-2.5 text-sm`}/>
+              </div>
+
+              {/* Private toggle */}
+              <button onClick={()=>setNewChPrivate(p=>!p)}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl border mb-5 transition-all ${newChPrivate?'bg-indigo-500/10 border-indigo-500/30':'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04]'}`}>
+                <div className="flex items-center gap-3">
+                  <Lock size={15} className={newChPrivate?'text-indigo-400':'text-zinc-500'}/>
+                  <div className="text-left">
+                    <p className="text-sm font-semibold text-white">Kanał prywatny</p>
+                    <p className="text-[11px] text-zinc-500">Tylko wybrani członkowie mogą go zobaczyć</p>
+                  </div>
                 </div>
-                <input value={newChName} onChange={e=>setNewChName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleCreateCh()} placeholder="nazwa-kanalu" className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
-                <button onClick={handleCreateCh} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">Utwórz kanał</button>
+                <div className={`w-10 h-6 rounded-full transition-all relative ${newChPrivate?'bg-indigo-500':'bg-zinc-700'}`}>
+                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${newChPrivate?'left-5':'left-1'}`}/>
+                </div>
+              </button>
+
+              <div className="flex gap-2">
+                <button onClick={()=>setChCreateOpen(false)} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold ${gb} transition-all`}>Anuluj</button>
+                <button onClick={handleCreateCh} disabled={!newChName.trim()}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all">
+                  Utwórz kanał
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Create Category ──────────────────────────────────────────── */}
+      <AnimatePresence>
+        {catCreateOpen&&(
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={()=>setCatCreateOpen(false)}>
+            <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
+              onClick={e=>e.stopPropagation()} className={`${gm} p-7 w-full max-w-sm`}>
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-lg font-bold text-white">Utwórz kategorię</h2>
+                <button onClick={()=>setCatCreateOpen(false)} className="text-zinc-600 hover:text-white transition-colors"><X size={17}/></button>
+              </div>
+              <div className="flex flex-col gap-4">
+                <div>
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Nazwa kategorii</p>
+                  <input autoFocus value={newCatName}
+                    onChange={e=>setNewCatName(e.target.value.toUpperCase())}
+                    onKeyDown={e=>e.key==='Enter'&&handleCreateCat()}
+                    placeholder="NOWA KATEGORIA"
+                    className={`w-full ${gi} px-4 py-2.5 text-sm tracking-wide`}/>
+                </div>
+                <button onClick={()=>setNewCatPrivate(p=>!p)}
+                  className={`flex items-center justify-between px-4 py-3 rounded-2xl border transition-all ${newCatPrivate?'bg-indigo-500/10 border-indigo-500/30':'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04]'}`}>
+                  <div className="flex items-center gap-3">
+                    <Lock size={15} className={newCatPrivate?'text-indigo-400':'text-zinc-500'}/>
+                    <div className="text-left">
+                      <p className="text-sm font-semibold text-white">Kategoria prywatna</p>
+                      <p className="text-[11px] text-zinc-500">Tylko wybrani mają dostęp</p>
+                    </div>
+                  </div>
+                  <div className={`w-10 h-6 rounded-full transition-all relative ${newCatPrivate?'bg-indigo-500':'bg-zinc-700'}`}>
+                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${newCatPrivate?'left-5':'left-1'}`}/>
+                  </div>
+                </button>
+                <div className="flex gap-2">
+                  <button onClick={()=>setCatCreateOpen(false)} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold ${gb} transition-all`}>Anuluj</button>
+                  <button onClick={handleCreateCat} disabled={!newCatName.trim()}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all">
+                    Utwórz kategorię
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Invite Friends ────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {inviteFriendsOpen&&(
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={()=>setInviteFriendsOpen(false)}>
+            <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
+              onClick={e=>e.stopPropagation()} className={`${gm} p-7 w-full max-w-md`}>
+              <div className="flex items-center justify-between mb-1">
+                <div>
+                  <h2 className="text-lg font-bold text-white">Zaproś znajomych</h2>
+                  <p className="text-[12px] text-zinc-500 mt-0.5">na serwer <span className="text-zinc-300 font-semibold">{serverFull?.name}</span></p>
+                </div>
+                <button onClick={()=>setInviteFriendsOpen(false)} className="text-zinc-600 hover:text-white transition-colors"><X size={17}/></button>
+              </div>
+
+              {/* Copy link */}
+              {inviteFriendsCode&&(
+                <div className="flex items-center gap-2 mt-4 mb-4 bg-white/[0.04] border border-white/[0.08] rounded-2xl px-4 py-3">
+                  <Globe size={14} className="text-zinc-500 shrink-0"/>
+                  <code className="flex-1 text-xs text-zinc-300 truncate font-mono">
+                    {window.location.origin}/join/{inviteFriendsCode}
+                  </code>
+                  <button onClick={()=>{navigator.clipboard.writeText(`${window.location.origin}/join/${inviteFriendsCode}`);addToast('Link skopiowany!','success');}}
+                    className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors shrink-0 px-2 py-1 rounded-lg hover:bg-indigo-500/10">
+                    Kopiuj link
+                  </button>
+                </div>
+              )}
+
+              {/* Friends list */}
+              <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Znajomi — {friends.filter(f=>f.status!=='offline').length} online</p>
+              <div className="flex flex-col gap-1 max-h-72 overflow-y-auto custom-scrollbar">
+                {friends.length === 0 && (
+                  <p className="text-sm text-zinc-600 text-center py-6">Brak znajomych do zaproszenia</p>
+                )}
+                {/* Online first, then offline */}
+                {[...friends].sort((a,b)=>{
+                  const onlineA = a.status!=='offline'; const onlineB = b.status!=='offline';
+                  return onlineA===onlineB ? 0 : onlineA ? -1 : 1;
+                }).map(f=>(
+                  <div key={f.id} className="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-white/[0.04] transition-colors">
+                    <div className="relative shrink-0">
+                      <img src={ava(f)} className={`w-9 h-9 rounded-xl object-cover ${f.status==='offline'?'opacity-40':''}`} alt=""/>
+                      <div className={`absolute -bottom-px -right-px w-2.5 h-2.5 ${sc(f.status)} border-2 border-[#1e1e2e] rounded-full`}/>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-semibold truncate ${f.status==='offline'?'text-zinc-500':'text-white'}`}>{f.username}</p>
+                      <p className="text-[11px] text-zinc-600 capitalize">{f.status==='online'?'Dostępny':f.status==='idle'?'Zaraz wracam':f.status==='dnd'?'Nie przeszkadzać':'Offline'}</p>
+                    </div>
+                    <button onClick={()=>handleInviteFriend(f.id, f.username)}
+                      disabled={inviteSending===f.id}
+                      className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/25 hover:bg-indigo-500/25 hover:text-indigo-200 disabled:opacity-50 transition-all flex items-center gap-1.5">
+                      {inviteSending===f.id?<Loader2 size={11} className="animate-spin"/>:<UserPlus size={11}/>}
+                      {inviteSending===f.id?'Wysyłam...':'Zaproś'}
+                    </button>
+                  </div>
+                ))}
               </div>
             </motion.div>
           </motion.div>
