@@ -1205,11 +1205,16 @@ export default function App() {
         setVoiceUsers(p => ({ ...p, [channel_id]: [...(p[channel_id]||[]).filter((u:VoiceUser)=>u.id!==user.id), user] }));
         const me = currentUserRef.current; const call = activeCallRef.current;
         if (me && user.id !== me.id && call?.channelId === channel_id) {
+          playVoiceJoin();   // someone else joined my channel
           await openPeer(user.id, true);
         }
       },
       onUserLeft: ({ channel_id, user_id }: any) => {
         setVoiceUsers(p => ({ ...p, [channel_id]: (p[channel_id]||[]).filter((u:VoiceUser)=>u.id!==user_id) }));
+        const me = currentUserRef.current; const call = activeCallRef.current;
+        if (me && user_id !== me.id && call?.channelId === channel_id) {
+          playVoiceLeave();  // someone else left my channel
+        }
         closePeer(user_id);
       },
       onOffer: async ({ from, sdp }: any) => {
