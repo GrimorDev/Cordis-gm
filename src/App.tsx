@@ -1495,8 +1495,11 @@ export default function App() {
     try {
       await channelsApi.createCategory(activeServer, newCatName.trim());
       setCatCreateOpen(false); setNewCatName(''); setNewCatPrivate(false);
+      addToast(`Kategoria „${newCatName.trim()}" utworzona`, 'success');
       const s = await serversApi.get(activeServer); setServerFull(s);
-    } catch (err) { console.error(err); }
+    } catch (err: any) {
+      addToast(err?.message || 'Nie udało się utworzyć kategorii', 'error');
+    }
   };
 
   // ── Invite Friends ───────────────────────────────────────────────
@@ -1512,8 +1515,11 @@ export default function App() {
     setInviteSending(friendId);
     const srvName = serverFull.name;
     const iconUrl = serverFull.icon_url || '';
-    // Special invite message format detected by renderer
-    const inviteMsg = `\x01INVITE\x01${activeServer}\x01${inviteFriendsCode}\x01${srvName}\x01${iconUrl}`;
+    // Special invite message format — pipe-separated, safe printable chars
+    // Format: CINV|serverId|code|serverName|iconUrl
+    const srvNameSafe = srvName.replace(/\|/g, ' ');
+    const iconSafe    = iconUrl.replace(/\|/g, '');
+    const inviteMsg   = `CINV|${activeServer}|${inviteFriendsCode}|${srvNameSafe}|${iconSafe}`;
     try {
       await dmsApi.send(friendId, inviteMsg);
       addToast(`Zaproszenie wysłane do ${friendUsername}!`, 'success');
@@ -2014,18 +2020,29 @@ export default function App() {
               {serverFull?.categories.map((cat, catIdx) => {
                 const textChs  = cat.channels.filter(c=>c.type==='text');
                 const voiceChs = cat.channels.filter(c=>c.type==='voice');
+                const isEmpty  = textChs.length===0 && voiceChs.length===0;
+                const openAddCh = () => { setChCreateCatId(cat.id); setChCreateOpen(true); setNewChName(''); setNewChType('text'); setNewChPrivate(false); };
                 return (
                   <motion.div key={cat.id} className="mb-1"
                     initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: catIdx * 0.04, duration: 0.18 }}>
 
+                    {/* Category header — ALWAYS shown */}
+                    <div className="flex items-center justify-between px-3 pt-4 pb-1.5 group/cat">
+                      <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{cat.name}</span>
+                      {isAdmin&&<Plus size={12} className="text-zinc-700 hover:text-zinc-300 cursor-pointer opacity-0 group-hover/cat:opacity-100 transition-all" onClick={openAddCh}/>}
+                    </div>
+                    {/* Empty category hint */}
+                    {isEmpty&&isAdmin&&(
+                      <div className="px-3 pb-2">
+                        <button onClick={openAddCh} className="w-full flex items-center gap-2 px-3 py-1.5 rounded-xl text-zinc-700 hover:text-zinc-400 hover:bg-white/[0.03] transition-all text-[11px] border border-dashed border-white/[0.05] hover:border-white/[0.09]">
+                          <Plus size={10}/> Dodaj kanał do kategorii
+                        </button>
+                      </div>
+                    )}
+
                     {/* Text channels — SPACES */}
                     {textChs.length>0&&<>
-                      <div className="flex items-center justify-between px-3 pt-4 pb-1.5 group/cat">
-                        <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{cat.name}</span>
-                        {isAdmin&&<Plus size={12} className="text-zinc-700 hover:text-zinc-300 cursor-pointer opacity-0 group-hover/cat:opacity-100 transition-all"
-                          onClick={() => { setChCreateCatId(cat.id); setChCreateOpen(true); setNewChName(''); setNewChType('text'); }}/>}
-                      </div>
                       {textChs.map(ch => {
                         const isAct = activeChannel===ch.id;
                         const unread = unreadChs[ch.id] || 0;
@@ -2787,9 +2804,9 @@ export default function App() {
                                   <span>• Enter — <button type="button" onClick={() => submitEditMsg(msg)} className="text-indigo-400 hover:text-indigo-300 transition-colors">zapisz</button></span>
                                 </div>
                               </div>
-                            ) : msg.content.startsWith('\x01INVITE\x01') ? (() => {
+                            ) : msg.content.startsWith('CINV|') ? (() => {
                               // ── Invite embed block ─────────────────────
-                              const [,srvId,code,srvName,iconUrl] = msg.content.split('\x01');
+                              const [,srvId,code,srvName,iconUrl] = msg.content.split('|');
                               const alreadyMember = serverList.some(s=>s.id===srvId);
                               return (
                                 <div className="mt-1 max-w-xs bg-[#1e1e2e] border border-white/[0.1] rounded-2xl overflow-hidden shadow-xl">
