@@ -842,7 +842,11 @@ export default function App() {
       setToasts(p => [...p, { id, msg, type }]);
       setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 4000);
     };
-    sock.on('call_accepted', () => autoToast('Połączenie zaakceptowane', 'success'));
+    sock.on('call_accepted', () => {
+      autoToast('Połączenie zaakceptowane', 'success');
+      // Caller initiates WebRTC after recipient accepts
+      voiceHandlerRef.current.onCallAccepted?.();
+    });
     sock.on('call_rejected', () => {
       setActiveCall(null); setShowCallPanel(false);
       autoToast('Połączenie odrzucone', 'error');
@@ -853,6 +857,68 @@ export default function App() {
       setActiveCall(null); setShowCallPanel(false); setCallDuration(0);
       autoToast('Rozmowa zakończona', 'info');
     });
+    // ── Real-time server/channel/member/user events ─────────────────
+    sock.on('channel_created' as any, (ch: any) => {
+      if (ch.server_id !== activeServerRef.current) return;
+      setServerFull(p => {
+        if (!p) return p;
+        return {
+          ...p,
+          categories: p.categories.map(cat =>
+            cat.id === ch.category_id
+              ? { ...cat, channels: [...cat.channels.filter((c: any) => c.id !== ch.id), { ...ch, allowed_roles: [] }] }
+              : cat
+          ),
+        };
+      });
+    });
+    sock.on('channel_updated' as any, (ch: any) => {
+      if (ch.server_id !== activeServerRef.current) return;
+      setServerFull(p => {
+        if (!p) return p;
+        return {
+          ...p,
+          categories: p.categories.map(cat => ({
+            ...cat,
+            channels: cat.channels.map((c: any) => c.id === ch.id ? { ...c, ...ch } : c),
+          })),
+        };
+      });
+    });
+    sock.on('channel_deleted' as any, ({ channel_id, server_id }: any) => {
+      if (server_id !== activeServerRef.current) return;
+      setServerFull(p => {
+        if (!p) return p;
+        return {
+          ...p,
+          categories: p.categories.map(cat => ({
+            ...cat,
+            channels: cat.channels.filter((c: any) => c.id !== channel_id),
+          })),
+        };
+      });
+      if (prevChRef.current === channel_id) { setActiveChannel(''); prevChRef.current = ''; }
+    });
+    sock.on('category_created' as any, (cat: any) => {
+      if (cat.server_id !== activeServerRef.current) return;
+      setServerFull(p => p ? { ...p, categories: [...p.categories, { ...cat, channels: [] }] } : p);
+    });
+    sock.on('server_updated' as any, (srv: any) => {
+      setServerFull(p => p && p.id === srv.id ? { ...p, ...srv } : p);
+      setServerList(p => p.map(s => s.id === srv.id ? { ...s, name: srv.name, icon_url: srv.icon_url } : s));
+    });
+    sock.on('member_joined' as any, ({ server_id, user }: any) => {
+      if (server_id !== activeServerRef.current) return;
+      setMembers(p => p.some(m => m.id === user.id) ? p : [...p, user]);
+    });
+    sock.on('user_updated' as any, (u: any) => {
+      setFriends(p => p.map(f => f.id === u.id ? { ...f, ...u } : f));
+      setMembers(p => p.map(m => m.id === u.id ? { ...m, ...u } : m));
+      setDmConvs(p => p.map(d => d.other_user_id === u.id
+        ? { ...d, other_username: u.username ?? d.other_username, other_avatar_url: u.avatar_url ?? d.other_avatar_url }
+        : d));
+    });
+
     // ── Reconnection: re-join rooms + refresh data ──────────────────
     sock.on('connect', () => {
       setIsConnected(true);
@@ -1121,6 +1187,12 @@ export default function App() {
       onIce: async ({ from, candidate }: any) => {
         const pc = peerConnsRef.current.get(from);
         if (pc) try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+      },
+      // Called when the DM call recipient accepts — caller initiates WebRTC
+      onCallAccepted: async () => {
+        const call = activeCallRef.current;
+        if (!call?.userId) return;
+        await openPeer(call.userId, true);
       },
     };
   }); // runs every render to keep closures fresh
@@ -1576,19 +1648,22 @@ export default function App() {
       try {
         const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
         screenStreamRef.current = stream;
+        // Add ALL tracks (video + audio) to every peer connection BEFORE renegotiating
+        stream.getTracks().forEach(t => {
+          peerConnsRef.current.forEach((pc) => { pc.addTrack(t, stream); });
+        });
+        // Renegotiate once per peer (after all tracks are added)
+        peerConnsRef.current.forEach(async (pc, peerId) => {
+          try {
+            if (pc.signalingState === 'stable') {
+              const offer = await pc.createOffer();
+              await pc.setLocalDescription(offer);
+              getSocket().emit('webrtc_offer', { to: peerId, sdp: offer });
+            }
+          } catch {}
+        });
+        // Stop screen share when video track ends (user clicks browser stop button)
         stream.getVideoTracks().forEach(t => {
-          // Add track + renegotiate each existing peer connection
-          peerConnsRef.current.forEach(async (pc, peerId) => {
-            pc.addTrack(t, stream);
-            // Must renegotiate so remote peer receives the new video track
-            try {
-              if (pc.signalingState === 'stable') {
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                getSocket().emit('webrtc_offer', { to: peerId, sdp: offer });
-              }
-            } catch {}
-          });
           t.onended = () => {
             screenStreamRef.current = null;
             setActiveCall(p => p ? {...p, isScreenSharing: false} : p);
@@ -3689,7 +3764,9 @@ export default function App() {
               </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={()=>{
+              <button onClick={async ()=>{
+                // Acquire mic before notifying caller — ensures localStreamRef is set when offer arrives
+                await acquireMic(selMic || undefined);
                 acceptCall(incomingCall.conversation_id, incomingCall.from.id);
                 setActiveCall({type: incomingCall.type==='video'?'dm_video':'dm_voice', userId: incomingCall.from.id, username: incomingCall.from.username, isMuted:false,isDeafened:false,isCameraOn:false,isScreenSharing:false});
                 setActiveDmUserId(incomingCall.from.id); setActiveView('dms'); setShowCallPanel(true); setIncomingCall(null);

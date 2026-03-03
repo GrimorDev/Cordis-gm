@@ -10,6 +10,20 @@ import { config } from '../config';
 
 const router = Router();
 
+// Broadcast user profile update to all servers the user belongs to
+async function broadcastUserUpdate(req: AuthRequest, data: any) {
+  const io = req.app.get('io');
+  if (!io) return;
+  const { rows: memberships } = await query(
+    'SELECT server_id FROM server_members WHERE user_id = $1', [req.user!.id]
+  );
+  for (const { server_id } of memberships) {
+    io.to(`server:${server_id}`).emit('user_updated', data);
+  }
+  // Also notify the user's own room (for DM partner info updates)
+  io.to(`user:${req.user!.id}`).emit('user_updated', data);
+}
+
 function makeUpload(folder: string) {
   const storage = multer.diskStorage({
     destination: (_req, _file, cb) => {
@@ -121,6 +135,7 @@ router.put('/me', authMiddleware,
                    privacy_status_visible,privacy_typing_visible,privacy_read_receipts,privacy_friend_requests`,
         values
       );
+      await broadcastUserUpdate(req, { id: rows[0].id, username: rows[0].username, avatar_url: rows[0].avatar_url, custom_status: rows[0].custom_status });
       return res.json(rows[0]);
     } catch { return res.status(500).json({ error: 'Internal server error' }); }
   }
@@ -141,7 +156,8 @@ router.post('/me/avatar', authMiddleware, avatarUpload.single('avatar'), async (
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   const avatarUrl = `/uploads/avatars/${req.file.filename}`;
   try {
-    await query('UPDATE users SET avatar_url=$1 WHERE id=$2', [avatarUrl, req.user!.id]);
+    const { rows: [u] } = await query('UPDATE users SET avatar_url=$1 WHERE id=$2 RETURNING id,username,avatar_url,custom_status', [avatarUrl, req.user!.id]);
+    await broadcastUserUpdate(req, u);
     return res.json({ avatar_url: avatarUrl });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });

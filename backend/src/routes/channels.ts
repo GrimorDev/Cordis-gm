@@ -84,6 +84,8 @@ router.post('/', authMiddleware,
          VALUES ($1, $2, $3, $4, $5) RETURNING *`,
         [server_id, category_id || null, name, type, description || null]
       );
+      const io = req.app.get('io');
+      if (io) io.to(`server:${server_id}`).emit('channel_created', { ...channel, server_id });
       return res.status(201).json(channel);
     } catch { return res.status(500).json({ error: 'Internal server error' }); }
   }
@@ -122,6 +124,8 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
         }
       }
       await client.query('COMMIT');
+      const io = req.app.get('io');
+      if (io) io.to(`server:${ch.server_id}`).emit('channel_updated', { ...updated, server_id: ch.server_id });
       return res.json(updated);
     } catch (err) {
       await client.query('ROLLBACK');
@@ -140,6 +144,8 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
       return res.status(403).json({ error: 'Not authorized' });
     }
     await query(`DELETE FROM channels WHERE id = $1`, [req.params.id]);
+    const io = req.app.get('io');
+    if (io) io.to(`server:${ch.server_id}`).emit('channel_deleted', { channel_id: req.params.id, server_id: ch.server_id });
     return res.json({ message: 'Channel deleted' });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -156,6 +162,8 @@ router.post('/categories', authMiddleware, async (req: AuthRequest, res: Respons
       `INSERT INTO channel_categories (server_id, name) VALUES ($1, $2) RETURNING *`,
       [server_id, name]
     );
+    const io = req.app.get('io');
+    if (io) io.to(`server:${server_id}`).emit('category_created', { ...cat, server_id, channels: [] });
     return res.status(201).json(cat);
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });

@@ -120,6 +120,13 @@ export interface ServerToClientEvents {
   screen_share_stop: (data: { from: string }) => void;
   voice_user_state: (data: { user_id: string; muted: boolean; deafened: boolean }) => void;
   server_activity: (data: { id: string; server_id: string; type: string; icon: string; text: string; time: string }) => void;
+  channel_created: (data: any) => void;
+  channel_updated: (data: any) => void;
+  channel_deleted: (data: { channel_id: string; server_id: string }) => void;
+  category_created: (data: any) => void;
+  server_updated: (data: any) => void;
+  member_joined: (data: { server_id: string; user: any }) => void;
+  user_updated: (data: any) => void;
   error: (data: { message: string }) => void;
 }
 

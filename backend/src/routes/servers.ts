@@ -160,6 +160,8 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
       [name || null, description !== undefined ? description : null,
        icon_url || null, banner_url || null, req.params.id]
     );
+    const io = req.app.get('io');
+    if (io) io.to(`server:${req.params.id}`).emit('server_updated', server);
     return res.json(server);
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -434,14 +436,24 @@ router.post('/join/:code', authMiddleware, async (req: AuthRequest, res: Respons
     }
     const [{ rows: [server] }, { rows: [u] }] = await Promise.all([
       query(`SELECT * FROM servers WHERE id = $1`, [invite.server_id]),
-      query(`SELECT username FROM users WHERE id=$1`, [req.user!.id]),
+      query(`SELECT id, username, avatar_url, status FROM users WHERE id=$1`, [req.user!.id]),
     ]);
     const { rows: [act] } = await query(
       `INSERT INTO server_activity (server_id, type, username, icon, text) VALUES ($1,'member_join',$2,'👋',$3) RETURNING id, type, icon, text, created_at as time`,
       [invite.server_id, u?.username, `${u?.username} dołączył/a do serwera`]
     );
     const io = req.app.get('io');
-    if (io && act) io.to(`server:${invite.server_id}`).emit('server_activity', { ...act, server_id: invite.server_id });
+    if (io) {
+      // Add the new member's socket to the server room immediately (no reconnect needed)
+      const sockets = await io.in(`user:${req.user!.id}`).fetchSockets();
+      for (const s of sockets) { s.join(`server:${invite.server_id}`); }
+      if (act) io.to(`server:${invite.server_id}`).emit('server_activity', { ...act, server_id: invite.server_id });
+      // Notify all members of the new member
+      io.to(`server:${invite.server_id}`).emit('member_joined', {
+        server_id: invite.server_id,
+        user: { ...u, role_name: 'Member', roles: [] },
+      });
+    }
     return res.json(server);
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
