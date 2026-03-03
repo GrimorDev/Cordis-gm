@@ -146,6 +146,35 @@ router.post('/:userId/system-message', authMiddleware, async (req: AuthRequest, 
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// PUT /api/dms/messages/:id
+router.put('/messages/:id', authMiddleware,
+  [body('content').trim().isLength({ min: 1, max: 4000 })],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    try {
+      const { rows: [msg] } = await query('SELECT * FROM dm_messages WHERE id=$1', [req.params.id]);
+      if (!msg) return res.status(404).json({ error: 'Not found' });
+      if (msg.sender_id !== req.user!.id) return res.status(403).json({ error: 'Not your message' });
+      const { rows: [updated] } = await query(
+        'UPDATE dm_messages SET content=$1, edited=true, updated_at=NOW() WHERE id=$2 RETURNING *',
+        [req.body.content, req.params.id]
+      );
+      const io = req.app.get('io');
+      if (io) {
+        // Notify both participants
+        const { rows: participants } = await query(
+          'SELECT user_id FROM dm_participants WHERE conversation_id=$1', [msg.conversation_id]
+        );
+        participants.forEach((p: any) => {
+          io.to(`user:${p.user_id}`).emit('dm_message_updated', { id: updated.id, content: updated.content, edited: true });
+        });
+      }
+      return res.json(updated);
+    } catch { return res.status(500).json({ error: 'Internal server error' }); }
+  }
+);
+
 // DELETE /api/dms/messages/:id
 router.delete('/messages/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {

@@ -209,6 +209,7 @@ export const dmsApi = {
     req<DmMessageFull>('POST', `/dms/${userId}/messages`, { content, ...opts }),
   sendSystem: (userId: string, content: string) =>
     req<DmMessageFull>('POST', `/dms/${userId}/system-message`, { content }),
+  editMessage: (id: string, content: string) => req<DmMessageFull>('PUT', `/dms/messages/${id}`, { content }),
   deleteMessage: (id: string) => req<void>('DELETE', `/dms/messages/${id}`),
 };
 

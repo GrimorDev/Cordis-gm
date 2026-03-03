@@ -647,6 +647,8 @@ export default function App() {
   const [sending, setSending]                 = useState(false);
   const [sendError, setSendError]             = useState('');
   const [replyTo, setReplyTo]                 = useState<MessageFull|DmMessageFull|null>(null);
+  const [editingMsgId, setEditingMsgId]       = useState<string|null>(null);
+  const [editingMsgContent, setEditingMsgContent] = useState('');
   const [attachFile, setAttachFile]           = useState<File|null>(null);
   const [attachPreview, setAttachPreview]     = useState<string|null>(null);
 
@@ -802,6 +804,8 @@ export default function App() {
     sock.on('message_deleted', ({ id }) => setChannelMsgs(p => p.filter(m => m.id !== id)));
     sock.on('message_updated', ({ id, content, edited }) =>
       setChannelMsgs(p => p.map(m => m.id === id ? { ...m, content, edited } : m)));
+    sock.on('dm_message_updated', ({ id, content, edited }: any) =>
+      setDmMsgs(p => p.map(m => m.id === id ? { ...m, content, edited } : m)));
     sock.on('user_status', ({ user_id, status }) => {
       setFriends(p => p.map(f => f.id === user_id ? { ...f, status } : f));
       setDmConvs(p => p.map(d => d.other_user_id === user_id ? { ...d, other_status: status } : d));
@@ -1377,6 +1381,29 @@ export default function App() {
     if (f.type.startsWith('image/')) setAttachPreview(URL.createObjectURL(f));
     else setAttachPreview(null);
     e.target.value = '';
+  };
+
+  // ── Edit message ─────────────────────────────────────────────────
+  const startEditMsg = (msg: MessageFull | DmMessageFull) => {
+    setEditingMsgId(msg.id);
+    setEditingMsgContent(msg.content);
+  };
+  const cancelEditMsg = () => { setEditingMsgId(null); setEditingMsgContent(''); };
+  const submitEditMsg = async (msg: MessageFull | DmMessageFull) => {
+    const newContent = editingMsgContent.trim();
+    if (!newContent || newContent === msg.content) { cancelEditMsg(); return; }
+    cancelEditMsg(); // optimistic: close edit UI immediately
+    try {
+      if (activeView === 'dms') {
+        await dmsApi.editMessage(msg.id, newContent);
+        // socket 'dm_message_updated' will update dmMsgs
+      } else {
+        await messagesApi.edit(msg.id, newContent);
+        // socket 'message_updated' will update channelMsgs
+      }
+    } catch (err: any) {
+      addToast(err?.message || 'Nie udało się edytować wiadomości', 'error');
+    }
   };
 
   // ── Server ──────────────────────────────────────────────────────
@@ -2642,7 +2669,26 @@ export default function App() {
                               <span className="text-[11px] text-zinc-600">{ft(msg.created_at)}</span>
                               {(msg as MessageFull).edited&&<span className="text-[10px] text-zinc-700 italic">(edytowano)</span>}
                             </div>
-                            <p className="text-sm text-zinc-200 leading-relaxed break-words">{hlText(msg.content)}</p>
+                            {editingMsgId === msg.id ? (
+                              <div className="mt-1 flex flex-col gap-1.5">
+                                <input
+                                  autoFocus
+                                  value={editingMsgContent}
+                                  onChange={e => setEditingMsgContent(e.target.value)}
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitEditMsg(msg); }
+                                    if (e.key === 'Escape') cancelEditMsg();
+                                  }}
+                                  className="w-full bg-white/[0.07] border border-indigo-500/40 text-zinc-100 text-sm rounded-xl px-3 py-1.5 outline-none focus:border-indigo-500/70 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.1)] transition-all"
+                                />
+                                <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+                                  <span>Esc — <button type="button" onClick={cancelEditMsg} className="text-zinc-400 hover:text-white transition-colors">anuluj</button></span>
+                                  <span>• Enter — <button type="button" onClick={() => submitEditMsg(msg)} className="text-indigo-400 hover:text-indigo-300 transition-colors">zapisz</button></span>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-zinc-200 leading-relaxed break-words">{hlText(msg.content)}</p>
+                            )}
                             {msg.attachment_url&&(
                               <div className="mt-2 max-w-sm">
                                 {/\.(jpg|jpeg|png|gif|webp)$/i.test(msg.attachment_url) ? (
@@ -2656,10 +2702,13 @@ export default function App() {
                               </div>
                             )}
                           </div>
+                          {editingMsgId !== msg.id && (
                           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 self-start mt-1">
                             <button onClick={()=>setReplyTo(msg)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/[0.08] text-zinc-600 hover:text-zinc-300 transition-colors"><Reply size={11}/></button>
+                            {isOwn&&<button onClick={()=>startEditMsg(msg)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-white/[0.08] text-zinc-600 hover:text-zinc-300 transition-colors"><Edit3 size={11}/></button>}
                             {isOwn&&<button onClick={()=>confirmAction('Usunąć wiadomość?', () => { if(activeView==='servers') messagesApi.delete(msg.id).catch(console.error); else dmsApi.deleteMessage(msg.id).catch(console.error); })} className="w-6 h-6 flex items-center justify-center rounded hover:bg-rose-500/10 text-zinc-600 hover:text-rose-400 transition-colors"><Trash2 size={11}/></button>}
                           </div>
+                          )}
                         </motion.div>
                       </React.Fragment>
                     );
