@@ -700,6 +700,8 @@ export default function App() {
   const voiceHandlerRef     = useRef<Record<string, (...a: any[]) => void>>({});
   // DM unread counts (keyed by other_user_id)
   const [unreadDms, setUnreadDms]             = useState<Record<string, number>>({});
+  // Channel unread counts (keyed by channel_id)
+  const [unreadChs, setUnreadChs]             = useState<Record<string, number>>({});
   // DM partner full profile (for BIO panel)
   const [dmPartnerProfile, setDmPartnerProfile] = useState<UserProfile | null>(null);
   // Messages loading
@@ -756,7 +758,15 @@ export default function App() {
   useEffect(() => {
     if (!isAuthenticated) return;
     const sock = connectSocket();
-    sock.on('new_message', msg => setChannelMsgs(p => [...p, msg as MessageFull]));
+    sock.on('new_message', (msg: any) => {
+      const chId = msg.channel_id;
+      if (chId && chId !== prevChRef.current) {
+        // Message in a channel we're not viewing — increment unread count
+        setUnreadChs(p => ({ ...p, [chId]: (p[chId] || 0) + 1 }));
+      } else {
+        setChannelMsgs(p => [...p, msg as MessageFull]);
+      }
+    });
     sock.on('new_dm', (msg: DmMessageFull) => {
       const myId = currentUserRef.current?.id;
       const isActiveDm = activeViewRef.current === 'dms' &&
@@ -911,6 +921,10 @@ export default function App() {
       if (server_id !== activeServerRef.current) return;
       setMembers(p => p.some(m => m.id === user.id) ? p : [...p, user]);
     });
+    sock.on('member_left' as any, ({ server_id, user_id }: any) => {
+      if (server_id !== activeServerRef.current) return;
+      setMembers(p => p.filter(m => m.id !== user_id));
+    });
     sock.on('user_updated' as any, (u: any) => {
       setFriends(p => p.map(f => f.id === u.id ? { ...f, ...u } : f));
       setMembers(p => p.map(m => m.id === u.id ? { ...m, ...u } : m));
@@ -986,6 +1000,7 @@ export default function App() {
     prevChRef.current = activeChannel;
     joinChannel(activeChannel);
     setTypingUsers({});
+    setUnreadChs(p => { const n = {...p}; delete n[activeChannel]; return n; });
     setChannelMsgs([]); setMsgsLoading(true); setSearchQuery('');
     messagesApi.list(activeChannel).then(setChannelMsgs).catch(console.error).finally(()=>setMsgsLoading(false));
     setReplyTo(null);
@@ -1012,7 +1027,7 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCall?.type, activeCall?.channelId, activeCall?.userId]);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [channelMsgs, dmMsgs]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [channelMsgs, dmMsgs, typingUsers]);
 
   // ── Call timer ──────────────────────────────────────────────────
   useEffect(() => {
@@ -1836,22 +1851,32 @@ export default function App() {
                       </div>
                       {textChs.map(ch => {
                         const isAct = activeChannel===ch.id;
+                        const unread = unreadChs[ch.id] || 0;
                         return (
                           <div key={ch.id} className="px-2">
                             <button onClick={() => { setActiveChannel(ch.id); setIsMobileOpen(false); }}
                               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl mb-0.5 group/ch transition-all ${
                                 isAct
                                   ? 'bg-white/[0.1] text-white shadow-sm'
-                                  : 'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200'}`}>
+                                  : unread > 0
+                                    ? 'text-white hover:bg-white/[0.06]'
+                                    : 'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200'}`}>
                               <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
-                                <Hash size={14} className={`shrink-0 ${isAct?'text-indigo-400':'text-zinc-600'}`}/>
-                                <span className="text-[13px] font-medium truncate">{ch.name}</span>
+                                <Hash size={14} className={`shrink-0 ${isAct?'text-indigo-400':unread>0?'text-indigo-400':'text-zinc-600'}`}/>
+                                <span className={`text-[13px] truncate ${unread>0&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
                                 {ch.is_private&&<Lock size={9} className="text-zinc-700 shrink-0"/>}
                               </div>
-                              {isAdmin&&<div className="flex gap-0.5 opacity-0 group-hover/ch:opacity-100 transition-opacity shrink-0">
-                                <button onClick={e=>{e.stopPropagation();openChEdit(ch);}} className="w-5 h-5 flex items-center justify-center rounded-lg hover:bg-white/10"><Settings2 size={10}/></button>
-                                <button onClick={e=>{e.stopPropagation();handleDeleteCh(ch.id);}} className="w-5 h-5 flex items-center justify-center rounded-lg hover:bg-rose-500/20 hover:text-rose-400"><Trash2 size={10}/></button>
-                              </div>}
+                              <div className="flex items-center gap-1 shrink-0">
+                                {unread > 0 && !isAct && (
+                                  <span className="min-w-[18px] h-[18px] bg-indigo-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1 leading-none">
+                                    {unread > 99 ? '99+' : unread}
+                                  </span>
+                                )}
+                                {isAdmin&&<div className="flex gap-0.5 opacity-0 group-hover/ch:opacity-100 transition-opacity">
+                                  <button onClick={e=>{e.stopPropagation();openChEdit(ch);}} className="w-5 h-5 flex items-center justify-center rounded-lg hover:bg-white/10"><Settings2 size={10}/></button>
+                                  <button onClick={e=>{e.stopPropagation();handleDeleteCh(ch.id);}} className="w-5 h-5 flex items-center justify-center rounded-lg hover:bg-rose-500/20 hover:text-rose-400"><Trash2 size={10}/></button>
+                                </div>}
+                              </div>
                             </button>
                           </div>
                         );
@@ -2582,6 +2607,23 @@ export default function App() {
                       </React.Fragment>
                     );
                   })}
+                  {/* Typing indicator — Discord-style at bottom of messages */}
+                  {(()=>{
+                    const typers = Object.entries(typingUsers).filter(([uid]) => uid !== currentUser?.id).map(([,n]) => n);
+                    if (!typers.length) return null;
+                    const txt = typers.length===1 ? `${typers[0]} pisze` : typers.length===2 ? `${typers[0]} i ${typers[1]} piszą` : `${typers.slice(0,-1).join(', ')} i ${typers.slice(-1)[0]} piszą`;
+                    return (
+                      <motion.div initial={{opacity:0,y:4}} animate={{opacity:1,y:0}} exit={{opacity:0,y:4}} transition={{duration:0.15}}
+                        className="flex items-center gap-2 px-4 py-2">
+                        <span className="flex gap-[3px] items-end pb-0.5">
+                          {[0,1,2].map(i=>(
+                            <span key={i} className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce inline-block" style={{animationDelay:`${i*160}ms`,animationDuration:'0.8s'}}/>
+                          ))}
+                        </span>
+                        <span className="text-[12px] text-zinc-400 font-medium">{txt}</span>
+                      </motion.div>
+                    );
+                  })()}
                   <div ref={bottomRef}/>
                 </motion.div>
                 </AnimatePresence>
@@ -2625,23 +2667,6 @@ export default function App() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-                {/* Typing indicator */}
-                {(()=>{
-                  if(activeView!=='servers') return null;
-                  const typers=Object.entries(typingUsers).filter(([uid])=>uid!==currentUser?.id).map(([,n])=>n);
-                  if(!typers.length) return null;
-                  const txt=typers.length===1?`${typers[0]} pisze`:typers.length===2?`${typers[0]} i ${typers[1]} piszą`:`${typers.slice(0,-1).join(', ')} i ${typers.slice(-1)[0]} piszą`;
-                  return (
-                    <div className="flex items-center gap-1.5 px-1 mb-1.5 min-h-[16px]">
-                      <span className="text-[11px] text-zinc-500 leading-none">{txt}</span>
-                      <span className="flex gap-[3px] items-center">
-                        {[0,1,2].map(i=>(
-                          <span key={i} className="w-1 h-1 bg-zinc-500 rounded-full animate-bounce inline-block" style={{animationDelay:`${i*150}ms`}}/>
-                        ))}
-                      </span>
-                    </div>
-                  );
-                })()}
                 {/* Main input row */}
                 {(()=>{
                   const isDmView = activeView==='dms' && !!activeDmUserId;

@@ -126,6 +126,7 @@ export interface ServerToClientEvents {
   category_created: (data: any) => void;
   server_updated: (data: any) => void;
   member_joined: (data: { server_id: string; user: any }) => void;
+  member_left: (data: { server_id: string; user_id: string }) => void;
   user_updated: (data: any) => void;
   error: (data: { message: string }) => void;
 }

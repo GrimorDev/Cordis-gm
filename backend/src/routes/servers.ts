@@ -191,7 +191,14 @@ router.post('/:id/leave', authMiddleware, async (req: AuthRequest, res: Response
       [req.params.id, u?.username, `${u?.username} opuścił/a serwer`]
     );
     const io = req.app.get('io');
-    if (io && act) io.to(`server:${req.params.id}`).emit('server_activity', { ...act, server_id: req.params.id });
+    if (io) {
+      if (act) io.to(`server:${req.params.id}`).emit('server_activity', { ...act, server_id: req.params.id });
+      // Notify all members that this user left
+      io.to(`server:${req.params.id}`).emit('member_left', { server_id: req.params.id, user_id: req.user!.id });
+      // Remove leaving user's socket from server room
+      const sockets = await io.in(`user:${req.user!.id}`).fetchSockets();
+      for (const s of sockets) { s.leave(`server:${req.params.id}`); }
+    }
     return res.json({ message: 'Left server' });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -301,6 +308,12 @@ router.delete('/:id/members/:userId', authMiddleware, async (req: AuthRequest, r
       `DELETE FROM server_members WHERE server_id = $1 AND user_id = $2`,
       [req.params.id, req.params.userId]
     );
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`server:${req.params.id}`).emit('member_left', { server_id: req.params.id, user_id: req.params.userId });
+      const sockets = await io.in(`user:${req.params.userId}`).fetchSockets();
+      for (const s of sockets) { s.leave(`server:${req.params.id}`); }
+    }
     return res.json({ message: 'Member kicked' });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
