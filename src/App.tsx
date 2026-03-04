@@ -1894,10 +1894,10 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-[#181828]">
+    <div className="flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-[#181828] p-2 gap-2">
 
       {/* TOP NAV — browser-tab style */}
-      <nav className="h-14 border-b border-white/[0.04] flex items-center justify-between shrink-0 z-30 relative bg-[#1e1e30] neuo-flat">
+      <nav className="h-12 flex items-center justify-between shrink-0 z-30 relative bg-[#1e1e30] neuo-raised rounded-2xl px-2">
         {/* Left: mobile toggle + server tabs */}
         <div className="flex items-center h-full overflow-x-auto">
           <button onClick={() => setIsMobileOpen(v => !v)} className="md:hidden w-9 h-9 flex items-center justify-center text-zinc-500 hover:text-white ml-2 shrink-0">
@@ -1975,10 +1975,10 @@ export default function App() {
       {isMobileOpen&&<div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-20 md:hidden" onClick={() => setIsMobileOpen(false)}/>}
 
       {/* WORKSPACE */}
-      <main className="flex-1 flex overflow-hidden relative">
+      <main className="flex-1 flex gap-2 overflow-hidden relative min-h-0">
 
         {/* LEFT */}
-        <aside className={`absolute md:relative z-30 md:z-0 w-60 shrink-0 flex flex-col bg-[#1e1e30] border-r border-white/[0.04] transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] h-full ${isMobileOpen?'translate-x-0':'-translate-x-[120%] md:translate-x-0'}`}>
+        <aside className={`absolute md:relative z-30 md:z-0 w-60 shrink-0 flex flex-col bg-[#1e1e30] neuo-raised rounded-2xl transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] h-full overflow-hidden ${isMobileOpen?'translate-x-0':'-translate-x-[120%] md:translate-x-0'}`}>
           {/* mobile server row */}
           <div className="md:hidden p-2 border-b border-white/[0.05] flex gap-1.5 overflow-x-auto">
             {([{v:'friends' as const,i:<Users size={16}/>},{v:'dms' as const,i:<MessageCircle size={16}/>}]).map(({v,i}) => (
@@ -2083,7 +2083,7 @@ export default function App() {
                       return (
                         <div key={ch.id} className="px-2">
                           <button onClick={()=>{setActiveChannel(ch.id);setIsMobileOpen(false);}}
-                            className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${isAct?'bg-[#181828] neuo-inset text-white border-l-2 border-indigo-500 border-r-0 border-y-0':unread>0?'text-white hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-[#222238] hover:text-zinc-300 border border-transparent hover:neuo-flat'}`}>
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${isAct?'bg-indigo-500/10 text-white border border-indigo-500/30 shadow-[inset_0_0_12px_rgba(99,102,241,0.08)]':unread>0?'text-white hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
                             <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
                               <Hash size={16} className={`shrink-0 ${isAct?'text-indigo-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
                               <span className={`text-sm truncate ${unread>0&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
@@ -2148,10 +2148,10 @@ export default function App() {
                             <button onClick={() => { setActiveChannel(ch.id); setIsMobileOpen(false); }}
                               className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${
                                 isAct
-                                  ? 'bg-[#181828] neuo-inset text-white border-l-2 border-indigo-500 border-r-0 border-y-0'
+                                  ? 'bg-indigo-500/10 text-white border border-indigo-500/30 shadow-[inset_0_0_12px_rgba(99,102,241,0.08)]'
                                   : unread > 0
                                     ? 'text-white hover:bg-white/[0.06] border border-transparent'
-                                    : 'text-zinc-500 hover:bg-[#222238] hover:text-zinc-300 border border-transparent hover:neuo-flat'}`}>
+                                    : 'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
                               <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
                                 <Hash size={16} className={`shrink-0 transition-colors ${isAct?'text-indigo-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
                                 <span className={`text-sm truncate transition-colors ${unread>0&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
@@ -2189,7 +2189,7 @@ export default function App() {
                           <div key={ch.id} className="px-2">
                             <button onClick={() => joinVoiceCh(ch)}
                               className={`w-full px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${
-                                isActiveVoice?'bg-emerald-500/12 text-emerald-400 border border-emerald-500/20 shadow-[0_0_12px_rgba(52,211,153,0.1)]':'text-zinc-500 hover:bg-[#222238] hover:text-zinc-300 border border-transparent hover:neuo-flat'}`}>
+                                isActiveVoice?'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 shadow-[inset_0_0_12px_rgba(52,211,153,0.08)]':'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2 min-w-0">
                                   <Volume2 size={13} className={`shrink-0 ${isActiveVoice?'text-emerald-400':hasUsers?'text-zinc-400':'text-zinc-600'}`}/>
@@ -2247,7 +2247,7 @@ export default function App() {
                 const isActive = activeDmUserId===dm.other_user_id;
                 return (
                   <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); }}
-                    className={`w-full flex items-center gap-3 px-2.5 py-2.5 rounded-2xl transition-all duration-150 ${isActive?'bg-[#181828] neuo-inset border-l-2 border-indigo-500 border-r-0 border-y-0':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
+                    className={`w-full flex items-center gap-3 px-2.5 py-2.5 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/10 text-white border border-indigo-500/30 shadow-[inset_0_0_12px_rgba(99,102,241,0.08)]':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
                     <div className="relative shrink-0">
                       <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className="w-9 h-9 rounded-2xl object-cover" alt=""/>
                       <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 ${sc(dm.other_status)} border-2 border-[#1e1e30] rounded-full`}/>
@@ -2359,12 +2359,12 @@ export default function App() {
         </aside>
 
         {/* CENTER */}
-        <section className="flex-1 flex flex-col bg-[#181828] overflow-hidden min-w-0">
+        <section className="flex-1 flex flex-col bg-[#1a1a2e] neuo-raised rounded-2xl overflow-hidden min-w-0">
           {showCallPanel && activeCall ? (
             /* ── CALL PANEL ─────────────────────────────────────────── */
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Call header */}
-              <header className="h-14 border-b border-white/[0.04] flex items-center justify-between px-5 bg-[#1e1e30] neuo-flat shrink-0">
+              <header className="h-14 border-b border-white/[0.04] flex items-center justify-between px-5 bg-[#1a1a2e] border-b border-white/[0.04] shrink-0">
                 <div className="flex items-center gap-2.5">
                   <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"/>
                   {activeCall.type==='voice_channel'
@@ -2607,7 +2607,7 @@ export default function App() {
             </div>
           ) : activeView==='friends' ? (
             <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="h-14 border-b border-white/[0.04] flex items-center px-5 shrink-0 bg-[#1e1e30] neuo-flat z-10">
+              <div className="h-14 border-b border-white/[0.04] flex items-center px-5 shrink-0 bg-[#1a1a2e] border-b border-white/[0.04] z-10">
                 <Users size={17} className="text-indigo-400 mr-2.5"/>
                 <h1 className="text-sm font-bold text-white">Znajomi</h1>
                 {incoming.length > 0 && <span className="ml-2 bg-rose-500 text-white text-[10px] font-bold px-2 py-1 rounded-full leading-none shadow-lg shadow-rose-500/30">{incoming.length} nowe</span>}
@@ -2717,7 +2717,7 @@ export default function App() {
           ) : (
             <>
               {/* Chat header */}
-              <header className="h-14 border-b border-white/[0.04] flex items-center justify-between px-5 bg-[#1e1e30] neuo-flat z-10 shrink-0 gap-3">
+              <header className="h-14 border-b border-white/[0.04] flex items-center justify-between px-5 bg-[#1a1a2e] border-b border-white/[0.04] z-10 shrink-0 gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   {activeView==='dms' ? (activeDm ? (
                     <div className="flex items-center gap-3">
@@ -3085,7 +3085,7 @@ export default function App() {
         </section>
 
         {/* RIGHT — Live voice + Activity */}
-        <aside className="hidden xl:flex w-64 shrink-0 flex-col gap-0 bg-[#1e1e30] border-l border-white/[0.04] overflow-y-auto custom-scrollbar">
+        <aside className="hidden xl:flex w-64 shrink-0 flex-col gap-0 bg-[#1e1e30] neuo-raised rounded-2xl overflow-y-auto custom-scrollbar">
           {/* ─ LIVE VOICE BLOCK ─ */}
           {activeView==='servers'&&(()=>{
             // find first voice channel on current server with users
@@ -3147,7 +3147,7 @@ export default function App() {
               {serverActivity.length>0 ? (
                 <div className="flex flex-col gap-1.5">
                   {serverActivity.slice(0,8).map(a=>(
-                    <div key={a.id} className="flex items-start gap-2.5 bg-[#1e1e30] neuo-flat rounded-2xl px-3 py-2.5 border border-white/[0.04] hover:neuo-raised transition-all duration-200">
+                    <div key={a.id} className="flex items-start gap-2.5 bg-white/[0.03] rounded-2xl px-3 py-2.5 border border-white/[0.04] hover:bg-white/[0.06] transition-all duration-200">
                       <span className="text-sm shrink-0 leading-none mt-0.5">{a.icon}</span>
                       <div className="min-w-0 flex-1">
                         <p className="text-xs text-zinc-300 leading-snug">{a.text}</p>
