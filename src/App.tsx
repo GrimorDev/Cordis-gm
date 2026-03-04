@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Hash, Volume2, Video, Settings, Plus, Search, Bell, Users,
@@ -33,11 +33,11 @@ import {
   setOutputDevice, watchSpeaking, getMediaDevices,
 } from './webrtc';
 
-// ─── Glass constants ──────────────────────────────────────────────────────────
-const gp = 'bg-[#16161e]/90 backdrop-blur-2xl border border-white/[0.08] shadow-2xl shadow-black/40';
-const gm = 'bg-[#16161e]/95 backdrop-blur-2xl border border-white/[0.09] shadow-2xl shadow-black/50 rounded-3xl';
-const gi = 'bg-white/[0.05] border border-white/[0.08] text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 focus:bg-white/[0.07] focus:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] transition-all rounded-xl';
-const gb = 'bg-white/[0.04] border border-white/[0.07] hover:bg-white/[0.08] text-zinc-400 hover:text-white hover:border-white/[0.12] transition-all active:scale-95';
+// ─── Neumorphic constants ──────────────────────────────────────────────────────
+const gp = 'bg-[#1e1e30] neuo-panel border border-white/[0.04]';
+const gm = 'bg-[#222238] neuo-raised border border-white/[0.04] rounded-3xl';
+const gi = 'bg-[#181828] neuo-inset border border-white/[0.04] text-white placeholder-zinc-600 outline-none focus:border-indigo-500/40 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.1)] transition-all rounded-xl';
+const gb = 'bg-[#1e1e30] neuo-raised neuo-btn-hover border border-white/[0.04] text-zinc-400 hover:text-white transition-all';
 
 const PERMISSIONS = [
   { id: 'administrator', label: 'Administrator' },
@@ -58,6 +58,11 @@ const GRADIENTS = [
   'from-amber-500 via-orange-500 to-red-500',
   'from-zinc-700 via-zinc-600 to-zinc-700',
 ];
+// Deterministic banner gradient from user ID (fallback when no custom banner)
+const getBannerGradient = (userId: string): string => {
+  const hash = (userId || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  return GRADIENTS[hash % GRADIENTS.length];
+};
 
 const STATUS_OPTIONS = [
   { value: 'online'  as const, label: 'Dostępny',         color: 'bg-emerald-500', desc: 'Widoczny dla wszystkich' },
@@ -115,7 +120,7 @@ function EmojiPicker({ onSelect, onClose }: { onSelect: (e: string) => void; onC
   }, [onClose]);
   return (
     <div ref={ref}
-      className="absolute bottom-full mb-2 right-0 w-80 bg-[#1a1a26] border border-white/[0.1] rounded-3xl shadow-2xl shadow-black/60 overflow-hidden z-50">
+      className="absolute bottom-full mb-2 right-0 w-80 bg-[#222238] border border-white/[0.1] rounded-3xl shadow-2xl shadow-black/60 overflow-hidden z-50">
       {/* Category tabs */}
       <div className="flex overflow-x-auto border-b border-white/[0.07] p-1.5 gap-0.5"
         style={{ scrollbarWidth: 'none' }}>
@@ -539,7 +544,7 @@ function WelcomeModal({ username, onClose }: { username: string; onClose: () => 
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
         transition={{ type: 'spring', stiffness: 260, damping: 22 }}
-        className="relative w-full max-w-lg bg-[#16161e] border border-white/[0.1] rounded-3xl shadow-2xl shadow-indigo-900/30">
+        className="relative w-full max-w-lg bg-[#222238] border border-white/[0.1] rounded-3xl shadow-2xl shadow-indigo-900/30">
 
         {/* Top gradient banner — rounded-t-3xl + overflow-hidden only on banner */}
         <div className="relative h-36 bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 overflow-hidden rounded-t-3xl">
@@ -557,7 +562,7 @@ function WelcomeModal({ username, onClose }: { username: string; onClose: () => 
 
         {/* Party icon — outside banner so overflow-hidden doesn't clip it */}
         <div className="absolute top-[112px] left-1/2 -translate-x-1/2
-          w-16 h-16 rounded-2xl bg-[#16161e] border-4 border-[#16161e]
+          w-16 h-16 rounded-2xl bg-[#222238] border-4 border-[#16161e]
           flex items-center justify-center shadow-xl z-10">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600
             flex items-center justify-center text-2xl shadow-lg shadow-indigo-500/40">
@@ -1861,7 +1866,7 @@ export default function App() {
   };
 
   // ──────────────────────────────────────────────────────────────────
-  if (authLoading) return <div className="fixed inset-0 bg-[#0c0c11] flex items-center justify-center"><Loader2 size={32} className="text-indigo-400 animate-spin" /></div>;
+  if (authLoading) return <div className="fixed inset-0 bg-[#181828] flex items-center justify-center"><Loader2 size={32} className="text-indigo-400 animate-spin" /></div>;
   if (!isAuthenticated) return <AuthScreen onAuth={(u, t, isNew) => handleAuth(u, t, isNew)} />;
 
   const allChs   = serverFull?.categories.flatMap(c => c.channels) ?? [];
@@ -1889,17 +1894,17 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-[#0c0c11]">
+    <div className="flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-[#181828]">
 
       {/* TOP NAV — browser-tab style */}
-      <nav className="h-12 border-b border-white/[0.06] flex items-center justify-between shrink-0 z-30 relative bg-[#12121a]">
+      <nav className="h-14 border-b border-white/[0.04] flex items-center justify-between shrink-0 z-30 relative bg-[#1e1e30] neuo-flat">
         {/* Left: mobile toggle + server tabs */}
         <div className="flex items-center h-full overflow-x-auto">
           <button onClick={() => setIsMobileOpen(v => !v)} className="md:hidden w-9 h-9 flex items-center justify-center text-zinc-500 hover:text-white ml-2 shrink-0">
             {isMobileOpen ? <X size={18}/> : <Menu size={18}/>}
           </button>
           {/* Friends / DM quick icons */}
-          <div className="hidden md:flex items-center h-full pl-2 gap-0.5 pr-2 border-r border-white/[0.06]">
+          <div className="hidden md:flex items-center h-full pl-2 gap-0.5 pr-2 border-r border-white/[0.04]">
             {([{v:'friends' as const,i:<Users size={15}/>,label:'Znajomi'},{v:'dms' as const,i:<MessageCircle size={15}/>,label:'Wiadomości'}]).map(({v,i,label}) => {
               const totalUnreadDms = v==='dms' ? Object.values(unreadDms).reduce((a,b)=>a+b,0) : 0;
               return (
@@ -1926,9 +1931,9 @@ export default function App() {
                 <button key={srv.id}
                   onClick={() => { if(activeServer===srv.id&&activeView==='servers') return; setActiveServer(srv.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); }}
                   onContextMenu={e => { e.preventDefault(); setSrvContextMenu({ x: e.clientX, y: e.clientY, srv }); }}
-                  className={`flex items-center gap-2 h-full px-4 text-sm font-medium transition-all duration-200 border-r border-white/[0.05] whitespace-nowrap relative group ${isActive?'text-white bg-[#0c0c11]':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'}`}>
+                  className={`flex items-center gap-2 h-full px-4 text-sm font-medium transition-all duration-200 border-r border-white/[0.05] whitespace-nowrap relative group ${isActive?'text-white bg-[#181828]':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'}`}>
                   {isActive&&<motion.span layoutId="nav-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"/>}
-                  <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold text-white shrink-0 overflow-hidden transition-all duration-200 ${isActive?'bg-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.3)]':'bg-zinc-800'}`}>
+                  <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden transition-all duration-200 ${isActive?'bg-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.3)]':'bg-zinc-800'}`}>
                     {srv.icon_url ? <img src={srv.icon_url} className="w-full h-full object-cover" alt=""/> : srv.name.charAt(0).toUpperCase()}
                   </span>
                   <span className="max-w-[120px] truncate">{srv.name}</span>
@@ -1955,7 +1960,7 @@ export default function App() {
           </div>
           <button className="relative w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all">
             <Bell size={15}/>
-            {incoming.length>0&&<span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-rose-500 rounded-full border border-[#12121a]"/>}
+            {incoming.length>0&&<span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-rose-500 rounded-full border border-[#1e1e30]"/>}
           </button>
           <button onClick={() => { setAppSettTab('account'); setAppSettOpen(true); }} title="Ustawienia"
             className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all">
@@ -1973,7 +1978,7 @@ export default function App() {
       <main className="flex-1 flex overflow-hidden relative">
 
         {/* LEFT */}
-        <aside className={`absolute md:relative z-30 md:z-0 w-60 shrink-0 flex flex-col bg-[#12121a] border-r border-white/[0.06] transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] h-full ${isMobileOpen?'translate-x-0':'-translate-x-[120%] md:translate-x-0'}`}>
+        <aside className={`absolute md:relative z-30 md:z-0 w-60 shrink-0 flex flex-col bg-[#1e1e30] border-r border-white/[0.04] transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] h-full ${isMobileOpen?'translate-x-0':'-translate-x-[120%] md:translate-x-0'}`}>
           {/* mobile server row */}
           <div className="md:hidden p-2 border-b border-white/[0.05] flex gap-1.5 overflow-x-auto">
             {([{v:'friends' as const,i:<Users size={16}/>},{v:'dms' as const,i:<MessageCircle size={16}/>}]).map(({v,i}) => (
@@ -1995,7 +2000,7 @@ export default function App() {
           {/* servers */}
           {activeView==='servers'&&<>
             {/* Server header with dropdown */}
-            <div className="relative border-b border-white/[0.06]">
+            <div className="relative border-b border-white/[0.04]">
               <div className="px-4 py-3.5 cursor-pointer hover:bg-white/[0.03] transition-colors group"
                 onClick={() => setSrvDropOpen(p => !p)}>
                 <div className="flex items-center justify-between gap-2">
@@ -2006,7 +2011,7 @@ export default function App() {
                     </svg>
                   </motion.div>
                 </div>
-                {serverFull?.description&&<p className="text-[11px] text-zinc-500 mt-0.5 truncate">{serverFull.description}</p>}
+                {serverFull?.description&&<p className="text-xs text-zinc-500 mt-0.5 truncate">{serverFull.description}</p>}
               </div>
               <AnimatePresence>
               {srvDropOpen&&(
@@ -2014,15 +2019,15 @@ export default function App() {
                   <div className="fixed inset-0 z-[39]" onClick={()=>setSrvDropOpen(false)}/>
                   <motion.div initial={{opacity:0,y:-6,scale:0.97}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:-6,scale:0.97}}
                     transition={{duration:0.15,ease:[0.16,1,0.3,1]}}
-                    className="absolute left-3 right-3 top-full mt-1 z-40 bg-[#1e1e2e] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 py-1.5 overflow-hidden">
+                    className="absolute left-3 right-3 top-full mt-1 z-40 bg-[#222238] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 py-1.5 overflow-hidden">
                     {isAdmin&&<>
                       <button onClick={()=>{setSrvDropOpen(false);setChCreateCatId('');setChCreateOpen(true);setNewChName('');setNewChType('text');setNewChPrivate(false);}}
-                        className="w-full flex items-center gap-3 px-3.5 py-2.5 text-[13px] text-zinc-300 hover:bg-indigo-500/10 hover:text-white transition-colors text-left">
-                        <Hash size={14} className="text-indigo-400 shrink-0"/>
+                        className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-indigo-500/10 hover:text-white transition-colors text-left">
+                        <Hash size={16} className="text-indigo-400 shrink-0"/>
                         Utwórz kanał
                       </button>
                       <button onClick={()=>{setSrvDropOpen(false);setNewCatName('');setNewCatPrivate(false);setCatCreateOpen(true);}}
-                        className="w-full flex items-center gap-3 px-3.5 py-2.5 text-[13px] text-zinc-300 hover:bg-indigo-500/10 hover:text-white transition-colors text-left">
+                        className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-indigo-500/10 hover:text-white transition-colors text-left">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-400 shrink-0">
                           <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                         </svg>
@@ -2031,14 +2036,14 @@ export default function App() {
                       <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
                     </>}
                     <button onClick={openInviteFriends}
-                      className="w-full flex items-center gap-3 px-3.5 py-2.5 text-[13px] text-zinc-300 hover:bg-emerald-500/10 hover:text-emerald-300 transition-colors text-left">
+                      className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-emerald-500/10 hover:text-emerald-300 transition-colors text-left">
                       <UserPlus size={14} className="text-emerald-400 shrink-0"/>
                       Zaproś znajomych
                     </button>
                     {isAdmin&&<>
                       <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
                       <button onClick={()=>{setSrvDropOpen(false);setSrvSettTab('overview');setSrvSettOpen(true);}}
-                        className="w-full flex items-center gap-3 px-3.5 py-2.5 text-[13px] text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
+                        className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
                         <Settings2 size={14} className="text-zinc-500 shrink-0"/>
                         Ustawienia serwera
                       </button>
@@ -2046,7 +2051,7 @@ export default function App() {
                     {serverFull?.my_role!=='Owner'&&<>
                       <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
                       <button onClick={()=>{setSrvDropOpen(false);handleLeaveServer(activeServer);}}
-                        className="w-full flex items-center gap-3 px-3.5 py-2.5 text-[13px] text-rose-400 hover:bg-rose-500/10 transition-colors text-left">
+                        className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-rose-400 hover:bg-rose-500/10 transition-colors text-left">
                         <LogOut size={14} className="shrink-0"/>
                         Opuść serwer
                       </button>
@@ -2078,10 +2083,10 @@ export default function App() {
                       return (
                         <div key={ch.id} className="px-2">
                           <button onClick={()=>{setActiveChannel(ch.id);setIsMobileOpen(false);}}
-                            className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${isAct?'bg-indigo-500/15 text-white shadow-[0_0_12px_rgba(99,102,241,0.15)] border border-indigo-500/20':unread>0?'text-white hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300 border border-transparent'}`}>
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${isAct?'bg-[#181828] neuo-inset text-white border-l-2 border-indigo-500 border-r-0 border-y-0':unread>0?'text-white hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-[#222238] hover:text-zinc-300 border border-transparent hover:neuo-flat'}`}>
                             <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
-                              <Hash size={14} className={`shrink-0 ${isAct?'text-indigo-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
-                              <span className={`text-[13px] truncate ${unread>0&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
+                              <Hash size={16} className={`shrink-0 ${isAct?'text-indigo-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
+                              <span className={`text-sm truncate ${unread>0&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
                             </div>
                             {unread>0&&!isAct&&<span className="min-w-[18px] h-[18px] bg-indigo-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1">{unread>99?'99+':unread}</span>}
                           </button>
@@ -2099,11 +2104,11 @@ export default function App() {
                 return (
                   <motion.div key={cat.id} className="mb-1"
                     initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: catIdx * 0.04, duration: 0.18 }}>
+                    transition={{ type:'spring', stiffness:320, damping:28, delay: catIdx * 0.04 }}>
 
                     {/* Category header — ALWAYS shown */}
                     {cat.id !== '__uncat__' && (
-                    <div className="flex items-center justify-between px-3 pt-4 pb-1 group/cat">
+                    <div className="flex items-center justify-between px-3 pt-5 pb-1.5 group/cat">
                       {editingCatId === cat.id ? (
                         <input autoFocus value={editingCatName}
                           onChange={e=>setEditingCatName(e.target.value.toUpperCase())}
@@ -2127,7 +2132,7 @@ export default function App() {
                     {/* Empty category hint */}
                     {isEmpty&&isAdmin&&(
                       <div className="px-3 pb-2">
-                        <button onClick={openAddCh} className="w-full flex items-center gap-2 px-3 py-1.5 rounded-xl text-zinc-700 hover:text-zinc-400 hover:bg-white/[0.03] transition-all text-[11px] border border-dashed border-white/[0.05] hover:border-white/[0.09]">
+                        <button onClick={openAddCh} className="w-full flex items-center gap-2 px-3 py-1.5 rounded-xl text-zinc-700 hover:text-zinc-400 hover:bg-white/[0.03] transition-all text-xs border border-dashed border-white/[0.05] hover:border-white/[0.09]">
                           <Plus size={10}/> Dodaj kanał do kategorii
                         </button>
                       </div>
@@ -2143,13 +2148,13 @@ export default function App() {
                             <button onClick={() => { setActiveChannel(ch.id); setIsMobileOpen(false); }}
                               className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${
                                 isAct
-                                  ? 'bg-indigo-500/15 text-white shadow-[0_0_12px_rgba(99,102,241,0.15)] border border-indigo-500/20'
+                                  ? 'bg-[#181828] neuo-inset text-white border-l-2 border-indigo-500 border-r-0 border-y-0'
                                   : unread > 0
                                     ? 'text-white hover:bg-white/[0.06] border border-transparent'
-                                    : 'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300 border border-transparent'}`}>
+                                    : 'text-zinc-500 hover:bg-[#222238] hover:text-zinc-300 border border-transparent hover:neuo-flat'}`}>
                               <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
-                                <Hash size={14} className={`shrink-0 transition-colors ${isAct?'text-indigo-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
-                                <span className={`text-[13px] truncate transition-colors ${unread>0&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
+                                <Hash size={16} className={`shrink-0 transition-colors ${isAct?'text-indigo-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
+                                <span className={`text-sm truncate transition-colors ${unread>0&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
                                 {ch.is_private&&<Lock size={9} className="text-zinc-700 shrink-0"/>}
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
@@ -2184,19 +2189,19 @@ export default function App() {
                           <div key={ch.id} className="px-2">
                             <button onClick={() => joinVoiceCh(ch)}
                               className={`w-full px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${
-                                isActiveVoice?'bg-emerald-500/12 text-emerald-400 border border-emerald-500/20 shadow-[0_0_12px_rgba(52,211,153,0.1)]':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300 border border-transparent'}`}>
+                                isActiveVoice?'bg-emerald-500/12 text-emerald-400 border border-emerald-500/20 shadow-[0_0_12px_rgba(52,211,153,0.1)]':'text-zinc-500 hover:bg-[#222238] hover:text-zinc-300 border border-transparent hover:neuo-flat'}`}>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2 min-w-0">
                                   <Volume2 size={13} className={`shrink-0 ${isActiveVoice?'text-emerald-400':hasUsers?'text-zinc-400':'text-zinc-600'}`}/>
-                                  <span className="text-[13px] font-medium truncate">{ch.name}</span>
+                                  <span className="text-sm font-medium truncate">{ch.name}</span>
                                 </div>
                                 {/* Stacked avatars for voice users */}
                                 {hasUsers&&(
                                   <div className="flex -space-x-1.5 shrink-0">
                                     {chVoiceUsers.slice(0,3).map(u=>(
-                                      <img key={u.id} src={ava(u)} className={`w-4 h-4 rounded-full border ${isActiveVoice?'border-emerald-900':'border-[#12121a]'} object-cover`} alt="" title={u.username}/>
+                                      <img key={u.id} src={ava(u)} className={`w-4 h-4 rounded-full border ${isActiveVoice?'border-emerald-900':'border-[#1e1e30]'} object-cover`} alt="" title={u.username}/>
                                     ))}
-                                    {chVoiceUsers.length>3&&<div className="w-4 h-4 rounded-full border border-[#12121a] bg-zinc-700 flex items-center justify-center text-[8px] font-bold text-white">+{chVoiceUsers.length-3}</div>}
+                                    {chVoiceUsers.length>3&&<div className="w-4 h-4 rounded-full border border-[#1e1e30] bg-zinc-700 flex items-center justify-center text-[8px] font-bold text-white">+{chVoiceUsers.length-3}</div>}
                                   </div>
                                 )}
                               </div>
@@ -2212,7 +2217,7 @@ export default function App() {
                                       <div className={`relative shrink-0 ${isSpeaking&&!isMuted?'ring-1 ring-emerald-500 rounded-full':''}`}>
                                         <img src={ava(u)} className="w-3.5 h-3.5 rounded-full object-cover" alt=""/>
                                       </div>
-                                      <span className={`text-[11px] truncate ${isSpeaking&&!isMuted?'text-emerald-400':isMuted?'text-rose-400/70':'text-zinc-500'}`}>{u.username}</span>
+                                      <span className={`text-xs truncate ${isSpeaking&&!isMuted?'text-emerald-400':isMuted?'text-rose-400/70':'text-zinc-500'}`}>{u.username}</span>
                                       {isMuted    && <MicOff  size={8} className="text-rose-400 shrink-0"/>}
                                       {isDeafened && <VolumeX size={8} className="text-rose-400 shrink-0"/>}
                                     </div>
@@ -2235,21 +2240,21 @@ export default function App() {
 
           {/* dms */}
           {activeView==='dms'&&<>
-            <div className="px-4 py-4 border-b border-white/[0.06]"><h2 className="text-sm font-bold text-white">Wiadomości prywatne</h2></div>
+            <div className="px-4 py-4 border-b border-white/[0.04]"><h2 className="text-sm font-bold text-white">Wiadomości prywatne</h2></div>
             <div className="flex-1 overflow-y-auto p-2.5 custom-scrollbar flex flex-col gap-0.5">
               {dmConvs.map(dm => {
                 const unread = unreadDms[dm.other_user_id] || 0;
                 const isActive = activeDmUserId===dm.other_user_id;
                 return (
                   <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); }}
-                    className={`w-full flex items-center gap-3 px-2.5 py-2.5 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/12 border border-indigo-500/20 shadow-[0_0_12px_rgba(99,102,241,0.12)]':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
+                    className={`w-full flex items-center gap-3 px-2.5 py-2.5 rounded-2xl transition-all duration-150 ${isActive?'bg-[#181828] neuo-inset border-l-2 border-indigo-500 border-r-0 border-y-0':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
                     <div className="relative shrink-0">
                       <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className="w-9 h-9 rounded-2xl object-cover" alt=""/>
-                      <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 ${sc(dm.other_status)} border-2 border-[#12121a] rounded-full`}/>
+                      <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 ${sc(dm.other_status)} border-2 border-[#1e1e30] rounded-full`}/>
                     </div>
                     <div className="flex-1 truncate text-left min-w-0">
-                      <p className={`text-[13px] font-semibold truncate ${isActive?'text-indigo-200':unread>0?'text-white':'text-zinc-300'}`}>{dm.other_username}</p>
-                      {dm.last_message&&<p className={`text-[11px] truncate mt-0.5 ${unread>0?'text-zinc-300 font-medium':'text-zinc-600'}`}>{dm.last_message}</p>}
+                      <p className={`text-sm font-semibold truncate ${isActive?'text-indigo-200':unread>0?'text-white':'text-zinc-300'}`}>{dm.other_username}</p>
+                      {dm.last_message&&<p className={`text-xs truncate mt-0.5 ${unread>0?'text-zinc-300 font-medium':'text-zinc-600'}`}>{dm.last_message}</p>}
                     </div>
                     {unread > 0 && (
                       <span className="shrink-0 min-w-[18px] h-[18px] bg-rose-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1 leading-none shadow-[0_0_8px_rgba(239,68,68,0.5)]">
@@ -2266,14 +2271,14 @@ export default function App() {
           {activeView==='friends'&&<div className="p-3.5 border-b border-white/[0.05]"><h2 className="text-sm font-bold text-white">Znajomi</h2></div>}
 
           {/* USER BAR — bottom of sidebar */}
-          <div className="shrink-0 px-3 py-3 border-t border-white/[0.06] bg-[#0e0e16] relative" ref={statusPickerRef}>
+          <div className="shrink-0 px-3 py-3 border-t border-white/[0.04] bg-[#181828] relative" ref={statusPickerRef}>
 
             {/* Status picker popup */}
             <AnimatePresence>
               {statusPickerOpen&&(
                 <motion.div initial={{opacity:0,y:6,scale:0.95}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:6,scale:0.95}}
                   transition={{duration:0.15,ease:[0.16,1,0.3,1]}}
-                  className="absolute bottom-full left-3 right-3 mb-2 bg-[#1a1a26] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden z-50 p-1">
+                  className="absolute bottom-full left-3 right-3 mb-2 bg-[#222238] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden z-50 p-1">
 
                   {/* Call status row — auto, shown when in call */}
                   {activeCall&&(
@@ -2312,18 +2317,18 @@ export default function App() {
                 <img src={currentUser?ava(currentUser):''} className="w-8 h-8 rounded-full object-cover" alt=""/>
                 {/* Status dot — red phone when in call, else normal status */}
                 {activeCall ? (
-                  <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-rose-500 border-2 border-[#0e0e16] rounded-full flex items-center justify-center">
+                  <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-rose-500 border-2 border-[#181828] rounded-full flex items-center justify-center">
                     <Phone size={6} className="text-white"/>
                   </div>
                 ) : (
-                  <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${sc(currentUser?.status??'offline')} border-2 border-[#0e0e16] rounded-full`}/>
+                  <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${sc(currentUser?.status??'offline')} border-2 border-[#181828] rounded-full`}/>
                 )}
               </div>
 
               {/* Name + status label */}
               <div className="flex-1 min-w-0 cursor-pointer" onClick={openOwnProfile}>
-                <p className="text-[13px] font-semibold text-white leading-tight truncate hover:text-zinc-300 transition-colors">{currentUser?.username}</p>
-                <p className="text-[11px] truncate leading-tight mt-0.5">
+                <p className="text-sm font-semibold text-white leading-tight truncate hover:text-zinc-300 transition-colors">{currentUser?.username}</p>
+                <p className="text-xs truncate leading-tight mt-0.5">
                   {activeCall ? (
                     <span className="text-rose-400">W trakcie rozmowy</span>
                   ) : currentUser?.custom_status ? (
@@ -2354,12 +2359,12 @@ export default function App() {
         </aside>
 
         {/* CENTER */}
-        <section className="flex-1 flex flex-col bg-[#0c0c11] overflow-hidden min-w-0">
+        <section className="flex-1 flex flex-col bg-[#181828] overflow-hidden min-w-0">
           {showCallPanel && activeCall ? (
             /* ── CALL PANEL ─────────────────────────────────────────── */
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Call header */}
-              <header className="h-14 border-b border-white/[0.06] flex items-center justify-between px-5 bg-[#0c0c11]/90 backdrop-blur-md shrink-0">
+              <header className="h-14 border-b border-white/[0.04] flex items-center justify-between px-5 bg-[#1e1e30] neuo-flat shrink-0">
                 <div className="flex items-center gap-2.5">
                   <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"/>
                   {activeCall.type==='voice_channel'
@@ -2482,7 +2487,7 @@ export default function App() {
                 );
               })()}
               {/* Call controls */}
-              <div className="shrink-0 border-t border-white/[0.06] bg-[#0c0c11]/80 backdrop-blur-sm">
+              <div className="shrink-0 border-t border-white/[0.04] bg-[#1e1e30]">
                 {/* Device settings panel */}
                 <AnimatePresence>
                   {devicesOpen&&(
@@ -2566,7 +2571,7 @@ export default function App() {
             <div className="flex-1 flex flex-col items-center justify-center p-8">
               <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4}}
                 className="w-full max-w-sm flex flex-col items-center text-center">
-                <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-600/30 to-purple-600/20 border border-indigo-500/20 flex items-center justify-center mb-5 shadow-[0_0_40px_-8px_rgba(99,102,241,0.4)]">
+                <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-600/30 to-purple-600/20 border border-indigo-500/20 flex items-center justify-center float-up neuo-raised mb-5 shadow-[0_0_40px_-8px_rgba(99,102,241,0.4)]">
                   <MessageCircle size={34} className="text-indigo-400"/>
                 </div>
                 <h2 className="text-xl font-bold text-white mb-2">Wiadomości prywatne</h2>
@@ -2580,7 +2585,7 @@ export default function App() {
                           className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.06] transition-all group text-left w-full">
                           <div className="relative shrink-0">
                             <img src={ava(f)} className="w-9 h-9 rounded-xl object-cover" alt=""/>
-                            <div className={`absolute -bottom-px -right-px w-2.5 h-2.5 ${sc(f.status)} border-2 border-[#0c0c11] rounded-full`}/>
+                            <div className={`absolute -bottom-px -right-px w-2.5 h-2.5 ${sc(f.status)} border-2 border-[#181828] rounded-full`}/>
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-zinc-300 group-hover:text-white transition-colors truncate">{f.username}</p>
@@ -2602,7 +2607,7 @@ export default function App() {
             </div>
           ) : activeView==='friends' ? (
             <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="h-14 border-b border-white/[0.06] flex items-center px-5 shrink-0 bg-[#0c0c11]/90 backdrop-blur-sm z-10">
+              <div className="h-14 border-b border-white/[0.04] flex items-center px-5 shrink-0 bg-[#1e1e30] neuo-flat z-10">
                 <Users size={17} className="text-indigo-400 mr-2.5"/>
                 <h1 className="text-sm font-bold text-white">Znajomi</h1>
                 {incoming.length > 0 && <span className="ml-2 bg-rose-500 text-white text-[10px] font-bold px-2 py-1 rounded-full leading-none shadow-lg shadow-rose-500/30">{incoming.length} nowe</span>}
@@ -2696,7 +2701,7 @@ export default function App() {
                     {friends.map(f => (
                       <div key={f.id} className="flex items-center justify-between bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] hover:border-white/[0.07] p-3.5 rounded-2xl transition-all duration-150 group">
                         <div className="flex items-center gap-3 cursor-pointer" onClick={()=>openProfile(f)}>
-                          <div className="relative"><img src={ava(f)} className="w-10 h-10 rounded-2xl object-cover" alt=""/><div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${sc(f.status)} border-2 border-[#0c0c11] rounded-full`}/></div>
+                          <div className="relative"><img src={ava(f)} className="w-10 h-10 rounded-2xl object-cover" alt=""/><div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${sc(f.status)} border-2 border-[#181828] rounded-full`}/></div>
                           <div><p className="font-semibold text-white text-sm">{f.username}</p><p className="text-xs text-zinc-600">{f.custom_status||f.status}</p></div>
                         </div>
                         <button onClick={()=>openDm(f.id)} title="Wyślij wiadomość" className={`w-8 h-8 rounded-xl ${gb} flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all active:scale-90`}><MessageCircle size={15}/></button>
@@ -2712,27 +2717,27 @@ export default function App() {
           ) : (
             <>
               {/* Chat header */}
-              <header className="h-14 border-b border-white/[0.06] flex items-center justify-between px-5 bg-[#0c0c11]/95 backdrop-blur-sm z-10 shrink-0 gap-3">
+              <header className="h-14 border-b border-white/[0.04] flex items-center justify-between px-5 bg-[#1e1e30] neuo-flat z-10 shrink-0 gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   {activeView==='dms' ? (activeDm ? (
                     <div className="flex items-center gap-3">
                       <div className="relative shrink-0">
                         <img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className="w-8 h-8 rounded-2xl object-cover shadow-sm" alt=""/>
-                        <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 ${sc(activeDm.other_status)} border-2 border-[#0c0c11] rounded-full`}/>
+                        <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 ${sc(activeDm.other_status)} border-2 border-[#181828] rounded-full`}/>
                       </div>
                       <div>
                         <h3 className="font-bold text-white text-sm leading-tight">{activeDm.other_username}</h3>
-                        <p className="text-[11px] text-zinc-500 leading-tight capitalize">{activeDm.other_status||'offline'}</p>
+                        <p className="text-xs text-zinc-500 leading-tight capitalize">{activeDm.other_status||'offline'}</p>
                       </div>
                     </div>
                   ) : <h3 className="font-bold text-white text-sm">Wiadomości</h3>) : (
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className="w-7 h-7 rounded-xl bg-indigo-500/15 flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(99,102,241,0.15)]">
-                        <Hash size={14} className="text-indigo-400"/>
+                        <Hash size={16} className="text-indigo-400"/>
                       </div>
                       <div className="min-w-0">
                         <h3 className="font-bold text-white text-sm truncate">{activeCh?.name||activeChannel}</h3>
-                        {activeCh?.description&&<p className="text-[11px] text-zinc-500 truncate hidden lg:block">{activeCh.description}</p>}
+                        {activeCh?.description&&<p className="text-xs text-zinc-500 truncate hidden lg:block">{activeCh.description}</p>}
                       </div>
                     </div>
                   )}
@@ -2746,9 +2751,9 @@ export default function App() {
                   {activeView==='servers'&&members.length>0&&(
                   <div className="hidden md:flex -space-x-2 mr-1">
                     {members.slice(0,4).map(m=>(
-                      <img key={m.id} src={ava(m)} className="w-6 h-6 rounded-full border-2 border-[#0c0c11] object-cover hover:scale-110 transition-transform cursor-pointer" alt="" title={m.username}/>
+                      <img key={m.id} src={ava(m)} className="w-6 h-6 rounded-full border-2 border-[#181828] object-cover hover:scale-110 transition-transform cursor-pointer" alt="" title={m.username}/>
                     ))}
-                    {members.length>4&&<div className="w-6 h-6 rounded-full border-2 border-[#0c0c11] bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-white">+{members.length-4}</div>}
+                    {members.length>4&&<div className="w-6 h-6 rounded-full border-2 border-[#181828] bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-white">+{members.length-4}</div>}
                   </div>
                   )}
                   <button className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all duration-150"><MoreHorizontal size={15}/></button>
@@ -2822,7 +2827,7 @@ export default function App() {
                           {showSep&&(
                             <div className="flex items-center gap-3 my-4">
                               <div className="flex-1 h-px bg-white/[0.07]"/>
-                              <span className="text-[11px] font-semibold text-zinc-600 uppercase tracking-widest shrink-0">{sepLabel}</span>
+                              <span className="text-xs font-semibold text-zinc-600 uppercase tracking-widest shrink-0">{sepLabel}</span>
                               <div className="flex-1 h-px bg-white/[0.07]"/>
                             </div>
                           )}
@@ -2841,14 +2846,14 @@ export default function App() {
                         {showSep&&(
                           <div className="flex items-center gap-3 my-4">
                             <div className="flex-1 h-px bg-white/[0.07]"/>
-                            <span className="text-[11px] font-semibold text-zinc-600 uppercase tracking-widest shrink-0">{sepLabel}</span>
+                            <span className="text-xs font-semibold text-zinc-600 uppercase tracking-widest shrink-0">{sepLabel}</span>
                             <div className="flex-1 h-px bg-white/[0.07]"/>
                           </div>
                         )}
                         <motion.div
                           initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: Math.min(idx * 0.012, 0.08), duration: 0.18, ease: 'easeOut' }}
-                          className={`flex gap-3.5 group hover:bg-white/[0.03] px-3 rounded-2xl -mx-3 transition-all duration-100 ${compactMessages?'py-1':'py-2.5'}`}>
+                          className={`flex gap-3.5 group hover:bg-[#1e1e30] hover:-translate-y-px px-3 rounded-2xl -mx-3 transition-all duration-150 ${compactMessages?'py-1':'py-2.5'}`}>
                           <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} alt=""
                             onClick={()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar,status:(msg as MessageFull).sender_status})}
                             className="w-10 h-10 rounded-2xl object-cover shrink-0 cursor-pointer hover:opacity-80 hover:scale-105 transition-all mt-0.5"/>
@@ -2876,7 +2881,7 @@ export default function App() {
                                   {(msg as MessageFull).sender_role}
                                 </span>
                               )}
-                              <span className="text-[11px] text-zinc-600">{ft(msg.created_at)}</span>
+                              <span className="text-xs text-zinc-600">{ft(msg.created_at)}</span>
                               {(msg as MessageFull).edited&&<span className="text-[10px] text-zinc-700 italic">(edytowano)</span>}
                             </div>
                             {editingMsgId === msg.id ? (
@@ -2891,7 +2896,7 @@ export default function App() {
                                   }}
                                   className="w-full bg-white/[0.07] border border-indigo-500/40 text-zinc-100 text-sm rounded-xl px-3 py-1.5 outline-none focus:border-indigo-500/70 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.1)] transition-all"
                                 />
-                                <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+                                <div className="flex items-center gap-2 text-xs text-zinc-500">
                                   <span>Esc — <button type="button" onClick={cancelEditMsg} className="text-zinc-400 hover:text-white transition-colors">anuluj</button></span>
                                   <span>• Enter — <button type="button" onClick={() => submitEditMsg(msg)} className="text-indigo-400 hover:text-indigo-300 transition-colors">zapisz</button></span>
                                 </div>
@@ -2901,7 +2906,7 @@ export default function App() {
                               const [,srvId,code,srvName,iconUrl] = msg.content.split('|');
                               const alreadyMember = serverList.some(s=>s.id===srvId);
                               return (
-                                <div className="mt-1 max-w-xs bg-[#1e1e2e] border border-white/[0.1] rounded-2xl overflow-hidden shadow-xl">
+                                <div className="mt-1 max-w-xs bg-[#222238] border border-white/[0.1] rounded-2xl overflow-hidden shadow-xl">
                                   {/* Banner gradient */}
                                   <div className="h-10 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600"/>
                                   <div className="px-4 pb-4 pt-2 flex items-end gap-3 -mt-5 relative">
@@ -2987,12 +2992,12 @@ export default function App() {
               </div>
 
               {/* Input */}
-              <div className="shrink-0 px-4 md:px-6 pb-5 pt-3 bg-[#0c0c11] border-t border-white/[0.05]">
+              <div className="shrink-0 px-4 md:px-6 pb-5 pt-3 bg-[#181828] border-t border-white/[0.05]">
                 {/* Reply / attach previews */}
                 <AnimatePresence>
                   {replyTo&&(
                     <motion.div initial={{opacity:0,height:0}} animate={{opacity:1,height:'auto'}} exit={{opacity:0,height:0}}
-                      className="flex items-center justify-between bg-[#1a1a26]/70 border border-white/[0.07] rounded-xl px-3 py-1.5 mb-2 text-xs overflow-hidden">
+                      className="flex items-center justify-between bg-[#222238]/70 border border-white/[0.07] rounded-xl px-3 py-1.5 mb-2 text-xs overflow-hidden">
                       <div className="flex items-center gap-1.5 text-zinc-400 truncate">
                         <Reply size={10} className="text-zinc-500 shrink-0"/>
                         <span className="font-semibold text-zinc-300">{replyTo.sender_username}</span>
@@ -3036,7 +3041,7 @@ export default function App() {
                   );
                   return (
                     <form onSubmit={handleSend}>
-                      <div className="flex items-center gap-3 bg-[#1a1a26] border border-white/[0.08] rounded-2xl px-4 py-3.5 hover:border-white/[0.12] focus-within:border-indigo-500/40 focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] transition-all duration-200">
+                      <div className="flex items-center gap-3 bg-[#222238] border border-white/[0.08] rounded-2xl px-4 py-3.5 hover:border-white/[0.12] focus-within:border-indigo-500/40 focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] transition-all duration-200">
                         <input type="file" ref={attachRef} onChange={handleAttach} accept="image/*" className="hidden"/>
                         <button type="button" onClick={()=>attachRef.current?.click()}
                           className="w-7 h-7 flex items-center justify-center rounded-xl text-zinc-600 hover:text-indigo-400 hover:bg-indigo-500/10 transition-all shrink-0 active:scale-90">
@@ -3058,7 +3063,7 @@ export default function App() {
                           }}
                           onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey) handleSend(e as any); }}
                           placeholder={activeView==='dms'&&activeDm?`Wiadomość do ${activeDm.other_username}...`:`Wiadomość w #${activeCh?.name||''}...`}
-                          className="flex-1 bg-transparent text-[13px] text-zinc-200 placeholder-zinc-600 outline-none min-w-0"/>
+                          className="flex-1 bg-transparent text-sm text-zinc-200 placeholder-zinc-600 outline-none min-w-0"/>
                         <div className="relative shrink-0">
                           <button type="button" onClick={() => setShowEmojiPicker(v => !v)}
                             className={`transition-all active:scale-90 ${showEmojiPicker ? 'text-indigo-400' : 'text-zinc-600 hover:text-zinc-400'}`}>
@@ -3080,7 +3085,7 @@ export default function App() {
         </section>
 
         {/* RIGHT — Live voice + Activity */}
-        <aside className="hidden xl:flex w-64 shrink-0 flex-col gap-0 bg-[#12121a] border-l border-white/[0.06] overflow-y-auto custom-scrollbar">
+        <aside className="hidden xl:flex w-64 shrink-0 flex-col gap-0 bg-[#1e1e30] border-l border-white/[0.04] overflow-y-auto custom-scrollbar">
           {/* ─ LIVE VOICE BLOCK ─ */}
           {activeView==='servers'&&(()=>{
             // find first voice channel on current server with users
@@ -3101,7 +3106,7 @@ export default function App() {
                     <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"/>
                     <span className="text-[12px] font-bold text-white">Live: {displayCh.name}</span>
                   </div>
-                  {activeCall&&<span className="text-[11px] font-mono text-emerald-400 font-semibold">{fmtDur(callDuration)}</span>}
+                  {activeCall&&<span className="text-xs font-mono text-emerald-400 font-semibold">{fmtDur(callDuration)}</span>}
                 </div>
                 {/* Participant thumbnails */}
                 {displayUsers.length>0&&(
@@ -3127,7 +3132,7 @@ export default function App() {
                 )}
                 {/* Join button */}
                 <button onClick={()=>liveCh&&joinVoiceCh(liveCh)}
-                  className="w-full flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 border border-white/[0.08] text-white text-[13px] font-semibold py-2.5 rounded-xl transition-all">
+                  className="w-full flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 border border-white/[0.08] text-white text-sm font-semibold py-2.5 rounded-xl transition-all">
                   <Volume2 size={14} className="text-zinc-300"/>
                   Dołącz
                 </button>
@@ -3142,17 +3147,17 @@ export default function App() {
               {serverActivity.length>0 ? (
                 <div className="flex flex-col gap-1.5">
                   {serverActivity.slice(0,8).map(a=>(
-                    <div key={a.id} className="flex items-start gap-2.5 bg-white/[0.03] rounded-2xl px-3 py-2.5 border border-white/[0.05] hover:bg-white/[0.05] transition-colors">
+                    <div key={a.id} className="flex items-start gap-2.5 bg-[#1e1e30] neuo-flat rounded-2xl px-3 py-2.5 border border-white/[0.04] hover:neuo-raised transition-all duration-200">
                       <span className="text-sm shrink-0 leading-none mt-0.5">{a.icon}</span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[11px] text-zinc-300 leading-snug">{a.text}</p>
+                        <p className="text-xs text-zinc-300 leading-snug">{a.text}</p>
                         <p className="text-[10px] text-zinc-600 mt-0.5">{ft(a.time)}</p>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-[11px] text-zinc-700 italic">Brak aktywności na serwerze</p>
+                <p className="text-xs text-zinc-700 italic">Brak aktywności na serwerze</p>
               )}
             </div>
           )}
@@ -3170,13 +3175,13 @@ export default function App() {
                     </h3>
                     <div className="flex flex-col gap-0.5">
                       {online.map(m=>(
-                        <div key={m.id} className="flex items-center gap-2.5 cursor-pointer group px-2.5 py-2 rounded-xl hover:bg-white/[0.06] transition-all" onClick={()=>openProfile(m)}>
+                        <div key={m.id} className="flex items-center gap-2.5 cursor-pointer group px-2.5 py-2.5 rounded-xl hover:bg-[#222238] hover:neuo-flat transition-all" onClick={()=>openProfile(m)}>
                           <div className="relative shrink-0">
                             <img src={ava(m)} className="w-8 h-8 rounded-xl object-cover" alt=""/>
-                            <div className={`absolute -bottom-px -right-px w-2.5 h-2.5 ${sc(m.status)} border-2 border-[#111111] rounded-full`}/>
+                            <div className={`absolute -bottom-px -right-px w-2.5 h-2.5 ${sc(m.status)} border-2 border-[#1e1e30] rounded-full`}/>
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-[13px] font-semibold truncate group-hover:opacity-90 transition-colors leading-tight"
+                            <p className="text-sm font-semibold truncate group-hover:opacity-90 transition-colors leading-tight"
                               style={{ color: m.roles?.[0]?.color || '#d4d4d8' }}>
                               {m.username}
                             </p>
@@ -3194,13 +3199,13 @@ export default function App() {
                     </h3>
                     <div className="flex flex-col gap-0.5">
                       {offline.map(m=>(
-                        <div key={m.id} className="flex items-center gap-2.5 cursor-pointer group px-2.5 py-2 rounded-xl hover:bg-white/[0.05] transition-all" onClick={()=>openProfile(m)}>
+                        <div key={m.id} className="flex items-center gap-2.5 cursor-pointer group px-2.5 py-2.5 rounded-xl hover:bg-[#222238] hover:neuo-flat transition-all" onClick={()=>openProfile(m)}>
                           <div className="relative shrink-0">
                             <img src={ava(m)} className="w-8 h-8 rounded-xl object-cover opacity-35" alt=""/>
-                            <div className="absolute -bottom-px -right-px w-2.5 h-2.5 bg-zinc-600 border-2 border-[#111111] rounded-full"/>
+                            <div className="absolute -bottom-px -right-px w-2.5 h-2.5 bg-zinc-600 border-2 border-[#1e1e30] rounded-full"/>
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-[13px] font-medium truncate group-hover:opacity-70 transition-colors leading-tight"
+                            <p className="text-sm font-medium truncate group-hover:opacity-70 transition-colors leading-tight"
                               style={{ color: m.roles?.[0]?.color ? `${m.roles[0].color}80` : '#52525b' }}>
                               {m.username}
                             </p>
@@ -3229,12 +3234,12 @@ export default function App() {
               {/* Avatar */}
               <div className="px-4 pb-4 border-b border-white/[0.07]">
                 <div className="relative inline-block -mt-7 mb-3">
-                  <img src={ava(dmPartnerProfile)} className="w-14 h-14 rounded-2xl border-4 border-[#111111] object-cover" alt=""/>
-                  <div className={`absolute bottom-0.5 right-0.5 w-3.5 h-3.5 ${sc(activeDm.other_status)} border-2 border-[#111111] rounded-full`}/>
+                  <img src={ava(dmPartnerProfile)} className="w-14 h-14 rounded-2xl border-4 border-[#1e1e30] object-cover" alt=""/>
+                  <div className={`absolute bottom-0.5 right-0.5 w-3.5 h-3.5 ${sc(activeDm.other_status)} border-2 border-[#1e1e30] rounded-full`}/>
                 </div>
                 <h3 className="text-sm font-bold text-white leading-tight">{dmPartnerProfile.username}</h3>
                 {activeDm.other_custom_status&&(
-                  <p className="text-[11px] text-zinc-500 mt-0.5 truncate">{activeDm.other_custom_status}</p>
+                  <p className="text-xs text-zinc-500 mt-0.5 truncate">{activeDm.other_custom_status}</p>
                 )}
               </div>
               {/* Info */}
@@ -3274,11 +3279,11 @@ export default function App() {
           <div className="fixed inset-0 z-[90]" onClick={()=>setSrvContextMenu(null)}/>
           <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:0.95}}
             style={{position:'fixed',left:srvContextMenu.x,top:srvContextMenu.y}}
-            className="z-[91] bg-[#1a1a26] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 py-1.5 min-w-[180px] overflow-hidden">
+            className="z-[91] bg-[#222238] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 py-1.5 min-w-[180px] overflow-hidden">
             {(srvContextMenu.srv.owner_id===currentUser?.id ||
               (srvContextMenu.srv.id===activeServer && (serverFull?.my_role==='Admin'||serverFull?.my_role==='Owner'))) && (<>
               <button onClick={()=>{ setSrvContextMenu(null); setSrvSettTab('overview'); setSrvSettOpen(true); setActiveServer(srvContextMenu.srv.id); setActiveView('servers'); }}
-                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
+                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
                 <Settings2 size={13} className="text-zinc-500 shrink-0"/>
                 Ustawienia serwera
               </button>
@@ -3286,13 +3291,13 @@ export default function App() {
             </>)}
             {srvContextMenu.srv.owner_id===currentUser?.id ? (
               <button onClick={()=>{ setDeleteSrvConfirm({id:srvContextMenu.srv.id,name:srvContextMenu.srv.name}); setSrvContextMenu(null); }}
-                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-rose-400 hover:bg-rose-500/10 transition-colors text-left">
+                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-rose-400 hover:bg-rose-500/10 transition-colors text-left">
                 <Trash2 size={13} className="shrink-0"/>
                 Usuń serwer
               </button>
             ) : (
               <button onClick={()=>handleLeaveServer(srvContextMenu.srv.id)}
-                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-rose-400 hover:bg-rose-500/10 transition-colors text-left">
+                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-rose-400 hover:bg-rose-500/10 transition-colors text-left">
                 <LogOut size={13} className="shrink-0"/>
                 Opuść serwer
               </button>
@@ -3341,59 +3346,152 @@ export default function App() {
       <AnimatePresence>
         {profileOpen&&selUser&&(
           <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={()=>setProfileOpen(false)}>
-            <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
-              onClick={e=>e.stopPropagation()} className={`${gm} rounded-3xl w-full max-w-sm flex flex-col max-h-[90vh]`}>
-              {/* Banner wrapper — relative but NO overflow-hidden, so avatar can poke out below */}
+            className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4" onClick={()=>setProfileOpen(false)}>
+            <motion.div
+              initial={{scale:0.93,opacity:0,y:20}}
+              animate={{scale:1,opacity:1,y:0}}
+              exit={{scale:0.93,opacity:0,y:16}}
+              transition={{type:'spring',stiffness:340,damping:28}}
+              onClick={e=>e.stopPropagation()}
+              className="bg-[#222238] neuo-raised border border-white/[0.04] rounded-3xl w-full max-w-sm flex flex-col max-h-[92vh] overflow-hidden">
+
+              {/* ── BANNER ── */}
               <div className="relative shrink-0">
-                {/* Banner — overflow-hidden only on this inner div (clips the image/gradient) */}
                 <div className="h-28 relative overflow-hidden rounded-t-3xl">
                   {(currentUser?.id===selUser.id ? (profBannerPrev||currentUser?.banner_url) : selUser.banner_url) ? (
                     <img src={currentUser?.id===selUser.id?(profBannerPrev||currentUser?.banner_url!):selUser.banner_url} className="w-full h-full object-cover" alt=""/>
                   ) : (
-                    <div className={`w-full h-full bg-gradient-to-r ${(currentUser?.id===selUser.id ? editProf?.banner_color : selUser?.banner_color)||'from-indigo-600 via-purple-600 to-pink-600'}`}/>
+                    <div className={`w-full h-full bg-gradient-to-r ${(currentUser?.id===selUser.id ? editProf?.banner_color : selUser?.banner_color)||getBannerGradient(selUser.id||'')}`}/>
                   )}
+                  {/* Subtle bottom fade */}
+                  <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#222238]/50 pointer-events-none"/>
                   {currentUser?.id===selUser.id&&(
-                    <label className="absolute top-2 right-2 w-8 h-8 bg-black/50 hover:bg-black/70 rounded-xl flex items-center justify-center cursor-pointer transition-colors group">
+                    <label className="absolute top-2 right-2 w-8 h-8 bg-black/50 hover:bg-black/75 rounded-xl flex items-center justify-center cursor-pointer transition-all neuo-btn">
                       <Upload size={13} className="text-white"/>
                       <input type="file" accept="image/*" onChange={handleBannerSelect} className="hidden"/>
                     </label>
                   )}
                 </div>
-                {/* Avatar — sibling to banner div, NOT inside overflow-hidden → no longer clipped */}
+                {/* Close button */}
+                <button onClick={()=>setProfileOpen(false)} className="absolute top-2 left-2 w-8 h-8 bg-black/50 hover:bg-black/75 rounded-xl flex items-center justify-center text-white/70 hover:text-white transition-all">
+                  <X size={15}/>
+                </button>
+                {/* Avatar — overlaps banner */}
                 <div className="absolute bottom-0 left-5 translate-y-1/2 z-10">
-                  <div className="relative">
-                    <img src={ava(selUser)} className="w-16 h-16 rounded-2xl border-4 border-zinc-900 object-cover" alt=""/>
-                    <div className={`absolute bottom-0 right-0 w-4 h-4 ${sc(selUser.status||'offline')} rounded-full border-2 border-zinc-900`}/>
+                  <div className="relative neuo-raised rounded-2xl p-0.5 bg-[#222238]">
+                    <img src={ava(selUser)} className="w-20 h-20 rounded-2xl object-cover" alt=""/>
+                    <div className={`absolute bottom-1 right-1 w-4 h-4 ${sc(selUser.status||'offline')} rounded-full border-2 border-[#222238]`}/>
                   </div>
                 </div>
               </div>
-              {/* Scrollable body */}
+
+              {/* ── SCROLLABLE BODY ── */}
               <div className="overflow-y-auto custom-scrollbar flex-1">
-                <div className="p-5 pt-12">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h3 className="text-lg font-bold text-white leading-tight">{selUser.username}</h3>
-                      {selUser.custom_status&&<p className="text-sm text-zinc-400 mt-0.5">{selUser.custom_status}</p>}
-                    </div>
-                    <button onClick={()=>setProfileOpen(false)} className="text-zinc-600 hover:text-white transition-colors shrink-0 ml-2"><X size={17}/></button>
+                <div className="px-5 pb-6 pt-14">
+
+                  {/* Name + tag */}
+                  <div className="mb-2">
+                    <h3 className="text-xl font-black text-white leading-tight tracking-tight truncate">{selUser.username}</h3>
+                    <p className="text-xs text-zinc-500 font-mono">#{(selUser.id||'0000').slice(-4).toUpperCase()}</p>
                   </div>
-                  {selUser.bio&&<p className="text-sm text-zinc-400 mb-4 bg-white/[0.03] border border-white/[0.05] rounded-xl p-3 leading-relaxed">{selUser.bio}</p>}
-                  {currentUser?.id===selUser.id ? (
+
+                  {/* Custom status pill */}
+                  {selUser.custom_status&&(
+                    <div className="inline-flex items-center gap-2 neuo-flat bg-[#1e1e30] border border-white/[0.04] rounded-full px-3 py-1.5 mb-4">
+                      <span className="text-base leading-none">{selUser.custom_status.match(/^\p{Emoji}/u)?.[0]||'💬'}</span>
+                      <span className="text-xs text-zinc-400 font-medium truncate max-w-[160px]">{selUser.custom_status.replace(/^\p{Emoji}\s*/u,'')}</span>
+                    </div>
+                  )}
+
+                  {/* Badges row */}
+                  <div className="flex items-center gap-2 mb-4 flex-wrap">
+                    <div className="flex items-center gap-1.5 neuo-flat bg-[#1e1e30] border border-white/[0.04] rounded-lg px-2.5 py-1">
+                      <span className="text-xs">🌐</span>
+                      <span className="text-[11px] text-zinc-500 font-medium">Cordis</span>
+                    </div>
+                    {(selUser.role_name==='Admin'||selUser.role_name==='Owner')&&(
+                      <div className="flex items-center gap-1.5 neuo-flat bg-indigo-500/10 border border-indigo-500/25 rounded-lg px-2.5 py-1">
+                        <span className="text-xs">🛡️</span>
+                        <span className="text-[11px] text-indigo-400 font-medium">{selUser.role_name}</span>
+                      </div>
+                    )}
+                    {selUser.created_at&&(
+                      <div className="flex items-center gap-1.5 neuo-flat bg-[#1e1e30] border border-white/[0.04] rounded-lg px-2.5 py-1">
+                        <span className="text-xs">📅</span>
+                        <span className="text-[11px] text-zinc-500 font-medium">
+                          {new Date(selUser.created_at).toLocaleDateString('pl-PL',{month:'short',year:'numeric'})}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Bio block */}
+                  {selUser.bio&&(
+                    <div className="mb-4">
+                      <p className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest mb-2">O mnie</p>
+                      <div className="neuo-inset bg-[#181828] border border-white/[0.04] rounded-xl px-3.5 py-3">
+                        <p className="text-sm text-zinc-300 leading-relaxed">{selUser.bio}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="border-t border-white/[0.05] mb-4"/>
+
+                  {/* Info rows */}
+                  {selUser.created_at&&(
+                    <div className="flex items-center gap-2.5 mb-3">
+                      <div className="w-7 h-7 rounded-lg neuo-flat bg-[#1e1e30] border border-white/[0.04] flex items-center justify-center shrink-0">
+                        <span className="text-xs">📅</span>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold">Dołączył/a</p>
+                        <p className="text-xs text-zinc-400">{new Date(selUser.created_at).toLocaleDateString('pl-PL',{day:'numeric',month:'long',year:'numeric'})}</p>
+                      </div>
+                    </div>
+                  )}
+                  {typeof selUser.mutual_friends_count==='number'&&selUser.mutual_friends_count>0&&(
+                    <div className="flex items-center gap-2.5 mb-4">
+                      <div className="w-7 h-7 rounded-lg neuo-flat bg-[#1e1e30] border border-white/[0.04] flex items-center justify-center shrink-0">
+                        <Users size={12} className="text-indigo-400"/>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold">Wspólni znajomi</p>
+                        <p className="text-xs text-zinc-400">{selUser.mutual_friends_count} wspólnych znajomych</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action buttons (other user) */}
+                  {currentUser?.id!==selUser.id ? (
+                    <div className="flex gap-2.5">
+                      <button onClick={()=>openDm(selUser.id)}
+                        className="flex-1 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 text-white font-bold py-3 rounded-xl neuo-btn shadow-lg shadow-indigo-500/25 transition-all flex items-center justify-center gap-2 text-sm">
+                        <MessageSquare size={15}/> Wyślij wiadomość
+                      </button>
+                      <button onClick={()=>startDmCall(selUser.id,selUser.username,'voice')}
+                        className="w-11 h-11 neuo-btn bg-[#1e1e30] border border-white/[0.04] rounded-xl flex items-center justify-center text-zinc-400 hover:text-emerald-400 transition-all">
+                        <Phone size={16}/>
+                      </button>
+                      <button onClick={()=>startDmCall(selUser.id,selUser.username,'video')}
+                        className="w-11 h-11 neuo-btn bg-[#1e1e30] border border-white/[0.04] rounded-xl flex items-center justify-center text-zinc-400 hover:text-sky-400 transition-all">
+                        <Video size={16}/>
+                      </button>
+                    </div>
+                  ) : (
+                    /* Own profile edit form */
                     <div className="flex flex-col gap-4">
-                      {/* Avatar + banner side by side */}
                       <div className="flex gap-3">
                         <div className="flex-1">
-                          <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Avatar</label>
-                          <label className={`flex items-center gap-2 cursor-pointer ${gi} rounded-xl px-3 py-2.5 border text-sm hover:bg-white/[0.06] transition-all`}>
+                          <label className="text-[11px] text-zinc-600 uppercase tracking-widest mb-1.5 block font-bold">Avatar</label>
+                          <label className={`flex items-center gap-2 cursor-pointer ${gi} px-3 py-2.5 hover:border-indigo-500/30 transition-all`}>
                             <Upload size={14} className="text-zinc-500 shrink-0"/>
                             <span className="text-zinc-500 truncate text-xs">Zmień avatar</span>
                             <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden"/>
                           </label>
                         </div>
                         <div className="flex-1">
-                          <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Banner</label>
-                          <label className={`flex items-center gap-2 cursor-pointer ${gi} rounded-xl px-3 py-2.5 border text-sm hover:bg-white/[0.06] transition-all`}>
+                          <label className="text-[11px] text-zinc-600 uppercase tracking-widest mb-1.5 block font-bold">Banner</label>
+                          <label className={`flex items-center gap-2 cursor-pointer ${gi} px-3 py-2.5 hover:border-indigo-500/30 transition-all`}>
                             <Upload size={14} className="text-zinc-500 shrink-0"/>
                             <span className="text-zinc-500 truncate text-xs">Zmień banner</span>
                             <input type="file" accept="image/*" onChange={handleBannerSelect} className="hidden"/>
@@ -3401,33 +3499,30 @@ export default function App() {
                         </div>
                       </div>
                       <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Nazwa użytkownika</label>
-                        <input value={editProf?.username||''} onChange={e=>setEditProf((p:any)=>({...p,username:e.target.value}))} className={`w-full ${gi} rounded-xl px-3 py-2.5 text-sm`}/>
+                        <label className="text-[11px] text-zinc-600 uppercase tracking-widest mb-1.5 block font-bold">Nazwa użytkownika</label>
+                        <input value={editProf?.username||''} onChange={e=>setEditProf((p:any)=>({...p,username:e.target.value}))} className={`w-full ${gi} px-3 py-2.5 text-sm`}/>
                       </div>
                       <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Status</label>
-                        <input value={editProf?.custom_status||''} onChange={e=>setEditProf((p:any)=>({...p,custom_status:e.target.value}))} placeholder="Ustaw status..." className={`w-full ${gi} rounded-xl px-3 py-2.5 text-sm`}/>
+                        <label className="text-[11px] text-zinc-600 uppercase tracking-widest mb-1.5 block font-bold">Status niestandardowy</label>
+                        <input value={editProf?.custom_status||''} onChange={e=>setEditProf((p:any)=>({...p,custom_status:e.target.value}))} placeholder="Np. 🎮 Gram w gry..." className={`w-full ${gi} px-3 py-2.5 text-sm`}/>
                       </div>
                       <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Bio</label>
-                        <textarea value={editProf?.bio||''} onChange={e=>setEditProf((p:any)=>({...p,bio:e.target.value}))} rows={3} placeholder="Napisz coś o sobie..." className={`w-full ${gi} rounded-xl px-3 py-2.5 text-sm resize-none`}/>
+                        <label className="text-[11px] text-zinc-600 uppercase tracking-widest mb-1.5 block font-bold">Bio</label>
+                        <textarea value={editProf?.bio||''} onChange={e=>setEditProf((p:any)=>({...p,bio:e.target.value}))} rows={3} placeholder="Napisz coś o sobie..." className={`w-full ${gi} px-3 py-2.5 text-sm resize-none`}/>
                       </div>
                       <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">Kolor bannera</label>
+                        <label className="text-[11px] text-zinc-600 uppercase tracking-widest mb-2 block font-bold">Kolor bannera</label>
                         <div className="grid grid-cols-6 gap-2">
                           {GRADIENTS.map(g=>(
                             <button key={g} onClick={()=>setEditProf((p:any)=>({...p,banner_color:g}))}
-                              className={`h-8 rounded-lg bg-gradient-to-r ${g} border-2 transition-all ${editProf?.banner_color===g?'border-white scale-105':'border-transparent'}`}/>
+                              className={`h-8 rounded-xl bg-gradient-to-r ${g} border-2 transition-all neuo-btn ${editProf?.banner_color===g?'border-white scale-105':'border-transparent'}`}/>
                           ))}
                         </div>
                       </div>
-                      <button onClick={handleSaveProfile} className="w-full bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors mt-1">Zapisz zmiany</button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button onClick={()=>openDm(selUser.id)} className="flex-1 bg-indigo-500 hover:bg-indigo-400 text-white font-semibold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 text-sm"><MessageSquare size={14}/> Wiadomość</button>
-                      <button onClick={()=>startDmCall(selUser.id,selUser.username,'voice')} className={`w-10 h-10 ${gb} rounded-xl flex items-center justify-center`}><Phone size={15}/></button>
-                      <button onClick={()=>startDmCall(selUser.id,selUser.username,'video')} className={`w-10 h-10 ${gb} rounded-xl flex items-center justify-center`}><Video size={15}/></button>
+                      <button onClick={handleSaveProfile}
+                        className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 text-white font-bold py-3 rounded-xl neuo-btn shadow-lg shadow-indigo-500/25 transition-all mt-1">
+                        Zapisz zmiany
+                      </button>
                     </div>
                   )}
                 </div>
@@ -3447,7 +3542,7 @@ export default function App() {
               onClick={e=>e.stopPropagation()} className={`${gm} rounded-3xl w-full max-w-sm overflow-hidden`}>
 
               {/* Mode tabs */}
-              <div className="flex border-b border-white/[0.06]">
+              <div className="flex border-b border-white/[0.04]">
                 {(['create','join'] as const).map(m=>(
                   <button key={m} onClick={()=>setCreateSrvMode(m)}
                     className={`flex-1 py-4 text-sm font-bold transition-all relative ${createSrvMode===m?'text-white':'text-zinc-500 hover:text-zinc-300'}`}>
@@ -3491,7 +3586,7 @@ export default function App() {
                     <div className="p-6 flex flex-col gap-5">
                       {/* Server name */}
                       <div className="flex flex-col gap-2">
-                        <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Nazwa serwera</label>
+                        <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Nazwa serwera</label>
                         <input
                           value={createSrvName}
                           onChange={e=>setCreateSrvName(e.target.value)}
@@ -3528,7 +3623,7 @@ export default function App() {
                     </div>
 
                     <div className="flex flex-col gap-2">
-                      <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Kod zaproszenia</label>
+                      <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Kod zaproszenia</label>
                       <input
                         value={joinCode}
                         onChange={e=>setJoinCode(e.target.value)}
@@ -3562,11 +3657,11 @@ export default function App() {
             className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={()=>setSrvSettOpen(false)}>
             <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
               onClick={e=>e.stopPropagation()} className={`${gm} rounded-3xl w-full max-w-2xl max-h-[85vh] flex flex-col`}>
-              <div className="flex items-center justify-between p-5 border-b border-white/[0.06] shrink-0">
+              <div className="flex items-center justify-between p-5 border-b border-white/[0.04] shrink-0">
                 <h2 className="text-base font-bold text-white">Ustawienia serwera</h2>
                 <button onClick={()=>setSrvSettOpen(false)} className="text-zinc-600 hover:text-white"><X size={17}/></button>
               </div>
-              <div className="flex border-b border-white/[0.06] shrink-0 px-5 gap-0.5">
+              <div className="flex border-b border-white/[0.04] shrink-0 px-5 gap-0.5">
                 {(['overview','roles','members','invites'] as const).map(t=>(
                   <button key={t} onClick={()=>setSrvSettTab(t)}
                     className={`px-4 py-3 text-sm font-semibold transition-all border-b-2 -mb-px ${srvSettTab===t?'border-indigo-500 text-white':'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
@@ -3763,7 +3858,7 @@ export default function App() {
                     <span className={newChType===type?'text-indigo-400':'text-zinc-500'}>{icon}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold leading-tight">{label}</p>
-                      <p className="text-[11px] text-zinc-500 leading-tight mt-0.5">{desc}</p>
+                      <p className="text-xs text-zinc-500 leading-tight mt-0.5">{desc}</p>
                     </div>
                     <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${newChType===type?'border-indigo-500 bg-indigo-500':'border-zinc-600'}`}>
                       {newChType===type&&<div className="w-1.5 h-1.5 rounded-full bg-white"/>}
@@ -3776,7 +3871,7 @@ export default function App() {
               <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Nazwa kanału</p>
               <div className="relative mb-4">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none">
-                  {newChType==='voice'?<Volume2 size={14}/>:<Hash size={14}/>}
+                  {newChType==='voice'?<Volume2 size={14}/>:<Hash size={16}/>}
                 </span>
                 <input autoFocus value={newChName}
                   onChange={e=>setNewChName(e.target.value.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-_]/g,''))}
@@ -3792,7 +3887,7 @@ export default function App() {
                   <Lock size={15} className={newChPrivate?'text-indigo-400':'text-zinc-500'}/>
                   <div className="text-left">
                     <p className="text-sm font-semibold text-white">Kanał prywatny</p>
-                    <p className="text-[11px] text-zinc-500">Tylko wybrani członkowie mogą go zobaczyć</p>
+                    <p className="text-xs text-zinc-500">Tylko wybrani członkowie mogą go zobaczyć</p>
                   </div>
                 </div>
                 <div className={`w-10 h-6 rounded-full transition-all relative ${newChPrivate?'bg-indigo-500':'bg-zinc-700'}`}>
@@ -3838,7 +3933,7 @@ export default function App() {
                     <Lock size={15} className={newCatPrivate?'text-indigo-400':'text-zinc-500'}/>
                     <div className="text-left">
                       <p className="text-sm font-semibold text-white">Kategoria prywatna</p>
-                      <p className="text-[11px] text-zinc-500">Tylko wybrani mają dostęp</p>
+                      <p className="text-xs text-zinc-500">Tylko wybrani mają dostęp</p>
                     </div>
                   </div>
                   <div className={`w-10 h-6 rounded-full transition-all relative ${newCatPrivate?'bg-indigo-500':'bg-zinc-700'}`}>
@@ -3905,7 +4000,7 @@ export default function App() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm font-semibold truncate ${f.status==='offline'?'text-zinc-500':'text-white'}`}>{f.username}</p>
-                      <p className="text-[11px] text-zinc-600 capitalize">{f.status==='online'?'Dostępny':f.status==='idle'?'Zaraz wracam':f.status==='dnd'?'Nie przeszkadzać':'Offline'}</p>
+                      <p className="text-xs text-zinc-600 capitalize">{f.status==='online'?'Dostępny':f.status==='idle'?'Zaraz wracam':f.status==='dnd'?'Nie przeszkadzać':'Offline'}</p>
                     </div>
                     <button onClick={()=>handleInviteFriend(f.id, f.username)}
                       disabled={inviteSending===f.id}
@@ -3976,7 +4071,7 @@ export default function App() {
               onClick={e=>e.stopPropagation()} className={`${gm} w-full max-w-2xl max-h-[88vh] flex flex-col overflow-hidden`}>
 
               {/* Header */}
-              <div className="flex items-center justify-between px-6 py-5 border-b border-white/[0.06] shrink-0">
+              <div className="flex items-center justify-between px-6 py-5 border-b border-white/[0.04] shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-xl bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center">
                     <Settings size={15} className="text-indigo-400"/>
@@ -3991,7 +4086,7 @@ export default function App() {
 
               <div className="flex flex-1 overflow-hidden">
                 {/* Sidebar tabs */}
-                <div className="w-48 shrink-0 border-r border-white/[0.06] p-3 flex flex-col gap-0.5">
+                <div className="w-48 shrink-0 border-r border-white/[0.04] p-3 flex flex-col gap-0.5">
                   {([
                     {id:'account',label:'Konto',icon:<Users size={14}/>},
                     {id:'appearance',label:'Wygląd',icon:<Image size={14}/>},
@@ -4005,7 +4100,7 @@ export default function App() {
                       {t.label}
                     </button>
                   ))}
-                  <div className="mt-auto pt-3 border-t border-white/[0.06]">
+                  <div className="mt-auto pt-3 border-t border-white/[0.04]">
                     <button onClick={()=>{setAppSettOpen(false);auth.logout().then(()=>{clearToken();setIsAuthenticated(false);setCurrentUser(null);}).catch(()=>{clearToken();setIsAuthenticated(false);setCurrentUser(null);});}}
                       className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all w-full">
                       <LogOut size={14}/> Wyloguj
@@ -4137,7 +4232,7 @@ export default function App() {
                               className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-all ${compactMessages===opt.key?'bg-indigo-500/10 border-indigo-500/30 text-white':'bg-white/[0.02] border-white/[0.05] text-zinc-400 hover:text-zinc-300'}`}>
                               <div className="text-left">
                                 <p className="font-semibold">{opt.label}</p>
-                                <p className="text-[11px] text-zinc-600 mt-0.5">{opt.desc}</p>
+                                <p className="text-xs text-zinc-600 mt-0.5">{opt.desc}</p>
                               </div>
                               {compactMessages===opt.key&&<Check size={13} className="text-indigo-400 shrink-0"/>}
                             </button>
@@ -4248,21 +4343,26 @@ export default function App() {
       </AnimatePresence>
 
       {/* ── TOAST CONTAINER ─────────────────────────────────────────────── */}
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] flex flex-col items-center gap-2 pointer-events-none" style={{minWidth:'20rem',maxWidth:'28rem'}}>
+      <div className="fixed top-4 right-4 z-[200] flex flex-col items-end gap-2.5 pointer-events-none" style={{minWidth:'20rem',maxWidth:'26rem'}}>
         <AnimatePresence>
           {toasts.map(t => {
             const toastIcon = t.type==='success'?<CheckCircle2 size={15}/>:t.type==='error'?<AlertCircle size={15}/>:t.type==='warn'?<AlertTriangle size={15}/>:<Info size={15}/>;
-            const toastCls = t.type==='success'?'bg-emerald-950/90 border-emerald-500/30 text-emerald-300 shadow-emerald-900/30':t.type==='error'?'bg-rose-950/90 border-rose-500/30 text-rose-300 shadow-rose-900/30':t.type==='warn'?'bg-amber-950/90 border-amber-500/30 text-amber-300 shadow-amber-900/30':'bg-[#1a1a26]/95 border-white/[0.1] text-zinc-300 shadow-black/50';
+            const toastCls  = t.type==='success'?'bg-[#0d2218] border-emerald-500/40 text-emerald-200':t.type==='error'?'bg-[#220d0d] border-rose-500/40 text-rose-200':t.type==='warn'?'bg-[#221800] border-amber-500/40 text-amber-200':'bg-[#1e1e30] border-indigo-500/20 text-zinc-200';
+            const iconCls   = t.type==='success'?'bg-emerald-500/20 text-emerald-400':t.type==='error'?'bg-rose-500/20 text-rose-400':t.type==='warn'?'bg-amber-500/20 text-amber-400':'bg-indigo-500/20 text-indigo-400';
             return (
-              <motion.div key={t.id} initial={{opacity:0,y:-20,scale:0.9}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,scale:0.9,y:-12}} transition={{duration:0.25,ease:[0.16,1,0.3,1]}}
-                className={`pointer-events-auto w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl border shadow-2xl backdrop-blur-2xl ${toastCls}`}>
-                <span className="shrink-0">{toastIcon}</span>
-                <span className="flex-1 text-sm font-medium">{t.msg}</span>
+              <motion.div key={t.id}
+                initial={{opacity:0,x:40,scale:0.93}}
+                animate={{opacity:1,x:0,scale:1}}
+                exit={{opacity:0,x:32,scale:0.9}}
+                transition={{type:'spring',stiffness:380,damping:28}}
+                className={`pointer-events-auto w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl border neuo-raised ${toastCls}`}>
+                <span className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center ${iconCls}`}>{toastIcon}</span>
+                <span className="flex-1 text-sm font-medium leading-snug">{t.msg}</span>
                 {t.onConfirm && <>
-                  <button onClick={()=>{t.onConfirm!();rmToast(t.id);}} className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition-colors">Tak</button>
-                  <button onClick={()=>rmToast(t.id)} className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/15 transition-colors">Nie</button>
+                  <button onClick={()=>{t.onConfirm!();rmToast(t.id);}} className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition-colors neuo-btn">Tak</button>
+                  <button onClick={()=>rmToast(t.id)} className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/10 transition-colors">Nie</button>
                 </>}
-                {!t.onConfirm && <button onClick={()=>rmToast(t.id)} className="shrink-0 opacity-50 hover:opacity-100 transition-opacity"><X size={14}/></button>}
+                {!t.onConfirm && <button onClick={()=>rmToast(t.id)} className="shrink-0 opacity-40 hover:opacity-90 transition-opacity"><X size={14}/></button>}
               </motion.div>
             );
           })}

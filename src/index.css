@@ -9,11 +9,11 @@
     background: transparent;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(255,255,255,0.07);
+    background: rgba(37,37,64,0.9);
     border-radius: 10px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(99,102,241,0.35);
+    background: rgba(99,102,241,0.45);
   }
 
   /* Smooth font rendering */
@@ -45,5 +45,87 @@
   }
   .glow-emerald {
     animation: glow-pulse 2s ease-in-out infinite;
+  }
+
+  /* ── Neumorphic shadows (base bg: #181828) ─────────────────────── */
+  .neuo-raised {
+    box-shadow:
+      6px 6px 14px #12121e,
+      -4px -4px 10px #252540;
+  }
+  .neuo-flat {
+    box-shadow:
+      3px 3px 7px #12121e,
+      -2px -2px 5px #252540;
+  }
+  .neuo-inset {
+    box-shadow:
+      inset 4px 4px 9px #12121e,
+      inset -3px -3px 7px #252540;
+  }
+  /* Panel surface — slightly lighter */
+  .neuo-panel {
+    background: #1e1e30;
+    box-shadow:
+      8px 8px 20px #12121e,
+      -5px -5px 14px #2a2a48;
+  }
+  /* Interactive button — raised at rest, inset on press */
+  .neuo-btn {
+    box-shadow:
+      6px 6px 14px #12121e,
+      -4px -4px 10px #252540;
+    transition: box-shadow 0.12s ease, transform 0.1s ease;
+  }
+  .neuo-btn:active {
+    box-shadow:
+      inset 4px 4px 9px #12121e,
+      inset -3px -3px 7px #252540;
+    transform: scale(0.97);
+  }
+  /* Hover helper for buttons */
+  .neuo-btn-hover:hover {
+    box-shadow: 3px 3px 7px #12121e, -2px -2px 5px #252540;
+  }
+  .neuo-btn-hover:active {
+    box-shadow: inset 4px 4px 9px #12121e, inset -3px -3px 7px #252540;
+    transform: scale(0.97);
+  }
+
+  /* Glow ring — pulsing indigo ring for active elements */
+  @keyframes glow-ring {
+    0%, 100% {
+      box-shadow:
+        0 0 0 2px rgba(99,102,241,0.15),
+        6px 6px 14px #12121e,
+        -4px -4px 10px #252540;
+    }
+    50% {
+      box-shadow:
+        0 0 0 4px rgba(99,102,241,0.4),
+        6px 6px 14px #12121e,
+        -4px -4px 10px #252540;
+    }
+  }
+  .glow-ring-indigo {
+    animation: glow-ring 2.5s ease-in-out infinite;
+  }
+
+  /* Float-up for empty state icons */
+  @keyframes float-up {
+    0%, 100% { transform: translateY(0px); }
+    50%       { transform: translateY(-5px); }
+  }
+  .float-up {
+    animation: float-up 3s ease-in-out infinite;
+  }
+
+  /* Slide-in from right (toasts) */
+  @keyframes slide-in-right {
+    from { opacity: 0; transform: translateX(32px) scale(0.95); }
+    to   { opacity: 1; transform: translateX(0)    scale(1); }
+  }
+  .slide-in-right {
+    animation: slide-in-right 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
 }
