@@ -186,6 +186,10 @@ export const channelsApi = {
   delete: (id: string) => req<void>('DELETE', `/channels/${id}`),
   createCategory: (server_id: string, name: string) =>
     req<ChannelCategory>('POST', '/channels/categories', { server_id, name }),
+  updateCategory: (id: string, name: string) =>
+    req<ChannelCategory>('PUT', `/channels/categories/${id}`, { name }),
+  deleteCategory: (id: string) =>
+    req<void>('DELETE', `/channels/categories/${id}`),
 };
 
 // ── Messages ───────────────────────────────────────────────────────────────

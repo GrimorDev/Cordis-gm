@@ -168,4 +168,42 @@ router.post('/categories', authMiddleware, async (req: AuthRequest, res: Respons
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// PUT /api/channels/categories/:id  — rename category
+router.put('/categories/:id', authMiddleware,
+  [body('name').trim().isLength({ min: 1, max: 100 })],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    try {
+      const { rows: [cat] } = await query('SELECT * FROM channel_categories WHERE id=$1', [req.params.id]);
+      if (!cat) return res.status(404).json({ error: 'Not found' });
+      const role = await isMember(cat.server_id, req.user!.id);
+      if (!role || !['Owner', 'Admin'].includes(role)) return res.status(403).json({ error: 'Not authorized' });
+      const { rows: [updated] } = await query(
+        'UPDATE channel_categories SET name=$1 WHERE id=$2 RETURNING *',
+        [req.body.name, req.params.id]
+      );
+      const io = req.app.get('io');
+      if (io) io.to(`server:${cat.server_id}`).emit('category_updated', { id: updated.id, name: updated.name, server_id: cat.server_id });
+      return res.json(updated);
+    } catch { return res.status(500).json({ error: 'Internal server error' }); }
+  }
+);
+
+// DELETE /api/channels/categories/:id  — delete category (channels become uncategorized)
+router.delete('/categories/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { rows: [cat] } = await query('SELECT * FROM channel_categories WHERE id=$1', [req.params.id]);
+    if (!cat) return res.status(404).json({ error: 'Not found' });
+    const role = await isMember(cat.server_id, req.user!.id);
+    if (!role || !['Owner', 'Admin'].includes(role)) return res.status(403).json({ error: 'Not authorized' });
+    // Channels in this category become uncategorized
+    await query('UPDATE channels SET category_id=NULL WHERE category_id=$1', [req.params.id]);
+    await query('DELETE FROM channel_categories WHERE id=$1', [req.params.id]);
+    const io = req.app.get('io');
+    if (io) io.to(`server:${cat.server_id}`).emit('category_deleted', { id: req.params.id, server_id: cat.server_id });
+    return res.json({ message: 'Deleted' });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
 export default router;

@@ -694,6 +694,10 @@ export default function App() {
   const [newCatName, setNewCatName]           = useState('');
   const [newCatPrivate, setNewCatPrivate]     = useState(false);
 
+  // ── Category inline edit ─────────────────────────────────────────
+  const [editingCatId, setEditingCatId]       = useState<string|null>(null);
+  const [editingCatName, setEditingCatName]   = useState('');
+
   // ── Invite Friends popup ─────────────────────────────────────────
   const [inviteFriendsOpen, setInviteFriendsOpen] = useState(false);
   const [inviteFriendsCode, setInviteFriendsCode] = useState<string|null>(null);
@@ -955,6 +959,27 @@ export default function App() {
     sock.on('category_created' as any, (cat: any) => {
       if (cat.server_id !== activeServerRef.current) return;
       setServerFull(p => p ? { ...p, categories: [...p.categories, { ...cat, channels: [] }] } : p);
+    });
+    sock.on('category_updated' as any, ({ id, name, server_id }: any) => {
+      if (server_id !== activeServerRef.current) return;
+      setServerFull(p => p ? { ...p, categories: p.categories.map(c => c.id === id ? { ...c, name } : c) } : p);
+    });
+    sock.on('category_deleted' as any, ({ id, server_id }: any) => {
+      if (server_id !== activeServerRef.current) return;
+      setServerFull(p => {
+        if (!p) return p;
+        // Channels from deleted category become uncategorized (category_id=null)
+        const deletedCat = p.categories.find(c => c.id === id);
+        const orphanChannels = deletedCat?.channels || [];
+        const remaining = p.categories.filter(c => c.id !== id);
+        // Find or create the __uncategorized__ slot
+        const uncat = remaining.find(c => c.id === '__uncat__');
+        if (orphanChannels.length === 0) return { ...p, categories: remaining };
+        if (uncat) {
+          return { ...p, categories: remaining.map(c => c.id === '__uncat__' ? { ...c, channels: [...c.channels, ...orphanChannels] } : c) };
+        }
+        return { ...p, categories: [{ id: '__uncat__', name: '', position: -1, channels: orphanChannels } as any, ...remaining] };
+      });
     });
     sock.on('server_updated' as any, (srv: any) => {
       setServerFull(p => p && p.id === srv.id ? { ...p, ...srv } : p);
@@ -1502,6 +1527,25 @@ export default function App() {
     }
   };
 
+  // ── Category rename / delete ─────────────────────────────────────
+  const startEditCat = (cat: { id: string; name: string }) => {
+    setEditingCatId(cat.id); setEditingCatName(cat.name);
+  };
+  const cancelEditCat = () => { setEditingCatId(null); setEditingCatName(''); };
+  const submitEditCat = async (catId: string) => {
+    const name = editingCatName.trim();
+    if (!name) { cancelEditCat(); return; }
+    cancelEditCat();
+    try { await channelsApi.updateCategory(catId, name); }
+    catch (err: any) { addToast(err?.message || 'Nie udało się zmienić nazwy', 'error'); }
+  };
+  const handleDeleteCat = (cat: { id: string; name: string }) => {
+    confirmAction(`Usunąć kategorię „${cat.name}"? Kanały staną się niekategoryzowane.`, async () => {
+      try { await channelsApi.deleteCategory(cat.id); }
+      catch (err: any) { addToast(err?.message || 'Nie udało się usunąć kategorii', 'error'); }
+    });
+  };
+
   // ── Invite Friends ───────────────────────────────────────────────
   const openInviteFriends = async () => {
     setSrvDropOpen(false); setInviteFriendsOpen(true);
@@ -2017,7 +2061,37 @@ export default function App() {
               {serverFull && <motion.div key={activeServer}
                 initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 8 }} transition={{ duration: 0.16, ease: 'easeOut' }}>
-              {serverFull?.categories.map((cat, catIdx) => {
+              {/* Uncategorized channels (category_id = null) rendered first */}
+              {(()=>{
+                const allCatChannelIds = new Set(serverFull.categories.flatMap(c=>c.channels.map((ch:any)=>ch.id)));
+                // The server GET response only includes channels attached to a category.
+                // Channels with category_id=null are NOT in any category.channels array.
+                // They are surfaced here via real-time socket updates (channel_created with null category_id).
+                const uncatChannels = serverFull.categories
+                  .filter(c=>c.id==='__uncat__')
+                  .flatMap(c=>c.channels);
+                if (uncatChannels.length===0) return null;
+                return (
+                  <div className="mb-1">
+                    {uncatChannels.filter((c:any)=>c.type==='text').map((ch:any)=>{
+                      const isAct = activeChannel===ch.id; const unread = unreadChs[ch.id]||0;
+                      return (
+                        <div key={ch.id} className="px-2">
+                          <button onClick={()=>{setActiveChannel(ch.id);setIsMobileOpen(false);}}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${isAct?'bg-indigo-500/15 text-white shadow-[0_0_12px_rgba(99,102,241,0.15)] border border-indigo-500/20':unread>0?'text-white hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300 border border-transparent'}`}>
+                            <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
+                              <Hash size={14} className={`shrink-0 ${isAct?'text-indigo-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
+                              <span className={`text-[13px] truncate ${unread>0&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
+                            </div>
+                            {unread>0&&!isAct&&<span className="min-w-[18px] h-[18px] bg-indigo-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1">{unread>99?'99+':unread}</span>}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+              {serverFull?.categories.filter(c=>c.id!=='__uncat__').map((cat, catIdx) => {
                 const textChs  = cat.channels.filter(c=>c.type==='text');
                 const voiceChs = cat.channels.filter(c=>c.type==='voice');
                 const isEmpty  = textChs.length===0 && voiceChs.length===0;
@@ -2028,10 +2102,28 @@ export default function App() {
                     transition={{ delay: catIdx * 0.04, duration: 0.18 }}>
 
                     {/* Category header — ALWAYS shown */}
-                    <div className="flex items-center justify-between px-3 pt-4 pb-1.5 group/cat">
-                      <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{cat.name}</span>
-                      {isAdmin&&<Plus size={12} className="text-zinc-700 hover:text-zinc-300 cursor-pointer opacity-0 group-hover/cat:opacity-100 transition-all" onClick={openAddCh}/>}
+                    {cat.id !== '__uncat__' && (
+                    <div className="flex items-center justify-between px-3 pt-4 pb-1 group/cat">
+                      {editingCatId === cat.id ? (
+                        <input autoFocus value={editingCatName}
+                          onChange={e=>setEditingCatName(e.target.value.toUpperCase())}
+                          onKeyDown={e=>{if(e.key==='Enter')submitEditCat(cat.id);if(e.key==='Escape')cancelEditCat();}}
+                          onBlur={()=>submitEditCat(cat.id)}
+                          className="flex-1 bg-white/[0.07] border border-indigo-500/40 text-zinc-300 text-[10px] font-bold uppercase tracking-widest rounded-lg px-2 py-0.5 outline-none focus:border-indigo-500/70 transition-all mr-2"/>
+                      ) : (
+                        <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest cursor-default select-none flex-1">
+                          {cat.name}
+                        </span>
+                      )}
+                      {isAdmin&&editingCatId!==cat.id&&(
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover/cat:opacity-100 transition-opacity">
+                          <button onClick={openAddCh} title="Dodaj kanał" className="w-4 h-4 flex items-center justify-center rounded hover:text-zinc-300 text-zinc-600 transition-colors"><Plus size={11}/></button>
+                          <button onClick={()=>startEditCat(cat)} title="Zmień nazwę" className="w-4 h-4 flex items-center justify-center rounded hover:text-zinc-300 text-zinc-600 transition-colors"><Edit3 size={10}/></button>
+                          <button onClick={()=>handleDeleteCat(cat)} title="Usuń kategorię" className="w-4 h-4 flex items-center justify-center rounded hover:text-rose-400 text-zinc-600 transition-colors"><Trash2 size={10}/></button>
+                        </div>
+                      )}
                     </div>
+                    )}
                     {/* Empty category hint */}
                     {isEmpty&&isAdmin&&(
                       <div className="px-3 pb-2">
