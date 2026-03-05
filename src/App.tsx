@@ -760,9 +760,9 @@ export default function App() {
   // WebRTC state
   const [speakingUsers, setSpeakingUsers]     = useState(new Set<string>());
   const [devices, setDevices]                 = useState<MediaDeviceInfo[]>([]);
-  const [selMic, setSelMic]                   = useState(() => localStorage.getItem('cordis_mic') || '');
-  const [selSpeaker, setSelSpeaker]           = useState(() => localStorage.getItem('cordis_speaker') || '');
-  const [selCamera, setSelCamera]             = useState(() => localStorage.getItem('cordis_camera') || '');
+  const [selMic, setSelMic]                   = useState(() => localStorage.getItem('cordyn_mic') || '');
+  const [selSpeaker, setSelSpeaker]           = useState(() => localStorage.getItem('cordyn_speaker') || '');
+  const [selCamera, setSelCamera]             = useState(() => localStorage.getItem('cordyn_camera') || '');
   const [devicesOpen, setDevicesOpen]         = useState(false);
 
   // App preferences — initialized from currentUser (DB), updated via users.updateMe()
@@ -1228,9 +1228,9 @@ export default function App() {
   }, [isAuthenticated]);
 
   // ── Persist selected devices across sessions ─────────────────────
-  useEffect(() => { if (selMic)     localStorage.setItem('cordis_mic',     selMic);     }, [selMic]);
-  useEffect(() => { if (selSpeaker) localStorage.setItem('cordis_speaker', selSpeaker); }, [selSpeaker]);
-  useEffect(() => { if (selCamera)  localStorage.setItem('cordis_camera',  selCamera);  }, [selCamera]);
+  useEffect(() => { if (selMic)     localStorage.setItem('cordyn_mic',     selMic);     }, [selMic]);
+  useEffect(() => { if (selSpeaker) localStorage.setItem('cordyn_speaker', selSpeaker); }, [selSpeaker]);
+  useEffect(() => { if (selCamera)  localStorage.setItem('cordyn_camera',  selCamera);  }, [selCamera]);
 
   // ── WebRTC voice signaling handlers ─────────────────────────────
   // These are updated via ref so socket callbacks always get latest version
@@ -1989,7 +1989,7 @@ export default function App() {
         </div>
         {/* Center: branding */}
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none">
-          <span className="text-white font-bold tracking-tight text-sm bg-clip-text">Cordis</span>
+          <span className="text-white font-bold tracking-tight text-sm bg-clip-text">Cordyn</span>
         </div>
         {/* Right: search + bell + settings + avatar */}
         <div className="flex items-center gap-1.5 pr-3">
@@ -3638,7 +3638,7 @@ export default function App() {
                   <div className="flex items-center gap-2 mb-4 flex-wrap">
                     <div className="flex items-center gap-1.5 bg-white/[0.04] border border-white/[0.06] rounded-lg px-2.5 py-1">
                       <span className="text-xs">🌐</span>
-                      <span className="text-[11px] text-zinc-500 font-medium">Cordis</span>
+                      <span className="text-[11px] text-zinc-500 font-medium">Cordyn</span>
                     </div>
                     {(selUser.role_name==='Admin'||selUser.role_name==='Owner')&&(
                       <div className="flex items-center gap-1.5 bg-indigo-500/10 border border-indigo-500/25 rounded-lg px-2.5 py-1">
