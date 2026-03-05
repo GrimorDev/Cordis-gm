@@ -1008,6 +1008,13 @@ export default function App() {
     sock.on('roles_updated' as any, ({ server_id, roles: updatedRoles }: any) => {
       if (server_id !== activeServerRef.current) return;
       setRoles(updatedRoles);
+      setMembers(prev => prev.map(m => ({
+        ...m,
+        roles: (m.roles || []).map((r: any) => {
+          const upd = updatedRoles.find((ur: any) => ur.id === r.id);
+          return upd ? { ...r, name: upd.name, color: upd.color } : r;
+        }),
+      })));
     });
     sock.on('member_joined' as any, ({ server_id, user }: any) => {
       if (server_id !== activeServerRef.current) return;
