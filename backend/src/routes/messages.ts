@@ -6,18 +6,21 @@ import { AuthRequest } from '../types';
 
 const router = Router();
 
-// Returns serverId if user can access the channel, null otherwise
-async function resolveChannelAccess(channelId: string, userId: string): Promise<string | null> {
+interface ChannelAccess { serverId: string; channelType: string; roleInServer: string; }
+
+// Returns channel access info if user can access the channel, null otherwise
+async function resolveChannelAccess(channelId: string, userId: string): Promise<ChannelAccess | null> {
   const { rows: [ch] } = await query(
-    `SELECT c.server_id, c.is_private, sm.role_name
+    `SELECT c.server_id, c.is_private, c.type, sm.role_name
      FROM channels c
      LEFT JOIN server_members sm ON sm.server_id = c.server_id AND sm.user_id = $2
      WHERE c.id = $1`,
     [channelId, userId]
   );
   if (!ch || !ch.role_name) return null; // not a member
-  if (!ch.is_private) return ch.server_id;
-  if (['Owner', 'Admin'].includes(ch.role_name)) return ch.server_id;
+  const result = { serverId: ch.server_id, channelType: ch.type, roleInServer: ch.role_name };
+  if (!ch.is_private) return result;
+  if (['Owner', 'Admin'].includes(ch.role_name)) return result;
   const { rowCount } = await query(
     `SELECT 1 FROM channel_role_access cra
      INNER JOIN member_roles mr ON mr.role_id = cra.role_id
@@ -25,7 +28,7 @@ async function resolveChannelAccess(channelId: string, userId: string): Promise<
      LIMIT 1`,
     [channelId, userId, ch.server_id]
   );
-  return rowCount ? ch.server_id : null;
+  return rowCount ? result : null;
 }
 
 const MSG_JOIN = (serverIdParam: string, channelIdParam: string) => `
@@ -58,9 +61,9 @@ router.get('/channel/:channelId', authMiddleware, async (req: AuthRequest, res: 
   const limit = Math.min(parseInt(String(req.query.limit || '50')), 100);
   const before = req.query.before as string | undefined;
   try {
-    const serverId = await resolveChannelAccess(req.params.channelId, req.user!.id);
-    if (!serverId) return res.status(403).json({ error: 'No access' });
-    const ch = { server_id: serverId };
+    const access = await resolveChannelAccess(req.params.channelId, req.user!.id);
+    if (!access) return res.status(403).json({ error: 'No access' });
+    const ch = { server_id: access.serverId };
 
     let sql = MSG_JOIN('$1', '$2');
     const params: any[] = [ch.server_id, req.params.channelId];
@@ -90,9 +93,12 @@ router.post('/channel/:channelId', authMiddleware,
     }
 
     try {
-      const serverId = await resolveChannelAccess(req.params.channelId, req.user!.id);
-      if (!serverId) return res.status(403).json({ error: 'No access' });
-      const ch = { server_id: serverId };
+      const access = await resolveChannelAccess(req.params.channelId, req.user!.id);
+      if (!access) return res.status(403).json({ error: 'No access' });
+      if (access.channelType === 'announcement' && !['Owner', 'Admin'].includes(access.roleInServer)) {
+        return res.status(403).json({ error: 'Tylko administratorzy mogą pisać na kanałach ogłoszeń' });
+      }
+      const ch = { server_id: access.serverId };
       const { rows: [msg] } = await query(
         'INSERT INTO messages (channel_id, sender_id, content, reply_to_id, attachment_url) VALUES ($1,$2,$3,$4,$5) RETURNING *',
         [req.params.channelId, req.user!.id, req.body.content, reply_to_id || null, attachment_url || null]
