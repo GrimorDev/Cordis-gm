@@ -1550,7 +1550,7 @@ export default function App() {
     if (!newChName.trim() || !activeServer) return;
     const icon = newChType==='voice'?'🎙️':newChType==='forum'?'🗨️':newChType==='announcement'?'📣':'#️⃣';
     try {
-      await channelsApi.create({ server_id: activeServer, name: newChName.trim(), type: newChType, category_id: chCreateCatId || undefined });
+      await channelsApi.create({ server_id: activeServer, name: newChName.trim(), type: newChType, category_id: chCreateCatId || undefined, is_private: newChPrivate });
       addServerActivity({ icon, text: `Kanał #${newChName.trim()} został utworzony` });
       setChCreateOpen(false); setNewChName(''); setNewChPrivate(false);
       const s = await serversApi.get(activeServer); setServerFull(s);

@@ -129,9 +129,24 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
       [req.params.id]
     );
 
+    // User's custom role IDs (for private channel visibility check)
+    const isAdminOrOwnerUser = ['Owner', 'Admin'].includes(server.my_role);
+    const { rows: userRoles } = await query(
+      `SELECT role_id FROM member_roles WHERE server_id = $1 AND user_id = $2`,
+      [req.params.id, req.user!.id]
+    );
+    const userRoleIds = new Set(userRoles.map((r: any) => r.role_id));
+
+    const visibleChannels = channels.filter((ch: any) => {
+      if (!ch.is_private) return true;
+      if (isAdminOrOwnerUser) return true;
+      const allowedRoleIds = cra.filter((r: any) => r.channel_id === ch.id).map((r: any) => r.role_id);
+      return allowedRoleIds.some((rid: string) => userRoleIds.has(rid));
+    });
+
     server.categories = categories.map((cat: any) => ({
       ...cat,
-      channels: channels
+      channels: visibleChannels
         .filter((ch: any) => ch.category_id === cat.id)
         .map((ch: any) => ({
           ...ch,

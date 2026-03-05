@@ -6,6 +6,28 @@ import { AuthRequest } from '../types';
 
 const router = Router();
 
+// Returns serverId if user can access the channel, null otherwise
+async function resolveChannelAccess(channelId: string, userId: string): Promise<string | null> {
+  const { rows: [ch] } = await query(
+    `SELECT c.server_id, c.is_private, sm.role_name
+     FROM channels c
+     LEFT JOIN server_members sm ON sm.server_id = c.server_id AND sm.user_id = $2
+     WHERE c.id = $1`,
+    [channelId, userId]
+  );
+  if (!ch || !ch.role_name) return null; // not a member
+  if (!ch.is_private) return ch.server_id;
+  if (['Owner', 'Admin'].includes(ch.role_name)) return ch.server_id;
+  const { rowCount } = await query(
+    `SELECT 1 FROM channel_role_access cra
+     INNER JOIN member_roles mr ON mr.role_id = cra.role_id
+     WHERE cra.channel_id = $1 AND mr.user_id = $2 AND mr.server_id = $3
+     LIMIT 1`,
+    [channelId, userId, ch.server_id]
+  );
+  return rowCount ? ch.server_id : null;
+}
+
 const MSG_JOIN = (serverIdParam: string, channelIdParam: string) => `
   SELECT m.id, m.channel_id, m.content, m.edited, m.created_at, m.updated_at,
          m.attachment_url, m.reply_to_id,
@@ -36,13 +58,9 @@ router.get('/channel/:channelId', authMiddleware, async (req: AuthRequest, res: 
   const limit = Math.min(parseInt(String(req.query.limit || '50')), 100);
   const before = req.query.before as string | undefined;
   try {
-    const { rows: [ch] } = await query('SELECT server_id FROM channels WHERE id = $1', [req.params.channelId]);
-    if (!ch) return res.status(404).json({ error: 'Channel not found' });
-    const access = await query(
-      'SELECT 1 FROM server_members WHERE server_id = $1 AND user_id = $2',
-      [ch.server_id, req.user!.id]
-    );
-    if (!access.rowCount) return res.status(403).json({ error: 'No access' });
+    const serverId = await resolveChannelAccess(req.params.channelId, req.user!.id);
+    if (!serverId) return res.status(403).json({ error: 'No access' });
+    const ch = { server_id: serverId };
 
     let sql = MSG_JOIN('$1', '$2');
     const params: any[] = [ch.server_id, req.params.channelId];
@@ -72,13 +90,9 @@ router.post('/channel/:channelId', authMiddleware,
     }
 
     try {
-      const { rows: [ch] } = await query('SELECT server_id FROM channels WHERE id = $1', [req.params.channelId]);
-      if (!ch) return res.status(404).json({ error: 'Channel not found' });
-      const access = await query(
-        'SELECT 1 FROM server_members WHERE server_id = $1 AND user_id = $2',
-        [ch.server_id, req.user!.id]
-      );
-      if (!access.rowCount) return res.status(403).json({ error: 'No access' });
+      const serverId = await resolveChannelAccess(req.params.channelId, req.user!.id);
+      if (!serverId) return res.status(403).json({ error: 'No access' });
+      const ch = { server_id: serverId };
       const { rows: [msg] } = await query(
         'INSERT INTO messages (channel_id, sender_id, content, reply_to_id, attachment_url) VALUES ($1,$2,$3,$4,$5) RETURNING *',
         [req.params.channelId, req.user!.id, req.body.content, reply_to_id || null, attachment_url || null]
