@@ -190,7 +190,7 @@ export const channelsApi = {
     req<Record<string, { id: string; username: string; avatar_url: string | null; status: string }[]>>(
       'GET', `/channels/server/${serverId}/voice-users`
     ),
-  create: (d: { server_id: string; name: string; type: 'text' | 'voice' | 'forum' | 'announcement'; category_id?: string }) =>
+  create: (d: { server_id: string; name: string; type: 'text' | 'voice' | 'forum' | 'announcement'; category_id?: string; is_private?: boolean; role_ids?: string[] }) =>
     req<ChannelData>('POST', '/channels', d),
   update: (id: string, d: Partial<Pick<ChannelData, 'name' | 'description' | 'is_private'>> & { role_ids?: string[] }) =>
     req<ChannelData>('PUT', `/channels/${id}`, d),

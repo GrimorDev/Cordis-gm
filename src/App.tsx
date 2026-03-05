@@ -688,6 +688,7 @@ export default function App() {
   const [newChName, setNewChName]             = useState('');
   const [newChType, setNewChType]             = useState<'text'|'voice'|'forum'|'announcement'>('text');
   const [newChPrivate, setNewChPrivate]       = useState(false);
+  const [newChRoles, setNewChRoles]           = useState<string[]>([]);
 
   // ── Forum state ──────────────────────────────────────────────────
   const [forumPosts, setForumPosts]           = useState<ForumPost[]>([]);
@@ -939,14 +940,28 @@ export default function App() {
       if (ch.server_id !== activeServerRef.current) return;
       setServerFull(p => {
         if (!p) return p;
-        return {
-          ...p,
-          categories: p.categories.map(cat =>
-            cat.id === ch.category_id
-              ? { ...cat, channels: [...cat.channels.filter((c: any) => c.id !== ch.id), { ...ch, allowed_roles: [] }] }
-              : cat
-          ),
-        };
+        const targetCatId = ch.category_id || '__uncat__';
+        const newCh = { ...ch, allowed_roles: ch.allowed_roles || [] };
+        // If target category exists, add channel there
+        const hasCat = p.categories.some((cat: any) => cat.id === targetCatId);
+        if (hasCat) {
+          return {
+            ...p,
+            categories: p.categories.map((cat: any) =>
+              cat.id === targetCatId
+                ? { ...cat, channels: [...cat.channels.filter((c: any) => c.id !== ch.id), newCh] }
+                : cat
+            ),
+          };
+        }
+        // No matching category (uncategorized slot doesn't exist yet) — create it
+        if (!ch.category_id) {
+          return {
+            ...p,
+            categories: [{ id: '__uncat__', name: '', position: -1, channels: [newCh] } as any, ...p.categories],
+          };
+        }
+        return p;
       });
     });
     sock.on('channel_updated' as any, (ch: any) => {
@@ -1550,9 +1565,9 @@ export default function App() {
     if (!newChName.trim() || !activeServer) return;
     const icon = newChType==='voice'?'🎙️':newChType==='forum'?'🗨️':newChType==='announcement'?'📣':'#️⃣';
     try {
-      await channelsApi.create({ server_id: activeServer, name: newChName.trim(), type: newChType, category_id: chCreateCatId || undefined, is_private: newChPrivate });
+      await channelsApi.create({ server_id: activeServer, name: newChName.trim(), type: newChType, category_id: chCreateCatId || undefined, is_private: newChPrivate, role_ids: newChPrivate ? newChRoles : undefined });
       addServerActivity({ icon, text: `Kanał #${newChName.trim()} został utworzony` });
-      setChCreateOpen(false); setNewChName(''); setNewChPrivate(false);
+      setChCreateOpen(false); setNewChName(''); setNewChPrivate(false); setNewChRoles([]);
       const s = await serversApi.get(activeServer); setServerFull(s);
     } catch (err: any) {
       console.error(err);
@@ -4112,8 +4127,8 @@ export default function App() {
               </div>
 
               {/* Private toggle */}
-              <button onClick={()=>setNewChPrivate(p=>!p)}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl border mb-5 transition-all ${newChPrivate?'bg-indigo-500/10 border-indigo-500/30':'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04]'}`}>
+              <button onClick={()=>{setNewChPrivate(p=>!p);setNewChRoles([]);}}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl border transition-all ${newChPrivate?'bg-indigo-500/10 border-indigo-500/30':'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04]'} ${newChPrivate?'mb-3':'mb-5'}`}>
                 <div className="flex items-center gap-3">
                   <Lock size={15} className={newChPrivate?'text-indigo-400':'text-zinc-500'}/>
                   <div className="text-left">
@@ -4125,6 +4140,21 @@ export default function App() {
                   <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${newChPrivate?'left-5':'left-1'}`}/>
                 </div>
               </button>
+              {newChPrivate&&roles.length>0&&(
+                <div className="mb-5">
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Dostęp dla ról</p>
+                  <div className="flex flex-col gap-1.5">
+                    {roles.map(r=>{
+                      const sel=newChRoles.includes(r.id);
+                      return <button key={r.id} onClick={()=>setNewChRoles(p=>sel?p.filter(id=>id!==r.id):[...p,r.id])}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border text-sm transition-all ${sel?'bg-indigo-500/10 border-indigo-500/30 text-white':'bg-white/[0.02] border-white/[0.05] text-zinc-400 hover:text-zinc-300'}`}>
+                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{background:r.color}}/>{r.name}
+                        {sel&&<Check size={13} className="ml-auto text-indigo-400"/>}
+                      </button>;
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-2">
                 <button onClick={()=>setChCreateOpen(false)} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold ${gb} transition-all`}>Anuluj</button>
