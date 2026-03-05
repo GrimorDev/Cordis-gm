@@ -80,12 +80,36 @@ CREATE TABLE IF NOT EXISTS channels (
     server_id   UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
     category_id UUID REFERENCES channel_categories(id) ON DELETE SET NULL,
     name        VARCHAR(100) NOT NULL,
-    type        VARCHAR(10)  NOT NULL CHECK (type IN ('text', 'voice')),
+    type        VARCHAR(15)  NOT NULL CHECK (type IN ('text', 'voice', 'forum', 'announcement')),
     description TEXT,
     is_private  BOOLEAN DEFAULT FALSE,
     position    INTEGER DEFAULT 0,
     created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS forum_posts (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    channel_id  UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    author_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title       VARCHAR(200) NOT NULL,
+    content     TEXT NOT NULL,
+    image_url   TEXT,
+    pinned      BOOLEAN DEFAULT FALSE,
+    locked      BOOLEAN DEFAULT FALSE,
+    reply_count INTEGER DEFAULT 0,
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_forum_posts_channel ON forum_posts(channel_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS forum_replies (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    post_id    UUID NOT NULL REFERENCES forum_posts(id) ON DELETE CASCADE,
+    author_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content    TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_forum_replies_post ON forum_replies(post_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_channels_server   ON channels(server_id);
 CREATE INDEX IF NOT EXISTS idx_channels_category ON channels(category_id);
 
@@ -217,6 +241,36 @@ CREATE INDEX IF NOT EXISTS idx_email_verif_email ON email_verifications(email, c
 
 -- Default role flag
 DO $$ BEGIN ALTER TABLE server_roles ADD COLUMN is_default BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Forum/announcement channel types (existing deployments)
+DO $$ BEGIN
+  ALTER TABLE channels DROP CONSTRAINT IF EXISTS channels_type_check;
+  ALTER TABLE channels ADD CONSTRAINT channels_type_check CHECK (type IN ('text', 'voice', 'forum', 'announcement'));
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS forum_posts (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    channel_id  UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    author_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title       VARCHAR(200) NOT NULL,
+    content     TEXT NOT NULL,
+    image_url   TEXT,
+    pinned      BOOLEAN DEFAULT FALSE,
+    locked      BOOLEAN DEFAULT FALSE,
+    reply_count INTEGER DEFAULT 0,
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_forum_posts_channel ON forum_posts(channel_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS forum_replies (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    post_id    UUID NOT NULL REFERENCES forum_posts(id) ON DELETE CASCADE,
+    author_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content    TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_forum_replies_post ON forum_replies(post_id, created_at);
 `;
 
 const SEED_SQL = `

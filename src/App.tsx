@@ -7,15 +7,15 @@ import {
   Shield, Trash2, Settings2, UserPlus, Check, X as XIcon,
   LogOut, Loader2, Lock, Phone, PhoneOff, MessageSquare, Upload, MoreHorizontal, ScreenShare,
   CheckCircle2, AlertCircle, Info, AlertTriangle, PartyPopper, Sparkles, Zap, Globe,
-  Eye, EyeOff
+  Eye, EyeOff, Megaphone, FileText, ChevronLeft, ArrowLeft
 } from 'lucide-react';
 import {
-  auth, users, serversApi, channelsApi, messagesApi, dmsApi, friendsApi,
+  auth, users, serversApi, channelsApi, messagesApi, dmsApi, friendsApi, forumApi,
   uploadFile, setToken, clearToken, getToken,
   type UserProfile, type ServerData, type ServerFull, type ServerRole,
   type ChannelData, type MessageFull, type DmConversation,
   type DmMessageFull, type FriendEntry, type FriendRequest,
-  type ServerMember, ApiError
+  type ServerMember, type ForumPost, type ForumReply, ApiError
 } from './api';
 import {
   connectSocket, disconnectSocket, joinChannel, leaveChannel,
@@ -120,7 +120,7 @@ function EmojiPicker({ onSelect, onClose }: { onSelect: (e: string) => void; onC
   }, [onClose]);
   return (
     <div ref={ref}
-      className="absolute bottom-full mb-2 right-0 w-80 bg-white/[0.06] border border-white/[0.1] rounded-3xl shadow-2xl shadow-black/60 overflow-hidden z-50">
+      className="absolute bottom-full mb-2 right-0 w-80 bg-[#0e0e1c] border border-white/[0.12] rounded-3xl shadow-2xl shadow-black/80 overflow-hidden z-50" style={{backdropFilter:'blur(24px)'}}>
       {/* Category tabs */}
       <div className="flex overflow-x-auto border-b border-white/[0.07] p-1.5 gap-0.5"
         style={{ scrollbarWidth: 'none' }}>
@@ -685,8 +685,19 @@ export default function App() {
   const [chCreateOpen, setChCreateOpen]       = useState(false);
   const [chCreateCatId, setChCreateCatId]     = useState('');
   const [newChName, setNewChName]             = useState('');
-  const [newChType, setNewChType]             = useState<'text'|'voice'>('text');
+  const [newChType, setNewChType]             = useState<'text'|'voice'|'forum'|'announcement'>('text');
   const [newChPrivate, setNewChPrivate]       = useState(false);
+
+  // ── Forum state ──────────────────────────────────────────────────
+  const [forumPosts, setForumPosts]           = useState<ForumPost[]>([]);
+  const [forumPost, setForumPost]             = useState<ForumPost|null>(null); // open thread
+  const [forumLoading, setForumLoading]       = useState(false);
+  const [newPostTitle, setNewPostTitle]       = useState('');
+  const [newPostContent, setNewPostContent]   = useState('');
+  const [newPostImage, setNewPostImage]       = useState('');
+  const [showNewPost, setShowNewPost]         = useState(false);
+  const [replyContent, setReplyContent]       = useState('');
+  const [replySending, setReplySending]       = useState(false);
   const [chEditOpen, setChEditOpen]           = useState(false);
   const [editingCh, setEditingCh]             = useState<ChannelData|null>(null);
   const [chForm, setChForm]                   = useState({ name:'', description:'', is_private:false, role_ids:[] as string[] });
@@ -1057,8 +1068,8 @@ export default function App() {
     serversApi.get(activeServer).then(s => {
       setServerFull(s);
       setSrvForm({ name: s.name, description: s.description||'', icon_url: s.icon_url||'', banner_url: s.banner_url||'' });
-      // Always auto-select first text channel when switching servers
-      const first = s.categories.flatMap(c => c.channels).find(ch => ch.type === 'text');
+      // Always auto-select first non-voice channel when switching servers
+      const first = s.categories.flatMap(c => c.channels).find(ch => ch.type !== 'voice');
       setActiveChannel(first?.id || '');
     }).catch(console.error);
     // Load current voice channel occupants from Redis (initial state)
@@ -1082,8 +1093,16 @@ export default function App() {
     joinChannel(activeChannel);
     setTypingUsers({});
     setUnreadChs(p => { const n = {...p}; delete n[activeChannel]; return n; });
-    setChannelMsgs([]); setMsgsLoading(true); setSearchQuery('');
-    messagesApi.list(activeChannel).then(setChannelMsgs).catch(console.error).finally(()=>setMsgsLoading(false));
+    setForumPost(null); setShowNewPost(false); setReplyContent('');
+    // Load content based on channel type
+    const ch = serverFull?.categories.flatMap(c=>c.channels).find(c=>c.id===activeChannel);
+    if (ch?.type === 'forum') {
+      setForumPosts([]); setForumLoading(true);
+      forumApi.listPosts(activeChannel).then(setForumPosts).catch(console.error).finally(()=>setForumLoading(false));
+    } else {
+      setChannelMsgs([]); setMsgsLoading(true); setSearchQuery('');
+      messagesApi.list(activeChannel).then(setChannelMsgs).catch(console.error).finally(()=>setMsgsLoading(false));
+    }
     setReplyTo(null);
   }, [activeChannel, activeView]);
 
@@ -1517,11 +1536,10 @@ export default function App() {
   // ── Channel ─────────────────────────────────────────────────────
   const handleCreateCh = async () => {
     if (!newChName.trim() || !activeServer) return;
-    // forum/announcement → stored as 'text' in DB (subtype shown in UI only)
-    const dbType = newChType === 'voice' ? 'voice' : 'text';
+    const icon = newChType==='voice'?'🎙️':newChType==='forum'?'🗨️':newChType==='announcement'?'📣':'#️⃣';
     try {
-      await channelsApi.create({ server_id: activeServer, name: newChName.trim(), type: dbType, category_id: chCreateCatId || undefined });
-      addServerActivity({ icon: newChType==='voice'?'🎙️':'#️⃣', text: `Kanał #${newChName.trim()} został utworzony` });
+      await channelsApi.create({ server_id: activeServer, name: newChName.trim(), type: newChType, category_id: chCreateCatId || undefined });
+      addServerActivity({ icon, text: `Kanał #${newChName.trim()} został utworzony` });
       setChCreateOpen(false); setNewChName(''); setNewChPrivate(false);
       const s = await serversApi.get(activeServer); setServerFull(s);
     } catch (err) { console.error(err); }
@@ -1914,7 +1932,7 @@ export default function App() {
           {/* Friends / DM quick icons */}
           <div className="hidden md:flex items-center h-full pl-2 gap-0.5 pr-2 border-r border-white/[0.06]">
             {([{v:'friends' as const,i:<Users size={15}/>,label:'Znajomi'},{v:'dms' as const,i:<MessageCircle size={15}/>,label:'Wiadomości'}]).map(({v,i,label}) => {
-              const totalUnreadDms = v==='dms' ? Object.values(unreadDms).reduce((a,b)=>a+b,0) : 0;
+              const totalUnreadDms: number = v==='dms' ? (Object.values(unreadDms) as number[]).reduce((a,b)=>a+b,0) : 0;
               return (
               <button key={v} title={label} onClick={() => { setActiveView(v); setActiveServer(''); setActiveChannel(''); }}
                 className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-200 relative ${activeView===v?'bg-indigo-500/25 text-indigo-300 shadow-[0_0_12px_rgba(99,102,241,0.2)]':'text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06]'}`}>
@@ -2027,7 +2045,7 @@ export default function App() {
                   <div className="fixed inset-0 z-[39]" onClick={()=>setSrvDropOpen(false)}/>
                   <motion.div initial={{opacity:0,y:-6,scale:0.97}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:-6,scale:0.97}}
                     transition={{duration:0.15,ease:[0.16,1,0.3,1]}}
-                    className="absolute left-3 right-3 top-full mt-1 z-40 bg-white/[0.06] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 py-1.5 overflow-hidden">
+                    className="absolute left-3 right-3 top-full mt-1 z-40 bg-[#0e0e1c] border border-white/[0.12] rounded-2xl shadow-2xl shadow-black/80 py-1.5 overflow-hidden" style={{backdropFilter:'blur(24px)'}}>
                     {isAdmin&&<>
                       <button onClick={()=>{setSrvDropOpen(false);setChCreateCatId('');setChCreateOpen(true);setNewChName('');setNewChType('text');setNewChPrivate(false);}}
                         className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-indigo-500/10 hover:text-white transition-colors text-left">
@@ -2086,14 +2104,15 @@ export default function App() {
                 if (uncatChannels.length===0) return null;
                 return (
                   <div className="mb-1">
-                    {uncatChannels.filter((c:any)=>c.type==='text').map((ch:any)=>{
+                    {uncatChannels.filter((c:any)=>c.type!=='voice').map((ch:any)=>{
                       const isAct = activeChannel===ch.id; const unread = unreadChs[ch.id]||0;
+                      const ChIcon = ch.type==='forum'?MessageSquare:ch.type==='announcement'?Megaphone:Hash;
                       return (
                         <div key={ch.id} className="px-2">
                           <button onClick={()=>{setActiveChannel(ch.id);setIsMobileOpen(false);}}
                             className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${isAct?'bg-indigo-500/15 text-white border border-indigo-500/25':unread>0?'text-white hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
                             <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
-                              <Hash size={16} className={`shrink-0 ${isAct?'text-indigo-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
+                              <ChIcon size={16} className={`shrink-0 ${isAct?'text-indigo-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
                               <span className={`text-sm truncate ${unread>0&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
                             </div>
                             {unread>0&&!isAct&&<span className="min-w-[18px] h-[18px] bg-indigo-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1">{unread>99?'99+':unread}</span>}
@@ -2105,7 +2124,7 @@ export default function App() {
                 );
               })()}
               {serverFull?.categories.filter(c=>c.id!=='__uncat__').map((cat, catIdx) => {
-                const textChs  = cat.channels.filter(c=>c.type==='text');
+                const textChs  = cat.channels.filter(c=>c.type!=='voice');
                 const voiceChs = cat.channels.filter(c=>c.type==='voice');
                 const isEmpty  = textChs.length===0 && voiceChs.length===0;
                 const openAddCh = () => { setChCreateCatId(cat.id); setChCreateOpen(true); setNewChName(''); setNewChType('text'); setNewChPrivate(false); };
@@ -2146,11 +2165,12 @@ export default function App() {
                       </div>
                     )}
 
-                    {/* Text channels — SPACES */}
+                    {/* Text/forum/announcement channels */}
                     {textChs.length>0&&<>
                       {textChs.map(ch => {
                         const isAct = activeChannel===ch.id;
                         const unread = unreadChs[ch.id] || 0;
+                        const ChIcon = ch.type==='forum'?MessageSquare:ch.type==='announcement'?Megaphone:Hash;
                         return (
                           <div key={ch.id} className="px-2">
                             <button onClick={() => { setActiveChannel(ch.id); setIsMobileOpen(false); }}
@@ -2161,7 +2181,7 @@ export default function App() {
                                     ? 'text-white hover:bg-white/[0.06] border border-transparent'
                                     : 'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
                               <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
-                                <Hash size={16} className={`shrink-0 transition-colors ${isAct?'text-indigo-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
+                                <ChIcon size={16} className={`shrink-0 transition-colors ${isAct?'text-indigo-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
                                 <span className={`text-sm truncate transition-colors ${unread>0&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
                                 {ch.is_private&&<Lock size={9} className="text-zinc-700 shrink-0"/>}
                               </div>
@@ -2286,7 +2306,7 @@ export default function App() {
               {statusPickerOpen&&(
                 <motion.div initial={{opacity:0,y:6,scale:0.95}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:6,scale:0.95}}
                   transition={{duration:0.15,ease:[0.16,1,0.3,1]}}
-                  className="absolute bottom-full left-3 right-3 mb-2 bg-white/[0.06] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden z-50 p-1">
+                  className="absolute bottom-full left-3 right-3 mb-2 bg-[#0e0e1c] border border-white/[0.12] rounded-2xl shadow-2xl shadow-black/80 overflow-hidden z-50 p-1" style={{backdropFilter:'blur(24px)'}}>
 
                   {/* Call status row — auto, shown when in call */}
                   {activeCall&&(
@@ -2741,7 +2761,9 @@ export default function App() {
                   ) : <h3 className="font-bold text-white text-sm">Wiadomości</h3>) : (
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className="w-7 h-7 rounded-xl bg-indigo-500/15 flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(99,102,241,0.15)]">
-                        <Hash size={16} className="text-indigo-400"/>
+                        {activeCh?.type==='forum' ? <MessageSquare size={16} className="text-indigo-400"/>
+                         : activeCh?.type==='announcement' ? <Megaphone size={16} className="text-indigo-400"/>
+                         : <Hash size={16} className="text-indigo-400"/>}
                       </div>
                       <div className="min-w-0">
                         <h3 className="font-bold text-white text-sm truncate">{activeCh?.name||activeChannel}</h3>
@@ -2768,6 +2790,163 @@ export default function App() {
                 </div>
               </header>
 
+              {/* ── Forum View ── */}
+              {activeCh?.type==='forum' && (
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                  {!forumPost ? (
+                    /* Post list */
+                    <div className="p-4 md:p-6 max-w-3xl mx-auto">
+                      <div className="flex items-center justify-between mb-5">
+                        <h2 className="text-lg font-bold text-white">Posty</h2>
+                        <button onClick={()=>setShowNewPost(v=>!v)}
+                          className="flex items-center gap-2 bg-indigo-500 hover:bg-indigo-400 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-indigo-500/20">
+                          <Plus size={14}/> Utwórz post
+                        </button>
+                      </div>
+
+                      {/* New post form */}
+                      {showNewPost && (
+                        <div className="mb-5 p-4 bg-white/[0.03] border border-white/[0.08] rounded-2xl">
+                          <h3 className="text-sm font-semibold text-white mb-3">Nowy post</h3>
+                          <input value={newPostTitle} onChange={e=>setNewPostTitle(e.target.value)}
+                            placeholder="Tytuł posta..." maxLength={200}
+                            className="w-full bg-white/[0.06] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 transition-all mb-2"/>
+                          <textarea value={newPostContent} onChange={e=>setNewPostContent(e.target.value)}
+                            placeholder="Treść posta..." rows={4}
+                            className="w-full bg-white/[0.06] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 transition-all resize-none mb-2"/>
+                          <input value={newPostImage} onChange={e=>setNewPostImage(e.target.value)}
+                            placeholder="URL obrazka (opcjonalnie)..."
+                            className="w-full bg-white/[0.06] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 transition-all mb-3"/>
+                          <div className="flex gap-2 justify-end">
+                            <button onClick={()=>{setShowNewPost(false);setNewPostTitle('');setNewPostContent('');setNewPostImage('');}}
+                              className="px-4 py-2 rounded-xl text-sm text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors">
+                              Anuluj
+                            </button>
+                            <button disabled={!newPostTitle.trim()||!newPostContent.trim()} onClick={async()=>{
+                              try {
+                                const p = await forumApi.createPost(activeChannel, { title: newPostTitle.trim(), content: newPostContent.trim(), image_url: newPostImage.trim()||undefined });
+                                setForumPosts(prev=>[p,...prev]); setShowNewPost(false); setNewPostTitle(''); setNewPostContent(''); setNewPostImage('');
+                              } catch {}
+                            }} className="px-4 py-2 rounded-xl text-sm font-semibold bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors">
+                              Opublikuj
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {forumLoading && <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-indigo-400"/></div>}
+                      {!forumLoading && forumPosts.length===0 && (
+                        <div className="flex flex-col items-center justify-center py-16 text-center">
+                          <div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center mb-4">
+                            <MessageSquare size={26} className="text-zinc-600"/>
+                          </div>
+                          <h3 className="text-base font-bold text-white mb-1">Brak postów</h3>
+                          <p className="text-sm text-zinc-500">Bądź pierwszy i utwórz nowy post!</p>
+                        </div>
+                      )}
+                      <div className="flex flex-col gap-3">
+                        {forumPosts.map(post=>(
+                          <button key={post.id} onClick={async()=>{
+                            try {
+                              const full = await forumApi.getPost(activeChannel, post.id);
+                              setForumPost(full);
+                            } catch {}
+                          }} className="text-left w-full bg-white/[0.03] hover:bg-white/[0.05] border border-white/[0.07] hover:border-white/[0.12] rounded-2xl overflow-hidden transition-all duration-150 group">
+                            {post.image_url && (
+                              <div className="h-40 overflow-hidden">
+                                <img src={post.image_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt=""/>
+                              </div>
+                            )}
+                            <div className="p-4">
+                              {post.pinned&&<span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 uppercase tracking-wide mb-1"><Sparkles size={9}/> Przypięty</span>}
+                              <h3 className="font-bold text-white text-sm mb-2 group-hover:text-indigo-300 transition-colors">{post.title}</h3>
+                              <p className="text-xs text-zinc-500 line-clamp-2 mb-3">{post.content}</p>
+                              <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-1.5">
+                                  <img src={post.author_avatar||`https://ui-avatars.com/api/?name=${post.author_username}&background=random`} className="w-5 h-5 rounded-full object-cover" alt=""/>
+                                  <span className="text-xs text-zinc-500">{post.author_username}</span>
+                                </div>
+                                <span className="text-xs text-zinc-600">{new Date(post.created_at).toLocaleDateString('pl-PL')}</span>
+                                <span className="ml-auto flex items-center gap-1 text-xs text-zinc-600">
+                                  <Reply size={11}/> {post.reply_count}
+                                </span>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    /* Thread view */
+                    <div className="p-4 md:p-6 max-w-3xl mx-auto">
+                      <button onClick={()=>setForumPost(null)} className="flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-colors mb-4">
+                        <ArrowLeft size={14}/> Wróć do listy
+                      </button>
+                      {/* Post */}
+                      <div className="bg-white/[0.03] border border-white/[0.08] rounded-2xl overflow-hidden mb-4">
+                        {forumPost.image_url && <img src={forumPost.image_url} className="w-full max-h-80 object-cover" alt=""/>}
+                        <div className="p-5">
+                          <h2 className="text-xl font-bold text-white mb-2">{forumPost.title}</h2>
+                          <div className="flex items-center gap-3 mb-4">
+                            <img src={forumPost.author_avatar||`https://ui-avatars.com/api/?name=${forumPost.author_username}&background=random`} className="w-7 h-7 rounded-full object-cover" alt=""/>
+                            <span className="text-sm font-semibold text-zinc-300">{forumPost.author_username}</span>
+                            <span className="text-xs text-zinc-600">{new Date(forumPost.created_at).toLocaleString('pl-PL')}</span>
+                            {(currentUser?.id===forumPost.author_id||isAdmin)&&(
+                              <button onClick={async()=>{
+                                try { await forumApi.deletePost(activeChannel,forumPost.id); setForumPost(null); setForumPosts(p=>p.filter(x=>x.id!==forumPost.id)); } catch {}
+                              }} className="ml-auto w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-colors">
+                                <Trash2 size={13}/>
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed">{forumPost.content}</p>
+                        </div>
+                      </div>
+                      {/* Replies */}
+                      <div className="flex flex-col gap-2 mb-4">
+                        <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1">Odpowiedzi ({forumPost.replies?.length||0})</h3>
+                        {forumPost.locked&&<div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-400"><Lock size={11}/>Ten wątek jest zablokowany</div>}
+                        {(forumPost.replies||[]).map(r=>(
+                          <div key={r.id} className="flex gap-3 bg-white/[0.02] border border-white/[0.06] rounded-xl p-3">
+                            <img src={r.author_avatar||`https://ui-avatars.com/api/?name=${r.author_username}&background=random`} className="w-7 h-7 rounded-full object-cover shrink-0 mt-0.5" alt=""/>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs font-semibold text-zinc-300">{r.author_username}</span>
+                                <span className="text-[10px] text-zinc-600">{new Date(r.created_at).toLocaleString('pl-PL')}</span>
+                              </div>
+                              <p className="text-sm text-zinc-400 leading-relaxed">{r.content}</p>
+                            </div>
+                          </div>
+                        ))}
+                        {!forumPost.locked&&(
+                          <div className="flex gap-3 mt-2">
+                            <img src={currentUser?.avatar_url||`https://ui-avatars.com/api/?name=${currentUser?.username||'?'}&background=random`} className="w-7 h-7 rounded-full object-cover shrink-0 mt-2" alt=""/>
+                            <div className="flex-1">
+                              <textarea value={replyContent} onChange={e=>setReplyContent(e.target.value)}
+                                placeholder="Napisz odpowiedź..." rows={2}
+                                className="w-full bg-white/[0.06] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 transition-all resize-none mb-2"/>
+                              <button disabled={!replyContent.trim()||replySending} onClick={async()=>{
+                                setReplySending(true);
+                                try {
+                                  const r = await forumApi.createReply(activeChannel, forumPost.id, replyContent.trim());
+                                  setForumPost(p=>p?{...p, replies:[...(p.replies||[]),r], reply_count:p.reply_count+1}:p);
+                                  setForumPosts(prev=>prev.map(x=>x.id===forumPost.id?{...x,reply_count:x.reply_count+1}:x));
+                                  setReplyContent('');
+                                } catch {} finally { setReplySending(false); }
+                              }} className="px-4 py-2 rounded-xl text-sm font-semibold bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors flex items-center gap-2">
+                                {replySending&&<Loader2 size={13} className="animate-spin"/>} Odpowiedz
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Announcement / Text Messages ── */}
+              {activeCh?.type!=='forum' && <>
               {/* Messages */}
               <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-5 custom-scrollbar flex flex-col">
                 {/* Loading skeleton */}
@@ -3058,6 +3237,13 @@ export default function App() {
                 {(()=>{
                   const isDmView = activeView==='dms' && !!activeDmUserId;
                   const isFriend = !isDmView || friends.some(f => f.id === activeDmUserId);
+                  // Announcement channel — only admins can write
+                  if (activeCh?.type==='announcement' && !isAdmin) return (
+                    <div className="flex items-center justify-center gap-2.5 py-3 px-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400 text-sm">
+                      <Megaphone size={14} className="shrink-0"/>
+                      <span>To jest kanał ogłoszeń. Tylko administratorzy mogą tutaj pisać.</span>
+                    </div>
+                  );
                   if (!isFriend) return (
                     <div className="flex items-center justify-center gap-2.5 py-3 px-4 bg-zinc-900/60 border border-white/[0.06] rounded-xl text-zinc-500 text-sm">
                       <Lock size={14} className="text-zinc-600 shrink-0"/>
@@ -3105,6 +3291,7 @@ export default function App() {
                   );
                 })()}
               </div>
+              </>}
             </>
           )}
         </section>
@@ -3896,12 +4083,12 @@ export default function App() {
               <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Nazwa kanału</p>
               <div className="relative mb-4">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none">
-                  {newChType==='voice'?<Volume2 size={14}/>:<Hash size={16}/>}
+                  {newChType==='voice'?<Volume2 size={14}/>:newChType==='forum'?<MessageSquare size={14}/>:newChType==='announcement'?<Megaphone size={14}/>:<Hash size={16}/>}
                 </span>
                 <input autoFocus value={newChName}
                   onChange={e=>setNewChName(e.target.value.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-_]/g,''))}
                   onKeyDown={e=>e.key==='Enter'&&handleCreateCh()}
-                  placeholder={newChType==='voice'?'pokoj-glosowy':'ogolny'}
+                  placeholder={newChType==='voice'?'pokoj-glosowy':newChType==='forum'?'dyskusje':newChType==='announcement'?'ogloszenia':'ogolny'}
                   className={`w-full ${gi} pl-8 pr-4 py-2.5 text-sm`}/>
               </div>
 

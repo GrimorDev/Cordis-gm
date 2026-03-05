@@ -66,7 +66,7 @@ router.post('/', authMiddleware,
   [
     body('server_id').isUUID(),
     body('name').trim().isLength({ min: 1, max: 100 }),
-    body('type').isIn(['text', 'voice']),
+    body('type').isIn(['text', 'voice', 'forum', 'announcement']),
     body('category_id').optional().isUUID(),
   ],
   async (req: AuthRequest, res: Response) => {
@@ -202,6 +202,124 @@ router.delete('/categories/:id', authMiddleware, async (req: AuthRequest, res: R
     await query('DELETE FROM channel_categories WHERE id=$1', [req.params.id]);
     const io = req.app.get('io');
     if (io) io.to(`server:${cat.server_id}`).emit('category_deleted', { id: req.params.id, server_id: cat.server_id });
+    return res.json({ message: 'Deleted' });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ── Forum Posts ───────────────────────────────────────────────────────────
+
+// GET /api/channels/:id/posts
+router.get('/:id/posts', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { rows: [ch] } = await query(`SELECT server_id FROM channels WHERE id = $1`, [req.params.id]);
+    if (!ch) return res.status(404).json({ error: 'Not found' });
+    const role = await isMember(ch.server_id, req.user!.id);
+    if (!role) return res.status(403).json({ error: 'No access' });
+    const { rows } = await query(
+      `SELECT fp.*, u.username as author_username, u.avatar_url as author_avatar
+       FROM forum_posts fp
+       JOIN users u ON u.id = fp.author_id
+       WHERE fp.channel_id = $1
+       ORDER BY fp.pinned DESC, fp.created_at DESC`,
+      [req.params.id]
+    );
+    return res.json(rows);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// POST /api/channels/:id/posts
+router.post('/:id/posts', authMiddleware,
+  [body('title').trim().isLength({ min: 1, max: 200 }), body('content').trim().isLength({ min: 1 })],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    try {
+      const { rows: [ch] } = await query(`SELECT server_id FROM channels WHERE id = $1`, [req.params.id]);
+      if (!ch) return res.status(404).json({ error: 'Not found' });
+      const role = await isMember(ch.server_id, req.user!.id);
+      if (!role) return res.status(403).json({ error: 'No access' });
+      const { title, content, image_url } = req.body;
+      const { rows: [post] } = await query(
+        `INSERT INTO forum_posts (channel_id, author_id, title, content, image_url)
+         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        [req.params.id, req.user!.id, title, content, image_url || null]
+      );
+      const { rows: [author] } = await query(`SELECT username, avatar_url FROM users WHERE id = $1`, [req.user!.id]);
+      const full = { ...post, author_username: author.username, author_avatar: author.avatar_url };
+      const io = req.app.get('io');
+      if (io) io.to(`server:${ch.server_id}`).emit('forum_post_created', { channel_id: req.params.id, post: full });
+      return res.status(201).json(full);
+    } catch { return res.status(500).json({ error: 'Internal server error' }); }
+  }
+);
+
+// GET /api/channels/:id/posts/:postId
+router.get('/:id/posts/:postId', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { rows: [ch] } = await query(`SELECT server_id FROM channels WHERE id = $1`, [req.params.id]);
+    if (!ch) return res.status(404).json({ error: 'Not found' });
+    const role = await isMember(ch.server_id, req.user!.id);
+    if (!role) return res.status(403).json({ error: 'No access' });
+    const { rows: [post] } = await query(
+      `SELECT fp.*, u.username as author_username, u.avatar_url as author_avatar
+       FROM forum_posts fp JOIN users u ON u.id = fp.author_id
+       WHERE fp.id = $1 AND fp.channel_id = $2`,
+      [req.params.postId, req.params.id]
+    );
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+    const { rows: replies } = await query(
+      `SELECT fr.*, u.username as author_username, u.avatar_url as author_avatar
+       FROM forum_replies fr JOIN users u ON u.id = fr.author_id
+       WHERE fr.post_id = $1 ORDER BY fr.created_at`,
+      [req.params.postId]
+    );
+    return res.json({ ...post, replies });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// POST /api/channels/:id/posts/:postId/replies
+router.post('/:id/posts/:postId/replies', authMiddleware,
+  [body('content').trim().isLength({ min: 1 })],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    try {
+      const { rows: [ch] } = await query(`SELECT server_id FROM channels WHERE id = $1`, [req.params.id]);
+      if (!ch) return res.status(404).json({ error: 'Not found' });
+      const role = await isMember(ch.server_id, req.user!.id);
+      if (!role) return res.status(403).json({ error: 'No access' });
+      const { rows: [post] } = await query(`SELECT id, locked FROM forum_posts WHERE id = $1`, [req.params.postId]);
+      if (!post) return res.status(404).json({ error: 'Post not found' });
+      if (post.locked && !['Owner', 'Admin'].includes(role)) return res.status(403).json({ error: 'Post is locked' });
+      const { rows: [reply] } = await query(
+        `INSERT INTO forum_replies (post_id, author_id, content) VALUES ($1, $2, $3) RETURNING *`,
+        [req.params.postId, req.user!.id, req.body.content]
+      );
+      await query(`UPDATE forum_posts SET reply_count = reply_count + 1 WHERE id = $1`, [req.params.postId]);
+      const { rows: [author] } = await query(`SELECT username, avatar_url FROM users WHERE id = $1`, [req.user!.id]);
+      const full = { ...reply, author_username: author.username, author_avatar: author.avatar_url };
+      const io = req.app.get('io');
+      if (io) io.to(`server:${ch.server_id}`).emit('forum_reply_created', { channel_id: req.params.id, post_id: req.params.postId, reply: full });
+      return res.status(201).json(full);
+    } catch { return res.status(500).json({ error: 'Internal server error' }); }
+  }
+);
+
+// DELETE /api/channels/:id/posts/:postId
+router.delete('/:id/posts/:postId', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { rows: [ch] } = await query(`SELECT server_id FROM channels WHERE id = $1`, [req.params.id]);
+    if (!ch) return res.status(404).json({ error: 'Not found' });
+    const role = await isMember(ch.server_id, req.user!.id);
+    if (!role) return res.status(403).json({ error: 'No access' });
+    const { rows: [post] } = await query(`SELECT author_id FROM forum_posts WHERE id = $1`, [req.params.postId]);
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+    if (post.author_id !== req.user!.id && !['Owner', 'Admin'].includes(role)) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    await query(`DELETE FROM forum_posts WHERE id = $1`, [req.params.postId]);
+    const io = req.app.get('io');
+    if (io) io.to(`server:${ch.server_id}`).emit('forum_post_deleted', { channel_id: req.params.id, post_id: req.params.postId });
     return res.json({ message: 'Deleted' });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
