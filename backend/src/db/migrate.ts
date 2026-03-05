@@ -244,6 +244,9 @@ DO $$ BEGIN ALTER TABLE server_roles ADD COLUMN is_default BOOLEAN DEFAULT FALSE
 
 -- Forum/announcement channel types (existing deployments)
 DO $$ BEGIN
+  ALTER TABLE channels ALTER COLUMN type TYPE VARCHAR(15);
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN
   ALTER TABLE channels DROP CONSTRAINT IF EXISTS channels_type_check;
   ALTER TABLE channels ADD CONSTRAINT channels_type_check CHECK (type IN ('text', 'voice', 'forum', 'announcement'));
 EXCEPTION WHEN OTHERS THEN NULL; END $$;
