@@ -182,6 +182,16 @@ router.delete('/messages/:id', authMiddleware, async (req: AuthRequest, res: Res
     if (!msg) return res.status(404).json({ error: 'Not found' });
     if (msg.sender_id !== req.user!.id) return res.status(403).json({ error: 'Not your message' });
     await query('DELETE FROM dm_messages WHERE id=$1', [req.params.id]);
+    // Notify both participants in real-time
+    const io = req.app.get('io');
+    if (io) {
+      const { rows: participants } = await query(
+        'SELECT user_id FROM dm_participants WHERE conversation_id=$1', [msg.conversation_id]
+      );
+      participants.forEach((p: any) => {
+        io.to(`user:${p.user_id}`).emit('dm_message_deleted', { id: msg.id, conversation_id: msg.conversation_id });
+      });
+    }
     return res.json({ message: 'Deleted' });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });

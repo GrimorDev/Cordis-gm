@@ -824,11 +824,14 @@ export default function App() {
         playDmNotification();
       }
     });
-    sock.on('message_deleted', ({ id }) => setChannelMsgs(p => p.filter(m => m.id !== id)));
-    sock.on('message_updated', ({ id, content, edited }) =>
+    sock.on('message_deleted', ({ id }: any) =>
+      setChannelMsgs(p => p.map(m => m.id === id ? { ...m, content: '__deleted__', deleted: true } : m)));
+    sock.on('message_updated', ({ id, content, edited }: any) =>
       setChannelMsgs(p => p.map(m => m.id === id ? { ...m, content, edited } : m)));
     sock.on('dm_message_updated', ({ id, content, edited }: any) =>
       setDmMsgs(p => p.map(m => m.id === id ? { ...m, content, edited } : m)));
+    sock.on('dm_message_deleted', ({ id }: any) =>
+      setDmMsgs(p => p.map(m => m.id === id ? { ...m, content: '__deleted__', deleted: true } : m)));
     sock.on('user_status', ({ user_id, status }) => {
       setFriends(p => p.map(f => f.id === user_id ? { ...f, status } : f));
       setDmConvs(p => p.map(d => d.other_user_id === user_id ? { ...d, other_status: status } : d));
@@ -1439,14 +1442,19 @@ export default function App() {
     cancelEditMsg(); // optimistic: close edit UI immediately
     try {
       if (activeView === 'dms') {
+        // Optimistic update — show immediately, socket will confirm
+        setDmMsgs(p => p.map(m => m.id === msg.id ? { ...m, content: newContent, edited: true } : m));
         await dmsApi.editMessage(msg.id, newContent);
-        // socket 'dm_message_updated' will update dmMsgs
       } else {
+        // Optimistic update
+        setChannelMsgs(p => p.map(m => m.id === msg.id ? { ...m, content: newContent, edited: true } : m));
         await messagesApi.edit(msg.id, newContent);
-        // socket 'message_updated' will update channelMsgs
       }
     } catch (err: any) {
       addToast(err?.message || 'Nie udało się edytować wiadomości', 'error');
+      // Revert on error
+      if (activeView === 'dms') setDmMsgs(p => p.map(m => m.id === msg.id ? { ...m, content: msg.content, edited: (msg as any).edited } : m));
+      else setChannelMsgs(p => p.map(m => m.id === msg.id ? { ...m, content: msg.content, edited: (msg as any).edited } : m));
     }
   };
 
@@ -2945,7 +2953,12 @@ export default function App() {
                                   </div>
                                 </div>
                               );
-                            })() : (
+                            })() : (msg as any).deleted || msg.content === '__deleted__' ? (
+                              <div className="px-3.5 py-2 rounded-2xl border border-white/[0.06] bg-white/[0.03] flex items-center gap-2">
+                                <Trash2 size={12} className="text-zinc-600 shrink-0"/>
+                                <p className="text-sm italic text-zinc-600">Wiadomość została usunięta</p>
+                              </div>
+                            ) : (
                               <div className={`relative px-4 py-2.5 rounded-2xl max-w-full ${isOwn
                                 ? 'bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-lg shadow-indigo-500/20 bubble-tail-right'
                                 : 'glass-bubble text-zinc-100 bubble-tail-left'
@@ -2970,7 +2983,7 @@ export default function App() {
                           </div>
 
                           {/* Hover actions */}
-                          {editingMsgId !== msg.id && (
+                          {editingMsgId !== msg.id && !((msg as any).deleted || msg.content === '__deleted__') && (
                           <div className={`flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 self-center`}>
                             <button onClick={()=>setReplyTo(msg)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/[0.1] text-zinc-600 hover:text-zinc-300 transition-colors"><Reply size={11}/></button>
                             {isOwn&&<button onClick={()=>startEditMsg(msg)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/[0.1] text-zinc-600 hover:text-zinc-300 transition-colors"><Edit3 size={11}/></button>}
