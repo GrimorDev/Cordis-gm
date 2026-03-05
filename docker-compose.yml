@@ -96,7 +96,7 @@ services:
       - ./postgres/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
     healthcheck:
       # Najprostszy check - czy postgres odpowiada na porcie 5432
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER:-cordis}"]
       interval: 10s
       timeout: 5s
       retries: 15
