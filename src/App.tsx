@@ -7,7 +7,7 @@ import {
   Shield, Trash2, Settings2, UserPlus, Check, X as XIcon,
   LogOut, Loader2, Lock, Phone, PhoneOff, MessageSquare, Upload, MoreHorizontal, ScreenShare,
   CheckCircle2, AlertCircle, Info, AlertTriangle, PartyPopper, Sparkles, Zap, Globe,
-  Eye, EyeOff, Megaphone, FileText, ChevronLeft, ArrowLeft
+  Eye, EyeOff, Megaphone, FileText, ChevronLeft, ChevronRight, ArrowLeft
 } from 'lucide-react';
 import {
   auth, users, serversApi, channelsApi, messagesApi, dmsApi, friendsApi, forumApi,
@@ -642,6 +642,7 @@ export default function App() {
   const [friendReqs, setFriendReqs]           = useState<FriendRequest[]>([]);
   const [members, setMembers]                 = useState<ServerMember[]>([]);
   const [roles, setRoles]                     = useState<ServerRole[]>([]);
+  const [collapsedVcats, setCollapsedVcats]   = useState<Set<string>>(new Set());
 
   const [msgInput, setMsgInput]               = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -1003,6 +1004,10 @@ export default function App() {
     sock.on('server_updated' as any, (srv: any) => {
       setServerFull(p => p && p.id === srv.id ? { ...p, ...srv } : p);
       setServerList(p => p.map(s => s.id === srv.id ? { ...s, name: srv.name, icon_url: srv.icon_url } : s));
+    });
+    sock.on('roles_updated' as any, ({ server_id, roles: updatedRoles }: any) => {
+      if (server_id !== activeServerRef.current) return;
+      setRoles(updatedRoles);
     });
     sock.on('member_joined' as any, ({ server_id, user }: any) => {
       if (server_id !== activeServerRef.current) return;
@@ -1542,7 +1547,10 @@ export default function App() {
       addServerActivity({ icon, text: `Kanał #${newChName.trim()} został utworzony` });
       setChCreateOpen(false); setNewChName(''); setNewChPrivate(false);
       const s = await serversApi.get(activeServer); setServerFull(s);
-    } catch (err) { console.error(err); }
+    } catch (err: any) {
+      console.error(err);
+      addToast(err?.message || 'Nie udało się utworzyć kanału', 'error');
+    }
   };
 
   // ── Create Category ──────────────────────────────────────────────
@@ -2202,14 +2210,18 @@ export default function App() {
                       })}
                     </>}
 
-                    {/* Voice channels — VOICE ROOMS */}
+                    {/* Voice channels — POKOJE GŁOSOWE */}
                     {voiceChs.length>0&&<>
-                      <div className="flex items-center justify-between px-3 pt-4 pb-1.5 group/vcat">
-                        <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Voice Rooms</span>
+                      <div className="flex items-center justify-between px-3 pt-4 pb-1.5 group/vcat cursor-pointer"
+                        onClick={()=>setCollapsedVcats(p=>{const n=new Set(p);n.has(cat.id)?n.delete(cat.id):n.add(cat.id);return n;})}>
+                        <div className="flex items-center gap-1">
+                          <ChevronRight size={10} className={`text-zinc-600 transition-transform ${collapsedVcats.has(cat.id)?'':'rotate-90'}`}/>
+                          <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Pokoje głosowe</span>
+                        </div>
                         {isAdmin&&<Plus size={12} className="text-zinc-700 hover:text-zinc-300 cursor-pointer opacity-0 group-hover/vcat:opacity-100 transition-all"
-                          onClick={() => { setChCreateCatId(cat.id); setChCreateOpen(true); setNewChName(''); setNewChType('voice'); }}/>}
+                          onClick={e=>{ e.stopPropagation(); setChCreateCatId(cat.id); setChCreateOpen(true); setNewChName(''); setNewChType('voice'); }}/>}
                       </div>
-                      {voiceChs.map(ch => {
+                      {!collapsedVcats.has(cat.id)&&voiceChs.map(ch => {
                         const isActiveVoice = activeCall?.channelId===ch.id;
                         const chVoiceUsers  = voiceUsers[ch.id]||[];
                         const hasUsers = chVoiceUsers.length>0;
@@ -3490,8 +3502,8 @@ export default function App() {
         <>
           <div className="fixed inset-0 z-[90]" onClick={()=>setSrvContextMenu(null)}/>
           <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:0.95}}
-            style={{position:'fixed',left:srvContextMenu.x,top:srvContextMenu.y}}
-            className="z-[91] bg-white/[0.06] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 py-1.5 min-w-[180px] overflow-hidden">
+            style={{position:'fixed',left:srvContextMenu.x,top:srvContextMenu.y,backdropFilter:'blur(24px)'}}
+            className="z-[91] bg-[#0e0e1c] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 py-1.5 min-w-[180px] overflow-hidden">
             {(srvContextMenu.srv.owner_id===currentUser?.id ||
               (srvContextMenu.srv.id===activeServer && (serverFull?.my_role==='Admin'||serverFull?.my_role==='Owner'))) && (<>
               <button onClick={()=>{ setSrvContextMenu(null); setSrvSettTab('overview'); setSrvSettOpen(true); setActiveServer(srvContextMenu.srv.id); setActiveView('servers'); }}

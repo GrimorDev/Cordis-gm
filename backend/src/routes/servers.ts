@@ -350,6 +350,14 @@ router.post('/:id/roles', authMiddleware,
          VALUES ($1, $2, $3, $4) RETURNING *`,
         [req.params.id, name, color, permissions]
       );
+      const io = req.app.get('io');
+      if (io) {
+        const { rows: updatedRoles } = await query(
+          `SELECT * FROM server_roles WHERE server_id = $1 ORDER BY position`,
+          [req.params.id]
+        );
+        io.to(`server:${req.params.id}`).emit('roles_updated', { server_id: req.params.id, roles: updatedRoles });
+      }
       return res.status(201).json(role);
     } catch { return res.status(500).json({ error: 'Internal server error' }); }
   }
@@ -371,6 +379,14 @@ router.put('/:id/roles/:roleId', authMiddleware, async (req: AuthRequest, res: R
       [name || null, color || null, permissions || null, req.params.roleId, req.params.id]
     );
     if (!role) return res.status(404).json({ error: 'Role not found' });
+    const io = req.app.get('io');
+    if (io) {
+      const { rows: updatedRoles } = await query(
+        `SELECT * FROM server_roles WHERE server_id = $1 ORDER BY position`,
+        [req.params.id]
+      );
+      io.to(`server:${req.params.id}`).emit('roles_updated', { server_id: req.params.id, roles: updatedRoles });
+    }
     return res.json(role);
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -391,6 +407,14 @@ router.delete('/:id/roles/:roleId', authMiddleware, async (req: AuthRequest, res
       `DELETE FROM server_roles WHERE id = $1 AND server_id = $2`,
       [req.params.roleId, req.params.id]
     );
+    const io = req.app.get('io');
+    if (io) {
+      const { rows: updatedRoles } = await query(
+        `SELECT * FROM server_roles WHERE server_id = $1 ORDER BY position`,
+        [req.params.id]
+      );
+      io.to(`server:${req.params.id}`).emit('roles_updated', { server_id: req.params.id, roles: updatedRoles });
+    }
     return res.json({ message: 'Role deleted' });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
