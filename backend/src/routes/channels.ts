@@ -73,19 +73,27 @@ router.post('/', authMiddleware,
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    const { server_id, name, type, category_id, description } = req.body;
+    const { server_id, name, type, category_id, description, is_private, role_ids } = req.body;
     const role = await isMember(server_id, req.user!.id);
     if (!role || !['Owner', 'Admin'].includes(role)) {
       return res.status(403).json({ error: 'Not authorized' });
     }
     try {
       const { rows: [channel] } = await query(
-        `INSERT INTO channels (server_id, category_id, name, type, description)
-         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-        [server_id, category_id || null, name, type, description || null]
+        `INSERT INTO channels (server_id, category_id, name, type, description, is_private)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+        [server_id, category_id || null, name, type, description || null, !!is_private]
       );
+      if (is_private && Array.isArray(role_ids) && role_ids.length > 0) {
+        for (const rid of role_ids) {
+          await query(
+            `INSERT INTO channel_role_access (channel_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+            [channel.id, rid]
+          );
+        }
+      }
       const io = req.app.get('io');
-      if (io) io.to(`server:${server_id}`).emit('channel_created', { ...channel, server_id });
+      if (io) io.to(`server:${server_id}`).emit('channel_created', { ...channel, server_id, allowed_roles: [] });
       return res.status(201).json(channel);
     } catch { return res.status(500).json({ error: 'Internal server error' }); }
   }
