@@ -35,7 +35,7 @@ export interface Channel {
   server_id: string;
   category_id: string | null;
   name: string;
-  type: 'text' | 'voice';
+  type: 'text' | 'voice' | 'forum' | 'announcement';
   description: string | null;
   position: number;
   created_at: Date;

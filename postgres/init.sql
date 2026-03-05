@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS channels (
     server_id   UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
     category_id UUID REFERENCES channel_categories(id) ON DELETE SET NULL,
     name        VARCHAR(100) NOT NULL,
-    type        VARCHAR(10)  NOT NULL CHECK (type IN ('text', 'voice')),
+    type        VARCHAR(15)  NOT NULL CHECK (type IN ('text', 'voice', 'forum', 'announcement')),
     description TEXT,
     position    INTEGER DEFAULT 0,
     created_at  TIMESTAMPTZ DEFAULT NOW()

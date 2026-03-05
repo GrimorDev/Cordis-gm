@@ -51,9 +51,20 @@ export interface ServerRole {
 }
 export interface ChannelData {
   id: string; server_id: string; category_id: string | null;
-  name: string; type: 'text' | 'voice'; description?: string | null;
+  name: string; type: 'text' | 'voice' | 'forum' | 'announcement'; description?: string | null;
   is_private?: boolean; position: number;
   allowed_roles?: { role_id: string; role_name: string; color: string }[];
+}
+export interface ForumPost {
+  id: string; channel_id: string; author_id: string; title: string; content: string;
+  image_url?: string | null; pinned: boolean; locked: boolean; reply_count: number;
+  created_at: string; updated_at: string;
+  author_username: string; author_avatar?: string | null;
+  replies?: ForumReply[];
+}
+export interface ForumReply {
+  id: string; post_id: string; author_id: string; content: string; created_at: string;
+  author_username: string; author_avatar?: string | null;
 }
 export interface ChannelCategory {
   id: string; name: string; position: number; channels: ChannelData[];
@@ -179,7 +190,7 @@ export const channelsApi = {
     req<Record<string, { id: string; username: string; avatar_url: string | null; status: string }[]>>(
       'GET', `/channels/server/${serverId}/voice-users`
     ),
-  create: (d: { server_id: string; name: string; type: 'text' | 'voice'; category_id?: string }) =>
+  create: (d: { server_id: string; name: string; type: 'text' | 'voice' | 'forum' | 'announcement'; category_id?: string }) =>
     req<ChannelData>('POST', '/channels', d),
   update: (id: string, d: Partial<Pick<ChannelData, 'name' | 'description' | 'is_private'>> & { role_ids?: string[] }) =>
     req<ChannelData>('PUT', `/channels/${id}`, d),
@@ -190,6 +201,17 @@ export const channelsApi = {
     req<ChannelCategory>('PUT', `/channels/categories/${id}`, { name }),
   deleteCategory: (id: string) =>
     req<void>('DELETE', `/channels/categories/${id}`),
+};
+
+// ── Forum ─────────────────────────────────────────────────────────────────
+export const forumApi = {
+  listPosts: (channelId: string) => req<ForumPost[]>('GET', `/channels/${channelId}/posts`),
+  createPost: (channelId: string, d: { title: string; content: string; image_url?: string }) =>
+    req<ForumPost>('POST', `/channels/${channelId}/posts`, d),
+  getPost: (channelId: string, postId: string) => req<ForumPost>('GET', `/channels/${channelId}/posts/${postId}`),
+  deletePost: (channelId: string, postId: string) => req<void>('DELETE', `/channels/${channelId}/posts/${postId}`),
+  createReply: (channelId: string, postId: string, content: string) =>
+    req<ForumReply>('POST', `/channels/${channelId}/posts/${postId}/replies`, { content }),
 };
 
 // ── Messages ───────────────────────────────────────────────────────────────
