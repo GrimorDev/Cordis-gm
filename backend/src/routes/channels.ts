@@ -155,9 +155,15 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
         }
       }
       await client.query('COMMIT');
+      // Fetch updated allowed_roles for realtime update
+      const { rows: allowedRoles } = await query(
+        `SELECT cra.channel_id, cra.role_id, sr.name as role_name, sr.color
+         FROM channel_role_access cra INNER JOIN server_roles sr ON sr.id = cra.role_id
+         WHERE cra.channel_id = $1`, [req.params.id]
+      ).catch(() => ({ rows: [] as any[] }));
       const io = req.app.get('io');
-      if (io) io.to(`server:${ch.server_id}`).emit('channel_updated', { ...updated, server_id: ch.server_id });
-      return res.json(updated);
+      if (io) io.to(`server:${ch.server_id}`).emit('channel_updated', { ...updated, server_id: ch.server_id, allowed_roles: allowedRoles });
+      return res.json({ ...updated, allowed_roles: allowedRoles });
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;
@@ -183,20 +189,38 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
 
 // POST /api/channels/categories
 router.post('/categories', authMiddleware, async (req: AuthRequest, res: Response) => {
-  const { server_id, name } = req.body;
+  const { server_id, name, is_private, role_ids } = req.body;
   const role = await isMember(server_id, req.user!.id);
   if (!role || !['Owner', 'Admin'].includes(role)) {
     return res.status(403).json({ error: 'Not authorized' });
   }
+  const client = await getClient();
   try {
-    const { rows: [cat] } = await query(
-      `INSERT INTO channel_categories (server_id, name) VALUES ($1, $2) RETURNING *`,
-      [server_id, name]
+    await client.query('BEGIN');
+    const { rows: [cat] } = await client.query(
+      `INSERT INTO channel_categories (server_id, name, is_private) VALUES ($1, $2, $3) RETURNING *`,
+      [server_id, name, is_private ? true : false]
     );
+    // Assign role access if private
+    if (is_private && Array.isArray(role_ids) && role_ids.length > 0) {
+      for (const rid of role_ids) {
+        await client.query(
+          `INSERT INTO category_role_access (category_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [cat.id, rid]
+        );
+      }
+    }
+    await client.query('COMMIT');
+    const { rows: allowedRoles } = is_private && Array.isArray(role_ids) && role_ids.length > 0
+      ? await query(`SELECT cra.category_id, cra.role_id, sr.name as role_name, sr.color FROM category_role_access cra INNER JOIN server_roles sr ON sr.id = cra.role_id WHERE cra.category_id = $1`, [cat.id])
+      : { rows: [] as any[] };
     const io = req.app.get('io');
-    if (io) io.to(`server:${server_id}`).emit('category_created', { ...cat, server_id, channels: [] });
-    return res.status(201).json(cat);
-  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+    if (io) io.to(`server:${server_id}`).emit('category_created', { ...cat, server_id, channels: [], allowed_roles: allowedRoles });
+    return res.status(201).json({ ...cat, allowed_roles: allowedRoles });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    return res.status(500).json({ error: 'Internal server error' });
+  } finally { client.release(); }
 });
 
 // PUT /api/channels/categories/:id  — rename category

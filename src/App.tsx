@@ -711,6 +711,7 @@ export default function App() {
   const [catCreateOpen, setCatCreateOpen]     = useState(false);
   const [newCatName, setNewCatName]           = useState('');
   const [newCatPrivate, setNewCatPrivate]     = useState(false);
+  const [newCatRoles, setNewCatRoles]         = useState<string[]>([]);
 
   // ── Category inline edit ─────────────────────────────────────────
   const [editingCatId, setEditingCatId]       = useState<string|null>(null);
@@ -726,6 +727,7 @@ export default function App() {
   const [roleForm, setRoleForm]               = useState({ name:'', color:'#5865f2', permissions:[] as string[] });
 
   const bottomRef        = useRef<HTMLDivElement>(null);
+  const scrollToBottomOnLoadRef = useRef(false); // flag: scroll to bottom when messages finish loading
   const prevChRef        = useRef('');
   const attachRef        = useRef<HTMLInputElement>(null);
   const callTimerRef     = useRef<ReturnType<typeof setInterval>|null>(null);
@@ -962,12 +964,13 @@ export default function App() {
       setToasts(p => [...p, { id, msg, type }]);
       setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 4000);
     };
-    sock.on('call_accepted', () => {
+    sock.on('call_accepted', ({ from_user_id }: any) => {
       stopRing();
       playCallAccepted();
       autoToast('Połączenie zaakceptowane', 'success');
-      // Caller initiates WebRTC after recipient accepts
-      voiceHandlerRef.current.onCallAccepted?.();
+      // Caller initiates WebRTC after recipient accepts — pass remoteUserId directly
+      // to avoid race condition where activeCallRef is not yet synced via useEffect
+      voiceHandlerRef.current.onCallAccepted?.(from_user_id);
     });
     sock.on('call_rejected', () => {
       stopRing();
@@ -1015,6 +1018,12 @@ export default function App() {
     });
     sock.on('channel_updated' as any, (ch: any) => {
       if (ch.server_id !== activeServerRef.current) return;
+      // If channel has privacy settings: refetch server data for accurate access control
+      // This ensures non-admins see/hide the channel correctly without needing a page refresh
+      if (ch.is_private) {
+        serversApi.get(ch.server_id).then(setServerFull).catch(console.error);
+        return;
+      }
       setServerFull(p => {
         if (!p) return p;
         return {
@@ -1211,9 +1220,19 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCall?.type, activeCall?.channelId, activeCall?.userId]);
 
-  // Scroll smoothly on new messages/typing; scroll instantly when entering a new channel/DM
+  // Scroll smoothly on new incoming messages/typing indicator
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [channelMsgs, dmMsgs, typingUsers]);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior }); }, [activeChannel, activeDmUserId]);
+  // When switching channel/DM: set flag to scroll once messages finish loading
+  useEffect(() => { scrollToBottomOnLoadRef.current = true; }, [activeChannel, activeDmUserId]);
+  // When loading completes (after channel/DM switch), scroll instantly to bottom
+  useEffect(() => {
+    if (!msgsLoading && scrollToBottomOnLoadRef.current) {
+      scrollToBottomOnLoadRef.current = false;
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior });
+      });
+    }
+  }, [msgsLoading]);
 
   // ── Sync refs ───────────────────────────────────────────────────
   useEffect(() => { currentUserRef.current    = currentUser;    }, [currentUser]);
@@ -1338,6 +1357,17 @@ export default function App() {
           // Audio track — only attach as mic audio if stream has NO video (not a screen-share stream)
           if (stream.getVideoTracks().length === 0) {
             attachRemoteAudio(remoteUserId, stream);
+            // Restore saved volume preference for this user
+            try {
+              const saved = localStorage.getItem(`cordyn_vol_${remoteUserId}`);
+              if (saved !== null) {
+                const vol = parseInt(saved, 10);
+                if (!isNaN(vol)) {
+                  setUserVols(p => ({ ...p, [remoteUserId]: vol }));
+                  setRemoteVolume(remoteUserId, vol);
+                }
+              }
+            } catch {}
             const stop = watchSpeaking(stream, (s) =>
               setSpeakingUsers(p => { const n = new Set(p); s ? n.add(remoteUserId) : n.delete(remoteUserId); return n; }));
             const old = speakStopRef.current.get(remoteUserId); if (old) old();
@@ -1402,10 +1432,11 @@ export default function App() {
         if (pc) try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
       },
       // Called when the DM call recipient accepts — caller initiates WebRTC
-      onCallAccepted: async () => {
-        const call = activeCallRef.current;
-        if (!call?.userId) return;
-        await openPeer(call.userId, true);
+      // remoteUserId is passed directly from the socket event to avoid stale ref race condition
+      onCallAccepted: async (remoteUserId: string) => {
+        const userId = remoteUserId || activeCallRef.current?.userId;
+        if (!userId) return;
+        await openPeer(userId, true);
       },
     };
   }); // runs every render to keep closures fresh
@@ -1666,8 +1697,8 @@ export default function App() {
   const handleCreateCat = async () => {
     if (!newCatName.trim() || !activeServer) return;
     try {
-      await channelsApi.createCategory(activeServer, newCatName.trim());
-      setCatCreateOpen(false); setNewCatName(''); setNewCatPrivate(false);
+      await channelsApi.createCategory(activeServer, newCatName.trim(), newCatPrivate, newCatPrivate ? newCatRoles : undefined);
+      setCatCreateOpen(false); setNewCatName(''); setNewCatPrivate(false); setNewCatRoles([]);
       addToast(`Kategoria „${newCatName.trim()}" utworzona`, 'success');
       const s = await serversApi.get(activeServer); setServerFull(s);
     } catch (err: any) {
@@ -4390,7 +4421,7 @@ export default function App() {
                     placeholder="NOWA KATEGORIA"
                     className={`w-full ${gi} px-4 py-2.5 text-sm tracking-wide`}/>
                 </div>
-                <button onClick={()=>setNewCatPrivate(p=>!p)}
+                <button onClick={()=>{setNewCatPrivate(p=>!p);setNewCatRoles([]);}}
                   className={`flex items-center justify-between px-4 py-3 rounded-2xl border transition-all ${newCatPrivate?'bg-indigo-500/10 border-indigo-500/30':'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04]'}`}>
                   <div className="flex items-center gap-3">
                     <Lock size={15} className={newCatPrivate?'text-indigo-400':'text-zinc-500'}/>
@@ -4403,6 +4434,25 @@ export default function App() {
                     <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${newCatPrivate?'left-5':'left-1'}`}/>
                   </div>
                 </button>
+                {newCatPrivate&&(
+                  <div>
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Dostęp dla ról</p>
+                    {roles.length===0 ? (
+                      <p className="text-xs text-zinc-600 italic px-1">Brak ról na serwerze. Utwórz role w ustawieniach serwera, aby przypisać dostęp.</p>
+                    ) : (
+                      <div className="flex flex-col gap-1.5">
+                        {roles.map(r=>{
+                          const sel=newCatRoles.includes(r.id);
+                          return <button key={r.id} onClick={()=>setNewCatRoles(p=>sel?p.filter(id=>id!==r.id):[...p,r.id])}
+                            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border text-sm transition-all ${sel?'bg-indigo-500/10 border-indigo-500/30 text-white':'bg-white/[0.02] border-white/[0.05] text-zinc-400 hover:text-zinc-300'}`}>
+                            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{background:r.color}}/>{r.name}
+                            {sel&&<Check size={13} className="ml-auto text-indigo-400"/>}
+                          </button>;
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <button onClick={()=>setCatCreateOpen(false)} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold ${gb} transition-all`}>Anuluj</button>
                   <button onClick={handleCreateCat} disabled={!newCatName.trim()}
@@ -4985,6 +5035,8 @@ export default function App() {
                   const v=+e.target.value;
                   setUserVols(p=>({...p,[volMenu.id]:v}));
                   setRemoteVolume(volMenu.id,v);
+                  // Persist volume preference to localStorage
+                  try { localStorage.setItem(`cordyn_vol_${volMenu.id}`, String(v)); } catch {}
                   if(mutedByMe[volMenu.id]&&v>0){setMutedByMe(p=>({...p,[volMenu.id]:false}));muteRemoteUser(volMenu.id,false);}
                 }}
                 className="w-full accent-indigo-500 cursor-pointer"/>

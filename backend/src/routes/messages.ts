@@ -10,8 +10,9 @@ interface ChannelAccess { serverId: string; channelType: string; roleInServer: s
 
 /** Check if a member has a specific permission through their server roles.
  *  Owner/Admin bypass all checks.
- *  If all of a user's roles have empty permissions arrays → allow (no restrictions configured).
- *  Only deny when at least one non-empty-permission role exists and NONE grant the permission. */
+ *  No custom roles assigned → allow (default member, unrestricted).
+ *  Has assigned roles → any role with this permission grants access; otherwise deny.
+ *  Empty permissions array on a role means "no permissions granted by this role". */
 async function hasPermission(serverId: string, userId: string, permission: string, roleName: string): Promise<boolean> {
   if (['Owner', 'Admin'].includes(roleName)) return true;
   const { rows } = await query(
@@ -20,12 +21,13 @@ async function hasPermission(serverId: string, userId: string, permission: strin
      WHERE mr.server_id = $1 AND mr.user_id = $2`,
     [serverId, userId]
   );
-  // No custom roles assigned, or all have empty permissions → default allow
+  // No custom roles assigned → default allow (unrestricted member)
   if (rows.length === 0) return true;
-  const allEmpty = rows.every((r: any) => !r.permissions || r.permissions.length === 0);
-  if (allEmpty) return true;
-  // At least one role has explicit permissions — check if any grants this permission
-  return rows.some((r: any) => Array.isArray(r.permissions) && r.permissions.includes(permission));
+  // Has assigned roles: check if any role grants 'administrator' (full bypass) or specific permission
+  return rows.some((r: any) =>
+    Array.isArray(r.permissions) &&
+    (r.permissions.includes('administrator') || r.permissions.includes(permission))
+  );
 }
 
 // Returns channel access info if user can access the channel, null otherwise
