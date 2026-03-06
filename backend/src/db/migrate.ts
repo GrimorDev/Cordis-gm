@@ -274,6 +274,19 @@ CREATE TABLE IF NOT EXISTS forum_replies (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_forum_replies_post ON forum_replies(post_id, created_at);
+
+-- Mentions/pings: !username in messages
+CREATE TABLE IF NOT EXISTS message_mentions (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    message_id UUID NOT NULL REFERENCES messages(id)  ON DELETE CASCADE,
+    channel_id UUID NOT NULL REFERENCES channels(id)  ON DELETE CASCADE,
+    server_id  UUID NOT NULL REFERENCES servers(id)   ON DELETE CASCADE,
+    user_id    UUID NOT NULL REFERENCES users(id)     ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (message_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_mentions_user    ON message_mentions(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_mentions_channel ON message_mentions(channel_id, user_id);
 `;
 
 const SEED_SQL = `

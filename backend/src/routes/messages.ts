@@ -109,6 +109,37 @@ router.post('/channel/:channelId', authMiddleware,
       );
       const io = req.app.get('io');
       if (io) io.to(`channel:${req.params.channelId}`).emit('new_message', full);
+
+      // ── Parse !username mentions and notify mentioned users ──────────
+      if (req.body.content) {
+        const mentionedNames: string[] = [...req.body.content.matchAll(/!([a-zA-Z0-9_]+)/g)].map((m: any) => m[1]);
+        if (mentionedNames.length > 0) {
+          const { rows: mentionedUsers } = await query(
+            `SELECT u.id, u.username FROM users u
+             INNER JOIN server_members sm ON sm.server_id = $1 AND sm.user_id = u.id
+             WHERE u.username ILIKE ANY($2::text[]) AND u.id != $3`,
+            [ch.server_id, mentionedNames, req.user!.id]
+          );
+          for (const mentioned of mentionedUsers) {
+            await query(
+              `INSERT INTO message_mentions (message_id, channel_id, server_id, user_id)
+               VALUES ($1,$2,$3,$4) ON CONFLICT (message_id, user_id) DO NOTHING`,
+              [msg.id, req.params.channelId, ch.server_id, mentioned.id]
+            );
+            if (io) {
+              io.to(`user:${mentioned.id}`).emit('ping_received' as any, {
+                message_id: msg.id,
+                channel_id: req.params.channelId,
+                server_id: ch.server_id,
+                from_user_id: req.user!.id,
+                from_username: req.user!.username,
+                content: req.body.content,
+              });
+            }
+          }
+        }
+      }
+
       return res.status(201).json(full);
     } catch (err) {
       console.error(err);
