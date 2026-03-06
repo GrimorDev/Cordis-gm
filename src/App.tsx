@@ -742,6 +742,7 @@ export default function App() {
   const activeServerRef     = useRef(activeServer);
   const callDurationRef     = useRef(0);
   const voiceHandlerRef     = useRef<Record<string, (...a: any[]) => void>>({});
+  const voiceBcRef          = useRef<BroadcastChannel|null>(null); // shared BroadcastChannel for multi-tab voice
   // DM unread counts (keyed by other_user_id)
   const [unreadDms, setUnreadDms]             = useState<Record<string, number>>({});
   // Channel unread counts (keyed by channel_id)
@@ -814,14 +815,18 @@ export default function App() {
   const [serverActivity, setServerActivity]   = useState<{id:string;icon:string;text:string;time:string}[]>([]);
 
   // ── Multi-tab voice prevention (BroadcastChannel) ───────────────
+  // IMPORTANT: we store a single instance in voiceBcRef and send FROM THE SAME INSTANCE.
+  // BroadcastChannel does NOT deliver a message back to the same instance that sent it,
+  // so there's no self-cancellation. Creating a new instance to send would cause
+  // the listener on this page to receive and immediately destroy its own voice session.
   useEffect(() => {
     if (!('BroadcastChannel' in window)) return;
     const bc = new BroadcastChannel('cordyn_voice');
+    voiceBcRef.current = bc;
     bc.onmessage = (e) => {
       // Another tab joined voice — silently leave this tab's voice session
       if (e.data?.type === 'voice_joined') {
         setActiveCall(cur => {
-          // Emit leave signal via socket so server removes us from voice room
           if (cur?.channelId) {
             try { getSocket().emit('voice_leave', cur.channelId); } catch {}
           }
@@ -830,7 +835,7 @@ export default function App() {
         setShowCallPanel(false);
       }
     };
-    return () => bc.close();
+    return () => { bc.close(); voiceBcRef.current = null; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1898,7 +1903,7 @@ export default function App() {
     setActiveCall({ type: 'voice_channel', channelId: ch.id, channelName: ch.name, serverId: activeServer, isMuted: false, isDeafened: false, isCameraOn: false, isScreenSharing: false });
     setShowCallPanel(true);
     // Notify other tabs to leave voice
-    try { if ('BroadcastChannel' in window) new BroadcastChannel('cordyn_voice').postMessage({ type: 'voice_joined' }); } catch {}
+    try { voiceBcRef.current?.postMessage({ type: 'voice_joined' }); } catch {}
   };
 
   const hangupCall = () => {
@@ -1931,7 +1936,7 @@ export default function App() {
     setActiveCall({ type: type === 'voice' ? 'dm_voice' : 'dm_video', userId, username, avatarUrl: avatarUrl ?? null, isMuted: false, isDeafened: false, isCameraOn: false, isScreenSharing: false });
     setActiveDmUserId(userId); setActiveView('dms'); setShowCallPanel(true); setProfileOpen(false);
     // Notify other tabs to leave voice
-    try { if ('BroadcastChannel' in window) new BroadcastChannel('cordyn_voice').postMessage({ type: 'voice_joined' }); } catch {}
+    try { voiceBcRef.current?.postMessage({ type: 'voice_joined' }); } catch {}
   };
 
   const toggleMute = () => {
