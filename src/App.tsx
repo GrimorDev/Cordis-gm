@@ -792,6 +792,9 @@ export default function App() {
   const [deleteCode, setDeleteCode]           = useState('');
   const [deleteLoading, setDeleteLoading]     = useState(false);
 
+  // Activity modal
+  const [showActivityModal, setShowActivityModal] = useState(false);
+
   // Mention / ping system
   const [pingChs, setPingChs]                 = useState<Record<string, number>>({});
   const [mentionQuery, setMentionQuery]       = useState<string | null>(null);
@@ -3503,17 +3506,25 @@ export default function App() {
             <div className="px-4 py-4 border-b border-white/[0.07] shrink-0">
               <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3">Aktywność</h3>
               {serverActivity.length>0 ? (
-                <div className="flex flex-col gap-1.5">
-                  {serverActivity.slice(0,8).map(a=>(
-                    <div key={a.id} className="flex items-start gap-2.5 bg-white/[0.03] rounded-2xl px-3 py-2.5 border border-white/[0.06] hover:bg-white/[0.06] transition-all duration-200">
-                      <span className="text-sm shrink-0 leading-none mt-0.5">{a.icon}</span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs text-zinc-300 leading-snug">{a.text}</p>
-                        <p className="text-[10px] text-zinc-600 mt-0.5">{ft(a.time)}</p>
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    {serverActivity.slice(0,4).map(a=>(
+                      <div key={a.id} className="flex items-start gap-2.5 bg-white/[0.03] rounded-2xl px-3 py-2.5 border border-white/[0.06] hover:bg-white/[0.06] transition-all duration-200">
+                        <span className="text-sm shrink-0 leading-none mt-0.5">{a.icon}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs text-zinc-300 leading-snug">{a.text}</p>
+                          <p className="text-[10px] text-zinc-600 mt-0.5">{ft(a.time)}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                  {serverActivity.length>4&&(
+                    <button onClick={()=>setShowActivityModal(true)}
+                      className="mt-2.5 w-full text-[11px] text-zinc-500 hover:text-zinc-300 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl py-2 transition-all font-medium">
+                      Zobacz więcej ({serverActivity.length - 4})
+                    </button>
+                  )}
+                </>
               ) : (
                 <p className="text-xs text-zinc-700 italic">Brak aktywności na serwerze</p>
               )}
@@ -3773,6 +3784,14 @@ export default function App() {
                         <span className="text-[11px] text-indigo-400 font-medium">{selUser.role_name}</span>
                       </div>
                     )}
+                    {/* Server roles (custom roles) */}
+                    {activeView==='servers'&&Array.isArray(selUser.roles)&&selUser.roles.map((role:any)=>(
+                      <div key={role.role_id} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1"
+                        style={{background:(role.color||'#5865f2')+'20',border:'1px solid '+(role.color||'#5865f2')+'40'}}>
+                        <div className="w-2 h-2 rounded-full shrink-0" style={{background:role.color||'#5865f2'}}/>
+                        <span className="text-[11px] font-medium" style={{color:role.color||'#818cf8'}}>{role.name}</span>
+                      </div>
+                    ))}
                     {selUser.created_at&&(
                       <div className="flex items-center gap-1.5 bg-white/[0.04] border border-white/[0.06] rounded-lg px-2.5 py-1">
                         <span className="text-xs">📅</span>
@@ -3782,6 +3801,22 @@ export default function App() {
                       </div>
                     )}
                   </div>
+
+                  {/* Server roles section (detailed) */}
+                  {activeView==='servers'&&Array.isArray(selUser.roles)&&selUser.roles.length>0&&(
+                    <div className="mb-4">
+                      <p className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Role na serwerze</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {selUser.roles.map((role:any)=>(
+                          <div key={role.role_id} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5"
+                            style={{background:(role.color||'#5865f2')+'18',border:'1px solid '+(role.color||'#5865f2')+'35'}}>
+                            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{background:role.color||'#5865f2'}}/>
+                            <span className="text-xs font-semibold" style={{color:role.color||'#818cf8'}}>{role.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Bio block */}
                   {selUser.bio&&(
@@ -4870,6 +4905,50 @@ export default function App() {
                   {deleteLoading ? <Loader2 size={15} className="animate-spin"/> : <Trash2 size={15}/>}
                   Usuń konto
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── ACTIVITY MODAL ───────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showActivityModal&&(
+          <motion.div key="act-modal-bg" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={()=>setShowActivityModal(false)}>
+            <motion.div key="act-modal" initial={{opacity:0,scale:0.93,y:16}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.93,y:16}}
+              transition={{duration:0.22,ease:[0.16,1,0.3,1]}}
+              className="bg-[#18181b] border border-white/[0.08] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+              onClick={e=>e.stopPropagation()}>
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.07]">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center">
+                    <span className="text-xs">📋</span>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Aktywność serwera</h3>
+                    <p className="text-[10px] text-zinc-600">{serverActivity.length} zdarzeń</p>
+                  </div>
+                </div>
+                <button onClick={()=>setShowActivityModal(false)}
+                  className="w-7 h-7 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] flex items-center justify-center text-zinc-500 hover:text-zinc-300 transition-all">
+                  <X size={13}/>
+                </button>
+              </div>
+              {/* List */}
+              <div className="overflow-y-auto custom-scrollbar max-h-[60vh] p-4 flex flex-col gap-2">
+                {serverActivity.map((a,i)=>(
+                  <motion.div key={a.id} initial={{opacity:0,x:-10}} animate={{opacity:1,x:0}} transition={{delay:i*0.025}}
+                    className="flex items-start gap-2.5 bg-white/[0.03] rounded-xl px-3 py-2.5 border border-white/[0.06] hover:bg-white/[0.06] transition-all duration-150">
+                    <span className="text-sm shrink-0 leading-none mt-0.5">{a.icon}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-zinc-300 leading-snug">{a.text}</p>
+                      <p className="text-[10px] text-zinc-600 mt-0.5">{ft(a.time)}</p>
+                    </div>
+                  </motion.div>
+                ))}
               </div>
             </motion.div>
           </motion.div>
