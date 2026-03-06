@@ -7,6 +7,8 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { config } from '../config';
+import { redis } from '../redis/client';
+import { generateCode, sendDeletionEmail } from '../services/email';
 
 const router = Router();
 
@@ -170,6 +172,49 @@ router.post('/me/banner', authMiddleware, bannerUpload.single('banner'), async (
     await query('UPDATE users SET banner_url=$1 WHERE id=$2', [bannerUrl, req.user!.id]);
     return res.json({ banner_url: bannerUrl });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// POST /api/users/me/request-deletion  — send 7-char deletion code to user's email
+router.post('/me/request-deletion', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { rows: [u] } = await query('SELECT id,email FROM users WHERE id=$1', [req.user!.id]);
+    if (!u) return res.status(404).json({ error: 'User not found' });
+
+    const code = generateCode(); // format XX-XXX-XXX  (8 visible chars with dashes)
+    const redisKey = `deletion:${req.user!.id}`;
+    await redis.setex(redisKey, 15 * 60, code); // 15 min TTL
+
+    await sendDeletionEmail(u.email, code);
+    return res.json({ message: 'Kod wysłany na Twój adres e-mail' });
+  } catch (err) {
+    console.error('request-deletion error:', err);
+    return res.status(500).json({ error: 'Nie udało się wysłać kodu — spróbuj ponownie' });
+  }
+});
+
+// DELETE /api/users/me  — confirm deletion with code, then delete account
+router.delete('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { code } = req.body;
+  if (!code || typeof code !== 'string') return res.status(400).json({ error: 'Brak kodu' });
+
+  try {
+    const redisKey = `deletion:${req.user!.id}`;
+    const stored = await redis.get(redisKey);
+    if (!stored) return res.status(400).json({ error: 'Kod wygasł lub nie był wygenerowany' });
+    if (stored.trim().toLowerCase() !== code.trim().toLowerCase())
+      return res.status(400).json({ error: 'Nieprawidłowy kod' });
+
+    // Delete the code so it can't be reused
+    await redis.del(redisKey);
+
+    // Cascade delete — all FK references have ON DELETE CASCADE so this covers everything
+    await query('DELETE FROM users WHERE id=$1', [req.user!.id]);
+
+    return res.json({ message: 'Konto zostało usunięte' });
+  } catch (err) {
+    console.error('delete-account error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 export default router;

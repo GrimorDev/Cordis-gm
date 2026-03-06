@@ -782,6 +782,11 @@ export default function App() {
   const [appSettOpen, setAppSettOpen]         = useState(false);
   const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'devices'|'privacy'>('account');
 
+  // Account deletion flow
+  const [deleteStep, setDeleteStep]           = useState<'confirm'|'code'|null>(null);
+  const [deleteCode, setDeleteCode]           = useState('');
+  const [deleteLoading, setDeleteLoading]     = useState(false);
+
   // Typing indicator
   const [typingUsers, setTypingUsers]         = useState<Record<string,string>>({});
   const typingTimersRef                        = useRef<Record<string,ReturnType<typeof setTimeout>>>({});
@@ -4576,7 +4581,7 @@ export default function App() {
                       <div className="mt-2 p-4 bg-rose-500/5 border border-rose-500/15 rounded-2xl">
                         <h4 className="text-sm font-bold text-rose-400 mb-1">Strefa zagrożenia</h4>
                         <p className="text-xs text-zinc-500 mb-3">Trwałe akcje których nie można cofnąć</p>
-                        <button onClick={()=>addToast('Usuń konto — skontaktuj się z administratorem','warn')}
+                        <button onClick={()=>setDeleteStep('confirm')}
                           className="text-sm font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/15 border border-rose-500/20 px-4 py-2 rounded-xl transition-all">
                           Usuń konto
                         </button>
@@ -4586,6 +4591,130 @@ export default function App() {
 
                   </AnimatePresence>
                 </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── ACCOUNT DELETION MODALS ─────────────────────────────────────── */}
+      <AnimatePresence>
+        {deleteStep === 'confirm' && (
+          <motion.div key="del-confirm-bg" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={()=>setDeleteStep(null)}>
+            <motion.div key="del-confirm-card" initial={{opacity:0,scale:0.92,y:16}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.92,y:8}} transition={{type:'spring',stiffness:380,damping:28}}
+              className="bg-[#141420] border border-rose-500/25 rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+              onClick={e=>e.stopPropagation()}>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-rose-500/15 flex items-center justify-center shrink-0">
+                  <Trash2 size={18} className="text-rose-400"/>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Usuń konto</h3>
+                  <p className="text-xs text-zinc-500">Ta akcja jest nieodwracalna</p>
+                </div>
+              </div>
+              <p className="text-sm text-zinc-400 mb-6 leading-relaxed">
+                Na pewno chcesz <span className="text-rose-400 font-semibold">trwale usunąć</span> swoje konto? Wszystkie wiadomości, serwery i dane zostaną usunięte bezpowrotnie.
+              </p>
+              <div className="flex gap-3">
+                <button onClick={()=>setDeleteStep(null)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-400 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.07] transition-all">
+                  Anuluj
+                </button>
+                <button
+                  disabled={deleteLoading}
+                  onClick={async()=>{
+                    setDeleteLoading(true);
+                    try {
+                      await users.requestDeletion();
+                      setDeleteStep('code');
+                      setDeleteCode('');
+                    } catch(e:any) {
+                      addToast(e?.message || 'Nie udało się wysłać kodu','error');
+                      setDeleteStep(null);
+                    } finally { setDeleteLoading(false); }
+                  }}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-rose-600 hover:bg-rose-500 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+                  {deleteLoading ? <Loader2 size={15} className="animate-spin"/> : <Trash2 size={15}/>}
+                  Tak, usuń
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {deleteStep === 'code' && (
+          <motion.div key="del-code-bg" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={()=>{setDeleteStep(null);setDeleteCode('');}}>
+            <motion.div key="del-code-card" initial={{opacity:0,scale:0.92,y:16}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.92,y:8}} transition={{type:'spring',stiffness:380,damping:28}}
+              className="bg-[#141420] border border-rose-500/25 rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+              onClick={e=>e.stopPropagation()}>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-rose-500/15 flex items-center justify-center shrink-0">
+                  <Shield size={18} className="text-rose-400"/>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Potwierdź kodem</h3>
+                  <p className="text-xs text-zinc-500">Sprawdź swoją skrzynkę e-mail</p>
+                </div>
+              </div>
+              <p className="text-sm text-zinc-400 mb-4 leading-relaxed">
+                Wysłaliśmy 7-znakowy kod potwierdzający na Twój adres e-mail. Wklej go poniżej, aby potwierdzić usunięcie konta.
+              </p>
+              <input
+                autoFocus
+                value={deleteCode}
+                onChange={e=>setDeleteCode(e.target.value)}
+                onKeyDown={async e=>{
+                  if(e.key==='Enter' && deleteCode.trim()) {
+                    e.preventDefault();
+                    setDeleteLoading(true);
+                    try {
+                      await users.confirmDeletion(deleteCode.trim());
+                      disconnectSocket();
+                      clearToken();
+                      setIsAuthenticated(false);
+                      setCurrentUser(null);
+                      setDeleteStep(null);
+                      setDeleteCode('');
+                      addToast('Konto zostało usunięte','success');
+                    } catch(err:any) {
+                      addToast(err?.message||'Nieprawidłowy kod','error');
+                    } finally { setDeleteLoading(false); }
+                  }
+                }}
+                placeholder="np. AB-CDE-FGH"
+                className="w-full bg-black/30 border border-white/[0.08] rounded-xl px-4 py-3 text-white text-center text-lg font-mono tracking-widest placeholder:text-zinc-600 focus:outline-none focus:border-rose-500/50 mb-5 transition-colors"
+              />
+              <div className="flex gap-3">
+                <button onClick={()=>{setDeleteStep(null);setDeleteCode('');}}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-400 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.07] transition-all">
+                  Anuluj
+                </button>
+                <button
+                  disabled={deleteLoading || !deleteCode.trim()}
+                  onClick={async()=>{
+                    setDeleteLoading(true);
+                    try {
+                      await users.confirmDeletion(deleteCode.trim());
+                      disconnectSocket();
+                      clearToken();
+                      setIsAuthenticated(false);
+                      setCurrentUser(null);
+                      setDeleteStep(null);
+                      setDeleteCode('');
+                      addToast('Konto zostało usunięte','success');
+                    } catch(err:any) {
+                      addToast(err?.message||'Nieprawidłowy kod','error');
+                    } finally { setDeleteLoading(false); }
+                  }}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-rose-600 hover:bg-rose-500 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+                  {deleteLoading ? <Loader2 size={15} className="animate-spin"/> : <Trash2 size={15}/>}
+                  Usuń konto
+                </button>
               </div>
             </motion.div>
           </motion.div>

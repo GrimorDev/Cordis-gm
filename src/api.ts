@@ -152,6 +152,8 @@ export const users = {
     const fd = new FormData(); fd.append('banner', file);
     return req<{ banner_url: string }>('POST', '/users/me/banner', fd, true);
   },
+  requestDeletion: () => req<{ message: string }>('POST', '/users/me/request-deletion'),
+  confirmDeletion: (code: string) => req<{ message: string }>('DELETE', '/users/me', { code }),
 };
 
 // ── Servers ────────────────────────────────────────────────────────────────
