@@ -8,6 +8,26 @@ const router = Router();
 
 interface ChannelAccess { serverId: string; channelType: string; roleInServer: string; }
 
+/** Check if a member has a specific permission through their server roles.
+ *  Owner/Admin bypass all checks.
+ *  If all of a user's roles have empty permissions arrays → allow (no restrictions configured).
+ *  Only deny when at least one non-empty-permission role exists and NONE grant the permission. */
+async function hasPermission(serverId: string, userId: string, permission: string, roleName: string): Promise<boolean> {
+  if (['Owner', 'Admin'].includes(roleName)) return true;
+  const { rows } = await query(
+    `SELECT sr.permissions FROM member_roles mr
+     INNER JOIN server_roles sr ON sr.id = mr.role_id
+     WHERE mr.server_id = $1 AND mr.user_id = $2`,
+    [serverId, userId]
+  );
+  // No custom roles assigned, or all have empty permissions → default allow
+  if (rows.length === 0) return true;
+  const allEmpty = rows.every((r: any) => !r.permissions || r.permissions.length === 0);
+  if (allEmpty) return true;
+  // At least one role has explicit permissions — check if any grants this permission
+  return rows.some((r: any) => Array.isArray(r.permissions) && r.permissions.includes(permission));
+}
+
 // Returns channel access info if user can access the channel, null otherwise
 async function resolveChannelAccess(channelId: string, userId: string): Promise<ChannelAccess | null> {
   const { rows: [ch] } = await query(
@@ -97,6 +117,10 @@ router.post('/channel/:channelId', authMiddleware,
       if (!access) return res.status(403).json({ error: 'No access' });
       if (access.channelType === 'announcement' && !['Owner', 'Admin'].includes(access.roleInServer)) {
         return res.status(403).json({ error: 'Tylko administratorzy mogą pisać na kanałach ogłoszeń' });
+      }
+      // Check send_messages permission (Owner/Admin always bypass)
+      if (!await hasPermission(access.serverId, req.user!.id, 'send_messages', access.roleInServer)) {
+        return res.status(403).json({ error: 'Nie masz uprawnienia do wysyłania wiadomości na tym kanale' });
       }
       const ch = { server_id: access.serverId };
       const { rows: [msg] } = await query(
