@@ -224,11 +224,17 @@ async function broadcastUserStatus(
   userId: string,
   status: string
 ) {
+  // Check if user has hidden their status
+  const { rows: [user] } = await query(
+    `SELECT privacy_status_visible FROM users WHERE id = $1`, [userId]
+  );
+  const broadcastStatus = user?.privacy_status_visible === false ? 'offline' : status;
+
   // Get all servers the user belongs to
   const { rows: servers } = await query(
     `SELECT server_id FROM server_members WHERE user_id = $1`, [userId]
   );
   for (const { server_id } of servers) {
-    io.to(`server:${server_id}`).emit('user_status', { user_id: userId, status });
+    io.to(`server:${server_id}`).emit('user_status', { user_id: userId, status: broadcastStatus });
   }
 }

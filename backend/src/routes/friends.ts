@@ -49,10 +49,12 @@ router.post('/request', authMiddleware, async (req: AuthRequest, res: Response) 
 
   try {
     const { rows: [target] } = await query(
-      `SELECT id FROM users WHERE username = $1`, [username]
+      `SELECT id, privacy_friend_requests FROM users WHERE username = $1`, [username]
     );
     if (!target) return res.status(404).json({ error: 'User not found' });
     if (target.id === req.user!.id) return res.status(400).json({ error: 'Cannot add yourself' });
+    if (target.privacy_friend_requests === false)
+      return res.status(403).json({ error: 'Ten użytkownik wyłączył zaproszenia do znajomych' });
 
     // Check existing relation
     const existing = await query(

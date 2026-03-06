@@ -770,6 +770,11 @@ export default function App() {
   const [accentColor, setAccentColor]         = useState<string>('indigo');
   const [compactMessages, setCompactMessages] = useState<boolean>(false);
 
+  // Appearance prefs (localStorage only — apply instantly, no server round-trip)
+  const [fontSize, setFontSize]                     = useState<'small'|'normal'|'large'>(() => (localStorage.getItem('cordyn_font_size') as any) || 'normal');
+  const [alwaysShowTimestamps, setAlwaysShowTimestamps] = useState<boolean>(() => localStorage.getItem('cordyn_timestamps') === 'true');
+  const [showChatAvatars, setShowChatAvatars]         = useState<boolean>(() => localStorage.getItem('cordyn_avatars') !== 'false');
+
   // Status system
   const [statusPickerOpen, setStatusPickerOpen] = useState(false);
   const [isMicMuted, setIsMicMuted]           = useState(false);
@@ -1182,10 +1187,21 @@ export default function App() {
   // Sync myStatusRef when currentUser.status changes (e.g. on login)
   useEffect(() => { if (currentUser?.status) myStatusRef.current = currentUser.status; }, [currentUser?.status]);
 
-  // Apply accent CSS variable
+  // Apply accent color — override Tailwind v4 color CSS variables so every bg-indigo-*, text-indigo-* etc. uses the chosen color
   useEffect(() => {
-    const map: Record<string,string> = { indigo:'99 102 241', violet:'139 92 246', pink:'236 72 153', blue:'59 130 246', emerald:'16 185 129' };
-    document.documentElement.style.setProperty('--accent-rgb', map[accentColor]||map.indigo);
+    const palettes: Record<string, Record<string,string>> = {
+      indigo:  { '300':'#a5b4fc','400':'#818cf8','500':'#6366f1','600':'#4f46e5','700':'#4338ca' },
+      violet:  { '300':'#c4b5fd','400':'#a78bfa','500':'#8b5cf6','600':'#7c3aed','700':'#6d28d9' },
+      pink:    { '300':'#f9a8d4','400':'#f472b6','500':'#ec4899','600':'#db2777','700':'#be185d' },
+      blue:    { '300':'#93c5fd','400':'#60a5fa','500':'#3b82f6','600':'#2563eb','700':'#1d4ed8' },
+      emerald: { '300':'#6ee7b7','400':'#34d399','500':'#10b981','600':'#059669','700':'#047857' },
+    };
+    const p = palettes[accentColor] || palettes.indigo;
+    const r = document.documentElement;
+    ['300','400','500','600','700'].forEach(shade => r.style.setProperty(`--color-indigo-${shade}`, p[shade]));
+    // Fallback: legacy CSS variable used by some inline styles
+    const [r2,g2,b2] = p['500'].match(/[\da-f]{2}/gi)!.map(h=>parseInt(h,16));
+    r.style.setProperty('--accent-rgb', `${r2} ${g2} ${b2}`);
   }, [accentColor]);
 
   // ── Auto-idle (10 min brak aktywności) ───────────────────────────
@@ -1386,6 +1402,9 @@ export default function App() {
     if (upd) { setCurrentUser(upd); setEditProf({...upd}); addToast('Ustawienia prywatności zapisane', 'success'); }
     else addToast('Błąd zapisu ustawień', 'error');
   };
+
+  // Derived appearance values
+  const msgFontCls = fontSize === 'small' ? 'text-xs' : fontSize === 'large' ? 'text-base' : 'text-sm';
 
   // ── Appearance helpers (save to DB) ──────────────────────────────
   const saveAccentColor = async (color: string) => {
@@ -3083,9 +3102,11 @@ export default function App() {
                           className={`flex gap-2.5 group ${compactMessages?'mb-0.5':'mb-1.5'} ${isOwn?'flex-row-reverse':'flex-row'}`}>
 
                           {/* Avatar */}
+                          {showChatAvatars&&(
                           <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} alt=""
                             onClick={()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar,status:(msg as MessageFull).sender_status})}
                             className="w-9 h-9 rounded-xl object-cover shrink-0 cursor-pointer hover:opacity-80 hover:scale-105 transition-all self-end mb-0.5"/>
+                          )}
 
                           {/* Content column */}
                           <div className={`flex flex-col max-w-[72%] ${isOwn?'items-end':'items-start'} min-w-0`}>
@@ -3107,7 +3128,7 @@ export default function App() {
                                   {(msg as MessageFull).sender_role}
                                 </span>
                               )}
-                              <span className="text-[10px] text-zinc-600">{ft(msg.created_at)}</span>
+                              <span className={`text-[10px] text-zinc-600 transition-opacity ${alwaysShowTimestamps?'':'opacity-0 group-hover:opacity-100'}`}>{ft(msg.created_at)}</span>
                               {(msg as MessageFull).edited&&<span className="text-[10px] text-zinc-700 italic">(ed.)</span>}
                             </div>
 
@@ -3181,7 +3202,7 @@ export default function App() {
                                 ? 'bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-lg shadow-indigo-500/20 bubble-tail-right'
                                 : 'glass-bubble text-zinc-100 bubble-tail-left'
                               }`}>
-                                <p className="text-sm leading-relaxed break-words">{hlText(msg.content)}</p>
+                                <p className={`${msgFontCls} leading-relaxed break-words`}>{hlText(msg.content)}</p>
                               </div>
                             )}
 
@@ -3300,7 +3321,7 @@ export default function App() {
                         <input ref={msgInputRef} type="text" value={msgInput}
                           onChange={e=>{
                             const v=e.target.value; setMsgInput(v);
-                            if(activeChannel&&activeView==='servers'){
+                            if(activeChannel&&activeView==='servers'&&currentUser?.privacy_typing_visible!==false){
                               if(v.trim()){
                                 getSocket()?.emit('typing_start',activeChannel);
                                 if(typingEmitTimerRef.current) clearTimeout(typingEmitTimerRef.current);
@@ -4483,7 +4504,6 @@ export default function App() {
                             </button>
                           ))}
                         </div>
-                        <p className="text-[10px] text-zinc-700 mt-2">Zmiana dotyczy podświetlenia UI — pełny motyw wkrótce</p>
                       </div>
 
                       {/* Message density */}
@@ -4504,6 +4524,55 @@ export default function App() {
                             </button>
                           ))}
                         </div>
+                      </div>
+
+                      {/* Font size */}
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Rozmiar czcionki</label>
+                        <div className="flex gap-2">
+                          {([
+                            {key:'small',  label:'Mała',    sample:'Aa'},
+                            {key:'normal', label:'Normalna', sample:'Aa'},
+                            {key:'large',  label:'Duża',    sample:'Aa'},
+                          ] as const).map(opt=>(
+                            <button key={opt.key} onClick={()=>{setFontSize(opt.key);localStorage.setItem('cordyn_font_size',opt.key);}}
+                              className={`flex-1 flex flex-col items-center gap-1.5 py-3 rounded-xl border text-sm transition-all ${fontSize===opt.key?'bg-indigo-500/10 border-indigo-500/30 text-white':'bg-white/[0.02] border-white/[0.05] text-zinc-400 hover:text-zinc-300'}`}>
+                              <span className={`font-bold ${opt.key==='small'?'text-sm':opt.key==='large'?'text-xl':'text-base'}`}>{opt.sample}</span>
+                              <span className="text-[10px]">{opt.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Toggle options */}
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1 block font-bold">Opcje wyświetlania</label>
+                        {([
+                          {
+                            label: 'Zawsze pokazuj sygnatury czasowe',
+                            desc: 'Godzina przy każdej wiadomości widoczna bez najechania',
+                            value: alwaysShowTimestamps,
+                            onChange: (v: boolean) => { setAlwaysShowTimestamps(v); localStorage.setItem('cordyn_timestamps', String(v)); },
+                          },
+                          {
+                            label: 'Pokaż awatary w czacie',
+                            desc: 'Zdjęcia profilowe obok wiadomości na kanałach',
+                            value: showChatAvatars,
+                            onChange: (v: boolean) => { setShowChatAvatars(v); localStorage.setItem('cordyn_avatars', String(v)); },
+                          },
+                        ]).map(opt=>(
+                          <div key={opt.label} className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-3 hover:border-white/[0.09] transition-colors">
+                            <div className="flex-1 min-w-0 mr-4">
+                              <p className="text-sm font-medium text-white">{opt.label}</p>
+                              <p className="text-xs text-zinc-600 mt-0.5">{opt.desc}</p>
+                            </div>
+                            <button onClick={()=>opt.onChange(!opt.value)}
+                              className={`w-11 h-6 rounded-full transition-all shrink-0 relative ${opt.value?'bg-indigo-500':'bg-zinc-700'}`}>
+                              <span className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200"
+                                style={{left: opt.value ? 'calc(100% - 1.375rem)' : '0.125rem'}}/>
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     </motion.div>
                   )}

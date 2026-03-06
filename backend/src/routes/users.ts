@@ -53,7 +53,8 @@ const bannerUpload = makeUpload('banners');
 router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { rows } = await query(
-      `SELECT id,username,avatar_url,banner_url,banner_color,bio,custom_status,status,
+      `SELECT id,username,avatar_url,banner_url,banner_color,bio,custom_status,
+              CASE WHEN privacy_status_visible=FALSE AND id!=$2 THEN 'offline' ELSE status END as status,
               accent_color,compact_messages,
               privacy_status_visible,privacy_typing_visible,privacy_read_receipts,privacy_friend_requests,
               created_at,
