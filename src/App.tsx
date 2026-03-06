@@ -29,8 +29,8 @@ import {
   playCallAccepted, playCallEnded,
 } from './sounds';
 import {
-  makePeerConnection, attachRemoteAudio, detachRemoteAudio, muteAllRemote,
-  setOutputDevice, watchSpeaking, getMediaDevices,
+  makePeerConnection, attachRemoteAudio, attachRemoteScreenAudio, detachRemoteAudio,
+  muteAllRemote, setRemoteVolume, muteRemoteUser, setOutputDevice, watchSpeaking, getMediaDevices,
 } from './webrtc';
 
 // ─── Glass constants ──────────────────────────────────────────────────────────
@@ -91,7 +91,7 @@ type Toast = { id: string; msg: string; type: 'info'|'success'|'error'|'warn'; o
 type CallState = {
   type: 'voice_channel' | 'dm_voice' | 'dm_video';
   channelId?: string; channelName?: string; serverId?: string;
-  userId?: string; username?: string;
+  userId?: string; username?: string; avatarUrl?: string | null;
   isMuted: boolean; isDeafened: boolean; isCameraOn: boolean; isScreenSharing: boolean;
 };
 type VoiceUser = { id: string; username: string; avatar_url: string|null; status: string };
@@ -795,6 +795,11 @@ export default function App() {
   // Activity modal
   const [showActivityModal, setShowActivityModal] = useState(false);
 
+  // Per-user volume control during calls
+  const [userVols, setUserVols]   = useState<Record<string, number>>({});  // 0–200, default 100
+  const [mutedByMe, setMutedByMe] = useState<Record<string, boolean>>({});
+  const [volMenu, setVolMenu]     = useState<{id:string, username:string, x:number, y:number}|null>(null);
+
   // Mention / ping system
   const [pingChs, setPingChs]                 = useState<Record<string, number>>({});
   const [mentionQuery, setMentionQuery]       = useState<string | null>(null);
@@ -807,6 +812,27 @@ export default function App() {
 
   // Server activity log
   const [serverActivity, setServerActivity]   = useState<{id:string;icon:string;text:string;time:string}[]>([]);
+
+  // ── Multi-tab voice prevention (BroadcastChannel) ───────────────
+  useEffect(() => {
+    if (!('BroadcastChannel' in window)) return;
+    const bc = new BroadcastChannel('cordyn_voice');
+    bc.onmessage = (e) => {
+      // Another tab joined voice — silently leave this tab's voice session
+      if (e.data?.type === 'voice_joined') {
+        setActiveCall(cur => {
+          // Emit leave signal via socket so server removes us from voice room
+          if (cur?.channelId) {
+            try { getSocket().emit('voice_leave', cur.channelId); } catch {}
+          }
+          return null;
+        });
+        setShowCallPanel(false);
+      }
+    };
+    return () => bc.close();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Init ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1180,18 +1206,9 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCall?.type, activeCall?.channelId, activeCall?.userId]);
 
+  // Scroll smoothly on new messages/typing; scroll instantly when entering a new channel/DM
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [channelMsgs, dmMsgs, typingUsers]);
-
-  // ── Call timer ──────────────────────────────────────────────────
-  useEffect(() => {
-    if (activeCall) {
-      callTimerRef.current = setInterval(() => setCallDuration(d => d + 1), 1000);
-    } else {
-      if (callTimerRef.current) { clearInterval(callTimerRef.current); callTimerRef.current = null; }
-      setCallDuration(0);
-    }
-    return () => { if (callTimerRef.current) clearInterval(callTimerRef.current); };
-  }, [!!activeCall]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior }); }, [activeChannel, activeDmUserId]);
 
   // ── Sync refs ───────────────────────────────────────────────────
   useEffect(() => { currentUserRef.current    = currentUser;    }, [currentUser]);
@@ -1305,16 +1322,23 @@ export default function App() {
       (e) => {
         const stream = e.streams[0]; if (!stream) return;
         if (e.track.kind === 'video') {
-          // Remote screen share track
+          // Remote screen share video track
           remoteScreenStreamsRef.current.set(remoteUserId, stream);
           setScreenShareTick(t => t + 1);
+          // Also play screen share audio if the stream has audio tracks
+          if (stream.getAudioTracks().length > 0) {
+            attachRemoteScreenAudio(remoteUserId, stream);
+          }
         } else {
-          // Remote audio track
-          attachRemoteAudio(remoteUserId, stream);
-          const stop = watchSpeaking(stream, (s) =>
-            setSpeakingUsers(p => { const n = new Set(p); s ? n.add(remoteUserId) : n.delete(remoteUserId); return n; }));
-          const old = speakStopRef.current.get(remoteUserId); if (old) old();
-          speakStopRef.current.set(remoteUserId, stop);
+          // Audio track — only attach as mic audio if stream has NO video (not a screen-share stream)
+          if (stream.getVideoTracks().length === 0) {
+            attachRemoteAudio(remoteUserId, stream);
+            const stop = watchSpeaking(stream, (s) =>
+              setSpeakingUsers(p => { const n = new Set(p); s ? n.add(remoteUserId) : n.delete(remoteUserId); return n; }));
+            const old = speakStopRef.current.get(remoteUserId); if (old) old();
+            speakStopRef.current.set(remoteUserId, stop);
+          }
+          // If stream has video tracks, this audio is from the screen share — handled above via attachRemoteScreenAudio
         }
       },
     );
@@ -1625,7 +1649,8 @@ export default function App() {
       await channelsApi.create({ server_id: activeServer, name: newChName.trim(), type: newChType, category_id: chCreateCatId || undefined, is_private: newChPrivate, role_ids: newChPrivate ? newChRoles : undefined });
       addServerActivity({ icon, text: `Kanał #${newChName.trim()} został utworzony` });
       setChCreateOpen(false); setNewChName(''); setNewChPrivate(false); setNewChRoles([]);
-      const s = await serversApi.get(activeServer); setServerFull(s);
+      // NOTE: Do NOT refetch serverFull here — the socket 'channel_created' event handles state update.
+      // Re-fetching would overwrite the __uncat__ pseudo-category that the socket handler adds for uncategorized channels.
     } catch (err: any) {
       console.error(err);
       addToast(err?.message || 'Nie udało się utworzyć kanału', 'error');
@@ -1841,9 +1866,13 @@ export default function App() {
           setSpeakingUsers(p => { const n = new Set(p); s ? n.add(uid) : n.delete(uid); return n; }));
         speakStopRef.current.set('self', stop);
       }
-      // Pipe to existing peer connections
+      // Pipe to existing peer connections — replace existing sender tracks (no renegotiation needed)
       peerConnsRef.current.forEach(pc =>
-        stream.getTracks().forEach(t => { if (!pc.getSenders().find(s=>s.track?.kind===t.kind)) pc.addTrack(t, stream); }));
+        stream.getTracks().forEach(newTrack => {
+          const sender = pc.getSenders().find(s => s.track?.kind === newTrack.kind);
+          if (sender) { sender.replaceTrack(newTrack).catch(console.error); }
+          else { pc.addTrack(newTrack, stream); }
+        }));
       // Re-enumerate after permission granted — now we get real device labels
       getMediaDevices().then(setDevices).catch(() => {});
       return stream;
@@ -1856,6 +1885,7 @@ export default function App() {
   };
 
   const joinVoiceCh = async (ch: ChannelData) => {
+    if (activeCall?.channelId === ch.id) return; // Already on this channel — don't rejoin (would break mic)
     if (activeCall?.channelId && activeCall.channelId !== ch.id) {
       leaveVoiceChannel(activeCall.channelId);
       // Optimistic: remove self from old channel
@@ -1867,6 +1897,8 @@ export default function App() {
     playVoiceJoin();
     setActiveCall({ type: 'voice_channel', channelId: ch.id, channelName: ch.name, serverId: activeServer, isMuted: false, isDeafened: false, isCameraOn: false, isScreenSharing: false });
     setShowCallPanel(true);
+    // Notify other tabs to leave voice
+    try { if ('BroadcastChannel' in window) new BroadcastChannel('cordyn_voice').postMessage({ type: 'voice_joined' }); } catch {}
   };
 
   const hangupCall = () => {
@@ -1892,12 +1924,14 @@ export default function App() {
     setActiveCall(null); setShowCallPanel(false); setCallDuration(0);
   };
 
-  const startDmCall = async (userId: string, username: string, type: 'voice'|'video') => {
+  const startDmCall = async (userId: string, username: string, type: 'voice'|'video', avatarUrl?: string | null) => {
     await acquireMic(selMic || undefined);
     sendCallInvite(userId, type);
     startRing();
-    setActiveCall({ type: type === 'voice' ? 'dm_voice' : 'dm_video', userId, username, isMuted: false, isDeafened: false, isCameraOn: false, isScreenSharing: false });
+    setActiveCall({ type: type === 'voice' ? 'dm_voice' : 'dm_video', userId, username, avatarUrl: avatarUrl ?? null, isMuted: false, isDeafened: false, isCameraOn: false, isScreenSharing: false });
     setActiveDmUserId(userId); setActiveView('dms'); setShowCallPanel(true); setProfileOpen(false);
+    // Notify other tabs to leave voice
+    try { if ('BroadcastChannel' in window) new BroadcastChannel('cordyn_voice').postMessage({ type: 'voice_joined' }); } catch {}
   };
 
   const toggleMute = () => {
@@ -2545,10 +2579,13 @@ export default function App() {
                   const isSpeaking = speakingUsers.has(u.id);
                   const uMuted    = voiceUserStates[u.id]?.muted    ?? false;
                   const uDeafened = voiceUserStates[u.id]?.deafened ?? false;
+                  const uMutedByMe = mutedByMe[u.id] ?? false;
                   return (
-                    <div key={u.id} className="flex flex-col items-center gap-2">
+                    <div key={u.id} className="flex flex-col items-center gap-2"
+                      onContextMenu={e=>{e.preventDefault();setVolMenu({id:u.id,username:u.username,x:e.clientX,y:e.clientY});}}>
                       <div className={`relative p-1 rounded-2xl border-2 transition-all duration-150 ${isSpeaking&&!uMuted?'border-emerald-500 shadow-[0_0_12px_2px_rgba(16,185,129,0.45)]':uMuted?'border-rose-500/40':'border-white/10'}`}>
                         <img src={ava(u)} className={`${hasScreenShare?'w-14 h-14':'w-24 h-24'} rounded-xl object-cover`} alt=""/>
+                        {uMutedByMe&&<div className="absolute inset-0 rounded-xl bg-zinc-900/60 flex items-center justify-center"><VolumeX size={20} className="text-rose-400"/></div>}
                         <div className={`absolute bottom-1 right-1 w-5 h-5 rounded-full flex items-center justify-center ${uMuted?'bg-rose-500':isSpeaking?'bg-emerald-500':'bg-zinc-700'}`}>
                           {uMuted ? <MicOff size={9} className="text-white"/> : <Mic size={9} className="text-white"/>}
                         </div>
@@ -2563,12 +2600,15 @@ export default function App() {
                   const partnerSpeaking = speakingUsers.has(activeCall.userId!);
                   const pMuted    = voiceUserStates[activeCall.userId!]?.muted    ?? false;
                   const pDeafened = voiceUserStates[activeCall.userId!]?.deafened ?? false;
+                  const pVol      = userVols[activeCall.userId!] ?? 100;
+                  const pMutedByMe = mutedByMe[activeCall.userId!] ?? false;
                   return (
-                    <div key="partner" className="flex flex-col items-center gap-2">
+                    <div key="partner" className="flex flex-col items-center gap-2"
+                      onContextMenu={e=>{e.preventDefault();setVolMenu({id:activeCall.userId!,username:activeCall.username!,x:e.clientX,y:e.clientY});}}>
                       <div className={`relative p-1 rounded-2xl border-2 transition-all duration-150 ${partnerSpeaking&&!pMuted?'border-emerald-500 shadow-[0_0_12px_2px_rgba(16,185,129,0.45)]':pMuted?'border-rose-500/40':'border-white/10'}`}>
-                        <div className={`${hasScreenShare?'w-14 h-14':'w-24 h-24'} rounded-xl bg-zinc-800 border border-white/[0.06] flex items-center justify-center font-bold text-zinc-600 ${hasScreenShare?'text-2xl':'text-4xl'}`}>
-                          {activeCall.username.charAt(0).toUpperCase()}
-                        </div>
+                        <img src={ava({avatar_url: activeCall.avatarUrl, username: activeCall.username})}
+                          className={`${hasScreenShare?'w-14 h-14':'w-24 h-24'} rounded-xl object-cover`} alt=""/>
+                        {pMutedByMe&&<div className="absolute inset-0 rounded-xl bg-zinc-900/60 flex items-center justify-center"><VolumeX size={20} className="text-rose-400"/></div>}
                         <div className={`absolute bottom-1 right-1 w-5 h-5 rounded-full flex items-center justify-center ${pMuted?'bg-rose-500':partnerSpeaking?'bg-emerald-500':'bg-zinc-700'}`}>
                           {pMuted ? <MicOff size={9} className="text-white"/> : <Mic size={9} className="text-white"/>}
                         </div>
@@ -2887,8 +2927,8 @@ export default function App() {
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {activeView==='dms'&&activeDm&&<>
-                    <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'voice')} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all duration-150 active:scale-95"><Phone size={15}/></button>
-                    <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'video')} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-sky-400 hover:bg-sky-500/10 transition-all duration-150 active:scale-95"><Video size={15}/></button>
+                    <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'voice',activeDm.other_avatar)} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all duration-150 active:scale-95"><Phone size={15}/></button>
+                    <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'video',activeDm.other_avatar)} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-sky-400 hover:bg-sky-500/10 transition-all duration-150 active:scale-95"><Video size={15}/></button>
                     <div className="w-px h-4 bg-white/[0.06] mx-1"/>
                   </>}
                   {activeView==='servers'&&members.length>0&&(
@@ -3861,11 +3901,11 @@ export default function App() {
                         className="flex-1 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-indigo-500/25 transition-all flex items-center justify-center gap-2 text-sm">
                         <MessageSquare size={15}/> Wyślij wiadomość
                       </button>
-                      <button onClick={()=>startDmCall(selUser.id,selUser.username,'voice')}
+                      <button onClick={()=>startDmCall(selUser.id,selUser.username,'voice',selUser.avatar_url)}
                         className="w-11 h-11 bg-white/[0.04] border border-white/[0.06] rounded-xl flex items-center justify-center text-zinc-400 hover:text-emerald-400 transition-all">
                         <Phone size={16}/>
                       </button>
-                      <button onClick={()=>startDmCall(selUser.id,selUser.username,'video')}
+                      <button onClick={()=>startDmCall(selUser.id,selUser.username,'video',selUser.avatar_url)}
                         className="w-11 h-11 bg-white/[0.04] border border-white/[0.06] rounded-xl flex items-center justify-center text-zinc-400 hover:text-sky-400 transition-all">
                         <Video size={16}/>
                       </button>
@@ -4140,10 +4180,11 @@ export default function App() {
                           {m.id!==currentUser?.id ? (
                             <>
                               <select value={m.role_name} onChange={e=>handleSetMemberRole(m.id,e.target.value)}
-                                className={`text-xs ${gi} rounded-lg px-2 py-1.5`}>
-                                {roles.map(r=><option key={r.id} value={r.name}>{r.name}{r.is_default?' ★':''}</option>)}
-                                {!roles.some(r=>r.name==='Member')&&<option value="Member">Member</option>}
-                                {!roles.some(r=>r.name==='Admin')&&<option value="Admin">Admin</option>}
+                                className={`text-xs ${gi} rounded-lg px-2 py-1.5`}
+                                style={{backgroundColor:'#18181b',color:'#d4d4d8'}}>
+                                {roles.map(r=><option key={r.id} value={r.name} style={{background:'#18181b',color:'#d4d4d8'}}>{r.name}{r.is_default?' ★':''}</option>)}
+                                {!roles.some(r=>r.name==='Member')&&<option value="Member" style={{background:'#18181b',color:'#d4d4d8'}}>Member</option>}
+                                {!roles.some(r=>r.name==='Admin')&&<option value="Admin" style={{background:'#18181b',color:'#d4d4d8'}}>Admin</option>}
                               </select>
                               {m.id!==serverFull?.owner_id&&<button onClick={()=>handleKick(m.id)} className="w-7 h-7 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg flex items-center justify-center"><X size={12}/></button>}
                             </>
@@ -4198,18 +4239,23 @@ export default function App() {
                     <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${chForm.is_private?'left-5':'left-1'}`}/>
                   </button>
                 </div>
-                {chForm.is_private&&roles.length>0&&(
+                {chForm.is_private&&(
                   <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Dostęp dla ról</label>
-                    <div className="flex flex-col gap-2">
-                      {roles.map(r=>{
-                        const sel=chForm.role_ids.includes(r.id);
-                        return <button key={r.id} onClick={()=>setChForm(p=>({...p,role_ids:sel?p.role_ids.filter(id=>id!==r.id):[...p.role_ids,r.id]}))}
-                          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border text-sm transition-all ${sel?'bg-indigo-500/10 border-indigo-500/30 text-white':'bg-white/[0.02] border-white/[0.05] text-zinc-400 hover:text-zinc-300'}`}>
-                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{background:r.color}}/>{r.name}
-                          {sel&&<Check size={13} className="ml-auto text-indigo-400"/>}
-                        </button>;
-                      })}
-                    </div></div>
+                    {roles.length===0 ? (
+                      <p className="text-xs text-zinc-600 italic">Brak ról — utwórz role w ustawieniach serwera.</p>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        {roles.map(r=>{
+                          const sel=chForm.role_ids.includes(r.id);
+                          return <button key={r.id} onClick={()=>setChForm(p=>({...p,role_ids:sel?p.role_ids.filter(id=>id!==r.id):[...p.role_ids,r.id]}))}
+                            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border text-sm transition-all ${sel?'bg-indigo-500/10 border-indigo-500/30 text-white':'bg-white/[0.02] border-white/[0.05] text-zinc-400 hover:text-zinc-300'}`}>
+                            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{background:r.color}}/>{r.name}
+                            {sel&&<Check size={13} className="ml-auto text-indigo-400"/>}
+                          </button>;
+                        })}
+                      </div>
+                    )}
+                  </div>
                 )}
                 <button onClick={handleSaveCh} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">Zapisz</button>
               </div>
@@ -4287,19 +4333,23 @@ export default function App() {
                   <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${newChPrivate?'left-5':'left-1'}`}/>
                 </div>
               </button>
-              {newChPrivate&&roles.length>0&&(
+              {newChPrivate&&(
                 <div className="mb-5">
                   <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Dostęp dla ról</p>
-                  <div className="flex flex-col gap-1.5">
-                    {roles.map(r=>{
-                      const sel=newChRoles.includes(r.id);
-                      return <button key={r.id} onClick={()=>setNewChRoles(p=>sel?p.filter(id=>id!==r.id):[...p,r.id])}
-                        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border text-sm transition-all ${sel?'bg-indigo-500/10 border-indigo-500/30 text-white':'bg-white/[0.02] border-white/[0.05] text-zinc-400 hover:text-zinc-300'}`}>
-                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{background:r.color}}/>{r.name}
-                        {sel&&<Check size={13} className="ml-auto text-indigo-400"/>}
-                      </button>;
-                    })}
-                  </div>
+                  {roles.length===0 ? (
+                    <p className="text-xs text-zinc-600 italic px-1">Brak ról na serwerze. Utwórz role w ustawieniach serwera, aby przypisać dostęp.</p>
+                  ) : (
+                    <div className="flex flex-col gap-1.5">
+                      {roles.map(r=>{
+                        const sel=newChRoles.includes(r.id);
+                        return <button key={r.id} onClick={()=>setNewChRoles(p=>sel?p.filter(id=>id!==r.id):[...p,r.id])}
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border text-sm transition-all ${sel?'bg-indigo-500/10 border-indigo-500/30 text-white':'bg-white/[0.02] border-white/[0.05] text-zinc-400 hover:text-zinc-300'}`}>
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{background:r.color}}/>{r.name}
+                          {sel&&<Check size={13} className="ml-auto text-indigo-400"/>}
+                        </button>;
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -4911,6 +4961,42 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* ── VOLUME CONTEXT MENU ──────────────────────────────────────────── */}
+      {volMenu&&(
+        <div className="fixed inset-0 z-[260]" onClick={()=>setVolMenu(null)}>
+          <motion.div initial={{opacity:0,scale:0.92}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:0.92}}
+            className="absolute bg-[#18181b] border border-white/[0.08] rounded-2xl shadow-2xl p-4 w-64"
+            style={{left:Math.min(volMenu.x,window.innerWidth-270),top:Math.min(volMenu.y,window.innerHeight-180)}}
+            onClick={e=>e.stopPropagation()}>
+            <p className="text-xs font-bold text-zinc-400 mb-3 uppercase tracking-widest truncate">{volMenu.username}</p>
+            {/* Volume slider */}
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs text-zinc-500">Głośność</span>
+                <span className="text-xs font-bold text-white">{userVols[volMenu.id]??100}%</span>
+              </div>
+              <input type="range" min={0} max={200} step={5} value={userVols[volMenu.id]??100}
+                onChange={e=>{
+                  const v=+e.target.value;
+                  setUserVols(p=>({...p,[volMenu.id]:v}));
+                  setRemoteVolume(volMenu.id,v);
+                  if(mutedByMe[volMenu.id]&&v>0){setMutedByMe(p=>({...p,[volMenu.id]:false}));muteRemoteUser(volMenu.id,false);}
+                }}
+                className="w-full accent-indigo-500 cursor-pointer"/>
+              <div className="flex justify-between text-[10px] text-zinc-700 mt-0.5"><span>0%</span><span>100%</span><span>200%</span></div>
+            </div>
+            {/* Mute toggle */}
+            <button onClick={()=>{
+              const muted=!(mutedByMe[volMenu.id]??false);
+              setMutedByMe(p=>({...p,[volMenu.id]:muted}));
+              muteRemoteUser(volMenu.id,muted);
+            }} className={`w-full py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all ${(mutedByMe[volMenu.id]??false)?'bg-rose-500/20 text-rose-400 border border-rose-500/30':'bg-white/[0.05] text-zinc-400 hover:text-white border border-white/[0.06]'}`}>
+              <VolumeX size={13}/>{(mutedByMe[volMenu.id]??false)?'Odcisz':'Wycisz dla mnie'}
+            </button>
+          </motion.div>
+        </div>
+      )}
+
       {/* ── ACTIVITY MODAL ───────────────────────────────────────────────── */}
       <AnimatePresence>
         {showActivityModal&&(
@@ -5011,7 +5097,7 @@ export default function App() {
                 {activeCall.isMuted?<MicOff size={13}/>:<Mic size={13}/>}
               </button>
               <button onClick={()=>setShowCallPanel(true)} title="Powróć do rozmowy" className="w-8 h-8 rounded-xl bg-indigo-500 hover:bg-indigo-400 active:scale-90 flex items-center justify-center text-white transition-all shadow-lg shadow-indigo-500/30">
-                <Phone size={13}/>
+                <Maximize2 size={13}/>
               </button>
               <button onClick={hangupCall} title="Rozłącz" className="w-8 h-8 rounded-xl bg-rose-500 hover:bg-rose-400 active:scale-90 flex items-center justify-center text-white transition-all shadow-lg shadow-rose-500/30">
                 <PhoneOff size={13}/>
@@ -5046,7 +5132,7 @@ export default function App() {
                 playCallAccepted();
                 await acquireMic(selMic || undefined);
                 acceptCall(incomingCall.conversation_id, incomingCall.from.id);
-                setActiveCall({type: incomingCall.type==='video'?'dm_video':'dm_voice', userId: incomingCall.from.id, username: incomingCall.from.username, isMuted:false,isDeafened:false,isCameraOn:false,isScreenSharing:false});
+                setActiveCall({type: incomingCall.type==='video'?'dm_video':'dm_voice', userId: incomingCall.from.id, username: incomingCall.from.username, avatarUrl: incomingCall.from.avatar_url, isMuted:false,isDeafened:false,isCameraOn:false,isScreenSharing:false});
                 setActiveDmUserId(incomingCall.from.id); setActiveView('dms'); setShowCallPanel(true); setIncomingCall(null);
               }} className="flex-1 h-9 bg-emerald-500 hover:bg-emerald-400 rounded-xl text-white font-semibold flex items-center justify-center gap-1.5 text-sm transition-colors">
                 <Phone size={14}/> Odbierz
