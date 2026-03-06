@@ -792,6 +792,11 @@ export default function App() {
   const [deleteCode, setDeleteCode]           = useState('');
   const [deleteLoading, setDeleteLoading]     = useState(false);
 
+  // Mention / ping system
+  const [pingChs, setPingChs]                 = useState<Record<string, number>>({});
+  const [mentionQuery, setMentionQuery]       = useState<string | null>(null);
+  const [mentionSel, setMentionSel]           = useState<number>(0);
+
   // Typing indicator
   const [typingUsers, setTypingUsers]         = useState<Record<string,string>>({});
   const typingTimersRef                        = useRef<Record<string,ReturnType<typeof setTimeout>>>({});
@@ -1057,6 +1062,13 @@ export default function App() {
         : d));
     });
 
+    // ── Ping / mention received ──────────────────────────────────────
+    sock.on('ping_received' as any, ({ channel_id }: any) => {
+      if (channel_id !== prevChRef.current) {
+        setPingChs(p => ({ ...p, [channel_id]: (p[channel_id] || 0) + 1 }));
+      }
+    });
+
     // ── Reconnection: re-join rooms + refresh data ──────────────────
     sock.on('connect', () => {
       setIsConnected(true);
@@ -1130,6 +1142,7 @@ export default function App() {
     joinChannel(activeChannel);
     setTypingUsers({});
     setUnreadChs(p => { const n = {...p}; delete n[activeChannel]; return n; });
+    setPingChs(p => { const n = {...p}; delete n[activeChannel]; return n; });
     setForumPost(null); setShowNewPost(false); setReplyContent('');
     // Load content based on channel type
     const ch = serverFull?.categories.flatMap(c=>c.channels).find(c=>c.id===activeChannel);
@@ -1405,6 +1418,23 @@ export default function App() {
 
   // Derived appearance values
   const msgFontCls = fontSize === 'small' ? 'text-xs' : fontSize === 'large' ? 'text-base' : 'text-sm';
+
+  // Mention autocomplete
+  const mentionSuggestions = mentionQuery !== null
+    ? members.filter(m => m.username.toLowerCase().startsWith(mentionQuery.toLowerCase()) && m.id !== currentUser?.id).slice(0, 6)
+    : [];
+  const insertMention = (username: string) => {
+    const el = msgInputRef.current;
+    if (!el) return;
+    const caretPos = el.selectionStart ?? msgInput.length;
+    const before = msgInput.slice(0, caretPos).replace(/!([a-zA-Z0-9_]*)$/, `!${username} `);
+    const after  = msgInput.slice(caretPos);
+    const newVal = before + after;
+    setMsgInput(newVal);
+    setMentionQuery(null);
+    setMentionSel(0);
+    setTimeout(() => { el.focus(); el.setSelectionRange(before.length, before.length); }, 0);
+  };
 
   // ── Appearance helpers (save to DB) ──────────────────────────────
   const saveAccentColor = async (color: string) => {
@@ -1962,15 +1992,28 @@ export default function App() {
 
   // Highlight matching text in search results
   const hlText = (text: string) => {
+    // First split on !username tokens, then apply search highlight within each part
+    const mentionParts = text.split(/(![a-zA-Z0-9_]+)/g);
     const q = searchQuery.trim();
-    if (!q) return <>{text}</>;
-    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
-    return <>{parts.map((p, i) =>
-      p.toLowerCase() === q.toLowerCase()
-        ? <mark key={i} className="bg-yellow-400/25 text-yellow-200 rounded px-0.5">{p}</mark>
-        : p
-    )}</>;
+    const escaped = q ? q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
+    return <>{mentionParts.map((part, pi) => {
+      if (/^![a-zA-Z0-9_]+$/.test(part)) {
+        const uname = part.slice(1);
+        const isMe = uname.toLowerCase() === currentUser?.username?.toLowerCase();
+        return (
+          <span key={pi} className={`inline-flex items-center rounded-md px-1.5 py-0 font-bold cursor-default select-none ${isMe ? 'bg-amber-500/25 text-amber-300' : 'bg-indigo-500/20 text-indigo-300'}`}>
+            @{uname}
+          </span>
+        );
+      }
+      if (!q || !part) return <React.Fragment key={pi}>{part}</React.Fragment>;
+      const sub = part.split(new RegExp(`(${escaped})`, 'gi'));
+      return <React.Fragment key={pi}>{sub.map((s, si) =>
+        s.toLowerCase() === q.toLowerCase()
+          ? <mark key={si} className="bg-yellow-400/25 text-yellow-200 rounded px-0.5">{s}</mark>
+          : s
+      )}</React.Fragment>;
+    })}</>;
   };
 
   return (
@@ -2159,17 +2202,18 @@ export default function App() {
                 return (
                   <div className="mb-1">
                     {uncatChannels.filter((c:any)=>c.type!=='voice').map((ch:any)=>{
-                      const isAct = activeChannel===ch.id; const unread = unreadChs[ch.id]||0;
+                      const isAct = activeChannel===ch.id; const unread = unreadChs[ch.id]||0; const ping = pingChs[ch.id]||0;
                       const ChIcon = ch.type==='forum'?MessageSquare:ch.type==='announcement'?Megaphone:Hash;
                       return (
                         <div key={ch.id} className="px-2">
                           <button onClick={()=>{setActiveChannel(ch.id);setIsMobileOpen(false);}}
-                            className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${isAct?'bg-indigo-500/15 text-white border border-indigo-500/25':unread>0?'text-white hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${isAct?'bg-indigo-500/15 text-white border border-indigo-500/25':ping>0?'text-white hover:bg-white/[0.06] border border-amber-500/20 bg-amber-500/5':unread>0?'text-white hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
                             <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
-                              <ChIcon size={16} className={`shrink-0 ${isAct?'text-indigo-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
-                              <span className={`text-sm truncate ${unread>0&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
+                              <ChIcon size={16} className={`shrink-0 ${isAct?'text-indigo-400':ping>0?'text-amber-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
+                              <span className={`text-sm truncate ${(unread>0||ping>0)&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
                             </div>
-                            {unread>0&&!isAct&&<span className="min-w-[18px] h-[18px] bg-indigo-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1">{unread>99?'99+':unread}</span>}
+                            {ping>0&&!isAct&&<span className="min-w-[18px] h-[18px] bg-amber-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1 shadow-[0_0_8px_rgba(245,158,11,0.5)]">@{ping>9?'9+':ping}</span>}
+                            {unread>0&&!isAct&&!ping&&<span className="min-w-[18px] h-[18px] bg-indigo-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1">{unread>99?'99+':unread}</span>}
                           </button>
                         </div>
                       );
@@ -2224,6 +2268,7 @@ export default function App() {
                       {textChs.map(ch => {
                         const isAct = activeChannel===ch.id;
                         const unread = unreadChs[ch.id] || 0;
+                        const ping = pingChs[ch.id] || 0;
                         const ChIcon = ch.type==='forum'?MessageSquare:ch.type==='announcement'?Megaphone:Hash;
                         return (
                           <div key={ch.id} className="px-2">
@@ -2231,16 +2276,23 @@ export default function App() {
                               className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${
                                 isAct
                                   ? 'bg-indigo-500/15 text-white border border-indigo-500/25'
-                                  : unread > 0
-                                    ? 'text-white hover:bg-white/[0.06] border border-transparent'
-                                    : 'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
+                                  : ping > 0
+                                    ? 'text-white hover:bg-white/[0.06] border border-amber-500/20 bg-amber-500/5'
+                                    : unread > 0
+                                      ? 'text-white hover:bg-white/[0.06] border border-transparent'
+                                      : 'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
                               <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
-                                <ChIcon size={16} className={`shrink-0 transition-colors ${isAct?'text-indigo-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
-                                <span className={`text-sm truncate transition-colors ${unread>0&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
+                                <ChIcon size={16} className={`shrink-0 transition-colors ${isAct?'text-indigo-400':ping>0?'text-amber-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
+                                <span className={`text-sm truncate transition-colors ${(unread>0||ping>0)&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
                                 {ch.is_private&&<Lock size={9} className="text-zinc-700 shrink-0"/>}
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
-                                {unread > 0 && !isAct && (
+                                {ping > 0 && !isAct && (
+                                  <span className="min-w-[18px] h-[18px] bg-amber-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1 leading-none shadow-[0_0_8px_rgba(245,158,11,0.5)]">
+                                    @{ping > 9 ? '9+' : ping}
+                                  </span>
+                                )}
+                                {unread > 0 && !isAct && !ping && (
                                   <span className="min-w-[18px] h-[18px] bg-indigo-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1 leading-none shadow-[0_0_8px_rgba(99,102,241,0.5)]">
                                     {unread > 99 ? '99+' : unread}
                                   </span>
@@ -3096,10 +3148,11 @@ export default function App() {
                           </div>
                         )}
                         {/* ── BUBBLE MESSAGE ───────────────────────── */}
+                        {(()=>{ const mentionsMe = !!currentUser?.username && new RegExp(`!${currentUser.username}(?:[^a-zA-Z0-9_]|$)`,'i').test(msg.content); return (
                         <motion.div
                           initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: Math.min(idx * 0.01, 0.06), type: 'spring', stiffness: 340, damping: 28 }}
-                          className={`flex gap-2.5 group ${compactMessages?'mb-0.5':'mb-1.5'} ${isOwn?'flex-row-reverse':'flex-row'}`}>
+                          className={`flex ${showChatAvatars?'gap-2.5':'gap-0'} group ${compactMessages?'mb-0.5':'mb-1.5'} ${isOwn?'flex-row-reverse':'flex-row'} ${mentionsMe?'rounded-xl bg-amber-400/5 border-l-2 border-amber-400/60 pl-2 -ml-2':''}`}>
 
                           {/* Avatar */}
                           {showChatAvatars&&(
@@ -3230,6 +3283,7 @@ export default function App() {
                           </div>
                           )}
                         </motion.div>
+                        );})()}
                       </React.Fragment>
                     );
                   })}
@@ -3311,7 +3365,24 @@ export default function App() {
                     </div>
                   );
                   return (
-                    <form onSubmit={handleSend}>
+                    <form onSubmit={handleSend} className="relative">
+                      {/* Mention autocomplete dropdown */}
+                      {mentionQuery !== null && mentionSuggestions.length > 0 && (
+                        <div className="absolute bottom-full left-0 right-0 mb-2 bg-[#141420] border border-white/[0.1] rounded-2xl overflow-hidden shadow-2xl z-50">
+                          <div className="px-3 py-1.5 border-b border-white/[0.05]">
+                            <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Wspomnij użytkownika</span>
+                          </div>
+                          {mentionSuggestions.map((m, i) => (
+                            <button key={m.id} type="button"
+                              onMouseDown={e=>{e.preventDefault(); insertMention(m.username);}}
+                              className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors ${i === mentionSel ? 'bg-indigo-500/15' : 'hover:bg-white/[0.04]'}`}>
+                              <img src={ava(m)} alt="" className="w-7 h-7 rounded-xl object-cover shrink-0"/>
+                              <span className="text-sm font-semibold text-white">{m.username}</span>
+                              <span className={`w-2 h-2 rounded-full shrink-0 ml-auto ${m.status==='online'?'bg-emerald-400':m.status==='idle'?'bg-amber-400':m.status==='dnd'?'bg-rose-500':'bg-zinc-600'}`}/>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       <div className="flex items-center gap-3 bg-white/[0.06] border border-white/[0.08] rounded-2xl px-4 py-3.5 hover:border-white/[0.12] focus-within:border-indigo-500/40 focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] transition-all duration-200">
                         <input type="file" ref={attachRef} onChange={handleAttach} accept="image/*" className="hidden"/>
                         <button type="button" onClick={()=>attachRef.current?.click()}
@@ -3321,6 +3392,13 @@ export default function App() {
                         <input ref={msgInputRef} type="text" value={msgInput}
                           onChange={e=>{
                             const v=e.target.value; setMsgInput(v);
+                            // Mention autocomplete trigger
+                            const caretPos = e.target.selectionStart ?? v.length;
+                            const textBefore = v.slice(0, caretPos);
+                            const mentionMatch = textBefore.match(/!([a-zA-Z0-9_]*)$/);
+                            if (mentionMatch && activeView==='servers') { setMentionQuery(mentionMatch[1]); setMentionSel(0); }
+                            else setMentionQuery(null);
+                            // Typing indicator
                             if(activeChannel&&activeView==='servers'&&currentUser?.privacy_typing_visible!==false){
                               if(v.trim()){
                                 getSocket()?.emit('typing_start',activeChannel);
@@ -3332,7 +3410,15 @@ export default function App() {
                               }
                             }
                           }}
-                          onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey) handleSend(e as any); }}
+                          onKeyDown={e=>{
+                            if (mentionQuery !== null && mentionSuggestions.length > 0) {
+                              if (e.key==='ArrowUp')   { e.preventDefault(); setMentionSel(s=>Math.max(0,s-1)); return; }
+                              if (e.key==='ArrowDown') { e.preventDefault(); setMentionSel(s=>Math.min(mentionSuggestions.length-1,s+1)); return; }
+                              if (e.key==='Enter'||e.key==='Tab') { e.preventDefault(); insertMention(mentionSuggestions[mentionSel]?.username||''); return; }
+                              if (e.key==='Escape') { setMentionQuery(null); return; }
+                            }
+                            if(e.key==='Enter'&&!e.shiftKey) handleSend(e as any);
+                          }}
                           placeholder={activeView==='dms'&&activeDm?`Wiadomość do ${activeDm.other_username}...`:`Wiadomość w #${activeCh?.name||''}...`}
                           className="flex-1 bg-transparent text-sm text-zinc-200 placeholder-zinc-600 outline-none min-w-0"/>
                         <div className="relative shrink-0">
