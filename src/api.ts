@@ -197,8 +197,8 @@ export const channelsApi = {
   update: (id: string, d: Partial<Pick<ChannelData, 'name' | 'description' | 'is_private'>> & { role_ids?: string[] }) =>
     req<ChannelData>('PUT', `/channels/${id}`, d),
   delete: (id: string) => req<void>('DELETE', `/channels/${id}`),
-  createCategory: (server_id: string, name: string) =>
-    req<ChannelCategory>('POST', '/channels/categories', { server_id, name }),
+  createCategory: (server_id: string, name: string, is_private?: boolean, role_ids?: string[]) =>
+    req<ChannelCategory>('POST', '/channels/categories', { server_id, name, is_private, role_ids }),
   updateCategory: (id: string, name: string) =>
     req<ChannelCategory>('PUT', `/channels/categories/${id}`, { name }),
   deleteCategory: (id: string) =>

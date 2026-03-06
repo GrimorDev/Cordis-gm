@@ -242,6 +242,14 @@ CREATE INDEX IF NOT EXISTS idx_email_verif_email ON email_verifications(email, c
 -- Default role flag
 DO $$ BEGIN ALTER TABLE server_roles ADD COLUMN is_default BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 
+-- Private categories
+DO $$ BEGIN ALTER TABLE channel_categories ADD COLUMN is_private BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+CREATE TABLE IF NOT EXISTS category_role_access (
+    category_id UUID NOT NULL REFERENCES channel_categories(id) ON DELETE CASCADE,
+    role_id     UUID NOT NULL REFERENCES server_roles(id) ON DELETE CASCADE,
+    PRIMARY KEY (category_id, role_id)
+);
+
 -- Forum/announcement channel types (existing deployments)
 DO $$ BEGIN
   ALTER TABLE channels ALTER COLUMN type TYPE VARCHAR(15);

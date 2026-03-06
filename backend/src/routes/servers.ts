@@ -112,7 +112,7 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     if (!server) return res.status(404).json({ error: 'Server not found or no access' });
 
     const { rows: categories } = await query(
-      `SELECT id, name, position FROM channel_categories WHERE server_id = $1 ORDER BY position`,
+      `SELECT id, name, position, COALESCE(is_private, false) as is_private FROM channel_categories WHERE server_id = $1 ORDER BY position`,
       [req.params.id]
     );
     const { rows: channels } = await query(
@@ -128,8 +128,16 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
        WHERE sr.server_id = $1`,
       [req.params.id]
     );
+    // Attach allowed role IDs per private category
+    const { rows: catCra } = await query(
+      `SELECT cra.category_id, cra.role_id, sr.name as role_name, sr.color
+       FROM category_role_access cra
+       INNER JOIN server_roles sr ON sr.id = cra.role_id
+       WHERE sr.server_id = $1`,
+      [req.params.id]
+    ).catch(() => ({ rows: [] as any[] }));
 
-    // User's custom role IDs (for private channel visibility check)
+    // User's custom role IDs (for private channel/category visibility check)
     const isAdminOrOwnerUser = ['Owner', 'Admin'].includes(server.my_role);
     const { rows: userRoles } = await query(
       `SELECT role_id FROM member_roles WHERE server_id = $1 AND user_id = $2`,
@@ -144,8 +152,18 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
       return allowedRoleIds.some((rid: string) => userRoleIds.has(rid));
     });
 
-    server.categories = categories.map((cat: any) => ({
+    // Filter visible categories (private categories need matching role)
+    const visibleCategories = categories.filter((cat: any) => {
+      if (!cat.is_private) return true;
+      if (isAdminOrOwnerUser) return true;
+      const allowedRoleIds = catCra.filter((r: any) => r.category_id === cat.id).map((r: any) => r.role_id);
+      return allowedRoleIds.some((rid: string) => userRoleIds.has(rid));
+    });
+
+    // Build categorized channels
+    const categorized = visibleCategories.map((cat: any) => ({
       ...cat,
+      allowed_roles: catCra.filter((r: any) => r.category_id === cat.id),
       channels: visibleChannels
         .filter((ch: any) => ch.category_id === cat.id)
         .map((ch: any) => ({
@@ -153,6 +171,18 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
           allowed_roles: cra.filter((r: any) => r.channel_id === ch.id),
         })),
     }));
+
+    // Include uncategorized channels (category_id = NULL) as __uncat__ pseudo-category
+    const uncatChannels = visibleChannels
+      .filter((ch: any) => !ch.category_id)
+      .map((ch: any) => ({
+        ...ch,
+        allowed_roles: cra.filter((r: any) => r.channel_id === ch.id),
+      }));
+
+    server.categories = uncatChannels.length > 0
+      ? [{ id: '__uncat__', name: '', position: -1, channels: uncatChannels }, ...categorized]
+      : categorized;
 
     return res.json(server);
   } catch { return res.status(500).json({ error: 'Internal server error' }); }

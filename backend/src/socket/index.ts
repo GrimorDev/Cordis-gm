@@ -136,9 +136,10 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
     });
 
     // ── 1-to-1 Calls (signaling) ─────────────────────────────────────
-    socket.on('call_invite', ({ to_user_id, type }) => {
+    socket.on('call_invite', async ({ to_user_id, type }) => {
+      const { rows: [caller] } = await query('SELECT avatar_url FROM users WHERE id = $1', [user.id]);
       io.to(`user:${to_user_id}`).emit('call_invite', {
-        from: { id: user.id, username: user.username, avatar_url: null, status: 'online', custom_status: null },
+        from: { id: user.id, username: user.username, avatar_url: caller?.avatar_url || null, status: 'online', custom_status: null },
         type,
         conversation_id: `call_${user.id}_${to_user_id}_${Date.now()}`,
       });
