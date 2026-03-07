@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Hash, Volume2, Video, Settings, Plus, Search, Bell, Users,
@@ -1228,28 +1228,35 @@ export default function App() {
   }, [activeCall?.type, activeCall?.channelId, activeCall?.userId]);
 
   // Scroll smoothly on new incoming messages/typing indicator
-  // Scroll helper — directly manipulates container scrollTop
+  // Scroll helper
   const scrollToBottom = (smooth = false) => {
     const el = msgScrollRef.current;
     if (!el) return;
     if (smooth) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     else el.scrollTop = el.scrollHeight;
   };
-  // When switching channel/DM: set flag
+  // Set flag on channel/DM switch
   useEffect(() => { scrollToBottomOnLoadRef.current = true; }, [activeChannel, activeDmUserId]);
-  // PRIMARY scroll trigger: fires when msgsLoading transitions false→false after channel switch.
-  // At this point messages are fully in the DOM (setChannelMsgs + setMsgsLoading(false) are batched).
-  // We intentionally depend on msgsLoading only — this avoids consuming the flag on the intermediate
-  // setChannelMsgs([]) clear that happens at channel switch.
+  // useLayoutEffect fires synchronously after React commits DOM — scrollHeight is accurate.
+  // Only consume flag when messages.length > 0, skipping the intermediate [] clear.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => {
+    const msgs = activeView === 'servers' ? channelMsgs : dmMsgs;
+    if (scrollToBottomOnLoadRef.current && msgs.length > 0) {
+      scrollToBottomOnLoadRef.current = false;
+      scrollToBottom(false);
+    }
+  }, [channelMsgs, dmMsgs]);
+  // Fallback for empty channels: scroll when loading ends
   useEffect(() => {
     if (!msgsLoading && scrollToBottomOnLoadRef.current) {
       scrollToBottomOnLoadRef.current = false;
-      requestAnimationFrame(() => scrollToBottom(false));
+      scrollToBottom(false);
     }
   }, [msgsLoading]); // eslint-disable-line react-hooks/exhaustive-deps
-  // SECONDARY scroll: smart-scroll when new messages arrive and user is near bottom
+  // Smart-scroll on new incoming messages (only near bottom, not during initial load)
   useEffect(() => {
-    if (scrollToBottomOnLoadRef.current) return; // still loading initial batch — skip
+    if (scrollToBottomOnLoadRef.current) return;
     const el = msgScrollRef.current;
     if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 180) scrollToBottom(true);
   }, [channelMsgs, dmMsgs]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -2114,15 +2121,16 @@ export default function App() {
   return (
     <div className="flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-transparent p-2 gap-2">
 
-      {/* TOP NAV — browser-tab style */}
-      {/* TOP NAV — 3-col grid: left tabs | center brand | right actions */}
-      <nav className="h-12 shrink-0 z-30 glass-panel rounded-2xl px-2 grid items-center" style={{gridTemplateColumns:'1fr auto 1fr'}}>
-        {/* Left: mobile toggle + server tabs */}
+      {/* TOP NAV — 3-col grid: [left tabs] [Cordyn] [right actions]
+           grid-cols: 1fr auto 1fr guarantees center is always truly centered.
+           No items-center on nav so children use h-full correctly (stretch). */}
+      <nav className="h-12 shrink-0 z-30 glass-panel rounded-2xl px-2 grid" style={{gridTemplateColumns:'1fr auto 1fr'}}>
+        {/* Left col — flex, clips overflow so tabs can't bleed into center */}
         <div className="flex items-center h-full min-w-0 overflow-hidden">
           <button onClick={() => setIsMobileOpen(v => !v)} className="md:hidden w-9 h-9 flex items-center justify-center text-zinc-500 hover:text-white ml-2 shrink-0">
             {isMobileOpen ? <X size={18}/> : <Menu size={18}/>}
           </button>
-          {/* Friends / DM quick icons */}
+          {/* Friends / DM quick icons — always visible, shrink-0 */}
           <div className="hidden md:flex items-center h-full pl-2 gap-0.5 pr-2 border-r border-white/[0.06] shrink-0">
             {([{v:'friends' as const,i:<Users size={15}/>,label:'Znajomi'},{v:'dms' as const,i:<MessageCircle size={15}/>,label:'Wiadomości'}]).map(({v,i,label}) => {
               const totalUnreadDms: number = v==='dms' ? (Object.values(unreadDms) as number[]).reduce((a,b)=>a+b,0) : 0;
@@ -2142,8 +2150,8 @@ export default function App() {
               );
             })}
           </div>
-          {/* Server tabs — horizontally scrollable, hidden scrollbar */}
-          <div className="hidden md:flex items-center h-full overflow-x-auto scrollbar-hide min-w-0">
+          {/* Server tabs — scrollable, min-w-0 so it can shrink inside overflow-hidden parent */}
+          <div className="hidden md:flex items-center h-full overflow-x-auto scrollbar-hide min-w-0 flex-1">
             {serverList.map(srv => {
               const isActive = activeServer===srv.id&&activeView==='servers';
               return (
@@ -2159,17 +2167,18 @@ export default function App() {
                 </button>
               );
             })}
-            <button onClick={() => setCreateSrvOpen(true)}
-              className="flex items-center justify-center w-9 h-full text-zinc-600 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all duration-200 border-r border-white/[0.05] shrink-0">
-              <Plus size={15}/>
-            </button>
           </div>
+          {/* + button always visible, outside the scrollable area */}
+          <button onClick={() => setCreateSrvOpen(true)} title="Utwórz serwer"
+            className="hidden md:flex items-center justify-center w-9 h-full text-zinc-600 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all duration-200 border-r border-white/[0.05] shrink-0">
+            <Plus size={15}/>
+          </button>
         </div>
-        {/* Center: branding — always centered, never overlapped */}
+        {/* Center col — Cordyn, always truly centered in the nav */}
         <div className="flex items-center justify-center pointer-events-none select-none px-4">
           <span className="text-white font-bold tracking-tight text-sm">Cordyn</span>
         </div>
-        {/* Right: search + bell + settings + avatar */}
+        {/* Right col */}
         <div className="flex items-center justify-end gap-1.5 pr-1">
           <div className="relative group hidden sm:block">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-zinc-400 transition-colors"/>
