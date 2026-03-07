@@ -295,6 +295,23 @@ CREATE TABLE IF NOT EXISTS message_mentions (
 );
 CREATE INDEX IF NOT EXISTS idx_mentions_user    ON message_mentions(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_mentions_channel ON message_mentions(channel_id, user_id);
+
+-- Ban system
+CREATE TABLE IF NOT EXISTS server_bans (
+    server_id  UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    user_id    UUID NOT NULL REFERENCES users(id)   ON DELETE CASCADE,
+    banned_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+    reason     TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (server_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_server_bans_server ON server_bans(server_id);
+
+-- Slow mode per channel
+DO $$ BEGIN ALTER TABLE channels ADD COLUMN slowmode_seconds INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Pinned messages in text channels
+DO $$ BEGIN ALTER TABLE messages ADD COLUMN pinned BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 `;
 
 const SEED_SQL = `

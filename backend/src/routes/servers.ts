@@ -18,8 +18,8 @@ async function isMember(serverId: string, userId: string): Promise<boolean> {
 }
 
 /**
- * Returns true if userId is Owner/Admin on the server,
- * OR if any of their custom roles grants 'administrator' or the specific permission.
+ * Restrictive: Owner/Admin always pass; custom roles must explicitly grant the permission.
+ * Used for admin actions (manage_roles, kick_members, ban_members, manage_server, etc.)
  */
 async function isAuthorized(serverId: string, userId: string, permission: string): Promise<boolean> {
   const { rows: [member] } = await query(
@@ -37,6 +37,52 @@ async function isAuthorized(serverId: string, userId: string, permission: string
     [serverId, userId, permission]
   );
   return !!rowCount;
+}
+
+/**
+ * Permissive: Owner/Admin always pass; members with NO custom roles pass (default allow);
+ * members WITH custom roles need an explicit grant.
+ * Used for member actions (create_invites, etc.)
+ */
+async function hasMemberPermission(serverId: string, userId: string, permission: string): Promise<boolean> {
+  const { rows: [member] } = await query(
+    `SELECT role_name FROM server_members WHERE server_id = $1 AND user_id = $2`,
+    [serverId, userId]
+  );
+  if (!member) return false;
+  if (['Owner', 'Admin'].includes(member.role_name)) return true;
+  const { rows } = await query(
+    `SELECT sr.permissions FROM member_roles mr
+     INNER JOIN server_roles sr ON sr.id = mr.role_id
+     WHERE mr.server_id = $1 AND mr.user_id = $2`,
+    [serverId, userId]
+  );
+  if (rows.length === 0) return true; // No custom roles → allow by default
+  return rows.some((r: any) =>
+    Array.isArray(r.permissions) &&
+    (r.permissions.includes('administrator') || r.permissions.includes(permission))
+  );
+}
+
+/**
+ * Returns the effective role position for hierarchy checks.
+ * Owner = Infinity, Admin = 9999, otherwise max position from custom roles.
+ */
+async function getRolePosition(serverId: string, userId: string): Promise<number> {
+  const { rows: [srv] } = await query(`SELECT owner_id FROM servers WHERE id=$1`, [serverId]);
+  if (srv?.owner_id === userId) return Infinity;
+  const { rows: [member] } = await query(
+    `SELECT role_name FROM server_members WHERE server_id=$1 AND user_id=$2`,
+    [serverId, userId]
+  );
+  if (member?.role_name === 'Admin') return 9999;
+  const { rows: [pos] } = await query(
+    `SELECT COALESCE(MAX(sr.position),0) as maxpos
+     FROM member_roles mr INNER JOIN server_roles sr ON sr.id = mr.role_id
+     WHERE mr.server_id=$1 AND mr.user_id=$2`,
+    [serverId, userId]
+  );
+  return pos?.maxpos ?? 0;
 }
 
 // ── Server CRUD ───────────────────────────────────────────────────────────────
@@ -380,6 +426,12 @@ router.delete('/:id/members/:userId', authMiddleware, async (req: AuthRequest, r
     if (!(await isAuthorized(req.params.id, req.user!.id, 'kick_members'))) {
       return res.status(403).json({ error: 'Not authorized' });
     }
+    // Role hierarchy: can't kick equal/higher role
+    const myPos = await getRolePosition(req.params.id, req.user!.id);
+    const targetPos = await getRolePosition(req.params.id, req.params.userId);
+    if (myPos !== Infinity && targetPos >= myPos) {
+      return res.status(403).json({ error: 'Nie możesz wyrzucić osoby z wyższą lub równą rolą' });
+    }
     await query(
       `DELETE FROM server_members WHERE server_id = $1 AND user_id = $2`,
       [req.params.id, req.params.userId]
@@ -391,6 +443,75 @@ router.delete('/:id/members/:userId', authMiddleware, async (req: AuthRequest, r
       for (const s of sockets) { s.leave(`server:${req.params.id}`); }
     }
     return res.json({ message: 'Member kicked' });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ── Bans ─────────────────────────────────────────────────────────────────────
+
+// GET /api/servers/:id/bans
+router.get('/:id/bans', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!(await isAuthorized(req.params.id, req.user!.id, 'ban_members'))) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    const { rows } = await query(
+      `SELECT sb.user_id, sb.reason, sb.created_at,
+              u.username, u.avatar_url,
+              bu.username as banned_by_username
+       FROM server_bans sb
+       INNER JOIN users u  ON u.id  = sb.user_id
+       LEFT  JOIN users bu ON bu.id = sb.banned_by
+       WHERE sb.server_id = $1 ORDER BY sb.created_at DESC`,
+      [req.params.id]
+    );
+    return res.json(rows);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// POST /api/servers/:id/bans/:userId
+router.post('/:id/bans/:userId', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!(await isAuthorized(req.params.id, req.user!.id, 'ban_members'))) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    // Role hierarchy: can't ban equal/higher role
+    const myPos = await getRolePosition(req.params.id, req.user!.id);
+    const targetPos = await getRolePosition(req.params.id, req.params.userId);
+    if (myPos !== Infinity && targetPos >= myPos) {
+      return res.status(403).json({ error: 'Nie możesz zbanować osoby z wyższą lub równą rolą' });
+    }
+    const { reason } = req.body;
+    // Remove from server first (if member)
+    await query(`DELETE FROM server_members WHERE server_id=$1 AND user_id=$2`, [req.params.id, req.params.userId]);
+    // Also remove from member_roles
+    await query(`DELETE FROM member_roles WHERE server_id=$1 AND user_id=$2`, [req.params.id, req.params.userId]);
+    // Add ban
+    await query(
+      `INSERT INTO server_bans (server_id, user_id, banned_by, reason) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (server_id, user_id) DO UPDATE SET reason=EXCLUDED.reason, banned_by=EXCLUDED.banned_by, created_at=NOW()`,
+      [req.params.id, req.params.userId, req.user!.id, reason || null]
+    );
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`server:${req.params.id}`).emit('member_left', { server_id: req.params.id, user_id: req.params.userId });
+      const sockets = await io.in(`user:${req.params.userId}`).fetchSockets();
+      for (const s of sockets) {
+        s.leave(`server:${req.params.id}`);
+        s.emit('banned_from_server', { server_id: req.params.id });
+      }
+    }
+    return res.json({ message: 'User banned' });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// DELETE /api/servers/:id/bans/:userId (unban)
+router.delete('/:id/bans/:userId', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!(await isAuthorized(req.params.id, req.user!.id, 'ban_members'))) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    await query(`DELETE FROM server_bans WHERE server_id=$1 AND user_id=$2`, [req.params.id, req.params.userId]);
+    return res.json({ message: 'User unbanned' });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
@@ -501,8 +622,8 @@ router.delete('/:id/roles/:roleId', authMiddleware, async (req: AuthRequest, res
 router.post('/invite/create', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { server_id, expires_in } = req.body;
   try {
-    if (!(await isMember(server_id, req.user!.id))) {
-      return res.status(403).json({ error: 'No access' });
+    if (!(await hasMemberPermission(server_id, req.user!.id, 'create_invites'))) {
+      return res.status(403).json({ error: 'Nie masz uprawnień do tworzenia zaproszeń' });
     }
     const code = crypto.randomBytes(5).toString('hex');
     let expiresAt: Date | null = null;
@@ -527,6 +648,12 @@ router.post('/join/:code', authMiddleware, async (req: AuthRequest, res: Respons
     if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
       return res.status(410).json({ error: 'Invite expired' });
     }
+    // Check if user is banned from this server
+    const { rowCount: isBanned } = await query(
+      `SELECT 1 FROM server_bans WHERE server_id=$1 AND user_id=$2`,
+      [invite.server_id, req.user!.id]
+    );
+    if (isBanned) return res.status(403).json({ error: 'Masz ban na tym serwerze' });
     const existing = await query(
       `SELECT 1 FROM server_members WHERE server_id = $1 AND user_id = $2`,
       [invite.server_id, req.user!.id]

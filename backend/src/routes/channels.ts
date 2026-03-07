@@ -149,18 +149,21 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    const { name, description, is_private, role_ids } = req.body;
+    const { name, description, is_private, role_ids, slowmode_seconds } = req.body;
     const client = await getClient();
     try {
       await client.query('BEGIN');
       const { rows: [updated] } = await client.query(
         `UPDATE channels SET
-           name        = COALESCE($1, name),
-           description = COALESCE($2, description),
-           is_private  = COALESCE($3, is_private)
-         WHERE id = $4 RETURNING *`,
+           name             = COALESCE($1, name),
+           description      = COALESCE($2, description),
+           is_private       = COALESCE($3, is_private),
+           slowmode_seconds = COALESCE($4, slowmode_seconds)
+         WHERE id = $5 RETURNING *`,
         [name || null, description !== undefined ? description : null,
-         is_private !== undefined ? is_private : null, req.params.id]
+         is_private !== undefined ? is_private : null,
+         slowmode_seconds !== undefined ? Math.max(0, Math.min(21600, parseInt(slowmode_seconds) || 0)) : null,
+         req.params.id]
       );
       if (Array.isArray(role_ids)) {
         await client.query(`DELETE FROM channel_role_access WHERE channel_id = $1`, [req.params.id]);

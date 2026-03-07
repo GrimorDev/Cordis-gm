@@ -27,6 +27,7 @@ export const KEYS = {
   onlineUsers: 'online:users',
   rateLimitMessages: (userId: string) => `ratelimit:msg:${userId}`,
   blacklistToken: (jti: string) => `blacklist:${jti}`,
+  slowmode: (channelId: string, userId: string) => `slowmode:${channelId}:${userId}`,
 };
 
 // Helpers
@@ -59,4 +60,18 @@ export async function leaveVoiceChannel(channelId: string, userId: string) {
 
 export async function getVoiceMembers(channelId: string): Promise<string[]> {
   return redis.smembers(KEYS.voiceChannel(channelId));
+}
+
+/** Returns seconds remaining in slowmode, or 0 if user can send */
+export async function checkSlowmode(channelId: string, userId: string, slowmodeSeconds: number): Promise<number> {
+  if (slowmodeSeconds <= 0) return 0;
+  const key = KEYS.slowmode(channelId, userId);
+  const ttl = await redis.ttl(key);
+  return ttl > 0 ? ttl : 0;
+}
+
+/** Mark that user just sent a message in a slowmode channel */
+export async function setSlowmode(channelId: string, userId: string, slowmodeSeconds: number): Promise<void> {
+  if (slowmodeSeconds <= 0) return;
+  await redis.setex(KEYS.slowmode(channelId, userId), slowmodeSeconds, '1');
 }

@@ -52,7 +52,7 @@ export interface ServerRole {
 export interface ChannelData {
   id: string; server_id: string; category_id: string | null;
   name: string; type: 'text' | 'voice' | 'forum' | 'announcement'; description?: string | null;
-  is_private?: boolean; position: number;
+  is_private?: boolean; position: number; slowmode_seconds?: number;
   allowed_roles?: { role_id: string; role_name: string; color: string }[];
 }
 export interface ForumPost {
@@ -73,6 +73,10 @@ export interface ServerFull extends ServerData {
   my_role: string; categories: ChannelCategory[];
   my_permissions?: string[];
 }
+export interface ServerBan {
+  user_id: string; username: string; avatar_url?: string | null;
+  reason?: string | null; created_at: string; banned_by_username?: string | null;
+}
 export interface MessageFull {
   id: string; channel_id: string; content: string; edited: boolean;
   created_at: string; updated_at: string;
@@ -82,6 +86,7 @@ export interface MessageFull {
   sender_avatar?: string | null; sender_status?: string;
   sender_role?: string | null;
   sender_role_color?: string | null;
+  pinned?: boolean;
 }
 export interface DmConversation {
   id: string; created_at: string;
@@ -184,6 +189,13 @@ export const serversApi = {
     req<{ code: string; expires_at: string | null }>('POST', '/servers/invite/create', { server_id: serverId, expires_in: expiresIn }),
   join: (code: string) => req<ServerData>('POST', `/servers/join/${code}`),
   activity: (id: string) => req<{id:string;type:string;icon:string;text:string;time:string}[]>('GET', `/servers/${id}/activity`),
+  bans: {
+    list: (serverId: string) => req<ServerBan[]>('GET', `/servers/${serverId}/bans`),
+    ban: (serverId: string, userId: string, reason?: string) =>
+      req<void>('POST', `/servers/${serverId}/bans/${userId}`, { reason }),
+    unban: (serverId: string, userId: string) =>
+      req<void>('DELETE', `/servers/${serverId}/bans/${userId}`),
+  },
 };
 
 // ── Channels ───────────────────────────────────────────────────────────────
@@ -227,6 +239,8 @@ export const messagesApi = {
   delete: (id: string) => req<void>('DELETE', `/messages/${id}`),
   addReaction: (id: string, emoji: string) => req<void>('POST', `/messages/${id}/reactions`, { emoji }),
   removeReaction: (id: string, emoji: string) => req<void>('DELETE', `/messages/${id}/reactions/${emoji}`),
+  pin: (id: string, pinned?: boolean) => req<void>('PUT', `/messages/${id}/pin`, { pinned: pinned !== false }),
+  listPinned: (channelId: string) => req<MessageFull[]>('GET', `/messages/channel/${channelId}/pinned`),
 };
 
 // ── DMs ────────────────────────────────────────────────────────────────────

@@ -7,7 +7,8 @@ import {
   Shield, Trash2, Settings2, UserPlus, Check, X as XIcon,
   LogOut, Loader2, Lock, Phone, PhoneOff, MessageSquare, Upload, MoreHorizontal, ScreenShare,
   CheckCircle2, AlertCircle, Info, AlertTriangle, PartyPopper, Sparkles, Zap, Globe,
-  Eye, EyeOff, Megaphone, FileText, ChevronLeft, ChevronRight, ArrowLeft
+  Eye, EyeOff, Megaphone, FileText, ChevronLeft, ChevronRight, ArrowLeft,
+  Clock, Pin, PinOff
 } from 'lucide-react';
 import {
   auth, users, serversApi, channelsApi, messagesApi, dmsApi, friendsApi, forumApi,
@@ -15,7 +16,7 @@ import {
   type UserProfile, type ServerData, type ServerFull, type ServerRole,
   type ChannelData, type MessageFull, type DmConversation,
   type DmMessageFull, type FriendEntry, type FriendRequest,
-  type ServerMember, type ForumPost, type ForumReply, ApiError
+  type ServerMember, type ForumPost, type ForumReply, type ServerBan, ApiError
 } from './api';
 import {
   connectSocket, disconnectSocket, joinChannel, leaveChannel,
@@ -40,14 +41,19 @@ const gi = 'bg-white/[0.06] border border-white/[0.08] text-white placeholder-zi
 const gb = 'glass-panel glass-panel-hover text-zinc-400 hover:text-white transition-all active:scale-95';
 
 const PERMISSIONS = [
-  { id: 'administrator', label: 'Administrator' },
-  { id: 'manage_server', label: 'Zarządzaj serwerem' },
-  { id: 'manage_channels', label: 'Zarządzaj kanałami' },
-  { id: 'manage_roles', label: 'Zarządzaj rolami' },
-  { id: 'kick_members', label: 'Wyrzucaj członków' },
-  { id: 'send_messages', label: 'Wysyłaj wiadomości' },
-  { id: 'manage_messages', label: 'Zarządzaj wiadomościami' },
-  { id: 'read_messages', label: 'Czytaj wiadomości' },
+  { id: 'administrator',    label: 'Administrator',           desc: 'Pełne uprawnienia — omiija wszystkie inne ograniczenia' },
+  { id: 'manage_server',    label: 'Zarządzaj serwerem',      desc: 'Edytuj ustawienia, nazwę, banner serwera' },
+  { id: 'manage_channels',  label: 'Zarządzaj kanałami',      desc: 'Twórz, edytuj i usuwaj kanały oraz kategorie' },
+  { id: 'manage_roles',     label: 'Zarządzaj rolami',        desc: 'Twórz i edytuj role, przypisuj je członkom' },
+  { id: 'kick_members',     label: 'Wyrzucaj członków',       desc: 'Wyrzucaj członków z serwera' },
+  { id: 'ban_members',      label: 'Banuj członków',          desc: 'Permanentnie banuj i odbanowuj użytkowników' },
+  { id: 'create_invites',   label: 'Twórz zaproszenia',       desc: 'Twórz linki zaproszeniowe (domyślnie wszyscy)' },
+  { id: 'send_messages',    label: 'Wysyłaj wiadomości',      desc: 'Wysyłaj wiadomości na kanałach (domyślnie wszyscy)' },
+  { id: 'attach_files',     label: 'Wysyłaj pliki',           desc: 'Wysyłaj zdjęcia i załączniki (domyślnie wszyscy)' },
+  { id: 'manage_messages',  label: 'Zarządzaj wiadomościami', desc: 'Usuwa wiadomości innych, pisze na kanałach ogłoszeń' },
+  { id: 'mention_everyone', label: 'Użyj @everyone',          desc: 'Pinguje wszystkich użytkowników na serwerze' },
+  { id: 'pin_messages',     label: 'Przypinaj wiadomości',    desc: 'Przypinaj i odpinaj wiadomości na kanałach' },
+  { id: 'read_messages',    label: 'Czytaj wiadomości',       desc: 'Dostęp do czytania wiadomości (domyślnie wszyscy)' },
 ];
 const ROLE_COLORS = ['#5865f2','#eb459e','#ed4245','#faa61a','#57f287','#1abc9c','#3498db','#9b59b6'];
 const GRADIENTS = [
@@ -676,7 +682,11 @@ export default function App() {
   const [deleteSrvConfirm, setDeleteSrvConfirm] = useState<{ id: string; name: string } | null>(null);
 
   const [srvSettOpen, setSrvSettOpen]         = useState(false);
-  const [srvSettTab, setSrvSettTab]           = useState<'overview'|'roles'|'members'|'invites'>('overview');
+  const [srvSettTab, setSrvSettTab]           = useState<'overview'|'roles'|'members'|'bans'|'invites'>('overview');
+  const [banList, setBanList]                 = useState<import('./api').ServerBan[]>([]);
+  const [slowmodeLeft, setSlowmodeLeft]       = useState(0); // seconds remaining
+  const [pinnedMsgs, setPinnedMsgs]           = useState<import('./api').MessageFull[]>([]);
+  const [showPinned, setShowPinned]           = useState(false);
   const [inviteDur, setInviteDur]             = useState('86400');
   const [inviteCode, setInviteCode]           = useState<string|null>(null);
   const [srvForm, setSrvForm]                 = useState({ name:'', description:'', icon_url:'', banner_url:'' });
@@ -702,7 +712,7 @@ export default function App() {
   const [replySending, setReplySending]       = useState(false);
   const [chEditOpen, setChEditOpen]           = useState(false);
   const [editingCh, setEditingCh]             = useState<ChannelData|null>(null);
-  const [chForm, setChForm]                   = useState({ name:'', description:'', is_private:false, role_ids:[] as string[] });
+  const [chForm, setChForm]                   = useState({ name:'', description:'', is_private:false, role_ids:[] as string[], slowmode_seconds:0 });
 
   // ── Server header dropdown ───────────────────────────────────────
   const [srvDropOpen, setSrvDropOpen]         = useState(false);
@@ -1097,6 +1107,20 @@ export default function App() {
       if (server_id !== activeServerRef.current) return;
       // My roles changed — refetch server to get updated my_permissions
       serversApi.get(server_id).then(setServerFull).catch(console.error);
+    });
+    sock.on('banned_from_server' as any, ({ server_id }: any) => {
+      // Remove server from list and navigate away
+      setServerList(p => p.filter(s => s.id !== server_id));
+      if (activeServerRef.current === server_id) {
+        setActiveServer(null); setServerFull(null); setActiveView('dms');
+      }
+    });
+    sock.on('message_pinned' as any, ({ channel_id, message_id, pinned }: any) => {
+      setChannelMsgs(p => p.map(m => m.id === message_id ? { ...m, pinned } : m));
+      setPinnedMsgs(p => pinned
+        ? p // full list refetched when panel opened
+        : p.filter(m => m.id !== message_id)
+      );
     });
     sock.on('member_joined' as any, ({ server_id, user }: any) => {
       if (server_id !== activeServerRef.current) return;
@@ -1588,6 +1612,16 @@ export default function App() {
     setTimeout(() => { input?.focus(); input?.setSelectionRange(pos + emoji.length, pos + emoji.length); }, 0);
   };
 
+  // ── Slowmode countdown ──────────────────────────────────────────
+  useEffect(() => {
+    if (slowmodeLeft <= 0) return;
+    const t = setInterval(() => setSlowmodeLeft(s => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [slowmodeLeft]);
+
+  // Reset slowmode and pinned panel when switching channels
+  useEffect(() => { setSlowmodeLeft(0); setShowPinned(false); setPinnedMsgs([]); }, [activeChannel]);
+
   // ── Send message ────────────────────────────────────────────────
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1609,7 +1643,15 @@ export default function App() {
     try {
       if (activeView === 'dms' && activeDmUserId) await dmsApi.send(activeDmUserId, finalContent, opts);
       else if (activeChannel) await messagesApi.send(activeChannel, finalContent, opts);
-    } catch (err: any) { setSendError(err?.message || 'Nie udało się wysłać'); setMsgInput(finalContent); }
+    } catch (err: any) {
+      // 429 = slowmode – extract remaining seconds from error
+      if ((err as any)?.status === 429) {
+        const match = (err?.message || '').match(/(\d+)s/);
+        setSlowmodeLeft(match ? parseInt(match[1]) : 5);
+      }
+      setSendError(err?.message || 'Nie udało się wysłać');
+      setMsgInput(finalContent);
+    }
     finally { setSending(false); }
   };
 
@@ -1791,13 +1833,13 @@ export default function App() {
   };
   const openChEdit = (ch: ChannelData) => {
     setEditingCh(ch);
-    setChForm({ name: ch.name, description: ch.description||'', is_private: ch.is_private||false, role_ids: ch.allowed_roles?.map(r => r.role_id)||[] });
+    setChForm({ name: ch.name, description: ch.description||'', is_private: ch.is_private||false, role_ids: ch.allowed_roles?.map(r => r.role_id)||[], slowmode_seconds: ch.slowmode_seconds||0 });
     setChEditOpen(true);
   };
   const handleSaveCh = async () => {
     if (!editingCh) return;
     try {
-      await channelsApi.update(editingCh.id, { name: chForm.name, description: chForm.description, is_private: chForm.is_private, role_ids: chForm.is_private ? chForm.role_ids : [] });
+      await channelsApi.update(editingCh.id, { name: chForm.name, description: chForm.description, is_private: chForm.is_private, role_ids: chForm.is_private ? chForm.role_ids : [], slowmode_seconds: chForm.slowmode_seconds } as any);
       setChEditOpen(false); setEditingCh(null);
       const s = await serversApi.get(activeServer); setServerFull(s);
     } catch (err) { console.error(err); }
@@ -1835,8 +1877,41 @@ export default function App() {
     if (!activeServer) return;
     confirmAction('Wyrzucić użytkownika?', async () => {
       try { await serversApi.kickMember(activeServer, userId); setMembers(p => p.filter(m => m.id !== userId)); }
-      catch (err) { console.error(err); }
+      catch (err: any) { alert(err?.message || 'Błąd'); }
     });
+  };
+  const handleBan = (userId: string, username: string) => {
+    if (!activeServer) return;
+    confirmAction(`Zbanować ${username}?`, async () => {
+      try {
+        await serversApi.bans.ban(activeServer, userId);
+        setMembers(p => p.filter(m => m.id !== userId));
+      } catch (err: any) { alert(err?.message || 'Błąd'); }
+    });
+  };
+  const handleUnban = (userId: string) => {
+    if (!activeServer) return;
+    confirmAction('Odbanować użytkownika?', async () => {
+      try {
+        await serversApi.bans.unban(activeServer, userId);
+        setBanList(p => p.filter(b => b.user_id !== userId));
+      } catch (err: any) { alert(err?.message || 'Błąd'); }
+    });
+  };
+  const handlePinMessage = async (msgId: string, pinned: boolean) => {
+    // Optimistic update
+    setChannelMsgs(p => p.map(m => m.id === msgId ? { ...m, pinned } : m));
+    try {
+      await messagesApi.pin(msgId, pinned);
+      // Refresh pinned panel if open
+      if (showPinned && activeChannel) {
+        messagesApi.listPinned(activeChannel).then(setPinnedMsgs).catch(() => {});
+      }
+    } catch (err: any) {
+      // Revert on error
+      setChannelMsgs(p => p.map(m => m.id === msgId ? { ...m, pinned: !pinned } : m));
+      alert(err?.message || 'Błąd');
+    }
   };
 
   // ── Invite ───────────────────────────────────────────────────────
@@ -2094,6 +2169,11 @@ export default function App() {
   const canManageServer        = hasAdminPerm || myPerms.includes('manage_server');
   const canManageMessages      = hasAdminPerm || myPerms.includes('manage_messages');
   const canSendMessages        = hasAdminPerm || myPerms.length === 0 || myPerms.includes('send_messages');
+  const canBanMembers          = hasAdminPerm || myPerms.includes('ban_members');
+  const canCreateInvites       = hasAdminPerm || myPerms.length === 0 || myPerms.includes('create_invites');
+  const canAttachFiles         = hasAdminPerm || myPerms.length === 0 || myPerms.includes('attach_files');
+  const canMentionEveryone     = hasAdminPerm || myPerms.includes('mention_everyone');
+  const canPinMessages         = hasAdminPerm || myPerms.includes('pin_messages');
   const incoming = friendReqs.filter(r => r.direction === 'incoming');
   const outgoing = friendReqs.filter(r => r.direction === 'outgoing');
   const allMessages = activeView === 'servers' ? channelMsgs : dmMsgs;
@@ -2285,11 +2365,11 @@ export default function App() {
                       </button>
                       <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
                     </>}
-                    <button onClick={openInviteFriends}
+                    {canCreateInvites&&<button onClick={openInviteFriends}
                       className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-emerald-500/10 hover:text-emerald-300 transition-colors text-left">
                       <UserPlus size={14} className="text-emerald-400 shrink-0"/>
                       Zaproś znajomych
-                    </button>
+                    </button>}
                     {(canManageServer||canManageRoles||canKickMembers)&&<>
                       <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
                       <button onClick={()=>{setSrvDropOpen(false);setSrvSettTab(canManageServer?'overview':canManageRoles?'roles':'members');setSrvSettOpen(true);}}
@@ -2624,7 +2704,7 @@ export default function App() {
         </aside>
 
         {/* CENTER */}
-        <section className="flex-1 flex flex-col glass-dark rounded-2xl overflow-hidden min-w-0">
+        <section className="flex-1 flex flex-col glass-dark rounded-2xl overflow-hidden min-w-0 relative">
           {showCallPanel && activeCall ? (
             /* ── CALL PANEL ─────────────────────────────────────────── */
             <div className="flex-1 flex flex-col overflow-hidden">
@@ -3043,9 +3123,58 @@ export default function App() {
                     {members.length>4&&<div className="w-6 h-6 rounded-full border-2 border-[#181828] bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-white">+{members.length-4}</div>}
                   </div>
                   )}
+                  {activeView==='servers'&&activeCh?.type==='text'&&(
+                    <>
+                      {activeCh.slowmode_seconds!=null&&activeCh.slowmode_seconds>0&&(
+                        <div title={`Tryb wolny: ${activeCh.slowmode_seconds<60?activeCh.slowmode_seconds+'s':activeCh.slowmode_seconds<3600?Math.floor(activeCh.slowmode_seconds/60)+'min':Math.floor(activeCh.slowmode_seconds/3600)+'h'}`}
+                          className="flex items-center gap-1 text-amber-400/70 px-2 py-1 bg-amber-500/10 rounded-lg text-[11px] font-medium">
+                          <Clock size={11}/>{activeCh.slowmode_seconds<60?activeCh.slowmode_seconds+'s':activeCh.slowmode_seconds<3600?Math.floor(activeCh.slowmode_seconds/60)+'min':Math.floor(activeCh.slowmode_seconds/3600)+'h'}
+                        </div>
+                      )}
+                      <button onClick={async()=>{setShowPinned(v=>{const next=!v;if(next){messagesApi.listPinned(activeChannel!).then(setPinnedMsgs).catch(()=>{});}return next;})} }
+                        title="Przypięte wiadomości"
+                        className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-150 active:scale-95 ${showPinned?'text-amber-400 bg-amber-500/15':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07]'}`}>
+                        <Pin size={14}/>
+                      </button>
+                    </>
+                  )}
                   <button className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all duration-150"><MoreHorizontal size={15}/></button>
                 </div>
               </header>
+
+              {/* ── Pinned Messages Panel ── */}
+              <AnimatePresence>
+                {showPinned&&activeView==='servers'&&activeCh?.type==='text'&&(
+                  <motion.div initial={{opacity:0,x:320}} animate={{opacity:1,x:0}} exit={{opacity:0,x:320}}
+                    transition={{type:'spring',stiffness:300,damping:30}}
+                    className="absolute top-[57px] right-0 bottom-0 w-80 bg-[#141420] border-l border-white/[0.06] z-20 flex flex-col shadow-2xl">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
+                      <div className="flex items-center gap-2 text-white font-semibold text-sm"><Pin size={13} className="text-amber-400"/>Przypięte</div>
+                      <button onClick={()=>setShowPinned(false)} className="text-zinc-600 hover:text-white transition-colors"><X size={15}/></button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-3 flex flex-col gap-2">
+                      {pinnedMsgs.length===0?(
+                        <div className="text-center text-zinc-600 text-sm py-8">Brak przypiętych wiadomości</div>
+                      ):pinnedMsgs.map(msg=>(
+                        <div key={msg.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <img src={msg.sender_avatar||`https://api.dicebear.com/7.x/shapes/svg?seed=${msg.sender_id}`} className="w-5 h-5 rounded-full object-cover" alt=""/>
+                            <span className="text-xs font-semibold text-white">{msg.sender_username}</span>
+                            <span className="text-[10px] text-zinc-600 ml-auto">{new Date(msg.created_at).toLocaleDateString('pl-PL')}</span>
+                          </div>
+                          <p className="text-xs text-zinc-400 line-clamp-3 break-words">{msg.content}</p>
+                          {canPinMessages&&(
+                            <button onClick={()=>handlePinMessage(msg.id,false)}
+                              className="mt-2 flex items-center gap-1 text-[10px] text-zinc-600 hover:text-rose-400 transition-colors">
+                              <PinOff size={10}/> Odepnij
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* ── Forum View ── */}
               {activeCh?.type==='forum' && (
@@ -3435,9 +3564,17 @@ export default function App() {
                           {/* Hover actions */}
                           {editingMsgId !== msg.id && !((msg as any).deleted || msg.content === '__deleted__') && (
                           <div className={`flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 self-center`}>
-                            <button onClick={()=>setReplyTo(msg)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/[0.1] text-zinc-600 hover:text-zinc-300 transition-colors"><Reply size={11}/></button>
-                            {isOwn&&<button onClick={()=>startEditMsg(msg)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/[0.1] text-zinc-600 hover:text-zinc-300 transition-colors"><Edit3 size={11}/></button>}
-                            {isOwn&&<button onClick={()=>confirmAction('Usunąć wiadomość?', () => { if(activeView==='servers') messagesApi.delete(msg.id).catch(console.error); else dmsApi.deleteMessage(msg.id).catch(console.error); })} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-rose-500/10 text-zinc-600 hover:text-rose-400 transition-colors"><Trash2 size={11}/></button>}
+                            <button onClick={()=>setReplyTo(msg)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/[0.1] text-zinc-600 hover:text-zinc-300 transition-colors" title="Odpowiedz"><Reply size={11}/></button>
+                            {isOwn&&<button onClick={()=>startEditMsg(msg)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/[0.1] text-zinc-600 hover:text-zinc-300 transition-colors" title="Edytuj"><Edit3 size={11}/></button>}
+                            {activeView==='servers'&&canPinMessages&&activeCh?.type==='text'&&(
+                              <button onClick={()=>{const pinned=!(msg as MessageFull).pinned;handlePinMessage(msg.id,pinned);}} title={(msg as MessageFull).pinned?'Odepnij':'Przypnij'}
+                                className={`w-6 h-6 flex items-center justify-center rounded-lg transition-colors ${(msg as MessageFull).pinned?'text-amber-400 hover:bg-amber-500/10':'text-zinc-600 hover:bg-white/[0.1] hover:text-amber-400'}`}>
+                                <Pin size={10}/>
+                              </button>
+                            )}
+                            {(isOwn||(activeView==='servers'&&canManageMessages))&&(
+                              <button onClick={()=>confirmAction('Usunąć wiadomość?', () => { if(activeView==='servers') messagesApi.delete(msg.id).catch(console.error); else dmsApi.deleteMessage(msg.id).catch(console.error); })} title="Usuń" className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-rose-500/10 text-zinc-600 hover:text-rose-400 transition-colors"><Trash2 size={11}/></button>
+                            )}
                           </div>
                           )}
                         </motion.div>
@@ -3548,10 +3685,17 @@ export default function App() {
                           ))}
                         </div>
                       )}
-                      <div className="flex items-center gap-3 bg-white/[0.06] border border-white/[0.08] rounded-2xl px-4 py-3.5 hover:border-white/[0.12] focus-within:border-indigo-500/40 focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] transition-all duration-200">
+                      {slowmodeLeft > 0 && activeView === 'servers' && (
+                        <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl px-4 py-3.5 text-amber-400 text-sm select-none">
+                          <Clock size={15} className="shrink-0"/>
+                          <span className="flex-1">Tryb wolny — poczekaj <span className="font-bold tabular-nums">{slowmodeLeft}s</span> przed kolejną wiadomością</span>
+                        </div>
+                      )}
+                      <div className={`flex items-center gap-3 bg-white/[0.06] border border-white/[0.08] rounded-2xl px-4 py-3.5 hover:border-white/[0.12] focus-within:border-indigo-500/40 focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] transition-all duration-200 ${slowmodeLeft > 0 && activeView === 'servers' ? 'opacity-40 pointer-events-none' : ''}`}>
                         <input type="file" ref={attachRef} onChange={handleAttach} accept="image/*" className="hidden"/>
-                        <button type="button" onClick={()=>attachRef.current?.click()}
-                          className="w-7 h-7 flex items-center justify-center rounded-xl text-zinc-600 hover:text-indigo-400 hover:bg-indigo-500/10 transition-all shrink-0 active:scale-90">
+                        <button type="button" onClick={()=>canAttachFiles?attachRef.current?.click():setSendError('Nie masz uprawnień do wysyłania plików')}
+                          title={canAttachFiles?'Wyślij plik':'Brak uprawnień do wysyłania plików'}
+                          className={`w-7 h-7 flex items-center justify-center rounded-xl transition-all shrink-0 active:scale-90 ${canAttachFiles?'text-zinc-600 hover:text-indigo-400 hover:bg-indigo-500/10':'text-zinc-700 cursor-not-allowed'}`}>
                           <Plus size={16}/>
                         </button>
                         <input ref={msgInputRef} type="text" value={msgInput}
@@ -4216,16 +4360,20 @@ export default function App() {
                 <h2 className="text-base font-bold text-white">Ustawienia serwera</h2>
                 <button onClick={()=>setSrvSettOpen(false)} className="text-zinc-600 hover:text-white"><X size={17}/></button>
               </div>
-              <div className="flex border-b border-white/[0.06] shrink-0 px-5 gap-0.5">
+              <div className="flex border-b border-white/[0.06] shrink-0 px-5 gap-0.5 overflow-x-auto scrollbar-hide">
                 {([
                   canManageServer && 'overview',
                   canManageRoles && 'roles',
                   (canManageRoles||canKickMembers) && 'members',
-                  'invites',
-                ].filter(Boolean) as ('overview'|'roles'|'members'|'invites')[]).map(t=>(
-                  <button key={t} onClick={()=>setSrvSettTab(t)}
-                    className={`px-4 py-3 text-sm font-semibold transition-all border-b-2 -mb-px ${srvSettTab===t?'border-indigo-500 text-white':'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
-                    {t==='overview'?'Ogólne':t==='roles'?'Role':t==='members'?'Członkowie':'Zaproszenia'}
+                  canBanMembers && 'bans',
+                  canCreateInvites && 'invites',
+                ].filter(Boolean) as ('overview'|'roles'|'members'|'bans'|'invites')[]).map(t=>(
+                  <button key={t} onClick={()=>{
+                    setSrvSettTab(t);
+                    if (t==='bans' && activeServer) serversApi.bans.list(activeServer).then(setBanList).catch(console.error);
+                  }}
+                    className={`px-4 py-3 text-sm font-semibold transition-all border-b-2 -mb-px shrink-0 ${srvSettTab===t?'border-indigo-500 text-white':'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
+                    {t==='overview'?'Ogólne':t==='roles'?'Role':t==='members'?'Członkowie':t==='bans'?'Bany':'Zaproszenia'}
                   </button>
                 ))}
               </div>
@@ -4313,10 +4461,30 @@ export default function App() {
                                 {!roles.some(r=>r.name==='Member')&&<option value="Member" style={{background:'#18181b',color:'#d4d4d8'}}>Member</option>}
                                 {!roles.some(r=>r.name==='Admin')&&<option value="Admin" style={{background:'#18181b',color:'#d4d4d8'}}>Admin</option>}
                               </select>}
-                              {canKickMembers&&m.id!==serverFull?.owner_id&&<button onClick={()=>handleKick(m.id)} className="w-7 h-7 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg flex items-center justify-center"><X size={12}/></button>}
+                              {canKickMembers&&m.id!==serverFull?.owner_id&&<button onClick={()=>handleKick(m.id)} title="Wyrzuć" className="w-7 h-7 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg flex items-center justify-center"><X size={12}/></button>}
+                              {canBanMembers&&m.id!==serverFull?.owner_id&&<button onClick={()=>handleBan(m.id,m.username)} title="Zbanuj" className="w-7 h-7 bg-rose-900/20 hover:bg-rose-800/40 text-rose-500 rounded-lg flex items-center justify-center"><Shield size={12}/></button>}
                             </>
                           ) : <span className="text-xs text-zinc-700">(ty)</span>}
                         </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {srvSettTab==='bans'&&(
+                  <div className="flex flex-col gap-3">
+                    <h3 className="text-sm font-bold text-white">Zbanowani ({banList.length})</h3>
+                    {banList.length===0&&<p className="text-sm text-zinc-600">Brak zbanowanych użytkowników.</p>}
+                    {banList.map(b=>(
+                      <div key={b.user_id} className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] px-4 py-3 rounded-xl">
+                        <div className="flex items-center gap-3">
+                          <img src={b.avatar_url||`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(b.username)}&size=36`} className="w-9 h-9 rounded-full object-cover" alt=""/>
+                          <div>
+                            <p className="text-sm font-semibold text-white">{b.username}</p>
+                            {b.reason&&<p className="text-xs text-zinc-600">Powód: {b.reason}</p>}
+                            {b.banned_by_username&&<p className="text-xs text-zinc-700">przez {b.banned_by_username}</p>}
+                          </div>
+                        </div>
+                        <button onClick={()=>handleUnban(b.user_id)} className="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors">Odbanuj</button>
                       </div>
                     ))}
                   </div>
@@ -4382,6 +4550,24 @@ export default function App() {
                         })}
                       </div>
                     )}
+                  </div>
+                )}
+                {editingCh.type==='text'&&(
+                  <div>
+                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Tryb wolny</label>
+                    <select value={chForm.slowmode_seconds} onChange={e=>setChForm(p=>({...p,slowmode_seconds:parseInt(e.target.value)||0}))}
+                      className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}>
+                      <option value="0">Wyłączony</option>
+                      <option value="5">5 sekund</option>
+                      <option value="10">10 sekund</option>
+                      <option value="30">30 sekund</option>
+                      <option value="60">1 minuta</option>
+                      <option value="300">5 minut</option>
+                      <option value="600">10 minut</option>
+                      <option value="3600">1 godzina</option>
+                      <option value="21600">6 godzin</option>
+                    </select>
+                    {chForm.slowmode_seconds>0&&<p className="text-[11px] text-zinc-600 mt-1">Użytkownicy mogą wysyłać wiadomość co {chForm.slowmode_seconds<60?`${chForm.slowmode_seconds}s`:chForm.slowmode_seconds<3600?`${chForm.slowmode_seconds/60} min`:`${chForm.slowmode_seconds/3600} godz`}</p>}
                   </div>
                 )}
                 <button onClick={handleSaveCh} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">Zapisz</button>
@@ -4649,9 +4835,15 @@ export default function App() {
                     {PERMISSIONS.map(perm=>{
                       const chk=roleForm.permissions.includes(perm.id);
                       return <button key={perm.id} onClick={()=>setRoleForm(p=>({...p,permissions:chk?p.permissions.filter(x=>x!==perm.id):[...p.permissions,perm.id]}))}
-                        className={`flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm transition-all ${chk?'bg-indigo-500/10 border-indigo-500/30 text-white':'bg-white/[0.02] border-white/[0.05] text-zinc-400 hover:text-zinc-300'}`}>
-                        <div className="flex items-center gap-2"><Shield size={13} className={chk?'text-indigo-400':'text-zinc-600'}/>{perm.label}</div>
-                        {chk&&<Check size={13} className="text-indigo-400"/>}
+                        className={`flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm transition-all text-left ${chk?'bg-indigo-500/10 border-indigo-500/30 text-white':'bg-white/[0.02] border-white/[0.05] text-zinc-400 hover:text-zinc-300'}`}>
+                        <div className="flex items-start gap-2 min-w-0">
+                          <Shield size={13} className={`mt-0.5 shrink-0 ${chk?'text-indigo-400':'text-zinc-600'}`}/>
+                          <div className="min-w-0">
+                            <p className="font-medium leading-tight">{perm.label}</p>
+                            {perm.desc&&<p className="text-[10px] text-zinc-600 leading-tight mt-0.5 truncate">{perm.desc}</p>}
+                          </div>
+                        </div>
+                        {chk&&<Check size={13} className="text-indigo-400 shrink-0"/>}
                       </button>;
                     })}
                   </div>
