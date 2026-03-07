@@ -71,6 +71,7 @@ export interface ChannelCategory {
 }
 export interface ServerFull extends ServerData {
   my_role: string; categories: ChannelCategory[];
+  my_permissions?: string[];
 }
 export interface MessageFull {
   id: string; channel_id: string; content: string; edited: boolean;

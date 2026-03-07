@@ -15,6 +15,25 @@ async function isMember(serverId: string, userId: string): Promise<string | null
   return rows[0]?.role_name || null;
 }
 
+/**
+ * Returns true if userId is Owner/Admin on the server,
+ * OR if any of their custom roles grants 'administrator' or the specific permission.
+ */
+async function hasServerPermission(serverId: string, userId: string, permission: string): Promise<boolean> {
+  const roleName = await isMember(serverId, userId);
+  if (!roleName) return false;
+  if (['Owner', 'Admin'].includes(roleName)) return true;
+  const { rowCount } = await query(
+    `SELECT 1 FROM member_roles mr
+     INNER JOIN server_roles sr ON sr.id = mr.role_id
+     WHERE mr.server_id = $1 AND mr.user_id = $2
+       AND ($3 = ANY(sr.permissions) OR 'administrator' = ANY(sr.permissions))
+     LIMIT 1`,
+    [serverId, userId, permission]
+  );
+  return !!rowCount;
+}
+
 // Returns { serverId, roleInServer } if user can access the channel, null otherwise
 async function canAccessChannel(channelId: string, userId: string): Promise<{ serverId: string; roleInServer: string } | null> {
   const { rows: [ch] } = await query(
@@ -97,8 +116,7 @@ router.post('/', authMiddleware,
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
     const { server_id, name, type, category_id, description, is_private, role_ids } = req.body;
-    const role = await isMember(server_id, req.user!.id);
-    if (!role || !['Owner', 'Admin'].includes(role)) {
+    if (!(await hasServerPermission(server_id, req.user!.id, 'manage_channels'))) {
       return res.status(403).json({ error: 'Not authorized' });
     }
     try {
@@ -127,8 +145,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { rows: [ch] } = await query(`SELECT server_id FROM channels WHERE id = $1`, [req.params.id]);
     if (!ch) return res.status(404).json({ error: 'Not found' });
-    const role = await isMember(ch.server_id, req.user!.id);
-    if (!role || !['Owner', 'Admin'].includes(role)) {
+    if (!(await hasServerPermission(ch.server_id, req.user!.id, 'manage_channels'))) {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
@@ -176,8 +193,7 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
   try {
     const { rows: [ch] } = await query(`SELECT server_id FROM channels WHERE id = $1`, [req.params.id]);
     if (!ch) return res.status(404).json({ error: 'Not found' });
-    const role = await isMember(ch.server_id, req.user!.id);
-    if (!role || !['Owner', 'Admin'].includes(role)) {
+    if (!(await hasServerPermission(ch.server_id, req.user!.id, 'manage_channels'))) {
       return res.status(403).json({ error: 'Not authorized' });
     }
     await query(`DELETE FROM channels WHERE id = $1`, [req.params.id]);
@@ -190,8 +206,7 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
 // POST /api/channels/categories
 router.post('/categories', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { server_id, name, is_private, role_ids } = req.body;
-  const role = await isMember(server_id, req.user!.id);
-  if (!role || !['Owner', 'Admin'].includes(role)) {
+  if (!(await hasServerPermission(server_id, req.user!.id, 'manage_channels'))) {
     return res.status(403).json({ error: 'Not authorized' });
   }
   const client = await getClient();
@@ -232,8 +247,7 @@ router.put('/categories/:id', authMiddleware,
     try {
       const { rows: [cat] } = await query('SELECT * FROM channel_categories WHERE id=$1', [req.params.id]);
       if (!cat) return res.status(404).json({ error: 'Not found' });
-      const role = await isMember(cat.server_id, req.user!.id);
-      if (!role || !['Owner', 'Admin'].includes(role)) return res.status(403).json({ error: 'Not authorized' });
+      if (!(await hasServerPermission(cat.server_id, req.user!.id, 'manage_channels'))) return res.status(403).json({ error: 'Not authorized' });
       const { rows: [updated] } = await query(
         'UPDATE channel_categories SET name=$1 WHERE id=$2 RETURNING *',
         [req.body.name, req.params.id]
@@ -250,8 +264,7 @@ router.delete('/categories/:id', authMiddleware, async (req: AuthRequest, res: R
   try {
     const { rows: [cat] } = await query('SELECT * FROM channel_categories WHERE id=$1', [req.params.id]);
     if (!cat) return res.status(404).json({ error: 'Not found' });
-    const role = await isMember(cat.server_id, req.user!.id);
-    if (!role || !['Owner', 'Admin'].includes(role)) return res.status(403).json({ error: 'Not authorized' });
+    if (!(await hasServerPermission(cat.server_id, req.user!.id, 'manage_channels'))) return res.status(403).json({ error: 'Not authorized' });
     // Channels in this category become uncategorized
     await query('UPDATE channels SET category_id=NULL WHERE category_id=$1', [req.params.id]);
     await query('DELETE FROM channel_categories WHERE id=$1', [req.params.id]);

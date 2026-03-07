@@ -1090,6 +1090,13 @@ export default function App() {
           return upd ? { ...r, name: upd.name, color: upd.color } : r;
         }),
       })));
+      // Role permissions may have changed — refetch server to update my_permissions
+      serversApi.get(server_id).then(setServerFull).catch(console.error);
+    });
+    sock.on('permissions_updated' as any, ({ server_id }: any) => {
+      if (server_id !== activeServerRef.current) return;
+      // My roles changed — refetch server to get updated my_permissions
+      serversApi.get(server_id).then(setServerFull).catch(console.error);
     });
     sock.on('member_joined' as any, ({ server_id, user }: any) => {
       if (server_id !== activeServerRef.current) return;
@@ -2079,6 +2086,14 @@ export default function App() {
   const activeCh = allChs.find(c => c.id === activeChannel);
   const activeDm = dmConvs.find(d => d.other_user_id === activeDmUserId);
   const isAdmin  = !!(serverFull?.my_role && ['Owner','Admin'].includes(serverFull.my_role));
+  const myPerms: string[]      = serverFull?.my_permissions ?? [];
+  const hasAdminPerm           = isAdmin || myPerms.includes('administrator');
+  const canManageChannels      = hasAdminPerm || myPerms.includes('manage_channels');
+  const canManageRoles         = hasAdminPerm || myPerms.includes('manage_roles');
+  const canKickMembers         = hasAdminPerm || myPerms.includes('kick_members');
+  const canManageServer        = hasAdminPerm || myPerms.includes('manage_server');
+  const canManageMessages      = hasAdminPerm || myPerms.includes('manage_messages');
+  const canSendMessages        = hasAdminPerm || myPerms.length === 0 || myPerms.includes('send_messages');
   const incoming = friendReqs.filter(r => r.direction === 'incoming');
   const outgoing = friendReqs.filter(r => r.direction === 'outgoing');
   const allMessages = activeView === 'servers' ? channelMsgs : dmMsgs;
@@ -2255,7 +2270,7 @@ export default function App() {
                   <motion.div initial={{opacity:0,y:-6,scale:0.97}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:-6,scale:0.97}}
                     transition={{duration:0.15,ease:[0.16,1,0.3,1]}}
                     className="absolute left-3 right-3 top-full mt-1 z-40 bg-[#0e0e1c] border border-white/[0.12] rounded-2xl shadow-2xl shadow-black/80 py-1.5 overflow-hidden" style={{backdropFilter:'blur(24px)'}}>
-                    {isAdmin&&<>
+                    {canManageChannels&&<>
                       <button onClick={()=>{setSrvDropOpen(false);setChCreateCatId('');setChCreateOpen(true);setNewChName('');setNewChType('text');setNewChPrivate(false);}}
                         className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-indigo-500/10 hover:text-white transition-colors text-left">
                         <Hash size={16} className="text-indigo-400 shrink-0"/>
@@ -2275,9 +2290,9 @@ export default function App() {
                       <UserPlus size={14} className="text-emerald-400 shrink-0"/>
                       Zaproś znajomych
                     </button>
-                    {isAdmin&&<>
+                    {(canManageServer||canManageRoles||canKickMembers)&&<>
                       <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
-                      <button onClick={()=>{setSrvDropOpen(false);setSrvSettTab('overview');setSrvSettOpen(true);}}
+                      <button onClick={()=>{setSrvDropOpen(false);setSrvSettTab(canManageServer?'overview':canManageRoles?'roles':'members');setSrvSettOpen(true);}}
                         className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
                         <Settings2 size={14} className="text-zinc-500 shrink-0"/>
                         Ustawienia serwera
@@ -2357,7 +2372,7 @@ export default function App() {
                           {cat.name}
                         </span>
                       )}
-                      {isAdmin&&editingCatId!==cat.id&&(
+                      {canManageChannels&&editingCatId!==cat.id&&(
                         <div className="flex items-center gap-0.5 opacity-0 group-hover/cat:opacity-100 transition-opacity">
                           <button onClick={openAddCh} title="Dodaj kanał" className="w-4 h-4 flex items-center justify-center rounded hover:text-zinc-300 text-zinc-600 transition-colors"><Plus size={11}/></button>
                           <button onClick={()=>startEditCat(cat)} title="Zmień nazwę" className="w-4 h-4 flex items-center justify-center rounded hover:text-zinc-300 text-zinc-600 transition-colors"><Edit3 size={10}/></button>
@@ -2367,7 +2382,7 @@ export default function App() {
                     </div>
                     )}
                     {/* Empty category hint */}
-                    {isEmpty&&isAdmin&&(
+                    {isEmpty&&canManageChannels&&(
                       <div className="px-3 pb-2">
                         <button onClick={openAddCh} className="w-full flex items-center gap-2 px-3 py-1.5 rounded-xl text-zinc-700 hover:text-zinc-400 hover:bg-white/[0.03] transition-all text-xs border border-dashed border-white/[0.05] hover:border-white/[0.09]">
                           <Plus size={10}/> Dodaj kanał do kategorii
@@ -2409,7 +2424,7 @@ export default function App() {
                                     {unread > 99 ? '99+' : unread}
                                   </span>
                                 )}
-                                {isAdmin&&<div className="flex gap-0.5 opacity-0 group-hover/ch:opacity-100 transition-opacity">
+                                {canManageChannels&&<div className="flex gap-0.5 opacity-0 group-hover/ch:opacity-100 transition-opacity">
                                   <button onClick={e=>{e.stopPropagation();openChEdit(ch);}} className="w-5 h-5 flex items-center justify-center rounded-lg hover:bg-white/10 hover:text-zinc-200 transition-colors"><Settings2 size={10}/></button>
                                   <button onClick={e=>{e.stopPropagation();handleDeleteCh(ch.id);}} className="w-5 h-5 flex items-center justify-center rounded-lg hover:bg-rose-500/20 hover:text-rose-400 transition-colors"><Trash2 size={10}/></button>
                                 </div>}
@@ -2428,7 +2443,7 @@ export default function App() {
                           <ChevronRight size={10} className={`text-zinc-600 transition-transform ${collapsedVcats.has(cat.id)?'':'rotate-90'}`}/>
                           <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Pokoje głosowe</span>
                         </div>
-                        {isAdmin&&<Plus size={12} className="text-zinc-700 hover:text-zinc-300 cursor-pointer opacity-0 group-hover/vcat:opacity-100 transition-all"
+                        {canManageChannels&&<Plus size={12} className="text-zinc-700 hover:text-zinc-300 cursor-pointer opacity-0 group-hover/vcat:opacity-100 transition-all"
                           onClick={e=>{ e.stopPropagation(); setChCreateCatId(cat.id); setChCreateOpen(true); setNewChName(''); setNewChType('voice'); }}/>}
                       </div>
                       {!collapsedVcats.has(cat.id)&&voiceChs.map(ch => {
@@ -3133,7 +3148,7 @@ export default function App() {
                             <img src={forumPost.author_avatar||`https://ui-avatars.com/api/?name=${forumPost.author_username}&background=random`} className="w-7 h-7 rounded-full object-cover" alt=""/>
                             <span className="text-sm font-semibold text-zinc-300">{forumPost.author_username}</span>
                             <span className="text-xs text-zinc-600">{new Date(forumPost.created_at).toLocaleString('pl-PL')}</span>
-                            {(currentUser?.id===forumPost.author_id||isAdmin)&&(
+                            {(currentUser?.id===forumPost.author_id||canManageMessages)&&(
                               <button onClick={async()=>{
                                 try { await forumApi.deletePost(activeChannel,forumPost.id); setForumPost(null); setForumPosts(p=>p.filter(x=>x.id!==forumPost.id)); } catch {}
                               }} className="ml-auto w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-colors">
@@ -3494,11 +3509,18 @@ export default function App() {
                 {(()=>{
                   const isDmView = activeView==='dms' && !!activeDmUserId;
                   const isFriend = !isDmView || friends.some(f => f.id === activeDmUserId);
-                  // Announcement channel — only admins can write
-                  if (activeCh?.type==='announcement' && !isAdmin) return (
+                  // Announcement channel — only those with manage_messages can write
+                  if (activeCh?.type==='announcement' && !canManageMessages) return (
                     <div className="flex items-center justify-center gap-2.5 py-3 px-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400 text-sm">
                       <Megaphone size={14} className="shrink-0"/>
                       <span>To jest kanał ogłoszeń. Tylko administratorzy mogą tutaj pisać.</span>
+                    </div>
+                  );
+                  // send_messages permission check (server channels only)
+                  if (!isDmView && activeView==='servers' && !canSendMessages) return (
+                    <div className="flex items-center justify-center gap-2.5 py-3 px-4 bg-zinc-900/60 border border-white/[0.06] rounded-xl text-zinc-500 text-sm">
+                      <Lock size={14} className="text-zinc-600 shrink-0"/>
+                      <span>Nie masz uprawnień do wysyłania wiadomości na tym kanale.</span>
                     </div>
                   );
                   if (!isFriend) return (
@@ -3790,8 +3812,8 @@ export default function App() {
             style={{position:'fixed',left:srvContextMenu.x,top:srvContextMenu.y,backdropFilter:'blur(24px)'}}
             className="z-[91] bg-[#0e0e1c] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 py-1.5 min-w-[180px] overflow-hidden">
             {(srvContextMenu.srv.owner_id===currentUser?.id ||
-              (srvContextMenu.srv.id===activeServer && (serverFull?.my_role==='Admin'||serverFull?.my_role==='Owner'))) && (<>
-              <button onClick={()=>{ setSrvContextMenu(null); setSrvSettTab('overview'); setSrvSettOpen(true); setActiveServer(srvContextMenu.srv.id); setActiveView('servers'); }}
+              (srvContextMenu.srv.id===activeServer && (canManageServer||canManageRoles||canKickMembers))) && (<>
+              <button onClick={()=>{ setSrvContextMenu(null); setSrvSettTab(canManageServer?'overview':canManageRoles?'roles':'members'); setSrvSettOpen(true); setActiveServer(srvContextMenu.srv.id); setActiveView('servers'); }}
                 className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
                 <Settings2 size={13} className="text-zinc-500 shrink-0"/>
                 Ustawienia serwera
@@ -4195,7 +4217,12 @@ export default function App() {
                 <button onClick={()=>setSrvSettOpen(false)} className="text-zinc-600 hover:text-white"><X size={17}/></button>
               </div>
               <div className="flex border-b border-white/[0.06] shrink-0 px-5 gap-0.5">
-                {(['overview','roles','members','invites'] as const).map(t=>(
+                {([
+                  canManageServer && 'overview',
+                  canManageRoles && 'roles',
+                  (canManageRoles||canKickMembers) && 'members',
+                  'invites',
+                ].filter(Boolean) as ('overview'|'roles'|'members'|'invites')[]).map(t=>(
                   <button key={t} onClick={()=>setSrvSettTab(t)}
                     className={`px-4 py-3 text-sm font-semibold transition-all border-b-2 -mb-px ${srvSettTab===t?'border-indigo-500 text-white':'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
                     {t==='overview'?'Ogólne':t==='roles'?'Role':t==='members'?'Członkowie':'Zaproszenia'}
@@ -4279,14 +4306,14 @@ export default function App() {
                         <div className="flex items-center gap-2">
                           {m.id!==currentUser?.id ? (
                             <>
-                              <select value={m.role_name} onChange={e=>handleSetMemberRole(m.id,e.target.value)}
+                              {canManageRoles&&<select value={m.role_name} onChange={e=>handleSetMemberRole(m.id,e.target.value)}
                                 className={`text-xs ${gi} rounded-lg px-2 py-1.5`}
                                 style={{backgroundColor:'#18181b',color:'#d4d4d8'}}>
                                 {roles.map(r=><option key={r.id} value={r.name} style={{background:'#18181b',color:'#d4d4d8'}}>{r.name}{r.is_default?' ★':''}</option>)}
                                 {!roles.some(r=>r.name==='Member')&&<option value="Member" style={{background:'#18181b',color:'#d4d4d8'}}>Member</option>}
                                 {!roles.some(r=>r.name==='Admin')&&<option value="Admin" style={{background:'#18181b',color:'#d4d4d8'}}>Admin</option>}
-                              </select>
-                              {m.id!==serverFull?.owner_id&&<button onClick={()=>handleKick(m.id)} className="w-7 h-7 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg flex items-center justify-center"><X size={12}/></button>}
+                              </select>}
+                              {canKickMembers&&m.id!==serverFull?.owner_id&&<button onClick={()=>handleKick(m.id)} className="w-7 h-7 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg flex items-center justify-center"><X size={12}/></button>}
                             </>
                           ) : <span className="text-xs text-zinc-700">(ty)</span>}
                         </div>

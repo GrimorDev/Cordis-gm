@@ -9,18 +9,32 @@ const router = Router();
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-async function isAdminOrOwner(serverId: string, userId: string): Promise<boolean> {
-  const { rows } = await query(
-    `SELECT role_name FROM server_members WHERE server_id = $1 AND user_id = $2`,
-    [serverId, userId]
-  );
-  return rows[0] && ['Owner', 'Admin'].includes(rows[0].role_name);
-}
-
 async function isMember(serverId: string, userId: string): Promise<boolean> {
   const { rowCount } = await query(
     `SELECT 1 FROM server_members WHERE server_id = $1 AND user_id = $2`,
     [serverId, userId]
+  );
+  return !!rowCount;
+}
+
+/**
+ * Returns true if userId is Owner/Admin on the server,
+ * OR if any of their custom roles grants 'administrator' or the specific permission.
+ */
+async function isAuthorized(serverId: string, userId: string, permission: string): Promise<boolean> {
+  const { rows: [member] } = await query(
+    `SELECT role_name FROM server_members WHERE server_id = $1 AND user_id = $2`,
+    [serverId, userId]
+  );
+  if (!member) return false;
+  if (['Owner', 'Admin'].includes(member.role_name)) return true;
+  const { rowCount } = await query(
+    `SELECT 1 FROM member_roles mr
+     INNER JOIN server_roles sr ON sr.id = mr.role_id
+     WHERE mr.server_id = $1 AND mr.user_id = $2
+       AND ($3 = ANY(sr.permissions) OR 'administrator' = ANY(sr.permissions))
+     LIMIT 1`,
+    [serverId, userId, permission]
   );
   return !!rowCount;
 }
@@ -145,6 +159,20 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     );
     const userRoleIds = new Set(userRoles.map((r: any) => r.role_id));
 
+    // Compute combined permissions from all custom roles
+    if (isAdminOrOwnerUser) {
+      server.my_permissions = ['administrator'];
+    } else {
+      const { rows: permRows } = await query(
+        `SELECT DISTINCT unnest(sr.permissions) as perm
+         FROM member_roles mr
+         INNER JOIN server_roles sr ON sr.id = mr.role_id
+         WHERE mr.server_id = $1 AND mr.user_id = $2`,
+        [req.params.id, req.user!.id]
+      );
+      server.my_permissions = permRows.map((r: any) => r.perm);
+    }
+
     const visibleChannels = channels.filter((ch: any) => {
       if (!ch.is_private) return true;
       if (isAdminOrOwnerUser) return true;
@@ -191,7 +219,7 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
 // PUT /api/servers/:id
 router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    if (!(await isAdminOrOwner(req.params.id, req.user!.id))) {
+    if (!(await isAuthorized(req.params.id, req.user!.id, 'manage_server'))) {
       return res.status(403).json({ error: 'Not authorized' });
     }
     const { name, description, icon_url, banner_url } = req.body;
@@ -292,7 +320,7 @@ router.get('/:id/members', authMiddleware, async (req: AuthRequest, res: Respons
 // PUT /api/servers/:id/members/:userId/roles
 router.put('/:id/members/:userId/roles', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    if (!(await isAdminOrOwner(req.params.id, req.user!.id))) {
+    if (!(await isAuthorized(req.params.id, req.user!.id, 'manage_roles'))) {
       return res.status(403).json({ error: 'Not authorized' });
     }
     const { role_ids, role_name } = req.body;
@@ -335,6 +363,9 @@ router.put('/:id/members/:userId/roles', authMiddleware, async (req: AuthRequest
         }
       }
       await client.query('COMMIT');
+      // Notify the affected user their permissions may have changed
+      const io = req.app.get('io');
+      if (io) io.to(`user:${req.params.userId}`).emit('permissions_updated', { server_id: req.params.id });
       return res.json({ message: 'Roles updated' });
     } catch (err) {
       await client.query('ROLLBACK');
@@ -346,7 +377,7 @@ router.put('/:id/members/:userId/roles', authMiddleware, async (req: AuthRequest
 // DELETE /api/servers/:id/members/:userId (kick)
 router.delete('/:id/members/:userId', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    if (!(await isAdminOrOwner(req.params.id, req.user!.id))) {
+    if (!(await isAuthorized(req.params.id, req.user!.id, 'kick_members'))) {
       return res.status(403).json({ error: 'Not authorized' });
     }
     await query(
@@ -386,7 +417,7 @@ router.post('/:id/roles', authMiddleware,
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
     try {
-      if (!(await isAdminOrOwner(req.params.id, req.user!.id))) {
+      if (!(await isAuthorized(req.params.id, req.user!.id, 'manage_roles'))) {
         return res.status(403).json({ error: 'Not authorized' });
       }
       const { name, color = '#5865f2', permissions = [] } = req.body;
@@ -411,7 +442,7 @@ router.post('/:id/roles', authMiddleware,
 // PUT /api/servers/:id/roles/:roleId
 router.put('/:id/roles/:roleId', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    if (!(await isAdminOrOwner(req.params.id, req.user!.id))) {
+    if (!(await isAuthorized(req.params.id, req.user!.id, 'manage_roles'))) {
       return res.status(403).json({ error: 'Not authorized' });
     }
     const { name, color, permissions } = req.body;
@@ -439,7 +470,7 @@ router.put('/:id/roles/:roleId', authMiddleware, async (req: AuthRequest, res: R
 // DELETE /api/servers/:id/roles/:roleId
 router.delete('/:id/roles/:roleId', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    if (!(await isAdminOrOwner(req.params.id, req.user!.id))) {
+    if (!(await isAuthorized(req.params.id, req.user!.id, 'manage_roles'))) {
       return res.status(403).json({ error: 'Not authorized' });
     }
     const { rows: [existing] } = await query(
