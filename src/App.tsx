@@ -1228,41 +1228,31 @@ export default function App() {
   }, [activeCall?.type, activeCall?.channelId, activeCall?.userId]);
 
   // Scroll smoothly on new incoming messages/typing indicator
-  // Scroll helper — directly manipulates the container's scrollTop (more reliable than scrollIntoView)
+  // Scroll helper — directly manipulates container scrollTop
   const scrollToBottom = (smooth = false) => {
     const el = msgScrollRef.current;
     if (!el) return;
-    if (smooth) { el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); }
-    else { el.scrollTop = el.scrollHeight; }
+    if (smooth) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    else el.scrollTop = el.scrollHeight;
   };
-  // When switching channel/DM: set flag to scroll to bottom on first load
+  // When switching channel/DM: set flag
   useEffect(() => { scrollToBottomOnLoadRef.current = true; }, [activeChannel, activeDmUserId]);
-  // Scroll when messages arrive: instant on initial load, smooth when near bottom on new msgs
-  useEffect(() => {
-    if (scrollToBottomOnLoadRef.current) {
-      scrollToBottomOnLoadRef.current = false;
-      // RAF ensures React has committed DOM updates before we measure scrollHeight
-      requestAnimationFrame(() => scrollToBottom(false));
-    } else {
-      // Auto-scroll on new message only if user is already near the bottom
-      const el = msgScrollRef.current;
-      if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 180) {
-        scrollToBottom(true);
-      }
-    }
-  }, [channelMsgs, dmMsgs]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Clear flag + scroll when loading ends (handles empty channels / edge cases)
+  // PRIMARY scroll trigger: fires when msgsLoading transitions false→false after channel switch.
+  // At this point messages are fully in the DOM (setChannelMsgs + setMsgsLoading(false) are batched).
+  // We intentionally depend on msgsLoading only — this avoids consuming the flag on the intermediate
+  // setChannelMsgs([]) clear that happens at channel switch.
   useEffect(() => {
     if (!msgsLoading && scrollToBottomOnLoadRef.current) {
       scrollToBottomOnLoadRef.current = false;
       requestAnimationFrame(() => scrollToBottom(false));
     }
   }, [msgsLoading]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Smooth scroll on new incoming messages / typing indicator changes
+  // SECONDARY scroll: smart-scroll when new messages arrive and user is near bottom
   useEffect(() => {
-    if (!scrollToBottomOnLoadRef.current) scrollToBottom(true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [typingUsers]);
+    if (scrollToBottomOnLoadRef.current) return; // still loading initial batch — skip
+    const el = msgScrollRef.current;
+    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 180) scrollToBottom(true);
+  }, [channelMsgs, dmMsgs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Sync refs ───────────────────────────────────────────────────
   useEffect(() => { currentUserRef.current    = currentUser;    }, [currentUser]);
@@ -2125,9 +2115,10 @@ export default function App() {
     <div className="flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-transparent p-2 gap-2">
 
       {/* TOP NAV — browser-tab style */}
-      <nav className="h-12 flex items-center justify-between shrink-0 z-30 relative glass-panel rounded-2xl px-2">
-        {/* Left: mobile toggle + server tabs — capped at ~45% so never covers center "Cordyn" */}
-        <div className="flex items-center h-full min-w-0 max-w-[45%]">
+      {/* TOP NAV — 3-col grid: left tabs | center brand | right actions */}
+      <nav className="h-12 shrink-0 z-30 glass-panel rounded-2xl px-2 grid items-center" style={{gridTemplateColumns:'1fr auto 1fr'}}>
+        {/* Left: mobile toggle + server tabs */}
+        <div className="flex items-center h-full min-w-0 overflow-hidden">
           <button onClick={() => setIsMobileOpen(v => !v)} className="md:hidden w-9 h-9 flex items-center justify-center text-zinc-500 hover:text-white ml-2 shrink-0">
             {isMobileOpen ? <X size={18}/> : <Menu size={18}/>}
           </button>
@@ -2174,12 +2165,12 @@ export default function App() {
             </button>
           </div>
         </div>
-        {/* Center: branding */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none z-10">
-          <span className="text-white font-bold tracking-tight text-sm bg-clip-text">Cordyn</span>
+        {/* Center: branding — always centered, never overlapped */}
+        <div className="flex items-center justify-center pointer-events-none select-none px-4">
+          <span className="text-white font-bold tracking-tight text-sm">Cordyn</span>
         </div>
         {/* Right: search + bell + settings + avatar */}
-        <div className="flex items-center gap-1.5 pr-3">
+        <div className="flex items-center justify-end gap-1.5 pr-1">
           <div className="relative group hidden sm:block">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-zinc-400 transition-colors"/>
             <input placeholder="Szukaj w wiadomościach..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
