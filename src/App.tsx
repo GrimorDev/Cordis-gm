@@ -93,7 +93,7 @@ const ft = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digi
 const fmtDur = (s: number) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Toast = { id: string; msg: string; type: 'info'|'success'|'error'|'warn'; onConfirm?: ()=>void };
+type Toast = { id: string; msg: string; type: 'info'|'success'|'error'|'warn'; onConfirm?: ()=>void; onClick?: ()=>void; avatar?: string|null; senderName?: string };
 type CallState = {
   type: 'voice_channel' | 'dm_voice' | 'dm_video';
   channelId?: string; channelName?: string; serverId?: string;
@@ -894,8 +894,16 @@ export default function App() {
       dmsApi.conversations().then(setDmConvs).catch(console.error);
       // Toast + unread count + sound only when NOT actively viewing this DM
       if (msg.sender_id !== myId && !isActivelyViewing) {
-        const preview = msg.content.length > 60 ? msg.content.slice(0, 60) + '…' : msg.content;
-        autoToast(`💬 ${msg.sender_username}: ${preview}`, 'info');
+        const preview = msg.content
+          ? (msg.content.length > 55 ? msg.content.slice(0, 55) + '…' : msg.content)
+          : msg.attachment_url ? '📎 Załącznik' : '';
+        autoToast(
+          preview,
+          'info',
+          () => { setActiveDmUserId(msg.sender_id); setActiveView('dms'); },
+          msg.sender_avatar,
+          msg.sender_username
+        );
         setUnreadDms(p => ({ ...p, [msg.sender_id]: (p[msg.sender_id] || 0) + 1 }));
         playDmNotification();
       }
@@ -971,10 +979,10 @@ export default function App() {
       setIncomingCall({ from, type, conversation_id });
       startIncomingRing();
     });
-    const autoToast = (msg: string, type: Toast['type']) => {
+    const autoToast = (msg: string, type: Toast['type'], onClick?: ()=>void, avatar?: string|null, senderName?: string) => {
       const id = Math.random().toString(36).slice(2);
-      setToasts(p => [...p, { id, msg, type }]);
-      setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 4000);
+      setToasts(p => [...p, { id, msg, type, onClick, avatar, senderName }]);
+      setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 5000);
     };
     sock.on('call_accepted', ({ from_user_id }: any) => {
       stopRing();
@@ -2183,11 +2191,20 @@ export default function App() {
 
   // Highlight matching text in search results
   const hlText = (text: string) => {
-    // First split on !username tokens, then apply search highlight within each part
-    const mentionParts = text.split(/(![a-zA-Z0-9_]+)/g);
+    // Split on !username mentions AND @everyone/@here
+    const mentionParts = text.split(/(![a-zA-Z0-9_]+|@everyone|@here)/g);
     const q = searchQuery.trim();
     const escaped = q ? q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
     return <>{mentionParts.map((part, pi) => {
+      // @everyone / @here — red global mention
+      if (part === '@everyone' || part === '@here') {
+        return (
+          <span key={pi} className="inline-flex items-center rounded-md px-1.5 py-0 font-bold cursor-default select-none bg-rose-500/25 text-rose-300">
+            {part}
+          </span>
+        );
+      }
+      // !username mention
       if (/^![a-zA-Z0-9_]+$/.test(part)) {
         const uname = part.slice(1);
         const isMe = uname.toLowerCase() === currentUser?.username?.toLowerCase();
@@ -5396,23 +5413,52 @@ export default function App() {
       <div className="fixed top-4 right-4 z-[200] flex flex-col items-end gap-2.5 pointer-events-none" style={{minWidth:'20rem',maxWidth:'26rem'}}>
         <AnimatePresence>
           {toasts.map(t => {
-            const toastIcon = t.type==='success'?<CheckCircle2 size={15}/>:t.type==='error'?<AlertCircle size={15}/>:t.type==='warn'?<AlertTriangle size={15}/>:<Info size={15}/>;
-            const toastCls  = t.type==='success'?'bg-emerald-950/80 border-emerald-500/40 text-emerald-200':t.type==='error'?'bg-rose-950/80 border-rose-500/40 text-rose-200':t.type==='warn'?'bg-amber-950/80 border-amber-500/40 text-amber-200':'bg-white/[0.04] border-indigo-500/20 text-zinc-200';
-            const iconCls   = t.type==='success'?'bg-emerald-500/20 text-emerald-400':t.type==='error'?'bg-rose-500/20 text-rose-400':t.type==='warn'?'bg-amber-500/20 text-amber-400':'bg-indigo-500/20 text-indigo-400';
+            const isDm = !!t.avatar || !!t.senderName;
+            const toastIcon = t.type==='success'?<CheckCircle2 size={15}/>:t.type==='error'?<AlertCircle size={15}/>:t.type==='warn'?<AlertTriangle size={15}/>:<MessageCircle size={15}/>;
+            const toastCls  = t.type==='success'?'bg-emerald-950/90 border-emerald-500/40 text-emerald-100':t.type==='error'?'bg-rose-950/90 border-rose-500/40 text-rose-100':t.type==='warn'?'bg-amber-950/90 border-amber-500/40 text-amber-100':'bg-[#0f0f1e]/95 border-indigo-500/35 text-white';
+            const iconCls   = t.type==='success'?'bg-emerald-500/25 text-emerald-400':t.type==='error'?'bg-rose-500/25 text-rose-400':t.type==='warn'?'bg-amber-500/25 text-amber-400':'bg-indigo-500/25 text-indigo-400';
+            const isClickable = !!t.onClick && !t.onConfirm;
             return (
               <motion.div key={t.id}
                 initial={{opacity:0,x:40,scale:0.93}}
                 animate={{opacity:1,x:0,scale:1}}
                 exit={{opacity:0,x:32,scale:0.9}}
                 transition={{type:'spring',stiffness:380,damping:28}}
-                className={`pointer-events-auto w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl border ${toastCls}`}>
-                <span className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center ${iconCls}`}>{toastIcon}</span>
-                <span className="flex-1 text-sm font-medium leading-snug">{t.msg}</span>
-                {t.onConfirm && <>
-                  <button onClick={()=>{t.onConfirm!();rmToast(t.id);}} className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition-colors">Tak</button>
-                  <button onClick={()=>rmToast(t.id)} className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/10 transition-colors">Nie</button>
-                </>}
-                {!t.onConfirm && <button onClick={()=>rmToast(t.id)} className="shrink-0 opacity-40 hover:opacity-90 transition-opacity"><X size={14}/></button>}
+                className={`pointer-events-auto w-full rounded-2xl border shadow-2xl shadow-black/60 overflow-hidden ${toastCls} ${isClickable?'cursor-pointer':''}`}
+                onClick={isClickable ? ()=>{t.onClick!();rmToast(t.id);} : undefined}>
+                {/* DM toast: full-width clickable layout */}
+                {isDm ? (
+                  <div className="flex items-start gap-3 px-4 py-3.5">
+                    <div className="relative shrink-0">
+                      <img src={t.avatar||`https://api.dicebear.com/7.x/shapes/svg?seed=${t.senderName}`}
+                        className="w-10 h-10 rounded-xl object-cover ring-2 ring-indigo-500/30" alt=""/>
+                      <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-indigo-500 rounded-full flex items-center justify-center shadow-lg">
+                        <MessageCircle size={8} className="text-white"/>
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-indigo-300 mb-0.5">{t.senderName}</p>
+                      <p className="text-sm text-zinc-200 leading-snug line-clamp-2 break-words">{t.msg}</p>
+                    </div>
+                    <button onClick={e=>{e.stopPropagation();rmToast(t.id);}} className="shrink-0 text-zinc-600 hover:text-zinc-300 mt-0.5 transition-colors"><X size={13}/></button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 px-4 py-3.5">
+                    <span className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center ${iconCls}`}>{toastIcon}</span>
+                    <span className="flex-1 text-sm font-medium leading-snug">{t.msg}</span>
+                    {t.onConfirm && <>
+                      <button onClick={()=>{t.onConfirm!();rmToast(t.id);}} className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition-colors">Tak</button>
+                      <button onClick={()=>rmToast(t.id)} className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/10 transition-colors">Nie</button>
+                    </>}
+                    {!t.onConfirm && <button onClick={()=>rmToast(t.id)} className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-opacity"><X size={14}/></button>}
+                  </div>
+                )}
+                {/* Click hint for DM toasts */}
+                {isDm && isClickable && (
+                  <div className="px-4 pb-2.5 flex items-center gap-1 text-[10px] text-indigo-400/70">
+                    <span>Kliknij aby otworzyć rozmowę</span>
+                  </div>
+                )}
               </motion.div>
             );
           })}
