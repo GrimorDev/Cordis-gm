@@ -1103,6 +1103,12 @@ export default function App() {
       setDmConvs(p => p.map(d => d.other_user_id === u.id
         ? { ...d, other_username: u.username ?? d.other_username, other_avatar_url: u.avatar_url ?? d.other_avatar_url }
         : d));
+      // Update own profile if it's the current user
+      setCurrentUser(p => p && p.id === u.id ? { ...p, ...u } : p);
+      // Update open profile popup
+      setSelUser((p: any) => p && p.id === u.id ? { ...p, ...u } : p);
+      // Update DM partner profile if visible
+      setDmPartnerProfile(p => p && p.id === u.id ? { ...p, ...u } : p);
     });
 
     // ── Ping / mention received ──────────────────────────────────────
@@ -1221,18 +1227,37 @@ export default function App() {
   }, [activeCall?.type, activeCall?.channelId, activeCall?.userId]);
 
   // Scroll smoothly on new incoming messages/typing indicator
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [channelMsgs, dmMsgs, typingUsers]);
-  // When switching channel/DM: set flag to scroll once messages finish loading
+  // When switching channel/DM: set flag to scroll to bottom on first load
   useEffect(() => { scrollToBottomOnLoadRef.current = true; }, [activeChannel, activeDmUserId]);
-  // When loading completes (after channel/DM switch), scroll instantly to bottom
+  // Scroll to bottom when messages arrive after channel/DM switch (double RAF ensures DOM is painted)
+  useEffect(() => {
+    if (scrollToBottomOnLoadRef.current) {
+      scrollToBottomOnLoadRef.current = false;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          bottomRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior });
+        });
+      });
+    }
+  }, [channelMsgs, dmMsgs]);
+  // Also clear flag on loading complete (handles empty channels)
   useEffect(() => {
     if (!msgsLoading && scrollToBottomOnLoadRef.current) {
       scrollToBottomOnLoadRef.current = false;
       requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior });
+        requestAnimationFrame(() => {
+          bottomRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior });
+        });
       });
     }
   }, [msgsLoading]);
+  // Smooth scroll on new incoming messages/typing (only when NOT doing initial load scroll)
+  useEffect(() => {
+    if (!scrollToBottomOnLoadRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typingUsers]);
 
   // ── Sync refs ───────────────────────────────────────────────────
   useEffect(() => { currentUserRef.current    = currentUser;    }, [currentUser]);
@@ -1736,13 +1761,15 @@ export default function App() {
   const handleInviteFriend = async (friendId: string, friendUsername: string) => {
     if (!inviteFriendsCode || !serverFull) return;
     setInviteSending(friendId);
-    const srvName = serverFull.name;
-    const iconUrl = serverFull.icon_url || '';
+    const srvName  = serverFull.name;
+    const iconUrl  = serverFull.icon_url  || '';
+    const bannerUrl = serverFull.banner_url || '';
     // Special invite message format — pipe-separated, safe printable chars
-    // Format: CINV|serverId|code|serverName|iconUrl
-    const srvNameSafe = srvName.replace(/\|/g, ' ');
-    const iconSafe    = iconUrl.replace(/\|/g, '');
-    const inviteMsg   = `CINV|${activeServer}|${inviteFriendsCode}|${srvNameSafe}|${iconSafe}`;
+    // Format: CINV|serverId|code|serverName|iconUrl|bannerUrl
+    const srvNameSafe  = srvName.replace(/\|/g, ' ');
+    const iconSafe     = iconUrl.replace(/\|/g, '');
+    const bannerSafe   = bannerUrl.replace(/\|/g, '');
+    const inviteMsg    = `CINV|${activeServer}|${inviteFriendsCode}|${srvNameSafe}|${iconSafe}|${bannerSafe}`;
     try {
       await dmsApi.send(friendId, inviteMsg);
       addToast(`Zaproszenie wysłane do ${friendUsername}!`, 'success');
@@ -3289,12 +3316,21 @@ export default function App() {
                                 </div>
                               </div>
                             ) : msg.content.startsWith('CINV|') ? (() => {
-                              const [,srvId,code,srvName,iconUrl] = msg.content.split('|');
+                              const parts = msg.content.split('|');
+                              const [,srvId,code,srvName,iconUrl,bannerUrl] = parts;
                               const alreadyMember = serverList.some(s=>s.id===srvId);
                               return (
                                 <div className="max-w-xs glass-bubble rounded-2xl overflow-hidden shadow-xl">
-                                  <div className="h-10 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600"/>
-                                  <div className="px-4 pb-4 pt-2 flex items-end gap-3 -mt-5 relative">
+                                  {/* Banner or gradient fallback */}
+                                  <div className="h-16 relative overflow-hidden">
+                                    {bannerUrl ? (
+                                      <img src={bannerUrl} className="w-full h-full object-cover" alt=""/>
+                                    ) : (
+                                      <div className="w-full h-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600"/>
+                                    )}
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"/>
+                                  </div>
+                                  <div className="px-4 pb-4 pt-2 flex items-end gap-3 -mt-6 relative">
                                     {iconUrl ? (
                                       <img src={iconUrl} className="w-12 h-12 rounded-2xl border-4 border-black/50 object-cover shadow-lg shrink-0" alt=""/>
                                     ) : (

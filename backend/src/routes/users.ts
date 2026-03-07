@@ -138,7 +138,7 @@ router.put('/me', authMiddleware,
                    privacy_status_visible,privacy_typing_visible,privacy_read_receipts,privacy_friend_requests`,
         values
       );
-      await broadcastUserUpdate(req, { id: rows[0].id, username: rows[0].username, avatar_url: rows[0].avatar_url, custom_status: rows[0].custom_status });
+      await broadcastUserUpdate(req, { id: rows[0].id, username: rows[0].username, avatar_url: rows[0].avatar_url, banner_url: rows[0].banner_url, banner_color: rows[0].banner_color, bio: rows[0].bio, custom_status: rows[0].custom_status });
       return res.json(rows[0]);
     } catch { return res.status(500).json({ error: 'Internal server error' }); }
   }
@@ -170,7 +170,11 @@ router.post('/me/banner', authMiddleware, bannerUpload.single('banner'), async (
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   const bannerUrl = `/uploads/banners/${req.file.filename}`;
   try {
-    await query('UPDATE users SET banner_url=$1 WHERE id=$2', [bannerUrl, req.user!.id]);
+    const { rows: [u] } = await query(
+      'UPDATE users SET banner_url=$1 WHERE id=$2 RETURNING id,username,avatar_url,banner_url,banner_color,bio,custom_status',
+      [bannerUrl, req.user!.id]
+    );
+    await broadcastUserUpdate(req, { id: u.id, username: u.username, avatar_url: u.avatar_url, banner_url: u.banner_url, banner_color: u.banner_color, bio: u.bio, custom_status: u.custom_status });
     return res.json({ banner_url: bannerUrl });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
