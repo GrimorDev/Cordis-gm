@@ -624,7 +624,7 @@ export default function App() {
   const [activeChannel, setActiveChannel]     = useState('');
   const [activeDmUserId, setActiveDmUserId]   = useState('');
   const [isMobileOpen, setIsMobileOpen]       = useState(false);
-  const [activeView, setActiveView]           = useState<'servers'|'dms'|'friends'>('servers');
+  const [activeView, setActiveView]           = useState<'servers'|'dms'|'friends'>('dms');
   const [activeCall, setActiveCall]           = useState<CallState|null>(null);
   const [showCallPanel, setShowCallPanel]     = useState(false);
   const [voiceUsers, setVoiceUsers]           = useState<Record<string, VoiceUser[]>>({});
@@ -727,6 +727,7 @@ export default function App() {
   const [roleForm, setRoleForm]               = useState({ name:'', color:'#5865f2', permissions:[] as string[] });
 
   const bottomRef        = useRef<HTMLDivElement>(null);
+  const msgScrollRef     = useRef<HTMLDivElement>(null); // ref to the scrollable message container
   const scrollToBottomOnLoadRef = useRef(false); // flag: scroll to bottom when messages finish loading
   const prevChRef        = useRef('');
   const attachRef        = useRef<HTMLInputElement>(null);
@@ -1227,35 +1228,39 @@ export default function App() {
   }, [activeCall?.type, activeCall?.channelId, activeCall?.userId]);
 
   // Scroll smoothly on new incoming messages/typing indicator
+  // Scroll helper — directly manipulates the container's scrollTop (more reliable than scrollIntoView)
+  const scrollToBottom = (smooth = false) => {
+    const el = msgScrollRef.current;
+    if (!el) return;
+    if (smooth) { el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); }
+    else { el.scrollTop = el.scrollHeight; }
+  };
   // When switching channel/DM: set flag to scroll to bottom on first load
   useEffect(() => { scrollToBottomOnLoadRef.current = true; }, [activeChannel, activeDmUserId]);
-  // Scroll to bottom when messages arrive after channel/DM switch (double RAF ensures DOM is painted)
+  // Scroll when messages arrive: instant on initial load, smooth when near bottom on new msgs
   useEffect(() => {
     if (scrollToBottomOnLoadRef.current) {
       scrollToBottomOnLoadRef.current = false;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          bottomRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior });
-        });
-      });
+      // RAF ensures React has committed DOM updates before we measure scrollHeight
+      requestAnimationFrame(() => scrollToBottom(false));
+    } else {
+      // Auto-scroll on new message only if user is already near the bottom
+      const el = msgScrollRef.current;
+      if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 180) {
+        scrollToBottom(true);
+      }
     }
-  }, [channelMsgs, dmMsgs]);
-  // Also clear flag on loading complete (handles empty channels)
+  }, [channelMsgs, dmMsgs]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Clear flag + scroll when loading ends (handles empty channels / edge cases)
   useEffect(() => {
     if (!msgsLoading && scrollToBottomOnLoadRef.current) {
       scrollToBottomOnLoadRef.current = false;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          bottomRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior });
-        });
-      });
+      requestAnimationFrame(() => scrollToBottom(false));
     }
-  }, [msgsLoading]);
-  // Smooth scroll on new incoming messages/typing (only when NOT doing initial load scroll)
+  }, [msgsLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Smooth scroll on new incoming messages / typing indicator changes
   useEffect(() => {
-    if (!scrollToBottomOnLoadRef.current) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
+    if (!scrollToBottomOnLoadRef.current) scrollToBottom(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [typingUsers]);
 
@@ -1469,7 +1474,7 @@ export default function App() {
   // ── Loaders ─────────────────────────────────────────────────────
   const loadServers = () => serversApi.list().then(list => {
     setServerList(list);
-    if (list.length > 0 && !activeServerRef.current) { setActiveServer(list[0].id); setActiveView('servers'); }
+    // Do NOT auto-select first server — default view is DMs (set by useState initial value)
   }).catch(console.error);
   const loadFriends = () => { friendsApi.list().then(setFriends).catch(console.error); friendsApi.requests().then(setFriendReqs).catch(console.error); };
   const loadDms    = () => dmsApi.conversations().then(setDmConvs).catch(console.error);
@@ -2121,13 +2126,13 @@ export default function App() {
 
       {/* TOP NAV — browser-tab style */}
       <nav className="h-12 flex items-center justify-between shrink-0 z-30 relative glass-panel rounded-2xl px-2">
-        {/* Left: mobile toggle + server tabs */}
-        <div className="flex items-center h-full overflow-x-auto">
+        {/* Left: mobile toggle + server tabs — capped at ~45% so never covers center "Cordyn" */}
+        <div className="flex items-center h-full min-w-0 max-w-[45%]">
           <button onClick={() => setIsMobileOpen(v => !v)} className="md:hidden w-9 h-9 flex items-center justify-center text-zinc-500 hover:text-white ml-2 shrink-0">
             {isMobileOpen ? <X size={18}/> : <Menu size={18}/>}
           </button>
           {/* Friends / DM quick icons */}
-          <div className="hidden md:flex items-center h-full pl-2 gap-0.5 pr-2 border-r border-white/[0.06]">
+          <div className="hidden md:flex items-center h-full pl-2 gap-0.5 pr-2 border-r border-white/[0.06] shrink-0">
             {([{v:'friends' as const,i:<Users size={15}/>,label:'Znajomi'},{v:'dms' as const,i:<MessageCircle size={15}/>,label:'Wiadomości'}]).map(({v,i,label}) => {
               const totalUnreadDms: number = v==='dms' ? (Object.values(unreadDms) as number[]).reduce((a,b)=>a+b,0) : 0;
               return (
@@ -2146,31 +2151,31 @@ export default function App() {
               );
             })}
           </div>
-          {/* Server tabs */}
-          <div className="hidden md:flex items-center h-full">
+          {/* Server tabs — horizontally scrollable, hidden scrollbar */}
+          <div className="hidden md:flex items-center h-full overflow-x-auto scrollbar-hide min-w-0">
             {serverList.map(srv => {
               const isActive = activeServer===srv.id&&activeView==='servers';
               return (
                 <button key={srv.id}
                   onClick={() => { if(activeServer===srv.id&&activeView==='servers') return; setActiveServer(srv.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); }}
                   onContextMenu={e => { e.preventDefault(); setSrvContextMenu({ x: e.clientX, y: e.clientY, srv }); }}
-                  className={`flex items-center gap-2 h-full px-4 text-sm font-medium transition-all duration-200 border-r border-white/[0.05] whitespace-nowrap relative group ${isActive?'text-white bg-black/20':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'}`}>
+                  className={`flex items-center gap-2 h-full px-3 text-sm font-medium transition-all duration-200 border-r border-white/[0.05] whitespace-nowrap relative group shrink-0 ${isActive?'text-white bg-black/20':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'}`}>
                   {isActive&&<motion.span layoutId="nav-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"/>}
                   <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden transition-all duration-200 ${isActive?'bg-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.3)]':'bg-zinc-800'}`}>
                     {srv.icon_url ? <img src={srv.icon_url} className="w-full h-full object-cover" alt=""/> : srv.name.charAt(0).toUpperCase()}
                   </span>
-                  <span className="max-w-[120px] truncate">{srv.name}</span>
+                  <span className="max-w-[90px] truncate">{srv.name}</span>
                 </button>
               );
             })}
             <button onClick={() => setCreateSrvOpen(true)}
-              className="flex items-center justify-center w-9 h-full text-zinc-600 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all duration-200 border-r border-white/[0.05]">
+              className="flex items-center justify-center w-9 h-full text-zinc-600 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all duration-200 border-r border-white/[0.05] shrink-0">
               <Plus size={15}/>
             </button>
           </div>
         </div>
         {/* Center: branding */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none">
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none z-10">
           <span className="text-white font-bold tracking-tight text-sm bg-clip-text">Cordyn</span>
         </div>
         {/* Right: search + bell + settings + avatar */}
@@ -2960,6 +2965,20 @@ export default function App() {
             </div>
           ) : (
             <>
+              {/* Server banner — shown only when viewing a server with a banner_url */}
+              {activeView==='servers' && serverFull?.banner_url && (
+                <div className="h-20 shrink-0 relative overflow-hidden">
+                  <img src={serverFull.banner_url} className="w-full h-full object-cover" alt=""/>
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/60"/>
+                  <div className="absolute bottom-2 left-5 flex items-center gap-2.5">
+                    {serverFull.icon_url
+                      ? <img src={serverFull.icon_url} className="w-7 h-7 rounded-lg object-cover border border-white/20 shadow" alt=""/>
+                      : <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-xs font-bold text-white">{serverFull.name?.[0]?.toUpperCase()}</div>
+                    }
+                    <span className="text-sm font-bold text-white drop-shadow">{serverFull.name}</span>
+                  </div>
+                </div>
+              )}
               {/* Chat header */}
               <header className="h-14 border-b border-white/[0.06] flex items-center justify-between px-5 glass-dark border-b border-white/[0.05] z-10 shrink-0 gap-3">
                 <div className="flex items-center gap-3 min-w-0">
@@ -3164,7 +3183,7 @@ export default function App() {
               {/* ── Announcement / Text Messages ── */}
               {activeCh?.type!=='forum' && <>
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-5 custom-scrollbar flex flex-col">
+              <div ref={msgScrollRef} className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-5 custom-scrollbar flex flex-col">
                 {/* Loading skeleton */}
                 {msgsLoading&&(
                   <div className="mt-auto flex flex-col gap-3 pb-2">
