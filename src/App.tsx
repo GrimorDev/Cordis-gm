@@ -550,7 +550,7 @@ function WelcomeModal({ username, onClose }: { username: string; onClose: () => 
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
         transition={{ type: 'spring', stiffness: 260, damping: 22 }}
-        className="relative w-full max-w-lg bg-white/[0.06] border border-white/[0.1] rounded-3xl shadow-2xl shadow-indigo-900/30">
+        className="relative w-full max-w-lg glass-modal rounded-3xl shadow-2xl shadow-indigo-900/30">
 
         {/* Top gradient banner — rounded-t-3xl + overflow-hidden only on banner */}
         <div className="relative h-36 bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 overflow-hidden rounded-t-3xl">
@@ -4045,7 +4045,7 @@ export default function App() {
               exit={{scale:0.93,opacity:0,y:16}}
               transition={{type:'spring',stiffness:340,damping:28}}
               onClick={e=>e.stopPropagation()}
-              className="bg-white/[0.06] border border-white/[0.06] rounded-3xl w-full max-w-sm flex flex-col max-h-[92vh] overflow-hidden">
+              className="glass-modal rounded-3xl w-full max-w-sm flex flex-col max-h-[92vh] overflow-hidden">
 
               {/* ── BANNER ── */}
               <div className="relative shrink-0">
