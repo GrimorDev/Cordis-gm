@@ -728,6 +728,7 @@ export default function App() {
 
   const bottomRef        = useRef<HTMLDivElement>(null);
   const msgScrollRef     = useRef<HTMLDivElement>(null); // ref to the scrollable message container
+  const srvTabsRef       = useRef<HTMLDivElement>(null); // ref to the scrollable server tabs
   const scrollToBottomOnLoadRef = useRef(false); // flag: scroll to bottom when messages finish loading
   const prevChRef        = useRef('');
   const attachRef        = useRef<HTMLInputElement>(null);
@@ -1237,18 +1238,11 @@ export default function App() {
   };
   // Set flag on channel/DM switch
   useEffect(() => { scrollToBottomOnLoadRef.current = true; }, [activeChannel, activeDmUserId]);
-  // useLayoutEffect fires synchronously after React commits DOM — scrollHeight is accurate.
-  // Only consume flag when messages.length > 0, skipping the intermediate [] clear.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // PRIMARY: useLayoutEffect on msgsLoading — fires after React commits DOM synchronously.
+  // In React 18 setChannelMsgs + setMsgsLoading(false) are batched into ONE render, so
+  // when msgsLoading→false the messages are already in the DOM and scrollHeight is correct.
+  // AnimatePresence is now mode="sync" so new content is in DOM immediately too.
   useLayoutEffect(() => {
-    const msgs = activeView === 'servers' ? channelMsgs : dmMsgs;
-    if (scrollToBottomOnLoadRef.current && msgs.length > 0) {
-      scrollToBottomOnLoadRef.current = false;
-      scrollToBottom(false);
-    }
-  }, [channelMsgs, dmMsgs]);
-  // Fallback for empty channels: scroll when loading ends
-  useEffect(() => {
     if (!msgsLoading && scrollToBottomOnLoadRef.current) {
       scrollToBottomOnLoadRef.current = false;
       scrollToBottom(false);
@@ -2150,25 +2144,38 @@ export default function App() {
               );
             })}
           </div>
-          {/* Server tabs — scrollable, min-w-0 so it can shrink inside overflow-hidden parent */}
-          <div className="hidden md:flex items-center h-full overflow-x-auto scrollbar-hide min-w-0 flex-1">
-            {serverList.map(srv => {
-              const isActive = activeServer===srv.id&&activeView==='servers';
-              return (
-                <button key={srv.id}
-                  onClick={() => { if(activeServer===srv.id&&activeView==='servers') return; setActiveServer(srv.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); }}
-                  onContextMenu={e => { e.preventDefault(); setSrvContextMenu({ x: e.clientX, y: e.clientY, srv }); }}
-                  className={`flex items-center gap-2 h-full px-3 text-sm font-medium transition-all duration-200 border-r border-white/[0.05] whitespace-nowrap relative group shrink-0 ${isActive?'text-white bg-black/20':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'}`}>
-                  {isActive&&<motion.span layoutId="nav-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"/>}
-                  <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden transition-all duration-200 ${isActive?'bg-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.3)]':'bg-zinc-800'}`}>
-                    {srv.icon_url ? <img src={srv.icon_url} className="w-full h-full object-cover" alt=""/> : srv.name.charAt(0).toUpperCase()}
-                  </span>
-                  <span className="max-w-[90px] truncate">{srv.name}</span>
-                </button>
-              );
-            })}
+          {/* Server tabs slider with ◀ ▶ arrows */}
+          <div className="hidden md:flex items-center h-full min-w-0 flex-1 relative">
+            {/* ◀ scroll left */}
+            <button onClick={() => srvTabsRef.current && (srvTabsRef.current.scrollLeft -= 160)}
+              className="w-6 h-full flex items-center justify-center text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.05] transition-all shrink-0 border-r border-white/[0.05]">
+              <ChevronLeft size={13}/>
+            </button>
+            {/* scrollable tab strip */}
+            <div ref={srvTabsRef} className="flex items-center h-full overflow-x-auto scrollbar-hide min-w-0 flex-1">
+              {serverList.map(srv => {
+                const isActive = activeServer===srv.id&&activeView==='servers';
+                return (
+                  <button key={srv.id}
+                    onClick={() => { if(activeServer===srv.id&&activeView==='servers') return; setActiveServer(srv.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); }}
+                    onContextMenu={e => { e.preventDefault(); setSrvContextMenu({ x: e.clientX, y: e.clientY, srv }); }}
+                    className={`flex items-center gap-2 h-full px-3 text-sm font-medium transition-all duration-200 border-r border-white/[0.05] whitespace-nowrap relative group shrink-0 ${isActive?'text-white bg-black/20':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'}`}>
+                    {isActive&&<motion.span layoutId="nav-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"/>}
+                    <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden transition-all duration-200 ${isActive?'bg-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.3)]':'bg-zinc-800'}`}>
+                      {srv.icon_url ? <img src={srv.icon_url} className="w-full h-full object-cover" alt=""/> : srv.name.charAt(0).toUpperCase()}
+                    </span>
+                    <span className="max-w-[90px] truncate">{srv.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {/* ▶ scroll right */}
+            <button onClick={() => srvTabsRef.current && (srvTabsRef.current.scrollLeft += 160)}
+              className="w-6 h-full flex items-center justify-center text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.05] transition-all shrink-0 border-r border-white/[0.05]">
+              <ChevronRight size={13}/>
+            </button>
           </div>
-          {/* + button always visible, outside the scrollable area */}
+          {/* + button always visible */}
           <button onClick={() => setCreateSrvOpen(true)} title="Utwórz serwer"
             className="hidden md:flex items-center justify-center w-9 h-full text-zinc-600 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all duration-200 border-r border-white/[0.05] shrink-0">
             <Plus size={15}/>
@@ -3199,10 +3206,12 @@ export default function App() {
                     ))}
                   </div>
                 )}
-                <AnimatePresence mode="wait" initial={false}>
+                {/* mode="sync" (default) so new content mounts immediately — mode="wait" kept
+                    new DOM out until old exit animation finished, breaking scrollHeight */}
+                <AnimatePresence initial={false}>
                 <motion.div key={`${activeServer}-${activeChannel}-${activeDmUserId}`}
-                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: 'easeOut' }}
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
                   className="mt-auto flex flex-col gap-1">
                   {searchQuery.trim()&&(
                     <div className="flex items-center gap-2 px-3 py-2 mb-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-300">
