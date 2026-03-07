@@ -36,7 +36,7 @@ import {
 
 // ─── Glass constants ──────────────────────────────────────────────────────────
 const gp = 'glass-panel';
-const gm = 'glass-panel rounded-3xl';
+const gm = 'glass-modal rounded-3xl'; // modals: high opacity, no bleed-through
 const gi = 'bg-white/[0.06] border border-white/[0.08] text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] transition-all rounded-xl';
 const gb = 'glass-panel glass-panel-hover text-zinc-400 hover:text-white transition-all active:scale-95';
 
@@ -1275,8 +1275,8 @@ export default function App() {
     if (smooth) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     else el.scrollTop = el.scrollHeight;
   };
-  // Set flag on channel/DM switch
-  useEffect(() => { scrollToBottomOnLoadRef.current = true; }, [activeChannel, activeDmUserId]);
+  // Set flag on channel/DM/view switch
+  useEffect(() => { scrollToBottomOnLoadRef.current = true; }, [activeChannel, activeDmUserId, activeView]);
   // PRIMARY: useLayoutEffect on msgsLoading — fires after React commits DOM synchronously.
   // In React 18 setChannelMsgs + setMsgsLoading(false) are batched into ONE render, so
   // when msgsLoading→false the messages are already in the DOM and scrollHeight is correct.
@@ -1286,7 +1286,7 @@ export default function App() {
       scrollToBottomOnLoadRef.current = false;
       scrollToBottom(false);
     }
-  }, [msgsLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [msgsLoading, activeView, activeDmUserId]); // eslint-disable-line react-hooks/exhaustive-deps
   // Smart-scroll on new incoming messages (only near bottom, not during initial load)
   useEffect(() => {
     if (scrollToBottomOnLoadRef.current) return;
@@ -3194,7 +3194,7 @@ export default function App() {
               </AnimatePresence>
 
               {/* ── Forum View ── */}
-              {activeCh?.type==='forum' && (
+              {activeView==='servers' && activeCh?.type==='forum' && (
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                   {!forumPost ? (
                     /* Post list */
@@ -3348,8 +3348,8 @@ export default function App() {
                 </div>
               )}
 
-              {/* ── Announcement / Text Messages ── */}
-              {activeCh?.type!=='forum' && <>
+              {/* ── Announcement / Text Messages / DMs ── */}
+              {(activeView!=='servers' || activeCh?.type!=='forum') && <>
               {/* Messages */}
               <div ref={msgScrollRef} className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-5 custom-scrollbar flex flex-col">
                 {/* Loading skeleton */}
