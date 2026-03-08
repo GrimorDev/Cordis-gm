@@ -8,7 +8,7 @@ import {
   LogOut, Loader2, Lock, Phone, PhoneOff, MessageSquare, Upload, MoreHorizontal, ScreenShare,
   CheckCircle2, AlertCircle, Info, AlertTriangle, PartyPopper, Sparkles, Zap, Globe,
   Eye, EyeOff, Megaphone, FileText, ChevronLeft, ChevronRight, ArrowLeft,
-  Clock, Pin, PinOff
+  Clock, Pin, PinOff, Activity, AtSign
 } from 'lucide-react';
 import {
   auth, users, serversApi, channelsApi, messagesApi, dmsApi, friendsApi, forumApi,
@@ -841,7 +841,7 @@ export default function App() {
   const typingEmitTimerRef                     = useRef<ReturnType<typeof setTimeout>|null>(null);
 
   // Server activity log
-  const [serverActivity, setServerActivity]   = useState<{id:string;icon:string;text:string;time:string}[]>([]);
+  const [serverActivity, setServerActivity]   = useState<{id:string;type:string;icon:string;text:string;time:string}[]>([]);
 
   // ── Multi-tab voice prevention (BroadcastChannel) ───────────────
   // IMPORTANT: we store a single instance in voiceBcRef and send FROM THE SAME INSTANCE.
@@ -2240,6 +2240,23 @@ export default function App() {
     : allMessages;
 
   // Highlight matching text in search results
+  // Maps server_activity.type to a Lucide icon element (no emoji)
+  const activityIcon = (type: string) => {
+    const cls = 'w-7 h-7 rounded-xl flex items-center justify-center shrink-0';
+    switch (type) {
+      case 'voice_join':
+        return <div className={`${cls} bg-emerald-500/15`}><Volume2 size={13} className="text-emerald-400"/></div>;
+      case 'voice_leave':
+        return <div className={`${cls} bg-zinc-800`}><VolumeX size={13} className="text-zinc-500"/></div>;
+      case 'member_join':
+        return <div className={`${cls} bg-emerald-500/15`}><UserPlus size={13} className="text-emerald-400"/></div>;
+      case 'member_leave':
+        return <div className={`${cls} bg-zinc-800`}><LogOut size={13} className="text-zinc-500"/></div>;
+      default:
+        return <div className={`${cls} bg-indigo-500/15`}><Activity size={13} className="text-indigo-400"/></div>;
+    }
+  };
+
   const hlText = (text: string) => {
     // Split on !username mentions AND @everyone/@here
     const mentionParts = text.split(/(![a-zA-Z0-9_]+|@everyone|@here)/g);
@@ -2427,8 +2444,10 @@ export default function App() {
                           }}
                           className={`w-full text-left px-4 py-3 hover:bg-white/[0.04] transition-colors group ${!notif.read?'bg-indigo-500/[0.04]':''}`}>
                             <div className="flex items-start gap-3">
-                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-base mt-0.5 ${notif.type==='everyone'?'bg-amber-500/15':'bg-indigo-500/15'}`}>
-                                {notif.type==='everyone'?'📢':'🔔'}
+                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${notif.type==='everyone'?'bg-amber-500/15':'bg-indigo-500/15'}`}>
+                                {notif.type==='everyone'
+                                  ? <Megaphone size={15} className="text-amber-400"/>
+                                  : <AtSign size={15} className="text-indigo-400"/>}
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -3987,7 +4006,7 @@ export default function App() {
                   <div className="flex flex-col gap-1.5">
                     {serverActivity.slice(0,4).map(a=>(
                       <div key={a.id} className="flex items-start gap-2.5 bg-white/[0.03] rounded-2xl px-3 py-2.5 border border-white/[0.06] hover:bg-white/[0.06] transition-all duration-200">
-                        <span className="text-sm shrink-0 leading-none mt-0.5">{a.icon}</span>
+                        {activityIcon(a.type)}
                         <div className="min-w-0 flex-1">
                           <p className="text-xs text-zinc-300 leading-snug">{a.text}</p>
                           <p className="text-[10px] text-zinc-600 mt-0.5">{ft(a.time)}</p>
@@ -4252,12 +4271,12 @@ export default function App() {
                   {/* Badges row */}
                   <div className="flex items-center gap-2 mb-4 flex-wrap">
                     <div className="flex items-center gap-1.5 bg-white/[0.04] border border-white/[0.06] rounded-lg px-2.5 py-1">
-                      <span className="text-xs">🌐</span>
+                      <Globe size={11} className="text-zinc-500"/>
                       <span className="text-[11px] text-zinc-500 font-medium">Cordyn</span>
                     </div>
                     {(selUser.role_name==='Admin'||selUser.role_name==='Owner')&&(
                       <div className="flex items-center gap-1.5 bg-indigo-500/10 border border-indigo-500/25 rounded-lg px-2.5 py-1">
-                        <span className="text-xs">🛡️</span>
+                        <Shield size={11} className="text-indigo-400"/>
                         <span className="text-[11px] text-indigo-400 font-medium">{selUser.role_name}</span>
                       </div>
                     )}
@@ -5522,7 +5541,7 @@ export default function App() {
               <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.07]">
                 <div className="flex items-center gap-2.5">
                   <div className="w-7 h-7 rounded-lg bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center">
-                    <span className="text-xs">📋</span>
+                    <Activity size={14} className="text-indigo-400"/>
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-white">Aktywność serwera</h3>
@@ -5539,7 +5558,7 @@ export default function App() {
                 {serverActivity.map((a,i)=>(
                   <motion.div key={a.id} initial={{opacity:0,x:-10}} animate={{opacity:1,x:0}} transition={{delay:i*0.025}}
                     className="flex items-start gap-2.5 bg-white/[0.03] rounded-xl px-3 py-2.5 border border-white/[0.06] hover:bg-white/[0.06] transition-all duration-150">
-                    <span className="text-sm shrink-0 leading-none mt-0.5">{a.icon}</span>
+                    {activityIcon(a.type)}
                     <div className="min-w-0 flex-1">
                       <p className="text-xs text-zinc-300 leading-snug">{a.text}</p>
                       <p className="text-[10px] text-zinc-600 mt-0.5">{ft(a.time)}</p>
