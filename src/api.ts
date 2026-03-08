@@ -72,6 +72,7 @@ export interface ChannelCategory {
 export interface ServerFull extends ServerData {
   my_role: string; categories: ChannelCategory[];
   my_permissions?: string[];
+  member_count?: number;
 }
 export interface ServerBan {
   user_id: string; username: string; avatar_url?: string | null;

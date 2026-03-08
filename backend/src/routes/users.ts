@@ -150,6 +150,19 @@ router.put('/me/status', authMiddleware, async (req: AuthRequest, res: Response)
   if (!['online','idle','dnd','offline'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
   try {
     await query('UPDATE users SET status=$1 WHERE id=$2', [status, req.user!.id]);
+    // Broadcast real-time status change to all servers the user belongs to
+    const io = req.app.get('io');
+    if (io) {
+      const { rows: memberships } = await query(
+        'SELECT server_id FROM server_members WHERE user_id=$1', [req.user!.id]
+      );
+      const payload = { user_id: req.user!.id, status };
+      for (const { server_id } of memberships) {
+        io.to(`server:${server_id}`).emit('user_status', payload);
+      }
+      // Also push to friends listening on their own user room
+      io.to(`user:${req.user!.id}`).emit('user_status', payload);
+    }
     return res.json({ status });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });

@@ -164,7 +164,9 @@ router.post('/', authMiddleware,
 router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { rows: [server] } = await query(
-      `SELECT s.*, sm.role_name as my_role
+      `SELECT s.*,
+              sm.role_name as my_role,
+              (SELECT COUNT(*)::int FROM server_members WHERE server_id = s.id) as member_count
        FROM servers s INNER JOIN server_members sm ON sm.server_id = s.id AND sm.user_id = $2
        WHERE s.id = $1`,
       [req.params.id, req.user!.id]

@@ -728,6 +728,7 @@ export default function App() {
 
   // ── Server header dropdown ───────────────────────────────────────
   const [srvDropOpen, setSrvDropOpen]         = useState(false);
+  const [bannerHovered, setBannerHovered]     = useState(false);
 
   // ── Create Category ──────────────────────────────────────────────
   const [catCreateOpen, setCatCreateOpen]     = useState(false);
@@ -2240,6 +2241,13 @@ export default function App() {
     : allMessages;
 
   // Highlight matching text in search results
+  // Returns status label + color class for non-online statuses (idle, dnd)
+  const statusLabel = (s: string | undefined) => {
+    if (s === 'idle') return { text: 'Zaraz wracam', cls: 'text-amber-400' };
+    if (s === 'dnd')  return { text: 'Nie przeszkadzać', cls: 'text-rose-400' };
+    return null;
+  };
+
   // Maps server_activity.type to a Lucide icon element (no emoji)
   const activityIcon = (type: string) => {
     const cls = 'w-7 h-7 rounded-xl flex items-center justify-center shrink-0';
@@ -3257,19 +3265,57 @@ export default function App() {
             </div>
           ) : (
             <>
-              {/* Server banner — shown only when viewing a server with a banner_url */}
+              {/* Server banner — expands on hover to show server details */}
               {activeView==='servers' && serverFull?.banner_url && (
-                <div className="h-20 shrink-0 relative overflow-hidden">
-                  <img src={serverFull.banner_url} className="w-full h-full object-cover" alt=""/>
-                  <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/60"/>
-                  <div className="absolute bottom-2 left-5 flex items-center gap-2.5">
-                    {serverFull.icon_url
-                      ? <img src={serverFull.icon_url} className="w-7 h-7 rounded-lg object-cover border border-white/20 shadow" alt=""/>
-                      : <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-xs font-bold text-white">{serverFull.name?.[0]?.toUpperCase()}</div>
-                    }
-                    <span className="text-sm font-bold text-white drop-shadow">{serverFull.name}</span>
+                <motion.div
+                  className="shrink-0 relative overflow-hidden cursor-pointer"
+                  animate={{ height: bannerHovered ? 200 : 80 }}
+                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                  onMouseEnter={() => setBannerHovered(true)}
+                  onMouseLeave={() => setBannerHovered(false)}
+                >
+                  <img src={serverFull.banner_url} className="w-full h-full object-cover" alt=""
+                    style={{ transition: 'transform 0.35s ease', transform: bannerHovered ? 'scale(1.04)' : 'scale(1)' }}/>
+                  {/* Gradient overlay — deeper on hover */}
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/10 to-black/70"
+                    style={{ opacity: bannerHovered ? 1 : 0.85, transition: 'opacity 0.35s ease' }}/>
+                  {/* Bottom info row — always visible */}
+                  <div className="absolute bottom-0 left-0 right-0 px-5 pb-3 flex items-end gap-3">
+                    <motion.div
+                      animate={{ width: bannerHovered ? 52 : 28, height: bannerHovered ? 52 : 28 }}
+                      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                      className="rounded-xl overflow-hidden border-2 border-white/25 shadow-lg shrink-0 flex items-center justify-center bg-indigo-600">
+                      {serverFull.icon_url
+                        ? <img src={serverFull.icon_url} className="w-full h-full object-cover" alt=""/>
+                        : <span className="text-white font-bold" style={{ fontSize: bannerHovered ? 20 : 12 }}>{serverFull.name?.[0]?.toUpperCase()}</span>
+                      }
+                    </motion.div>
+                    <div className="flex-1 min-w-0 pb-0.5">
+                      <motion.p
+                        animate={{ fontSize: bannerHovered ? 18 : 13 }}
+                        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                        className="font-bold text-white drop-shadow truncate leading-tight">
+                        {serverFull.name}
+                      </motion.p>
+                      <AnimatePresence>
+                        {bannerHovered && (
+                          <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }}
+                            transition={{ duration: 0.2, delay: 0.1 }}
+                            className="flex items-center gap-3 mt-1">
+                            <div className="flex items-center gap-1">
+                              <Users size={11} className="text-zinc-300"/>
+                              <span className="text-xs text-zinc-200">{serverFull.member_count ?? members.length} członków</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Clock size={11} className="text-zinc-300"/>
+                              <span className="text-xs text-zinc-200">od {new Date(serverFull.created_at).toLocaleDateString('pl-PL', { year:'numeric', month:'long', day:'numeric' })}</span>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
-                </div>
+                </motion.div>
               )}
               {/* Chat header */}
               <header className="h-14 border-b border-white/[0.06] flex items-center justify-between px-5 glass-dark border-b border-white/[0.05] z-10 shrink-0 gap-3">
@@ -4050,7 +4096,10 @@ export default function App() {
                               style={{ color: m.roles?.[0]?.color || '#d4d4d8' }}>
                               {m.username}
                             </p>
-                            {m.role_name&&<p className="text-[10px] text-zinc-600 truncate leading-tight">{m.role_name}</p>}
+                            {(()=>{const sl=statusLabel(m.status); return sl
+                              ? <p className={`text-[10px] truncate leading-tight ${sl.cls}`}>{sl.text}</p>
+                              : m.role_name ? <p className="text-[10px] text-zinc-600 truncate leading-tight">{m.role_name}</p> : null;
+                            })()}
                           </div>
                         </div>
                       ))}
