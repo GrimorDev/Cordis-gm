@@ -3283,6 +3283,7 @@ export default function App() {
                   {/* Bottom info row — always visible */}
                   <div className="absolute bottom-0 left-0 right-0 px-5 pb-3 flex items-end gap-3">
                     <motion.div
+                      initial={{ width: 28, height: 28 }}
                       animate={{ width: bannerHovered ? 52 : 28, height: bannerHovered ? 52 : 28 }}
                       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
                       className="rounded-xl overflow-hidden border-2 border-white/25 shadow-lg shrink-0 flex items-center justify-center bg-indigo-600">
@@ -3293,6 +3294,7 @@ export default function App() {
                     </motion.div>
                     <div className="flex-1 min-w-0 pb-0.5">
                       <motion.p
+                        initial={{ fontSize: 13 }}
                         animate={{ fontSize: bannerHovered ? 18 : 13 }}
                         transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
                         className="font-bold text-white drop-shadow truncate leading-tight">
