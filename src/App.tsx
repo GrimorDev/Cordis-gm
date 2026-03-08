@@ -1521,7 +1521,18 @@ export default function App() {
             const old = speakStopRef.current.get(remoteUserId); if (old) old();
             speakStopRef.current.set(remoteUserId, stop);
           }
-          // If stream has video tracks, this audio is from the screen share — handled above via attachRemoteScreenAudio
+          // Audio track on a stream that also has video = screen-share audio arriving separately
+          // (race: audio track fires before/after video track; attachRemoteScreenAudio is idempotent)
+          else {
+            attachRemoteScreenAudio(remoteUserId, stream);
+            try {
+              const saved = localStorage.getItem(`cordyn_streamvol_${remoteUserId}`);
+              if (saved !== null) {
+                const vol = parseInt(saved, 10);
+                if (!isNaN(vol)) { setStreamVols(p => ({ ...p, [remoteUserId]: vol })); setRemoteScreenVolume(remoteUserId, vol); }
+              }
+            } catch {}
+          }
         }
       },
     );
@@ -3071,7 +3082,7 @@ export default function App() {
                         {screenStream && (
                           <video
                             id="screen-share-video"
-                            ref={el => { if (el && el.srcObject !== screenStream) { el.srcObject = screenStream; el.play().catch(()=>{}); } }}
+                            ref={el => { if (el && el.srcObject !== screenStream) { el.muted = true; el.srcObject = screenStream; el.play().catch(()=>{}); } }}
                             className="w-full h-full object-contain"
                             autoPlay playsInline muted /* always muted — audio plays via remoteScreenAudios element */
                           />
@@ -5854,7 +5865,7 @@ export default function App() {
               {hasStream && (
                 <div className="relative bg-black cursor-pointer" style={{width:280,height:158}} onClick={()=>setShowCallPanel(true)}>
                   <video
-                    ref={el=>{ if(el&&el.srcObject!==miniScreenStream){el.srcObject=miniScreenStream;el.play().catch(()=>{}); }}}
+                    ref={el=>{ if(el&&el.srcObject!==miniScreenStream){el.muted=true;el.srcObject=miniScreenStream;el.play().catch(()=>{}); }}}
                     className="w-full h-full object-contain" autoPlay playsInline muted/>
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"/>
                   <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
