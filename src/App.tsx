@@ -101,6 +101,18 @@ type CallState = {
   isMuted: boolean; isDeafened: boolean; isCameraOn: boolean; isScreenSharing: boolean;
 };
 type VoiceUser = { id: string; username: string; avatar_url: string|null; status: string };
+type NotificationEntry = {
+  id: string;
+  from_username: string;
+  server_id: string;
+  server_name: string;
+  channel_id: string;
+  channel_name: string;
+  content: string;
+  type: 'mention' | 'everyone';
+  created_at: string;
+  read: boolean;
+};
 
 // ─── AuthScreen ───────────────────────────────────────────────────────────────
 // ─── Emoji Picker ─────────────────────────────────────────────────────────────
@@ -797,6 +809,7 @@ export default function App() {
   const autoIdledRef                           = useRef(false); // true if idle was set automatically
   const idleTimerRef                           = useRef<ReturnType<typeof setTimeout>|null>(null);
   const statusPickerRef                        = useRef<HTMLDivElement>(null);
+  const notifBellRef                           = useRef<HTMLDivElement>(null);
 
   // App Settings
   const [appSettOpen, setAppSettOpen]         = useState(false);
@@ -817,6 +830,8 @@ export default function App() {
 
   // Mention / ping system
   const [pingChs, setPingChs]                 = useState<Record<string, number>>({});
+  const [notifications, setNotifications]     = useState<NotificationEntry[]>([]);
+  const [notifOpen, setNotifOpen]             = useState(false);
   const [mentionQuery, setMentionQuery]       = useState<string | null>(null);
   const [mentionSel, setMentionSel]           = useState<number>(0);
 
@@ -1153,9 +1168,32 @@ export default function App() {
     });
 
     // ── Ping / mention received ──────────────────────────────────────
-    sock.on('ping_received' as any, ({ channel_id }: any) => {
+    sock.on('ping_received' as any, (data: any) => {
+      const { channel_id, channel_name, server_id, server_name, from_username, content, type } = data;
       if (channel_id !== prevChRef.current) {
         setPingChs(p => ({ ...p, [channel_id]: (p[channel_id] || 0) + 1 }));
+      }
+      // Store notification entry
+      const entry: NotificationEntry = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        from_username: from_username ?? '?',
+        server_id: server_id ?? '',
+        server_name: server_name ?? 'Serwer',
+        channel_id: channel_id ?? '',
+        channel_name: channel_name ? `#${channel_name}` : '#kanał',
+        content: (content ?? '').slice(0, 120),
+        type: type === 'everyone' ? 'everyone' : 'mention',
+        created_at: new Date().toISOString(),
+        read: false,
+      };
+      setNotifications(prev => [entry, ...prev].slice(0, 50));
+      // Browser push notification (if granted)
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        const n = new Notification(
+          type === 'everyone' ? `@everyone na ${server_name ?? 'serwerze'}` : `${from_username} wspomniał(-a) o Tobie`,
+          { body: content?.slice(0, 80) ?? '', icon: '/favicon.ico', tag: channel_id }
+        );
+        n.onclick = () => { window.focus(); };
       }
     });
 
@@ -1371,6 +1409,18 @@ export default function App() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [statusPickerOpen]);
+
+  // ── Close notification panel on outside click ────────────────────
+  useEffect(() => {
+    if (!notifOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (notifBellRef.current && !notifBellRef.current.contains(e.target as Node)) {
+        setNotifOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [notifOpen]);
 
   // ── Enumerate devices ────────────────────────────────────────────
   useEffect(() => {
@@ -2305,10 +2355,114 @@ export default function App() {
               className="bg-white/[0.05] border border-white/[0.07] text-white placeholder-zinc-600 outline-none focus:border-indigo-500/40 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] rounded-xl pl-8 pr-10 py-1.5 text-xs w-44 focus:w-56 transition-all duration-300"/>
             <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-zinc-600 font-mono hidden lg:flex items-center gap-0.5"><span className="border border-zinc-700 rounded px-1 py-0.5">⌘</span><span className="border border-zinc-700 rounded px-1 py-0.5">K</span></span>
           </div>
-          <button className="relative w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all">
-            <Bell size={15}/>
-            {incoming.length>0&&<span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-rose-500 rounded-full border border-[#1e1e30]"/>}
-          </button>
+          {/* 🔔 Notification bell with dropdown panel */}
+          <div className="relative" ref={notifBellRef}>
+            <button onClick={() => {
+              setNotifOpen(p => !p);
+              if (!notifOpen) {
+                // Request notification permission on first open
+                if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+                  Notification.requestPermission().catch(() => {});
+                }
+              }
+            }} className="relative w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all">
+              <Bell size={15}/>
+              {(()=>{
+                const unreadCount = notifications.filter(n=>!n.read).length;
+                return unreadCount > 0 ? (
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-rose-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5 leading-none shadow-[0_0_6px_rgba(239,68,68,0.5)]">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                ) : null;
+              })()}
+            </button>
+            <AnimatePresence>
+              {notifOpen&&(
+                <motion.div initial={{opacity:0,y:-8,scale:0.96}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:-8,scale:0.96}}
+                  transition={{duration:0.15,ease:'easeOut'}}
+                  className="absolute right-0 top-full mt-2 w-96 max-h-[480px] flex flex-col z-50 rounded-2xl border border-white/[0.1] shadow-2xl shadow-black/60 overflow-hidden"
+                  style={{background:'rgba(13,13,24,0.98)',backdropFilter:'blur(24px)'}}>
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07] shrink-0">
+                    <div className="flex items-center gap-2">
+                      <Bell size={14} className="text-indigo-400"/>
+                      <span className="text-sm font-semibold text-white">Powiadomienia</span>
+                      {notifications.filter(n=>!n.read).length > 0&&(
+                        <span className="text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-full px-1.5 py-0.5 leading-none">
+                          {notifications.filter(n=>!n.read).length} nowych
+                        </span>
+                      )}
+                    </div>
+                    <button onClick={() => setNotifications(p => p.map(n=>({...n,read:true})))}
+                      className="text-[11px] text-zinc-500 hover:text-indigo-400 transition-colors">
+                      Oznacz wszystkie
+                    </button>
+                  </div>
+                  {/* Notifications list */}
+                  <div className="overflow-y-auto flex-1" style={{scrollbarWidth:'thin',scrollbarColor:'#3f3f46 transparent'}}>
+                    {notifications.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-12 gap-3 text-center px-6">
+                        <div className="w-12 h-12 rounded-2xl bg-white/[0.04] flex items-center justify-center">
+                          <Bell size={20} className="text-zinc-600"/>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-zinc-400">Brak powiadomień</p>
+                          <p className="text-xs text-zinc-600 mt-0.5">Powiadomienia o wzmiankowaniach pojawią się tutaj</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-white/[0.04]">
+                        {notifications.map(notif => (
+                          <button key={notif.id} onClick={() => {
+                            // Navigate to server+channel
+                            if (notif.server_id) {
+                              setActiveView('servers');
+                              setActiveServer(notif.server_id);
+                              setServerFull(null);
+                              if (notif.channel_id) setActiveChannel(notif.channel_id);
+                            }
+                            // Mark as read
+                            setNotifications(p => p.map(n => n.id===notif.id ? {...n,read:true} : n));
+                            setNotifOpen(false);
+                          }}
+                          className={`w-full text-left px-4 py-3 hover:bg-white/[0.04] transition-colors group ${!notif.read?'bg-indigo-500/[0.04]':''}`}>
+                            <div className="flex items-start gap-3">
+                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-base mt-0.5 ${notif.type==='everyone'?'bg-amber-500/15':'bg-indigo-500/15'}`}>
+                                {notif.type==='everyone'?'📢':'🔔'}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-xs font-semibold text-white">{notif.from_username}</span>
+                                  <span className="text-xs text-zinc-500">
+                                    {notif.type==='everyone' ? 'użył @everyone na' : 'wspomniał(-a) o Tobie na'}
+                                  </span>
+                                  <span className="text-xs font-medium text-indigo-400 truncate">{notif.server_name}</span>
+                                </div>
+                                <p className="text-[11px] text-zinc-500 mt-0.5 truncate">{notif.channel_name}</p>
+                                {notif.content&&(
+                                  <p className="text-xs text-zinc-400 mt-1 line-clamp-2 break-words">{notif.content}</p>
+                                )}
+                                <p className="text-[10px] text-zinc-600 mt-1">{ft(notif.created_at)}</p>
+                              </div>
+                              {!notif.read&&<div className="w-2 h-2 rounded-full bg-indigo-500 shrink-0 mt-2"/>}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {notifications.length > 0&&(
+                    <div className="px-4 py-2 border-t border-white/[0.06] shrink-0">
+                      <button onClick={() => setNotifications([])}
+                        className="w-full text-center text-[11px] text-zinc-600 hover:text-rose-400 transition-colors py-1">
+                        Wyczyść wszystkie
+                      </button>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
           <button onClick={() => { setAppSettTab('account'); setAppSettOpen(true); }} title="Ustawienia"
             className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all">
             <Settings size={15}/>

@@ -7,7 +7,7 @@ import { checkSlowmode, setSlowmode } from '../redis/client';
 
 const router = Router();
 
-interface ChannelAccess { serverId: string; channelType: string; roleInServer: string; slowmodeSeconds: number; }
+interface ChannelAccess { serverId: string; serverName: string; channelName: string; channelType: string; roleInServer: string; slowmodeSeconds: number; }
 
 /** Check if a member has a specific permission through their server roles.
  *  Owner/Admin bypass all checks.
@@ -34,8 +34,10 @@ async function hasPermission(serverId: string, userId: string, permission: strin
 // Returns channel access info if user can access the channel, null otherwise
 async function resolveChannelAccess(channelId: string, userId: string): Promise<ChannelAccess | null> {
   const { rows: [ch] } = await query(
-    `SELECT c.server_id, c.is_private, c.type, c.slowmode_seconds, sm.role_name
+    `SELECT c.server_id, c.name AS channel_name, c.is_private, c.type, c.slowmode_seconds,
+            s.name AS server_name, sm.role_name
      FROM channels c
+     LEFT JOIN servers s ON s.id = c.server_id
      LEFT JOIN server_members sm ON sm.server_id = c.server_id AND sm.user_id = $2
      WHERE c.id = $1`,
     [channelId, userId]
@@ -43,6 +45,8 @@ async function resolveChannelAccess(channelId: string, userId: string): Promise<
   if (!ch || !ch.role_name) return null; // not a member
   const result: ChannelAccess = {
     serverId: ch.server_id,
+    serverName: ch.server_name ?? '',
+    channelName: ch.channel_name ?? '',
     channelType: ch.type,
     roleInServer: ch.role_name,
     slowmodeSeconds: ch.slowmode_seconds ?? 0,
@@ -177,7 +181,9 @@ router.post('/channel/:channelId', authMiddleware,
             io.to(`user:${m.user_id}`).emit('ping_received' as any, {
               message_id: msg.id,
               channel_id: req.params.channelId,
+              channel_name: access.channelName,
               server_id: ch.server_id,
+              server_name: access.serverName,
               from_user_id: req.user!.id,
               from_username: req.user!.username,
               content,
@@ -207,10 +213,13 @@ router.post('/channel/:channelId', authMiddleware,
               io.to(`user:${mentioned.id}`).emit('ping_received' as any, {
                 message_id: msg.id,
                 channel_id: req.params.channelId,
+                channel_name: access.channelName,
                 server_id: ch.server_id,
+                server_name: access.serverName,
                 from_user_id: req.user!.id,
                 from_username: req.user!.username,
                 content,
+                type: 'mention',
               });
             }
           }
