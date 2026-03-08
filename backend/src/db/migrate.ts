@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
     privacy_typing_visible  BOOLEAN      DEFAULT TRUE,
     privacy_read_receipts   BOOLEAN      DEFAULT FALSE,
     privacy_friend_requests BOOLEAN      DEFAULT TRUE,
+    voice_noise_cancel      BOOLEAN      DEFAULT TRUE,
     created_at    TIMESTAMPTZ  DEFAULT NOW(),
     updated_at    TIMESTAMPTZ  DEFAULT NOW()
 );
@@ -203,6 +204,7 @@ DO $$ BEGIN ALTER TABLE users ADD COLUMN privacy_status_visible  BOOLEAN      DE
 DO $$ BEGIN ALTER TABLE users ADD COLUMN privacy_typing_visible  BOOLEAN      DEFAULT TRUE;     EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN privacy_read_receipts   BOOLEAN      DEFAULT FALSE;    EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN privacy_friend_requests BOOLEAN      DEFAULT TRUE;     EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN voice_noise_cancel      BOOLEAN      DEFAULT TRUE;      EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE dm_messages ADD COLUMN is_system BOOLEAN DEFAULT FALSE;                   EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS server_activity (

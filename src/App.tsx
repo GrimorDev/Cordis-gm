@@ -34,6 +34,10 @@ import {
   muteAllRemote, setRemoteVolume, setRemoteScreenVolume, muteRemoteUser, muteRemoteScreenStream,
   setOutputDevice, watchSpeaking, getMediaDevices, applyNoiseGate, type NoisePipeline,
 } from './webrtc';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
+// Configure marked once — GFM mode, line-break aware
+marked.use({ gfm: true });
 
 // ─── Glass constants ──────────────────────────────────────────────────────────
 const gp = 'glass-panel';
@@ -676,6 +680,16 @@ export default function App() {
   const [editingMsgContent, setEditingMsgContent] = useState('');
   const [attachFile, setAttachFile]           = useState<File|null>(null);
   const [attachPreview, setAttachPreview]     = useState<string|null>(null);
+  const [isDraggingOver, setIsDraggingOver]   = useState(false);
+
+  // Lightbox for image previews
+  const [lightboxSrc, setLightboxSrc]         = useState<string|null>(null);
+
+  // Voice channel text chat
+  const [voiceChatOpen, setVoiceChatOpen]     = useState(false);
+  const [voiceChatMsgs, setVoiceChatMsgs]     = useState<MessageFull[]>([]);
+  const [voiceChatInput, setVoiceChatInput]   = useState('');
+  const voiceChatEndRef                        = useRef<HTMLDivElement>(null);
 
   const [profileOpen, setProfileOpen]         = useState(false);
   const [selUser, setSelUser]                 = useState<any>(null);
@@ -898,6 +912,28 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChannel, activeDmUserId]);
 
+  // Load voice channel messages when chat panel opens + subscribe to socket room
+  useEffect(() => {
+    if (voiceChatOpen && activeCall?.channelId) {
+      joinChannel(activeCall.channelId);
+      messagesApi.list(activeCall.channelId).then(setVoiceChatMsgs).catch(console.error);
+      return () => { leaveChannel(activeCall.channelId!); };
+    } else if (!voiceChatOpen) {
+      setVoiceChatMsgs([]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceChatOpen, activeCall?.channelId]);
+
+  // Scroll voice chat to bottom on new messages
+  useEffect(() => {
+    voiceChatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [voiceChatMsgs]);
+
+  // Reset voice chat when call ends
+  useEffect(() => {
+    if (!activeCall) { setVoiceChatOpen(false); setVoiceChatMsgs([]); }
+  }, [activeCall]);
+
   // ── Init ────────────────────────────────────────────────────────
   useEffect(() => {
     const token = getToken();
@@ -912,6 +948,10 @@ export default function App() {
     const sock = connectSocket();
     sock.on('new_message', (msg: any) => {
       const chId = msg.channel_id;
+      // Also route to voice chat messages if the call is on this channel
+      if (chId && activeCallRef.current?.channelId === chId) {
+        setVoiceChatMsgs(p => p.some(m => m.id === msg.id) ? p : [...p, msg as MessageFull]);
+      }
       if (chId && chId !== prevChRef.current) {
         // Message in a channel we're not viewing — increment unread count
         setUnreadChs(p => ({ ...p, [chId]: (p[chId] || 0) + 1 }));
@@ -1771,6 +1811,31 @@ export default function App() {
     e.target.value = '';
   };
 
+  // ── Formatting toolbar — wrap selected text in markdown syntax ───────────
+  const wrapSelection = (prefix: string, suffix: string = prefix) => {
+    const el = msgInputRef.current;
+    if (!el) return;
+    const start = el.selectionStart ?? 0;
+    const end   = el.selectionEnd   ?? 0;
+    const selected = msgInput.slice(start, end) || 'tekst';
+    const newVal = msgInput.slice(0, start) + prefix + selected + suffix + msgInput.slice(end);
+    setMsgInput(newVal);
+    setTimeout(() => {
+      el.focus();
+      el.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
+    }, 0);
+  };
+
+  // ── Voice channel chat send ──────────────────────────────────────
+  const handleVoiceChatSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const content = voiceChatInput.trim();
+    if (!content || !activeCall?.channelId) return;
+    setVoiceChatInput('');
+    try { await messagesApi.send(activeCall.channelId, content); }
+    catch { setVoiceChatInput(content); }
+  };
+
   // ── Edit message ─────────────────────────────────────────────────
   const startEditMsg = (msg: MessageFull | DmMessageFull) => {
     setEditingMsgId(msg.id);
@@ -2344,38 +2409,46 @@ export default function App() {
     }
   };
 
-  const hlText = (text: string) => {
-    // Split on !username mentions AND @everyone/@here
-    const mentionParts = text.split(/(![a-zA-Z0-9_]+|@everyone|@here)/g);
+  // ── Markdown + Mention HTML renderer ───────────────────────────────────────
+  const renderMsgHTML = (text: string): string => {
+    if (!text) return '';
+    // Step 1: protect mentions from markdown with null-byte placeholders
+    const mentionMap: string[] = [];
+    let processed = text.replace(/(![a-zA-Z0-9_]+|@everyone|@here)/g, (match) => {
+      const idx = mentionMap.length;
+      mentionMap.push(match);
+      return `\x00M${idx}\x00`;
+    });
+    // Step 2: protect search-query matches (applied before markdown parsing)
     const q = searchQuery.trim();
-    const escaped = q ? q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
-    return <>{mentionParts.map((part, pi) => {
-      // @everyone / @here — red global mention
-      if (part === '@everyone' || part === '@here') {
-        return (
-          <span key={pi} className="inline-flex items-center rounded-md px-1.5 py-0 font-bold cursor-default select-none bg-rose-500/25 text-rose-300">
-            {part}
-          </span>
-        );
-      }
-      // !username mention
-      if (/^![a-zA-Z0-9_]+$/.test(part)) {
-        const uname = part.slice(1);
-        const isMe = uname.toLowerCase() === currentUser?.username?.toLowerCase();
-        return (
-          <span key={pi} className={`inline-flex items-center rounded-md px-1.5 py-0 font-bold cursor-default select-none ${isMe ? 'bg-amber-500/25 text-amber-300' : 'bg-indigo-500/20 text-indigo-300'}`}>
-            @{uname}
-          </span>
-        );
-      }
-      if (!q || !part) return <React.Fragment key={pi}>{part}</React.Fragment>;
-      const sub = part.split(new RegExp(`(${escaped})`, 'gi'));
-      return <React.Fragment key={pi}>{sub.map((s, si) =>
-        s.toLowerCase() === q.toLowerCase()
-          ? <mark key={si} className="bg-yellow-400/25 text-yellow-200 rounded px-0.5">{s}</mark>
-          : s
-      )}</React.Fragment>;
-    })}</>;
+    if (q) {
+      const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      processed = processed.replace(new RegExp(`(${esc})`, 'gi'), '\x00Q$1\x00Q');
+    }
+    // Step 3: parse each line with marked inline parser (handles **bold**, *italic*, `code`, ~~del~~, links)
+    const lines = processed.split('\n');
+    let html = lines.map(line => marked.parseInline(line) as string).join('<br>');
+    // Step 4: restore search highlights
+    html = html.replace(/\x00Q([\s\S]+?)\x00Q/g, (_, m) =>
+      `<mark style="background:rgba(234,179,8,0.2);color:#fef08a;border-radius:3px;padding:0 2px">${m}</mark>`);
+    // Step 5: restore mentions as styled inline spans
+    html = html.replace(/\x00M(\d+)\x00/g, (_, i) => {
+      const mention = mentionMap[parseInt(i, 10)];
+      if (mention === '@everyone' || mention === '@here')
+        return `<span style="background:rgba(239,68,68,0.2);color:#fca5a5;border-radius:4px;padding:0 4px;font-weight:700;cursor:default">${mention}</span>`;
+      const uname = mention.slice(1);
+      const isMe = currentUser?.username?.toLowerCase() === uname.toLowerCase();
+      const bg = isMe ? 'rgba(245,158,11,0.2)' : 'rgba(99,102,241,0.2)';
+      const color = isMe ? '#fbbf24' : '#a5b4fc';
+      return `<span style="background:${bg};color:${color};border-radius:4px;padding:0 4px;font-weight:700;cursor:default">@${uname}</span>`;
+    });
+    // Step 6: make links open in new tab
+    html = html.replace(/<a href=/g, '<a target="_blank" rel="noopener noreferrer" href=');
+    // Step 7: sanitize
+    return DOMPurify.sanitize(html, {
+      ALLOWED_TAGS: ['strong', 'em', 'code', 'del', 's', 'a', 'br', 'span', 'mark'],
+      ALLOWED_ATTR: ['href', 'style', 'target', 'rel'],
+    });
   };
 
   return (
@@ -2998,6 +3071,12 @@ export default function App() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-zinc-500 font-mono bg-zinc-950/60 px-2 py-0.5 rounded-lg">{fmtDur(callDuration)}</span>
+                  {activeCall.type==='voice_channel' && (
+                    <button onClick={()=>setVoiceChatOpen(v=>!v)} title="Czat kanału głosowego"
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${voiceChatOpen?'bg-indigo-500/30 text-indigo-300':gb}`}>
+                      <MessageSquare size={13}/>
+                    </button>
+                  )}
                   <button onClick={()=>setShowCallPanel(false)} title="Minimalizuj" className={`w-7 h-7 ${gb} rounded-lg flex items-center justify-center`}><Minimize2 size={13}/></button>
                 </div>
               </header>
@@ -3192,7 +3271,7 @@ export default function App() {
                               // Re-acquire mic with new constraints (real-time effect)
                               if (localStreamRef.current) await acquireMic(selMic || undefined, next);
                               // Save to DB
-                              usersApi.updateMe({ voice_noise_cancel: next }).catch(() => {});
+                              users.updateMe({ voice_noise_cancel: next }).catch(() => {});
                             }}
                             className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${noiseCancel ? 'bg-indigo-500' : 'bg-zinc-700'}`}
                           >
@@ -3236,6 +3315,35 @@ export default function App() {
                   </button>
                 </div>
               </div>
+              {/* ── Voice channel text chat panel ────────────────────── */}
+              {voiceChatOpen && activeCall.channelId && (
+                <div className="h-64 shrink-0 flex flex-col border-t border-white/[0.06] bg-black/20">
+                  <div className="flex-1 overflow-y-auto p-3 custom-scrollbar flex flex-col gap-1.5">
+                    {voiceChatMsgs.length === 0 && (
+                      <p className="text-xs text-zinc-600 text-center mt-4">Brak wiadomości — zacznij czat głosowy!</p>
+                    )}
+                    {voiceChatMsgs.map(msg => (
+                      <div key={msg.id} className={`flex gap-2 ${msg.sender_id===currentUser?.id?'flex-row-reverse':''}`}>
+                        <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} className="w-6 h-6 rounded-lg object-cover shrink-0 self-start mt-0.5" alt=""/>
+                        <div className={`max-w-[85%] px-2.5 py-1.5 rounded-xl text-xs msg-md ${msg.sender_id===currentUser?.id?'bg-indigo-600/80 text-white':'bg-white/[0.08] text-zinc-200'}`}
+                          dangerouslySetInnerHTML={{__html:renderMsgHTML(msg.content)}}/>
+                      </div>
+                    ))}
+                    <div ref={voiceChatEndRef}/>
+                  </div>
+                  <div className="p-2.5 border-t border-white/[0.06] shrink-0">
+                    <form onSubmit={handleVoiceChatSend} className="flex gap-2">
+                      <input value={voiceChatInput} onChange={e=>setVoiceChatInput(e.target.value)}
+                        placeholder={`Wiadomość w #${activeCall.channelName||'kanał'}...`}
+                        className="flex-1 bg-white/[0.07] border border-white/[0.08] rounded-xl px-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-600 outline-none focus:border-indigo-500/40 transition-colors"/>
+                      <button type="submit" disabled={!voiceChatInput.trim()}
+                        className="w-7 h-7 rounded-xl bg-indigo-500 hover:bg-indigo-400 disabled:opacity-30 flex items-center justify-center text-white transition-colors shrink-0 active:scale-90">
+                        <Send size={12}/>
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              )}
             </div>
           ) : activeView==='servers' && !activeChannel ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
@@ -3703,7 +3811,23 @@ export default function App() {
               )}
 
               {/* ── Announcement / Text Messages / DMs ── */}
-              {(activeView!=='servers' || activeCh?.type!=='forum') && <>
+              {(activeView!=='servers' || activeCh?.type!=='forum') && <div
+                className="flex-1 flex flex-col min-h-0 relative"
+                onDragOver={e=>{e.preventDefault();setIsDraggingOver(true);}}
+                onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget as Node))setIsDraggingOver(false);}}
+                onDrop={e=>{
+                  e.preventDefault(); setIsDraggingOver(false);
+                  const file = e.dataTransfer.files[0];
+                  if (file) { setAttachFile(file); if(file.type.startsWith('image/'))setAttachPreview(URL.createObjectURL(file)); else setAttachPreview(null); }
+                }}>
+                {isDraggingOver&&(
+                  <div className="absolute inset-0 z-50 bg-indigo-500/15 border-2 border-dashed border-indigo-400/70 rounded-2xl flex items-center justify-center pointer-events-none">
+                    <div className="flex flex-col items-center gap-3 text-indigo-300">
+                      <Upload size={32}/>
+                      <span className="text-sm font-semibold">Upuść plik tutaj</span>
+                    </div>
+                  </div>
+                )}
               {/* Messages */}
               <div ref={msgScrollRef} className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-5 custom-scrollbar flex flex-col">
                 {/* Loading skeleton */}
@@ -3913,7 +4037,7 @@ export default function App() {
                                 ? 'bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-lg shadow-indigo-500/20 bubble-tail-right'
                                 : 'glass-bubble text-zinc-100 bubble-tail-left'
                               }`}>
-                                <p className={`${msgFontCls} leading-relaxed break-words`}>{hlText(msg.content)}</p>
+                                <p className={`${msgFontCls} leading-relaxed break-words msg-md`} dangerouslySetInnerHTML={{__html: renderMsgHTML(msg.content)}}/>
                               </div>
                             )}
 
@@ -3921,8 +4045,8 @@ export default function App() {
                             {msg.attachment_url&&(
                               <div className="mt-1.5 max-w-sm">
                                 {/\.(jpg|jpeg|png|gif|webp)$/i.test(msg.attachment_url) ? (
-                                  <img src={msg.attachment_url} alt="attachment" className="rounded-2xl max-h-64 object-contain cursor-pointer hover:opacity-90 transition-opacity shadow-lg"
-                                    onClick={()=>window.open(msg.attachment_url!,'_blank')}/>
+                                  <img src={msg.attachment_url} alt="attachment" className="rounded-2xl max-h-64 object-contain cursor-zoom-in hover:opacity-90 transition-opacity shadow-lg"
+                                    onClick={()=>setLightboxSrc(msg.attachment_url!)}/>
                                 ) : (
                                   <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-2 rounded-xl glass-bubble text-xs text-zinc-400 hover:text-white transition-colors">
                                     <Paperclip size={12}/> {msg.attachment_url.split('/').pop()}
@@ -4062,6 +4186,21 @@ export default function App() {
                           <span className="flex-1">Tryb wolny — poczekaj <span className="font-bold tabular-nums">{slowmodeLeft}s</span> przed kolejną wiadomością</span>
                         </div>
                       )}
+                      {/* Formatting toolbar */}
+                      <div className="flex items-center gap-0.5 mb-1.5 pl-1">
+                        {([
+                          {title:'Pogrubienie',md:'**',label:<strong className="text-xs">B</strong>},
+                          {title:'Kursywa',md:'*',label:<em className="text-xs">I</em>},
+                          {title:'Przekreślenie',md:'~~',label:<span className="text-xs line-through">S</span>},
+                          {title:'Kod',md:'`',label:<code className="text-xs font-mono">&lt;/&gt;</code>},
+                        ] as {title:string;md:string;label:React.ReactNode}[]).map(({title,md,label})=>(
+                          <button key={md} type="button" title={title}
+                            onClick={()=>wrapSelection(md)}
+                            className="w-7 h-6 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all active:scale-90 text-xs font-semibold select-none">
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                       <div className={`flex items-center gap-3 bg-white/[0.06] border border-white/[0.08] rounded-2xl px-4 py-3.5 hover:border-white/[0.12] focus-within:border-indigo-500/40 focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] transition-all duration-200 ${slowmodeLeft > 0 && activeView === 'servers' ? 'opacity-40 pointer-events-none' : ''}`}>
                         <input type="file" ref={attachRef} onChange={handleAttach} accept="image/*" className="hidden"/>
                         <button type="button" onClick={()=>canAttachFiles?attachRef.current?.click():setSendError('Nie masz uprawnień do wysyłania plików')}
@@ -4117,7 +4256,7 @@ export default function App() {
                   );
                 })()}
               </div>
-              </>}
+              </div>}
             </>
           )}
         </section>
@@ -5948,6 +6087,28 @@ export default function App() {
       <AnimatePresence>
         {showWelcome && currentUser && (
           <WelcomeModal username={currentUser.username} onClose={() => setShowWelcome(false)} />
+        )}
+      </AnimatePresence>
+
+      {/* ── Image Lightbox ──────────────────────────────────────────── */}
+      <AnimatePresence>
+        {lightboxSrc && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.18}}
+            className="lightbox-bg" onClick={()=>setLightboxSrc(null)}>
+            <motion.img initial={{scale:0.88,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.88,opacity:0}} transition={{duration:0.2,ease:[0.16,1,0.3,1]}}
+              src={lightboxSrc} alt="preview"
+              className="max-w-[90vw] max-h-[90vh] object-contain rounded-2xl shadow-2xl"
+              onClick={e=>e.stopPropagation()}/>
+            <button onClick={()=>setLightboxSrc(null)}
+              className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/50 hover:bg-black/80 flex items-center justify-center text-white transition-colors">
+              <X size={18}/>
+            </button>
+            <a href={lightboxSrc} download target="_blank" rel="noopener noreferrer"
+              className="absolute bottom-4 right-4 px-4 py-2 rounded-xl bg-black/50 hover:bg-black/80 text-white text-xs font-semibold flex items-center gap-2 transition-colors"
+              onClick={e=>e.stopPropagation()}>
+              <Upload size={13}/> Pobierz
+            </a>
+          </motion.div>
         )}
       </AnimatePresence>
 

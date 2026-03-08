@@ -148,7 +148,7 @@ export const users = {
   search: (q: string) => req<UserProfile[]>('GET', `/users/search/query?q=${encodeURIComponent(q)}`),
   updateMe: (d: Partial<Pick<UserProfile,
     'username' | 'bio' | 'custom_status' | 'banner_color' | 'banner_url' |
-    'accent_color' | 'compact_messages' |
+    'accent_color' | 'compact_messages' | 'voice_noise_cancel' |
     'privacy_status_visible' | 'privacy_typing_visible' | 'privacy_read_receipts' | 'privacy_friend_requests'
   >>) => req<UserProfile>('PUT', '/users/me', d),
   updateStatus: (s: string) => req<{ status: string }>('PUT', '/users/me/status', { status: s }),
