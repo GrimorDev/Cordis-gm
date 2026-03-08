@@ -2790,14 +2790,14 @@ export default function App() {
                 const isActive = activeDmUserId===dm.other_user_id;
                 return (
                   <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); }}
-                    className={`w-full flex items-center gap-3 px-2.5 py-2.5 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/15 text-white border border-indigo-500/25':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
+                    className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/15 text-white border border-indigo-500/25':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
                     <div className="relative shrink-0">
-                      <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className="w-9 h-9 rounded-2xl object-cover" alt=""/>
-                      <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 ${sc(dm.other_status)} border-2 border-[#1e1e30] rounded-full`}/>
+                      <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className="w-10 h-10 rounded-2xl object-cover" alt=""/>
+                      <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 ${sc(dm.other_status)} border-[2.5px] border-[#1e1e30] rounded-full`}/>
                     </div>
                     <div className="flex-1 truncate text-left min-w-0">
-                      <p className={`text-sm font-semibold truncate ${isActive?'text-indigo-200':unread>0?'text-white':'text-zinc-300'}`}>{dm.other_username}</p>
-                      {dm.last_message&&<p className={`text-xs truncate mt-0.5 ${unread>0?'text-zinc-300 font-medium':'text-zinc-600'}`}>{dm.last_message}</p>}
+                      <p className={`text-[13px] font-semibold truncate ${isActive?'text-indigo-200':unread>0?'text-white':'text-zinc-300'}`}>{dm.other_username}</p>
+                      {dm.last_message&&<p className={`text-[11px] truncate mt-0.5 ${unread>0?'text-zinc-300 font-medium':'text-zinc-600'}`}>{dm.last_message}</p>}
                     </div>
                     {unread > 0 && (
                       <span className="shrink-0 min-w-[18px] h-[18px] bg-rose-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1 leading-none shadow-[0_0_8px_rgba(239,68,68,0.5)]">
@@ -4084,24 +4084,24 @@ export default function App() {
               <div className="px-3 py-4 flex-1 overflow-y-auto custom-scrollbar">
                 {online.length>0&&(
                   <div className="mb-5">
-                    <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2.5 px-1">
+                    <h3 className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mb-2 px-1">
                       Online — {online.length}
                     </h3>
                     <div className="flex flex-col gap-0.5">
                       {online.map(m=>(
-                        <div key={m.id} className="flex items-center gap-2.5 cursor-pointer group px-2.5 py-2.5 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={()=>openProfile(m)}>
+                        <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={()=>openProfile(m)}>
                           <div className="relative shrink-0">
-                            <img src={ava(m)} className="w-8 h-8 rounded-xl object-cover" alt=""/>
-                            <div className={`absolute -bottom-px -right-px w-2.5 h-2.5 ${sc(m.status)} border-2 border-[#1e1e30] rounded-full`}/>
+                            <img src={ava(m)} className="w-10 h-10 rounded-xl object-cover" alt=""/>
+                            <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 ${sc(m.status)} border-[2.5px] border-[#1e1e30] rounded-full`}/>
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold truncate group-hover:opacity-90 transition-colors leading-tight"
+                            <p className="text-[13px] font-semibold truncate group-hover:opacity-90 transition-colors leading-tight"
                               style={{ color: m.roles?.[0]?.color || '#d4d4d8' }}>
                               {m.username}
                             </p>
                             {(()=>{const sl=statusLabel(m.status); return sl
-                              ? <p className={`text-[10px] truncate leading-tight ${sl.cls}`}>{sl.text}</p>
-                              : m.role_name ? <p className="text-[10px] text-zinc-600 truncate leading-tight">{m.role_name}</p> : null;
+                              ? <p className={`text-[11px] truncate leading-tight ${sl.cls}`}>{sl.text}</p>
+                              : m.role_name ? <p className="text-[11px] text-zinc-600 truncate leading-tight">{m.role_name}</p> : null;
                             })()}
                           </div>
                         </div>
@@ -4111,22 +4111,22 @@ export default function App() {
                 )}
                 {offline.length>0&&(
                   <div>
-                    <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2.5 px-1">
+                    <h3 className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest mb-2 px-1">
                       Offline — {offline.length}
                     </h3>
                     <div className="flex flex-col gap-0.5">
                       {offline.map(m=>(
-                        <div key={m.id} className="flex items-center gap-2.5 cursor-pointer group px-2.5 py-2.5 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={()=>openProfile(m)}>
+                        <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={()=>openProfile(m)}>
                           <div className="relative shrink-0">
-                            <img src={ava(m)} className="w-8 h-8 rounded-xl object-cover opacity-35" alt=""/>
-                            <div className="absolute -bottom-px -right-px w-2.5 h-2.5 bg-zinc-600 border-2 border-[#1e1e30] rounded-full"/>
+                            <img src={ava(m)} className="w-10 h-10 rounded-xl object-cover opacity-35" alt=""/>
+                            <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-zinc-600 border-[2.5px] border-[#1e1e30] rounded-full"/>
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium truncate group-hover:opacity-70 transition-colors leading-tight"
+                            <p className="text-[13px] font-medium truncate group-hover:opacity-70 transition-colors leading-tight"
                               style={{ color: m.roles?.[0]?.color ? `${m.roles[0].color}80` : '#52525b' }}>
                               {m.username}
                             </p>
-                            {m.role_name&&<p className="text-[10px] text-zinc-700 truncate leading-tight">{m.role_name}</p>}
+                            {m.role_name&&<p className="text-[11px] text-zinc-700 truncate leading-tight">{m.role_name}</p>}
                           </div>
                         </div>
                       ))}
