@@ -31,7 +31,8 @@ import {
 } from './sounds';
 import {
   makePeerConnection, attachRemoteAudio, attachRemoteScreenAudio, detachRemoteAudio,
-  muteAllRemote, setRemoteVolume, setRemoteScreenVolume, muteRemoteUser, setOutputDevice, watchSpeaking, getMediaDevices,
+  muteAllRemote, setRemoteVolume, setRemoteScreenVolume, muteRemoteUser, muteRemoteScreenStream,
+  setOutputDevice, watchSpeaking, getMediaDevices, applyNoiseGate, type NoisePipeline,
 } from './webrtc';
 
 // ─── Glass constants ──────────────────────────────────────────────────────────
@@ -825,13 +826,16 @@ export default function App() {
   const [showActivityModal, setShowActivityModal] = useState(false);
 
   // Per-user volume control during calls
-  const [userVols, setUserVols]       = useState<Record<string, number>>({});  // 0–200, default 100
-  const [streamVols, setStreamVols]   = useState<Record<string, number>>({});  // stream volume 0–100, default 100
-  const [mutedByMe, setMutedByMe]     = useState<Record<string, boolean>>({});
-  const [volMenu, setVolMenu]         = useState<{id:string, username:string, x:number, y:number}|null>(null);
+  const [userVols, setUserVols]           = useState<Record<string, number>>({});  // 0–200, default 100
+  const [streamVols, setStreamVols]       = useState<Record<string, number>>({});  // stream audio volume 0–100, default 100
+  const [mutedByMe, setMutedByMe]         = useState<Record<string, boolean>>({});
+  const [streamMutedByMe, setStreamMutedByMe] = useState<Record<string, boolean>>({});
+  const [volMenu, setVolMenu]             = useState<{id:string, username:string, x:number, y:number}|null>(null);
 
   // Noise cancellation setting (loaded from DB, toggled in devices panel)
   const [noiseCancel, setNoiseCancel] = useState<boolean>(true);
+  // Active noise gate pipeline (AudioWorklet + AudioContext); cleanup on re-acquire or leave
+  const noisePipelineRef = useRef<NoisePipeline | null>(null);
 
   // Ref for auto-minimize: becomes true 600ms after call panel opens
   const callSettledRef = useRef(false);
@@ -1485,9 +1489,17 @@ export default function App() {
           // Remote screen share video track
           remoteScreenStreamsRef.current.set(remoteUserId, stream);
           setScreenShareTick(t => t + 1);
-          // Also play screen share audio if the stream has audio tracks
+          // Attach screen-share audio element (audio separate from video so volume is controllable)
           if (stream.getAudioTracks().length > 0) {
             attachRemoteScreenAudio(remoteUserId, stream);
+            // Restore saved stream volume preference
+            try {
+              const saved = localStorage.getItem(`cordyn_streamvol_${remoteUserId}`);
+              if (saved !== null) {
+                const vol = parseInt(saved, 10);
+                if (!isNaN(vol)) { setStreamVols(p => ({ ...p, [remoteUserId]: vol })); setRemoteScreenVolume(remoteUserId, vol); }
+              }
+            } catch {}
           }
         } else {
           // Audio track — only attach as mic audio if stream has NO video (not a screen-share stream)
@@ -2068,8 +2080,10 @@ export default function App() {
     // Stop all peer connections
     peerConnsRef.current.forEach((pc, uid) => { pc.close(); detachRemoteAudio(uid); });
     peerConnsRef.current.clear();
-    // Stop local tracks
-    localStreamRef.current?.getTracks().forEach(t => t.stop()); localStreamRef.current = null;
+    // Stop noise pipeline (closes AudioContext + raw mic)
+    if (noisePipelineRef.current) { noisePipelineRef.current.cleanup(); noisePipelineRef.current = null; }
+    else { localStreamRef.current?.getTracks().forEach(t => t.stop()); }
+    localStreamRef.current = null;
     screenStreamRef.current?.getTracks().forEach(t => t.stop()); screenStreamRef.current = null;
     // Stop speaking detection
     speakStopRef.current.forEach(fn => fn()); speakStopRef.current.clear();
@@ -2079,34 +2093,57 @@ export default function App() {
   const acquireMic = async (deviceId?: string, noiseCancelOverride?: boolean): Promise<MediaStream|null> => {
     const useNoise = noiseCancelOverride !== undefined ? noiseCancelOverride : noiseCancel;
     try {
+      // Stop previous speaking detection
+      const old = speakStopRef.current.get('self'); if (old) { old(); speakStopRef.current.delete('self'); }
+      // Clean up previous noise pipeline (this also stops the old raw mic stream)
+      if (noisePipelineRef.current) {
+        noisePipelineRef.current.cleanup();
+        noisePipelineRef.current = null;
+      } else {
+        localStreamRef.current?.getTracks().forEach(t => t.stop());
+      }
+      localStreamRef.current = null;
+
+      // Acquire raw mic — echoCancellation/autoGain always on; noiseSuppression off
+      // because our AudioWorklet handles noise (they'd conflict if both active).
       const audioConstraints: MediaTrackConstraints = {
         ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
-        noiseSuppression: useNoise,
-        echoCancellation: useNoise,
-        autoGainControl:  useNoise,
+        echoCancellation: true,   // hardware echo cancel — always useful
+        autoGainControl:  true,   // normalize mic level
+        noiseSuppression: !useNoise, // browser's basic filter only when our gate is off
       };
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
-      // Replace old stream
-      const old = speakStopRef.current.get('self'); if (old) { old(); speakStopRef.current.delete('self'); }
-      localStreamRef.current?.getTracks().forEach(t => t.stop());
-      localStreamRef.current = stream;
-      // Self speaking detection
+      const rawStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+
+      // Speaking detection on the raw stream (pre-gate) so indicator stays accurate
       if (currentUserRef.current?.id) {
         const uid = currentUserRef.current.id;
-        const stop = watchSpeaking(stream, s =>
+        const stop = watchSpeaking(rawStream, s =>
           setSpeakingUsers(p => { const n = new Set(p); s ? n.add(uid) : n.delete(uid); return n; }));
         speakStopRef.current.set('self', stop);
       }
-      // Pipe to existing peer connections — replace existing sender tracks (no renegotiation needed)
+
+      // Apply noise gate AudioWorklet if enabled
+      let sendStream = rawStream;
+      if (useNoise) {
+        const pipeline = await applyNoiseGate(rawStream);
+        if (pipeline) {
+          noisePipelineRef.current = pipeline;
+          sendStream = pipeline.processedStream;
+        }
+        // If applyNoiseGate returns null (unsupported), sendStream stays rawStream
+      }
+
+      localStreamRef.current = sendStream;
+      // Pipe processed (or raw) stream to peer connections
       peerConnsRef.current.forEach(pc =>
-        stream.getTracks().forEach(newTrack => {
+        sendStream.getTracks().forEach(newTrack => {
           const sender = pc.getSenders().find(s => s.track?.kind === newTrack.kind);
           if (sender) { sender.replaceTrack(newTrack).catch(console.error); }
-          else { pc.addTrack(newTrack, stream); }
+          else { pc.addTrack(newTrack, sendStream); }
         }));
       // Re-enumerate after permission granted — now we get real device labels
       getMediaDevices().then(setDevices).catch(() => {});
-      return stream;
+      return sendStream;
     } catch (err: any) {
       const msg = err?.name === 'NotFoundError' ? 'Nie znaleziono mikrofonu'
         : err?.name === 'NotAllowedError' ? 'Brak uprawnień do mikrofonu — zezwól w przeglądarce'
@@ -3033,19 +3070,52 @@ export default function App() {
                       <div className="relative flex-1 bg-black rounded-xl overflow-hidden min-h-0 group">
                         {screenStream && (
                           <video
+                            id="screen-share-video"
                             ref={el => { if (el && el.srcObject !== screenStream) { el.srcObject = screenStream; el.play().catch(()=>{}); } }}
                             className="w-full h-full object-contain"
-                            autoPlay playsInline muted={activeCall.isScreenSharing}
+                            autoPlay playsInline muted /* always muted — audio plays via remoteScreenAudios element */
                           />
                         )}
-                        {/* Label */}
-                        <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm rounded-lg px-2.5 py-1">
-                          <ScreenShare size={12} className="text-indigo-400"/>
-                          <span className="text-xs text-white font-medium">{screenOwner} udostępnia ekran</span>
+                        {/* Label + stream mute button */}
+                        <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-sm rounded-lg px-2.5 py-1">
+                            <ScreenShare size={12} className="text-indigo-400"/>
+                            <span className="text-xs text-white font-medium">{screenOwner} udostępnia ekran</span>
+                          </div>
+                          {/* Stream audio controls (only for remote streams) */}
+                          {!activeCall.isScreenSharing && remoteScreenEntries[0]?.[0] && (()=>{
+                            const sid = remoteScreenEntries[0][0];
+                            const isMutedStream = streamMutedByMe[sid] ?? false;
+                            const svol = streamVols[sid] ?? 100;
+                            return (
+                              <div className="flex items-center gap-2 bg-black/60 backdrop-blur-sm rounded-lg px-2.5 py-1.5">
+                                <button onClick={()=>{
+                                  const m = !isMutedStream;
+                                  setStreamMutedByMe(p=>({...p,[sid]:m}));
+                                  muteRemoteScreenStream(sid, m);
+                                  if (!m) setRemoteScreenVolume(sid, svol);
+                                }} title={isMutedStream ? 'Włącz dźwięk transmisji' : 'Wycisz transmisję'}
+                                  className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${isMutedStream?'text-rose-400':'text-zinc-300 hover:text-white'}`}>
+                                  {isMutedStream ? <VolumeX size={13}/> : <Volume2 size={13}/>}
+                                </button>
+                                <input type="range" min={0} max={100} step={5} value={isMutedStream ? 0 : svol}
+                                  onChange={e=>{
+                                    const v=+e.target.value;
+                                    setStreamVols(p=>({...p,[sid]:v}));
+                                    setRemoteScreenVolume(sid, v);
+                                    if (v > 0 && isMutedStream) { setStreamMutedByMe(p=>({...p,[sid]:false})); muteRemoteScreenStream(sid, false); }
+                                    if (v === 0) { setStreamMutedByMe(p=>({...p,[sid]:true})); muteRemoteScreenStream(sid, true); }
+                                    try { localStorage.setItem(`cordyn_streamvol_${sid}`, String(v)); } catch {}
+                                  }}
+                                  className="w-20 accent-indigo-400 cursor-pointer" style={{height:4}}/>
+                                <span className="text-[10px] text-zinc-400 font-mono w-7 text-right">{isMutedStream ? 0 : svol}%</span>
+                              </div>
+                            );
+                          })()}
                         </div>
                         {/* Fullscreen button */}
                         <button
-                          onClick={() => { const el = document.querySelector('#screen-share-video') as HTMLVideoElement; el?.requestFullscreen?.(); }}
+                          onClick={() => { const el = document.getElementById('screen-share-video') as HTMLVideoElement; el?.requestFullscreen?.(); }}
                           className="absolute top-3 right-3 w-8 h-8 bg-black/60 backdrop-blur-sm rounded-lg flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
                           title="Pełny ekran">
                           <Maximize2 size={14}/>
@@ -5617,22 +5687,32 @@ export default function App() {
                 className="w-full accent-indigo-500 cursor-pointer"/>
               <div className="flex justify-between text-[10px] text-zinc-700 mt-0.5"><span>0%</span><span>100%</span><span>200%</span></div>
             </div>
-            {/* Stream volume slider — only if user is streaming */}
-            {(remoteScreenStreamsRef.current.has(volMenu.id)||screenShareTick>=0)&&remoteScreenStreamsRef.current.has(volMenu.id)&&(
+            {/* Stream volume — shown whenever user is (or was recently) streaming */}
+            {(screenShareTick >= 0 && remoteScreenStreamsRef.current.has(volMenu.id)) && (
               <div className="mb-3 pt-3 border-t border-white/[0.05]">
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs text-zinc-500">Głośność transmisji</span>
-                  <span className="text-xs font-bold text-white">{streamVols[volMenu.id]??100}%</span>
+                  <span className="text-xs text-zinc-500 flex items-center gap-1"><ScreenShare size={11}/> Transmisja</span>
+                  <span className="text-xs font-bold text-white">{(streamMutedByMe[volMenu.id]??false) ? '🔇' : `${streamVols[volMenu.id]??100}%`}</span>
                 </div>
-                <input type="range" min={0} max={100} step={5} value={streamVols[volMenu.id]??100}
+                <input type="range" min={0} max={100} step={5}
+                  value={(streamMutedByMe[volMenu.id]??false) ? 0 : (streamVols[volMenu.id]??100)}
                   onChange={e=>{
                     const v=+e.target.value;
                     setStreamVols(p=>({...p,[volMenu.id]:v}));
-                    setRemoteScreenVolume(volMenu.id,v);
+                    setRemoteScreenVolume(volMenu.id, v);
+                    if (v > 0 && (streamMutedByMe[volMenu.id]??false)) { setStreamMutedByMe(p=>({...p,[volMenu.id]:false})); muteRemoteScreenStream(volMenu.id, false); }
+                    if (v === 0) { setStreamMutedByMe(p=>({...p,[volMenu.id]:true})); muteRemoteScreenStream(volMenu.id, true); }
                     try { localStorage.setItem(`cordyn_streamvol_${volMenu.id}`, String(v)); } catch {}
                   }}
                   className="w-full accent-indigo-500 cursor-pointer"/>
-                <div className="flex justify-between text-[10px] text-zinc-700 mt-0.5"><span>Cicho</span><span>Pełna głośność</span></div>
+                <div className="flex justify-between text-[10px] text-zinc-700 mt-0.5"><span>Cicho</span><span>100%</span></div>
+                <button onClick={()=>{
+                  const m = !(streamMutedByMe[volMenu.id]??false);
+                  setStreamMutedByMe(p=>({...p,[volMenu.id]:m}));
+                  muteRemoteScreenStream(volMenu.id, m);
+                }} className={`w-full py-2 mt-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all ${(streamMutedByMe[volMenu.id]??false)?'bg-rose-500/20 text-rose-400 border border-rose-500/30':'bg-white/[0.05] text-zinc-400 hover:text-white border border-white/[0.06]'}`}>
+                  <VolumeX size={12}/>{(streamMutedByMe[volMenu.id]??false)?'Włącz transmisję':'Wycisz transmisję'}
+                </button>
               </div>
             )}
             {/* Mute toggle */}
@@ -5775,7 +5855,7 @@ export default function App() {
                 <div className="relative bg-black cursor-pointer" style={{width:280,height:158}} onClick={()=>setShowCallPanel(true)}>
                   <video
                     ref={el=>{ if(el&&el.srcObject!==miniScreenStream){el.srcObject=miniScreenStream;el.play().catch(()=>{}); }}}
-                    className="w-full h-full object-contain" autoPlay playsInline muted={activeCall.isScreenSharing}/>
+                    className="w-full h-full object-contain" autoPlay playsInline muted/>
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"/>
                   <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
                     <ScreenShare size={11} className="text-indigo-400"/>

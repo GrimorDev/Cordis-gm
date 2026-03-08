@@ -91,12 +91,18 @@ export function setRemoteVolume(userId: string, volumePct: number) {
   }
 }
 
-/** Set volume for a user's screen-share audio (0–200%). */
+/** Set volume for a user's screen-share audio (0–100%). */
 export function setRemoteScreenVolume(userId: string, volumePct: number) {
-  const gain = Math.max(0, volumePct / 100);
   const el = remoteScreenAudios.get(userId);
   if (!el) return;
-  el.volume = Math.min(1, gain);
+  el.volume = Math.max(0, Math.min(1, volumePct / 100));
+  if (volumePct > 0) el.muted = false; // un-mute if raising volume
+}
+
+/** Mute/unmute only the screen-share audio for a remote user. */
+export function muteRemoteScreenStream(userId: string, muted: boolean) {
+  const el = remoteScreenAudios.get(userId);
+  if (el) el.muted = muted;
 }
 
 export function muteRemoteUser(userId: string, muted: boolean) {
@@ -154,6 +160,62 @@ export function watchSpeaking(
     if (interval) clearInterval(interval);
     if (ctx) ctx.close().catch(() => {});
   };
+}
+
+// ─── Noise Gate AudioWorklet Pipeline ────────────────────────────────────────
+export interface NoisePipeline {
+  /** Processed stream to send to peer connections (noise-gated audio). */
+  processedStream: MediaStream;
+  /** Call to stop raw mic + close AudioContext. */
+  cleanup: () => void;
+  /** Change enabled/threshold live without re-acquiring mic. */
+  setEnabled: (v: boolean) => void;
+  setThreshold: (v: number) => void;
+}
+
+/**
+ * Wraps a raw microphone stream with the CordisNoiseProcessor AudioWorklet.
+ * Returns null if the browser does not support AudioWorklet (graceful fallback).
+ */
+export async function applyNoiseGate(rawStream: MediaStream): Promise<NoisePipeline | null> {
+  try {
+    const ctx = new AudioContext({ sampleRate: 48000 });
+    // Load the worklet processor from the public folder
+    await ctx.audioWorklet.addModule('/noise-processor.js');
+
+    const source  = ctx.createMediaStreamSource(rawStream);
+    const worklet = new AudioWorkletNode(ctx, 'cordis-noise-processor');
+    const dest    = ctx.createMediaStreamDestination();
+
+    // Voice frequency emphasis: high-pass at 80 Hz (cut rumble) + low-pass at 8 kHz (cut hiss)
+    const hpf = ctx.createBiquadFilter();
+    hpf.type = 'highpass'; hpf.frequency.value = 80; hpf.Q.value = 0.7;
+    const lpf = ctx.createBiquadFilter();
+    lpf.type = 'lowpass';  lpf.frequency.value = 8000; lpf.Q.value = 0.7;
+
+    // Chain: source → HPF → LPF → noise gate worklet → destination
+    source.connect(hpf);
+    hpf.connect(lpf);
+    lpf.connect(worklet);
+    worklet.connect(dest);
+
+    const enabledParam   = worklet.parameters.get('enabled');
+    const thresholdParam = worklet.parameters.get('threshold');
+
+    return {
+      processedStream: dest.stream,
+      cleanup: () => {
+        rawStream.getTracks().forEach(t => t.stop());
+        ctx.close().catch(() => {});
+      },
+      setEnabled:   (v) => { if (enabledParam)   enabledParam.setValueAtTime(v ? 1 : 0, ctx.currentTime); },
+      setThreshold: (v) => { if (thresholdParam) thresholdParam.setValueAtTime(v, ctx.currentTime); },
+    };
+  } catch (e) {
+    // AudioWorklet unsupported or worklet file not found — fall back gracefully
+    console.warn('[Cordis] Noise gate worklet unavailable, using raw stream:', e);
+    return null;
+  }
 }
 
 // ─── Device Enumeration ──────────────────────────────────────────────────────
