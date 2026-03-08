@@ -35,10 +35,16 @@ export interface UserProfile {
   accent_color?: string | null;
   compact_messages?: boolean | null;
   voice_noise_cancel?: boolean | null;
+  font_size?: string | null;
+  show_timestamps?: boolean | null;
+  show_chat_avatars?: boolean | null;
+  message_animations?: boolean | null;
+  show_link_previews?: boolean | null;
   privacy_status_visible?: boolean | null;
   privacy_typing_visible?: boolean | null;
   privacy_read_receipts?: boolean | null;
   privacy_friend_requests?: boolean | null;
+  privacy_dm_from_strangers?: boolean | null;
 }
 export interface ServerData {
   id: string; name: string; description?: string | null;
@@ -149,7 +155,9 @@ export const users = {
   updateMe: (d: Partial<Pick<UserProfile,
     'username' | 'bio' | 'custom_status' | 'banner_color' | 'banner_url' |
     'accent_color' | 'compact_messages' | 'voice_noise_cancel' |
-    'privacy_status_visible' | 'privacy_typing_visible' | 'privacy_read_receipts' | 'privacy_friend_requests'
+    'font_size' | 'show_timestamps' | 'show_chat_avatars' | 'message_animations' | 'show_link_previews' |
+    'privacy_status_visible' | 'privacy_typing_visible' | 'privacy_read_receipts' |
+    'privacy_friend_requests' | 'privacy_dm_from_strangers'
   >>) => req<UserProfile>('PUT', '/users/me', d),
   updateStatus: (s: string) => req<{ status: string }>('PUT', '/users/me/status', { status: s }),
   uploadAvatar: async (file: File): Promise<{ avatar_url: string }> => {

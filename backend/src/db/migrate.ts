@@ -22,6 +22,12 @@ CREATE TABLE IF NOT EXISTS users (
     privacy_read_receipts   BOOLEAN      DEFAULT FALSE,
     privacy_friend_requests BOOLEAN      DEFAULT TRUE,
     voice_noise_cancel      BOOLEAN      DEFAULT TRUE,
+    font_size               VARCHAR(10)  DEFAULT 'normal',
+    show_timestamps         BOOLEAN      DEFAULT FALSE,
+    show_chat_avatars       BOOLEAN      DEFAULT TRUE,
+    message_animations      BOOLEAN      DEFAULT TRUE,
+    show_link_previews      BOOLEAN      DEFAULT TRUE,
+    privacy_dm_from_strangers BOOLEAN    DEFAULT TRUE,
     created_at    TIMESTAMPTZ  DEFAULT NOW(),
     updated_at    TIMESTAMPTZ  DEFAULT NOW()
 );
@@ -204,7 +210,13 @@ DO $$ BEGIN ALTER TABLE users ADD COLUMN privacy_status_visible  BOOLEAN      DE
 DO $$ BEGIN ALTER TABLE users ADD COLUMN privacy_typing_visible  BOOLEAN      DEFAULT TRUE;     EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN privacy_read_receipts   BOOLEAN      DEFAULT FALSE;    EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN privacy_friend_requests BOOLEAN      DEFAULT TRUE;     EXCEPTION WHEN duplicate_column THEN NULL; END $$;
-DO $$ BEGIN ALTER TABLE users ADD COLUMN voice_noise_cancel      BOOLEAN      DEFAULT TRUE;      EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN voice_noise_cancel        BOOLEAN      DEFAULT TRUE;     EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN font_size                 VARCHAR(10)  DEFAULT 'normal'; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN show_timestamps           BOOLEAN      DEFAULT FALSE;    EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN show_chat_avatars         BOOLEAN      DEFAULT TRUE;     EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN message_animations        BOOLEAN      DEFAULT TRUE;     EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN show_link_previews        BOOLEAN      DEFAULT TRUE;     EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN privacy_dm_from_strangers BOOLEAN      DEFAULT TRUE;     EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE dm_messages ADD COLUMN is_system BOOLEAN DEFAULT FALSE;                   EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS server_activity (

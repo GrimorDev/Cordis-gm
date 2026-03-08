@@ -810,13 +810,16 @@ export default function App() {
   const [devicesOpen, setDevicesOpen]         = useState(false);
 
   // App preferences — initialized from currentUser (DB), updated via users.updateMe()
-  const [accentColor, setAccentColor]         = useState<string>('indigo');
-  const [compactMessages, setCompactMessages] = useState<boolean>(false);
+  const [accentColor, setAccentColor]           = useState<string>('indigo');
+  const [compactMessages, setCompactMessages]   = useState<boolean>(false);
+  const [fontSize, setFontSize]                 = useState<'small'|'normal'|'large'>('normal');
+  const [alwaysShowTimestamps, setAlwaysShowTimestamps] = useState<boolean>(false);
+  const [showChatAvatars, setShowChatAvatars]   = useState<boolean>(true);
+  const [messageAnimations, setMessageAnimations] = useState<boolean>(true);
+  const [showLinkPreviews, setShowLinkPreviews] = useState<boolean>(true);
 
-  // Appearance prefs (localStorage only — apply instantly, no server round-trip)
-  const [fontSize, setFontSize]                     = useState<'small'|'normal'|'large'>(() => (localStorage.getItem('cordyn_font_size') as any) || 'normal');
-  const [alwaysShowTimestamps, setAlwaysShowTimestamps] = useState<boolean>(() => localStorage.getItem('cordyn_timestamps') === 'true');
-  const [showChatAvatars, setShowChatAvatars]         = useState<boolean>(() => localStorage.getItem('cordyn_avatars') !== 'false');
+  // Formatting toolbar visibility
+  const [showFmtBar, setShowFmtBar] = useState<boolean>(false);
 
   // Status system
   const [statusPickerOpen, setStatusPickerOpen] = useState(false);
@@ -1669,11 +1672,12 @@ export default function App() {
   };
 
   // ── Privacy helpers (read from currentUser, save to DB) ──────────
-  const getPrivacy = (k: 'privacy_status_visible'|'privacy_typing_visible'|'privacy_read_receipts'|'privacy_friend_requests') =>
+  type PrivacyKey = 'privacy_status_visible'|'privacy_typing_visible'|'privacy_read_receipts'|'privacy_friend_requests'|'privacy_dm_from_strangers';
+  const getPrivacy = (k: PrivacyKey) =>
     currentUser?.[k] ?? (k === 'privacy_read_receipts' ? false : true);
-  const togglePrivacy = async (k: 'privacy_status_visible'|'privacy_typing_visible'|'privacy_read_receipts'|'privacy_friend_requests') => {
+  const togglePrivacy = async (k: PrivacyKey) => {
     const next = !getPrivacy(k);
-    const upd = await users.updateMe({ [k]: next }).catch(() => null);
+    const upd = await users.updateMe({ [k]: next } as any).catch(() => null);
     if (upd) { setCurrentUser(upd); setEditProf({...upd}); addToast('Ustawienia prywatności zapisane', 'success'); }
     else addToast('Błąd zapisu ustawień', 'error');
   };
@@ -1709,6 +1713,26 @@ export default function App() {
     if (upd) { setCurrentUser(upd); setEditProf({...upd}); setCompactMessages(compact); addToast('Układ wiadomości zmieniony', 'success'); }
     else addToast('Błąd zapisu', 'error');
   };
+  const saveFontSize = async (size: 'small'|'normal'|'large') => {
+    setFontSize(size); // apply immediately for live preview
+    const upd = await users.updateMe({ font_size: size }).catch(() => null);
+    if (upd) { setCurrentUser(upd); setEditProf({...upd}); }
+  };
+  const saveTogglePref = async (
+    key: 'show_timestamps'|'show_chat_avatars'|'message_animations'|'show_link_previews'|'privacy_dm_from_strangers',
+    value: boolean
+  ) => {
+    const setter: Record<string, (v: boolean) => void> = {
+      show_timestamps:   setAlwaysShowTimestamps,
+      show_chat_avatars: setShowChatAvatars,
+      message_animations: setMessageAnimations,
+      show_link_previews: setShowLinkPreviews,
+    };
+    setter[key]?.(value); // apply immediately
+    const upd = await users.updateMe({ [key]: value } as any).catch(() => null);
+    if (upd) { setCurrentUser(upd); setEditProf({...upd}); }
+    else addToast('Błąd zapisu', 'error');
+  };
 
   // ── Status ────────────────────────────────────────────────────────
   const changeStatus = async (s: 'online'|'idle'|'dnd'|'offline', auto = false) => {
@@ -1735,6 +1759,11 @@ export default function App() {
     setAccentColor(u.accent_color || 'indigo');
     setCompactMessages(u.compact_messages ?? false);
     setNoiseCancel(u.voice_noise_cancel !== false); // default true
+    setFontSize((u.font_size as 'small'|'normal'|'large') || 'normal');
+    setAlwaysShowTimestamps(u.show_timestamps ?? false);
+    setShowChatAvatars(u.show_chat_avatars !== false); // default true
+    setMessageAnimations(u.message_animations !== false); // default true
+    setShowLinkPreviews(u.show_link_previews !== false); // default true
   };
   const [showWelcome, setShowWelcome] = useState(false);
   const handleAuth = (u: UserProfile, _t: string, isNew = false) => {
@@ -4186,27 +4215,44 @@ export default function App() {
                           <span className="flex-1">Tryb wolny — poczekaj <span className="font-bold tabular-nums">{slowmodeLeft}s</span> przed kolejną wiadomością</span>
                         </div>
                       )}
-                      {/* Formatting toolbar */}
-                      <div className="flex items-center gap-0.5 mb-1.5 pl-1">
-                        {([
-                          {title:'Pogrubienie',md:'**',label:<strong className="text-xs">B</strong>},
-                          {title:'Kursywa',md:'*',label:<em className="text-xs">I</em>},
-                          {title:'Przekreślenie',md:'~~',label:<span className="text-xs line-through">S</span>},
-                          {title:'Kod',md:'`',label:<code className="text-xs font-mono">&lt;/&gt;</code>},
-                        ] as {title:string;md:string;label:React.ReactNode}[]).map(({title,md,label})=>(
-                          <button key={md} type="button" title={title}
-                            onClick={()=>wrapSelection(md)}
-                            className="w-7 h-6 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all active:scale-90 text-xs font-semibold select-none">
-                            {label}
-                          </button>
-                        ))}
-                      </div>
+                      {/* Formatting toolbar — collapsible */}
+                      <AnimatePresence>
+                        {showFmtBar && (
+                          <motion.div key="fmtbar"
+                            initial={{opacity:0,height:0}} animate={{opacity:1,height:'auto'}} exit={{opacity:0,height:0}}
+                            transition={{duration:0.15}} className="overflow-hidden">
+                            <div className="flex items-center gap-0.5 mb-1.5 pl-1 pb-1.5 border-b border-white/[0.05]">
+                              {([
+                                {title:'Pogrubienie (Ctrl+B)',md:'**',label:<strong className="text-xs">B</strong>},
+                                {title:'Kursywa (Ctrl+I)',md:'*',label:<em className="text-xs">I</em>},
+                                {title:'Przekreślenie',md:'~~',label:<span className="text-xs line-through">S</span>},
+                                {title:'Kod inline',md:'`',label:<code className="text-xs font-mono">&lt;/&gt;</code>},
+                                {title:'Blok kodu',md:'```',suffix:'```',label:<span className="text-xs font-mono opacity-60">&#123;&#125;</span>},
+                              ] as {title:string;md:string;suffix?:string;label:React.ReactNode}[]).map(({title,md,suffix,label})=>(
+                                <button key={md} type="button" title={title}
+                                  onClick={()=>wrapSelection(md,suffix??md)}
+                                  className="w-8 h-6 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.09] transition-all active:scale-90 select-none">
+                                  {label}
+                                </button>
+                              ))}
+                              <div className="ml-auto mr-1 flex items-center gap-0.5">
+                                <span className="text-[10px] text-zinc-700">Markdown</span>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                       <div className={`flex items-center gap-3 bg-white/[0.06] border border-white/[0.08] rounded-2xl px-4 py-3.5 hover:border-white/[0.12] focus-within:border-indigo-500/40 focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] transition-all duration-200 ${slowmodeLeft > 0 && activeView === 'servers' ? 'opacity-40 pointer-events-none' : ''}`}>
                         <input type="file" ref={attachRef} onChange={handleAttach} accept="image/*" className="hidden"/>
                         <button type="button" onClick={()=>canAttachFiles?attachRef.current?.click():setSendError('Nie masz uprawnień do wysyłania plików')}
                           title={canAttachFiles?'Wyślij plik':'Brak uprawnień do wysyłania plików'}
                           className={`w-7 h-7 flex items-center justify-center rounded-xl transition-all shrink-0 active:scale-90 ${canAttachFiles?'text-zinc-600 hover:text-indigo-400 hover:bg-indigo-500/10':'text-zinc-700 cursor-not-allowed'}`}>
                           <Plus size={16}/>
+                        </button>
+                        <button type="button" onClick={()=>setShowFmtBar(v=>!v)}
+                          title="Formatowanie tekstu"
+                          className={`w-7 h-7 flex items-center justify-center rounded-xl transition-all shrink-0 active:scale-90 ${showFmtBar?'text-indigo-400 bg-indigo-500/10':'text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.07]'}`}>
+                          <Edit3 size={14}/>
                         </button>
                         <input ref={msgInputRef} type="text" value={msgInput}
                           onChange={e=>{
@@ -5557,7 +5603,7 @@ export default function App() {
                             {key:'normal', label:'Normalna', sample:'Aa'},
                             {key:'large',  label:'Duża',    sample:'Aa'},
                           ] as const).map(opt=>(
-                            <button key={opt.key} onClick={()=>{setFontSize(opt.key);localStorage.setItem('cordyn_font_size',opt.key);}}
+                            <button key={opt.key} onClick={()=>saveFontSize(opt.key)}
                               className={`flex-1 flex flex-col items-center gap-1.5 py-3 rounded-xl border text-sm transition-all ${fontSize===opt.key?'bg-indigo-500/10 border-indigo-500/30 text-white':'bg-white/[0.02] border-white/[0.05] text-zinc-400 hover:text-zinc-300'}`}>
                               <span className={`font-bold ${opt.key==='small'?'text-sm':opt.key==='large'?'text-xl':'text-base'}`}>{opt.sample}</span>
                               <span className="text-[10px]">{opt.label}</span>
@@ -5571,24 +5617,36 @@ export default function App() {
                         <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1 block font-bold">Opcje wyświetlania</label>
                         {([
                           {
+                            key: 'show_timestamps' as const,
                             label: 'Zawsze pokazuj sygnatury czasowe',
                             desc: 'Godzina przy każdej wiadomości widoczna bez najechania',
                             value: alwaysShowTimestamps,
-                            onChange: (v: boolean) => { setAlwaysShowTimestamps(v); localStorage.setItem('cordyn_timestamps', String(v)); },
                           },
                           {
+                            key: 'show_chat_avatars' as const,
                             label: 'Pokaż awatary w czacie',
                             desc: 'Zdjęcia profilowe obok wiadomości na kanałach',
                             value: showChatAvatars,
-                            onChange: (v: boolean) => { setShowChatAvatars(v); localStorage.setItem('cordyn_avatars', String(v)); },
+                          },
+                          {
+                            key: 'message_animations' as const,
+                            label: 'Animacje wiadomości',
+                            desc: 'Płynne pojawianie się nowych wiadomości',
+                            value: messageAnimations,
+                          },
+                          {
+                            key: 'show_link_previews' as const,
+                            label: 'Podgląd linków',
+                            desc: 'Pokazuj miniatury i opisy dla wklejonych adresów URL',
+                            value: showLinkPreviews,
                           },
                         ]).map(opt=>(
-                          <div key={opt.label} className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-3 hover:border-white/[0.09] transition-colors">
+                          <div key={opt.key} className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-3 hover:border-white/[0.09] transition-colors">
                             <div className="flex-1 min-w-0 mr-4">
                               <p className="text-sm font-medium text-white">{opt.label}</p>
                               <p className="text-xs text-zinc-600 mt-0.5">{opt.desc}</p>
                             </div>
-                            <button onClick={()=>opt.onChange(!opt.value)}
+                            <button onClick={()=>saveTogglePref(opt.key,!opt.value)}
                               className={`w-11 h-6 rounded-full transition-all shrink-0 relative ${opt.value?'bg-indigo-500':'bg-zinc-700'}`}>
                               <span className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200"
                                 style={{left: opt.value ? 'calc(100% - 1.375rem)' : '0.125rem'}}/>
@@ -5649,10 +5707,11 @@ export default function App() {
                       className="flex flex-col gap-5">
                       <h3 className="text-sm font-bold text-white">Prywatność i bezpieczeństwo</h3>
                       {([
-                        {key:'privacy_status_visible',  label:'Status widoczny dla innych',     desc:'Inni widzą czy jesteś online/offline/zaraz wracam'},
-                        {key:'privacy_typing_visible',  label:'Podgląd "pisze..."',              desc:'Inni widzą animację gdy piszesz wiadomość'},
-                        {key:'privacy_read_receipts',   label:'Potwierdzenia odczytu',           desc:'Nadawca widzi że przeczytałeś wiadomość prywatną'},
-                        {key:'privacy_friend_requests', label:'Zaproszenia od nieznajomych',     desc:'Osoby spoza twoich serwerów mogą cię zaprosić'},
+                        {key:'privacy_status_visible',     label:'Status widoczny dla innych',       desc:'Inni widzą czy jesteś online/offline/zaraz wracam'},
+                        {key:'privacy_typing_visible',     label:'Podgląd "pisze..."',                desc:'Inni widzą animację gdy piszesz wiadomość'},
+                        {key:'privacy_read_receipts',      label:'Potwierdzenia odczytu',             desc:'Nadawca widzi że przeczytałeś wiadomość prywatną'},
+                        {key:'privacy_friend_requests',    label:'Zaproszenia od nieznajomych',       desc:'Osoby spoza twoich serwerów mogą cię zaprosić'},
+                        {key:'privacy_dm_from_strangers',  label:'Wiadomości prywatne od obcych',    desc:'Osoby niebędące Twoimi znajomymi mogą pisać do Ciebie w DM'},
                       ] as const).map(opt=>{
                         const on = getPrivacy(opt.key);
                         return (

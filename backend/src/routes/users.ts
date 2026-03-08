@@ -97,10 +97,16 @@ router.put('/me', authMiddleware,
     body('accent_color').optional().isIn(['indigo','violet','pink','blue','emerald']),
     body('compact_messages').optional().isBoolean(),
     body('voice_noise_cancel').optional().isBoolean(),
+    body('font_size').optional().isIn(['small','normal','large']),
+    body('show_timestamps').optional().isBoolean(),
+    body('show_chat_avatars').optional().isBoolean(),
+    body('message_animations').optional().isBoolean(),
+    body('show_link_previews').optional().isBoolean(),
     body('privacy_status_visible').optional().isBoolean(),
     body('privacy_typing_visible').optional().isBoolean(),
     body('privacy_read_receipts').optional().isBoolean(),
     body('privacy_friend_requests').optional().isBoolean(),
+    body('privacy_dm_from_strangers').optional().isBoolean(),
   ],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
@@ -108,7 +114,9 @@ router.put('/me', authMiddleware,
     const {
       username, bio, custom_status, banner_color, banner_url,
       accent_color, compact_messages, voice_noise_cancel,
+      font_size, show_timestamps, show_chat_avatars, message_animations, show_link_previews,
       privacy_status_visible, privacy_typing_visible, privacy_read_receipts, privacy_friend_requests,
+      privacy_dm_from_strangers,
     } = req.body;
     const updates: string[] = [];
     const values: any[] = [];
@@ -121,10 +129,16 @@ router.put('/me', authMiddleware,
     if (accent_color          !== undefined) { updates.push(`accent_color=$${idx++}`);          values.push(accent_color); }
     if (compact_messages      !== undefined) { updates.push(`compact_messages=$${idx++}`);      values.push(compact_messages); }
     if (voice_noise_cancel    !== undefined) { updates.push(`voice_noise_cancel=$${idx++}`);    values.push(voice_noise_cancel); }
-    if (privacy_status_visible  !== undefined) { updates.push(`privacy_status_visible=$${idx++}`);  values.push(privacy_status_visible); }
-    if (privacy_typing_visible  !== undefined) { updates.push(`privacy_typing_visible=$${idx++}`);  values.push(privacy_typing_visible); }
-    if (privacy_read_receipts   !== undefined) { updates.push(`privacy_read_receipts=$${idx++}`);   values.push(privacy_read_receipts); }
-    if (privacy_friend_requests !== undefined) { updates.push(`privacy_friend_requests=$${idx++}`); values.push(privacy_friend_requests); }
+    if (font_size             !== undefined) { updates.push(`font_size=$${idx++}`);             values.push(font_size); }
+    if (show_timestamps       !== undefined) { updates.push(`show_timestamps=$${idx++}`);       values.push(show_timestamps); }
+    if (show_chat_avatars     !== undefined) { updates.push(`show_chat_avatars=$${idx++}`);     values.push(show_chat_avatars); }
+    if (message_animations    !== undefined) { updates.push(`message_animations=$${idx++}`);    values.push(message_animations); }
+    if (show_link_previews    !== undefined) { updates.push(`show_link_previews=$${idx++}`);    values.push(show_link_previews); }
+    if (privacy_status_visible    !== undefined) { updates.push(`privacy_status_visible=$${idx++}`);    values.push(privacy_status_visible); }
+    if (privacy_typing_visible    !== undefined) { updates.push(`privacy_typing_visible=$${idx++}`);    values.push(privacy_typing_visible); }
+    if (privacy_read_receipts     !== undefined) { updates.push(`privacy_read_receipts=$${idx++}`);     values.push(privacy_read_receipts); }
+    if (privacy_friend_requests   !== undefined) { updates.push(`privacy_friend_requests=$${idx++}`);   values.push(privacy_friend_requests); }
+    if (privacy_dm_from_strangers !== undefined) { updates.push(`privacy_dm_from_strangers=$${idx++}`); values.push(privacy_dm_from_strangers); }
     if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update' });
     updates.push(`updated_at=NOW()`);
     values.push(req.user!.id);
@@ -137,7 +151,9 @@ router.put('/me', authMiddleware,
         `UPDATE users SET ${updates.join(',')} WHERE id=$${idx}
          RETURNING id,username,email,avatar_url,banner_url,banner_color,bio,custom_status,status,
                    accent_color,compact_messages,voice_noise_cancel,
-                   privacy_status_visible,privacy_typing_visible,privacy_read_receipts,privacy_friend_requests`,
+                   font_size,show_timestamps,show_chat_avatars,message_animations,show_link_previews,
+                   privacy_status_visible,privacy_typing_visible,privacy_read_receipts,
+                   privacy_friend_requests,privacy_dm_from_strangers`,
         values
       );
       await broadcastUserUpdate(req, { id: rows[0].id, username: rows[0].username, avatar_url: rows[0].avatar_url, banner_url: rows[0].banner_url, banner_color: rows[0].banner_color, bio: rows[0].bio, custom_status: rows[0].custom_status });

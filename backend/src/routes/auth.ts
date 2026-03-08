@@ -188,7 +188,9 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
     const { rows } = await query(
       `SELECT id, username, email, avatar_url, banner_url, banner_color, bio, custom_status, status,
               accent_color, compact_messages, voice_noise_cancel,
-              privacy_status_visible, privacy_typing_visible, privacy_read_receipts, privacy_friend_requests,
+              font_size, show_timestamps, show_chat_avatars, message_animations, show_link_previews,
+              privacy_status_visible, privacy_typing_visible, privacy_read_receipts,
+              privacy_friend_requests, privacy_dm_from_strangers,
               created_at
        FROM users WHERE id = $1`,
       [req.user!.id]

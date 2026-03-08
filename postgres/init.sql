@@ -24,6 +24,13 @@ CREATE TABLE IF NOT EXISTS users (
     privacy_typing_visible  BOOLEAN      DEFAULT TRUE,
     privacy_read_receipts   BOOLEAN      DEFAULT FALSE,
     privacy_friend_requests BOOLEAN      DEFAULT TRUE,
+    voice_noise_cancel      BOOLEAN      DEFAULT TRUE,
+    font_size               VARCHAR(10)  DEFAULT 'normal',
+    show_timestamps         BOOLEAN      DEFAULT FALSE,
+    show_chat_avatars       BOOLEAN      DEFAULT TRUE,
+    message_animations      BOOLEAN      DEFAULT TRUE,
+    show_link_previews      BOOLEAN      DEFAULT TRUE,
+    privacy_dm_from_strangers BOOLEAN    DEFAULT TRUE,
     created_at    TIMESTAMPTZ  DEFAULT NOW(),
     updated_at    TIMESTAMPTZ  DEFAULT NOW()
 );
@@ -187,7 +194,13 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_typing_visible  BOOLEAN      
 ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_read_receipts   BOOLEAN      DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_friend_requests BOOLEAN      DEFAULT TRUE;
 
-ALTER TABLE users ADD COLUMN IF NOT EXISTS voice_noise_cancel BOOLEAN DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS voice_noise_cancel        BOOLEAN     DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS font_size                 VARCHAR(10) DEFAULT 'normal';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS show_timestamps           BOOLEAN     DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS show_chat_avatars         BOOLEAN     DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS message_animations        BOOLEAN     DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS show_link_previews        BOOLEAN     DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_dm_from_strangers BOOLEAN     DEFAULT TRUE;
 
 ALTER TABLE servers ADD COLUMN IF NOT EXISTS description TEXT;
 ALTER TABLE servers ADD COLUMN IF NOT EXISTS banner_url  TEXT;
