@@ -31,7 +31,7 @@ import {
 } from './sounds';
 import {
   makePeerConnection, attachRemoteAudio, attachRemoteScreenAudio, detachRemoteAudio,
-  muteAllRemote, setRemoteVolume, muteRemoteUser, setOutputDevice, watchSpeaking, getMediaDevices,
+  muteAllRemote, setRemoteVolume, setRemoteScreenVolume, muteRemoteUser, setOutputDevice, watchSpeaking, getMediaDevices,
 } from './webrtc';
 
 // ─── Glass constants ──────────────────────────────────────────────────────────
@@ -825,9 +825,16 @@ export default function App() {
   const [showActivityModal, setShowActivityModal] = useState(false);
 
   // Per-user volume control during calls
-  const [userVols, setUserVols]   = useState<Record<string, number>>({});  // 0–200, default 100
-  const [mutedByMe, setMutedByMe] = useState<Record<string, boolean>>({});
-  const [volMenu, setVolMenu]     = useState<{id:string, username:string, x:number, y:number}|null>(null);
+  const [userVols, setUserVols]       = useState<Record<string, number>>({});  // 0–200, default 100
+  const [streamVols, setStreamVols]   = useState<Record<string, number>>({});  // stream volume 0–100, default 100
+  const [mutedByMe, setMutedByMe]     = useState<Record<string, boolean>>({});
+  const [volMenu, setVolMenu]         = useState<{id:string, username:string, x:number, y:number}|null>(null);
+
+  // Noise cancellation setting (loaded from DB, toggled in devices panel)
+  const [noiseCancel, setNoiseCancel] = useState<boolean>(true);
+
+  // Ref for auto-minimize: becomes true 600ms after call panel opens
+  const callSettledRef = useRef(false);
 
   // Mention / ping system
   const [pingChs, setPingChs]                 = useState<Record<string, number>>({});
@@ -868,6 +875,24 @@ export default function App() {
     return () => { bc.close(); voiceBcRef.current = null; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Auto-minimize call panel when navigating away ────────────────
+  // Mark panel as "settled" 600ms after it opens to prevent false triggers during init
+  useEffect(() => {
+    if (showCallPanel) {
+      callSettledRef.current = false;
+      const t = setTimeout(() => { callSettledRef.current = true; }, 600);
+      return () => clearTimeout(t);
+    } else {
+      callSettledRef.current = false;
+    }
+  }, [showCallPanel]);
+
+  // When text channel or DM conversation changes while call is open → minimize
+  useEffect(() => {
+    if (callSettledRef.current && activeCall) setShowCallPanel(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChannel, activeDmUserId]);
 
   // ── Init ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1646,6 +1671,7 @@ export default function App() {
   const applyUserPrefs = (u: UserProfile) => {
     setAccentColor(u.accent_color || 'indigo');
     setCompactMessages(u.compact_messages ?? false);
+    setNoiseCancel(u.voice_noise_cancel !== false); // default true
   };
   const [showWelcome, setShowWelcome] = useState(false);
   const handleAuth = (u: UserProfile, _t: string, isNew = false) => {
@@ -2050,11 +2076,16 @@ export default function App() {
     setSpeakingUsers(new Set());
   };
 
-  const acquireMic = async (deviceId?: string): Promise<MediaStream|null> => {
+  const acquireMic = async (deviceId?: string, noiseCancelOverride?: boolean): Promise<MediaStream|null> => {
+    const useNoise = noiseCancelOverride !== undefined ? noiseCancelOverride : noiseCancel;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: deviceId ? { deviceId: { exact: deviceId } } : true,
-      });
+      const audioConstraints: MediaTrackConstraints = {
+        ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+        noiseSuppression: useNoise,
+        echoCancellation: useNoise,
+        autoGainControl:  useNoise,
+      };
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
       // Replace old stream
       const old = speakStopRef.current.get('self'); if (old) { old(); speakStopRef.current.delete('self'); }
       localStreamRef.current?.getTracks().forEach(t => t.stop());
@@ -3066,6 +3097,26 @@ export default function App() {
                             <option value="">Domyślna</option>
                             {devices.filter(d=>d.kind==='videoinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`Kamera ${d.deviceId.slice(0,6)}`}</option>)}
                           </select>
+                        </div>
+                        {/* Noise cancellation toggle */}
+                        <div className="sm:col-span-3 flex items-center justify-between px-0.5 pt-1 border-t border-white/[0.05] mt-1">
+                          <div className="flex flex-col">
+                            <span className="text-xs font-semibold text-white">Redukcja szumów i echo</span>
+                            <span className="text-[10px] text-zinc-500 mt-0.5">Wycisza hałas tła i echa mikrofonu w czasie rzeczywistym</span>
+                          </div>
+                          <button
+                            onClick={async () => {
+                              const next = !noiseCancel;
+                              setNoiseCancel(next);
+                              // Re-acquire mic with new constraints (real-time effect)
+                              if (localStreamRef.current) await acquireMic(selMic || undefined, next);
+                              // Save to DB
+                              usersApi.updateMe({ voice_noise_cancel: next }).catch(() => {});
+                            }}
+                            className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${noiseCancel ? 'bg-indigo-500' : 'bg-zinc-700'}`}
+                          >
+                            <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${noiseCancel ? 'translate-x-5' : 'translate-x-0'}`}/>
+                          </button>
                         </div>
                       </div>
                     </motion.div>
@@ -5546,13 +5597,13 @@ export default function App() {
         <div className="fixed inset-0 z-[260]" onClick={()=>setVolMenu(null)}>
           <motion.div initial={{opacity:0,scale:0.92}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:0.92}}
             className="absolute bg-[#18181b] border border-white/[0.08] rounded-2xl shadow-2xl p-4 w-64"
-            style={{left:Math.min(volMenu.x,window.innerWidth-270),top:Math.min(volMenu.y,window.innerHeight-180)}}
+            style={{left:Math.min(volMenu.x,window.innerWidth-270),top:Math.min(volMenu.y,window.innerHeight-220)}}
             onClick={e=>e.stopPropagation()}>
             <p className="text-xs font-bold text-zinc-400 mb-3 uppercase tracking-widest truncate">{volMenu.username}</p>
-            {/* Volume slider */}
+            {/* Mic volume slider */}
             <div className="mb-3">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs text-zinc-500">Głośność</span>
+                <span className="text-xs text-zinc-500">Głośność mikrofonu</span>
                 <span className="text-xs font-bold text-white">{userVols[volMenu.id]??100}%</span>
               </div>
               <input type="range" min={0} max={200} step={5} value={userVols[volMenu.id]??100}
@@ -5560,13 +5611,30 @@ export default function App() {
                   const v=+e.target.value;
                   setUserVols(p=>({...p,[volMenu.id]:v}));
                   setRemoteVolume(volMenu.id,v);
-                  // Persist volume preference to localStorage
                   try { localStorage.setItem(`cordyn_vol_${volMenu.id}`, String(v)); } catch {}
                   if(mutedByMe[volMenu.id]&&v>0){setMutedByMe(p=>({...p,[volMenu.id]:false}));muteRemoteUser(volMenu.id,false);}
                 }}
                 className="w-full accent-indigo-500 cursor-pointer"/>
               <div className="flex justify-between text-[10px] text-zinc-700 mt-0.5"><span>0%</span><span>100%</span><span>200%</span></div>
             </div>
+            {/* Stream volume slider — only if user is streaming */}
+            {(remoteScreenStreamsRef.current.has(volMenu.id)||screenShareTick>=0)&&remoteScreenStreamsRef.current.has(volMenu.id)&&(
+              <div className="mb-3 pt-3 border-t border-white/[0.05]">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs text-zinc-500">Głośność transmisji</span>
+                  <span className="text-xs font-bold text-white">{streamVols[volMenu.id]??100}%</span>
+                </div>
+                <input type="range" min={0} max={100} step={5} value={streamVols[volMenu.id]??100}
+                  onChange={e=>{
+                    const v=+e.target.value;
+                    setStreamVols(p=>({...p,[volMenu.id]:v}));
+                    setRemoteScreenVolume(volMenu.id,v);
+                    try { localStorage.setItem(`cordyn_streamvol_${volMenu.id}`, String(v)); } catch {}
+                  }}
+                  className="w-full accent-indigo-500 cursor-pointer"/>
+                <div className="flex justify-between text-[10px] text-zinc-700 mt-0.5"><span>Cicho</span><span>Pełna głośność</span></div>
+              </div>
+            )}
             {/* Mute toggle */}
             <button onClick={()=>{
               const muted=!(mutedByMe[volMenu.id]??false);
@@ -5692,30 +5760,58 @@ export default function App() {
 
       {/* ── MINIMIZED CALL WIDGET ────────────────────────────────────────── */}
       <AnimatePresence>
-        {activeCall && !showCallPanel && (
-          <motion.div initial={{opacity:0,scale:0.85,y:24}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.85,y:20}}
-            transition={{duration:0.3,ease:[0.16,1,0.3,1]}}
-            className={`fixed bottom-6 right-6 z-[150] ${gm} p-4 flex items-center gap-3 min-w-60 shadow-2xl border-indigo-500/10`}>
-            <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse shrink-0 shadow-[0_0_8px_rgba(52,211,153,0.8)]"/>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-white truncate">
-                {activeCall.type==='voice_channel'?activeCall.channelName:activeCall.username}
-              </p>
-              <p className="text-[10px] text-emerald-400/80 font-mono">{fmtDur(callDuration)}</p>
-            </div>
-            <div className="flex gap-1.5 shrink-0">
-              <button onClick={toggleMute} title="Mikrofon" className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all active:scale-90 ${activeCall.isMuted?'bg-rose-500 text-white shadow-lg shadow-rose-500/30':'bg-white/[0.07] text-zinc-400 hover:text-white hover:bg-white/[0.12]'}`}>
-                {activeCall.isMuted?<MicOff size={13}/>:<Mic size={13}/>}
-              </button>
-              <button onClick={()=>setShowCallPanel(true)} title="Powróć do rozmowy" className="w-8 h-8 rounded-xl bg-indigo-500 hover:bg-indigo-400 active:scale-90 flex items-center justify-center text-white transition-all shadow-lg shadow-indigo-500/30">
-                <Maximize2 size={13}/>
-              </button>
-              <button onClick={hangupCall} title="Rozłącz" className="w-8 h-8 rounded-xl bg-rose-500 hover:bg-rose-400 active:scale-90 flex items-center justify-center text-white transition-all shadow-lg shadow-rose-500/30">
-                <PhoneOff size={13}/>
-              </button>
-            </div>
-          </motion.div>
-        )}
+        {activeCall && !showCallPanel && (()=>{
+          const miniRemoteScreenEntries = [...remoteScreenStreamsRef.current.entries()];
+          const miniScreenStream = activeCall.isScreenSharing && screenStreamRef.current
+            ? screenStreamRef.current
+            : miniRemoteScreenEntries[0]?.[1] ?? null;
+          const hasStream = !!miniScreenStream;
+          return (
+            <motion.div initial={{opacity:0,scale:0.85,y:24}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.85,y:20}}
+              transition={{duration:0.3,ease:[0.16,1,0.3,1]}}
+              className={`fixed bottom-6 right-6 z-[150] ${gm} shadow-2xl border-indigo-500/10 overflow-hidden`}>
+              {/* Stream preview (shown when someone is streaming) */}
+              {hasStream && (
+                <div className="relative bg-black cursor-pointer" style={{width:280,height:158}} onClick={()=>setShowCallPanel(true)}>
+                  <video
+                    ref={el=>{ if(el&&el.srcObject!==miniScreenStream){el.srcObject=miniScreenStream;el.play().catch(()=>{}); }}}
+                    className="w-full h-full object-contain" autoPlay playsInline muted={activeCall.isScreenSharing}/>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"/>
+                  <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
+                    <ScreenShare size={11} className="text-indigo-400"/>
+                    <span className="text-[10px] text-white font-medium">
+                      {activeCall.isScreenSharing ? 'Ty' : (miniRemoteScreenEntries[0] ? (activeCall.username || 'Rozmówca') : '')} udostępnia
+                    </span>
+                  </div>
+                  <div className="absolute top-2 right-2 w-6 h-6 bg-black/60 rounded-lg flex items-center justify-center">
+                    <Maximize2 size={11} className="text-white"/>
+                  </div>
+                </div>
+              )}
+              {/* Controls row */}
+              <div className="p-3.5 flex items-center gap-3">
+                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse shrink-0 shadow-[0_0_8px_rgba(52,211,153,0.8)]"/>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-white truncate">
+                    {activeCall.type==='voice_channel'?activeCall.channelName:activeCall.username}
+                  </p>
+                  <p className="text-[10px] text-emerald-400/80 font-mono">{fmtDur(callDuration)}</p>
+                </div>
+                <div className="flex gap-1.5 shrink-0">
+                  <button onClick={toggleMute} title="Mikrofon" className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all active:scale-90 ${activeCall.isMuted?'bg-rose-500 text-white shadow-lg shadow-rose-500/30':'bg-white/[0.07] text-zinc-400 hover:text-white hover:bg-white/[0.12]'}`}>
+                    {activeCall.isMuted?<MicOff size={13}/>:<Mic size={13}/>}
+                  </button>
+                  <button onClick={()=>setShowCallPanel(true)} title="Powróć do rozmowy" className="w-8 h-8 rounded-xl bg-indigo-500 hover:bg-indigo-400 active:scale-90 flex items-center justify-center text-white transition-all shadow-lg shadow-indigo-500/30">
+                    <Maximize2 size={13}/>
+                  </button>
+                  <button onClick={hangupCall} title="Rozłącz" className="w-8 h-8 rounded-xl bg-rose-500 hover:bg-rose-400 active:scale-90 flex items-center justify-center text-white transition-all shadow-lg shadow-rose-500/30">
+                    <PhoneOff size={13}/>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          );
+        })()}
       </AnimatePresence>
 
       {/* ── INCOMING CALL ────────────────────────────────────────────────── */}

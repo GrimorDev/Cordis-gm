@@ -91,6 +91,14 @@ export function setRemoteVolume(userId: string, volumePct: number) {
   }
 }
 
+/** Set volume for a user's screen-share audio (0–200%). */
+export function setRemoteScreenVolume(userId: string, volumePct: number) {
+  const gain = Math.max(0, volumePct / 100);
+  const el = remoteScreenAudios.get(userId);
+  if (!el) return;
+  el.volume = Math.min(1, gain);
+}
+
 export function muteRemoteUser(userId: string, muted: boolean) {
   const el = remoteAudios.get(userId);
   if (el) el.muted = muted;

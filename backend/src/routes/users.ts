@@ -96,6 +96,7 @@ router.put('/me', authMiddleware,
     body('banner_url').optional({ nullable: true }).isLength({ max: 500 }),
     body('accent_color').optional().isIn(['indigo','violet','pink','blue','emerald']),
     body('compact_messages').optional().isBoolean(),
+    body('voice_noise_cancel').optional().isBoolean(),
     body('privacy_status_visible').optional().isBoolean(),
     body('privacy_typing_visible').optional().isBoolean(),
     body('privacy_read_receipts').optional().isBoolean(),
@@ -106,7 +107,7 @@ router.put('/me', authMiddleware,
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
     const {
       username, bio, custom_status, banner_color, banner_url,
-      accent_color, compact_messages,
+      accent_color, compact_messages, voice_noise_cancel,
       privacy_status_visible, privacy_typing_visible, privacy_read_receipts, privacy_friend_requests,
     } = req.body;
     const updates: string[] = [];
@@ -119,6 +120,7 @@ router.put('/me', authMiddleware,
     if (banner_url            !== undefined) { updates.push(`banner_url=$${idx++}`);            values.push(banner_url); }
     if (accent_color          !== undefined) { updates.push(`accent_color=$${idx++}`);          values.push(accent_color); }
     if (compact_messages      !== undefined) { updates.push(`compact_messages=$${idx++}`);      values.push(compact_messages); }
+    if (voice_noise_cancel    !== undefined) { updates.push(`voice_noise_cancel=$${idx++}`);    values.push(voice_noise_cancel); }
     if (privacy_status_visible  !== undefined) { updates.push(`privacy_status_visible=$${idx++}`);  values.push(privacy_status_visible); }
     if (privacy_typing_visible  !== undefined) { updates.push(`privacy_typing_visible=$${idx++}`);  values.push(privacy_typing_visible); }
     if (privacy_read_receipts   !== undefined) { updates.push(`privacy_read_receipts=$${idx++}`);   values.push(privacy_read_receipts); }
@@ -134,7 +136,7 @@ router.put('/me', authMiddleware,
       const { rows } = await query(
         `UPDATE users SET ${updates.join(',')} WHERE id=$${idx}
          RETURNING id,username,email,avatar_url,banner_url,banner_color,bio,custom_status,status,
-                   accent_color,compact_messages,
+                   accent_color,compact_messages,voice_noise_cancel,
                    privacy_status_visible,privacy_typing_visible,privacy_read_receipts,privacy_friend_requests`,
         values
       );

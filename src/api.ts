@@ -34,6 +34,7 @@ export interface UserProfile {
   // User preferences (stored in DB)
   accent_color?: string | null;
   compact_messages?: boolean | null;
+  voice_noise_cancel?: boolean | null;
   privacy_status_visible?: boolean | null;
   privacy_typing_visible?: boolean | null;
   privacy_read_receipts?: boolean | null;
