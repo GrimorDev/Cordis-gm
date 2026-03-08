@@ -3269,6 +3269,7 @@ export default function App() {
               {activeView==='servers' && serverFull?.banner_url && (
                 <motion.div
                   className="shrink-0 relative overflow-hidden cursor-pointer"
+                  initial={{ height: 80 }}
                   animate={{ height: bannerHovered ? 200 : 80 }}
                   transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
                   onMouseEnter={() => setBannerHovered(true)}
