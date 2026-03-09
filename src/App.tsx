@@ -9,7 +9,8 @@ import {
   CheckCircle2, AlertCircle, Info, AlertTriangle, PartyPopper, Sparkles, Zap, Globe,
   Eye, EyeOff, Megaphone, FileText, ChevronLeft, ChevronRight, ArrowLeft,
   Clock, Pin, PinOff, Activity, AtSign, BadgeCheck, Crown, LayoutDashboard,
-  Code2, FlaskConical, ShieldCheck, Hammer, Award, type LucideIcon
+  Code2, FlaskConical, ShieldCheck, Hammer, Award, CalendarDays, Quote,
+  type LucideIcon
 } from 'lucide-react';
 import {
   auth, users, serversApi, channelsApi, messagesApi, dmsApi, friendsApi, forumApi, adminApi,
@@ -4837,11 +4838,15 @@ export default function App() {
                     <p className="text-xs text-zinc-500 font-mono">#{(selUser.id||'0000').slice(-4).toUpperCase()}</p>
                   </div>
 
-                  {/* Custom status pill */}
+                  {/* Custom status — thought bubble style */}
                   {selUser.custom_status&&(
-                    <div className="inline-flex items-center gap-2 bg-white/[0.04] border border-white/[0.06] rounded-full px-3 py-1.5 mb-4">
-                      <span className="text-base leading-none">{selUser.custom_status.match(/^\p{Emoji}/u)?.[0]||'💬'}</span>
-                      <span className="text-xs text-zinc-400 font-medium truncate max-w-[160px]">{selUser.custom_status.replace(/^\p{Emoji}\s*/u,'')}</span>
+                    <div className="flex items-start gap-2.5 mb-4">
+                      <div className="w-6 h-6 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center shrink-0 mt-0.5">
+                        <Quote size={10} className="text-zinc-400"/>
+                      </div>
+                      <div className="relative bg-white/[0.04] border border-white/[0.07] rounded-2xl rounded-tl-sm px-3 py-2 max-w-[220px]">
+                        <p className="text-xs text-zinc-300 leading-relaxed break-words">{selUser.custom_status}</p>
+                      </div>
                     </div>
                   )}
 
@@ -4872,26 +4877,20 @@ export default function App() {
                         <span className="text-[11px] text-emerald-400 font-semibold">Nowy</span>
                       </div>
                     )}
-                    {/* NOTE: server roles intentionally removed here — shown below in "Role na serwerze" section */}
-                    {selUser.created_at&&(
-                      <div className="flex items-center gap-1.5 bg-white/[0.04] border border-white/[0.06] rounded-lg px-2.5 py-1">
-                        <span className="text-xs">📅</span>
-                        <span className="text-[11px] text-zinc-500 font-medium">
-                          {new Date(selUser.created_at).toLocaleDateString('pl-PL',{month:'short',year:'numeric'})}
-                        </span>
-                      </div>
-                    )}
+                    {/* NOTE: server roles and date intentionally removed here — shown in sections below */}
                   </div>
 
-                  {/* Server roles section (detailed) */}
+                  {/* Server roles section */}
                   {activeView==='servers'&&Array.isArray(selUser.roles)&&selUser.roles.length>0&&(
                     <div className="mb-4">
-                      <p className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Role na serwerze</p>
+                      <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                        <Shield size={9} className="text-zinc-700"/>Role na serwerze
+                      </p>
                       <div className="flex flex-wrap gap-1.5">
                         {selUser.roles.map((role:any)=>(
                           <div key={role.role_id} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5"
                             style={{background:(role.color||'#5865f2')+'18',border:'1px solid '+(role.color||'#5865f2')+'35'}}>
-                            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{background:role.color||'#5865f2'}}/>
+                            <div className="w-2 h-2 rounded-full shrink-0" style={{background:role.color||'#5865f2'}}/>
                             <span className="text-xs font-semibold" style={{color:role.color||'#818cf8'}}>{role.name}</span>
                           </div>
                         ))}
@@ -4902,36 +4901,40 @@ export default function App() {
                   {/* Bio block */}
                   {selUser.bio&&(
                     <div className="mb-4">
-                      <p className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest mb-2">O mnie</p>
-                      <div className="bg-black/20 border border-white/[0.06] rounded-xl px-3.5 py-3">
-                        <p className="text-sm text-zinc-300 leading-relaxed">{selUser.bio}</p>
+                      <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                        <FileText size={9} className="text-zinc-700"/>O mnie
+                      </p>
+                      <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-3.5 py-3">
+                        <p className="text-xs text-zinc-300 leading-relaxed">{selUser.bio}</p>
                       </div>
                     </div>
                   )}
 
-                  <div className="border-t border-white/[0.05] mb-4"/>
-
-                  {/* Info rows */}
-                  {selUser.created_at&&(
-                    <div className="flex items-center gap-2.5 mb-3">
-                      <div className="w-7 h-7 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
-                        <span className="text-xs">📅</span>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold">Dołączył/a</p>
-                        <p className="text-xs text-zinc-400">{new Date(selUser.created_at).toLocaleDateString('pl-PL',{day:'numeric',month:'long',year:'numeric'})}</p>
-                      </div>
-                    </div>
-                  )}
-                  {typeof selUser.mutual_friends_count==='number'&&selUser.mutual_friends_count>0&&(
-                    <div className="flex items-center gap-2.5 mb-4">
-                      <div className="w-7 h-7 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
-                        <Users size={12} className="text-indigo-400"/>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold">Wspólni znajomi</p>
-                        <p className="text-xs text-zinc-400">{selUser.mutual_friends_count} wspólnych znajomych</p>
-                      </div>
+                  {/* Info rows — full-width cards */}
+                  {(selUser.created_at||(typeof selUser.mutual_friends_count==='number'&&selUser.mutual_friends_count>0))&&(
+                    <div className="border-t border-white/[0.05] pt-4 mb-4 flex flex-col gap-2">
+                      {selUser.created_at&&(
+                        <div className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.05] rounded-xl px-3 py-2.5">
+                          <div className="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
+                            <CalendarDays size={13} className="text-indigo-400"/>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold leading-none mb-0.5">Dołączył/a do Cordyn</p>
+                            <p className="text-xs text-zinc-300 font-medium">{new Date(selUser.created_at).toLocaleDateString('pl-PL',{day:'numeric',month:'long',year:'numeric'})}</p>
+                          </div>
+                        </div>
+                      )}
+                      {typeof selUser.mutual_friends_count==='number'&&selUser.mutual_friends_count>0&&(
+                        <div className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.05] rounded-xl px-3 py-2.5">
+                          <div className="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
+                            <Users size={13} className="text-indigo-400"/>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold leading-none mb-0.5">Wspólni znajomi</p>
+                            <p className="text-xs text-zinc-300 font-medium">{selUser.mutual_friends_count} {selUser.mutual_friends_count===1?'znajomy':'znajomych'}</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
