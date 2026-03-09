@@ -101,6 +101,7 @@ export interface DmConversation {
   other_user_id: string; other_username: string;
   other_avatar?: string | null; other_status: string;
   other_custom_status?: string | null;
+  other_last_read_at?: string | null;
   last_message?: string | null; last_message_at?: string | null;
 }
 export interface DmMessageFull {
@@ -264,6 +265,7 @@ export const dmsApi = {
     req<DmMessageFull>('POST', `/dms/${userId}/system-message`, { content }),
   editMessage: (id: string, content: string) => req<DmMessageFull>('PUT', `/dms/messages/${id}`, { content }),
   deleteMessage: (id: string) => req<void>('DELETE', `/dms/messages/${id}`),
+  markRead: (userId: string) => req<{ok:boolean}>('PUT', `/dms/${userId}/read`),
 };
 
 // ── Friends ────────────────────────────────────────────────────────────────

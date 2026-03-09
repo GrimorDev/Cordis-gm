@@ -38,6 +38,7 @@ router.get('/conversations', authMiddleware, async (req: AuthRequest, res: Respo
               u.id as other_user_id, u.username as other_username,
               u.avatar_url as other_avatar, u.status as other_status,
               u.custom_status as other_custom_status,
+              dp2.last_read_at as other_last_read_at,
               (SELECT content FROM dm_messages WHERE conversation_id=dc.id ORDER BY created_at DESC LIMIT 1) as last_message,
               (SELECT created_at FROM dm_messages WHERE conversation_id=dc.id ORDER BY created_at DESC LIMIT 1) as last_message_at
        FROM dm_conversations dc
@@ -125,6 +126,26 @@ router.post('/:userId/messages', authMiddleware,
     } catch { return res.status(500).json({ error: 'Internal server error' }); }
   }
 );
+
+// PUT /api/dms/:userId/read — mark conversation as read by current user
+router.put('/:userId/read', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const conversationId = await getOrCreateConversation(req.user!.id, req.params.userId);
+    await query(
+      'UPDATE dm_participants SET last_read_at = NOW() WHERE conversation_id=$1 AND user_id=$2',
+      [conversationId, req.user!.id]
+    );
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user:${req.params.userId}`).emit('dm_read', {
+        conversation_id: conversationId,
+        reader_id: req.user!.id,
+        read_at: new Date().toISOString(),
+      });
+    }
+    return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
 
 // POST /api/dms/:userId/system-message  (call ended, etc.)
 router.post('/:userId/system-message', authMiddleware, async (req: AuthRequest, res: Response) => {

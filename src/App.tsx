@@ -638,6 +638,46 @@ function WelcomeModal({ username, onClose }: { username: string; onClose: () => 
   );
 }
 
+// ─── Link Preview ─────────────────────────────────────────────────────────────
+const YT_RE = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?(?:[^&]+&)*v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+const URL_RE = /https?:\/\/[^\s"<>()[\]{}]+/g;
+
+interface OgData { title: string; description: string; image: string; site_name: string; }
+function LinkPreview({ url, show }: { url: string; show: boolean }) {
+  const [data, setData] = React.useState<OgData | null>(null);
+  const [done, setDone] = React.useState(false);
+  React.useEffect(() => {
+    if (!show || done) return;
+    setDone(true);
+    const token = getToken();
+    fetch(`/api/og?url=${encodeURIComponent(url)}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then(r => r.json())
+      .then((d: OgData) => { if (d.title) setData(d); })
+      .catch(() => {});
+  }, [url, show, done]);
+  if (!show || !data) return null;
+  const ytId = url.match(YT_RE)?.[1];
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="link-prev">
+      {ytId ? (
+        <div className="link-prev-yt">
+          <img src={`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`} alt="" className="w-full h-full object-cover"/>
+          <div className="link-prev-yt-play">▶</div>
+        </div>
+      ) : data.image ? (
+        <img src={data.image} alt="" className="link-prev-img"/>
+      ) : null}
+      <div className="link-prev-body">
+        {data.site_name && <p className="link-prev-site">{data.site_name}</p>}
+        <p className="link-prev-title">{data.title}</p>
+        {data.description && <p className="link-prev-desc">{data.description}</p>}
+      </div>
+    </a>
+  );
+}
+
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -661,6 +701,8 @@ export default function App() {
   const [channelMsgs, setChannelMsgs]         = useState<MessageFull[]>([]);
   const [dmConvs, setDmConvs]                 = useState<DmConversation[]>([]);
   const [dmMsgs, setDmMsgs]                   = useState<DmMessageFull[]>([]);
+  // dm_read events: maps other_user_id → read_at timestamp (when THEY read our messages)
+  const [dmReadStates, setDmReadStates]       = useState<Record<string, string>>({});
   const [friends, setFriends]                 = useState<FriendEntry[]>([]);
   const [friendReqs, setFriendReqs]           = useState<FriendRequest[]>([]);
   const [members, setMembers]                 = useState<ServerMember[]>([]);
@@ -1004,6 +1046,12 @@ export default function App() {
       setDmMsgs(p => p.map(m => m.id === id ? { ...m, content, edited } : m)));
     sock.on('dm_message_deleted', ({ id }: any) =>
       setDmMsgs(p => p.map(m => m.id === id ? { ...m, content: '__deleted__', deleted: true } : m)));
+    // dm_read: the other user has read our messages in this conversation
+    sock.on('dm_read', ({ reader_id, read_at }: any) => {
+      setDmReadStates(p => ({ ...p, [reader_id]: read_at }));
+      // Also refresh conversation list to update other_last_read_at
+      dmsApi.conversations().then(setDmConvs).catch(() => {});
+    });
     sock.on('user_status', ({ user_id, status }) => {
       setFriends(p => p.map(f => f.id === user_id ? { ...f, status } : f));
       setDmConvs(p => p.map(d => d.other_user_id === user_id ? { ...d, other_status: status } : d));
@@ -1364,6 +1412,8 @@ export default function App() {
     dmsApi.messages(activeDmUserId).then(setDmMsgs).catch(console.error).finally(()=>setMsgsLoading(false));
     users.get(activeDmUserId).then(setDmPartnerProfile).catch(console.error);
     setReplyTo(null);
+    // Mark conversation as read when opening
+    dmsApi.markRead(activeDmUserId).catch(() => {});
   }, [activeDmUserId]);
 
   // ── Call duration timer ─────────────────────────────────────────
@@ -2441,26 +2491,47 @@ export default function App() {
   // ── Markdown + Mention HTML renderer ───────────────────────────────────────
   const renderMsgHTML = (text: string): string => {
     if (!text) return '';
-    // Step 1: protect mentions from markdown with null-byte placeholders
+
+    // ── Step 0: extract fenced code blocks (``` ``` multi-line) ─────
+    const codeBlocks: string[] = [];
+    let processed = text.replace(/```([a-zA-Z0-9]*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+      const idx = codeBlocks.length;
+      const safeLang = (lang || '').toLowerCase().substring(0, 20);
+      const escaped = code.trim()
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const dataCode = encodeURIComponent(code.trim());
+      codeBlocks.push(
+        `<div class="code-block">` +
+        `<div class="code-block-hdr">` +
+        `<span class="code-lang">${safeLang || 'tekst'}</span>` +
+        `<button class="copy-code-btn" data-code="${dataCode}" type="button">⎘ Kopiuj</button>` +
+        `</div>` +
+        `<pre class="code-pre"><code>${escaped}</code></pre>` +
+        `</div>`
+      );
+      return `\x00CB${idx}\x00`;
+    });
+
+    // ── Step 1: protect mentions ──────────────────────────────────────
     const mentionMap: string[] = [];
-    let processed = text.replace(/(![a-zA-Z0-9_]+|@everyone|@here)/g, (match) => {
+    processed = processed.replace(/(![a-zA-Z0-9_]+|@everyone|@here)/g, (match) => {
       const idx = mentionMap.length;
       mentionMap.push(match);
       return `\x00M${idx}\x00`;
     });
-    // Step 2: protect search-query matches (applied before markdown parsing)
+    // ── Step 2: protect search-query highlights ───────────────────────
     const q = searchQuery.trim();
     if (q) {
       const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       processed = processed.replace(new RegExp(`(${esc})`, 'gi'), '\x00Q$1\x00Q');
     }
-    // Step 3: parse each line with marked inline parser (handles **bold**, *italic*, `code`, ~~del~~, links)
+    // ── Step 3: parse each line with marked inline parser ─────────────
     const lines = processed.split('\n');
     let html = lines.map(line => marked.parseInline(line) as string).join('<br>');
-    // Step 4: restore search highlights
+    // ── Step 4: restore search highlights ────────────────────────────
     html = html.replace(/\x00Q([\s\S]+?)\x00Q/g, (_, m) =>
       `<mark style="background:rgba(234,179,8,0.2);color:#fef08a;border-radius:3px;padding:0 2px">${m}</mark>`);
-    // Step 5: restore mentions as styled inline spans
+    // ── Step 5: restore mentions ──────────────────────────────────────
     html = html.replace(/\x00M(\d+)\x00/g, (_, i) => {
       const mention = mentionMap[parseInt(i, 10)];
       if (mention === '@everyone' || mention === '@here')
@@ -2471,13 +2542,16 @@ export default function App() {
       const color = isMe ? '#fbbf24' : '#a5b4fc';
       return `<span style="background:${bg};color:${color};border-radius:4px;padding:0 4px;font-weight:700;cursor:default">@${uname}</span>`;
     });
-    // Step 6: make links open in new tab
+    // ── Step 6: links open in new tab ────────────────────────────────
     html = html.replace(/<a href=/g, '<a target="_blank" rel="noopener noreferrer" href=');
-    // Step 7: sanitize
-    return DOMPurify.sanitize(html, {
+    // ── Step 7: sanitize (code block placeholders survive as text) ────
+    let safe = DOMPurify.sanitize(html, {
       ALLOWED_TAGS: ['strong', 'em', 'code', 'del', 's', 'a', 'br', 'span', 'mark'],
       ALLOWED_ATTR: ['href', 'style', 'target', 'rel'],
     });
+    // ── Step 8: restore code blocks (already HTML-safe, injected after sanitize) ──
+    safe = safe.replace(/\x00CB(\d+)\x00/g, (_, i) => codeBlocks[parseInt(i, 10)] || '');
+    return safe;
   };
 
   return (
@@ -3858,7 +3932,17 @@ export default function App() {
                   </div>
                 )}
               {/* Messages */}
-              <div ref={msgScrollRef} className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-5 custom-scrollbar flex flex-col">
+              <div ref={msgScrollRef} className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-5 custom-scrollbar flex flex-col"
+                onClickCapture={e => {
+                  const btn = (e.target as HTMLElement).closest<HTMLElement>('.copy-code-btn');
+                  if (!btn) return;
+                  const code = decodeURIComponent(btn.dataset.code || '');
+                  navigator.clipboard.writeText(code).then(() => {
+                    btn.textContent = '✓ Skopiowano';
+                    btn.classList.add('cb-copied');
+                    setTimeout(() => { btn.textContent = '⎘ Kopiuj'; btn.classList.remove('cb-copied'); }, 2000);
+                  }).catch(() => {});
+                }}>
                 {/* Loading skeleton */}
                 {msgsLoading&&(
                   <div className="mt-auto flex flex-col gap-3 pb-2">
@@ -4070,6 +4154,16 @@ export default function App() {
                               </div>
                             )}
 
+                            {/* Link preview */}
+                            {(()=>{
+                              const urls = msg.content?.match(URL_RE);
+                              const firstUrl = urls?.[0];
+                              if (!firstUrl || !msg.content) return null;
+                              // Don't show for invite links (already rendered as card)
+                              if (msg.content.includes('/join/')) return null;
+                              return <span key={firstUrl}><LinkPreview url={firstUrl} show={showLinkPreviews}/></span>;
+                            })()}
+
                             {/* Attachment */}
                             {msg.attachment_url&&(
                               <div className="mt-1.5 max-w-sm">
@@ -4106,6 +4200,27 @@ export default function App() {
                       </React.Fragment>
                     );
                   })}
+                  {/* DM read receipt — "Przeczytane" after last own message */}
+                  {(()=>{
+                    if (activeView !== 'dms' || !activeDm || !currentUser) return null;
+                    // Use socket-received read time or the other user's last_read_at from conversations list
+                    const readAt = dmReadStates[activeDmUserId] || activeDm.other_last_read_at;
+                    if (!readAt) return null;
+                    // Find last message sent by current user
+                    const msgs = messages as (MessageFull|DmMessageFull)[];
+                    const lastOwn = [...msgs].reverse().find(m => m.sender_id === currentUser.id);
+                    if (!lastOwn) return null;
+                    const wasRead = new Date(readAt) >= new Date(lastOwn.created_at);
+                    if (!wasRead) return null;
+                    return (
+                      <div className="flex justify-end items-center gap-1.5 pr-1 -mt-1 mb-0.5">
+                        <span className="text-[10px] text-zinc-600">Przeczytane</span>
+                        <img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})}
+                          className="w-3.5 h-3.5 rounded-full object-cover opacity-70" alt=""/>
+                      </div>
+                    );
+                  })()}
+
                   {/* Typing indicator — Discord-style at bottom of messages */}
                   {(()=>{
                     const typers = Object.entries(typingUsers).filter(([uid]) => uid !== currentUser?.id).map(([,n]) => n);

@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS dm_conversations (
 CREATE TABLE IF NOT EXISTS dm_participants (
     conversation_id UUID NOT NULL REFERENCES dm_conversations(id) ON DELETE CASCADE,
     user_id         UUID NOT NULL REFERENCES users(id)            ON DELETE CASCADE,
+    last_read_at    TIMESTAMPTZ DEFAULT NULL,
     PRIMARY KEY (conversation_id, user_id)
 );
 

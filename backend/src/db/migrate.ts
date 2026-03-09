@@ -218,6 +218,7 @@ DO $$ BEGIN ALTER TABLE users ADD COLUMN message_animations        BOOLEAN      
 DO $$ BEGIN ALTER TABLE users ADD COLUMN show_link_previews        BOOLEAN      DEFAULT TRUE;     EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN privacy_dm_from_strangers BOOLEAN      DEFAULT TRUE;     EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE dm_messages ADD COLUMN is_system BOOLEAN DEFAULT FALSE;                   EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE dm_participants ADD COLUMN last_read_at TIMESTAMPTZ DEFAULT NULL;          EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS server_activity (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
