@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS servers (
     description TEXT,
     icon_url    TEXT,
     banner_url  TEXT,
+    is_official BOOLEAN      DEFAULT FALSE,
     owner_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at  TIMESTAMPTZ DEFAULT NOW()
 );

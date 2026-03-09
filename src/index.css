@@ -221,6 +221,12 @@ select optgroup {
 .link-prev-desc { font-size: 11px; color: rgba(180,185,210,0.6); margin-top: 3px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
 /* ── Avatar effects ────────────────────────────────────────────────── */
+/* Frozen wrappers: pause animations by default, resume on hover */
+.av-frozen .av-eff-pulse   { animation-play-state: paused; }
+.av-frozen .av-eff-rainbow { animation-play-state: paused; }
+.av-frozen:hover .av-eff-pulse   { animation-play-state: running; }
+.av-frozen:hover .av-eff-rainbow { animation-play-state: running; }
+
 .av-eff-glow {
   box-shadow: 0 0 10px 3px rgb(var(--accent-rgb) / 0.65);
 }

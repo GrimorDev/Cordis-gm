@@ -50,6 +50,7 @@ export interface UserProfile {
 export interface ServerData {
   id: string; name: string; description?: string | null;
   icon_url?: string | null; banner_url?: string | null;
+  is_official?: boolean;
   owner_id: string; created_at: string;
 }
 export interface ServerRole {
@@ -95,6 +96,7 @@ export interface MessageFull {
   sender_avatar?: string | null; sender_status?: string;
   sender_role?: string | null;
   sender_role_color?: string | null;
+  sender_avatar_effect?: string | null;
   pinned?: boolean;
 }
 export interface DmConversation {
@@ -103,6 +105,7 @@ export interface DmConversation {
   other_avatar?: string | null; other_status: string;
   other_custom_status?: string | null;
   other_last_read_at?: string | null;
+  other_avatar_effect?: string | null;
   last_message?: string | null; last_message_at?: string | null;
 }
 export interface DmMessageFull {
@@ -110,6 +113,7 @@ export interface DmMessageFull {
   created_at: string; attachment_url?: string | null;
   reply_to_id?: string | null; reply_content?: string | null; reply_username?: string | null;
   sender_id: string; sender_username: string; sender_avatar?: string | null;
+  sender_avatar_effect?: string | null;
 }
 export interface FriendEntry {
   id: string; username: string; avatar_url?: string | null;
@@ -128,6 +132,7 @@ export interface ServerMember {
   status: string; custom_status?: string | null;
   role_name: string; joined_at: string;
   roles: { role_id: string; name: string; color: string }[];
+  avatar_effect?: string | null;
 }
 
 // ── Auth ───────────────────────────────────────────────────────────────────

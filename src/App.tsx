@@ -8,7 +8,7 @@ import {
   LogOut, Loader2, Lock, Phone, PhoneOff, MessageSquare, Upload, MoreHorizontal, ScreenShare,
   CheckCircle2, AlertCircle, Info, AlertTriangle, PartyPopper, Sparkles, Zap, Globe,
   Eye, EyeOff, Megaphone, FileText, ChevronLeft, ChevronRight, ArrowLeft,
-  Clock, Pin, PinOff, Activity, AtSign
+  Clock, Pin, PinOff, Activity, AtSign, BadgeCheck
 } from 'lucide-react';
 import {
   auth, users, serversApi, channelsApi, messagesApi, dmsApi, friendsApi, forumApi,
@@ -2623,10 +2623,13 @@ export default function App() {
                     onContextMenu={e => { e.preventDefault(); setSrvContextMenu({ x: e.clientX, y: e.clientY, srv }); }}
                     className={`flex items-center gap-2 h-full px-3 text-sm font-medium transition-all duration-200 border-r border-white/[0.05] whitespace-nowrap relative group shrink-0 ${isActive?'text-white bg-black/20':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'}`}>
                     {isActive&&<motion.span layoutId="nav-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"/>}
-                    <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden transition-all duration-200 ${isActive?'bg-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.3)]':'bg-zinc-800'}`}>
+                    <span className={`relative w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden transition-all duration-200 ${isActive?'bg-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.3)]':'bg-zinc-800'} ${srv.is_official?'ring-2 ring-amber-400/80 ring-offset-[2px] ring-offset-transparent':''}`}>
                       {srv.icon_url ? <img src={srv.icon_url} className="w-full h-full object-cover" alt=""/> : srv.name.charAt(0).toUpperCase()}
                     </span>
                     <span className="max-w-[90px] truncate">{srv.name}</span>
+                    {srv.is_official&&(
+                      <BadgeCheck size={13} className="shrink-0 text-amber-400" title="Oficjalny serwer Cordyn"/>
+                    )}
                   </button>
                 );
               })}
@@ -4062,9 +4065,11 @@ export default function App() {
 
                           {/* Avatar */}
                           {showChatAvatars&&(
-                          <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} alt=""
-                            onClick={()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar,status:(msg as MessageFull).sender_status})}
-                            className="w-9 h-9 rounded-xl object-cover shrink-0 cursor-pointer hover:opacity-80 hover:scale-105 transition-all self-end mb-0.5"/>
+                          <div className="av-frozen shrink-0 self-end mb-0.5">
+                            <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} alt=""
+                              onClick={()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar,status:(msg as MessageFull).sender_status})}
+                              className={`w-9 h-9 rounded-xl object-cover cursor-pointer hover:opacity-80 hover:scale-105 transition-all av-eff-${(msg as any).sender_avatar_effect||'none'}`}/>
+                          </div>
                           )}
 
                           {/* Content column */}
@@ -4238,7 +4243,7 @@ export default function App() {
                       <div className="flex justify-end items-center gap-1.5 pr-1 -mt-1 mb-0.5">
                         <span className="text-[10px] text-zinc-600">Przeczytane</span>
                         <img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})}
-                          className="w-3.5 h-3.5 rounded-full object-cover opacity-70" alt=""/>
+                          className="w-5 h-5 rounded-full object-cover opacity-80" alt=""/>
                       </div>
                     );
                   })()}
@@ -4544,8 +4549,8 @@ export default function App() {
                     <div className="flex flex-col gap-0.5">
                       {online.map(m=>(
                         <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={()=>openProfile(m)}>
-                          <div className="relative shrink-0">
-                            <img src={ava(m)} className="w-10 h-10 rounded-xl object-cover" alt=""/>
+                          <div className="relative shrink-0 av-frozen">
+                            <img src={ava(m)} className={`w-10 h-10 rounded-xl object-cover av-eff-${m.avatar_effect||'none'}`} alt=""/>
                             <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 ${sc(m.status)} border-[2.5px] border-[#1e1e30] rounded-full`}/>
                           </div>
                           <div className="min-w-0 flex-1">
@@ -4571,8 +4576,8 @@ export default function App() {
                     <div className="flex flex-col gap-0.5">
                       {offline.map(m=>(
                         <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={()=>openProfile(m)}>
-                          <div className="relative shrink-0">
-                            <img src={ava(m)} className="w-10 h-10 rounded-xl object-cover opacity-35" alt=""/>
+                          <div className="relative shrink-0 av-frozen">
+                            <img src={ava(m)} className={`w-10 h-10 rounded-xl object-cover opacity-35 av-eff-${m.avatar_effect||'none'}`} alt=""/>
                             <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-zinc-600 border-[2.5px] border-[#1e1e30] rounded-full"/>
                           </div>
                           <div className="min-w-0 flex-1">
@@ -4602,11 +4607,11 @@ export default function App() {
                   <div className={`w-full h-full bg-gradient-to-br ${dmPartnerProfile.banner_color||'from-indigo-600 via-purple-600 to-pink-600'}`}/>
                 )}
               </div>
-              {/* Avatar */}
+              {/* Avatar — animated freely (no frozen) */}
               <div className="px-4 pb-4 border-b border-white/[0.07]">
                 <div className="relative inline-block -mt-7 mb-3">
-                  <img src={ava(dmPartnerProfile)} className="w-14 h-14 rounded-2xl border-4 border-[#1e1e30] object-cover" alt=""/>
-                  <div className={`absolute bottom-0.5 right-0.5 w-3.5 h-3.5 ${sc(activeDm.other_status)} border-2 border-[#1e1e30] rounded-full`}/>
+                  <img src={ava(dmPartnerProfile)} className={`w-14 h-14 rounded-2xl border-4 border-[#1e1e30] object-cover av-eff-${dmPartnerProfile.avatar_effect||'none'}`} alt=""/>
+                  <div className={`absolute -bottom-1 -right-1 w-5 h-5 ${sc(activeDm.other_status)} border-[3px] border-[#1e1e30] rounded-full`}/>
                 </div>
                 <h3 className="text-sm font-bold text-white leading-tight">{dmPartnerProfile.username}</h3>
                 {activeDm.other_custom_status&&(

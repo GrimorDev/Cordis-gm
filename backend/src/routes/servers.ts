@@ -91,7 +91,7 @@ async function getRolePosition(serverId: string, userId: string): Promise<number
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { rows } = await query(
-      `SELECT s.id, s.name, s.icon_url, s.banner_url, s.description, s.owner_id, s.created_at
+      `SELECT s.id, s.name, s.icon_url, s.banner_url, s.description, s.owner_id, s.is_official, s.created_at
        FROM servers s INNER JOIN server_members sm ON sm.server_id = s.id
        WHERE sm.user_id = $1 ORDER BY s.created_at`,
       [req.user!.id]
@@ -344,7 +344,7 @@ router.get('/:id/members', authMiddleware, async (req: AuthRequest, res: Respons
       return res.status(403).json({ error: 'No access' });
     }
     const { rows } = await query(
-      `SELECT u.id, u.username, u.avatar_url, u.status, u.custom_status,
+      `SELECT u.id, u.username, u.avatar_url, u.status, u.custom_status, u.avatar_effect,
               sm.role_name, sm.joined_at
        FROM server_members sm INNER JOIN users u ON u.id = sm.user_id
        WHERE sm.server_id = $1 ORDER BY sm.role_name, u.username`,

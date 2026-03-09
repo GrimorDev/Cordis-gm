@@ -37,7 +37,7 @@ router.get('/conversations', authMiddleware, async (req: AuthRequest, res: Respo
       `SELECT dc.id, dc.created_at,
               u.id as other_user_id, u.username as other_username,
               u.avatar_url as other_avatar, u.status as other_status,
-              u.custom_status as other_custom_status,
+              u.avatar_effect as other_avatar_effect, u.custom_status as other_custom_status,
               CASE WHEN u.privacy_read_receipts = FALSE THEN NULL ELSE dp2.last_read_at END as other_last_read_at,
               (SELECT content FROM dm_messages WHERE conversation_id=dc.id ORDER BY created_at DESC LIMIT 1) as last_message,
               (SELECT created_at FROM dm_messages WHERE conversation_id=dc.id ORDER BY created_at DESC LIMIT 1) as last_message_at
@@ -61,7 +61,7 @@ router.get('/:userId/messages', authMiddleware, async (req: AuthRequest, res: Re
     let sql = `
       SELECT dm.id, dm.conversation_id, dm.content, dm.edited, dm.created_at,
              dm.attachment_url, dm.reply_to_id, dm.is_system,
-             u.id as sender_id, u.username as sender_username, u.avatar_url as sender_avatar,
+             u.id as sender_id, u.username as sender_username, u.avatar_url as sender_avatar, u.avatar_effect as sender_avatar_effect,
              rm.content as reply_content, ru.username as reply_username
       FROM dm_messages dm
       INNER JOIN users u ON u.id=dm.sender_id

@@ -218,6 +218,7 @@ DO $$ BEGIN ALTER TABLE users ADD COLUMN message_animations        BOOLEAN      
 DO $$ BEGIN ALTER TABLE users ADD COLUMN show_link_previews        BOOLEAN      DEFAULT TRUE;     EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN privacy_dm_from_strangers BOOLEAN      DEFAULT TRUE;     EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN avatar_effect            VARCHAR(20)  DEFAULT 'none';   EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE servers ADD COLUMN is_official            BOOLEAN      DEFAULT FALSE;    EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE dm_messages ADD COLUMN is_system BOOLEAN DEFAULT FALSE;                   EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE dm_participants ADD COLUMN last_read_at TIMESTAMPTZ DEFAULT NULL;          EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 
