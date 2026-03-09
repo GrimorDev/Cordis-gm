@@ -8,7 +8,8 @@ import {
   LogOut, Loader2, Lock, Phone, PhoneOff, MessageSquare, Upload, MoreHorizontal, ScreenShare,
   CheckCircle2, AlertCircle, Info, AlertTriangle, PartyPopper, Sparkles, Zap, Globe,
   Eye, EyeOff, Megaphone, FileText, ChevronLeft, ChevronRight, ArrowLeft,
-  Clock, Pin, PinOff, Activity, AtSign, BadgeCheck, Crown, LayoutDashboard
+  Clock, Pin, PinOff, Activity, AtSign, BadgeCheck, Crown, LayoutDashboard,
+  Code2, FlaskConical, ShieldCheck, Hammer, Award, type LucideIcon
 } from 'lucide-react';
 import {
   auth, users, serversApi, channelsApi, messagesApi, dmsApi, friendsApi, forumApi, adminApi,
@@ -686,6 +687,15 @@ function LinkPreview({ url, show }: { url: string; show: boolean }) {
     </a>
   );
 }
+
+// ─── Badge icon map ────────────────────────────────────────────────────────────
+const BADGE_ICON_MAP: Record<string, LucideIcon> = {
+  developer: Code2,
+  qa: FlaskConical,
+  admin: ShieldCheck,
+  moderator: Hammer,
+};
+const getBadgeIcon = (name: string): LucideIcon => BADGE_ICON_MAP[name] ?? Award;
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
@@ -2517,6 +2527,13 @@ export default function App() {
     return null;
   };
 
+  // Returns badge array for a message sender (looks up members/dmPartnerProfile)
+  const getMsgSenderBadges = (senderId: string): import('./api').Badge[] => {
+    if (senderId === currentUser?.id) return currentUser?.badges ?? [];
+    if (activeView === 'servers') return members.find(m => m.id === senderId)?.badges ?? [];
+    return dmPartnerProfile?.badges ?? [];
+  };
+
   // Maps server_activity.type to a Lucide icon element (no emoji)
   const activityIcon = (type: string) => {
     const cls = 'w-7 h-7 rounded-xl flex items-center justify-center shrink-0';
@@ -4114,6 +4131,7 @@ export default function App() {
                                 onClick={()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar})}>
                                 {msg.sender_username}
                               </span>
+                              {getMsgSenderBadges(msg.sender_id).map(b=>{const BIcon=getBadgeIcon(b.name);return <BIcon key={b.id} size={10} style={{color:b.color}} title={b.label} className="shrink-0"/>;  })}
                               {(msg as MessageFull).sender_role&&(
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide"
                                   style={{
@@ -4590,12 +4608,13 @@ export default function App() {
                             <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 ${sc(m.status)} border-[2.5px] border-[#1e1e30] rounded-full`}/>
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 flex-wrap">
                               <p className="text-[13px] font-semibold truncate group-hover:opacity-90 transition-colors leading-tight"
                                 style={{ color: m.roles?.[0]?.color || '#d4d4d8' }}>
                                 {m.username}
                               </p>
                               {isOwner&&<Crown size={11} className="text-amber-400 shrink-0"/>}
+                              {m.badges?.map(b=>{const BIcon=getBadgeIcon(b.name);return <BIcon key={b.id} size={11} style={{color:b.color}} title={b.label} className="shrink-0"/>;  })}
                             </div>
                             {(()=>{const sl=statusLabel(m.status); return sl
                               ? <p className={`text-[11px] truncate leading-tight ${sl.cls}`}>{sl.text}</p>
@@ -4623,12 +4642,13 @@ export default function App() {
                             <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-zinc-600 border-[2.5px] border-[#1e1e30] rounded-full"/>
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 flex-wrap">
                               <p className="text-[13px] font-medium truncate group-hover:opacity-70 transition-colors leading-tight"
                                 style={{ color: m.roles?.[0]?.color ? `${m.roles[0].color}80` : '#52525b' }}>
                                 {m.username}
                               </p>
                               {isOwner&&<Crown size={11} className="text-amber-400/50 shrink-0"/>}
+                              {m.badges?.map(b=>{const BIcon=getBadgeIcon(b.name);return <BIcon key={b.id} size={11} style={{color:b.color+'80'}} title={b.label} className="shrink-0 opacity-50"/>;  })}
                             </div>
                             {m.role_name&&<p className="text-[11px] text-zinc-700 truncate leading-tight">{m.role_name}</p>}
                           </div>
@@ -4827,14 +4847,17 @@ export default function App() {
 
                   {/* Badges row */}
                   <div className="flex items-center gap-2 mb-4 flex-wrap">
-                    {/* Global badges */}
-                    {Array.isArray(selUser.badges)&&selUser.badges.map((b:Badge)=>(
-                      <div key={b.id} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1"
-                        style={{background:b.color+'18',border:'1px solid '+b.color+'45'}}>
-                        <span className="text-xs leading-none">{b.icon}</span>
-                        <span className="text-[11px] font-semibold" style={{color:b.color}}>{b.label}</span>
-                      </div>
-                    ))}
+                    {/* Global badges — Lucide icons */}
+                    {Array.isArray(selUser.badges)&&selUser.badges.map((b:Badge)=>{
+                      const BIcon = getBadgeIcon(b.name);
+                      return (
+                        <div key={b.id} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1"
+                          style={{background:b.color+'18',border:'1px solid '+b.color+'45'}}>
+                          <BIcon size={11} style={{color:b.color}} className="shrink-0"/>
+                          <span className="text-[11px] font-semibold" style={{color:b.color}}>{b.label}</span>
+                        </div>
+                      );
+                    })}
                     {/* Crown — server owner */}
                     {activeView==='servers'&&serverFull&&selUser.id===serverFull.owner_id&&(
                       <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2.5 py-1">
@@ -4849,14 +4872,7 @@ export default function App() {
                         <span className="text-[11px] text-emerald-400 font-semibold">Nowy</span>
                       </div>
                     )}
-                    {/* Server roles (custom roles) */}
-                    {activeView==='servers'&&Array.isArray(selUser.roles)&&selUser.roles.map((role:any)=>(
-                      <div key={role.role_id} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1"
-                        style={{background:(role.color||'#5865f2')+'20',border:'1px solid '+(role.color||'#5865f2')+'40'}}>
-                        <div className="w-2 h-2 rounded-full shrink-0" style={{background:role.color||'#5865f2'}}/>
-                        <span className="text-[11px] font-medium" style={{color:role.color||'#818cf8'}}>{role.name}</span>
-                      </div>
-                    ))}
+                    {/* NOTE: server roles intentionally removed here — shown below in "Role na serwerze" section */}
                     {selUser.created_at&&(
                       <div className="flex items-center gap-1.5 bg-white/[0.04] border border-white/[0.06] rounded-lg px-2.5 py-1">
                         <span className="text-xs">📅</span>
@@ -6511,9 +6527,11 @@ export default function App() {
                       <div>
                         <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mb-3">Istniejące odznaki</p>
                         <div className="flex flex-col gap-2">
-                          {adminBadges.map(b=>(
+                          {adminBadges.map(b=>{const BIcon=getBadgeIcon(b.name); return (
                             <div key={b.id} className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2.5">
-                              <span className="text-xl">{b.icon}</span>
+                              <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{background:b.color+'18'}}>
+                                <BIcon size={16} style={{color:b.color}}/>
+                              </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm font-semibold" style={{color:b.color}}>{b.label}</span>
@@ -6528,7 +6546,7 @@ export default function App() {
                                 <Trash2 size={12}/>
                               </button>
                             </div>
-                          ))}
+                          );})}
                           {adminBadges.length===0&&<p className="text-xs text-zinc-600 text-center py-4">Brak odznak</p>}
                         </div>
                       </div>
