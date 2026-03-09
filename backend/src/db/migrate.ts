@@ -329,6 +329,40 @@ DO $$ BEGIN ALTER TABLE channels ADD COLUMN slowmode_seconds INT DEFAULT 0; EXCE
 
 -- Pinned messages in text channels
 DO $$ BEGIN ALTER TABLE messages ADD COLUMN pinned BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Global badge system
+DO $$ BEGIN ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS global_badges (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name        VARCHAR(50) UNIQUE NOT NULL,
+    label       VARCHAR(100) NOT NULL,
+    color       VARCHAR(20) DEFAULT '#6366f1',
+    icon        VARCHAR(10) DEFAULT '🔵',
+    description TEXT,
+    position    INT DEFAULT 0,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS user_badges (
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    badge_id    UUID NOT NULL REFERENCES global_badges(id) ON DELETE CASCADE,
+    assigned_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    assigned_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (user_id, badge_id)
+);
+
+INSERT INTO global_badges (name, label, color, icon, description, position) VALUES
+  ('developer', 'Developer', '#6366f1', '⚙️', 'Twórca i deweloper systemu Cordyn', 0),
+  ('qa',        'QA',        '#f59e0b', '🔬', 'Tester i zapewnienie jakości',       1),
+  ('admin',     'Admin',     '#ef4444', '🛡️', 'Administrator systemu',               2),
+  ('moderator', 'Moderator', '#10b981', '🔨', 'Moderator społeczności',              3)
+ON CONFLICT (name) DO NOTHING;
+
+UPDATE users SET is_admin = TRUE WHERE username = 'Grimor';
+INSERT INTO user_badges (user_id, badge_id)
+  SELECT u.id, gb.id FROM users u, global_badges gb
+  WHERE u.username = 'Grimor' AND gb.name = 'developer'
+ON CONFLICT DO NOTHING;
 `;
 
 const SEED_SQL = `

@@ -25,12 +25,19 @@ export const setToken = (t: string) => localStorage.setItem('cordyn_token', t);
 export const clearToken = () => localStorage.removeItem('cordyn_token');
 
 // ── Types ──────────────────────────────────────────────────────────────────
+export interface Badge {
+  id: string; name: string; label: string;
+  color: string; icon: string;
+  description?: string | null; position?: number;
+}
 export interface UserProfile {
   id: string; username: string; email: string;
   avatar_url?: string | null; banner_url?: string | null;
   banner_color: string; bio?: string | null; custom_status?: string | null;
   status: 'online' | 'idle' | 'dnd' | 'offline'; created_at: string;
   mutual_friends_count?: number;
+  badges?: Badge[];
+  is_admin?: boolean;
   // User preferences (stored in DB)
   accent_color?: string | null;
   compact_messages?: boolean | null;
@@ -133,6 +140,7 @@ export interface ServerMember {
   role_name: string; joined_at: string;
   roles: { role_id: string; name: string; color: string }[];
   avatar_effect?: string | null;
+  badges?: Badge[];
 }
 
 // ── Auth ───────────────────────────────────────────────────────────────────
@@ -282,4 +290,37 @@ export const friendsApi = {
   respondRequest: (id: string, action: 'accept' | 'reject') =>
     req<void>('PUT', `/friends/request/${id}`, { action }),
   remove: (id: string) => req<void>('DELETE', `/friends/${id}`),
+};
+
+// ── Admin ───────────────────────────────────────────────────────────────────
+export interface AdminStats {
+  users: number; servers: number; messages: number; dm_messages: number;
+  badges: number; badge_assignments: number;
+  memory: { rss: number; heapUsed: number; heapTotal: number; external: number };
+  node_version: string; uptime_seconds: number;
+}
+export interface AdminUser {
+  id: string; username: string; avatar_url?: string | null;
+  status: string; is_admin: boolean; created_at: string;
+  badges: Badge[];
+}
+export const adminApi = {
+  stats: () => req<AdminStats>('GET', '/admin/stats'),
+  badges: {
+    list: () => req<Badge[]>('GET', '/admin/badges'),
+    create: (d: { name: string; label: string; color?: string; icon?: string; description?: string; position?: number }) =>
+      req<Badge>('POST', '/admin/badges', d),
+    update: (id: string, d: Partial<{ label: string; color: string; icon: string; description: string; position: number }>) =>
+      req<Badge>('PUT', `/admin/badges/${id}`, d),
+    delete: (id: string) => req<void>('DELETE', `/admin/badges/${id}`),
+    assign: (user_id: string, badge_id: string) =>
+      req<{ ok: boolean }>('POST', '/admin/badges/assign', { user_id, badge_id }),
+    remove: (userId: string, badgeId: string) =>
+      req<{ ok: boolean }>('DELETE', `/admin/users/${userId}/badges/${badgeId}`),
+  },
+  users: {
+    search: (q: string) => req<AdminUser[]>('GET', `/admin/users/search?q=${encodeURIComponent(q)}`),
+    setAdmin: (userId: string, is_admin: boolean) =>
+      req<{ ok: boolean }>('POST', `/admin/users/${userId}/set-admin`, { is_admin }),
+  },
 };

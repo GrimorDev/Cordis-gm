@@ -53,11 +53,16 @@ const bannerUpload = makeUpload('banners');
 router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { rows } = await query(
-      `SELECT id,username,avatar_url,banner_url,banner_color,bio,custom_status,
-              CASE WHEN privacy_status_visible=FALSE AND id!=$2 THEN 'offline' ELSE status END as status,
-              accent_color,compact_messages,
-              privacy_status_visible,privacy_typing_visible,privacy_read_receipts,privacy_friend_requests,
-              created_at,
+      `SELECT u.id, u.username, u.avatar_url, u.banner_url, u.banner_color, u.bio, u.custom_status, u.avatar_effect,
+              CASE WHEN u.privacy_status_visible=FALSE AND u.id!=$2 THEN 'offline' ELSE u.status END as status,
+              u.accent_color, u.compact_messages,
+              u.privacy_status_visible, u.privacy_typing_visible, u.privacy_read_receipts, u.privacy_friend_requests,
+              u.created_at,
+              COALESCE(
+                (SELECT json_agg(json_build_object('id', gb.id, 'name', gb.name, 'label', gb.label, 'color', gb.color, 'icon', gb.icon) ORDER BY gb.position)
+                 FROM user_badges ub INNER JOIN global_badges gb ON gb.id = ub.badge_id WHERE ub.user_id = u.id),
+                '[]'::json
+              ) as badges,
               (SELECT COUNT(*)::int FROM (
                 SELECT CASE WHEN f.requester_id=$2 THEN f.addressee_id ELSE f.requester_id END as fid
                 FROM friends f WHERE (f.requester_id=$2 OR f.addressee_id=$2) AND f.status='accepted'
@@ -65,7 +70,7 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
                 SELECT CASE WHEN f.requester_id=$1 THEN f.addressee_id ELSE f.requester_id END as fid
                 FROM friends f WHERE (f.requester_id=$1 OR f.addressee_id=$1) AND f.status='accepted'
               ) tf ON tf.fid=mf.fid) as mutual_friends_count
-       FROM users WHERE id=$1`,
+       FROM users u WHERE u.id=$1`,
       [req.params.id, req.user!.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'User not found' });

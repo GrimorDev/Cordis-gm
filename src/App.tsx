@@ -8,15 +8,16 @@ import {
   LogOut, Loader2, Lock, Phone, PhoneOff, MessageSquare, Upload, MoreHorizontal, ScreenShare,
   CheckCircle2, AlertCircle, Info, AlertTriangle, PartyPopper, Sparkles, Zap, Globe,
   Eye, EyeOff, Megaphone, FileText, ChevronLeft, ChevronRight, ArrowLeft,
-  Clock, Pin, PinOff, Activity, AtSign, BadgeCheck
+  Clock, Pin, PinOff, Activity, AtSign, BadgeCheck, Crown, LayoutDashboard
 } from 'lucide-react';
 import {
-  auth, users, serversApi, channelsApi, messagesApi, dmsApi, friendsApi, forumApi,
+  auth, users, serversApi, channelsApi, messagesApi, dmsApi, friendsApi, forumApi, adminApi,
   uploadFile, setToken, clearToken, getToken,
   type UserProfile, type ServerData, type ServerFull, type ServerRole,
   type ChannelData, type MessageFull, type DmConversation,
   type DmMessageFull, type FriendEntry, type FriendRequest,
-  type ServerMember, type ForumPost, type ForumReply, type ServerBan, ApiError
+  type ServerMember, type ForumPost, type ForumReply, type ServerBan,
+  type Badge, type AdminStats, type AdminUser, ApiError
 } from './api';
 import {
   connectSocket, disconnectSocket, joinChannel, leaveChannel,
@@ -787,6 +788,19 @@ export default function App() {
   const [showNewPost, setShowNewPost]         = useState(false);
   const [replyContent, setReplyContent]       = useState('');
   const [replySending, setReplySending]       = useState(false);
+
+  // ── Admin panel ──────────────────────────────────────────────────
+  const [adminPanelOpen, setAdminPanelOpen]   = useState(false);
+  const [adminTab, setAdminTab]               = useState<'stats'|'badges'|'users'>('stats');
+  const [adminStats, setAdminStats]           = useState<AdminStats|null>(null);
+  const [adminBadges, setAdminBadges]         = useState<Badge[]>([]);
+  const [adminUserQ, setAdminUserQ]           = useState('');
+  const [adminUsers, setAdminUsers]           = useState<AdminUser[]>([]);
+  const [adminBadgeForm, setAdminBadgeForm]   = useState({ name:'', label:'', color:'#6366f1', icon:'⚙️' });
+  const [adminBadgeSaving, setAdminBadgeSaving] = useState(false);
+  const [adminAssignUser, setAdminAssignUser] = useState<AdminUser|null>(null);
+  const [adminAssignBadgeId, setAdminAssignBadgeId] = useState('');
+
   const [chEditOpen, setChEditOpen]           = useState(false);
   const [editingCh, setEditingCh]             = useState<ChannelData|null>(null);
   const [chForm, setChForm]                   = useState({ name:'', description:'', is_private:false, role_ids:[] as string[], slowmode_seconds:0 });
@@ -1295,6 +1309,11 @@ export default function App() {
       setSelUser((p: any) => p && p.id === u.id ? { ...p, ...u } : p);
       // Update DM partner profile if visible
       setDmPartnerProfile(p => p && p.id === u.id ? { ...p, ...u } : p);
+    });
+
+    // ── Badges updated (admin assigns/removes) ───────────────────────
+    sock.on('badges_updated' as any, ({ badges }: { badges: Badge[] }) => {
+      setCurrentUser(p => p ? { ...p, badges } : p);
     });
 
     // ── Ping / mention received ──────────────────────────────────────
@@ -2212,7 +2231,14 @@ export default function App() {
   };
 
   // ── Profile ──────────────────────────────────────────────────────
-  const openProfile = (u: any) => { setSelUser(u); setProfileOpen(true); };
+  const openProfile = (u: any) => {
+    setSelUser(u);
+    setProfileOpen(true);
+    // Enrich with full profile (badges, bio, etc.) from API
+    if (u?.id && u.id !== currentUser?.id) {
+      users.get(u.id).then(full => setSelUser((prev: any) => prev?.id === full.id ? { ...prev, ...full } : prev)).catch(()=>{});
+    }
+  };
   const openOwnProfile = () => { setSelUser(currentUser); setProfBannerFile(null); setProfBannerPrev(null); setProfileOpen(true); };
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (!f) return;
@@ -2768,6 +2794,12 @@ export default function App() {
               )}
             </AnimatePresence>
           </div>
+          {currentUser?.is_admin&&(
+            <button onClick={() => setAdminPanelOpen(true)} title="Panel admina"
+              className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-violet-400 hover:bg-violet-500/10 transition-all">
+              <LayoutDashboard size={15}/>
+            </button>
+          )}
           <button onClick={() => { setAppSettTab('account'); setAppSettOpen(true); }} title="Ustawienia"
             className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all">
             <Settings size={15}/>
@@ -4547,24 +4579,32 @@ export default function App() {
                       Online — {online.length}
                     </h3>
                     <div className="flex flex-col gap-0.5">
-                      {online.map(m=>(
+                      {online.map(m=>{
+                        const isNew = m.joined_at && (Date.now()-new Date(m.joined_at).getTime()<172800000);
+                        const isOwner = m.id === serverFull?.owner_id;
+                        return (
                         <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={()=>openProfile(m)}>
                           <div className="relative shrink-0 av-frozen">
+                            {isNew&&<div className="absolute inset-0 rounded-xl ring-2 ring-emerald-400/60 ring-offset-1 ring-offset-[#1e1e30] pointer-events-none animate-pulse z-10"/>}
                             <img src={ava(m)} className={`w-10 h-10 rounded-xl object-cover av-eff-${m.avatar_effect||'none'}`} alt=""/>
                             <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 ${sc(m.status)} border-[2.5px] border-[#1e1e30] rounded-full`}/>
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-[13px] font-semibold truncate group-hover:opacity-90 transition-colors leading-tight"
-                              style={{ color: m.roles?.[0]?.color || '#d4d4d8' }}>
-                              {m.username}
-                            </p>
+                            <div className="flex items-center gap-1">
+                              <p className="text-[13px] font-semibold truncate group-hover:opacity-90 transition-colors leading-tight"
+                                style={{ color: m.roles?.[0]?.color || '#d4d4d8' }}>
+                                {m.username}
+                              </p>
+                              {isOwner&&<Crown size={11} className="text-amber-400 shrink-0"/>}
+                            </div>
                             {(()=>{const sl=statusLabel(m.status); return sl
                               ? <p className={`text-[11px] truncate leading-tight ${sl.cls}`}>{sl.text}</p>
                               : m.role_name ? <p className="text-[11px] text-zinc-600 truncate leading-tight">{m.role_name}</p> : null;
                             })()}
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -4574,21 +4614,27 @@ export default function App() {
                       Offline — {offline.length}
                     </h3>
                     <div className="flex flex-col gap-0.5">
-                      {offline.map(m=>(
+                      {offline.map(m=>{
+                        const isOwner = m.id === serverFull?.owner_id;
+                        return (
                         <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={()=>openProfile(m)}>
                           <div className="relative shrink-0 av-frozen">
                             <img src={ava(m)} className={`w-10 h-10 rounded-xl object-cover opacity-35 av-eff-${m.avatar_effect||'none'}`} alt=""/>
                             <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-zinc-600 border-[2.5px] border-[#1e1e30] rounded-full"/>
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-[13px] font-medium truncate group-hover:opacity-70 transition-colors leading-tight"
-                              style={{ color: m.roles?.[0]?.color ? `${m.roles[0].color}80` : '#52525b' }}>
-                              {m.username}
-                            </p>
+                            <div className="flex items-center gap-1">
+                              <p className="text-[13px] font-medium truncate group-hover:opacity-70 transition-colors leading-tight"
+                                style={{ color: m.roles?.[0]?.color ? `${m.roles[0].color}80` : '#52525b' }}>
+                                {m.username}
+                              </p>
+                              {isOwner&&<Crown size={11} className="text-amber-400/50 shrink-0"/>}
+                            </div>
                             {m.role_name&&<p className="text-[11px] text-zinc-700 truncate leading-tight">{m.role_name}</p>}
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -4781,14 +4827,26 @@ export default function App() {
 
                   {/* Badges row */}
                   <div className="flex items-center gap-2 mb-4 flex-wrap">
-                    <div className="flex items-center gap-1.5 bg-white/[0.04] border border-white/[0.06] rounded-lg px-2.5 py-1">
-                      <Globe size={11} className="text-zinc-500"/>
-                      <span className="text-[11px] text-zinc-500 font-medium">Cordyn</span>
-                    </div>
-                    {(selUser.role_name==='Admin'||selUser.role_name==='Owner')&&(
-                      <div className="flex items-center gap-1.5 bg-indigo-500/10 border border-indigo-500/25 rounded-lg px-2.5 py-1">
-                        <Shield size={11} className="text-indigo-400"/>
-                        <span className="text-[11px] text-indigo-400 font-medium">{selUser.role_name}</span>
+                    {/* Global badges */}
+                    {Array.isArray(selUser.badges)&&selUser.badges.map((b:Badge)=>(
+                      <div key={b.id} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1"
+                        style={{background:b.color+'18',border:'1px solid '+b.color+'45'}}>
+                        <span className="text-xs leading-none">{b.icon}</span>
+                        <span className="text-[11px] font-semibold" style={{color:b.color}}>{b.label}</span>
+                      </div>
+                    ))}
+                    {/* Crown — server owner */}
+                    {activeView==='servers'&&serverFull&&selUser.id===serverFull.owner_id&&(
+                      <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2.5 py-1">
+                        <Crown size={11} className="text-amber-400"/>
+                        <span className="text-[11px] text-amber-400 font-semibold">Właściciel</span>
+                      </div>
+                    )}
+                    {/* New member indicator (joined within 48h) */}
+                    {activeView==='servers'&&selUser.joined_at&&(Date.now()-new Date(selUser.joined_at).getTime()<172800000)&&(
+                      <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-2.5 py-1">
+                        <Sparkles size={11} className="text-emerald-400"/>
+                        <span className="text-[11px] text-emerald-400 font-semibold">Nowy</span>
                       </div>
                     )}
                     {/* Server roles (custom roles) */}
@@ -6318,6 +6376,266 @@ export default function App() {
       <AnimatePresence>
         {showWelcome && currentUser && (
           <WelcomeModal username={currentUser.username} onClose={() => setShowWelcome(false)} />
+        )}
+      </AnimatePresence>
+
+      {/* ── Admin Panel ─────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {adminPanelOpen&&(
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+            onClick={()=>setAdminPanelOpen(false)}>
+            <motion.div initial={{scale:0.94,opacity:0,y:20}} animate={{scale:1,opacity:1,y:0}} exit={{scale:0.94,opacity:0,y:16}}
+              transition={{type:'spring',stiffness:320,damping:26}}
+              onClick={e=>e.stopPropagation()}
+              className="glass-modal rounded-3xl w-full max-w-3xl max-h-[88vh] flex flex-col overflow-hidden">
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.07] shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-violet-500/15 flex items-center justify-center">
+                    <LayoutDashboard size={16} className="text-violet-400"/>
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-white leading-tight">Panel Administratora</h2>
+                    <p className="text-[11px] text-zinc-500">Cordyn System</p>
+                  </div>
+                </div>
+                <button onClick={()=>setAdminPanelOpen(false)} className="w-8 h-8 bg-white/[0.04] hover:bg-white/[0.08] rounded-xl flex items-center justify-center text-zinc-500 hover:text-white transition-all">
+                  <X size={15}/>
+                </button>
+              </div>
+              {/* Tabs */}
+              <div className="flex gap-1 px-6 pt-3 pb-0 shrink-0">
+                {(['stats','badges','users'] as const).map(t=>(
+                  <button key={t} onClick={()=>{
+                    setAdminTab(t);
+                    if(t==='stats') adminApi.stats().then(setAdminStats).catch(()=>{});
+                    if(t==='badges') adminApi.badges.list().then(setAdminBadges).catch(()=>{});
+                    if(t==='users') { setAdminUserQ(''); setAdminUsers([]); }
+                  }}
+                    className={`px-4 py-2 rounded-t-xl text-[13px] font-semibold transition-all ${adminTab===t?'bg-white/[0.07] text-white border border-white/[0.08] border-b-transparent':'text-zinc-500 hover:text-zinc-300'}`}>
+                    {t==='stats'?'Statystyki':t==='badges'?'Odznaki':'Użytkownicy'}
+                  </button>
+                ))}
+              </div>
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5">
+                {/* ── Stats tab ── */}
+                {adminTab==='stats'&&(()=>{
+                  if(!adminStats) {
+                    adminApi.stats().then(setAdminStats).catch(()=>{});
+                    return <div className="flex items-center justify-center py-16"><Loader2 size={22} className="text-zinc-600 animate-spin"/></div>;
+                  }
+                  const mb = (b:number) => (b/1024/1024).toFixed(1)+' MB';
+                  const uptime = (s:number) => {
+                    const h = Math.floor(s/3600), m = Math.floor((s%3600)/60);
+                    return h>0 ? `${h}h ${m}m` : `${m}m`;
+                  };
+                  return (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {[
+                        {label:'Użytkownicy',value:adminStats.users,icon:'👤',color:'#6366f1'},
+                        {label:'Serwery',value:adminStats.servers,icon:'🏠',color:'#10b981'},
+                        {label:'Wiadomości',value:adminStats.messages,icon:'💬',color:'#3b82f6'},
+                        {label:'DM',value:adminStats.dm_messages,icon:'📩',color:'#8b5cf6'},
+                        {label:'Odznaki',value:adminStats.badges,icon:'🏅',color:'#f59e0b'},
+                        {label:'Przypisania',value:adminStats.badge_assignments,icon:'🎖️',color:'#ec4899'},
+                      ].map(c=>(
+                        <div key={c.label} className="bg-white/[0.04] border border-white/[0.06] rounded-2xl p-4 flex flex-col gap-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-zinc-500 font-medium">{c.label}</span>
+                            <span className="text-base">{c.icon}</span>
+                          </div>
+                          <p className="text-2xl font-black text-white">{c.value.toLocaleString()}</p>
+                        </div>
+                      ))}
+                      {/* Memory */}
+                      <div className="col-span-2 sm:col-span-3 bg-white/[0.04] border border-white/[0.06] rounded-2xl p-4">
+                        <p className="text-xs text-zinc-500 font-medium mb-3">Pamięć Node.js</p>
+                        <div className="flex flex-col gap-2">
+                          {[
+                            {label:'RSS',value:adminStats.memory.rss,max:adminStats.memory.rss},
+                            {label:'Heap używany',value:adminStats.memory.heapUsed,max:adminStats.memory.heapTotal},
+                            {label:'Heap całkowity',value:adminStats.memory.heapTotal,max:adminStats.memory.heapTotal},
+                          ].map(row=>(
+                            <div key={row.label}>
+                              <div className="flex justify-between text-[11px] mb-1">
+                                <span className="text-zinc-400">{row.label}</span>
+                                <span className="text-zinc-500 font-mono">{mb(row.value)}</span>
+                              </div>
+                              <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                                <div className="h-full bg-violet-500 rounded-full" style={{width:`${Math.min(100,(row.value/row.max)*100)}%`}}/>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-[11px] text-zinc-600 mt-3">Node {adminStats.node_version} · Uptime: {uptime(adminStats.uptime_seconds)}</p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* ── Badges tab ── */}
+                {adminTab==='badges'&&(()=>{
+                  if(!adminBadges.length) adminApi.badges.list().then(setAdminBadges).catch(()=>{});
+                  return (
+                    <div className="flex flex-col gap-5">
+                      {/* Create badge form */}
+                      <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
+                        <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mb-3">Nowa odznaka</p>
+                        <div className="grid grid-cols-2 gap-2 mb-2">
+                          <input placeholder="name (np. qa)" value={adminBadgeForm.name}
+                            onChange={e=>setAdminBadgeForm(p=>({...p,name:e.target.value}))}
+                            className="bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 outline-none focus:border-violet-500/40"/>
+                          <input placeholder="Etykieta (np. QA)" value={adminBadgeForm.label}
+                            onChange={e=>setAdminBadgeForm(p=>({...p,label:e.target.value}))}
+                            className="bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 outline-none focus:border-violet-500/40"/>
+                          <input placeholder="Kolor hex (#6366f1)" value={adminBadgeForm.color}
+                            onChange={e=>setAdminBadgeForm(p=>({...p,color:e.target.value}))}
+                            className="bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 outline-none focus:border-violet-500/40"/>
+                          <input placeholder="Ikona emoji (⚙️)" value={adminBadgeForm.icon}
+                            onChange={e=>setAdminBadgeForm(p=>({...p,icon:e.target.value}))}
+                            className="bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 outline-none focus:border-violet-500/40"/>
+                        </div>
+                        <button disabled={adminBadgeSaving||!adminBadgeForm.name||!adminBadgeForm.label}
+                          onClick={async()=>{
+                            setAdminBadgeSaving(true);
+                            try { const b = await adminApi.badges.create(adminBadgeForm); setAdminBadges(p=>[...p,b]); setAdminBadgeForm({name:'',label:'',color:'#6366f1',icon:'⚙️'}); } catch(e:any){alert(e.message);}
+                            setAdminBadgeSaving(false);
+                          }}
+                          className="w-full py-2 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 text-violet-300 text-xs font-semibold transition-all disabled:opacity-40">
+                          {adminBadgeSaving?'Tworzenie…':'Utwórz odznakę'}
+                        </button>
+                      </div>
+                      {/* Badge list */}
+                      <div>
+                        <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mb-3">Istniejące odznaki</p>
+                        <div className="flex flex-col gap-2">
+                          {adminBadges.map(b=>(
+                            <div key={b.id} className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2.5">
+                              <span className="text-xl">{b.icon}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-semibold" style={{color:b.color}}>{b.label}</span>
+                                  <span className="text-[11px] text-zinc-600 font-mono">{b.name}</span>
+                                </div>
+                              </div>
+                              <button onClick={async()=>{
+                                if(!confirm(`Usuń odznakę "${b.label}"?`)) return;
+                                await adminApi.badges.delete(b.id);
+                                setAdminBadges(p=>p.filter(x=>x.id!==b.id));
+                              }} className="w-7 h-7 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 flex items-center justify-center text-rose-400 transition-all">
+                                <Trash2 size={12}/>
+                              </button>
+                            </div>
+                          ))}
+                          {adminBadges.length===0&&<p className="text-xs text-zinc-600 text-center py-4">Brak odznak</p>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* ── Users tab ── */}
+                {adminTab==='users'&&(
+                  <div className="flex flex-col gap-4">
+                    {/* Search */}
+                    <div className="flex gap-2">
+                      <input placeholder="Szukaj użytkownika…" value={adminUserQ}
+                        onChange={e=>setAdminUserQ(e.target.value)}
+                        onKeyDown={async e=>{
+                          if(e.key==='Enter'&&adminUserQ.trim()) {
+                            const r = await adminApi.users.search(adminUserQ.trim()).catch(()=>[]);
+                            setAdminUsers(r);
+                          }
+                        }}
+                        className="flex-1 bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-violet-500/40"/>
+                      <button onClick={async()=>{
+                        if(!adminUserQ.trim()) return;
+                        const r = await adminApi.users.search(adminUserQ.trim()).catch(()=>[]);
+                        setAdminUsers(r);
+                      }} className="px-4 py-2 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 text-violet-300 text-sm font-semibold transition-all">
+                        Szukaj
+                      </button>
+                    </div>
+                    {/* Assign UI */}
+                    {adminAssignUser&&(
+                      <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4">
+                        <p className="text-xs font-bold text-zinc-400 mb-2">Przypisz odznakę → <span className="text-white">{adminAssignUser.username}</span></p>
+                        <div className="flex gap-2">
+                          <select value={adminAssignBadgeId} onChange={e=>setAdminAssignBadgeId(e.target.value)}
+                            className="flex-1 bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-violet-500/40">
+                            <option value="">Wybierz odznakę…</option>
+                            {adminBadges.map(b=><option key={b.id} value={b.id}>{b.icon} {b.label}</option>)}
+                          </select>
+                          <button disabled={!adminAssignBadgeId} onClick={async()=>{
+                            if(!adminAssignBadgeId) return;
+                            try {
+                              await adminApi.badges.assign(adminAssignUser.id, adminAssignBadgeId);
+                              const badge = adminBadges.find(b=>b.id===adminAssignBadgeId);
+                              if(badge) setAdminUsers(p=>p.map(u=>u.id===adminAssignUser.id?{...u,badges:[...u.badges.filter(b2=>b2.id!==badge.id),badge]}:u));
+                              setAdminAssignBadgeId('');
+                            } catch(e:any){alert(e.message);}
+                          }} className="px-4 py-2 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 text-violet-300 text-sm font-semibold transition-all disabled:opacity-40">
+                            Przypisz
+                          </button>
+                          <button onClick={()=>{setAdminAssignUser(null);setAdminAssignBadgeId('');}} className="px-3 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 text-sm transition-all">
+                            Anuluj
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {/* Results */}
+                    <div className="flex flex-col gap-2">
+                      {adminUsers.map(u=>(
+                        <div key={u.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-3 flex items-start gap-3">
+                          <img src={u.avatar_url||`https://api.dicebear.com/7.x/thumbs/svg?seed=${u.username}`} className="w-9 h-9 rounded-xl object-cover shrink-0" alt=""/>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-semibold text-white">{u.username}</span>
+                              {u.is_admin&&<span className="text-[10px] font-bold bg-violet-500/15 text-violet-400 border border-violet-500/25 rounded-full px-2 py-0.5">Admin</span>}
+                            </div>
+                            <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                              {u.badges.map(b=>(
+                                <div key={b.id} className="flex items-center gap-1 rounded-lg px-2 py-0.5 text-[11px] font-semibold cursor-pointer hover:opacity-70 transition-all"
+                                  style={{background:b.color+'18',border:'1px solid '+b.color+'40',color:b.color}}
+                                  title="Kliknij aby usunąć"
+                                  onClick={async()=>{
+                                    if(!confirm(`Usuń odznakę "${b.label}" od ${u.username}?`)) return;
+                                    await adminApi.badges.remove(u.id, b.id).catch(()=>{});
+                                    setAdminUsers(p=>p.map(x=>x.id===u.id?{...x,badges:x.badges.filter(b2=>b2.id!==b.id)}:x));
+                                  }}>
+                                  {b.icon} {b.label}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-1.5 shrink-0">
+                            <button onClick={()=>{
+                              setAdminAssignUser(u);
+                              setAdminAssignBadgeId('');
+                              if(!adminBadges.length) adminApi.badges.list().then(setAdminBadges).catch(()=>{});
+                            }} className="px-3 py-1.5 rounded-xl bg-violet-500/15 hover:bg-violet-500/25 text-violet-300 text-[11px] font-semibold transition-all whitespace-nowrap">
+                              + Odznaka
+                            </button>
+                            <button onClick={async()=>{
+                              const newState = !u.is_admin;
+                              if(!confirm(`${newState?'Nadać':'Odebrać'} uprawnienia administratora ${u.username}?`)) return;
+                              await adminApi.users.setAdmin(u.id, newState).catch(()=>{});
+                              setAdminUsers(p=>p.map(x=>x.id===u.id?{...x,is_admin:newState}:x));
+                            }} className={`px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all whitespace-nowrap ${u.is_admin?'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400':'bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400'}`}>
+                              {u.is_admin?'Odbierz admin':'Nadaj admin'}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      {adminUsers.length===0&&adminUserQ&&<p className="text-xs text-zinc-600 text-center py-6">Brak wyników</p>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 

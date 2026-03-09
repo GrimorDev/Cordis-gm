@@ -345,7 +345,12 @@ router.get('/:id/members', authMiddleware, async (req: AuthRequest, res: Respons
     }
     const { rows } = await query(
       `SELECT u.id, u.username, u.avatar_url, u.status, u.custom_status, u.avatar_effect,
-              sm.role_name, sm.joined_at
+              sm.role_name, sm.joined_at,
+              COALESCE(
+                (SELECT json_agg(json_build_object('id', gb.id, 'name', gb.name, 'label', gb.label, 'color', gb.color, 'icon', gb.icon) ORDER BY gb.position)
+                 FROM user_badges ub INNER JOIN global_badges gb ON gb.id = ub.badge_id WHERE ub.user_id = u.id),
+                '[]'::json
+              ) as badges
        FROM server_members sm INNER JOIN users u ON u.id = sm.user_id
        WHERE sm.server_id = $1 ORDER BY sm.role_name, u.username`,
       [req.params.id]

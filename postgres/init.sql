@@ -224,3 +224,40 @@ CREATE TABLE IF NOT EXISTS server_activity (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_server_activity ON server_activity(server_id, created_at DESC);
+
+-- ── Global Badge System ───────────────────────────────────────────────
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS global_badges (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name        VARCHAR(50) UNIQUE NOT NULL,
+    label       VARCHAR(100) NOT NULL,
+    color       VARCHAR(20) DEFAULT '#6366f1',
+    icon        VARCHAR(10) DEFAULT '🔵',
+    description TEXT,
+    position    INT DEFAULT 0,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS user_badges (
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    badge_id    UUID NOT NULL REFERENCES global_badges(id) ON DELETE CASCADE,
+    assigned_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    assigned_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (user_id, badge_id)
+);
+
+-- Seed default global badges
+INSERT INTO global_badges (name, label, color, icon, description, position) VALUES
+  ('developer', 'Developer', '#6366f1', '⚙️', 'Twórca i deweloper systemu Cordyn', 0),
+  ('qa',        'QA',        '#f59e0b', '🔬', 'Tester i zapewnienie jakości',       1),
+  ('admin',     'Admin',     '#ef4444', '🛡️', 'Administrator systemu',               2),
+  ('moderator', 'Moderator', '#10b981', '🔨', 'Moderator społeczności',              3)
+ON CONFLICT (name) DO NOTHING;
+
+-- Bootstrap: Grimor becomes admin and gets the developer badge
+UPDATE users SET is_admin = TRUE WHERE username = 'Grimor';
+INSERT INTO user_badges (user_id, badge_id)
+  SELECT u.id, gb.id FROM users u, global_badges gb
+  WHERE u.username = 'Grimor' AND gb.name = 'developer'
+ON CONFLICT DO NOTHING;
