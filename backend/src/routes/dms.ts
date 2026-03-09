@@ -38,7 +38,7 @@ router.get('/conversations', authMiddleware, async (req: AuthRequest, res: Respo
               u.id as other_user_id, u.username as other_username,
               u.avatar_url as other_avatar, u.status as other_status,
               u.custom_status as other_custom_status,
-              dp2.last_read_at as other_last_read_at,
+              CASE WHEN u.privacy_read_receipts = FALSE THEN NULL ELSE dp2.last_read_at END as other_last_read_at,
               (SELECT content FROM dm_messages WHERE conversation_id=dc.id ORDER BY created_at DESC LIMIT 1) as last_message,
               (SELECT created_at FROM dm_messages WHERE conversation_id=dc.id ORDER BY created_at DESC LIMIT 1) as last_message_at
        FROM dm_conversations dc
@@ -131,12 +131,18 @@ router.post('/:userId/messages', authMiddleware,
 router.put('/:userId/read', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const conversationId = await getOrCreateConversation(req.user!.id, req.params.userId);
+    // Always update last_read_at for unread count purposes
     await query(
       'UPDATE dm_participants SET last_read_at = NOW() WHERE conversation_id=$1 AND user_id=$2',
       [conversationId, req.user!.id]
     );
+    // Only emit dm_read event if the reader allows read receipts
+    const { rows: [reader] } = await query(
+      'SELECT privacy_read_receipts FROM users WHERE id=$1',
+      [req.user!.id]
+    );
     const io = req.app.get('io');
-    if (io) {
+    if (io && reader?.privacy_read_receipts === true) {
       io.to(`user:${req.params.userId}`).emit('dm_read', {
         conversation_id: conversationId,
         reader_id: req.user!.id,

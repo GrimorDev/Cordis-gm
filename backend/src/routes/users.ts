@@ -94,7 +94,7 @@ router.put('/me', authMiddleware,
     body('custom_status').optional({ nullable: true }).isLength({ max: 128 }),
     body('banner_color').optional().isLength({ max: 200 }),
     body('banner_url').optional({ nullable: true }).isLength({ max: 500 }),
-    body('accent_color').optional().isIn(['indigo','violet','pink','blue','emerald']),
+    body('accent_color').optional().isIn(['indigo','violet','pink','blue','emerald','amber','orange','rose','teal','cyan']),
     body('compact_messages').optional().isBoolean(),
     body('voice_noise_cancel').optional().isBoolean(),
     body('font_size').optional().isIn(['small','normal','large']),
@@ -107,6 +107,7 @@ router.put('/me', authMiddleware,
     body('privacy_read_receipts').optional().isBoolean(),
     body('privacy_friend_requests').optional().isBoolean(),
     body('privacy_dm_from_strangers').optional().isBoolean(),
+    body('avatar_effect').optional().isIn(['none','glow','pulse','rainbow','neon']),
   ],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
@@ -116,7 +117,7 @@ router.put('/me', authMiddleware,
       accent_color, compact_messages, voice_noise_cancel,
       font_size, show_timestamps, show_chat_avatars, message_animations, show_link_previews,
       privacy_status_visible, privacy_typing_visible, privacy_read_receipts, privacy_friend_requests,
-      privacy_dm_from_strangers,
+      privacy_dm_from_strangers, avatar_effect,
     } = req.body;
     const updates: string[] = [];
     const values: any[] = [];
@@ -139,6 +140,7 @@ router.put('/me', authMiddleware,
     if (privacy_read_receipts     !== undefined) { updates.push(`privacy_read_receipts=$${idx++}`);     values.push(privacy_read_receipts); }
     if (privacy_friend_requests   !== undefined) { updates.push(`privacy_friend_requests=$${idx++}`);   values.push(privacy_friend_requests); }
     if (privacy_dm_from_strangers !== undefined) { updates.push(`privacy_dm_from_strangers=$${idx++}`); values.push(privacy_dm_from_strangers); }
+    if (avatar_effect             !== undefined) { updates.push(`avatar_effect=$${idx++}`);             values.push(avatar_effect); }
     if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update' });
     updates.push(`updated_at=NOW()`);
     values.push(req.user!.id);
@@ -153,10 +155,10 @@ router.put('/me', authMiddleware,
                    accent_color,compact_messages,voice_noise_cancel,
                    font_size,show_timestamps,show_chat_avatars,message_animations,show_link_previews,
                    privacy_status_visible,privacy_typing_visible,privacy_read_receipts,
-                   privacy_friend_requests,privacy_dm_from_strangers`,
+                   privacy_friend_requests,privacy_dm_from_strangers,avatar_effect`,
         values
       );
-      await broadcastUserUpdate(req, { id: rows[0].id, username: rows[0].username, avatar_url: rows[0].avatar_url, banner_url: rows[0].banner_url, banner_color: rows[0].banner_color, bio: rows[0].bio, custom_status: rows[0].custom_status });
+      await broadcastUserUpdate(req, { id: rows[0].id, username: rows[0].username, avatar_url: rows[0].avatar_url, banner_url: rows[0].banner_url, banner_color: rows[0].banner_color, bio: rows[0].bio, custom_status: rows[0].custom_status, privacy_read_receipts: rows[0].privacy_read_receipts, avatar_effect: rows[0].avatar_effect });
       return res.json(rows[0]);
     } catch { return res.status(500).json({ error: 'Internal server error' }); }
   }

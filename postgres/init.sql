@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS users (
     message_animations      BOOLEAN      DEFAULT TRUE,
     show_link_previews      BOOLEAN      DEFAULT TRUE,
     privacy_dm_from_strangers BOOLEAN    DEFAULT TRUE,
+    avatar_effect           VARCHAR(20)  DEFAULT 'none',
     created_at    TIMESTAMPTZ  DEFAULT NOW(),
     updated_at    TIMESTAMPTZ  DEFAULT NOW()
 );

@@ -190,7 +190,7 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
               accent_color, compact_messages, voice_noise_cancel,
               font_size, show_timestamps, show_chat_avatars, message_animations, show_link_previews,
               privacy_status_visible, privacy_typing_visible, privacy_read_receipts,
-              privacy_friend_requests, privacy_dm_from_strangers,
+              privacy_friend_requests, privacy_dm_from_strangers, avatar_effect,
               created_at
        FROM users WHERE id = $1`,
       [req.user!.id]

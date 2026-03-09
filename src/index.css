@@ -220,6 +220,33 @@ select optgroup {
 .link-prev-title { font-size: 13px; font-weight: 600; color: #e8eaf6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .link-prev-desc { font-size: 11px; color: rgba(180,185,210,0.6); margin-top: 3px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
+/* ── Avatar effects ────────────────────────────────────────────────── */
+.av-eff-glow {
+  box-shadow: 0 0 10px 3px rgb(var(--accent-rgb) / 0.65);
+}
+.av-eff-pulse {
+  animation: av-pulse-anim 2s ease-in-out infinite;
+}
+@keyframes av-pulse-anim {
+  0%, 100% { box-shadow: 0 0 6px 2px rgb(var(--accent-rgb) / 0.5); }
+  50%       { box-shadow: 0 0 20px 7px rgb(var(--accent-rgb) / 0.85); }
+}
+.av-eff-neon {
+  box-shadow: 0 0 4px 1px rgb(var(--accent-rgb) / 0.95), 0 0 16px 5px rgb(var(--accent-rgb) / 0.45);
+}
+.av-eff-rainbow {
+  animation: av-rainbow-anim 3s linear infinite;
+}
+@keyframes av-rainbow-anim {
+  0%   { box-shadow: 0 0 12px 4px rgba(255,50,50,0.75); }
+  16%  { box-shadow: 0 0 12px 4px rgba(255,165,0,0.75); }
+  33%  { box-shadow: 0 0 12px 4px rgba(240,220,0,0.75); }
+  50%  { box-shadow: 0 0 12px 4px rgba(50,210,80,0.75); }
+  66%  { box-shadow: 0 0 12px 4px rgba(30,140,255,0.75); }
+  83%  { box-shadow: 0 0 12px 4px rgba(160,30,255,0.75); }
+  100% { box-shadow: 0 0 12px 4px rgba(255,50,50,0.75); }
+}
+
 /* Lightbox overlay */
 .lightbox-bg {
   position: fixed; inset: 0; z-index: 9000;

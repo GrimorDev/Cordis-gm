@@ -61,6 +61,14 @@ const PERMISSIONS = [
   { id: 'read_messages',    label: 'Czytaj wiadomości',       desc: 'Dostęp do czytania wiadomości (domyślnie wszyscy)' },
 ];
 const ROLE_COLORS = ['#5865f2','#eb459e','#ed4245','#faa61a','#57f287','#1abc9c','#3498db','#9b59b6'];
+const AVATAR_EFFECTS = [
+  { key: 'none',    label: 'Brak',       desc: 'Avatar bez efektów' },
+  { key: 'glow',    label: 'Poświata',   desc: 'Subtelna poświata w kolorze akcentu' },
+  { key: 'pulse',   label: 'Pulsowanie', desc: 'Pulsująca animowana poświata' },
+  { key: 'neon',    label: 'Neon',       desc: 'Ostre neonowe obramowanie' },
+  { key: 'rainbow', label: 'Tęcza',      desc: 'Tęczowa animowana poświata' },
+];
+
 const GRADIENTS = [
   'from-indigo-600 via-purple-600 to-pink-600',
   'from-rose-500 via-red-500 to-orange-500',
@@ -853,6 +861,7 @@ export default function App() {
 
   // App preferences — initialized from currentUser (DB), updated via users.updateMe()
   const [accentColor, setAccentColor]           = useState<string>('indigo');
+  const [avatarEffect, setAvatarEffect]         = useState<string>('none');
   const [compactMessages, setCompactMessages]   = useState<boolean>(false);
   const [fontSize, setFontSize]                 = useState<'small'|'normal'|'large'>('normal');
   const [alwaysShowTimestamps, setAlwaysShowTimestamps] = useState<boolean>(false);
@@ -1473,6 +1482,11 @@ export default function App() {
       pink:    { '300':'#f9a8d4','400':'#f472b6','500':'#ec4899','600':'#db2777','700':'#be185d' },
       blue:    { '300':'#93c5fd','400':'#60a5fa','500':'#3b82f6','600':'#2563eb','700':'#1d4ed8' },
       emerald: { '300':'#6ee7b7','400':'#34d399','500':'#10b981','600':'#059669','700':'#047857' },
+      amber:   { '300':'#fcd34d','400':'#fbbf24','500':'#f59e0b','600':'#d97706','700':'#b45309' },
+      orange:  { '300':'#fdba74','400':'#fb923c','500':'#f97316','600':'#ea580c','700':'#c2410c' },
+      rose:    { '300':'#fda4af','400':'#fb7185','500':'#f43f5e','600':'#e11d48','700':'#be123c' },
+      teal:    { '300':'#5eead4','400':'#2dd4bf','500':'#14b8a6','600':'#0d9488','700':'#0f766e' },
+      cyan:    { '300':'#67e8f9','400':'#22d3ee','500':'#06b6d4','600':'#0891b2','700':'#0e7490' },
     };
     const p = palettes[accentColor] || palettes.indigo;
     const r = document.documentElement;
@@ -1758,6 +1772,11 @@ export default function App() {
     if (upd) { setCurrentUser(upd); setEditProf({...upd}); setAccentColor(color); addToast('Kolor akcentu zmieniony', 'success'); }
     else addToast('Błąd zapisu', 'error');
   };
+  const saveAvatarEffect = async (effect: string) => {
+    const upd = await users.updateMe({ avatar_effect: effect } as any).catch(() => null);
+    if (upd) { setCurrentUser(upd); setEditProf({...upd}); setAvatarEffect(effect); addToast('Efekt avatara zmieniony', 'success'); }
+    else addToast('Błąd zapisu', 'error');
+  };
   const saveCompactMessages = async (compact: boolean) => {
     const upd = await users.updateMe({ compact_messages: compact }).catch(() => null);
     if (upd) { setCurrentUser(upd); setEditProf({...upd}); setCompactMessages(compact); addToast('Układ wiadomości zmieniony', 'success'); }
@@ -1807,6 +1826,7 @@ export default function App() {
   // ── Auth ────────────────────────────────────────────────────────
   const applyUserPrefs = (u: UserProfile) => {
     setAccentColor(u.accent_color || 'indigo');
+    setAvatarEffect(u.avatar_effect || 'none');
     setCompactMessages(u.compact_messages ?? false);
     setNoiseCancel(u.voice_noise_cancel !== false); // default true
     setFontSize((u.font_size as 'small'|'normal'|'large') || 'normal');
@@ -3112,7 +3132,7 @@ export default function App() {
             <div className="flex items-center gap-2.5 px-2 py-2 rounded-2xl hover:bg-white/[0.05] transition-colors cursor-default">
               {/* Avatar + status dot — click opens picker */}
               <div className="relative shrink-0 cursor-pointer" onClick={()=>setStatusPickerOpen(p=>!p)} title="Zmień status">
-                <img src={currentUser?ava(currentUser):''} className="w-8 h-8 rounded-full object-cover" alt=""/>
+                <img src={currentUser?ava(currentUser):''} className={`w-8 h-8 rounded-full object-cover av-eff-${avatarEffect}`} alt=""/>
                 {/* Status dot — red phone when in call, else normal status */}
                 {activeCall ? (
                   <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-rose-500 border-2 border-[#181828] rounded-full flex items-center justify-center">
@@ -4203,6 +4223,8 @@ export default function App() {
                   {/* DM read receipt — "Przeczytane" after last own message */}
                   {(()=>{
                     if (activeView !== 'dms' || !activeDm || !currentUser) return null;
+                    // Hide if partner has disabled read receipts
+                    if (dmPartnerProfile?.privacy_read_receipts === false) return null;
                     // Use socket-received read time or the other user's last_read_at from conversations list
                     const readAt = dmReadStates[activeDmUserId] || activeDm.other_last_read_at;
                     if (!readAt) return null;
@@ -5674,11 +5696,16 @@ export default function App() {
                         <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Kolor akcentu</label>
                         <div className="grid grid-cols-5 gap-2">
                           {([
-                            {key:'indigo',  label:'Indigo',    hex:'#6366f1', cls:'bg-indigo-500'},
-                            {key:'violet',  label:'Fioletowy', hex:'#8b5cf6', cls:'bg-violet-500'},
-                            {key:'pink',    label:'Różowy',    hex:'#ec4899', cls:'bg-pink-500'},
-                            {key:'blue',    label:'Niebieski', hex:'#3b82f6', cls:'bg-blue-500'},
-                            {key:'emerald', label:'Zielony',   hex:'#10b981', cls:'bg-emerald-500'},
+                            {key:'indigo',  label:'Indigo',     cls:'bg-indigo-500'},
+                            {key:'violet',  label:'Fioletowy',  cls:'bg-violet-500'},
+                            {key:'pink',    label:'Różowy',     cls:'bg-pink-500'},
+                            {key:'blue',    label:'Niebieski',  cls:'bg-blue-500'},
+                            {key:'emerald', label:'Zielony',    cls:'bg-emerald-500'},
+                            {key:'teal',    label:'Morski',     cls:'bg-teal-500'},
+                            {key:'cyan',    label:'Cyjan',      cls:'bg-cyan-500'},
+                            {key:'amber',   label:'Bursztynowy',cls:'bg-amber-500'},
+                            {key:'orange',  label:'Pomarańcz', cls:'bg-orange-500'},
+                            {key:'rose',    label:'Karmazyn',  cls:'bg-rose-500'},
                           ] as const).map(c=>(
                             <button key={c.key} onClick={()=>saveAccentColor(c.key)}
                               title={c.label}
@@ -5768,6 +5795,31 @@ export default function App() {
                             </button>
                           </div>
                         ))}
+                      </div>
+
+                      {/* Avatar effects */}
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Efekty avatara</label>
+                        {/* Live preview */}
+                        <div className="flex items-center gap-4 mb-4 p-3 bg-white/[0.03] rounded-2xl border border-white/[0.06]">
+                          <img src={currentUser?ava(currentUser):''} className={`w-14 h-14 rounded-2xl object-cover shrink-0 av-eff-${avatarEffect}`} alt="podgląd"/>
+                          <div>
+                            <p className="text-sm font-semibold text-white">{AVATAR_EFFECTS.find(e=>e.key===avatarEffect)?.label ?? 'Brak efektu'}</p>
+                            <p className="text-xs text-zinc-500 mt-0.5 leading-snug">{AVATAR_EFFECTS.find(e=>e.key===avatarEffect)?.desc}</p>
+                          </div>
+                        </div>
+                        {/* Effect picker */}
+                        <div className="grid grid-cols-5 gap-2">
+                          {AVATAR_EFFECTS.map(ef=>(
+                            <button key={ef.key} onClick={()=>saveAvatarEffect(ef.key)}
+                              title={ef.label}
+                              className={`relative flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${avatarEffect===ef.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+                              <img src={currentUser?ava(currentUser):''} className={`w-9 h-9 rounded-xl object-cover av-eff-${ef.key}`} alt=""/>
+                              <span className="text-[9px] text-zinc-400 font-medium leading-tight text-center">{ef.label}</span>
+                              {avatarEffect===ef.key&&<span className="absolute top-1 right-1 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={7} className="text-white"/></span>}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </motion.div>
                   )}
