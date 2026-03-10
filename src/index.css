@@ -237,6 +237,8 @@ img.av-sc-lg {
 }
 
 /* ── Avatar effects ────────────────────────────────────────────────── */
+/* Base: position:relative so ::before/::after pseudo-elements anchor here */
+.av-frozen { position: relative; }
 /* Frozen wrappers: pause animations by default, resume on hover */
 .av-frozen .av-eff-pulse   { animation-play-state: paused; }
 .av-frozen .av-eff-rainbow { animation-play-state: paused; }
@@ -269,85 +271,134 @@ img.av-sc-lg {
   100% { box-shadow: 0 0 12px 4px rgba(255,50,50,0.75); }
 }
 
-/* ── Vortex avatar effects ──────────────────────────────────────── */
-/* Two spinning arc-rings: outer (::before) and inner (::after).
-   Both hidden by default, appear + scale in on hover.
-   Avatar image shrinks slightly on hover (pulled-in vortex feel).
-   Rings sit behind avatar (z-index:-1 inside isolation:isolate context). */
-.av-frozen:has(img.av-eff-vortex-cw),
-.av-frozen:has(img.av-eff-vortex-ccw) {
-  isolation: isolate;
-}
-
-/* Avatar scales down on hover */
-img.av-eff-vortex-cw,
-img.av-eff-vortex-ccw {
-  position: relative;
-  z-index: 1;
-  scale: 1;
+/* ── Vortex ─────────────────────────────────────────────────────── */
+/* isolation:isolate so z-index:-1 rings stay inside wrapper context */
+.av-frozen:has(img.av-eff-vortex-cw) { isolation: isolate; }
+img.av-eff-vortex-cw {
+  position: relative; z-index: 1; scale: 1;
   transition: scale 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.av-frozen:hover img.av-eff-vortex-cw,
-.av-frozen:hover img.av-eff-vortex-ccw {
-  scale: 0.82;
-}
-
-/* Outer ring (::before) */
-.av-frozen:has(img.av-eff-vortex-cw)::before,
-.av-frozen:has(img.av-eff-vortex-ccw)::before {
-  content: '';
-  position: absolute;
-  inset: -5px;
-  border-radius: 50%;
+.av-frozen:hover img.av-eff-vortex-cw { scale: 0.82; }
+.av-frozen:has(img.av-eff-vortex-cw)::before {
+  content: ''; position: absolute; inset: -5px; border-radius: 50%;
   border: 3px solid transparent;
-  border-top-color: rgb(var(--accent-rgb));
-  border-left-color: rgb(var(--accent-rgb));
-  pointer-events: none;
-  opacity: 0;
-  scale: 1.5;
-  transition: opacity 0.5s ease, scale 0.5s ease;
-  z-index: -1;
+  border-top-color: rgb(var(--accent-rgb)); border-left-color: rgb(var(--accent-rgb));
+  pointer-events: none; opacity: 0; scale: 1.5;
+  transition: opacity 0.5s ease, scale 0.5s ease; z-index: -1;
 }
-
-/* Inner ring (::after) */
-.av-frozen:has(img.av-eff-vortex-cw)::after,
-.av-frozen:has(img.av-eff-vortex-ccw)::after {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  border-radius: 50%;
+.av-frozen:has(img.av-eff-vortex-cw)::after {
+  content: ''; position: absolute; inset: -2px; border-radius: 50%;
   border: 2px solid transparent;
-  border-bottom-color: rgb(var(--accent-rgb) / 0.65);
-  border-right-color: rgb(var(--accent-rgb) / 0.65);
-  pointer-events: none;
-  opacity: 0;
-  scale: 1.25;
-  transition: opacity 0.5s ease, scale 0.5s ease;
-  z-index: -1;
+  border-bottom-color: rgb(var(--accent-rgb) / 0.65); border-right-color: rgb(var(--accent-rgb) / 0.65);
+  pointer-events: none; opacity: 0; scale: 1.25;
+  transition: opacity 0.5s ease, scale 0.5s ease; z-index: -1;
 }
-
-/* CW — outer spins CW, inner spins CCW */
-.av-frozen:hover:has(img.av-eff-vortex-cw)::before {
-  opacity: 1; scale: 1;
-  animation: av-vortex-spin-cw 1s linear infinite;
-}
-.av-frozen:hover:has(img.av-eff-vortex-cw)::after {
-  opacity: 1; scale: 1;
-  animation: av-vortex-spin-ccw 1.5s linear infinite;
-}
-
-/* CCW — outer spins CCW, inner spins CW */
-.av-frozen:hover:has(img.av-eff-vortex-ccw)::before {
-  opacity: 1; scale: 1;
-  animation: av-vortex-spin-ccw 1s linear infinite;
-}
-.av-frozen:hover:has(img.av-eff-vortex-ccw)::after {
-  opacity: 1; scale: 1;
-  animation: av-vortex-spin-cw 1.5s linear infinite;
-}
-
+.av-frozen:hover:has(img.av-eff-vortex-cw)::before { opacity: 1; scale: 1; animation: av-vortex-spin-cw 1s linear infinite; }
+.av-frozen:hover:has(img.av-eff-vortex-cw)::after  { opacity: 1; scale: 1; animation: av-vortex-spin-ccw 1.5s linear infinite; }
 @keyframes av-vortex-spin-cw  { to { rotate:  360deg; } }
 @keyframes av-vortex-spin-ccw { to { rotate: -360deg; } }
+
+/* ── Portal (Stargate) ──────────────────────────────────────────── */
+/* ::before = dashed ring that slow-spins on hover */
+/* ::after  = blue kawoosh overlay that flashes once on hover       */
+.av-frozen:has(img.av-eff-portal)::before {
+  content: ''; position: absolute; inset: -10%;
+  border-radius: 50%; border: 4px dashed #94a3b8;
+  pointer-events: none; opacity: 0; transition: opacity 0.3s; z-index: 2;
+}
+.av-frozen:hover:has(img.av-eff-portal)::before {
+  opacity: 1; animation: portal-ring-spin 10s linear infinite;
+}
+.av-frozen:has(img.av-eff-portal)::after {
+  content: ''; position: absolute; inset: 0; border-radius: 50%;
+  background: radial-gradient(circle, #bfdbfe 0%, #3b82f6 50%, transparent 72%);
+  pointer-events: none; opacity: 0; z-index: 3; mix-blend-mode: screen;
+}
+.av-frozen:hover:has(img.av-eff-portal)::after {
+  animation: portal-kawoosh 2s ease-out forwards;
+}
+@keyframes portal-ring-spin { 100% { rotate: 360deg; } }
+@keyframes portal-kawoosh {
+  0%   { transform: scale(0); opacity: 0; }
+  20%  { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 0; }
+}
+
+/* ── Quantum ────────────────────────────────────────────────────── */
+/* Two dashed rings (cyan + pink) spinning in 3D tilted planes */
+.av-frozen:has(img.av-eff-quantum) { perspective: 800px; }
+.av-frozen:has(img.av-eff-quantum)::before {
+  content: ''; position: absolute; inset: -20%; border-radius: 50%;
+  border: 2px dashed #06b6d4; pointer-events: none;
+  opacity: 0; transition: opacity 0.3s; z-index: 2;
+}
+.av-frozen:has(img.av-eff-quantum)::after {
+  content: ''; position: absolute; inset: -20%; border-radius: 50%;
+  border: 2px dashed #ec4899; pointer-events: none;
+  opacity: 0; transition: opacity 0.3s; z-index: 2;
+}
+.av-frozen:hover:has(img.av-eff-quantum)::before { opacity: 1; animation: quantum-spin-1 3s linear infinite; }
+.av-frozen:hover:has(img.av-eff-quantum)::after  { opacity: 1; animation: quantum-spin-2 4s linear infinite; }
+@keyframes quantum-spin-1 {
+  from { transform: rotateZ(0deg) rotateX(60deg) rotateY(45deg); }
+  to   { transform: rotateZ(360deg) rotateX(60deg) rotateY(45deg); }
+}
+@keyframes quantum-spin-2 {
+  from { transform: rotateZ(0deg) rotateX(45deg) rotateY(60deg); }
+  to   { transform: rotateZ(-360deg) rotateX(45deg) rotateY(60deg); }
+}
+
+/* ── Glitch ─────────────────────────────────────────────────────── */
+/* img shakes + red/cyan drop-shadow split; ::before/::after = color bars */
+.av-frozen:has(img.av-eff-glitch) { overflow: hidden; }
+img.av-eff-glitch { filter: grayscale(0.7); transition: filter 0.3s; }
+.av-frozen:hover img.av-eff-glitch { animation: glitch-img 0.5s steps(1) infinite; }
+.av-frozen:hover:has(img.av-eff-glitch)::before {
+  content: ''; position: absolute; left: 0; right: 0; height: 6%;
+  background: rgba(255,0,50,0.35); mix-blend-mode: screen;
+  pointer-events: none; z-index: 5;
+  animation: glitch-bar-r 0.5s steps(1) infinite;
+}
+.av-frozen:hover:has(img.av-eff-glitch)::after {
+  content: ''; position: absolute; left: 0; right: 0; height: 4%;
+  background: rgba(0,255,220,0.35); mix-blend-mode: screen;
+  pointer-events: none; z-index: 5;
+  animation: glitch-bar-c 0.5s steps(1) infinite 0.1s;
+}
+@keyframes glitch-img {
+  0%   { transform: translate(0);        filter: drop-shadow(3px 0 rgba(255,0,0,.8)) drop-shadow(-3px 0 rgba(0,255,255,.8)); }
+  15%  { transform: translate(-3px,1px); filter: drop-shadow(-3px 0 rgba(255,0,0,.9)); }
+  30%  { transform: translate(3px,-1px); filter: drop-shadow(3px 0 rgba(0,255,255,.9)); }
+  45%  { transform: translate(0);        filter: none; }
+  60%  { transform: translate(-2px,2px); filter: drop-shadow(2px 0 rgba(255,0,0,.7)) drop-shadow(-2px 0 rgba(0,255,255,.7)); }
+  75%  { transform: translate(2px,-1px); filter: drop-shadow(-3px 0 rgba(255,0,0,.8)); }
+  90%  { transform: translate(-1px,1px); filter: drop-shadow(3px 0 rgba(0,255,255,.8)); }
+  100% { transform: translate(0);        filter: none; }
+}
+@keyframes glitch-bar-r { 0%{top:25%} 20%{top:65%} 40%{top:40%} 60%{top:80%} 80%{top:15%} 100%{top:55%} }
+@keyframes glitch-bar-c { 0%{top:55%} 20%{top:20%} 40%{top:75%} 60%{top:35%} 80%{top:60%} 100%{top:10%} }
+
+/* ── Scan ───────────────────────────────────────────────────────── */
+/* Cyan scan-line sweeps top→bottom; scanline overlay always visible */
+.av-frozen:has(img.av-eff-scan) { overflow: hidden; }
+img.av-eff-scan { filter: sepia(0.3) hue-rotate(180deg); transition: filter 0.4s; }
+.av-frozen:hover img.av-eff-scan { filter: none; }
+.av-frozen:has(img.av-eff-scan)::before {
+  content: ''; position: absolute; left: 0; right: 0; top: -5%; height: 3px;
+  background: #22d3ee; box-shadow: 0 0 14px 4px rgba(34,211,238,.9);
+  pointer-events: none; z-index: 10; opacity: 0;
+}
+.av-frozen:hover:has(img.av-eff-scan)::before {
+  opacity: 1; animation: av-scan-sweep 2s linear infinite;
+}
+.av-frozen:has(img.av-eff-scan)::after {
+  content: ''; position: absolute; inset: 0;
+  background: repeating-linear-gradient(transparent 0px, transparent 1px, rgba(0,0,0,.22) 1px, rgba(0,0,0,.22) 2px);
+  pointer-events: none; z-index: 5; opacity: 0.4;
+  border: 2px solid rgba(34,211,238,.25); transition: border-color 0.3s;
+}
+.av-frozen:hover:has(img.av-eff-scan)::after { border-color: rgba(34,211,238,.7); }
+@keyframes av-scan-sweep { 0% { top: -5%; } 100% { top: 105%; } }
 
 /* Lightbox overlay */
 .lightbox-bg {

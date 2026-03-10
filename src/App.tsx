@@ -69,9 +69,12 @@ const AVATAR_EFFECTS = [
   { key: 'glow',    label: 'Poświata',   desc: 'Subtelna poświata w kolorze akcentu' },
   { key: 'pulse',   label: 'Pulsowanie', desc: 'Pulsująca animowana poświata' },
   { key: 'neon',    label: 'Neon',       desc: 'Ostre neonowe obramowanie' },
-  { key: 'rainbow',    label: 'Tęcza',       desc: 'Tęczowa animowana poświata' },
-  { key: 'vortex-cw',  label: 'Vortex ↻',   desc: 'Wirujący pierścień (w prawo) na hover' },
-  { key: 'vortex-ccw', label: 'Vortex ↺',   desc: 'Wirujący pierścień (w lewo) na hover' },
+  { key: 'rainbow',  label: 'Tęcza',   desc: 'Tęczowa animowana poświata' },
+  { key: 'vortex-cw',label: 'Vortex',  desc: 'Dwa wirujące łuki na hover, avatar wciągany do środka' },
+  { key: 'portal',   label: 'Portal',  desc: 'Brama Gwiezdna — pierścień + błysk portalu na hover' },
+  { key: 'quantum',  label: 'Quantum', desc: 'Dwa pierścienie w przestrzeni 3D wirujące na hover' },
+  { key: 'glitch',   label: 'Glitch',  desc: 'Cyfrowa usterka z rozszczepionymi kolorami RGB' },
+  { key: 'scan',     label: 'Scan',    desc: 'Cybernetyczne skanowanie z wiązką lasera' },
 ];
 
 const GRADIENTS = [
