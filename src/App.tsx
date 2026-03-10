@@ -75,6 +75,7 @@ const AVATAR_EFFECTS = [
   { key: 'quantum',  label: 'Quantum', desc: 'Dwa pierścienie w przestrzeni 3D wirujące na hover' },
   { key: 'glitch',   label: 'Glitch',  desc: 'Cyfrowa usterka z rozszczepionymi kolorami RGB' },
   { key: 'scan',     label: 'Scan',    desc: 'Cybernetyczne skanowanie z wiązką lasera' },
+  { key: 'katana',   label: 'Katana',  desc: 'Cięcie przekątne z czerwoną świecącą klingą na hover' },
 ];
 
 const GRADIENTS = [
@@ -3200,8 +3201,8 @@ export default function App() {
                 return (
                   <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); }}
                     className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/15 text-white border border-indigo-500/25':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
-                    <div className="relative shrink-0">
-                      <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className="w-10 h-10 rounded-2xl object-cover av-sc" alt=""/>
+                    <div className="relative shrink-0 av-frozen">
+                      <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className={`w-10 h-10 rounded-2xl object-cover av-eff-${(dm as any).other_avatar_effect||'none'}`} alt=""/>
                       <StatusBadge status={dm.other_status} size={14} className="absolute -bottom-1 -right-1"/>
                     </div>
                     <div className="flex-1 truncate text-left min-w-0">
@@ -3822,8 +3823,8 @@ export default function App() {
                 <div className="flex items-center gap-3 min-w-0">
                   {activeView==='dms' ? (activeDm ? (
                     <div className="flex items-center gap-3">
-                      <div className="relative shrink-0">
-                        <img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className="w-8 h-8 rounded-2xl object-cover shadow-sm av-sc-xs" alt=""/>
+                      <div className="relative shrink-0 av-frozen">
+                        <img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className={`w-8 h-8 rounded-2xl object-cover shadow-sm av-eff-${(activeDm as any).other_avatar_effect||'none'}`} alt=""/>
                         <StatusBadge status={activeDm.other_status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
                       </div>
                       <div>
@@ -4755,11 +4756,11 @@ export default function App() {
                   <div className={`w-full h-full bg-gradient-to-br ${dmPartnerProfile.banner_color||'from-indigo-600 via-purple-600 to-pink-600'}`}/>
                 )}
               </div>
-              {/* Avatar — animated freely (no frozen) */}
+              {/* Avatar — wrapped in av-frozen for hover effects */}
               <div className="px-4 pb-4 border-b border-white/[0.07]">
-                <div className="relative inline-block -mt-7 mb-3">
-                  <img src={ava(dmPartnerProfile)} className={`w-14 h-14 rounded-2xl border-4 border-[#1e1e30] object-cover av-eff-${dmPartnerProfile.avatar_effect||'none'} av-sc-lg`} alt=""/>
-                  <StatusBadge status={activeDm.other_status} size={20} className="absolute -bottom-1.5 -right-1.5"/>
+                <div className="relative inline-block -mt-8 mb-3 av-frozen">
+                  <img src={ava(dmPartnerProfile)} className={`w-16 h-16 rounded-2xl border-4 border-[#1e1e30] object-cover av-eff-${dmPartnerProfile.avatar_effect||'none'}`} alt=""/>
+                  <StatusBadge status={activeDm.other_status} size={22} className="absolute -bottom-1.5 -right-1.5"/>
                 </div>
                 <h3 className="text-sm font-bold text-white leading-tight">{dmPartnerProfile.username}</h3>
                 {activeDm.other_custom_status&&(
