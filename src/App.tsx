@@ -657,9 +657,15 @@ interface OgData { title: string; description: string; image: string; site_name:
 function LinkPreview({ url, show }: { url: string; show: boolean }) {
   const [data, setData] = React.useState<OgData | null>(null);
   const [done, setDone] = React.useState(false);
+  const ytId = url.match(YT_RE)?.[1];
   React.useEffect(() => {
     if (!show || done) return;
     setDone(true);
+    // YouTube: show preview immediately using thumbnail API — no OG fetch needed
+    if (ytId) {
+      setData({ title: 'YouTube', description: '', image: `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`, site_name: 'YouTube' });
+      return;
+    }
     const token = getToken();
     fetch(`/api/og?url=${encodeURIComponent(url)}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -667,9 +673,8 @@ function LinkPreview({ url, show }: { url: string; show: boolean }) {
       .then(r => r.json())
       .then((d: OgData) => { if (d.title) setData(d); })
       .catch(() => {});
-  }, [url, show, done]);
+  }, [url, show, done, ytId]);
   if (!show || !data) return null;
-  const ytId = url.match(YT_RE)?.[1];
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="link-prev">
       {ytId ? (
@@ -806,7 +811,7 @@ export default function App() {
   const [createSrvIconFile, setCreateSrvIconFile]     = useState<File|null>(null);
   const [createSrvIconPreview, setCreateSrvIconPreview] = useState<string|null>(null);
   const createSrvIconRef = useRef<HTMLInputElement>(null);
-  const msgInputRef      = useRef<HTMLInputElement>(null);
+  const msgInputRef      = useRef<HTMLTextAreaElement>(null);
   const [srvContextMenu, setSrvContextMenu]   = useState<{ x: number; y: number; srv: ServerData } | null>(null);
   const [deleteSrvConfirm, setDeleteSrvConfirm] = useState<{ id: string; name: string } | null>(null);
 
@@ -1958,6 +1963,14 @@ export default function App() {
 
   // Reset slowmode and pinned panel when switching channels
   useEffect(() => { setSlowmodeLeft(0); setShowPinned(false); setPinnedMsgs([]); }, [activeChannel]);
+
+  // Auto-resize message textarea
+  useEffect(() => {
+    const el = msgInputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  }, [msgInput]);
 
   // ── Send message ────────────────────────────────────────────────
   const handleSend = async (e: React.FormEvent) => {
@@ -4507,7 +4520,7 @@ export default function App() {
                           className={`w-7 h-7 flex items-center justify-center rounded-xl transition-all shrink-0 active:scale-90 ${showFmtBar?'text-indigo-400 bg-indigo-500/10':'text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.07]'}`}>
                           <Edit3 size={14}/>
                         </button>
-                        <input ref={msgInputRef} type="text" value={msgInput}
+                        <textarea ref={msgInputRef} value={msgInput} rows={1}
                           onChange={e=>{
                             const v=e.target.value; setMsgInput(v);
                             // Mention autocomplete trigger
@@ -4535,10 +4548,10 @@ export default function App() {
                               if (e.key==='Enter'||e.key==='Tab') { e.preventDefault(); insertMention(mentionSuggestions[mentionSel]?.username||''); return; }
                               if (e.key==='Escape') { setMentionQuery(null); return; }
                             }
-                            if(e.key==='Enter'&&!e.shiftKey) handleSend(e as any);
+                            if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); handleSend(e as any); }
                           }}
                           placeholder={activeView==='dms'&&activeDm?`Wiadomość do ${activeDm.other_username}...`:`Wiadomość w #${activeCh?.name||''}...`}
-                          className="flex-1 bg-transparent text-sm text-zinc-200 placeholder-zinc-600 outline-none min-w-0"/>
+                          className="flex-1 bg-transparent text-sm text-zinc-200 placeholder-zinc-600 outline-none min-w-0 resize-none overflow-hidden leading-[1.4] self-center"/>
                         <div className="relative shrink-0">
                           <button type="button" onClick={() => setShowEmojiPicker(v => !v)}
                             className={`transition-all active:scale-90 ${showEmojiPicker ? 'text-indigo-400' : 'text-zinc-600 hover:text-zinc-400'}`}>
