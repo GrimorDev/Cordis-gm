@@ -112,7 +112,7 @@ router.put('/me', authMiddleware,
     body('privacy_read_receipts').optional().isBoolean(),
     body('privacy_friend_requests').optional().isBoolean(),
     body('privacy_dm_from_strangers').optional().isBoolean(),
-    body('avatar_effect').optional().isIn(['none','glow','pulse','rainbow','neon']),
+    body('avatar_effect').optional().isIn(['none','glow','pulse','rainbow','neon','vortex-cw','vortex-ccw']),
   ],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);

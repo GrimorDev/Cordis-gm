@@ -270,44 +270,84 @@ img.av-sc-lg {
 }
 
 /* ── Vortex avatar effects ──────────────────────────────────────── */
+/* Two spinning arc-rings: outer (::before) and inner (::after).
+   Both hidden by default, appear + scale in on hover.
+   Avatar image shrinks slightly on hover (pulled-in vortex feel).
+   Rings sit behind avatar (z-index:-1 inside isolation:isolate context). */
 .av-frozen:has(img.av-eff-vortex-cw),
 .av-frozen:has(img.av-eff-vortex-ccw) {
   isolation: isolate;
 }
+
+/* Avatar scales down on hover */
+img.av-eff-vortex-cw,
+img.av-eff-vortex-ccw {
+  position: relative;
+  z-index: 1;
+  scale: 1;
+  transition: scale 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.av-frozen:hover img.av-eff-vortex-cw,
+.av-frozen:hover img.av-eff-vortex-ccw {
+  scale: 0.82;
+}
+
+/* Outer ring (::before) */
 .av-frozen:has(img.av-eff-vortex-cw)::before,
 .av-frozen:has(img.av-eff-vortex-ccw)::before {
   content: '';
   position: absolute;
-  inset: -3px;
-  border-radius: 15px;
-  background: conic-gradient(
-    from 0deg,
-    transparent 0%,
-    rgb(var(--accent-rgb) / 0.9) 20%,
-    rgb(var(--accent-rgb) / 0.4) 38%,
-    transparent 50%,
-    transparent 62%,
-    rgb(var(--accent-rgb) / 0.4) 80%,
-    rgb(var(--accent-rgb) / 0.9) 100%
-  );
+  inset: -5px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  border-top-color: rgb(var(--accent-rgb));
+  border-left-color: rgb(var(--accent-rgb));
   pointer-events: none;
   opacity: 0;
-  scale: 1.35;
-  transition: opacity 0.3s ease, scale 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  scale: 1.5;
+  transition: opacity 0.5s ease, scale 0.5s ease;
   z-index: -1;
 }
+
+/* Inner ring (::after) */
+.av-frozen:has(img.av-eff-vortex-cw)::after,
+.av-frozen:has(img.av-eff-vortex-ccw)::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-bottom-color: rgb(var(--accent-rgb) / 0.65);
+  border-right-color: rgb(var(--accent-rgb) / 0.65);
+  pointer-events: none;
+  opacity: 0;
+  scale: 1.25;
+  transition: opacity 0.5s ease, scale 0.5s ease;
+  z-index: -1;
+}
+
+/* CW — outer spins CW, inner spins CCW */
 .av-frozen:hover:has(img.av-eff-vortex-cw)::before {
-  opacity: 1;
-  scale: 1;
-  animation: av-vortex-cw-spin 1.8s linear infinite;
+  opacity: 1; scale: 1;
+  animation: av-vortex-spin-cw 1s linear infinite;
 }
+.av-frozen:hover:has(img.av-eff-vortex-cw)::after {
+  opacity: 1; scale: 1;
+  animation: av-vortex-spin-ccw 1.5s linear infinite;
+}
+
+/* CCW — outer spins CCW, inner spins CW */
 .av-frozen:hover:has(img.av-eff-vortex-ccw)::before {
-  opacity: 1;
-  scale: 1;
-  animation: av-vortex-ccw-spin 1.8s linear infinite;
+  opacity: 1; scale: 1;
+  animation: av-vortex-spin-ccw 1s linear infinite;
 }
-@keyframes av-vortex-cw-spin  { to { rotate:  360deg; } }
-@keyframes av-vortex-ccw-spin { to { rotate: -360deg; } }
+.av-frozen:hover:has(img.av-eff-vortex-ccw)::after {
+  opacity: 1; scale: 1;
+  animation: av-vortex-spin-cw 1.5s linear infinite;
+}
+
+@keyframes av-vortex-spin-cw  { to { rotate:  360deg; } }
+@keyframes av-vortex-spin-ccw { to { rotate: -360deg; } }
 
 /* Lightbox overlay */
 .lightbox-bg {

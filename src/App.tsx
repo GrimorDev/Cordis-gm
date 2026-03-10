@@ -2633,7 +2633,10 @@ export default function App() {
 
     // ── Step 0: extract fenced code blocks (``` ``` multi-line) ─────
     const codeBlocks: string[] = [];
-    let processed = text.replace(/```([a-zA-Z0-9]*)\n([\s\S]*?)```/g, (_, lang, code) => {
+    // Alternation: first try ```lang\ncode``` (with explicit lang+newline),
+    // then fall back to ```anything``` (no newline required — preserves backwards compat)
+    let processed = text.replace(/```([a-zA-Z0-9]+)\n([\s\S]*?)```|```([\s\S]*?)```/g, (_, lang, code1, code2) => {
+      const code = code1 !== undefined ? code1 : (code2 ?? '');
       const idx = codeBlocks.length;
       const safeLang = (lang || '').toLowerCase().substring(0, 20);
       const escaped = code.trim()
@@ -5733,9 +5736,10 @@ export default function App() {
                 <button onClick={()=>setAppSettOpen(false)} className="text-zinc-600 hover:text-white transition-colors"><X size={18}/></button>
               </div>
 
-              <div className="flex flex-1 overflow-hidden">
-                {/* Sidebar tabs */}
-                <div className="w-48 shrink-0 border-r border-white/[0.06] p-3 flex flex-col gap-0.5">
+              {/* Responsive: flex-col on mobile (tab bar on top), flex-row on sm+ (sidebar) */}
+              <div className="flex flex-col sm:flex-row flex-1 min-h-0 overflow-hidden">
+                {/* Sidebar / Tab bar */}
+                <div className="sm:w-44 shrink-0 border-b sm:border-b-0 sm:border-r border-white/[0.06] p-2 sm:p-3 flex sm:flex-col flex-row gap-0.5 overflow-x-auto scrollbar-hide">
                   {([
                     {id:'account',label:'Konto',icon:<Users size={14}/>},
                     {id:'appearance',label:'Wygląd',icon:<Image size={14}/>},
@@ -5743,22 +5747,23 @@ export default function App() {
                     {id:'privacy',label:'Prywatność',icon:<Shield size={14}/>},
                   ] as const).map(t=>(
                     <button key={t.id} onClick={()=>setAppSettTab(t.id)}
-                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left ${
+                      className={`flex items-center gap-2 px-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all text-left shrink-0 ${
                         appSettTab===t.id?'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] border border-transparent'}`}>
                       <span className={appSettTab===t.id?'text-indigo-400':'text-zinc-600'}>{t.icon}</span>
                       {t.label}
                     </button>
                   ))}
-                  <div className="mt-auto pt-3 border-t border-white/[0.06]">
+                  {/* Logout — at end of tab bar on mobile, bottom of sidebar on desktop */}
+                  <div className="sm:mt-auto sm:pt-3 sm:border-t border-white/[0.06] ml-auto sm:ml-0 shrink-0">
                     <button onClick={()=>{setAppSettOpen(false);auth.logout().then(()=>{clearToken();setIsAuthenticated(false);setCurrentUser(null);}).catch(()=>{clearToken();setIsAuthenticated(false);setCurrentUser(null);});}}
-                      className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all w-full">
-                      <LogOut size={14}/> Wyloguj
+                      className="flex items-center gap-2 px-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all w-full shrink-0">
+                      <LogOut size={14}/> <span className="sm:inline hidden">Wyloguj</span><span className="sm:hidden">Wyloguj</span>
                     </button>
                   </div>
                 </div>
 
                 {/* Tab content */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6">
                   <AnimatePresence mode="wait">
 
                   {/* ─── KONTO ─── */}
