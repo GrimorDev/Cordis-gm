@@ -76,7 +76,9 @@ const AVATAR_EFFECTS = [
   { key: 'glitch',   label: 'Glitch',  desc: 'Cyfrowa usterka z rozszczepionymi kolorami RGB' },
   { key: 'scan',     label: 'Scan',    desc: 'Cybernetyczne skanowanie z wiązką lasera' },
   { key: 'katana',      label: 'Katana',  desc: 'Cięcie przekątne z czerwoną świecącą klingą na hover' },
-  { key: 'liquid-morph',label: 'Liquid',  desc: 'Organiczny płynny kształt z gradientową poświatą' },
+  { key: 'liquid-morph', label: 'Liquid',  desc: 'Organiczny płynny kształt z gradientową poświatą' },
+  { key: 'radar-sweep',  label: 'Radar',   desc: 'Zielony radar wojskowy z wirującą wiązką na hover' },
+  { key: 'vhs',          label: 'VHS',     desc: 'Retro efekt magnetowidu — RGB split + linia śledzenia' },
 ];
 
 const GRADIENTS = [
@@ -3204,7 +3206,7 @@ export default function App() {
                     className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/15 text-white border border-indigo-500/25':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
                     <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava({avatar_url:dm.other_avatar,username:dm.other_username})}")`} as React.CSSProperties}>
                       <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className={`w-10 h-10 rounded-2xl object-cover av-eff-${(dm as any).other_avatar_effect||'none'}`} alt=""/>
-                      <StatusBadge status={dm.other_status} size={14} className="absolute -bottom-1 -right-1"/>
+                      <StatusBadge status={dm.other_status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
                     </div>
                     <div className="flex-1 truncate text-left min-w-0">
                       <p className={`text-[13px] font-semibold truncate ${isActive?'text-indigo-200':unread>0?'text-white':'text-zinc-300'}`}>{dm.other_username}</p>
@@ -4689,7 +4691,7 @@ export default function App() {
                           <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava(m)}")`} as React.CSSProperties}>
                             {isNew&&<div className="absolute inset-0 rounded-xl ring-2 ring-emerald-400/60 ring-offset-1 ring-offset-[#1e1e30] pointer-events-none animate-pulse z-10"/>}
                             <img src={ava(m)} className={`w-10 h-10 rounded-xl object-cover av-eff-${m.avatar_effect||'none'} av-sc`} alt=""/>
-                            <StatusBadge status={m.status} size={14} className="absolute -bottom-1 -right-1"/>
+                            <StatusBadge status={m.status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1 flex-wrap">
@@ -4723,7 +4725,7 @@ export default function App() {
                         <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={()=>openProfile(m)}>
                           <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava(m)}")`} as React.CSSProperties}>
                             <img src={ava(m)} className={`w-10 h-10 rounded-xl object-cover opacity-35 av-eff-${m.avatar_effect||'none'} av-sc`} alt=""/>
-                            <StatusBadge status="offline" size={14} className="absolute -bottom-1 -right-1 opacity-50"/>
+                            <StatusBadge status="offline" size={10} className="absolute -bottom-0.5 -right-0.5 opacity-50"/>
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1 flex-wrap">
