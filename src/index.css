@@ -403,22 +403,31 @@ img.av-eff-scan { filter: sepia(0.3) hue-rotate(180deg); transition: filter 0.4s
 @keyframes av-scan-sweep { 0% { top: -5%; } 100% { top: 105%; } }
 
 /* ── Katana ─────────────────────────────────────────────────────── */
-/* Diagonal cut: img clips to upper-right triangle on hover (slide apart).
-   Red glowing cut line appears at 45°. Dark bg fills the lower-left gap. */
+/* Two halves slide apart on hover:
+   ::before = top-right half (same image via --av-url CSS var, set inline in JSX)
+   img      = bottom-left half (clip-path triangle, slides down-left)
+   ::after  = glowing red cut line at 45° */
 .av-frozen:has(img.av-eff-katana) { isolation: isolate; }
+/* Bottom-left half */
 img.av-eff-katana {
   position: relative; z-index: 1;
-  /* 4-point polygon = full rect, allows smooth morph to triangle */
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
-  transition: clip-path 0.35s ease, transform 0.35s ease;
+  clip-path: polygon(0 0, 100% 100%, 0 100%);
+  transition: transform 0.35s ease;
 }
-.av-frozen:hover img.av-eff-katana {
-  /* Collapse bottom-left point to top-left → upper-right triangle slides up-right */
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 0);
-  transform: translate(3px, -3px);
-}
-/* ::before = glowing red cut line at 45° */
+.av-frozen:hover img.av-eff-katana { transform: translate(-3px, 3px); }
+/* Top-right half — same image via CSS custom property --av-url set inline on wrapper */
 .av-frozen:has(img.av-eff-katana)::before {
+  content: ''; position: absolute; inset: 0;
+  background-image: var(--av-url);
+  background-size: cover; background-position: center;
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+  border-radius: 1rem;
+  transition: transform 0.35s ease;
+  z-index: 2; pointer-events: none;
+}
+.av-frozen:hover:has(img.av-eff-katana)::before { transform: translate(3px, -3px); }
+/* Red glowing cut line */
+.av-frozen:has(img.av-eff-katana)::after {
   content: ''; position: absolute;
   width: 150%; height: 2px;
   background: linear-gradient(90deg, transparent, #ef4444 20%, #ef4444 80%, transparent);
@@ -427,13 +436,28 @@ img.av-eff-katana {
   transform: rotate(45deg); transform-origin: center;
   opacity: 0; transition: opacity 0.2s; z-index: 5; pointer-events: none;
 }
-.av-frozen:hover:has(img.av-eff-katana)::before { opacity: 1; }
-/* ::after = dark fill for the lower-left gap exposed after img clips away */
-.av-frozen:has(img.av-eff-katana)::after {
-  content: ''; position: absolute; inset: 0;
-  background: #0a0a14;
-  clip-path: polygon(0 0, 100% 100%, 0 100%);
+.av-frozen:hover:has(img.av-eff-katana)::after { opacity: 1; }
+
+/* ── Liquid Morph ───────────────────────────────────────────────── */
+/* Organic blob shape + pink-violet gradient glow on hover */
+.av-frozen:has(img.av-eff-liquid-morph) { isolation: isolate; }
+img.av-eff-liquid-morph { border-radius: 50%; transition: border-radius 0.5s ease; }
+.av-frozen:has(img.av-eff-liquid-morph)::before {
+  content: ''; position: absolute; inset: -4px;
+  background: linear-gradient(135deg, #ec4899, #8b5cf6);
+  border-radius: 50%; filter: blur(2px);
+  opacity: 0; transition: opacity 0.5s ease;
   z-index: -1; pointer-events: none;
+}
+.av-frozen:hover:has(img.av-eff-liquid-morph)::before {
+  opacity: 1; animation: liquid-morph-shape 3s ease-in-out infinite;
+}
+.av-frozen:hover img.av-eff-liquid-morph {
+  animation: liquid-morph-shape 3s ease-in-out infinite;
+}
+@keyframes liquid-morph-shape {
+  0%, 100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+  50%       { border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; }
 }
 
 /* Lightbox overlay */
