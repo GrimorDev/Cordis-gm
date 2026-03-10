@@ -689,6 +689,46 @@ function LinkPreview({ url, show }: { url: string; show: boolean }) {
   );
 }
 
+// ─── Status badge SVG component ───────────────────────────────────────────────
+const STATUS_COL: Record<string, string> = {
+  online: '#3ba55d',
+  idle:   '#faa81a',
+  dnd:    '#ed4245',
+};
+function StatusBadge({ status, size = 14, className = '' }: { status: string; size?: number; className?: string }) {
+  const r = size / 2;
+  const col = STATUS_COL[status] ?? '#747f8d';
+  if (status === 'idle') {
+    const maskId = `sc-moon-${size}`;
+    return (
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className={className}>
+        <defs>
+          <mask id={maskId}>
+            <rect width={size} height={size} fill="white"/>
+            {/* Offset circle cuts the crescent shape */}
+            <circle cx={r * 0.52} cy={r * 0.52} r={r * 0.78} fill="black"/>
+          </mask>
+        </defs>
+        <circle cx={r} cy={r} r={r} fill={col} mask={`url(#${maskId})`}/>
+      </svg>
+    );
+  }
+  if (status === 'dnd') {
+    return (
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className={className}>
+        <circle cx={r} cy={r} r={r} fill={col}/>
+        <rect x={size*0.2} y={r - size*0.115} width={size*0.6} height={size*0.23} rx={size*0.115} fill="white"/>
+      </svg>
+    );
+  }
+  // online / offline — solid circle
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className={className}>
+      <circle cx={r} cy={r} r={r} fill={col}/>
+    </svg>
+  );
+}
+
 // ─── Badge icon map ────────────────────────────────────────────────────────────
 const BADGE_ICON_MAP: Record<string, LucideIcon> = {
   developer: Code2,
@@ -3120,8 +3160,8 @@ export default function App() {
                   <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); }}
                     className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/15 text-white border border-indigo-500/25':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
                     <div className="relative shrink-0">
-                      <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className="w-10 h-10 rounded-2xl object-cover" alt=""/>
-                      <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 ${sc(dm.other_status)} border-[2.5px] border-[#1e1e30] rounded-full`}/>
+                      <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className="w-10 h-10 rounded-2xl object-cover av-sc" alt=""/>
+                      <StatusBadge status={dm.other_status} size={14} className="absolute -bottom-1 -right-1"/>
                     </div>
                     <div className="flex-1 truncate text-left min-w-0">
                       <p className={`text-[13px] font-semibold truncate ${isActive?'text-indigo-200':unread>0?'text-white':'text-zinc-300'}`}>{dm.other_username}</p>
@@ -3185,14 +3225,14 @@ export default function App() {
             <div className="flex items-center gap-2.5 px-2 py-2 rounded-2xl hover:bg-white/[0.05] transition-colors cursor-default">
               {/* Avatar + status dot — click opens picker */}
               <div className="relative shrink-0 cursor-pointer" onClick={()=>setStatusPickerOpen(p=>!p)} title="Zmień status">
-                <img src={currentUser?ava(currentUser):''} className={`w-8 h-8 rounded-full object-cover av-eff-${avatarEffect}`} alt=""/>
+                <img src={currentUser?ava(currentUser):''} className={`w-8 h-8 rounded-full object-cover av-eff-${avatarEffect} av-sc-xs`} alt=""/>
                 {/* Status dot — red phone when in call, else normal status */}
                 {activeCall ? (
                   <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-rose-500 border-2 border-[#181828] rounded-full flex items-center justify-center">
                     <Phone size={6} className="text-white"/>
                   </div>
                 ) : (
-                  <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${sc(currentUser?.status??'offline')} border-2 border-[#181828] rounded-full`}/>
+                  <StatusBadge status={currentUser?.status??'offline'} size={10} className="absolute -bottom-0.5 -right-0.5"/>
                 )}
               </div>
 
@@ -3549,8 +3589,8 @@ export default function App() {
                         <button key={f.id} onClick={()=>openDm(f.id)}
                           className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.06] transition-all group text-left w-full">
                           <div className="relative shrink-0">
-                            <img src={ava(f)} className="w-9 h-9 rounded-xl object-cover" alt=""/>
-                            <div className={`absolute -bottom-px -right-px w-2.5 h-2.5 ${sc(f.status)} border-2 border-[#181828] rounded-full`}/>
+                            <img src={ava(f)} className="w-9 h-9 rounded-xl object-cover av-sc-xs" alt=""/>
+                            <StatusBadge status={f.status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-zinc-300 group-hover:text-white transition-colors truncate">{f.username}</p>
@@ -3597,8 +3637,8 @@ export default function App() {
                     {!friendSearchLoading && friendSearchResult && addFriendVal.trim().length >= 2 && (
                       <div className="mt-2 px-4 py-3 bg-white/[0.04] border border-indigo-500/25 rounded-xl flex items-center gap-3">
                         <div className="relative shrink-0">
-                          <img src={ava(friendSearchResult)} className="w-10 h-10 rounded-full object-cover" alt=""/>
-                          <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${sc(friendSearchResult.status)} border-2 border-zinc-950 rounded-full`}/>
+                          <img src={ava(friendSearchResult)} className="w-10 h-10 rounded-full object-cover av-sc-xs" alt=""/>
+                          <StatusBadge status={friendSearchResult.status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-white text-sm">{friendSearchResult.username}</p>
@@ -3666,7 +3706,7 @@ export default function App() {
                     {friends.map(f => (
                       <div key={f.id} className="flex items-center justify-between bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] hover:border-white/[0.07] p-3.5 rounded-2xl transition-all duration-150 group">
                         <div className="flex items-center gap-3 cursor-pointer" onClick={()=>openProfile(f)}>
-                          <div className="relative"><img src={ava(f)} className="w-10 h-10 rounded-2xl object-cover" alt=""/><div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${sc(f.status)} border-2 border-[#181828] rounded-full`}/></div>
+                          <div className="relative"><img src={ava(f)} className="w-10 h-10 rounded-2xl object-cover av-sc-xs" alt=""/><StatusBadge status={f.status} size={10} className="absolute -bottom-0.5 -right-0.5"/></div>
                           <div><p className="font-semibold text-white text-sm">{f.username}</p><p className="text-xs text-zinc-600">{f.custom_status||f.status}</p></div>
                         </div>
                         <button onClick={()=>openDm(f.id)} title="Wyślij wiadomość" className={`w-8 h-8 rounded-xl ${gb} flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all active:scale-90`}><MessageCircle size={15}/></button>
@@ -3742,8 +3782,8 @@ export default function App() {
                   {activeView==='dms' ? (activeDm ? (
                     <div className="flex items-center gap-3">
                       <div className="relative shrink-0">
-                        <img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className="w-8 h-8 rounded-2xl object-cover shadow-sm" alt=""/>
-                        <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 ${sc(activeDm.other_status)} border-2 border-[#181828] rounded-full`}/>
+                        <img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className="w-8 h-8 rounded-2xl object-cover shadow-sm av-sc-xs" alt=""/>
+                        <StatusBadge status={activeDm.other_status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
                       </div>
                       <div>
                         <h3 className="font-bold text-white text-sm leading-tight">{activeDm.other_username}</h3>
@@ -4605,8 +4645,8 @@ export default function App() {
                         <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={()=>openProfile(m)}>
                           <div className="relative shrink-0 av-frozen">
                             {isNew&&<div className="absolute inset-0 rounded-xl ring-2 ring-emerald-400/60 ring-offset-1 ring-offset-[#1e1e30] pointer-events-none animate-pulse z-10"/>}
-                            <img src={ava(m)} className={`w-10 h-10 rounded-xl object-cover av-eff-${m.avatar_effect||'none'}`} alt=""/>
-                            <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 ${sc(m.status)} border-[2.5px] border-[#1e1e30] rounded-full`}/>
+                            <img src={ava(m)} className={`w-10 h-10 rounded-xl object-cover av-eff-${m.avatar_effect||'none'} av-sc`} alt=""/>
+                            <StatusBadge status={m.status} size={14} className="absolute -bottom-1 -right-1"/>
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1 flex-wrap">
@@ -4639,8 +4679,8 @@ export default function App() {
                         return (
                         <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={()=>openProfile(m)}>
                           <div className="relative shrink-0 av-frozen">
-                            <img src={ava(m)} className={`w-10 h-10 rounded-xl object-cover opacity-35 av-eff-${m.avatar_effect||'none'}`} alt=""/>
-                            <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-zinc-600 border-[2.5px] border-[#1e1e30] rounded-full"/>
+                            <img src={ava(m)} className={`w-10 h-10 rounded-xl object-cover opacity-35 av-eff-${m.avatar_effect||'none'} av-sc`} alt=""/>
+                            <StatusBadge status="offline" size={14} className="absolute -bottom-1 -right-1 opacity-50"/>
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1 flex-wrap">
@@ -4677,8 +4717,8 @@ export default function App() {
               {/* Avatar — animated freely (no frozen) */}
               <div className="px-4 pb-4 border-b border-white/[0.07]">
                 <div className="relative inline-block -mt-7 mb-3">
-                  <img src={ava(dmPartnerProfile)} className={`w-14 h-14 rounded-2xl border-4 border-[#1e1e30] object-cover av-eff-${dmPartnerProfile.avatar_effect||'none'}`} alt=""/>
-                  <div className={`absolute -bottom-1 -right-1 w-5 h-5 ${sc(activeDm.other_status)} border-[3px] border-[#1e1e30] rounded-full`}/>
+                  <img src={ava(dmPartnerProfile)} className={`w-14 h-14 rounded-2xl border-4 border-[#1e1e30] object-cover av-eff-${dmPartnerProfile.avatar_effect||'none'} av-sc-lg`} alt=""/>
+                  <StatusBadge status={activeDm.other_status} size={20} className="absolute -bottom-1.5 -right-1.5"/>
                 </div>
                 <h3 className="text-sm font-bold text-white leading-tight">{dmPartnerProfile.username}</h3>
                 {activeDm.other_custom_status&&(
@@ -4822,8 +4862,8 @@ export default function App() {
                 {/* Avatar — overlaps banner */}
                 <div className="absolute bottom-0 left-5 translate-y-1/2 z-10">
                   <div className="relative rounded-2xl p-0.5 bg-white/[0.06]">
-                    <img src={ava(selUser)} className="w-20 h-20 rounded-2xl object-cover" alt=""/>
-                    <div className={`absolute bottom-1 right-1 w-4 h-4 ${sc(selUser.status||'offline')} rounded-full border-2 border-[#222238]`}/>
+                    <img src={ava(selUser)} className="w-20 h-20 rounded-2xl object-cover av-sc-lg" alt=""/>
+                    <StatusBadge status={selUser.status||'offline'} size={18} className="absolute -bottom-1.5 -right-1.5"/>
                   </div>
                 </div>
               </div>
@@ -5226,7 +5266,7 @@ export default function App() {
                     {members.map(m=>(
                       <div key={m.id} className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] px-4 py-3 rounded-xl">
                         <div className="flex items-center gap-3">
-                          <div className="relative"><img src={ava(m)} className="w-9 h-9 rounded-full object-cover" alt=""/><div className={`absolute bottom-0 right-0 w-2.5 h-2.5 ${sc(m.status)} border-2 border-zinc-950 rounded-full`}/></div>
+                          <div className="relative"><img src={ava(m)} className="w-9 h-9 rounded-full object-cover av-sc-xs" alt=""/><StatusBadge status={m.status} size={10} className="absolute -bottom-0.5 -right-0.5"/></div>
                           <div><p className="text-sm font-semibold text-white">{m.username}</p><p className="text-xs text-zinc-600">{m.role_name}</p></div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -5563,8 +5603,8 @@ export default function App() {
                 }).map(f=>(
                   <div key={f.id} className="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-white/[0.04] transition-colors">
                     <div className="relative shrink-0">
-                      <img src={ava(f)} className={`w-9 h-9 rounded-xl object-cover ${f.status==='offline'?'opacity-40':''}`} alt=""/>
-                      <div className={`absolute -bottom-px -right-px w-2.5 h-2.5 ${sc(f.status)} border-2 border-[#1e1e2e] rounded-full`}/>
+                      <img src={ava(f)} className={`w-9 h-9 rounded-xl object-cover av-sc-xs ${f.status==='offline'?'opacity-40':''}`} alt=""/>
+                      <StatusBadge status={f.status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm font-semibold truncate ${f.status==='offline'?'text-zinc-500':'text-white'}`}>{f.username}</p>
