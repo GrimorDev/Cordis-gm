@@ -240,7 +240,7 @@ img.av-sc-lg {
 /* Base: position:relative so ::before/::after pseudo-elements anchor here */
 .av-frozen { position: relative; }
 /* Status badge (SVG) always floats above all ring/overlay effects */
-.av-frozen > svg { position: relative; z-index: 20; }
+.av-frozen > svg { z-index: 20; }
 /* Frozen wrappers: pause animations by default, resume on hover */
 .av-frozen .av-eff-pulse   { animation-play-state: paused; }
 .av-frozen .av-eff-rainbow { animation-play-state: paused; }
@@ -403,30 +403,38 @@ img.av-eff-scan { filter: sepia(0.3) hue-rotate(180deg); transition: filter 0.4s
 @keyframes av-scan-sweep { 0% { top: -5%; } 100% { top: 105%; } }
 
 /* ── Katana ─────────────────────────────────────────────────────── */
-/* Cut line at 45° + dark wedge reveals a diagonal slice on hover.
-   Avatar (top-right) shifts up-right; dark triangle fills bottom-left gap */
+/* Diagonal cut: img clips to upper-right triangle on hover (slide apart).
+   Red glowing cut line appears at 45°. Dark bg fills the lower-left gap. */
 .av-frozen:has(img.av-eff-katana) { isolation: isolate; }
-img.av-eff-katana { position: relative; z-index: 1; transition: transform 0.3s ease; }
-.av-frozen:hover img.av-eff-katana { transform: translate(3px, -3px); }
-/* ::before = glowing red cut line */
+img.av-eff-katana {
+  position: relative; z-index: 1;
+  /* 4-point polygon = full rect, allows smooth morph to triangle */
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+  transition: clip-path 0.35s ease, transform 0.35s ease;
+}
+.av-frozen:hover img.av-eff-katana {
+  /* Collapse bottom-left point to top-left → upper-right triangle slides up-right */
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 0);
+  transform: translate(3px, -3px);
+}
+/* ::before = glowing red cut line at 45° */
 .av-frozen:has(img.av-eff-katana)::before {
   content: ''; position: absolute;
   width: 150%; height: 2px;
-  background: #ef4444;
-  box-shadow: 0 0 10px 3px rgba(239,68,68,.8);
+  background: linear-gradient(90deg, transparent, #ef4444 20%, #ef4444 80%, transparent);
+  box-shadow: 0 0 12px 4px rgba(239,68,68,.85);
   top: 50%; left: -25%;
   transform: rotate(45deg); transform-origin: center;
-  opacity: 0; transition: opacity 0.3s; z-index: 5; pointer-events: none;
+  opacity: 0; transition: opacity 0.2s; z-index: 5; pointer-events: none;
 }
 .av-frozen:hover:has(img.av-eff-katana)::before { opacity: 1; }
-/* ::after = dark bottom-left triangle (the "separated" slice) */
+/* ::after = dark fill for the lower-left gap exposed after img clips away */
 .av-frozen:has(img.av-eff-katana)::after {
   content: ''; position: absolute; inset: 0;
-  background: rgba(5,5,15,.88);
+  background: #0a0a14;
   clip-path: polygon(0 0, 100% 100%, 0 100%);
-  opacity: 0; transition: opacity 0.3s; z-index: 2; pointer-events: none;
+  z-index: -1; pointer-events: none;
 }
-.av-frozen:hover:has(img.av-eff-katana)::after { opacity: 1; }
 
 /* Lightbox overlay */
 .lightbox-bg {
