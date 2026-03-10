@@ -69,7 +69,9 @@ const AVATAR_EFFECTS = [
   { key: 'glow',    label: 'Poświata',   desc: 'Subtelna poświata w kolorze akcentu' },
   { key: 'pulse',   label: 'Pulsowanie', desc: 'Pulsująca animowana poświata' },
   { key: 'neon',    label: 'Neon',       desc: 'Ostre neonowe obramowanie' },
-  { key: 'rainbow', label: 'Tęcza',      desc: 'Tęczowa animowana poświata' },
+  { key: 'rainbow',    label: 'Tęcza',       desc: 'Tęczowa animowana poświata' },
+  { key: 'vortex-cw',  label: 'Vortex ↻',   desc: 'Wirujący pierścień (w prawo) na hover' },
+  { key: 'vortex-ccw', label: 'Vortex ↺',   desc: 'Wirujący pierścień (w lewo) na hover' },
 ];
 
 const GRADIENTS = [
@@ -2631,7 +2633,7 @@ export default function App() {
 
     // ── Step 0: extract fenced code blocks (``` ``` multi-line) ─────
     const codeBlocks: string[] = [];
-    let processed = text.replace(/```([a-zA-Z0-9]*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+    let processed = text.replace(/```([a-zA-Z0-9]*)\n([\s\S]*?)```/g, (_, lang, code) => {
       const idx = codeBlocks.length;
       const safeLang = (lang || '').toLowerCase().substring(0, 20);
       const escaped = code.trim()
@@ -4493,7 +4495,7 @@ export default function App() {
                                 {title:'Kursywa (Ctrl+I)',md:'*',label:<em className="text-xs">I</em>},
                                 {title:'Przekreślenie',md:'~~',label:<span className="text-xs line-through">S</span>},
                                 {title:'Kod inline',md:'`',label:<code className="text-xs font-mono">&lt;/&gt;</code>},
-                                {title:'Blok kodu',md:'```',suffix:'```',label:<span className="text-xs font-mono opacity-60">&#123;&#125;</span>},
+                                {title:'Blok kodu',md:'```\n',suffix:'\n```',label:<span className="text-xs font-mono opacity-60">&#123;&#125;</span>},
                               ] as {title:string;md:string;suffix?:string;label:React.ReactNode}[]).map(({title,md,suffix,label})=>(
                                 <button key={md} type="button" title={title}
                                   onClick={()=>wrapSelection(md,suffix??md)}
@@ -5957,7 +5959,9 @@ export default function App() {
                         <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Efekty avatara</label>
                         {/* Live preview */}
                         <div className="flex items-center gap-4 mb-4 p-3 bg-white/[0.03] rounded-2xl border border-white/[0.06]">
-                          <img src={currentUser?ava(currentUser):''} className={`w-14 h-14 rounded-2xl object-cover shrink-0 av-eff-${avatarEffect}`} alt="podgląd"/>
+                          <div className="relative av-frozen shrink-0">
+                            <img src={currentUser?ava(currentUser):''} className={`w-14 h-14 rounded-2xl object-cover av-eff-${avatarEffect}`} alt="podgląd"/>
+                          </div>
                           <div>
                             <p className="text-sm font-semibold text-white">{AVATAR_EFFECTS.find(e=>e.key===avatarEffect)?.label ?? 'Brak efektu'}</p>
                             <p className="text-xs text-zinc-500 mt-0.5 leading-snug">{AVATAR_EFFECTS.find(e=>e.key===avatarEffect)?.desc}</p>
@@ -5969,7 +5973,9 @@ export default function App() {
                             <button key={ef.key} onClick={()=>saveAvatarEffect(ef.key)}
                               title={ef.label}
                               className={`relative flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${avatarEffect===ef.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
-                              <img src={currentUser?ava(currentUser):''} className={`w-9 h-9 rounded-xl object-cover av-eff-${ef.key}`} alt=""/>
+                              <div className="relative av-frozen">
+                                <img src={currentUser?ava(currentUser):''} className={`w-9 h-9 rounded-xl object-cover av-eff-${ef.key}`} alt=""/>
+                              </div>
                               <span className="text-[9px] text-zinc-400 font-medium leading-tight text-center">{ef.label}</span>
                               {avatarEffect===ef.key&&<span className="absolute top-1 right-1 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={7} className="text-white"/></span>}
                             </button>
