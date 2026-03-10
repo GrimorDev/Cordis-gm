@@ -496,42 +496,41 @@ img.av-eff-radar-sweep {
 @keyframes radar-spin { to { rotate: 360deg; } }
 
 /* ── VHS Tracking ───────────────────────────────────────────────── */
-/* RGB split via drop-shadow + scanlines + moving tracking bar */
+/* Two real image layers via --av-url (same technique as Katana).
+   ::before = sepia+hue-rotate(90deg)  → green/yellow tint, shifted +x
+   ::after  = sepia+hue-rotate(270deg) → magenta/violet tint, shifted -x
+   Both layers use mix-blend-mode:screen — matching the reference exactly. */
 .av-frozen:has(img.av-eff-vhs) { isolation: isolate; }
-img.av-eff-vhs { transition: filter 0.3s, opacity 0.3s; }
-.av-frozen:hover img.av-eff-vhs {
-  opacity: 0.82;
-  filter: drop-shadow(3px 0 rgba(255,0,80,0.75)) drop-shadow(-3px 0 rgba(0,255,200,0.75));
-}
-/* ::before = scanlines */
+img.av-eff-vhs { transition: opacity 0.3s; }
+.av-frozen:hover img.av-eff-vhs { opacity: 0.8; }
+
+/* Green channel — shifted right */
 .av-frozen:has(img.av-eff-vhs)::before {
   content: ''; position: absolute; inset: 0;
-  background: repeating-linear-gradient(
-    0deg, transparent 0px, transparent 2px,
-    rgba(0,0,0,0.25) 2px, rgba(0,0,0,0.25) 4px
-  );
+  background-image: var(--av-url);
+  background-size: cover; background-position: center;
   border-radius: 1rem;
+  filter: sepia(1) hue-rotate(90deg) saturate(2);
+  mix-blend-mode: screen;
+  transform: translateX(4px);
   opacity: 0; transition: opacity 0.3s;
-  z-index: 3; pointer-events: none;
+  z-index: 2; pointer-events: none;
 }
-.av-frozen:hover:has(img.av-eff-vhs)::before { opacity: 1; }
-/* ::after = moving tracking bar */
+.av-frozen:hover:has(img.av-eff-vhs)::before { opacity: 0.6; }
+
+/* Magenta channel — shifted left */
 .av-frozen:has(img.av-eff-vhs)::after {
-  content: ''; position: absolute;
-  left: 0; right: 0; height: 10px;
-  background: rgba(255,255,255,0.18);
-  filter: blur(1px);
+  content: ''; position: absolute; inset: 0;
+  background-image: var(--av-url);
+  background-size: cover; background-position: center;
   border-radius: 1rem;
+  filter: sepia(1) hue-rotate(270deg) saturate(2);
+  mix-blend-mode: screen;
+  transform: translateX(-4px);
   opacity: 0; transition: opacity 0.3s;
-  z-index: 4; pointer-events: none;
+  z-index: 2; pointer-events: none;
 }
-.av-frozen:hover:has(img.av-eff-vhs)::after {
-  opacity: 1; animation: vhs-track 1.5s linear infinite;
-}
-@keyframes vhs-track {
-  0%   { transform: translateY(-100%); }
-  100% { transform: translateY(500%); }
-}
+.av-frozen:hover:has(img.av-eff-vhs)::after { opacity: 0.6; }
 
 /* Lightbox overlay */
 .lightbox-bg {
