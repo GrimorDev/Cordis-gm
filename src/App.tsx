@@ -1367,6 +1367,26 @@ export default function App() {
       setCurrentUser(p => p ? { ...p, badges } : p);
     });
 
+    // ── Forum real-time events ───────────────────────────────────────
+    sock.on('forum_post_created' as any, ({ channel_id, post }: any) => {
+      if (channel_id !== prevChRef.current) return;
+      setForumPosts(p => p.some(x => x.id === post.id) ? p : [post, ...p]);
+    });
+    sock.on('forum_reply_created' as any, ({ channel_id, post_id, reply }: any) => {
+      if (channel_id !== prevChRef.current) return;
+      setForumPost(p => {
+        if (!p || p.id !== post_id) return p;
+        const alreadyHas = (p.replies || []).some((r: any) => r.id === reply.id);
+        return alreadyHas ? p : { ...p, replies: [...(p.replies || []), reply], reply_count: p.reply_count + 1 };
+      });
+      setForumPosts(prev => prev.map(x => x.id === post_id ? { ...x, reply_count: x.reply_count + 1 } : x));
+    });
+    sock.on('forum_post_deleted' as any, ({ channel_id, post_id }: any) => {
+      if (channel_id !== prevChRef.current) return;
+      setForumPosts(p => p.filter(x => x.id !== post_id));
+      setForumPost(p => p?.id === post_id ? null : p);
+    });
+
     // ── Ping / mention received ──────────────────────────────────────
     sock.on('ping_received' as any, (data: any) => {
       const { channel_id, channel_name, server_id, server_name, from_username, content, type } = data;
