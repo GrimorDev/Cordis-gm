@@ -3403,10 +3403,9 @@ export default function App() {
       if (oldIdx === newIdx || oldIdx === -1) return;
       const reordered = (arrayMove(cats, oldIdx, newIdx) as typeof cats).map((c, i) => ({ ...c, position: i }));
       setServerFull(p => p ? { ...p, categories: [...reordered, ...p.categories.filter(c => c.id === '__uncat__')] } : p);
-      channelsApi.reorderCategories(serverFull.id, reordered.map(c => ({ id: c.id, position: c.position ?? 0 }))).catch((err) => {
+      channelsApi.reorderCategories(serverFull.id, reordered.map(c => ({ id: c.id, position: c.position ?? 0 }))).catch(() => {
         setServerFull(snapshot);
-        const detail = err instanceof ApiError ? ` (${err.status}: ${err.message})` : '';
-        addToast(`Nie udało się zapisać kolejności kategorii${detail}`, 'error');
+        addToast('Nie udało się zapisać kolejności kategorii', 'error');
       });
       return;
     }
@@ -3423,10 +3422,9 @@ export default function App() {
         if (oldIdx === newIdx || oldIdx === -1) return;
         const reordered = (arrayMove(activeCat.channels, oldIdx, newIdx) as typeof activeCat.channels).map((c, i) => ({ ...c, position: i }));
         setServerFull(p => p ? { ...p, categories: p.categories.map(cat => cat.id === activeCatId ? { ...cat, channels: reordered } : cat) } : p);
-        channelsApi.reorderChannels(serverFull.id, reordered.map(c => ({ id: c.id, position: c.position ?? 0, category_id: activeCatId }))).catch((err) => {
+        channelsApi.reorderChannels(serverFull.id, reordered.map(c => ({ id: c.id, position: c.position ?? 0, category_id: activeCatId }))).catch(() => {
           setServerFull(snapshot);
-          const detail = err instanceof ApiError ? ` (${err.status}: ${err.message})` : '';
-          addToast(`Nie udało się zapisać kolejności kanałów${detail}`, 'error');
+          addToast('Nie udało się zapisać kolejności kanałów', 'error');
         });
       } else {
         const targetCat = serverFull.categories.find(c => c.id === overCatId);
@@ -3447,10 +3445,9 @@ export default function App() {
           ...newSrcChs.map(c => ({ id: c.id, position: c.position ?? 0, category_id: activeCatId })),
           ...newTgtChs.map(c => ({ id: c.id, position: c.position ?? 0, category_id: overCatId })),
         ];
-        channelsApi.reorderChannels(serverFull.id, allUpdated).catch((err) => {
+        channelsApi.reorderChannels(serverFull.id, allUpdated).catch(() => {
           setServerFull(snapshot);
-          const detail = err instanceof ApiError ? ` (${err.status}: ${err.message})` : '';
-          addToast(`Nie udało się zapisać kolejności kanałów${detail}`, 'error');
+          addToast('Nie udało się zapisać kolejności kanałów', 'error');
         });
       }
     }

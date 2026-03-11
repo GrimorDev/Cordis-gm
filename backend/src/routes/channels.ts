@@ -387,7 +387,7 @@ router.delete('/:id/posts/:postId', authMiddleware, async (req: AuthRequest, res
 });
 
 // ── PATCH /api/channels/categories/reorder ───────────────────────
-router.patch('/categories/reorder',
+router.patch('/categories/reorder', authMiddleware,
   [
     body('server_id').isUUID(),
     body('categories').isArray({ min: 1 }),
@@ -417,19 +417,19 @@ router.patch('/categories/reorder',
       } catch (e: any) {
         console.error('[categories/reorder] DB error:', e?.message ?? e);
         try { await client.query('ROLLBACK'); } catch {}
-        return res.status(500).json({ error: e?.message ?? 'Internal server error' });
+        return res.status(500).json({ error: 'Internal server error' });
       } finally {
         client.release();
       }
     } catch (e: any) {
       console.error('[categories/reorder] outer error:', e?.message ?? e);
-      return res.status(500).json({ error: e?.message ?? 'Internal server error' });
+      return res.status(500).json({ error: 'Internal server error' });
     }
   }
 );
 
 // ── PATCH /api/channels/reorder ──────────────────────────────────
-router.patch('/reorder',
+router.patch('/reorder', authMiddleware,
   [
     body('server_id').isUUID(),
     body('channels').isArray({ min: 1 }),
@@ -460,13 +460,13 @@ router.patch('/reorder',
       } catch (e: any) {
         console.error('[channels/reorder] DB error:', e?.message ?? e);
         try { await client.query('ROLLBACK'); } catch {}
-        return res.status(500).json({ error: e?.message ?? 'Internal server error' });
+        return res.status(500).json({ error: 'Internal server error' });
       } finally {
         client.release();
       }
     } catch (e: any) {
       console.error('[channels/reorder] outer error:', e?.message ?? e);
-      return res.status(500).json({ error: e?.message ?? 'Internal server error' });
+      return res.status(500).json({ error: 'Internal server error' });
     }
   }
 );
