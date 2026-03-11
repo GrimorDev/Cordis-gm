@@ -324,6 +324,10 @@ CREATE TABLE IF NOT EXISTS server_bans (
 );
 CREATE INDEX IF NOT EXISTS idx_server_bans_server ON server_bans(server_id);
 
+-- Channel & category ordering (drag-and-drop reorder)
+DO $$ BEGIN ALTER TABLE channel_categories ADD COLUMN position INTEGER DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE channels           ADD COLUMN position INTEGER DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
 -- Slow mode per channel
 DO $$ BEGIN ALTER TABLE channels ADD COLUMN slowmode_seconds INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 
