@@ -87,7 +87,11 @@ const AVATAR_EFFECTS = [
   { key: 'katana',      label: 'Katana',  desc: 'Cięcie przekątne z czerwoną świecącą klingą na hover' },
   { key: 'liquid-morph', label: 'Liquid',  desc: 'Organiczny płynny kształt z gradientową poświatą' },
   { key: 'radar-sweep',  label: 'Radar',   desc: 'Zielony radar wojskowy z wirującą wiązką na hover' },
-  { key: 'vhs',          label: 'VHS',     desc: 'Retro efekt magnetowidu — RGB split + linia śledzenia' },
+  { key: 'vhs',          label: 'VHS',        desc: 'Retro efekt magnetowidu — RGB split + linia śledzenia' },
+  { key: 'toxic-slime',  label: 'Toxic Slime', desc: 'Toksyczny zielony śluz kapiący z avatara' },
+  { key: 'sakura',       label: 'Sakura',      desc: 'Różowe płatki wiśni opadające wokół avatara' },
+  { key: 'demon',        label: 'Demon',       desc: 'Czerwone rogi demona pojawiające się na hover' },
+  { key: 'neon-cat',     label: 'Neon Cat',    desc: 'Neonowe uszka kota z falującą animacją' },
 ];
 
 const GRADIENTS = [

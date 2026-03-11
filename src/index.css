@@ -532,6 +532,124 @@ img.av-eff-vhs { transition: opacity 0.3s; }
 }
 .av-frozen:hover:has(img.av-eff-vhs)::after { opacity: 0.6; }
 
+/* ── Toxic Slime ──────────────────────────────────────────── */
+@keyframes slime-drip {
+  0%,100% { height:8px; border-radius:50% 50% 50% 50% / 0% 0% 80% 80%; }
+  50%      { height:30px; border-radius:30% 70% 50% 50% / 0% 0% 80% 70%; }
+}
+@keyframes slime-pulse {
+  0%,100% { box-shadow:0 0 0 2px #22c55e, 0 0 10px rgba(34,197,94,0.5); }
+  50%     { box-shadow:0 0 0 2px #4ade80, 0 0 20px rgba(74,222,128,0.8); }
+}
+.av-frozen:has(img.av-eff-toxic-slime)::before {
+  content:''; position:absolute; inset:-3px; border-radius:50%;
+  opacity:0; transition:opacity 0.3s; z-index:15; pointer-events:none;
+}
+.av-frozen:hover:has(img.av-eff-toxic-slime)::before {
+  opacity:1; animation:slime-pulse 2s ease-in-out infinite;
+}
+.av-frozen:has(img.av-eff-toxic-slime)::after {
+  content:''; position:absolute; top:-3px; left:50%; transform:translateX(-50%);
+  width:14px; height:8px; background:#22c55e; box-shadow:0 0 8px #22c55e;
+  opacity:0; transition:opacity 0.3s; z-index:25; pointer-events:none;
+}
+.av-frozen:hover:has(img.av-eff-toxic-slime)::after {
+  opacity:1; animation:slime-drip 2s ease-in-out infinite;
+}
+img.av-eff-toxic-slime { transition:filter 0.3s; }
+.av-frozen:hover img.av-eff-toxic-slime { filter:saturate(1.3) hue-rotate(60deg); }
+
+/* ── Sakura ───────────────────────────────────────────────── */
+@keyframes sakura-float {
+  0%   { transform:rotate(0deg) translateX(38px) rotate(0deg) scale(1); opacity:0.9; }
+  25%  { opacity:0.6; }
+  75%  { opacity:0.8; }
+  100% { transform:rotate(360deg) translateX(38px) rotate(-360deg) scale(0.7); opacity:0.9; }
+}
+.av-frozen:has(img.av-eff-sakura)::before {
+  content:''; position:absolute; inset:-3px; border-radius:50%;
+  box-shadow:0 0 0 2px rgba(249,168,212,0.8), 0 0 14px rgba(244,114,182,0.6);
+  opacity:0; transition:opacity 0.3s; z-index:15; pointer-events:none;
+}
+.av-frozen:hover:has(img.av-eff-sakura)::before { opacity:1; }
+.av-frozen:has(img.av-eff-sakura)::after {
+  content:''; position:absolute; top:50%; left:50%;
+  width:10px; height:7px; margin:-3.5px 0 0 -5px;
+  background:radial-gradient(ellipse, #f9a8d4 0%, #ec4899 100%);
+  border-radius:50% 0 50% 0; opacity:0; filter:blur(0.5px);
+  transition:opacity 0.3s; z-index:30; pointer-events:none;
+}
+.av-frozen:hover:has(img.av-eff-sakura)::after {
+  opacity:0.9; animation:sakura-float 3s linear infinite;
+}
+img.av-eff-sakura { transition:filter 0.3s; }
+.av-frozen:hover img.av-eff-sakura { filter:saturate(1.2) sepia(0.1) hue-rotate(-10deg); }
+
+/* ── Demon Horns ──────────────────────────────────────────── */
+.av-frozen:has(img.av-eff-demon)::before {
+  content:''; position:absolute; top:-24px; left:6px;
+  width:14px; height:28px;
+  background:linear-gradient(to top, #b91c1c, #fca5a5);
+  clip-path:polygon(50% 0%, 5% 100%, 95% 100%);
+  filter:drop-shadow(0 0 6px rgba(239,68,68,0.9));
+  transform:rotate(-22deg); transform-origin:bottom center;
+  opacity:0; transition:opacity 0.3s; z-index:30; pointer-events:none;
+}
+.av-frozen:hover:has(img.av-eff-demon)::before { opacity:1; }
+.av-frozen:has(img.av-eff-demon)::after {
+  content:''; position:absolute; top:-24px; right:6px;
+  width:14px; height:28px;
+  background:linear-gradient(to top, #b91c1c, #fca5a5);
+  clip-path:polygon(50% 0%, 5% 100%, 95% 100%);
+  filter:drop-shadow(0 0 6px rgba(239,68,68,0.9));
+  transform:rotate(22deg); transform-origin:bottom center;
+  opacity:0; transition:opacity 0.3s; z-index:30; pointer-events:none;
+}
+.av-frozen:hover:has(img.av-eff-demon)::after { opacity:1; }
+img.av-eff-demon { transition:box-shadow 0.3s, filter 0.3s; }
+.av-frozen:hover img.av-eff-demon {
+  box-shadow:0 0 0 2px #dc2626, 0 0 16px rgba(220,38,38,0.65);
+  filter:saturate(1.2);
+}
+
+/* ── Neon Cat ─────────────────────────────────────────────── */
+@keyframes cat-ear-wiggle-l {
+  0%,100% { transform:rotate(-14deg); }
+  50%     { transform:rotate(-28deg); }
+}
+@keyframes cat-ear-wiggle-r {
+  0%,100% { transform:rotate(14deg); }
+  50%     { transform:rotate(28deg); }
+}
+.av-frozen:has(img.av-eff-neon-cat)::before {
+  content:''; position:absolute; top:-20px; left:4px;
+  width:15px; height:24px;
+  background:linear-gradient(to top, #a21caf, #e879f9);
+  clip-path:polygon(50% 0%, 5% 100%, 95% 100%);
+  filter:drop-shadow(0 0 5px rgba(217,70,239,0.9));
+  transform:rotate(-14deg); transform-origin:bottom center;
+  opacity:0; transition:opacity 0.3s; z-index:30; pointer-events:none;
+}
+.av-frozen:hover:has(img.av-eff-neon-cat)::before {
+  opacity:1; animation:cat-ear-wiggle-l 1.5s ease-in-out infinite;
+}
+.av-frozen:has(img.av-eff-neon-cat)::after {
+  content:''; position:absolute; top:-20px; right:4px;
+  width:15px; height:24px;
+  background:linear-gradient(to top, #a21caf, #e879f9);
+  clip-path:polygon(50% 0%, 5% 100%, 95% 100%);
+  filter:drop-shadow(0 0 5px rgba(217,70,239,0.9));
+  transform:rotate(14deg); transform-origin:bottom center;
+  opacity:0; transition:opacity 0.3s; z-index:30; pointer-events:none;
+}
+.av-frozen:hover:has(img.av-eff-neon-cat)::after {
+  opacity:1; animation:cat-ear-wiggle-r 1.5s ease-in-out infinite 0.2s;
+}
+img.av-eff-neon-cat { transition:box-shadow 0.3s; }
+.av-frozen:hover img.av-eff-neon-cat {
+  box-shadow:0 0 0 2px #d946ef, 0 0 12px rgba(217,70,239,0.7);
+}
+
 /* Lightbox overlay */
 .lightbox-bg {
   position: fixed; inset: 0; z-index: 9000;
