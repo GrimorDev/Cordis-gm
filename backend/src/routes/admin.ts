@@ -10,7 +10,13 @@ const router = Router();
 async function adminMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { rows } = await query('SELECT is_admin FROM users WHERE id=$1', [req.user!.id]);
-    if (!rows[0]?.is_admin) return res.status(403).json({ error: 'Forbidden' });
+    if (rows[0]?.is_admin) return next();
+    const { rowCount } = await query(
+      `SELECT 1 FROM user_badges ub JOIN global_badges gb ON gb.id=ub.badge_id
+       WHERE ub.user_id=$1 AND gb.name='developer' LIMIT 1`,
+      [req.user!.id]
+    );
+    if (!rowCount) return res.status(403).json({ error: 'Forbidden' });
     next();
   } catch { res.status(500).json({ error: 'Internal server error' }); }
 }
@@ -191,6 +197,86 @@ router.delete('/users/:userId/badges/:badgeId', async (req: AuthRequest, res: Re
       }
     }
     return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ── GET /api/admin/users?page=1&limit=50 ─────────────────────────
+router.get('/users', async (req: AuthRequest, res: Response) => {
+  const page  = Math.max(1, parseInt(req.query.page  as string) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+  const offset = (page - 1) * limit;
+  try {
+    const [usersRes, totalRes] = await Promise.all([
+      query(
+        `SELECT u.id, u.username, u.avatar_url, u.status, u.is_admin, u.created_at,
+                COUNT(DISTINCT sm.server_id)::int as server_count,
+                (SELECT COUNT(*)::int FROM messages WHERE sender_id=u.id) as message_count,
+                COALESCE(
+                  (SELECT json_agg(json_build_object('id',gb.id,'name',gb.name,'label',gb.label,'color',gb.color,'icon',gb.icon) ORDER BY gb.position)
+                   FROM user_badges ub2 JOIN global_badges gb ON gb.id=ub2.badge_id WHERE ub2.user_id=u.id),
+                  '[]'::json
+                ) as badges
+         FROM users u LEFT JOIN server_members sm ON sm.user_id=u.id
+         GROUP BY u.id ORDER BY u.created_at DESC
+         LIMIT $1 OFFSET $2`,
+        [limit, offset]
+      ),
+      query('SELECT COUNT(*)::int as n FROM users'),
+    ]);
+    return res.json({ users: usersRes.rows, total: totalRes.rows[0].n });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ── GET /api/admin/servers ────────────────────────────────────────
+router.get('/servers', async (_req, res: Response) => {
+  try {
+    const { rows } = await query(
+      `SELECT s.id, s.name, s.icon_url, s.owner_id, u.username as owner_name,
+              COUNT(DISTINCT sm.user_id)::int as member_count,
+              COUNT(DISTINCT c.id)::int as channel_count, s.created_at
+       FROM servers s
+       JOIN users u ON u.id=s.owner_id
+       LEFT JOIN server_members sm ON sm.server_id=s.id
+       LEFT JOIN channels c ON c.server_id=s.id
+       GROUP BY s.id, u.username ORDER BY member_count DESC`
+    );
+    return res.json(rows);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ── GET /api/admin/overview ───────────────────────────────────────
+router.get('/overview', async (_req, res: Response) => {
+  try {
+    const [users, servers, messages, dms, channels, registrations, onlineUsers] = await Promise.all([
+      query('SELECT COUNT(*)::int as n FROM users'),
+      query('SELECT COUNT(*)::int as n FROM servers'),
+      query('SELECT COUNT(*)::int as n FROM messages'),
+      query('SELECT COUNT(*)::int as n FROM dm_messages'),
+      query('SELECT COUNT(*)::int as n FROM channels'),
+      query(
+        `SELECT DATE(created_at) as date, COUNT(*)::int as count
+         FROM users WHERE created_at > NOW()-INTERVAL '7 days'
+         GROUP BY DATE(created_at) ORDER BY date`
+      ),
+      query(`SELECT COUNT(*)::int as n FROM users WHERE status='online'`),
+    ]);
+    const mem = process.memoryUsage();
+    return res.json({
+      total_users:    users.rows[0].n,
+      total_servers:  servers.rows[0].n,
+      total_messages: messages.rows[0].n,
+      total_dms:      dms.rows[0].n,
+      total_channels: channels.rows[0].n,
+      online_users:   onlineUsers.rows[0].n,
+      registrations_7d: registrations.rows,
+      memory: {
+        rss:       Math.round(mem.rss       / 1024 / 1024),
+        heapUsed:  Math.round(mem.heapUsed  / 1024 / 1024),
+        heapTotal: Math.round(mem.heapTotal / 1024 / 1024),
+      },
+      node_version:    process.version,
+      uptime_seconds:  Math.round(process.uptime()),
+    });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 

@@ -10,6 +10,7 @@ import {
   Eye, EyeOff, Megaphone, FileText, ChevronLeft, ChevronRight, ArrowLeft,
   Clock, Pin, PinOff, Activity, AtSign, BadgeCheck, Crown, LayoutDashboard,
   Code2, FlaskConical, ShieldCheck, Hammer, Award, CalendarDays, Quote,
+  GripVertical, BarChart2, Server, Database,
   type LucideIcon
 } from 'lucide-react';
 import {
@@ -19,8 +20,16 @@ import {
   type ChannelData, type MessageFull, type DmConversation,
   type DmMessageFull, type FriendEntry, type FriendRequest,
   type ServerMember, type ForumPost, type ForumReply, type ServerBan,
-  type Badge, type AdminStats, type AdminUser, ApiError
+  type Badge, type AdminStats, type AdminUser, type AdminServer, type AdminOverview, ApiError
 } from './api';
+import {
+  DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
+  closestCorners, type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext, useSortable, verticalListSortingStrategy, arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   connectSocket, disconnectSocket, joinChannel, leaveChannel,
   joinVoiceChannel, leaveVoiceChannel, sendCallInvite, acceptCall, rejectCall, endCall,
@@ -752,6 +761,429 @@ const BADGE_ICON_MAP: Record<string, LucideIcon> = {
 };
 const getBadgeIcon = (name: string): LucideIcon => BADGE_ICON_MAP[name] ?? Award;
 
+// ─── Admin Panel component ────────────────────────────────────────────────────
+interface AdminPanelProps {
+  currentUser: import('./api').UserProfile | null;
+  overview: import('./api').AdminOverview | null;
+  setOverview: (v: import('./api').AdminOverview | null) => void;
+  tab: 'dashboard'|'users'|'servers'|'badges'|'system';
+  setTab: (t: 'dashboard'|'users'|'servers'|'badges'|'system') => void;
+  badges: Badge[]; setBadges: (v: Badge[]) => void;
+  users: AdminUser[]; setUsers: (v: AdminUser[]) => void;
+  usersTotal: number; setUsersTotal: (v: number) => void;
+  usersPage: number; setUsersPage: (v: number) => void;
+  serversList: import('./api').AdminServer[]; setServersList: (v: import('./api').AdminServer[]) => void;
+  userQ: string; setUserQ: (v: string) => void;
+  badgeForm: { name:string; label:string; color:string; icon:string };
+  setBadgeForm: (v: any) => void;
+  badgeSaving: boolean; setBadgeSaving: (v: boolean) => void;
+  assignUser: AdminUser|null; setAssignUser: (v: AdminUser|null) => void;
+  assignBadgeId: string; setAssignBadgeId: (v: string) => void;
+  onBack: () => void;
+  addToast: (t: any) => void;
+}
+function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, setBadges, users, setUsers,
+  usersTotal, setUsersTotal, usersPage, setUsersPage, serversList, setServersList,
+  userQ, setUserQ, badgeForm, setBadgeForm, badgeSaving, setBadgeSaving,
+  assignUser, setAssignUser, assignBadgeId, setAssignBadgeId, onBack, addToast }: AdminPanelProps) {
+
+  const gi2 = 'bg-white/[0.06] border border-white/[0.08] text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 transition-all rounded-xl';
+
+  React.useEffect(() => {
+    // Load all data when admin panel opens
+    adminApi.overview().then(d => setOverview(d)).catch(()=>{});
+    adminApi.badges.list().then(d => setBadges(d)).catch(()=>{});
+    adminApi.users.list(1, 50).then(d => { setUsers(d.users); setUsersTotal(d.total); }).catch(()=>{});
+    adminApi.servers().then(d => setServersList(d)).catch(()=>{});
+  }, []);
+
+  // Load more users on page change
+  React.useEffect(() => {
+    if (usersPage === 1) return;
+    adminApi.users.list(usersPage, 50).then(d => { setUsers(d.users); setUsersTotal(d.total); }).catch(()=>{});
+  }, [usersPage]);
+
+  const searchUsers = React.useCallback(async (q: string) => {
+    if (!q.trim()) {
+      adminApi.users.list(1, 50).then(d => { setUsers(d.users); setUsersTotal(d.total); setUsersPage(1); }).catch(()=>{});
+      return;
+    }
+    const res = await adminApi.users.search(q).catch(()=>[]);
+    setUsers(res); setUsersTotal(res.length);
+  }, []);
+
+  React.useEffect(() => {
+    const t = setTimeout(() => searchUsers(userQ), 300);
+    return () => clearTimeout(t);
+  }, [userQ]);
+
+  const handleCreateBadge = async () => {
+    if (!badgeForm.name || !badgeForm.label) return;
+    setBadgeSaving(true);
+    try {
+      const badge = await adminApi.badges.create(badgeForm);
+      setBadges([...badges, badge]);
+      setBadgeForm({ name:'', label:'', color:'#6366f1', icon:'⚙️' });
+      addToast({ type:'success', message:'Odznaka utworzona' });
+    } catch { addToast({ type:'error', message:'Błąd tworzenia odznaki' }); }
+    finally { setBadgeSaving(false); }
+  };
+
+  const handleDeleteBadge = async (id: string) => {
+    try {
+      await adminApi.badges.delete(id);
+      setBadges(badges.filter(b => b.id !== id));
+      addToast({ type:'success', message:'Odznaka usunięta' });
+    } catch { addToast({ type:'error', message:'Błąd usuwania odznaki' }); }
+  };
+
+  const handleAssignBadge = async () => {
+    if (!assignUser || !assignBadgeId) return;
+    try {
+      await adminApi.badges.assign(assignUser.id, assignBadgeId);
+      setAssignUser(null); setAssignBadgeId('');
+      adminApi.users.list(usersPage, 50).then(d => { setUsers(d.users); setUsersTotal(d.total); }).catch(()=>{});
+      addToast({ type:'success', message:'Odznaka przypisana' });
+    } catch { addToast({ type:'error', message:'Błąd przypisywania odznaki' }); }
+  };
+
+  const handleRemoveBadge = async (userId: string, badgeId: string) => {
+    try {
+      await adminApi.badges.remove(userId, badgeId);
+      setUsers(users.map(u => u.id===userId ? { ...u, badges: u.badges.filter(b=>b.id!==badgeId) } : u));
+      addToast({ type:'success', message:'Odznaka usunięta' });
+    } catch { addToast({ type:'error', message:'Błąd usuwania odznaki' }); }
+  };
+
+  const handleToggleAdmin = async (u: AdminUser) => {
+    const newState = !u.is_admin;
+    try {
+      await adminApi.users.setAdmin(u.id, newState);
+      setUsers(users.map(x => x.id===u.id ? { ...x, is_admin: newState } : x));
+    } catch { addToast({ type:'error', message:'Błąd zmiany uprawnień' }); }
+  };
+
+  const TABS: { id: 'dashboard'|'users'|'servers'|'badges'|'system'; label: string; icon: React.ReactNode }[] = [
+    { id:'dashboard', label:'Dashboard', icon: <LayoutDashboard size={14}/> },
+    { id:'users',     label:'Użytkownicy', icon: <Users size={14}/> },
+    { id:'servers',   label:'Serwery', icon: <Server size={14}/> },
+    { id:'badges',    label:'Odznaki', icon: <Award size={14}/> },
+    { id:'system',    label:'System', icon: <Database size={14}/> },
+  ];
+
+  const fmtUptime = (s: number) => {
+    const d = Math.floor(s/86400), h = Math.floor((s%86400)/3600), m = Math.floor((s%3600)/60);
+    return [d&&`${d}d`, h&&`${h}h`, `${m}m`].filter(Boolean).join(' ');
+  };
+
+  const reg7 = overview?.registrations_7d ?? [];
+  const maxReg = Math.max(1, ...reg7.map(r=>r.count));
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden bg-[#0d0d18]">
+      {/* Header */}
+      <div className="h-14 border-b border-white/[0.06] flex items-center px-5 gap-4 shrink-0 glass-dark z-10">
+        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-white hover:bg-white/[0.07] transition-all">
+          <ArrowLeft size={16}/>
+        </button>
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <Shield size={16} className="text-violet-400 shrink-0"/>
+          <span className="text-sm font-bold text-white">Cordyn Admin Panel</span>
+          {currentUser?.badges?.find(b=>b.name==='developer')&&(
+            <span className="text-[10px] font-bold bg-violet-500/15 text-violet-300 border border-violet-500/30 rounded-full px-2 py-0.5 ml-1">developer</span>
+          )}
+        </div>
+      </div>
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar nav */}
+        <div className="w-44 shrink-0 border-r border-white/[0.05] flex flex-col gap-0.5 p-2 overflow-y-auto">
+          {TABS.map(t=>(
+            <button key={t.id} onClick={()=>setTab(t.id)}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium transition-all text-left ${tab===t.id?'bg-violet-500/15 text-violet-300':'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.05]'}`}>
+              {t.icon}{t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+
+          {/* ── Dashboard ── */}
+          {tab==='dashboard'&&(
+            <div className="max-w-4xl mx-auto space-y-6">
+              <h2 className="text-base font-bold text-white">Dashboard</h2>
+              {/* Stat cards */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {[
+                  { label:'Użytkownicy', val: overview?.total_users, icon:<Users size={16} className="text-indigo-400"/>, color:'indigo' },
+                  { label:'Online teraz', val: overview?.online_users, icon:<Activity size={16} className="text-emerald-400"/>, color:'emerald' },
+                  { label:'Serwery', val: overview?.total_servers, icon:<Server size={16} className="text-violet-400"/>, color:'violet' },
+                  { label:'Wiadomości', val: overview?.total_messages, icon:<MessageCircle size={16} className="text-blue-400"/>, color:'blue' },
+                  { label:'DM', val: overview?.total_dms, icon:<MessageSquare size={16} className="text-pink-400"/>, color:'pink' },
+                  { label:'Kanały', val: overview?.total_channels, icon:<Hash size={16} className="text-amber-400"/>, color:'amber' },
+                ].map(c=>(
+                  <div key={c.label} className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4 flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/[0.06]">{c.icon}</div>
+                    <div>
+                      <div className="text-xl font-bold text-white">{c.val ?? <Loader2 size={14} className="animate-spin text-zinc-600"/>}</div>
+                      <div className="text-xs text-zinc-500">{c.label}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* 7-day registration chart */}
+              {reg7.length>0&&(
+                <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-5">
+                  <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4">Rejestracje — ostatnie 7 dni</h3>
+                  <div className="flex items-end gap-2 h-24">
+                    {reg7.map(r=>(
+                      <div key={r.date} className="flex-1 flex flex-col items-center gap-1.5">
+                        <span className="text-[10px] text-zinc-500">{r.count}</span>
+                        <div className="w-full rounded-t-lg bg-indigo-500/70 transition-all" style={{height:`${Math.max(4,(r.count/maxReg)*80)}px`}}/>
+                        <span className="text-[9px] text-zinc-600">{new Date(r.date).toLocaleDateString('pl',{weekday:'short'})}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Users ── */}
+          {tab==='users'&&(
+            <div className="max-w-5xl mx-auto space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-bold text-white">Użytkownicy <span className="text-zinc-500 font-normal text-sm">({usersTotal})</span></h2>
+                <input value={userQ} onChange={e=>setUserQ(e.target.value)} placeholder="Szukaj użytkownika..." className={`${gi2} px-3 py-1.5 text-sm w-52`}/>
+              </div>
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
+                <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-2 px-4 py-2 border-b border-white/[0.06] text-[10px] font-bold text-zinc-600 uppercase tracking-wider">
+                  <span>Użytkownik</span><span>Status</span><span>Serwery</span><span>Wiad.</span><span>Dołączył</span><span>Akcje</span>
+                </div>
+                {users.map(u=>(
+                  <div key={u.id} className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-2 px-4 py-3 border-b border-white/[0.04] last:border-0 items-center hover:bg-white/[0.02] transition-colors">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-7 h-7 rounded-lg overflow-hidden bg-zinc-800 shrink-0">
+                        {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover" alt=""/> : <div className="w-full h-full flex items-center justify-center text-xs font-bold text-zinc-400">{u.username[0].toUpperCase()}</div>}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-sm font-semibold text-white truncate">{u.username}</span>
+                          {u.is_admin&&<span className="text-[9px] font-bold bg-violet-500/15 text-violet-400 border border-violet-500/25 rounded-full px-1.5 py-0.5 leading-none">Admin</span>}
+                          {u.badges?.map(b=>(
+                            <span key={b.id} style={{color:b.color,borderColor:`${b.color}40`,background:`${b.color}15`}}
+                              className="text-[9px] font-bold border rounded-full px-1.5 py-0.5 leading-none flex items-center gap-0.5">
+                              {b.icon} {b.label}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <span className={`text-xs font-medium ${u.status==='online'?'text-emerald-400':u.status==='idle'?'text-amber-400':u.status==='dnd'?'text-rose-400':'text-zinc-500'}`}>{u.status}</span>
+                    <span className="text-xs text-zinc-400">{u.server_count ?? '-'}</span>
+                    <span className="text-xs text-zinc-400">{u.message_count ?? '-'}</span>
+                    <span className="text-xs text-zinc-500">{new Date(u.created_at).toLocaleDateString('pl')}</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button onClick={()=>{ setAssignUser(u); setAssignBadgeId(badges[0]?.id??''); }}
+                        className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/[0.04] hover:bg-indigo-500/20 hover:text-indigo-400 text-zinc-500 transition-colors">
+                        <Award size={11}/>
+                      </button>
+                      <button onClick={()=>handleToggleAdmin(u)}
+                        className={`w-6 h-6 flex items-center justify-center rounded-lg transition-colors ${u.is_admin?'bg-violet-500/15 text-violet-400 hover:bg-rose-500/20 hover:text-rose-400':'bg-white/[0.04] text-zinc-500 hover:bg-violet-500/15 hover:text-violet-400'}`}>
+                        <ShieldCheck size={11}/>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {users.length===0&&<p className="text-xs text-zinc-600 text-center py-8">Brak wyników</p>}
+              </div>
+              {/* Pagination */}
+              {usersTotal>50&&!userQ&&(
+                <div className="flex justify-center gap-2">
+                  <button disabled={usersPage===1} onClick={()=>setUsersPage(usersPage-1)} className="px-3 py-1.5 text-xs rounded-lg bg-white/[0.05] text-zinc-400 hover:text-white disabled:opacity-30 transition-all"><ChevronLeft size={12}/></button>
+                  <span className="px-3 py-1.5 text-xs text-zinc-400">str. {usersPage} / {Math.ceil(usersTotal/50)}</span>
+                  <button disabled={usersPage>=Math.ceil(usersTotal/50)} onClick={()=>setUsersPage(usersPage+1)} className="px-3 py-1.5 text-xs rounded-lg bg-white/[0.05] text-zinc-400 hover:text-white disabled:opacity-30 transition-all"><ChevronRight size={12}/></button>
+                </div>
+              )}
+              {/* Assign badge dialog */}
+              {assignUser&&(
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={()=>setAssignUser(null)}>
+                  <div className="bg-[#16162a] border border-white/[0.09] rounded-2xl p-5 w-72 space-y-4" onClick={e=>e.stopPropagation()}>
+                    <h3 className="text-sm font-bold text-white">Przypisz odznakę — {assignUser.username}</h3>
+                    <select value={assignBadgeId} onChange={e=>setAssignBadgeId(e.target.value)} className={`${gi2} w-full px-3 py-2 text-sm`}>
+                      {badges.map(b=><option key={b.id} value={b.id}>{b.icon} {b.label}</option>)}
+                    </select>
+                    <div className="flex gap-2">
+                      <button onClick={handleAssignBadge} className="flex-1 bg-indigo-500 hover:bg-indigo-400 text-white py-2 rounded-xl text-sm font-semibold transition-colors">Przypisz</button>
+                      <button onClick={()=>setAssignUser(null)} className="flex-1 bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 py-2 rounded-xl text-sm transition-colors">Anuluj</button>
+                    </div>
+                    {/* Remove badge section */}
+                    {assignUser.badges?.length>0&&(
+                      <div>
+                        <p className="text-xs text-zinc-500 mb-2">Aktualne odznaki:</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {assignUser.badges.map(b=>(
+                            <button key={b.id} onClick={()=>handleRemoveBadge(assignUser.id, b.id)}
+                              style={{color:b.color,borderColor:`${b.color}40`,background:`${b.color}15`}}
+                              className="text-[10px] font-bold border rounded-full px-2 py-0.5 flex items-center gap-1 hover:opacity-70 transition-opacity">
+                              {b.icon} {b.label} <X size={9}/>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Servers ── */}
+          {tab==='servers'&&(
+            <div className="max-w-4xl mx-auto space-y-4">
+              <h2 className="text-base font-bold text-white">Serwery <span className="text-zinc-500 font-normal text-sm">({serversList.length})</span></h2>
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
+                <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr_1fr] gap-2 px-4 py-2 border-b border-white/[0.06] text-[10px] font-bold text-zinc-600 uppercase tracking-wider">
+                  <span>Serwer</span><span>Właściciel</span><span>Członkowie</span><span>Kanały</span><span>Utworzony</span>
+                </div>
+                {serversList.map(s=>(
+                  <div key={s.id} className="grid grid-cols-[2fr_1.5fr_1fr_1fr_1fr] gap-2 px-4 py-3 border-b border-white/[0.04] last:border-0 items-center hover:bg-white/[0.02]">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-7 h-7 rounded-lg overflow-hidden bg-zinc-800 shrink-0">
+                        {s.icon_url ? <img src={s.icon_url} className="w-full h-full object-cover" alt=""/> : <div className="w-full h-full flex items-center justify-center text-xs font-bold text-zinc-500">{s.name[0]}</div>}
+                      </div>
+                      <span className="text-sm font-semibold text-white truncate">{s.name}</span>
+                    </div>
+                    <span className="text-xs text-zinc-400 truncate">{s.owner_name}</span>
+                    <span className="text-xs text-zinc-400">{s.member_count}</span>
+                    <span className="text-xs text-zinc-400">{s.channel_count}</span>
+                    <span className="text-xs text-zinc-500">{new Date(s.created_at).toLocaleDateString('pl')}</span>
+                  </div>
+                ))}
+                {serversList.length===0&&<p className="text-xs text-zinc-600 text-center py-8"><Loader2 size={14} className="animate-spin inline"/></p>}
+              </div>
+            </div>
+          )}
+
+          {/* ── Badges ── */}
+          {tab==='badges'&&(
+            <div className="max-w-2xl mx-auto space-y-6">
+              <h2 className="text-base font-bold text-white">Odznaki</h2>
+              {/* Create form */}
+              <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4 space-y-3">
+                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Nowa odznaka</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <input value={badgeForm.name} onChange={e=>setBadgeForm({...badgeForm,name:e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,'')})} placeholder="Nazwa (np. vip)" className={`${gi2} px-3 py-2 text-sm`}/>
+                  <input value={badgeForm.label} onChange={e=>setBadgeForm({...badgeForm,label:e.target.value})} placeholder="Etykieta (np. VIP)" className={`${gi2} px-3 py-2 text-sm`}/>
+                  <input value={badgeForm.icon} onChange={e=>setBadgeForm({...badgeForm,icon:e.target.value})} placeholder="Emoji" className={`${gi2} px-3 py-2 text-sm`}/>
+                  <input value={badgeForm.color} onChange={e=>setBadgeForm({...badgeForm,color:e.target.value})} type="color" className="h-9 w-full rounded-xl border border-white/[0.08] bg-transparent cursor-pointer"/>
+                </div>
+                <button onClick={handleCreateBadge} disabled={badgeSaving||!badgeForm.name||!badgeForm.label}
+                  className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2">
+                  {badgeSaving&&<Loader2 size={13} className="animate-spin"/>} Utwórz
+                </button>
+              </div>
+              {/* Badge list */}
+              <div className="flex flex-col gap-2">
+                {badges.map(b=>(
+                  <div key={b.id} className="flex items-center gap-3 px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
+                    <span className="text-lg">{b.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span style={{color:b.color}} className="text-sm font-bold">{b.label}</span>
+                        <span className="text-xs text-zinc-600">#{b.name}</span>
+                      </div>
+                    </div>
+                    <div className="w-3 h-3 rounded-full shrink-0" style={{background:b.color}}/>
+                    <button onClick={()=>handleDeleteBadge(b.id)} className="w-7 h-7 flex items-center justify-center rounded-xl hover:bg-rose-500/20 hover:text-rose-400 text-zinc-600 transition-colors">
+                      <Trash2 size={13}/>
+                    </button>
+                  </div>
+                ))}
+                {badges.length===0&&<p className="text-xs text-zinc-600 text-center py-4">Brak odznak</p>}
+              </div>
+            </div>
+          )}
+
+          {/* ── System ── */}
+          {tab==='system'&&(
+            <div className="max-w-xl mx-auto space-y-4">
+              <h2 className="text-base font-bold text-white">System</h2>
+              {overview ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4">
+                      <div className="text-xs text-zinc-500 mb-1">Node.js</div>
+                      <div className="text-sm font-bold text-emerald-400">{overview.node_version}</div>
+                    </div>
+                    <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4">
+                      <div className="text-xs text-zinc-500 mb-1">Uptime</div>
+                      <div className="text-sm font-bold text-indigo-400">{fmtUptime(overview.uptime_seconds)}</div>
+                    </div>
+                  </div>
+                  {/* Memory bars */}
+                  <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4 space-y-3">
+                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Pamięć</h3>
+                    {([
+                      { label:'RSS', val: overview.memory.rss, total: overview.memory.rss, color:'bg-violet-500' },
+                      { label:'Heap Used', val: overview.memory.heapUsed, total: overview.memory.heapTotal, color:'bg-indigo-500' },
+                      { label:'Heap Total', val: overview.memory.heapTotal, total: overview.memory.rss, color:'bg-blue-500/60' },
+                    ] as const).map(m=>(
+                      <div key={m.label}>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-zinc-400">{m.label}</span>
+                          <span className="text-zinc-300 font-semibold">{m.val} MB</span>
+                        </div>
+                        <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
+                          <div className={`h-full ${m.color} rounded-full transition-all`} style={{width:`${Math.min(100,(m.val/Math.max(1,m.total))*100)}%`}}/>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : <div className="flex justify-center py-12"><Loader2 size={20} className="animate-spin text-zinc-600"/></div>}
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── DnD Sortable helpers ─────────────────────────────────────────────────────
+function SortableCategoryItem({ id, children, canManage }: { id: string; children: React.ReactNode; canManage: boolean }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, data: { type: 'category' } });
+  return (
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}>
+      {canManage && (
+        <span {...attributes} {...listeners}
+          className="hidden group-hover/cat:flex cursor-grab active:cursor-grabbing text-zinc-700 hover:text-zinc-400 transition-colors absolute left-0 top-0 items-center h-full pl-1 z-10"
+          style={{ pointerEvents: 'auto' }}>
+          <GripVertical size={11}/>
+        </span>
+      )}
+      {children}
+    </div>
+  );
+}
+
+function SortableChannelItem({ id, catId, children, canManage }: { id: string; catId: string; children: React.ReactNode; canManage: boolean }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, data: { type: 'channel', categoryId: catId } });
+  return (
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+      className="flex items-center group/drag">
+      {canManage && (
+        <span {...attributes} {...listeners}
+          className="ml-0.5 cursor-grab active:cursor-grabbing text-zinc-700 hover:text-zinc-400 opacity-0 group-hover/drag:opacity-100 transition-opacity shrink-0">
+          <GripVertical size={11}/>
+        </span>
+      )}
+      <div className="flex-1 min-w-0">{children}</div>
+    </div>
+  );
+}
+
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -761,7 +1193,7 @@ export default function App() {
   const [activeChannel, setActiveChannel]     = useState('');
   const [activeDmUserId, setActiveDmUserId]   = useState('');
   const [isMobileOpen, setIsMobileOpen]       = useState(false);
-  const [activeView, setActiveView]           = useState<'servers'|'dms'|'friends'>('dms');
+  const [activeView, setActiveView]           = useState<'servers'|'dms'|'friends'|'admin'>('dms');
   const [activeCall, setActiveCall]           = useState<CallState|null>(null);
   const [showCallPanel, setShowCallPanel]     = useState(false);
   const [voiceUsers, setVoiceUsers]           = useState<Record<string, VoiceUser[]>>({});
@@ -855,16 +1287,24 @@ export default function App() {
   const [replySending, setReplySending]       = useState(false);
 
   // ── Admin panel ──────────────────────────────────────────────────
-  const [adminPanelOpen, setAdminPanelOpen]   = useState(false);
-  const [adminTab, setAdminTab]               = useState<'stats'|'badges'|'users'>('stats');
+  const [prevView, setPrevView]               = useState<'servers'|'dms'|'friends'>('dms');
+  const [adminTab, setAdminTab]               = useState<'dashboard'|'users'|'servers'|'badges'|'system'>('dashboard');
+  const [adminOverview, setAdminOverview]     = useState<AdminOverview|null>(null);
   const [adminStats, setAdminStats]           = useState<AdminStats|null>(null);
   const [adminBadges, setAdminBadges]         = useState<Badge[]>([]);
   const [adminUserQ, setAdminUserQ]           = useState('');
   const [adminUsers, setAdminUsers]           = useState<AdminUser[]>([]);
+  const [adminUsersTotal, setAdminUsersTotal] = useState(0);
+  const [adminUsersPage, setAdminUsersPage]   = useState(1);
+  const [adminServersList, setAdminServersList] = useState<AdminServer[]>([]);
   const [adminBadgeForm, setAdminBadgeForm]   = useState({ name:'', label:'', color:'#6366f1', icon:'⚙️' });
   const [adminBadgeSaving, setAdminBadgeSaving] = useState(false);
   const [adminAssignUser, setAdminAssignUser] = useState<AdminUser|null>(null);
   const [adminAssignBadgeId, setAdminAssignBadgeId] = useState('');
+  // ── DnD ──────────────────────────────────────────────────────────
+  const [activeDragId,   setActiveDragId]     = useState<string|null>(null);
+  const [activeDragType, setActiveDragType]   = useState<'category'|'channel'|null>(null);
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const [chEditOpen, setChEditOpen]           = useState(false);
   const [editingCh, setEditingCh]             = useState<ChannelData|null>(null);
@@ -1379,6 +1819,39 @@ export default function App() {
     // ── Badges updated (admin assigns/removes) ───────────────────────
     sock.on('badges_updated' as any, ({ badges }: { badges: Badge[] }) => {
       setCurrentUser(p => p ? { ...p, badges } : p);
+    });
+
+    // ── Channel/Category reorder ──────────────────────────────────
+    sock.on('categories_reordered' as any, ({ server_id, categories }: any) => {
+      setServerFull(p => {
+        if (!p || p.id !== server_id) return p;
+        const sorted = [...p.categories].map(c => {
+          const u = categories.find((x: any) => x.id === c.id);
+          return u ? { ...c, position: u.position } : c;
+        }).sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+        return { ...p, categories: sorted };
+      });
+    });
+    sock.on('channels_reordered' as any, ({ server_id, channels }: any) => {
+      setServerFull(p => {
+        if (!p || p.id !== server_id) return p;
+        return {
+          ...p,
+          categories: p.categories.map(cat => {
+            const catChannels = channels.filter((c: any) => c.category_id === cat.id);
+            if (!catChannels.length) return cat;
+            return {
+              ...cat,
+              channels: cat.channels
+                .map(ch => {
+                  const u = catChannels.find((c: any) => c.id === ch.id);
+                  return u ? { ...ch, position: u.position, category_id: u.category_id } : ch;
+                })
+                .sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
+            };
+          }),
+        };
+      });
     });
 
     // ── Forum real-time events ───────────────────────────────────────
@@ -2634,6 +3107,61 @@ export default function App() {
     }
   };
 
+  // ── Channel/Category DnD ─────────────────────────────────────────────────────
+  function handleChannelDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    setActiveDragId(null); setActiveDragType(null);
+    if (!over || !serverFull) return;
+    const type = active.data.current?.type;
+
+    if (type === 'category') {
+      const cats = serverFull.categories.filter(c => c.id !== '__uncat__');
+      const oldIdx = cats.findIndex(c => c.id === active.id);
+      const newIdx = cats.findIndex(c => c.id === over.id);
+      if (oldIdx === newIdx || oldIdx === -1) return;
+      const reordered = (arrayMove(cats, oldIdx, newIdx) as typeof cats).map((c, i) => ({ ...c, position: i }));
+      setServerFull(p => p ? { ...p, categories: [...reordered, ...p.categories.filter(c => c.id === '__uncat__')] } : p);
+      channelsApi.reorderCategories(serverFull.id, reordered.map(c => ({ id: c.id, position: c.position ?? 0 }))).catch(() => {});
+      return;
+    }
+
+    if (type === 'channel') {
+      const activeCatId = active.data.current?.categoryId as string;
+      const overCatId   = (over.data.current?.categoryId ?? over.id) as string;
+      const activeCat   = serverFull.categories.find(c => c.id === activeCatId);
+      if (!activeCat) return;
+
+      if (activeCatId === overCatId) {
+        const oldIdx = activeCat.channels.findIndex(c => c.id === active.id);
+        const newIdx = activeCat.channels.findIndex(c => c.id === over.id);
+        if (oldIdx === newIdx || oldIdx === -1) return;
+        const reordered = (arrayMove(activeCat.channels, oldIdx, newIdx) as typeof activeCat.channels).map((c, i) => ({ ...c, position: i }));
+        setServerFull(p => p ? { ...p, categories: p.categories.map(cat => cat.id === activeCatId ? { ...cat, channels: reordered } : cat) } : p);
+        channelsApi.reorderChannels(serverFull.id, reordered.map(c => ({ id: c.id, position: c.position ?? 0, category_id: activeCatId }))).catch(() => {});
+      } else {
+        const targetCat = serverFull.categories.find(c => c.id === overCatId);
+        if (!targetCat) return;
+        const movedCh = activeCat.channels.find(c => c.id === active.id);
+        if (!movedCh) return;
+        const overIdx = targetCat.channels.findIndex(c => c.id === over.id);
+        const insertAt = overIdx === -1 ? targetCat.channels.length : overIdx;
+        const newSrcChs = activeCat.channels.filter(c => c.id !== active.id).map((c, i) => ({ ...c, position: i }));
+        const tgtArr = [...targetCat.channels];
+        tgtArr.splice(insertAt, 0, { ...movedCh, category_id: overCatId });
+        const newTgtChs = tgtArr.map((c, i) => ({ ...c, position: i }));
+        setServerFull(p => p ? { ...p, categories: p.categories.map(cat =>
+          cat.id === activeCatId ? { ...cat, channels: newSrcChs } :
+          cat.id === overCatId   ? { ...cat, channels: newTgtChs } : cat
+        )} : p);
+        const allUpdated = [
+          ...newSrcChs.map(c => ({ id: c.id, position: c.position ?? 0, category_id: activeCatId })),
+          ...newTgtChs.map(c => ({ id: c.id, position: c.position ?? 0, category_id: overCatId })),
+        ];
+        channelsApi.reorderChannels(serverFull.id, allUpdated).catch(() => {});
+      }
+    }
+  }
+
   // ── Markdown + Mention HTML renderer ───────────────────────────────────────
   const renderMsgHTML = (text: string): string => {
     if (!text) return '';
@@ -2897,8 +3425,8 @@ export default function App() {
               )}
             </AnimatePresence>
           </div>
-          {currentUser?.is_admin&&(
-            <button onClick={() => setAdminPanelOpen(true)} title="Panel admina"
+          {(currentUser?.badges?.some(b=>b.name==='developer')||currentUser?.is_admin)&&(
+            <button onClick={()=>{setPrevView(activeView==='admin'?prevView:(activeView as 'servers'|'dms'|'friends'));setActiveView('admin');setAdminTab('dashboard');}} title="Panel admina"
               className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-violet-400 hover:bg-violet-500/10 transition-all">
               <LayoutDashboard size={15}/>
             </button>
@@ -3039,13 +3567,21 @@ export default function App() {
                   </div>
                 );
               })()}
+              <DndContext sensors={dndSensors} collisionDetection={closestCorners}
+                onDragStart={e=>{ setActiveDragId(e.active.id as string); setActiveDragType(e.active.data.current?.type); }}
+                onDragEnd={handleChannelDragEnd}>
+              <SortableContext
+                items={serverFull?.categories.filter(c=>c.id!=='__uncat__').map(c=>c.id)??[]}
+                strategy={verticalListSortingStrategy}>
               {serverFull?.categories.filter(c=>c.id!=='__uncat__').map((cat, catIdx) => {
                 const textChs  = cat.channels.filter(c=>c.type!=='voice');
                 const voiceChs = cat.channels.filter(c=>c.type==='voice');
                 const isEmpty  = textChs.length===0 && voiceChs.length===0;
                 const openAddCh = () => { setChCreateCatId(cat.id); setChCreateOpen(true); setNewChName(''); setNewChType('text'); setNewChPrivate(false); };
                 return (
-                  <motion.div key={cat.id} className="mb-1"
+                  <React.Fragment key={cat.id}>
+                  <SortableCategoryItem id={cat.id} canManage={canManageChannels}>
+                  <motion.div className="mb-1"
                     initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
                     transition={{ type:'spring', stiffness:320, damping:28, delay: catIdx * 0.04 }}>
 
@@ -3083,13 +3619,16 @@ export default function App() {
 
                     {/* Text/forum/announcement channels */}
                     {textChs.length>0&&<>
+                      <SortableContext items={textChs.map(c=>c.id)} strategy={verticalListSortingStrategy}>
                       {textChs.map(ch => {
                         const isAct = activeChannel===ch.id;
                         const unread = unreadChs[ch.id] || 0;
                         const ping = pingChs[ch.id] || 0;
                         const ChIcon = ch.type==='forum'?MessageSquare:ch.type==='announcement'?Megaphone:Hash;
                         return (
-                          <div key={ch.id} className="px-2">
+                          <React.Fragment key={ch.id}>
+                          <SortableChannelItem id={ch.id} catId={cat.id} canManage={canManageChannels}>
+                          <div className="px-2">
                             <button onClick={() => { setActiveChannel(ch.id); setIsMobileOpen(false); }}
                               className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${
                                 isAct
@@ -3122,8 +3661,11 @@ export default function App() {
                               </div>
                             </button>
                           </div>
+                          </SortableChannelItem>
+                          </React.Fragment>
                         );
                       })}
+                      </SortableContext>
                     </>}
 
                     {/* Voice channels — POKOJE GŁOSOWE */}
@@ -3186,8 +3728,13 @@ export default function App() {
                       })}
                     </>}
                   </motion.div>
+                  </SortableCategoryItem>
+                  </React.Fragment>
                 );
               })}
+              </SortableContext>
+              </DndContext>
+              {activeDragId&&activeDragType==='channel'&&<DragOverlay><div className="px-2 py-1.5 bg-indigo-500/20 border border-indigo-500/40 rounded-xl text-xs text-indigo-300 opacity-90">Przenoszenie kanału...</div></DragOverlay>}
               </motion.div>}
               </AnimatePresence>
               {!serverFull&&activeServer&&<div className="flex justify-center py-8"><Loader2 size={18} className="text-zinc-600 animate-spin"/></div>}
@@ -3764,6 +4311,24 @@ export default function App() {
                 </div>
               </div>
             </div>
+          ) : activeView==='admin' ? (
+            <AdminPanel
+              currentUser={currentUser}
+              overview={adminOverview} setOverview={setAdminOverview}
+              tab={adminTab} setTab={setAdminTab}
+              badges={adminBadges} setBadges={setAdminBadges}
+              users={adminUsers} setUsers={setAdminUsers}
+              usersTotal={adminUsersTotal} setUsersTotal={setAdminUsersTotal}
+              usersPage={adminUsersPage} setUsersPage={setAdminUsersPage}
+              serversList={adminServersList} setServersList={setAdminServersList}
+              userQ={adminUserQ} setUserQ={setAdminUserQ}
+              badgeForm={adminBadgeForm} setBadgeForm={setAdminBadgeForm}
+              badgeSaving={adminBadgeSaving} setBadgeSaving={setAdminBadgeSaving}
+              assignUser={adminAssignUser} setAssignUser={setAdminAssignUser}
+              assignBadgeId={adminAssignBadgeId} setAssignBadgeId={setAdminAssignBadgeId}
+              onBack={()=>setActiveView(prevView)}
+              addToast={(t:any)=>setToasts(p=>[...p,{id:Date.now().toString(),...t}])}
+            />
           ) : (
             <>
               {/* Server banner — expands on hover to show server details */}
@@ -6486,268 +7051,6 @@ export default function App() {
       <AnimatePresence>
         {showWelcome && currentUser && (
           <WelcomeModal username={currentUser.username} onClose={() => setShowWelcome(false)} />
-        )}
-      </AnimatePresence>
-
-      {/* ── Admin Panel ─────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {adminPanelOpen&&(
-          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
-            onClick={()=>setAdminPanelOpen(false)}>
-            <motion.div initial={{scale:0.94,opacity:0,y:20}} animate={{scale:1,opacity:1,y:0}} exit={{scale:0.94,opacity:0,y:16}}
-              transition={{type:'spring',stiffness:320,damping:26}}
-              onClick={e=>e.stopPropagation()}
-              className="glass-modal rounded-3xl w-full max-w-3xl max-h-[88vh] flex flex-col overflow-hidden">
-              {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.07] shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-violet-500/15 flex items-center justify-center">
-                    <LayoutDashboard size={16} className="text-violet-400"/>
-                  </div>
-                  <div>
-                    <h2 className="text-base font-bold text-white leading-tight">Panel Administratora</h2>
-                    <p className="text-[11px] text-zinc-500">Cordyn System</p>
-                  </div>
-                </div>
-                <button onClick={()=>setAdminPanelOpen(false)} className="w-8 h-8 bg-white/[0.04] hover:bg-white/[0.08] rounded-xl flex items-center justify-center text-zinc-500 hover:text-white transition-all">
-                  <X size={15}/>
-                </button>
-              </div>
-              {/* Tabs */}
-              <div className="flex gap-1 px-6 pt-3 pb-0 shrink-0">
-                {(['stats','badges','users'] as const).map(t=>(
-                  <button key={t} onClick={()=>{
-                    setAdminTab(t);
-                    if(t==='stats') adminApi.stats().then(setAdminStats).catch(()=>{});
-                    if(t==='badges') adminApi.badges.list().then(setAdminBadges).catch(()=>{});
-                    if(t==='users') { setAdminUserQ(''); setAdminUsers([]); }
-                  }}
-                    className={`px-4 py-2 rounded-t-xl text-[13px] font-semibold transition-all ${adminTab===t?'bg-white/[0.07] text-white border border-white/[0.08] border-b-transparent':'text-zinc-500 hover:text-zinc-300'}`}>
-                    {t==='stats'?'Statystyki':t==='badges'?'Odznaki':'Użytkownicy'}
-                  </button>
-                ))}
-              </div>
-              {/* Body */}
-              <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5">
-                {/* ── Stats tab ── */}
-                {adminTab==='stats'&&(()=>{
-                  if(!adminStats) {
-                    adminApi.stats().then(setAdminStats).catch(()=>{});
-                    return <div className="flex items-center justify-center py-16"><Loader2 size={22} className="text-zinc-600 animate-spin"/></div>;
-                  }
-                  const mb = (b:number) => (b/1024/1024).toFixed(1)+' MB';
-                  const uptime = (s:number) => {
-                    const h = Math.floor(s/3600), m = Math.floor((s%3600)/60);
-                    return h>0 ? `${h}h ${m}m` : `${m}m`;
-                  };
-                  return (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      {[
-                        {label:'Użytkownicy',value:adminStats.users,icon:'👤',color:'#6366f1'},
-                        {label:'Serwery',value:adminStats.servers,icon:'🏠',color:'#10b981'},
-                        {label:'Wiadomości',value:adminStats.messages,icon:'💬',color:'#3b82f6'},
-                        {label:'DM',value:adminStats.dm_messages,icon:'📩',color:'#8b5cf6'},
-                        {label:'Odznaki',value:adminStats.badges,icon:'🏅',color:'#f59e0b'},
-                        {label:'Przypisania',value:adminStats.badge_assignments,icon:'🎖️',color:'#ec4899'},
-                      ].map(c=>(
-                        <div key={c.label} className="bg-white/[0.04] border border-white/[0.06] rounded-2xl p-4 flex flex-col gap-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-zinc-500 font-medium">{c.label}</span>
-                            <span className="text-base">{c.icon}</span>
-                          </div>
-                          <p className="text-2xl font-black text-white">{c.value.toLocaleString()}</p>
-                        </div>
-                      ))}
-                      {/* Memory */}
-                      <div className="col-span-2 sm:col-span-3 bg-white/[0.04] border border-white/[0.06] rounded-2xl p-4">
-                        <p className="text-xs text-zinc-500 font-medium mb-3">Pamięć Node.js</p>
-                        <div className="flex flex-col gap-2">
-                          {[
-                            {label:'RSS',value:adminStats.memory.rss,max:adminStats.memory.rss},
-                            {label:'Heap używany',value:adminStats.memory.heapUsed,max:adminStats.memory.heapTotal},
-                            {label:'Heap całkowity',value:adminStats.memory.heapTotal,max:adminStats.memory.heapTotal},
-                          ].map(row=>(
-                            <div key={row.label}>
-                              <div className="flex justify-between text-[11px] mb-1">
-                                <span className="text-zinc-400">{row.label}</span>
-                                <span className="text-zinc-500 font-mono">{mb(row.value)}</span>
-                              </div>
-                              <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
-                                <div className="h-full bg-violet-500 rounded-full" style={{width:`${Math.min(100,(row.value/row.max)*100)}%`}}/>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        <p className="text-[11px] text-zinc-600 mt-3">Node {adminStats.node_version} · Uptime: {uptime(adminStats.uptime_seconds)}</p>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* ── Badges tab ── */}
-                {adminTab==='badges'&&(()=>{
-                  if(!adminBadges.length) adminApi.badges.list().then(setAdminBadges).catch(()=>{});
-                  return (
-                    <div className="flex flex-col gap-5">
-                      {/* Create badge form */}
-                      <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
-                        <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mb-3">Nowa odznaka</p>
-                        <div className="grid grid-cols-2 gap-2 mb-2">
-                          <input placeholder="name (np. qa)" value={adminBadgeForm.name}
-                            onChange={e=>setAdminBadgeForm(p=>({...p,name:e.target.value}))}
-                            className="bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 outline-none focus:border-violet-500/40"/>
-                          <input placeholder="Etykieta (np. QA)" value={adminBadgeForm.label}
-                            onChange={e=>setAdminBadgeForm(p=>({...p,label:e.target.value}))}
-                            className="bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 outline-none focus:border-violet-500/40"/>
-                          <input placeholder="Kolor hex (#6366f1)" value={adminBadgeForm.color}
-                            onChange={e=>setAdminBadgeForm(p=>({...p,color:e.target.value}))}
-                            className="bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 outline-none focus:border-violet-500/40"/>
-                          <input placeholder="Ikona emoji (⚙️)" value={adminBadgeForm.icon}
-                            onChange={e=>setAdminBadgeForm(p=>({...p,icon:e.target.value}))}
-                            className="bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 outline-none focus:border-violet-500/40"/>
-                        </div>
-                        <button disabled={adminBadgeSaving||!adminBadgeForm.name||!adminBadgeForm.label}
-                          onClick={async()=>{
-                            setAdminBadgeSaving(true);
-                            try { const b = await adminApi.badges.create(adminBadgeForm); setAdminBadges(p=>[...p,b]); setAdminBadgeForm({name:'',label:'',color:'#6366f1',icon:'⚙️'}); } catch(e:any){alert(e.message);}
-                            setAdminBadgeSaving(false);
-                          }}
-                          className="w-full py-2 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 text-violet-300 text-xs font-semibold transition-all disabled:opacity-40">
-                          {adminBadgeSaving?'Tworzenie…':'Utwórz odznakę'}
-                        </button>
-                      </div>
-                      {/* Badge list */}
-                      <div>
-                        <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mb-3">Istniejące odznaki</p>
-                        <div className="flex flex-col gap-2">
-                          {adminBadges.map(b=>{const BIcon=getBadgeIcon(b.name); return (
-                            <div key={b.id} className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2.5">
-                              <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{background:b.color+'18'}}>
-                                <BIcon size={16} style={{color:b.color}}/>
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-semibold" style={{color:b.color}}>{b.label}</span>
-                                  <span className="text-[11px] text-zinc-600 font-mono">{b.name}</span>
-                                </div>
-                              </div>
-                              <button onClick={async()=>{
-                                if(!confirm(`Usuń odznakę "${b.label}"?`)) return;
-                                await adminApi.badges.delete(b.id);
-                                setAdminBadges(p=>p.filter(x=>x.id!==b.id));
-                              }} className="w-7 h-7 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 flex items-center justify-center text-rose-400 transition-all">
-                                <Trash2 size={12}/>
-                              </button>
-                            </div>
-                          );})}
-                          {adminBadges.length===0&&<p className="text-xs text-zinc-600 text-center py-4">Brak odznak</p>}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* ── Users tab ── */}
-                {adminTab==='users'&&(
-                  <div className="flex flex-col gap-4">
-                    {/* Search */}
-                    <div className="flex gap-2">
-                      <input placeholder="Szukaj użytkownika…" value={adminUserQ}
-                        onChange={e=>setAdminUserQ(e.target.value)}
-                        onKeyDown={async e=>{
-                          if(e.key==='Enter'&&adminUserQ.trim()) {
-                            const r = await adminApi.users.search(adminUserQ.trim()).catch(()=>[]);
-                            setAdminUsers(r);
-                          }
-                        }}
-                        className="flex-1 bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-violet-500/40"/>
-                      <button onClick={async()=>{
-                        if(!adminUserQ.trim()) return;
-                        const r = await adminApi.users.search(adminUserQ.trim()).catch(()=>[]);
-                        setAdminUsers(r);
-                      }} className="px-4 py-2 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 text-violet-300 text-sm font-semibold transition-all">
-                        Szukaj
-                      </button>
-                    </div>
-                    {/* Assign UI */}
-                    {adminAssignUser&&(
-                      <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4">
-                        <p className="text-xs font-bold text-zinc-400 mb-2">Przypisz odznakę → <span className="text-white">{adminAssignUser.username}</span></p>
-                        <div className="flex gap-2">
-                          <select value={adminAssignBadgeId} onChange={e=>setAdminAssignBadgeId(e.target.value)}
-                            className="flex-1 bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-violet-500/40">
-                            <option value="">Wybierz odznakę…</option>
-                            {adminBadges.map(b=><option key={b.id} value={b.id}>{b.icon} {b.label}</option>)}
-                          </select>
-                          <button disabled={!adminAssignBadgeId} onClick={async()=>{
-                            if(!adminAssignBadgeId) return;
-                            try {
-                              await adminApi.badges.assign(adminAssignUser.id, adminAssignBadgeId);
-                              const badge = adminBadges.find(b=>b.id===adminAssignBadgeId);
-                              if(badge) setAdminUsers(p=>p.map(u=>u.id===adminAssignUser.id?{...u,badges:[...u.badges.filter(b2=>b2.id!==badge.id),badge]}:u));
-                              setAdminAssignBadgeId('');
-                            } catch(e:any){alert(e.message);}
-                          }} className="px-4 py-2 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 text-violet-300 text-sm font-semibold transition-all disabled:opacity-40">
-                            Przypisz
-                          </button>
-                          <button onClick={()=>{setAdminAssignUser(null);setAdminAssignBadgeId('');}} className="px-3 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 text-sm transition-all">
-                            Anuluj
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    {/* Results */}
-                    <div className="flex flex-col gap-2">
-                      {adminUsers.map(u=>(
-                        <div key={u.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-3 flex items-start gap-3">
-                          <img src={u.avatar_url||`https://api.dicebear.com/7.x/thumbs/svg?seed=${u.username}`} className="w-9 h-9 rounded-xl object-cover shrink-0" alt=""/>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm font-semibold text-white">{u.username}</span>
-                              {u.is_admin&&<span className="text-[10px] font-bold bg-violet-500/15 text-violet-400 border border-violet-500/25 rounded-full px-2 py-0.5">Admin</span>}
-                            </div>
-                            <div className="flex gap-1.5 mt-1.5 flex-wrap">
-                              {u.badges.map(b=>(
-                                <div key={b.id} className="flex items-center gap-1 rounded-lg px-2 py-0.5 text-[11px] font-semibold cursor-pointer hover:opacity-70 transition-all"
-                                  style={{background:b.color+'18',border:'1px solid '+b.color+'40',color:b.color}}
-                                  title="Kliknij aby usunąć"
-                                  onClick={async()=>{
-                                    if(!confirm(`Usuń odznakę "${b.label}" od ${u.username}?`)) return;
-                                    await adminApi.badges.remove(u.id, b.id).catch(()=>{});
-                                    setAdminUsers(p=>p.map(x=>x.id===u.id?{...x,badges:x.badges.filter(b2=>b2.id!==b.id)}:x));
-                                  }}>
-                                  {b.icon} {b.label}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="flex flex-col gap-1.5 shrink-0">
-                            <button onClick={()=>{
-                              setAdminAssignUser(u);
-                              setAdminAssignBadgeId('');
-                              if(!adminBadges.length) adminApi.badges.list().then(setAdminBadges).catch(()=>{});
-                            }} className="px-3 py-1.5 rounded-xl bg-violet-500/15 hover:bg-violet-500/25 text-violet-300 text-[11px] font-semibold transition-all whitespace-nowrap">
-                              + Odznaka
-                            </button>
-                            <button onClick={async()=>{
-                              const newState = !u.is_admin;
-                              if(!confirm(`${newState?'Nadać':'Odebrać'} uprawnienia administratora ${u.username}?`)) return;
-                              await adminApi.users.setAdmin(u.id, newState).catch(()=>{});
-                              setAdminUsers(p=>p.map(x=>x.id===u.id?{...x,is_admin:newState}:x));
-                            }} className={`px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all whitespace-nowrap ${u.is_admin?'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400':'bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400'}`}>
-                              {u.is_admin?'Odbierz admin':'Nadaj admin'}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                      {adminUsers.length===0&&adminUserQ&&<p className="text-xs text-zinc-600 text-center py-6">Brak wyników</p>}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
         )}
       </AnimatePresence>
 

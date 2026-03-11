@@ -241,6 +241,10 @@ export const channelsApi = {
     req<ChannelCategory>('PUT', `/channels/categories/${id}`, { name }),
   deleteCategory: (id: string) =>
     req<void>('DELETE', `/channels/categories/${id}`),
+  reorderCategories: (serverId: string, categories: { id: string; position: number }[]) =>
+    req<{ ok: boolean }>('PATCH', '/channels/categories/reorder', { server_id: serverId, categories }),
+  reorderChannels: (serverId: string, channels: { id: string; position: number; category_id: string }[]) =>
+    req<{ ok: boolean }>('PATCH', '/channels/reorder', { server_id: serverId, channels }),
 };
 
 // ── Forum ─────────────────────────────────────────────────────────────────
@@ -303,9 +307,23 @@ export interface AdminUser {
   id: string; username: string; avatar_url?: string | null;
   status: string; is_admin: boolean; created_at: string;
   badges: Badge[];
+  server_count?: number; message_count?: number;
+}
+export interface AdminServer {
+  id: string; name: string; icon_url?: string | null;
+  owner_id: string; owner_name: string;
+  member_count: number; channel_count: number; created_at: string;
+}
+export interface AdminOverview {
+  total_users: number; total_servers: number; total_messages: number;
+  total_dms: number; total_channels: number; online_users: number;
+  registrations_7d: { date: string; count: number }[];
+  memory: { rss: number; heapUsed: number; heapTotal: number };
+  node_version: string; uptime_seconds: number;
 }
 export const adminApi = {
   stats: () => req<AdminStats>('GET', '/admin/stats'),
+  overview: () => req<AdminOverview>('GET', '/admin/overview'),
   badges: {
     list: () => req<Badge[]>('GET', '/admin/badges'),
     create: (d: { name: string; label: string; color?: string; icon?: string; description?: string; position?: number }) =>
@@ -319,8 +337,11 @@ export const adminApi = {
       req<{ ok: boolean }>('DELETE', `/admin/users/${userId}/badges/${badgeId}`),
   },
   users: {
+    list: (page = 1, limit = 50) =>
+      req<{ users: AdminUser[]; total: number }>('GET', `/admin/users?page=${page}&limit=${limit}`),
     search: (q: string) => req<AdminUser[]>('GET', `/admin/users/search?q=${encodeURIComponent(q)}`),
     setAdmin: (userId: string, is_admin: boolean) =>
       req<{ ok: boolean }>('POST', `/admin/users/${userId}/set-admin`, { is_admin }),
   },
+  servers: () => req<AdminServer[]>('GET', '/admin/servers'),
 };

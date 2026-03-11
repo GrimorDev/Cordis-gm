@@ -386,4 +386,77 @@ router.delete('/:id/posts/:postId', authMiddleware, async (req: AuthRequest, res
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// ── PATCH /api/channels/categories/reorder ───────────────────────
+router.patch('/categories/reorder',
+  [
+    body('server_id').isUUID(),
+    body('categories').isArray({ min: 1 }),
+    body('categories.*.id').isUUID(),
+    body('categories.*.position').isInt({ min: 0 }),
+  ],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    const { server_id, categories } = req.body;
+    const canReorder = await hasServerPermission(server_id, req.user!.id, 'manage_channels');
+    if (!canReorder) return res.status(403).json({ error: 'Forbidden' });
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+      for (const cat of categories) {
+        await client.query(
+          'UPDATE channel_categories SET position=$1 WHERE id=$2 AND server_id=$3',
+          [cat.position, cat.id, server_id]
+        );
+      }
+      await client.query('COMMIT');
+      const io = req.app.get('io');
+      if (io) io.to(`server:${server_id}`).emit('categories_reordered', { server_id, categories });
+      return res.json({ ok: true });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      return res.status(500).json({ error: 'Internal server error' });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+// ── PATCH /api/channels/reorder ──────────────────────────────────
+router.patch('/reorder',
+  [
+    body('server_id').isUUID(),
+    body('channels').isArray({ min: 1 }),
+    body('channels.*.id').isUUID(),
+    body('channels.*.position').isInt({ min: 0 }),
+    body('channels.*.category_id').isUUID(),
+  ],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    const { server_id, channels } = req.body;
+    const canReorder = await hasServerPermission(server_id, req.user!.id, 'manage_channels');
+    if (!canReorder) return res.status(403).json({ error: 'Forbidden' });
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+      for (const ch of channels) {
+        await client.query(
+          'UPDATE channels SET position=$1, category_id=$2 WHERE id=$3 AND server_id=$4',
+          [ch.position, ch.category_id, ch.id, server_id]
+        );
+      }
+      await client.query('COMMIT');
+      const io = req.app.get('io');
+      if (io) io.to(`server:${server_id}`).emit('channels_reordered', { server_id, channels });
+      return res.json({ ok: true });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      return res.status(500).json({ error: 'Internal server error' });
+    } finally {
+      client.release();
+    }
+  }
+);
+
 export default router;
