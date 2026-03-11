@@ -761,6 +761,287 @@ const BADGE_ICON_MAP: Record<string, LucideIcon> = {
 };
 const getBadgeIcon = (name: string): LucideIcon => BADGE_ICON_MAP[name] ?? Award;
 
+// ─── Server Settings Page ─────────────────────────────────────────────────────
+interface ServerSettingsPageProps {
+  serverFull: ServerFull;
+  tab: 'overview'|'roles'|'members'|'bans'|'invites';
+  setTab: (t: 'overview'|'roles'|'members'|'bans'|'invites') => void;
+  roles: ServerRole[];
+  members: ServerMember[];
+  banList: ServerBan[]; setBanList: (v: ServerBan[]) => void;
+  srvForm: { name: string; description: string; icon_url: string; banner_url: string };
+  setSrvForm: (v: any) => void;
+  srvBannerFile: File|null; setSrvBannerFile: (f: File|null) => void;
+  srvIconFile: File|null; setSrvIconFile: (f: File|null) => void;
+  handleSaveSrv: () => void;
+  inviteDur: string; setInviteDur: (v: string) => void;
+  inviteCode: string|null; handleInvite: () => void;
+  canManageServer: boolean; canManageRoles: boolean;
+  canKickMembers: boolean; canBanMembers: boolean; canCreateInvites: boolean;
+  handleSetMemberRole: (userId: string, roleName: string) => void;
+  handleKick: (userId: string) => void;
+  handleBan: (userId: string, username: string) => void;
+  handleUnban: (userId: string) => void;
+  openNewRole: () => void;
+  openEditRole: (r: ServerRole) => void;
+  handleDeleteRole: (id: string) => void;
+  currentUser: UserProfile|null;
+  onClose: () => void;
+}
+function ServerSettingsPage({
+  serverFull, tab, setTab, roles, members, banList, setBanList,
+  srvForm, setSrvForm, srvBannerFile, setSrvBannerFile, srvIconFile, setSrvIconFile,
+  handleSaveSrv, inviteDur, setInviteDur, inviteCode, handleInvite,
+  canManageServer, canManageRoles, canKickMembers, canBanMembers, canCreateInvites,
+  handleSetMemberRole, handleKick, handleBan, handleUnban,
+  openNewRole, openEditRole, handleDeleteRole, currentUser, onClose,
+}: ServerSettingsPageProps) {
+  const [memberQ, setMemberQ] = React.useState('');
+  const filteredMembers = memberQ.trim()
+    ? members.filter(m => m.username.toLowerCase().includes(memberQ.toLowerCase()))
+    : members;
+  const STABS = [
+    canManageServer && { id: 'overview' as const, label: 'Ogólne',      icon: <Settings size={14}/> },
+    canManageRoles  && { id: 'roles'    as const, label: 'Role',         icon: <Shield   size={14}/> },
+    (canManageRoles||canKickMembers) && { id: 'members' as const, label: 'Członkowie', icon: <Users size={14}/> },
+    canBanMembers   && { id: 'bans'     as const, label: 'Bany',         icon: <ShieldCheck size={14}/> },
+    canCreateInvites && { id: 'invites' as const, label: 'Zaproszenia',  icon: <UserPlus size={14}/> },
+  ].filter(Boolean) as { id: typeof tab; label: string; icon: React.ReactNode }[];
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden bg-[#0d0d18]">
+      {/* Header */}
+      <div className="h-14 border-b border-white/[0.06] flex items-center px-5 gap-4 shrink-0 glass-dark z-10">
+        <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-white hover:bg-white/[0.07] transition-all">
+          <ArrowLeft size={16}/>
+        </button>
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+          {serverFull.icon_url
+            ? <img src={serverFull.icon_url} className="w-6 h-6 rounded-lg object-cover shrink-0" alt=""/>
+            : <div className="w-6 h-6 rounded-lg bg-indigo-600 flex items-center justify-center text-xs font-bold text-white shrink-0">{serverFull.name[0]}</div>
+          }
+          <span className="text-sm font-bold text-white truncate">{serverFull.name}</span>
+          <span className="text-zinc-600 text-sm shrink-0">— Ustawienia</span>
+        </div>
+      </div>
+
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar */}
+        <div className="w-44 shrink-0 border-r border-white/[0.05] flex flex-col gap-0.5 p-2 overflow-y-auto">
+          {STABS.map(t => (
+            <button key={t.id} onClick={() => {
+              setTab(t.id);
+              if (t.id === 'bans') serversApi.bans.list(serverFull.id).then(setBanList).catch(console.error);
+            }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium transition-all text-left
+                ${tab === t.id ? 'bg-indigo-500/15 text-indigo-300' : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.05]'}`}>
+              {t.icon}{t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+
+          {/* ── Ogólne ── */}
+          {tab === 'overview' && (
+            <div className="max-w-2xl mx-auto flex flex-col gap-5">
+              <h2 className="text-base font-bold text-white">Ogólne</h2>
+              <div>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Banner</label>
+                <div className="relative h-32 rounded-2xl overflow-hidden bg-white/[0.03] border border-white/[0.06]">
+                  {(srvBannerFile ? URL.createObjectURL(srvBannerFile) : srvForm.banner_url) ? (
+                    <img src={srvBannerFile ? URL.createObjectURL(srvBannerFile) : srvForm.banner_url} className="w-full h-full object-cover" alt=""/>
+                  ) : <div className="w-full h-full flex items-center justify-center text-zinc-700"><Image size={22}/></div>}
+                  <label className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 hover:opacity-100 cursor-pointer transition-opacity">
+                    <span className="text-sm text-white font-semibold flex items-center gap-1.5"><Upload size={14}/> Zmień banner</span>
+                    <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f)setSrvBannerFile(f);e.target.value='';}} className="hidden"/>
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Ikona</label>
+                <div className="flex items-center gap-4">
+                  <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-white/[0.04] border border-white/[0.06]">
+                    {(srvIconFile ? URL.createObjectURL(srvIconFile) : srvForm.icon_url) ? (
+                      <img src={srvIconFile ? URL.createObjectURL(srvIconFile) : srvForm.icon_url} className="w-full h-full object-cover" alt=""/>
+                    ) : <div className="w-full h-full flex items-center justify-center text-xl font-bold text-zinc-600">{serverFull.name.charAt(0)}</div>}
+                  </div>
+                  <label className="cursor-pointer text-sm font-semibold bg-white/[0.06] hover:bg-white/[0.09] border border-white/[0.08] text-zinc-300 hover:text-white px-3 py-2 rounded-xl flex items-center gap-1.5 transition-all">
+                    <Upload size={13}/> Zmień ikonę
+                    <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f)setSrvIconFile(f);e.target.value='';}} className="hidden"/>
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Nazwa</label>
+                <input value={srvForm.name} onChange={e=>setSrvForm((p:any)=>({...p,name:e.target.value}))} className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
+              </div>
+              <div>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Opis</label>
+                <textarea value={srvForm.description} onChange={e=>setSrvForm((p:any)=>({...p,description:e.target.value}))} rows={4} placeholder="Opis serwera..." className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm resize-none`}/>
+              </div>
+              <button onClick={handleSaveSrv} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">Zapisz zmiany</button>
+            </div>
+          )}
+
+          {/* ── Role ── */}
+          {tab === 'roles' && (
+            <div className="max-w-2xl mx-auto flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-bold text-white">Role ({roles.length})</h2>
+                <button onClick={openNewRole} className="bg-indigo-500 hover:bg-indigo-400 text-white px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5"><Plus size={14}/> Nowa rola</button>
+              </div>
+              {roles.length === 0 && <p className="text-sm text-zinc-700">Brak ról</p>}
+              {roles.map(r => (
+                <div key={r.id} className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] px-4 py-3 rounded-xl group">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-3 h-3 rounded-full shrink-0" style={{background: r.color}}/>
+                    <span className="text-sm font-semibold text-white truncate">{r.name}</span>
+                    {r.is_default && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 text-amber-400 bg-amber-500/10 border border-amber-500/20">Domyślny</span>}
+                    <span className="text-xs text-zinc-600 shrink-0">{(r.permissions||[]).length} uprawnień</span>
+                  </div>
+                  <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                    <button onClick={() => openEditRole(r)} className="w-7 h-7 bg-white/[0.05] hover:bg-white/[0.09] text-zinc-400 hover:text-white rounded-lg flex items-center justify-center"><Edit3 size={12}/></button>
+                    {!r.is_default && <button onClick={() => handleDeleteRole(r.id)} className="w-7 h-7 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg flex items-center justify-center"><Trash2 size={12}/></button>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── Członkowie ── */}
+          {tab === 'members' && (
+            <div className="max-w-4xl mx-auto flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-bold text-white">Członkowie ({members.length})</h2>
+                <div className="relative">
+                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 pointer-events-none"/>
+                  <input value={memberQ} onChange={e=>setMemberQ(e.target.value)} placeholder="Szukaj członka..." className={`${gi} text-sm pl-8 pr-4 py-2 rounded-xl w-52`}/>
+                </div>
+              </div>
+              <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl overflow-hidden">
+                <div className="grid grid-cols-[1fr_150px_120px_80px] gap-3 px-4 py-2.5 border-b border-white/[0.05]">
+                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Użytkownik</span>
+                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Rola</span>
+                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Dołączył</span>
+                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Akcje</span>
+                </div>
+                {filteredMembers.length === 0 && <div className="px-4 py-8 text-sm text-zinc-700 text-center">Brak wyników</div>}
+                {filteredMembers.map((m, i) => (
+                  <div key={m.id} className={`grid grid-cols-[1fr_150px_120px_80px] gap-3 items-center px-4 py-3 ${i > 0 ? 'border-t border-white/[0.03]' : ''} hover:bg-white/[0.02] transition-colors`}>
+                    {/* Użytkownik */}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative shrink-0">
+                        <img src={m.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(m.username)}&size=36`}
+                          className="w-9 h-9 rounded-full object-cover" alt=""/>
+                        <StatusBadge status={m.status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white truncate">{m.username}</p>
+                        {m.badges && m.badges.length > 0 && (
+                          <div className="flex gap-1 mt-0.5 flex-wrap">
+                            {m.badges.slice(0, 3).map(b => {
+                              const BIcon = getBadgeIcon(b.name);
+                              return (
+                                <span key={b.id} title={b.label}
+                                  className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full border"
+                                  style={{color: b.color, borderColor: b.color+'40', background: b.color+'18'}}>
+                                  <BIcon size={8}/>{b.label}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {/* Rola */}
+                    <div>
+                      {m.id !== currentUser?.id && canManageRoles ? (
+                        <select value={m.role_name} onChange={e => handleSetMemberRole(m.id, e.target.value)}
+                          className="text-xs bg-white/[0.06] border border-white/[0.08] text-zinc-300 rounded-lg px-2 py-1.5 outline-none focus:border-indigo-500/50 w-full"
+                          style={{backgroundColor:'#18181b',color:'#d4d4d8'}}>
+                          {roles.map(r => <option key={r.id} value={r.name} style={{background:'#18181b',color:'#d4d4d8'}}>{r.name}{r.is_default?' ★':''}</option>)}
+                          {!roles.some(r=>r.name==='Member') && <option value="Member" style={{background:'#18181b',color:'#d4d4d8'}}>Member</option>}
+                          {!roles.some(r=>r.name==='Admin')  && <option value="Admin"  style={{background:'#18181b',color:'#d4d4d8'}}>Admin</option>}
+                        </select>
+                      ) : (
+                        <span className="text-xs text-zinc-500">{m.role_name}{m.id === currentUser?.id ? ' (ty)' : ''}</span>
+                      )}
+                    </div>
+                    {/* Dołączył */}
+                    <div>
+                      <span className="text-xs text-zinc-600">
+                        {new Date(m.joined_at).toLocaleDateString('pl-PL', {day:'2-digit', month:'short', year:'numeric'})}
+                      </span>
+                    </div>
+                    {/* Akcje */}
+                    <div className="flex items-center gap-1">
+                      {m.id !== currentUser?.id && serverFull.owner_id !== m.id && (<>
+                        {canKickMembers && <button onClick={() => handleKick(m.id)} title="Wyrzuć z serwera" className="w-7 h-7 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-lg flex items-center justify-center transition-colors"><X size={12}/></button>}
+                        {canBanMembers  && <button onClick={() => handleBan(m.id, m.username)} title="Zbanuj" className="w-7 h-7 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg flex items-center justify-center transition-colors"><Shield size={12}/></button>}
+                      </>)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Bany ── */}
+          {tab === 'bans' && (
+            <div className="max-w-2xl mx-auto flex flex-col gap-4">
+              <h2 className="text-base font-bold text-white">Zbanowani ({banList.length})</h2>
+              {banList.length === 0 && <p className="text-sm text-zinc-600">Brak zbanowanych użytkowników.</p>}
+              {banList.map(b => (
+                <div key={b.user_id} className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] px-4 py-3 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <img src={b.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(b.username)}&size=36`}
+                      className="w-9 h-9 rounded-full object-cover" alt=""/>
+                    <div>
+                      <p className="text-sm font-semibold text-white">{b.username}</p>
+                      {b.reason && <p className="text-xs text-zinc-600">Powód: {b.reason}</p>}
+                      {b.banned_by_username && <p className="text-xs text-zinc-700">przez {b.banned_by_username}</p>}
+                    </div>
+                  </div>
+                  <button onClick={() => handleUnban(b.user_id)} className="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors">Odbanuj</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── Zaproszenia ── */}
+          {tab === 'invites' && (
+            <div className="max-w-xl mx-auto flex flex-col gap-5">
+              <h2 className="text-base font-bold text-white">Zaproszenia</h2>
+              <div>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Ważność zaproszenia</label>
+                <select value={inviteDur} onChange={e => setInviteDur(e.target.value)} className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}>
+                  <option value="1800">30 minut</option>
+                  <option value="3600">1 godzina</option>
+                  <option value="86400">1 dzień</option>
+                  <option value="never">Nigdy</option>
+                </select>
+              </div>
+              <button onClick={handleInvite} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">Generuj zaproszenie</button>
+              {inviteCode && (
+                <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-4">
+                  <p className="text-[10px] text-zinc-600 mb-2">LINK DO ZAPROSZENIA</p>
+                  <div className="flex items-center gap-2">
+                    <code className="text-white font-mono text-sm flex-1 bg-black/30 px-3 py-2 rounded-lg">{inviteCode}</code>
+                    <button onClick={() => navigator.clipboard.writeText(inviteCode)} className="text-xs text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 px-3 py-2 rounded-lg transition-colors shrink-0">Kopiuj</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Admin Panel component ────────────────────────────────────────────────────
 interface AdminPanelProps {
   currentUser: import('./api').UserProfile | null;
@@ -3113,6 +3394,7 @@ export default function App() {
     setActiveDragId(null); setActiveDragType(null);
     if (!over || !serverFull) return;
     const type = active.data.current?.type;
+    const snapshot = serverFull; // snapshot for rollback
 
     if (type === 'category') {
       const cats = serverFull.categories.filter(c => c.id !== '__uncat__');
@@ -3121,7 +3403,10 @@ export default function App() {
       if (oldIdx === newIdx || oldIdx === -1) return;
       const reordered = (arrayMove(cats, oldIdx, newIdx) as typeof cats).map((c, i) => ({ ...c, position: i }));
       setServerFull(p => p ? { ...p, categories: [...reordered, ...p.categories.filter(c => c.id === '__uncat__')] } : p);
-      channelsApi.reorderCategories(serverFull.id, reordered.map(c => ({ id: c.id, position: c.position ?? 0 }))).catch(() => {});
+      channelsApi.reorderCategories(serverFull.id, reordered.map(c => ({ id: c.id, position: c.position ?? 0 }))).catch(() => {
+        setServerFull(snapshot);
+        addToast('Nie udało się zapisać kolejności kategorii', 'error');
+      });
       return;
     }
 
@@ -3137,7 +3422,10 @@ export default function App() {
         if (oldIdx === newIdx || oldIdx === -1) return;
         const reordered = (arrayMove(activeCat.channels, oldIdx, newIdx) as typeof activeCat.channels).map((c, i) => ({ ...c, position: i }));
         setServerFull(p => p ? { ...p, categories: p.categories.map(cat => cat.id === activeCatId ? { ...cat, channels: reordered } : cat) } : p);
-        channelsApi.reorderChannels(serverFull.id, reordered.map(c => ({ id: c.id, position: c.position ?? 0, category_id: activeCatId }))).catch(() => {});
+        channelsApi.reorderChannels(serverFull.id, reordered.map(c => ({ id: c.id, position: c.position ?? 0, category_id: activeCatId }))).catch(() => {
+          setServerFull(snapshot);
+          addToast('Nie udało się zapisać kolejności kanałów', 'error');
+        });
       } else {
         const targetCat = serverFull.categories.find(c => c.id === overCatId);
         if (!targetCat) return;
@@ -3157,7 +3445,10 @@ export default function App() {
           ...newSrcChs.map(c => ({ id: c.id, position: c.position ?? 0, category_id: activeCatId })),
           ...newTgtChs.map(c => ({ id: c.id, position: c.position ?? 0, category_id: overCatId })),
         ];
-        channelsApi.reorderChannels(serverFull.id, allUpdated).catch(() => {});
+        channelsApi.reorderChannels(serverFull.id, allUpdated).catch(() => {
+          setServerFull(snapshot);
+          addToast('Nie udało się zapisać kolejności kanałów', 'error');
+        });
       }
     }
   }
@@ -4311,6 +4602,27 @@ export default function App() {
                 </div>
               </div>
             </div>
+          ) : srvSettOpen && serverFull ? (
+            <ServerSettingsPage
+              serverFull={serverFull}
+              tab={srvSettTab} setTab={setSrvSettTab}
+              roles={roles} members={members}
+              banList={banList} setBanList={setBanList}
+              srvForm={srvForm} setSrvForm={setSrvForm}
+              srvBannerFile={srvBannerFile} setSrvBannerFile={setSrvBannerFile}
+              srvIconFile={srvIconFile} setSrvIconFile={setSrvIconFile}
+              handleSaveSrv={handleSaveSrv}
+              inviteDur={inviteDur} setInviteDur={setInviteDur}
+              inviteCode={inviteCode} handleInvite={handleInvite}
+              canManageServer={canManageServer} canManageRoles={canManageRoles}
+              canKickMembers={canKickMembers} canBanMembers={canBanMembers}
+              canCreateInvites={canCreateInvites}
+              handleSetMemberRole={handleSetMemberRole}
+              handleKick={handleKick} handleBan={handleBan} handleUnban={handleUnban}
+              openNewRole={openNewRole} openEditRole={openEditRole} handleDeleteRole={handleDeleteRole}
+              currentUser={currentUser}
+              onClose={() => setSrvSettOpen(false)}
+            />
           ) : activeView==='admin' ? (
             <AdminPanel
               currentUser={currentUser}
@@ -5777,9 +6089,8 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Server Settings */}
-      <AnimatePresence>
-        {srvSettOpen&&serverFull&&(
+      {/* Server Settings — moved to full-page in main content area (ServerSettingsPage component) */}
+      {false&&srvSettOpen&&serverFull&&(
           <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
             className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={()=>setSrvSettOpen(false)}>
             <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
@@ -5939,7 +6250,6 @@ export default function App() {
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
 
       {/* Channel Edit */}
       <AnimatePresence>
