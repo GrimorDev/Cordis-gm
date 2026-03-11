@@ -414,13 +414,17 @@ router.patch('/categories/reorder',
         const io = req.app.get('io');
         if (io) io.to(`server:${server_id}`).emit('categories_reordered', { server_id, categories });
         return res.json({ ok: true });
-      } catch (e) {
+      } catch (e: any) {
+        console.error('[categories/reorder] DB error:', e?.message ?? e);
         try { await client.query('ROLLBACK'); } catch {}
-        return res.status(500).json({ error: 'Internal server error' });
+        return res.status(500).json({ error: e?.message ?? 'Internal server error' });
       } finally {
         client.release();
       }
-    } catch { return res.status(500).json({ error: 'Internal server error' }); }
+    } catch (e: any) {
+      console.error('[categories/reorder] outer error:', e?.message ?? e);
+      return res.status(500).json({ error: e?.message ?? 'Internal server error' });
+    }
   }
 );
 
@@ -453,13 +457,17 @@ router.patch('/reorder',
         const io = req.app.get('io');
         if (io) io.to(`server:${server_id}`).emit('channels_reordered', { server_id, channels });
         return res.json({ ok: true });
-      } catch (e) {
+      } catch (e: any) {
+        console.error('[channels/reorder] DB error:', e?.message ?? e);
         try { await client.query('ROLLBACK'); } catch {}
-        return res.status(500).json({ error: 'Internal server error' });
+        return res.status(500).json({ error: e?.message ?? 'Internal server error' });
       } finally {
         client.release();
       }
-    } catch { return res.status(500).json({ error: 'Internal server error' }); }
+    } catch (e: any) {
+      console.error('[channels/reorder] outer error:', e?.message ?? e);
+      return res.status(500).json({ error: e?.message ?? 'Internal server error' });
+    }
   }
 );
 
