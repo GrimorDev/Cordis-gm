@@ -1159,7 +1159,7 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
     setBanLoading(true);
     try {
       const payload: any = { ban_type: banForm.type, reason: banForm.reason||null };
-      if (banForm.type==='temporary') payload.hours = parseInt(banForm.hours)||24;
+      if (banForm.type==='temporary') payload.duration_hours = parseInt(banForm.hours)||24;
       if (banForm.type==='ip') payload.ip_address = banForm.ip;
       await adminApi.users.ban(banTarget.id, payload);
       setBanTarget(null);
@@ -3370,6 +3370,9 @@ export default function App() {
 
   const joinVoiceCh = async (ch: ChannelData) => {
     if (activeCall?.channelId === ch.id) return; // Already on this channel — don't rejoin (would break mic)
+    // Close settings / admin panel so the call panel is visible
+    setSrvSettOpen(false);
+    if (activeViewRef.current === 'admin') setActiveView('servers');
     const curCall = activeCallRef.current;
     // End any active DM call first — only 1 call allowed at a time
     if (curCall?.userId) {

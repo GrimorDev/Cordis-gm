@@ -331,12 +331,14 @@ router.post('/users/:userId/ban',
          VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
         [req.params.userId, req.user!.id, reason || null, ban_type, banned_until, ip_address || null]
       );
-      // Force-disconnect the banned user
+      // Force-disconnect the banned user — delay disconnect so force_logout event is delivered first
       const io = req.app.get('io');
       if (io) {
         io.to(`user:${req.params.userId}`).emit('force_logout', { reason: reason || 'Zostałeś zbanowany' });
-        const sockets = await io.in(`user:${req.params.userId}`).fetchSockets();
-        for (const s of sockets) s.disconnect(true);
+        setTimeout(async () => {
+          const sockets = await io.in(`user:${req.params.userId}`).fetchSockets();
+          for (const s of sockets) s.disconnect(true);
+        }, 800);
       }
       return res.json(ban);
     } catch { return res.status(500).json({ error: 'Internal server error' }); }

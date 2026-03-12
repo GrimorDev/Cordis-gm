@@ -58,7 +58,15 @@ router.get('/:userId/messages', authMiddleware, async (req: AuthRequest, res: Re
   const limit = Math.min(parseInt(String(req.query.limit || '50')), 100);
   const before = req.query.before as string | undefined;
   try {
-    const conversationId = await getOrCreateConversation(req.user!.id, req.params.userId);
+    // Find existing conversation WITHOUT creating one — prevents ghost empty conversations
+    const { rows: existing } = await query(
+      `SELECT dp1.conversation_id FROM dm_participants dp1
+       INNER JOIN dm_participants dp2 ON dp2.conversation_id=dp1.conversation_id AND dp2.user_id=$2
+       WHERE dp1.user_id=$1 LIMIT 1`,
+      [req.user!.id, req.params.userId]
+    );
+    if (!existing[0]) return res.json([]); // No conversation yet — return empty, don't create
+    const conversationId = existing[0].conversation_id;
     let sql = `
       SELECT dm.id, dm.conversation_id, dm.content, dm.edited, dm.created_at,
              dm.attachment_url, dm.reply_to_id, dm.is_system,
