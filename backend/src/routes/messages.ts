@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { query } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
+import { msgLimiter } from '../middleware/messageLimiter';
 import { AuthRequest } from '../types';
 import { checkSlowmode, setSlowmode } from '../redis/client';
 
@@ -113,7 +114,7 @@ router.get('/channel/:channelId', authMiddleware, async (req: AuthRequest, res: 
 });
 
 // POST /api/messages/channel/:channelId
-router.post('/channel/:channelId', authMiddleware,
+router.post('/channel/:channelId', authMiddleware, msgLimiter,
   [body('content').trim().isLength({ min: 0, max: 4000 })],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);

@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { query, getClient } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
+import { msgLimiter } from '../middleware/messageLimiter';
 import { AuthRequest } from '../types';
 
 const router = Router();
@@ -84,7 +85,7 @@ router.get('/:userId/messages', authMiddleware, async (req: AuthRequest, res: Re
 });
 
 // POST /api/dms/:userId/messages
-router.post('/:userId/messages', authMiddleware,
+router.post('/:userId/messages', authMiddleware, msgLimiter,
   [body('content').trim().isLength({ min: 0, max: 4000 })],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
