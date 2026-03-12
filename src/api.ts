@@ -125,6 +125,8 @@ export interface DmMessageFull {
 export interface FriendEntry {
   id: string; username: string; avatar_url?: string | null;
   status: string; custom_status?: string | null;
+  friendship_id?: string;
+  friends_since?: string;
 }
 export interface FriendRequest {
   id: string;
@@ -294,6 +296,9 @@ export const friendsApi = {
   respondRequest: (id: string, action: 'accept' | 'reject') =>
     req<void>('PUT', `/friends/request/${id}`, { action }),
   remove: (id: string) => req<void>('DELETE', `/friends/${id}`),
+  block: (userId: string) => req<void>('POST', `/friends/block/${userId}`),
+  unblock: (userId: string) => req<void>('DELETE', `/friends/block/${userId}`),
+  blocked: () => req<{ id: string; username: string; avatar_url?: string; blocked_at: string }[]>('GET', '/friends/blocked'),
 };
 
 // ── Admin ───────────────────────────────────────────────────────────────────
@@ -308,6 +313,12 @@ export interface AdminUser {
   status: string; is_admin: boolean; created_at: string;
   badges: Badge[];
   server_count?: number; message_count?: number;
+}
+export interface UserBan {
+  id: string; user_id: string; banned_by: string | null; banned_by_username?: string;
+  reason: string | null; ban_type: 'permanent' | 'temporary' | 'ip';
+  banned_until: string | null; ip_address: string | null;
+  is_active: boolean; created_at: string;
 }
 export interface AdminServer {
   id: string; name: string; icon_url?: string | null;
@@ -342,6 +353,10 @@ export const adminApi = {
     search: (q: string) => req<AdminUser[]>('GET', `/admin/users/search?q=${encodeURIComponent(q)}`),
     setAdmin: (userId: string, is_admin: boolean) =>
       req<{ ok: boolean }>('POST', `/admin/users/${userId}/set-admin`, { is_admin }),
+    bans: (userId: string) => req<UserBan[]>('GET', `/admin/users/${userId}/bans`),
+    ban: (userId: string, data: { ban_type: 'permanent' | 'temporary' | 'ip'; reason?: string; duration_hours?: number; ip_address?: string }) =>
+      req<UserBan>('POST', `/admin/users/${userId}/ban`, data),
+    unban: (userId: string) => req<{ ok: boolean }>('DELETE', `/admin/users/${userId}/ban`),
   },
   servers: () => req<AdminServer[]>('GET', '/admin/servers'),
 };

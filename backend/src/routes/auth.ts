@@ -151,6 +151,22 @@ router.post(
       const valid = await bcrypt.compare(password, user.password_hash);
       if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
 
+      // Check platform-wide ban
+      const { rows: bans } = await query(
+        `SELECT reason, ban_type, banned_until FROM user_bans
+         WHERE user_id=$1 AND is_active=TRUE
+           AND (banned_until IS NULL OR banned_until > NOW())
+         LIMIT 1`,
+        [user.id]
+      );
+      if (bans[0]) {
+        const b = bans[0];
+        const msg = b.ban_type === 'temporary' && b.banned_until
+          ? `Twoje konto jest zawieszone do ${new Date(b.banned_until).toLocaleString('pl-PL')}. Powód: ${b.reason || 'brak'}`
+          : `Twoje konto zostało zbanowane. Powód: ${b.reason || 'brak'}`;
+        return res.status(403).json({ error: msg });
+      }
+
       const token = signToken({ id: user.id, username: user.username, email: user.email });
       await setUserStatus(user.id, 'online');
       await query('UPDATE users SET status = $1 WHERE id = $2', ['online', user.id]);

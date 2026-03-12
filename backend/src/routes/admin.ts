@@ -293,4 +293,62 @@ router.post('/users/:userId/set-admin',
   }
 );
 
+// ── GET /api/admin/users/:userId/bans ─────────────────────────────────
+router.get('/users/:userId/bans', async (req: AuthRequest, res: Response) => {
+  try {
+    const { rows } = await query(
+      `SELECT ub.*, u.username as banned_by_username
+       FROM user_bans ub LEFT JOIN users u ON u.id=ub.banned_by
+       WHERE ub.user_id=$1 ORDER BY ub.created_at DESC`,
+      [req.params.userId]
+    );
+    return res.json(rows);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ── POST /api/admin/users/:userId/ban ─────────────────────────────────
+router.post('/users/:userId/ban',
+  [
+    body('ban_type').isIn(['permanent', 'temporary', 'ip']),
+    body('reason').optional().isString().isLength({ max: 500 }),
+    body('duration_hours').optional().isInt({ min: 1 }),
+    body('ip_address').optional().isString(),
+  ],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    if (req.params.userId === req.user!.id)
+      return res.status(400).json({ error: 'Cannot ban yourself' });
+
+    const { ban_type, reason, duration_hours, ip_address } = req.body;
+    const banned_until = (ban_type === 'temporary' && duration_hours)
+      ? new Date(Date.now() + duration_hours * 3_600_000)
+      : null;
+    try {
+      await query(`UPDATE user_bans SET is_active=FALSE WHERE user_id=$1 AND is_active=TRUE`, [req.params.userId]);
+      const { rows: [ban] } = await query(
+        `INSERT INTO user_bans (user_id, banned_by, reason, ban_type, banned_until, ip_address)
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+        [req.params.userId, req.user!.id, reason || null, ban_type, banned_until, ip_address || null]
+      );
+      // Force-disconnect the banned user
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`user:${req.params.userId}`).emit('force_logout', { reason: reason || 'Zostałeś zbanowany' });
+        const sockets = await io.in(`user:${req.params.userId}`).fetchSockets();
+        for (const s of sockets) s.disconnect(true);
+      }
+      return res.json(ban);
+    } catch { return res.status(500).json({ error: 'Internal server error' }); }
+  }
+);
+
+// ── DELETE /api/admin/users/:userId/ban ───────────────────────────────
+router.delete('/users/:userId/ban', async (req: AuthRequest, res: Response) => {
+  try {
+    await query(`UPDATE user_bans SET is_active=FALSE WHERE user_id=$1 AND is_active=TRUE`, [req.params.userId]);
+    return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
 export default router;

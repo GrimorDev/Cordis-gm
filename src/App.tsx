@@ -6,6 +6,7 @@ import {
   Menu, X, Edit3, MessageCircle, Minimize2, Maximize2,
   Shield, Trash2, Settings2, UserPlus, Check, X as XIcon,
   LogOut, Loader2, Lock, Phone, PhoneOff, MessageSquare, Upload, MoreHorizontal, ScreenShare,
+  UserX, UserCheck, UserMinus,
   CheckCircle2, AlertCircle, Info, AlertTriangle, PartyPopper, Sparkles, Zap, Globe,
   Eye, EyeOff, Megaphone, FileText, ChevronLeft, ChevronRight, ArrowLeft,
   Clock, Pin, PinOff, Activity, AtSign, BadgeCheck, Crown, LayoutDashboard,
@@ -1148,6 +1149,33 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
     } catch { addToast({ type:'error', message:'Błąd zmiany uprawnień' }); }
   };
 
+  // Ban state (local to AdminPanel)
+  const [banTarget, setBanTarget] = React.useState<AdminUser|null>(null);
+  const [banForm, setBanForm] = React.useState({ type:'permanent' as 'permanent'|'temporary'|'ip', reason:'', hours:'24', ip:'' });
+  const [banLoading, setBanLoading] = React.useState(false);
+
+  const handleBanUser = async () => {
+    if (!banTarget) return;
+    setBanLoading(true);
+    try {
+      const payload: any = { ban_type: banForm.type, reason: banForm.reason||null };
+      if (banForm.type==='temporary') payload.hours = parseInt(banForm.hours)||24;
+      if (banForm.type==='ip') payload.ip_address = banForm.ip;
+      await adminApi.users.ban(banTarget.id, payload);
+      setBanTarget(null);
+      setBanForm({ type:'permanent', reason:'', hours:'24', ip:'' });
+      addToast({ type:'success', message:`Zbanowano ${banTarget.username}` });
+    } catch (e: any) { addToast({ type:'error', message: e?.message || 'Błąd banowania' }); }
+    finally { setBanLoading(false); }
+  };
+
+  const handleUnbanUser = async (u: AdminUser) => {
+    try {
+      await adminApi.users.unban(u.id);
+      addToast({ type:'success', message:`Odbanowano ${u.username}` });
+    } catch (e: any) { addToast({ type:'error', message: e?.message || 'Błąd odbanowania' }); }
+  };
+
   const TABS: { id: 'dashboard'|'users'|'servers'|'badges'|'system'; label: string; icon: React.ReactNode }[] = [
     { id:'dashboard', label:'Dashboard', icon: <LayoutDashboard size={14}/> },
     { id:'users',     label:'Użytkownicy', icon: <Users size={14}/> },
@@ -1270,12 +1298,18 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                     <span className="text-xs text-zinc-500">{new Date(u.created_at).toLocaleDateString('pl')}</span>
                     <div className="flex items-center gap-1 shrink-0">
                       <button onClick={()=>{ setAssignUser(u); setAssignBadgeId(badges[0]?.id??''); }}
+                        title="Odznaki"
                         className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/[0.04] hover:bg-indigo-500/20 hover:text-indigo-400 text-zinc-500 transition-colors">
                         <Award size={11}/>
                       </button>
-                      <button onClick={()=>handleToggleAdmin(u)}
+                      <button onClick={()=>handleToggleAdmin(u)} title={u.is_admin?'Odbierz admina':'Nadaj admina'}
                         className={`w-6 h-6 flex items-center justify-center rounded-lg transition-colors ${u.is_admin?'bg-violet-500/15 text-violet-400 hover:bg-rose-500/20 hover:text-rose-400':'bg-white/[0.04] text-zinc-500 hover:bg-violet-500/15 hover:text-violet-400'}`}>
                         <ShieldCheck size={11}/>
+                      </button>
+                      <button onClick={()=>{ setBanTarget(u); setBanForm({ type:'permanent', reason:'', hours:'24', ip:'' }); }}
+                        title="Zbanuj / zarządzaj banem"
+                        className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/[0.04] hover:bg-rose-500/20 hover:text-rose-400 text-zinc-500 transition-colors">
+                        <Hammer size={11}/>
                       </button>
                     </div>
                   </div>
@@ -1290,6 +1324,69 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                   <button disabled={usersPage>=Math.ceil(usersTotal/50)} onClick={()=>setUsersPage(usersPage+1)} className="px-3 py-1.5 text-xs rounded-lg bg-white/[0.05] text-zinc-400 hover:text-white disabled:opacity-30 transition-all"><ChevronRight size={12}/></button>
                 </div>
               )}
+              {/* Ban dialog */}
+              {banTarget&&(
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={()=>setBanTarget(null)}>
+                  <div className="bg-[#16162a] border border-white/[0.09] rounded-2xl p-5 w-80 space-y-4" onClick={e=>e.stopPropagation()}>
+                    <div className="flex items-center gap-2">
+                      <Hammer size={14} className="text-rose-400"/>
+                      <h3 className="text-sm font-bold text-white">Zbanuj — {banTarget.username}</h3>
+                    </div>
+                    {/* Type */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs text-zinc-500">Typ bana</label>
+                      <div className="flex gap-2">
+                        {(['permanent','temporary','ip'] as const).map(t=>(
+                          <button key={t} onClick={()=>setBanForm(f=>({...f,type:t}))}
+                            className={`flex-1 py-1.5 rounded-xl text-xs font-semibold transition-colors border ${banForm.type===t?'bg-rose-500/20 text-rose-300 border-rose-500/40':'bg-white/[0.04] text-zinc-500 border-transparent hover:text-zinc-300'}`}>
+                            {t==='permanent'?'Stały':t==='temporary'?'Czasowy':'IP'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Reason */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs text-zinc-500">Powód (opcjonalnie)</label>
+                      <input value={banForm.reason} onChange={e=>setBanForm(f=>({...f,reason:e.target.value}))}
+                        placeholder="np. spam, nieodpowiednie zachowanie..."
+                        className="w-full bg-white/[0.06] border border-white/[0.08] text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 rounded-xl px-3 py-2 text-sm"/>
+                    </div>
+                    {/* Duration — only for temporary */}
+                    {banForm.type==='temporary'&&(
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-zinc-500">Czas zawieszenia (godziny)</label>
+                        <input value={banForm.hours} onChange={e=>setBanForm(f=>({...f,hours:e.target.value}))}
+                          type="number" min="1" max="8760" placeholder="24"
+                          className="w-full bg-white/[0.06] border border-white/[0.08] text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 rounded-xl px-3 py-2 text-sm"/>
+                      </div>
+                    )}
+                    {/* IP — only for ip ban */}
+                    {banForm.type==='ip'&&(
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-zinc-500">Adres IP</label>
+                        <input value={banForm.ip} onChange={e=>setBanForm(f=>({...f,ip:e.target.value}))}
+                          placeholder="np. 1.2.3.4"
+                          className="w-full bg-white/[0.06] border border-white/[0.08] text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 rounded-xl px-3 py-2 text-sm font-mono"/>
+                      </div>
+                    )}
+                    <div className="flex gap-2 pt-1">
+                      <button onClick={handleBanUser} disabled={banLoading||(banForm.type==='ip'&&!banForm.ip.trim())}
+                        className="flex-1 bg-rose-500 hover:bg-rose-400 disabled:opacity-40 text-white py-2 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2">
+                        {banLoading&&<Loader2 size={12} className="animate-spin"/>} Zbanuj
+                      </button>
+                      <button onClick={()=>handleUnbanUser(banTarget)}
+                        className="flex-1 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 py-2 rounded-xl text-sm font-semibold transition-colors">
+                        Odbanuj
+                      </button>
+                      <button onClick={()=>setBanTarget(null)}
+                        className="px-3 py-2 bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 rounded-xl text-sm transition-colors">
+                        <X size={13}/>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Assign badge dialog */}
               {assignUser&&(
                 <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={()=>setAssignUser(null)}>
@@ -1495,6 +1592,8 @@ export default function App() {
   // dm_read events: maps other_user_id → read_at timestamp (when THEY read our messages)
   const [dmReadStates, setDmReadStates]       = useState<Record<string, string>>({});
   const [friends, setFriends]                 = useState<FriendEntry[]>([]);
+  const [blockedUsers, setBlockedUsers]       = useState<Set<string>>(new Set());
+  const [showDmMenu, setShowDmMenu]           = useState(false);
   const [friendReqs, setFriendReqs]           = useState<FriendRequest[]>([]);
   const [members, setMembers]                 = useState<ServerMember[]>([]);
   const [roles, setRoles]                     = useState<ServerRole[]>([]);
@@ -2455,9 +2554,22 @@ export default function App() {
       (e) => {
         const stream = e.streams[0]; if (!stream) return;
         if (e.track.kind === 'video') {
-          // Remote screen share video track
+          // Remote video track (camera or screen share)
           remoteScreenStreamsRef.current.set(remoteUserId, stream);
           setScreenShareTick(t => t + 1);
+          // Clear frozen frame when remote turns off camera/share
+          e.track.onended = () => {
+            if (remoteScreenStreamsRef.current.get(remoteUserId) === stream) {
+              remoteScreenStreamsRef.current.delete(remoteUserId);
+              setScreenShareTick(t => t + 1);
+            }
+          };
+          e.track.onmute = () => {
+            if (remoteScreenStreamsRef.current.get(remoteUserId) === stream) {
+              remoteScreenStreamsRef.current.delete(remoteUserId);
+              setScreenShareTick(t => t + 1);
+            }
+          };
           // Attach screen-share audio element (audio separate from video so volume is controllable)
           if (stream.getAudioTracks().length > 0) {
             attachRemoteScreenAudio(remoteUserId, stream);
@@ -2574,8 +2686,34 @@ export default function App() {
     setServerList(list);
     // Do NOT auto-select first server — default view is DMs (set by useState initial value)
   }).catch(console.error);
-  const loadFriends = () => { friendsApi.list().then(setFriends).catch(console.error); friendsApi.requests().then(setFriendReqs).catch(console.error); };
+  const loadFriends = () => {
+    friendsApi.list().then(setFriends).catch(console.error);
+    friendsApi.requests().then(setFriendReqs).catch(console.error);
+    friendsApi.blocked().then(bl => setBlockedUsers(new Set(bl.map(b => b.id)))).catch(console.error);
+  };
   const loadDms    = () => dmsApi.conversations().then(setDmConvs).catch(console.error);
+
+  const handleBlockUser = async (userId: string, username: string) => {
+    await friendsApi.block(userId);
+    setBlockedUsers(prev => new Set([...prev, userId]));
+    setFriends(prev => prev.filter(f => f.id !== userId));
+    addToast(`Zablokowano ${username}`, 'success');
+    setShowDmMenu(false);
+  };
+
+  const handleUnblockUser = async (userId: string, username: string) => {
+    await friendsApi.unblock(userId);
+    setBlockedUsers(prev => { const s = new Set(prev); s.delete(userId); return s; });
+    addToast(`Odblokowano ${username}`, 'success');
+    setShowDmMenu(false);
+  };
+
+  const handleRemoveFriend = async (friendshipId: string, username: string) => {
+    await friendsApi.remove(friendshipId);
+    setFriends(prev => prev.filter(f => (f.friendship_id ?? f.id) !== friendshipId));
+    addToast(`Usunięto ${username} ze znajomych`, 'success');
+    setShowDmMenu(false);
+  };
 
   // Friend search debounce
   useEffect(() => {
@@ -3206,10 +3344,19 @@ export default function App() {
 
   const joinVoiceCh = async (ch: ChannelData) => {
     if (activeCall?.channelId === ch.id) return; // Already on this channel — don't rejoin (would break mic)
-    if (activeCall?.channelId && activeCall.channelId !== ch.id) {
-      leaveVoiceChannel(activeCall.channelId);
-      // Optimistic: remove self from old channel
-      if (currentUser) setVoiceUsers(p => ({ ...p, [activeCall.channelId!]: (p[activeCall.channelId!]||[]).filter(u=>u.id!==currentUser.id) }));
+    const curCall = activeCallRef.current;
+    // End any active DM call first — only 1 call allowed at a time
+    if (curCall?.userId) {
+      endCall(curCall.userId);
+      stopRing(); stopIncomingRing(); playCallEnded();
+      dmsApi.sendSystem(curCall.userId, `📞 Rozmowa zakończona · ${fmtDur(callDurationRef.current)}`).catch(() => {});
+      cleanupWebRTC();
+      setActiveCall(null); setShowCallPanel(false); setCallDuration(0);
+    }
+    // Switch voice channel if needed
+    if (curCall?.channelId && curCall.channelId !== ch.id) {
+      leaveVoiceChannel(curCall.channelId);
+      if (currentUser) setVoiceUsers(p => ({ ...p, [curCall.channelId!]: (p[curCall.channelId!]||[]).filter(u=>u.id!==currentUser.id) }));
       cleanupWebRTC();
     }
     await acquireMic(selMic || undefined);
@@ -3245,6 +3392,15 @@ export default function App() {
   };
 
   const startDmCall = async (userId: string, username: string, type: 'voice'|'video', avatarUrl?: string | null) => {
+    const curCall = activeCallRef.current;
+    // Leave any active voice channel first — only 1 call allowed at a time
+    if (curCall?.channelId) {
+      leaveVoiceChannel(curCall.channelId);
+      playVoiceLeave();
+      if (currentUser) setVoiceUsers(p => ({ ...p, [curCall.channelId!]: (p[curCall.channelId!]||[]).filter(u=>u.id!==currentUser.id) }));
+      cleanupWebRTC();
+      setActiveCall(null); setShowCallPanel(false);
+    }
     await acquireMic(selMic || undefined);
     sendCallInvite(userId, type);
     startRing();
@@ -3272,16 +3428,41 @@ export default function App() {
   };
   const toggleCamera = async () => {
     if (activeCall?.isCameraOn) {
+      // Stop local video tracks
       localStreamRef.current?.getVideoTracks().forEach(t => { t.stop(); });
+      // Remove video senders from all peer connections and renegotiate
+      peerConnsRef.current.forEach(async (pc, peerId) => {
+        const videoSenders = pc.getSenders().filter(s => s.track?.kind === 'video');
+        videoSenders.forEach(s => { try { pc.removeTrack(s); } catch {} });
+        if (pc.signalingState === 'stable') {
+          try {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            getSocket().emit('webrtc_offer', { to: peerId, sdp: offer });
+          } catch {}
+        }
+      });
       localStreamRef.current = localStreamRef.current ?
         new MediaStream(localStreamRef.current.getAudioTracks()) : null;
       setActiveCall(p => p ? {...p, isCameraOn: false} : p);
     } else {
       try {
         const vs = await navigator.mediaDevices.getUserMedia({ video: selCamera ? { deviceId: { exact: selCamera } } : true });
-        vs.getVideoTracks().forEach(t => {
-          localStreamRef.current?.addTrack(t);
-          peerConnsRef.current.forEach(pc => { if (!pc.getSenders().find(s=>s.track?.kind==='video')) pc.addTrack(t, localStreamRef.current!); });
+        vs.getVideoTracks().forEach(t => { localStreamRef.current?.addTrack(t); });
+        // Add video track to each peer connection and renegotiate
+        peerConnsRef.current.forEach(async (pc, peerId) => {
+          vs.getVideoTracks().forEach(t => {
+            const existing = pc.getSenders().find(s => s.track?.kind === 'video');
+            if (existing) { existing.replaceTrack(t).catch(() => {}); }
+            else { pc.addTrack(t, localStreamRef.current!); }
+          });
+          if (pc.signalingState === 'stable') {
+            try {
+              const offer = await pc.createOffer();
+              await pc.setLocalDescription(offer);
+              getSocket().emit('webrtc_offer', { to: peerId, sdp: offer });
+            } catch {}
+          }
         });
         setActiveCall(p => p ? {...p, isCameraOn: true} : p);
       } catch { addToast('Brak dostępu do kamery', 'error'); }
@@ -4759,7 +4940,49 @@ export default function App() {
                       </button>
                     </>
                   )}
-                  <button className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all duration-150"><MoreHorizontal size={15}/></button>
+                  <div className="relative">
+                    <button onClick={()=>setShowDmMenu(v=>!v)} className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-150 active:scale-95 ${showDmMenu?'text-white bg-white/[0.1]':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07]'}`}>
+                      <MoreHorizontal size={15}/>
+                    </button>
+                    <AnimatePresence>
+                      {showDmMenu&&(
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={()=>setShowDmMenu(false)}/>
+                          <motion.div initial={{opacity:0,scale:0.92,y:-6}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.92,y:-6}}
+                            transition={{duration:0.12}}
+                            className="absolute right-0 top-10 z-50 bg-[#1a1a2e] border border-white/[0.08] rounded-xl shadow-2xl py-1 min-w-[180px] overflow-hidden">
+                            {activeView==='dms'&&activeDm&&(
+                              <>
+                                {blockedUsers.has(activeDm.other_user_id) ? (
+                                  <button onClick={()=>handleUnblockUser(activeDm.other_user_id,activeDm.other_username)}
+                                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-emerald-400 hover:bg-white/[0.05] transition-colors">
+                                    <UserCheck size={14}/>Odblokuj użytkownika
+                                  </button>
+                                ) : (
+                                  <button onClick={()=>handleBlockUser(activeDm.other_user_id,activeDm.other_username)}
+                                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-rose-400 hover:bg-white/[0.05] transition-colors">
+                                    <UserX size={14}/>Zablokuj użytkownika
+                                  </button>
+                                )}
+                                {friends.some(f=>f.id===activeDm.other_user_id)&&(
+                                  <>
+                                    <div className="h-px bg-white/[0.06] mx-2 my-1"/>
+                                    <button onClick={()=>{
+                                      const f=friends.find(fr=>fr.id===activeDm.other_user_id);
+                                      if(f?.friendship_id) handleRemoveFriend(f.friendship_id,activeDm.other_username);
+                                    }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-zinc-400 hover:text-rose-400 hover:bg-white/[0.05] transition-colors">
+                                      <UserMinus size={14}/>Usuń ze znajomych
+                                    </button>
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </motion.div>
+                        </>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
               </header>
 
@@ -7342,9 +7565,18 @@ export default function App() {
             </div>
             <div className="flex gap-2">
               <button onClick={async ()=>{
-                // Acquire mic before notifying caller — ensures localStreamRef is set when offer arrives
                 stopIncomingRing();
                 playCallAccepted();
+                // Leave any active voice channel first — only 1 call allowed at a time
+                const curCall = activeCallRef.current;
+                if (curCall?.channelId) {
+                  leaveVoiceChannel(curCall.channelId);
+                  playVoiceLeave();
+                  if (currentUser) setVoiceUsers(p => ({ ...p, [curCall.channelId!]: (p[curCall.channelId!]||[]).filter(u=>u.id!==currentUser.id) }));
+                  cleanupWebRTC();
+                  setActiveCall(null); setShowCallPanel(false);
+                }
+                // Acquire mic before notifying caller — ensures localStreamRef is set when offer arrives
                 await acquireMic(selMic || undefined);
                 acceptCall(incomingCall.conversation_id, incomingCall.from.id);
                 setActiveCall({type: incomingCall.type==='video'?'dm_video':'dm_voice', userId: incomingCall.from.id, username: incomingCall.from.username, avatarUrl: incomingCall.from.avatar_url, isMuted:false,isDeafened:false,isCameraOn:false,isScreenSharing:false});

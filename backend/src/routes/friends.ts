@@ -141,4 +141,54 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
   }
 });
 
+// POST /api/friends/block/:userId - block a user
+router.post('/block/:userId', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const blockerId  = req.user!.id;
+  const blockedId  = req.params.userId;
+  if (blockerId === blockedId) return res.status(400).json({ error: 'Cannot block yourself' });
+  try {
+    // Remove any existing friendship
+    await query(
+      `DELETE FROM friends
+       WHERE (requester_id=$1 AND addressee_id=$2) OR (requester_id=$2 AND addressee_id=$1)`,
+      [blockerId, blockedId]
+    );
+    await query(
+      `INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [blockerId, blockedId]
+    );
+    return res.json({ ok: true });
+  } catch {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/friends/block/:userId - unblock a user
+router.delete('/block/:userId', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    await query(
+      `DELETE FROM user_blocks WHERE blocker_id=$1 AND blocked_id=$2`,
+      [req.user!.id, req.params.userId]
+    );
+    return res.json({ ok: true });
+  } catch {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/friends/blocked - list blocked users
+router.get('/blocked', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { rows } = await query(
+      `SELECT u.id, u.username, u.avatar_url, ub.created_at as blocked_at
+       FROM user_blocks ub JOIN users u ON u.id = ub.blocked_id
+       WHERE ub.blocker_id=$1 ORDER BY ub.created_at DESC`,
+      [req.user!.id]
+    );
+    return res.json(rows);
+  } catch {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

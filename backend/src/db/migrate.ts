@@ -367,6 +367,31 @@ INSERT INTO user_badges (user_id, badge_id)
   SELECT u.id, gb.id FROM users u, global_badges gb
   WHERE u.username = 'Grimor' AND gb.name = 'developer'
 ON CONFLICT DO NOTHING;
+
+-- ── User blocks (per-user blocking) ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS user_blocks (
+    blocker_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    blocked_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (blocker_id, blocked_id)
+);
+CREATE INDEX IF NOT EXISTS idx_user_blocks_blocker ON user_blocks(blocker_id);
+CREATE INDEX IF NOT EXISTS idx_user_blocks_blocked ON user_blocks(blocked_id);
+
+-- ── Global platform bans (admin-issued) ──────────────────────────────
+CREATE TABLE IF NOT EXISTS user_bans (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    banned_by    UUID REFERENCES users(id) ON DELETE SET NULL,
+    reason       TEXT,
+    ban_type     VARCHAR(20) NOT NULL DEFAULT 'permanent'
+                 CHECK (ban_type IN ('permanent', 'temporary', 'ip')),
+    banned_until TIMESTAMPTZ,
+    ip_address   TEXT,
+    is_active    BOOLEAN DEFAULT TRUE,
+    created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_user_bans_user ON user_bans(user_id, is_active);
 `;
 
 const SEED_SQL = `
