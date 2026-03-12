@@ -33,6 +33,15 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
 
     try {
       const payload = jwt.verify(String(token), config.jwt.secret) as JwtPayload;
+
+      // Reject banned users
+      const { rows: bans } = await query(
+        `SELECT id FROM user_bans WHERE user_id=$1 AND is_active=TRUE
+         AND (banned_until IS NULL OR banned_until > NOW()) LIMIT 1`,
+        [payload.id]
+      );
+      if (bans.length > 0) return next(new Error('Account suspended'));
+
       (socket.data as SocketData).user = {
         id: payload.id,
         username: payload.username,

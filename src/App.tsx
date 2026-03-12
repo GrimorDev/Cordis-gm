@@ -1637,6 +1637,8 @@ export default function App() {
   const [createSrvIconPreview, setCreateSrvIconPreview] = useState<string|null>(null);
   const createSrvIconRef = useRef<HTMLInputElement>(null);
   const msgInputRef      = useRef<HTMLTextAreaElement>(null);
+  const msgDraftsRef     = useRef<Record<string, string>>({});
+  const prevConvKeyRef   = useRef('');
   const [srvContextMenu, setSrvContextMenu]   = useState<{ x: number; y: number; srv: ServerData } | null>(null);
   const [deleteSrvConfirm, setDeleteSrvConfirm] = useState<{ id: string; name: string } | null>(null);
 
@@ -2055,6 +2057,17 @@ export default function App() {
       setActiveCall(null); setShowCallPanel(false); setCallDuration(0);
       autoToast('Rozmowa zakończona', 'info');
     });
+    // ── Force logout (ban) ──────────────────────────────────────────
+    sock.on('force_logout' as any, ({ reason }: { reason?: string }) => {
+      const msg = reason || 'Twoje konto zostało zbanowane';
+      autoToast(msg, 'error');
+      setTimeout(() => {
+        clearToken();
+        disconnectSocket();
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+      }, 2500);
+    });
     // ── Real-time server/channel/member/user events ─────────────────
     sock.on('channel_created' as any, (ch: any) => {
       if (ch.server_id !== activeServerRef.current) return;
@@ -2434,6 +2447,19 @@ export default function App() {
   useEffect(() => { callDurationRef.current   = callDuration;   }, [callDuration]);
   // Sync myStatusRef when currentUser.status changes (e.g. on login)
   useEffect(() => { if (currentUser?.status) myStatusRef.current = currentUser.status; }, [currentUser?.status]);
+
+  // ── Per-conversation message drafts ─────────────────────────────
+  // Save current input draft when switching DM/channel, restore for new conversation
+  useLayoutEffect(() => {
+    const key = activeDmUserId ? `dm:${activeDmUserId}` : activeChannel ? `ch:${activeChannel}` : '';
+    const prev = prevConvKeyRef.current;
+    if (key === prev) return;
+    // Save draft for previous conversation (read from DOM to get latest value)
+    if (prev) msgDraftsRef.current[prev] = msgInputRef.current?.value ?? '';
+    // Restore draft for new conversation
+    setMsgInput(msgDraftsRef.current[key] ?? '');
+    prevConvKeyRef.current = key;
+  }, [activeDmUserId, activeChannel]);
 
   // Apply accent color — override Tailwind v4 color CSS variables so every bg-indigo-*, text-indigo-* etc. uses the chosen color
   useEffect(() => {
@@ -3902,7 +3928,7 @@ export default function App() {
             </AnimatePresence>
           </div>
           {(currentUser?.badges?.some(b=>b.name==='developer')||currentUser?.is_admin)&&(
-            <button onClick={()=>{setPrevView(activeView==='admin'?prevView:(activeView as 'servers'|'dms'|'friends'));setActiveView('admin');setAdminTab('dashboard');}} title="Panel admina"
+            <button onClick={()=>{setPrevView(activeView==='admin'?prevView:(activeView as 'servers'|'dms'|'friends'));setActiveView('admin');setAdminTab('dashboard');setShowCallPanel(false);}} title="Panel admina"
               className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-violet-400 hover:bg-violet-500/10 transition-all">
               <LayoutDashboard size={15}/>
             </button>
@@ -3987,7 +4013,7 @@ export default function App() {
                     </button>}
                     {(canManageServer||canManageRoles||canKickMembers)&&<>
                       <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
-                      <button onClick={()=>{setSrvDropOpen(false);setSrvSettTab(canManageServer?'overview':canManageRoles?'roles':'members');setSrvSettOpen(true);}}
+                      <button onClick={()=>{setSrvDropOpen(false);setSrvSettTab(canManageServer?'overview':canManageRoles?'roles':'members');setSrvSettOpen(true);setShowCallPanel(false);}}
                         className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
                         <Settings2 size={14} className="text-zinc-500 shrink-0"/>
                         Ustawienia serwera
@@ -5914,7 +5940,7 @@ export default function App() {
             className="z-[91] bg-[#0e0e1c] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 py-1.5 min-w-[180px] overflow-hidden">
             {(srvContextMenu.srv.owner_id===currentUser?.id ||
               (srvContextMenu.srv.id===activeServer && (canManageServer||canManageRoles||canKickMembers))) && (<>
-              <button onClick={()=>{ setSrvContextMenu(null); setSrvSettTab(canManageServer?'overview':canManageRoles?'roles':'members'); setSrvSettOpen(true); setActiveServer(srvContextMenu.srv.id); setActiveView('servers'); }}
+              <button onClick={()=>{ setSrvContextMenu(null); setSrvSettTab(canManageServer?'overview':canManageRoles?'roles':'members'); setSrvSettOpen(true); setShowCallPanel(false); setActiveServer(srvContextMenu.srv.id); setActiveView('servers'); }}
                 className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
                 <Settings2 size={13} className="text-zinc-500 shrink-0"/>
                 Ustawienia serwera
