@@ -4,6 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
+import { RedisStore } from 'rate-limit-redis';
 import path from 'path';
 import { config } from './config';
 import { pool } from './db/pool';
@@ -42,17 +43,31 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Rate limiting
+// keyGenerator: prefer X-Real-IP (set by nginx) to avoid Docker-internal IPs
+// being treated as a single shared bucket for all users.
+const realIp = (req: express.Request) =>
+  (req.headers['x-real-ip'] as string) || req.ip || 'unknown';
+
+const redisStore = (prefix: string) => new RedisStore({
+  sendCommand: (...args: string[]) => (redis as any).call(...args),
+  prefix,
+});
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 500,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, slow down' },
+  keyGenerator: realIp,
+  store: redisStore('rl:api:'),
 });
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
   message: { error: 'Too many auth attempts' },
+  keyGenerator: realIp,
+  store: redisStore('rl:auth:'),
 });
 
 app.use('/api/', apiLimiter);
