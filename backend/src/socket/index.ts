@@ -48,6 +48,24 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
     const user = (socket.data as SocketData).user;
     console.log(`Socket connected: ${user.username} (${socket.id})`);
 
+    // ── Anti-flood: disconnect sockets that send too many events ─────
+    let eventCount = 0;
+    const FLOOD_WINDOW_MS = 10_000;
+    const FLOOD_MAX_EVENTS = 120; // 120 events / 10s is already extreme
+    const floodTimer = setInterval(() => { eventCount = 0; }, FLOOD_WINDOW_MS);
+    socket.onAny(() => {
+      eventCount++;
+      if (eventCount > FLOOD_MAX_EVENTS) {
+        console.warn(`Flood detected from ${user.username} (${socket.id}), disconnecting`);
+        clearInterval(floodTimer);
+        socket.disconnect(true);
+      }
+    });
+    socket.on('disconnect', () => clearInterval(floodTimer));
+
+    // ── Typing throttle: 1 broadcast per 2 s per channel per user ────
+    const typingLastSent = new Map<string, number>();
+
     // Join personal room for DMs and notifications
     socket.join(`user:${user.id}`);
 
@@ -78,6 +96,9 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
 
     // ── Typing indicators ────────────────────────────────────────────
     socket.on('typing_start', (channelId) => {
+      const now = Date.now();
+      if ((now - (typingLastSent.get(channelId) ?? 0)) < 2000) return;
+      typingLastSent.set(channelId, now);
       socket.to(`channel:${channelId}`).emit('user_typing', {
         channel_id: channelId,
         user_id: user.id,
@@ -86,6 +107,7 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
     });
 
     socket.on('typing_stop', (channelId) => {
+      typingLastSent.delete(channelId);
       socket.to(`channel:${channelId}`).emit('user_stop_typing', {
         channel_id: channelId,
         user_id: user.id,

@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { query } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
+import { friendReqLimiter } from '../middleware/userRateLimits';
 import { AuthRequest } from '../types';
 
 const router = Router();
@@ -43,7 +44,7 @@ router.get('/requests', authMiddleware, async (req: AuthRequest, res: Response) 
 });
 
 // POST /api/friends/request - send friend request
-router.post('/request', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/request', authMiddleware, friendReqLimiter, async (req: AuthRequest, res: Response) => {
   const { username } = req.body;
   if (!username) return res.status(400).json({ error: 'Username required' });
 

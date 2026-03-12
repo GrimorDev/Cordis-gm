@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { query, getClient } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
+import { joinLimiter, inviteCreateLimiter } from '../middleware/userRateLimits';
 import { AuthRequest } from '../types';
 import crypto from 'crypto';
 
@@ -626,7 +627,7 @@ router.delete('/:id/roles/:roleId', authMiddleware, async (req: AuthRequest, res
 // ── Invites ───────────────────────────────────────────────────────────────────
 
 // POST /api/servers/invite/create
-router.post('/invite/create', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/invite/create', authMiddleware, inviteCreateLimiter, async (req: AuthRequest, res: Response) => {
   const { server_id, expires_in } = req.body;
   try {
     if (!(await hasMemberPermission(server_id, req.user!.id, 'create_invites'))) {
@@ -646,7 +647,7 @@ router.post('/invite/create', authMiddleware, async (req: AuthRequest, res: Resp
 });
 
 // POST /api/servers/join/:code
-router.post('/join/:code', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/join/:code', authMiddleware, joinLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const { rows: [invite] } = await query(
       `SELECT * FROM server_invites WHERE code = $1`, [req.params.code]
