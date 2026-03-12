@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import { RedisStore } from 'rate-limit-redis';
+import jwt from 'jsonwebtoken';
 import path from 'path';
 import { config } from './config';
 import { pool } from './db/pool';
@@ -42,9 +43,7 @@ app.use(morgan(config.nodeEnv === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Rate limiting
-// keyGenerator: prefer X-Real-IP (set by nginx) to avoid Docker-internal IPs
-// being treated as a single shared bucket for all users.
+// Rate limiting helpers
 const realIp = (req: express.Request) =>
   (req.headers['x-real-ip'] as string) || req.ip || 'unknown';
 
@@ -53,15 +52,32 @@ const redisStore = (prefix: string) => new RedisStore({
   prefix,
 });
 
+// For authenticated routes: key by JWT user ID so every user has their own
+// bucket regardless of shared IP / NAT / CDN. Falls back to IP for guests.
+const userOrIp = (req: express.Request): string => {
+  const auth = req.headers.authorization;
+  if (auth?.startsWith('Bearer ')) {
+    try {
+      const payload = jwt.verify(auth.slice(7), config.jwt.secret) as { id: string };
+      return `u:${payload.id}`;
+    } catch { /* expired / invalid — fall through to IP */ }
+  }
+  return realIp(req);
+};
+
+// Global API limiter — 2000 req / 15 min per user (or IP for guests).
+// Individual write endpoints have tighter per-user limits in their routes.
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 500,
+  max: 2000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, slow down' },
-  keyGenerator: realIp,
+  keyGenerator: userOrIp,
   store: redisStore('rl:api:'),
 });
+
+// Auth limiter — still per real IP to protect against credential stuffing
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
