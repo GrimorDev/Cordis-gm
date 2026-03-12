@@ -147,12 +147,6 @@ router.post('/block/:userId', authMiddleware, async (req: AuthRequest, res: Resp
   const blockedId  = req.params.userId;
   if (blockerId === blockedId) return res.status(400).json({ error: 'Cannot block yourself' });
   try {
-    // Remove any existing friendship
-    await query(
-      `DELETE FROM friends
-       WHERE (requester_id=$1 AND addressee_id=$2) OR (requester_id=$2 AND addressee_id=$1)`,
-      [blockerId, blockedId]
-    );
     await query(
       `INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
       [blockerId, blockedId]

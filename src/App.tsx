@@ -2722,7 +2722,6 @@ export default function App() {
   const handleBlockUser = async (userId: string, username: string) => {
     await friendsApi.block(userId);
     setBlockedUsers(prev => new Set([...prev, userId]));
-    setFriends(prev => prev.filter(f => f.id !== userId));
     addToast(`Zablokowano ${username}`, 'success');
     setShowDmMenu(false);
   };
@@ -4057,7 +4056,7 @@ export default function App() {
                       const ChIcon = ch.type==='forum'?MessageSquare:ch.type==='announcement'?Megaphone:Hash;
                       return (
                         <div key={ch.id} className="px-2">
-                          <button onClick={()=>{setActiveChannel(ch.id);setIsMobileOpen(false);}}
+                          <button onClick={()=>{setActiveChannel(ch.id);setIsMobileOpen(false);setSrvSettOpen(false);if(activeViewRef.current==='admin')setActiveView('servers');}}
                             className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${isAct?'bg-indigo-500/15 text-white border border-indigo-500/25':ping>0?'text-white hover:bg-white/[0.06] border border-amber-500/20 bg-amber-500/5':unread>0?'text-white hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
                             <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
                               <ChIcon size={16} className={`shrink-0 ${isAct?'text-indigo-400':ping>0?'text-amber-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
@@ -4134,7 +4133,7 @@ export default function App() {
                           <React.Fragment key={ch.id}>
                           <SortableChannelItem id={ch.id} catId={cat.id} canManage={canManageChannels}>
                           <div className="px-2">
-                            <button onClick={() => { setActiveChannel(ch.id); setIsMobileOpen(false); }}
+                            <button onClick={() => { setActiveChannel(ch.id); setIsMobileOpen(false); setSrvSettOpen(false); if(activeViewRef.current==='admin')setActiveView('servers'); }}
                               className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${
                                 isAct
                                   ? 'bg-indigo-500/15 text-white border border-indigo-500/25'
