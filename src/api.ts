@@ -358,6 +358,7 @@ export const gamesApi = {
 export const spotifyApi = {
   connect:       () => req<{ url: string }>('GET', '/spotify/connect'),
   status:        () => req<SpotifyData>('GET', '/spotify/status'),
+  nowPlaying:    () => req<{ track: SpotifyTrack | null }>('GET', '/spotify/now-playing'),
   userPublic:    (userId: string) => req<SpotifyData>('GET', `/spotify/user/${userId}`),
   setSettings:   (d: { show_on_profile: boolean }) => req<{ok:boolean}>('PUT', '/spotify/settings', d),
   disconnect:    () => req<{ok:boolean}>('DELETE', '/spotify/disconnect'),

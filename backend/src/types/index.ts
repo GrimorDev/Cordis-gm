@@ -128,6 +128,7 @@ export interface ServerToClientEvents {
   member_joined: (data: { server_id: string; user: any }) => void;
   member_left: (data: { server_id: string; user_id: string }) => void;
   user_updated: (data: any) => void;
+  friend_spotify_update: (data: { user_id: string; track: { name: string; artists: string; album_cover: string | null; external_url: string | null } | null }) => void;
   error: (data: { message: string }) => void;
 }
 
@@ -149,6 +150,7 @@ export interface ClientToServerEvents {
   screen_share_start: (data: { to_user_id?: string; channel_id?: string }) => void;
   screen_share_stop: (data: { to_user_id?: string; channel_id?: string }) => void;
   voice_state: (data: { muted: boolean; deafened: boolean; channel_id?: string; to_user_id?: string }) => void;
+  spotify_update: (data: { track: { name: string; artists: string; album_cover: string | null; external_url: string | null } | null }) => void;
 }
 
 export interface MessageWithSender extends Message {

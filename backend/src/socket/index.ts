@@ -166,6 +166,26 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
       }
     });
 
+    // ── Spotify now-playing broadcast ────────────────────────────────
+    socket.on('spotify_update', async ({ track }) => {
+      // Broadcast to all server rooms this user is in
+      const { rows: serverRows } = await query(
+        `SELECT server_id FROM server_members WHERE user_id = $1`, [user.id]
+      );
+      for (const { server_id } of serverRows) {
+        socket.to(`server:${server_id}`).emit('friend_spotify_update', { user_id: user.id, track });
+      }
+      // Also notify friends directly (for DM/friends-list context)
+      const { rows: friendRows } = await query(
+        `SELECT CASE WHEN requester_id=$1 THEN addressee_id ELSE requester_id END AS friend_id
+         FROM friends WHERE (requester_id=$1 OR addressee_id=$1) AND status='accepted'`,
+        [user.id]
+      );
+      for (const { friend_id } of friendRows) {
+        socket.to(`user:${friend_id}`).emit('friend_spotify_update', { user_id: user.id, track });
+      }
+    });
+
     // ── 1-to-1 Calls (signaling) ─────────────────────────────────────
     socket.on('call_invite', async ({ to_user_id, type }) => {
       const { rows: [caller] } = await query('SELECT avatar_url FROM users WHERE id = $1', [user.id]);
