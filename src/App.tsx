@@ -2129,10 +2129,11 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
     const cached = cache.current.get(userId);
     const CACHE_TTL = 60_000;
     if (cached && Date.now() - cached.loadedAt < CACHE_TTL) { setData(cached); return; }
+    const tk = localStorage.getItem('cordyn_token') || '';
     Promise.allSettled([
-      fetch(`/api/users/${userId}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')||''}` } }).then(r=>r.json()),
-      fetch(`/api/games/user/${userId}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')||''}` } }).then(r=>r.json()),
-      fetch(`/api/spotify/user/${userId}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')||''}` } }).then(r=>r.json()),
+      fetch(`/api/users/${userId}`, { headers: { Authorization: `Bearer ${tk}` } }).then(r=>r.json()),
+      fetch(`/api/games/user/${userId}`, { headers: { Authorization: `Bearer ${tk}` } }).then(r=>r.json()),
+      fetch(`/api/spotify/user/${userId}`, { headers: { Authorization: `Bearer ${tk}` } }).then(r=>r.json()),
     ]).then(([p,g,s]) => {
       const entry = {
         profile: p.status==='fulfilled' ? p.value : null,
@@ -5083,6 +5084,8 @@ export default function App() {
                 const isActive = activeDmUserId===dm.other_user_id;
                 return (
                   <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); }}
+                    onMouseEnter={e=>showHoverCard(dm.other_user_id,e)}
+                    onMouseLeave={hideHoverCard}
                     className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/15 text-white border border-indigo-500/25':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
                     <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava({avatar_url:dm.other_avatar,username:dm.other_username})}")`} as React.CSSProperties}>
                       <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className={`w-10 h-10 rounded-2xl object-cover av-eff-${(dm as any).other_avatar_effect||'none'}`} alt=""/>
@@ -5688,7 +5691,7 @@ export default function App() {
               gameSearchRef={gameSearchRef}
               onSpotifyConnect={async()=>{ try { const r = await spotifyApi.connect(); window.location.href = r.url; } catch(e:any){ addToast(e.message||'Błąd Spotify','error'); } }}
               onSpotifyDisconnect={async()=>{ await spotifyApi.disconnect(); setOwnSpotify(null); addToast('Spotify odłączono','info'); }}
-              onSpotifyToggle={async(v)=>{ await spotifyApi.setSettings({show_on_profile:v}); setOwnSpotify(p=>p?{...p,show_on_profile:v}:p); }}
+              onSpotifyToggle={async(v)=>{ await spotifyApi.setSettings({show_on_profile:v}); setOwnSpotify(p=>p?{...p,show_on_profile:v}:p); lastEmittedTrack.current=undefined; if(!v&&currentUser?.id){const sock=getSocket();if(sock)(sock as any).emit('spotify_update',{track:null});setUserActivities(p=>{const n=new Map(p);n.set(currentUser.id,null);return n;});} }}
               friends={friends}
               blockedUsers={blockedUsers}
               addToast={addToast}
@@ -6737,7 +6740,9 @@ export default function App() {
                       {offline.map(m=>{
                         const isOwner = m.id === serverFull?.owner_id;
                         return (
-                        <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={()=>openProfile(m)}>
+                        <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={()=>openProfile(m)}
+                          onMouseEnter={e=>showHoverCard(m.id,e)}
+                          onMouseLeave={hideHoverCard}>
                           <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava(m)}")`} as React.CSSProperties}>
                             <img src={ava(m)} className={`w-10 h-10 rounded-xl object-cover opacity-35 av-eff-${m.avatar_effect||'none'} av-sc`} alt=""/>
                             <StatusBadge status="offline" size={10} className="absolute -bottom-0.5 -right-0.5 opacity-50"/>
