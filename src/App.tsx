@@ -2570,16 +2570,17 @@ export default function App() {
   }, []);
 
   // ── Poll own Spotify every 30s → broadcast track to socket ──────
-  const lastEmittedTrack = useRef<string|null>(undefined);
+  const lastEmittedTrack = useRef<string|null|undefined>(undefined);
   useEffect(() => {
-    if (!currentUser?.id || !socket) return;
+    if (!currentUser?.id) return;
     const poll = async () => {
       try {
         const r = await spotifyApi.nowPlaying();
         const trackKey = r.track ? `${r.track.name}|${r.track.artists}` : null;
         if (trackKey === lastEmittedTrack.current) return;
         lastEmittedTrack.current = trackKey;
-        socket.emit('spotify_update' as any, { track: r.track ? {
+        const sock = getSocket();
+        if (sock) (sock as any).emit('spotify_update', { track: r.track ? {
           name: r.track.name, artists: r.track.artists,
           album_cover: r.track.album_cover, external_url: r.track.external_url,
         } : null });
@@ -2593,7 +2594,7 @@ export default function App() {
     const t = setInterval(poll, 30_000);
     return () => clearInterval(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?.id, socket]);
+  }, [currentUser?.id]);
 
   // ── Profile page: real-time Spotify refresh every 30s ────────────
   useEffect(() => {
@@ -8455,7 +8456,7 @@ export default function App() {
           y={hoverCard.y}
           currentUserId={currentUser?.id}
           onOpenDm={openDm}
-          onCall={(id,un,av,t)=>{ setActiveCall({ id, username:un, avatar:av, type:t, isCaller:true }); hideHoverCard(); }}
+          onCall={(id,un,av,t)=>{ startDmCall(id,un,t,av); hideHoverCard(); }}
           onOpenProfile={(id)=>{ openProfilePage(id); hideHoverCard(); }}
           cache={hoverCardCache}
           activity={userActivities.has(hoverCard.userId) ? userActivities.get(hoverCard.userId)??null : undefined}
