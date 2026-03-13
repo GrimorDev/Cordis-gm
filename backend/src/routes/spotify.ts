@@ -168,7 +168,7 @@ router.get('/now-playing', authMiddleware, async (req: AuthRequest, res: Respons
     });
     if (r.status === 204 || !r.ok) return res.json({ track: null });
     const data: any = await r.json();
-    if (!data?.item) return res.json({ track: null });
+    if (!data?.item || !data.is_playing) return res.json({ track: null });
     return res.json({ track: fmtTrack(data.item, data.is_playing, data.progress_ms) });
   } catch {
     return res.json({ track: null });
@@ -217,7 +217,7 @@ router.get('/user/:userId', async (req: Request, res: Response) => {
     let current_playing = null;
     if (nowRes.status === 'fulfilled' && nowRes.value.status !== 204 && nowRes.value.ok) {
       const d: any = await nowRes.value.json();
-      if (d?.item) current_playing = fmtTrack(d.item, d.is_playing, d.progress_ms);
+      if (d?.item && d.is_playing) current_playing = fmtTrack(d.item, d.is_playing, d.progress_ms);
     }
 
     let top_tracks: any[] = [];
