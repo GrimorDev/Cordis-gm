@@ -356,7 +356,7 @@ export const gamesApi = {
 
 // ── Spotify ────────────────────────────────────────────────────────────────
 export const spotifyApi = {
-  authUrl:       () => `${BASE}/spotify/auth`,
+  connect:       () => req<{ url: string }>('GET', '/spotify/connect'),
   status:        () => req<SpotifyData>('GET', '/spotify/status'),
   userPublic:    (userId: string) => req<SpotifyData>('GET', `/spotify/user/${userId}`),
   setSettings:   (d: { show_on_profile: boolean }) => req<{ok:boolean}>('PUT', '/spotify/settings', d),

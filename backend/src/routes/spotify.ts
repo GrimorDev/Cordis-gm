@@ -70,8 +70,9 @@ function fmtTrack(t: any, isPlaying?: boolean) {
   };
 }
 
-// GET /api/spotify/auth — start OAuth (auth required so we know who to save token for)
-router.get('/auth', authMiddleware, async (req: AuthRequest, res: Response) => {
+// GET /api/spotify/connect — authenticated endpoint that returns the Spotify OAuth URL as JSON
+// (Called via Ajax with Authorization header, then frontend redirects to the URL)
+router.get('/connect', authMiddleware, async (req: AuthRequest, res: Response) => {
   if (!CLIENT_ID) return res.status(503).json({ error: 'Spotify not configured' });
   const state = `${req.user!.id}:${Math.random().toString(36).slice(2)}`;
   const params = new URLSearchParams({
@@ -81,7 +82,7 @@ router.get('/auth', authMiddleware, async (req: AuthRequest, res: Response) => {
     redirect_uri:  REDIRECT_URI,
     state,
   });
-  return res.redirect(`https://accounts.spotify.com/authorize?${params}`);
+  return res.json({ url: `https://accounts.spotify.com/authorize?${params}` });
 });
 
 // GET /api/spotify/callback — OAuth callback (no auth middleware, uses state param for user ID)

@@ -5401,7 +5401,7 @@ export default function App() {
               gameSearching={gameSearching}
               setGameSearching={setGameSearching}
               gameSearchRef={gameSearchRef}
-              onSpotifyConnect={()=>{ window.location.href = spotifyApi.authUrl(); }}
+              onSpotifyConnect={async()=>{ try { const r = await spotifyApi.connect(); window.location.href = r.url; } catch(e:any){ addToast(e.message||'Błąd Spotify','error'); } }}
               onSpotifyDisconnect={async()=>{ await spotifyApi.disconnect(); setOwnSpotify(null); addToast('Spotify odłączono','info'); }}
               onSpotifyToggle={async(v)=>{ await spotifyApi.setSettings({show_on_profile:v}); setOwnSpotify(p=>p?{...p,show_on_profile:v}:p); }}
               friends={friends}
