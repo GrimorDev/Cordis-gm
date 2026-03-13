@@ -1641,7 +1641,8 @@ function ProfilePage({
     } catch { addToast('Błąd usuwania gry', 'error'); }
   };
 
-  const spotifyToShow = isOwn ? ownSpotify : spotify;
+  // For own profile: prefer full spotify data (with tracks) from userPublic, fall back to status-only
+  const spotifyToShow = isOwn ? (spotify || ownSpotify) : spotify;
 
   const bannerSrc = isOwn
     ? (profBannerPrev || editProf?.banner_url || null)
@@ -1930,7 +1931,7 @@ function ProfilePage({
                         <Link2Off size={12}/> Odłącz
                       </button>
                     </div>
-                    <SpotifyDisplay spotify={ownSpotify}/>
+                    <SpotifyDisplay spotify={spotifyToShow || ownSpotify}/>
                   </div>
                 ) : spotifyToShow?.connected && spotifyToShow?.show_on_profile ? (
                   <SpotifyDisplay spotify={spotifyToShow}/>
