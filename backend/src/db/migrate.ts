@@ -392,6 +392,27 @@ CREATE TABLE IF NOT EXISTS user_bans (
     created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_user_bans_user ON user_bans(user_id, is_active);
+
+-- ── User favorite games ───────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS user_favorite_games (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    game_name      VARCHAR(255) NOT NULL,
+    game_cover_url TEXT,
+    game_genre     VARCHAR(100),
+    rawg_id        INT,
+    display_order  INT DEFAULT 0,
+    created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_user_games_user ON user_favorite_games(user_id);
+
+-- ── Spotify connection ────────────────────────────────────────────────
+DO $$ BEGIN ALTER TABLE users ADD COLUMN spotify_access_token   TEXT;        EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN spotify_refresh_token  TEXT;        EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN spotify_token_expires  TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN spotify_user_id        VARCHAR(255); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN spotify_display_name   VARCHAR(255); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN spotify_show_on_profile BOOLEAN DEFAULT TRUE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 `;
 
 const SEED_SQL = `

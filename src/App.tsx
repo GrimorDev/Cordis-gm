@@ -12,16 +12,19 @@ import {
   Clock, Pin, PinOff, Activity, AtSign, BadgeCheck, Crown, LayoutDashboard,
   Code2, FlaskConical, ShieldCheck, Hammer, Award, CalendarDays, Quote,
   GripVertical, BarChart2, Server, Database,
+  Music, Gamepad2, ExternalLink, Link2, Link2Off,
   type LucideIcon
 } from 'lucide-react';
 import {
   auth, users, serversApi, channelsApi, messagesApi, dmsApi, friendsApi, forumApi, adminApi,
+  gamesApi, spotifyApi,
   uploadFile, setToken, clearToken, getToken,
   type UserProfile, type ServerData, type ServerFull, type ServerRole,
   type ChannelData, type MessageFull, type DmConversation,
   type DmMessageFull, type FriendEntry, type FriendRequest,
   type ServerMember, type ForumPost, type ForumReply, type ServerBan,
-  type Badge, type AdminStats, type AdminUser, type AdminServer, type AdminOverview, ApiError
+  type Badge, type AdminStats, type AdminUser, type AdminServer, type AdminOverview,
+  type FavoriteGame, type SpotifyData, type SpotifyTrack, ApiError
 } from './api';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -1566,6 +1569,516 @@ function SortableChannelItem({ id, catId, children, canManage }: { id: string; c
   );
 }
 
+// ─── ProfilePage ──────────────────────────────────────────────────────────────
+function ProfilePage({
+  viewUserId, profileData, games, spotify, ownSpotify, loading,
+  currentUser, editProf, setEditProf, profBannerFile, profBannerPrev,
+  onBack, onOpenDm, onCall,
+  handleAvatarUpload, handleBannerSelect, handleSaveProfile,
+  onGameAdded, onGameRemoved,
+  showGameModal, setShowGameModal, gameSearch, setGameSearch,
+  gameResults, setGameResults, gameSearching, setGameSearching, gameSearchRef,
+  onSpotifyConnect, onSpotifyDisconnect, onSpotifyToggle,
+  friends, blockedUsers, addToast,
+}: {
+  viewUserId: string; profileData: UserProfile|null; games: FavoriteGame[];
+  spotify: SpotifyData|null; ownSpotify: SpotifyData|null; loading: boolean;
+  currentUser: UserProfile|null; editProf: any; setEditProf: (fn:any)=>void;
+  profBannerFile: File|null; profBannerPrev: string|null;
+  onBack: ()=>void; onOpenDm: (id:string)=>void;
+  onCall: (id:string,un:string,av:string|null,t:'voice'|'video')=>void;
+  handleAvatarUpload: (e:React.ChangeEvent<HTMLInputElement>)=>void;
+  handleBannerSelect: (e:React.ChangeEvent<HTMLInputElement>)=>void;
+  handleSaveProfile: ()=>void;
+  onGameAdded: (g:FavoriteGame)=>void; onGameRemoved: (id:string)=>void;
+  showGameModal: boolean; setShowGameModal: (v:boolean)=>void;
+  gameSearch: string; setGameSearch: (v:string)=>void;
+  gameResults: {rawg_id:number;name:string;cover_url:string|null;genre:string|null}[];
+  setGameResults: (r:any[])=>void;
+  gameSearching: boolean; setGameSearching: (v:boolean)=>void;
+  gameSearchRef: React.MutableRefObject<ReturnType<typeof setTimeout>|null>;
+  onSpotifyConnect: ()=>void; onSpotifyDisconnect: ()=>void; onSpotifyToggle: (v:boolean)=>void;
+  friends: {id:string}[]; blockedUsers: Set<string>;
+  addToast: (m:string,t?:any)=>void;
+}) {
+  const isOwn   = currentUser?.id === viewUserId;
+  const user    = profileData || (isOwn ? currentUser : null);
+  const disp    = isOwn ? editProf : user;
+  const gi      = 'bg-white/[0.06] border border-white/[0.08] text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] transition-all rounded-xl';
+  const gm      = 'glass-modal rounded-3xl';
+  const isFriend = friends.some((f:any) => f.id === viewUserId);
+  const isBlocked = blockedUsers.has(viewUserId);
+
+  // Game search handler
+  const handleGameSearchChange = (val: string) => {
+    setGameSearch(val);
+    if (gameSearchRef.current) clearTimeout(gameSearchRef.current);
+    if (!val.trim()) { setGameResults([]); return; }
+    setGameSearching(true);
+    gameSearchRef.current = setTimeout(async () => {
+      try {
+        const r = await gamesApi.search(val);
+        setGameResults(r);
+      } catch {}
+      setGameSearching(false);
+    }, 400);
+  };
+
+  const handleAddGame = async (g: {rawg_id:number;name:string;cover_url:string|null;genre:string|null}) => {
+    try {
+      const added = await gamesApi.add({ game_name: g.name, game_cover_url: g.cover_url, game_genre: g.genre, rawg_id: g.rawg_id });
+      onGameAdded(added);
+      setShowGameModal(false); setGameSearch(''); setGameResults([]);
+      addToast(`Dodano ${g.name}`, 'success');
+    } catch (e:any) { addToast(e.message || 'Błąd dodawania gry', 'error'); }
+  };
+
+  const handleRemoveGame = async (id: string, name: string) => {
+    try {
+      await gamesApi.remove(id);
+      onGameRemoved(id);
+      addToast(`Usunięto ${name}`, 'info');
+    } catch { addToast('Błąd usuwania gry', 'error'); }
+  };
+
+  const spotifyToShow = isOwn ? ownSpotify : spotify;
+
+  const bannerSrc = isOwn
+    ? (profBannerPrev || editProf?.banner_url || null)
+    : (user?.banner_url || null);
+  const bannerGrad = isOwn
+    ? (editProf?.banner_color || getBannerGradient(viewUserId))
+    : (user?.banner_color || getBannerGradient(viewUserId));
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden bg-[#0e0e1c]">
+      {/* Top bar */}
+      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/[0.06] shrink-0">
+        <button onClick={onBack}
+          className="w-8 h-8 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] flex items-center justify-center text-zinc-400 hover:text-white transition-all">
+          <ArrowLeft size={15}/>
+        </button>
+        <span className="text-sm font-semibold text-zinc-300">
+          {loading ? 'Ładowanie...' : user ? `@${user.username}` : 'Profil użytkownika'}
+        </span>
+      </div>
+
+      {loading && !user ? (
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 size={28} className="text-indigo-400 animate-spin"/>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          {/* Banner */}
+          <div className="relative h-44 shrink-0 overflow-hidden">
+            {bannerSrc ? (
+              <img src={bannerSrc} className="w-full h-full object-cover" alt=""/>
+            ) : (
+              <div className={`w-full h-full bg-gradient-to-r ${bannerGrad}`}/>
+            )}
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#0e0e1c]/80 pointer-events-none"/>
+            {isOwn && (
+              <label className="absolute top-3 right-3 w-9 h-9 bg-black/50 hover:bg-black/75 rounded-xl flex items-center justify-center cursor-pointer transition-all border border-white/10">
+                <Upload size={14} className="text-white"/>
+                <input type="file" accept="image/*" onChange={handleBannerSelect} className="hidden"/>
+              </label>
+            )}
+          </div>
+
+          {/* Avatar row */}
+          <div className="relative px-6 -mt-14 flex items-end justify-between mb-5">
+            <div className="relative z-10">
+              <div className="rounded-2xl p-1 bg-[#0e0e1c]">
+                <div className="relative">
+                  <img src={ava(user || { username: '?' })} className="w-24 h-24 rounded-2xl object-cover" alt=""/>
+                  <StatusBadge status={(user?.status)||'offline'} size={16} className="absolute -bottom-1 -right-1"/>
+                </div>
+              </div>
+              {isOwn && (
+                <label className="absolute -bottom-1 -right-1 w-7 h-7 bg-indigo-600 hover:bg-indigo-500 rounded-xl flex items-center justify-center cursor-pointer z-10 shadow-lg border border-[#0e0e1c] transition-all">
+                  <Upload size={11} className="text-white"/>
+                  <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden"/>
+                </label>
+              )}
+            </div>
+            {/* Action buttons for other users */}
+            {!isOwn && user && (
+              <div className="flex gap-2 pb-1">
+                {!isBlocked && (
+                  <button onClick={()=>onOpenDm(viewUserId)}
+                    className="flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 text-white font-semibold px-4 py-2 rounded-xl text-sm shadow-lg shadow-indigo-500/20 transition-all">
+                    <MessageSquare size={14}/> Wiadomość
+                  </button>
+                )}
+                <button onClick={()=>onCall(viewUserId, user.username, user.avatar_url||null, 'voice')}
+                  className="w-9 h-9 bg-white/[0.04] border border-white/[0.06] rounded-xl flex items-center justify-center text-zinc-400 hover:text-emerald-400 transition-all">
+                  <Phone size={16}/>
+                </button>
+                <button onClick={()=>onCall(viewUserId, user.username, user.avatar_url||null, 'video')}
+                  className="w-9 h-9 bg-white/[0.04] border border-white/[0.06] rounded-xl flex items-center justify-center text-zinc-400 hover:text-sky-400 transition-all">
+                  <Video size={16}/>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Content grid */}
+          <div className="px-6 pb-8 flex gap-6 flex-col lg:flex-row">
+
+            {/* ── Left sidebar ── */}
+            <div className="lg:w-64 shrink-0 flex flex-col gap-4">
+              {/* Name & tag */}
+              <div>
+                {isOwn ? (
+                  <div className="flex flex-col gap-2">
+                    <input value={editProf?.username||''} onChange={e=>setEditProf((p:any)=>({...p,username:e.target.value}))}
+                      className={`text-xl font-black bg-transparent border-b border-white/10 focus:border-indigo-500/50 outline-none text-white w-full pb-0.5 transition-all`}/>
+                    <p className="text-xs text-zinc-500 font-mono">#{(viewUserId||'0000').slice(-4).toUpperCase()}</p>
+                  </div>
+                ) : (
+                  <>
+                    <h2 className="text-2xl font-black text-white leading-tight">{user?.username}</h2>
+                    <p className="text-xs text-zinc-500 font-mono">#{(viewUserId||'0000').slice(-4).toUpperCase()}</p>
+                  </>
+                )}
+              </div>
+
+              {/* Custom status */}
+              {isOwn ? (
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5 block">Status</label>
+                  <input value={editProf?.custom_status||''} onChange={e=>setEditProf((p:any)=>({...p,custom_status:e.target.value}))}
+                    placeholder="Np. 🎮 Gram w gry..." className={`w-full ${gi} px-3 py-2 text-sm`}/>
+                </div>
+              ) : user?.custom_status ? (
+                <div className="flex items-start gap-2">
+                  <div className="w-6 h-6 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center shrink-0 mt-0.5">
+                    <Quote size={9} className="text-zinc-400"/>
+                  </div>
+                  <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl rounded-tl-sm px-3 py-2 max-w-full">
+                    <p className="text-xs text-zinc-300 leading-relaxed break-words">{user.custom_status}</p>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Badges */}
+              {Array.isArray(disp?.badges) && disp.badges.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {disp.badges.map((b:Badge)=>{
+                    const BIcon = getBadgeIcon(b.name);
+                    return (
+                      <div key={b.id} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1"
+                        style={{background:b.color+'18',border:'1px solid '+b.color+'45'}}>
+                        <BIcon size={11} style={{color:b.color}} className="shrink-0"/>
+                        <span className="text-[11px] font-semibold" style={{color:b.color}}>{b.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Bio */}
+              <div>
+                <label className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5 block">O mnie</label>
+                {isOwn ? (
+                  <textarea value={editProf?.bio||''} onChange={e=>setEditProf((p:any)=>({...p,bio:e.target.value}))}
+                    rows={4} placeholder="Napisz coś o sobie..."
+                    className={`w-full ${gi} px-3 py-2.5 text-sm resize-none`}/>
+                ) : user?.bio ? (
+                  <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-3.5 py-3">
+                    <p className="text-xs text-zinc-300 leading-relaxed">{user.bio}</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-zinc-700 italic">Brak opisu</p>
+                )}
+              </div>
+
+              {/* Meta info */}
+              <div className="flex flex-col gap-2">
+                {user?.created_at && (
+                  <div className="flex items-center gap-2.5 bg-white/[0.03] border border-white/[0.05] rounded-xl px-3 py-2.5">
+                    <CalendarDays size={13} className="text-indigo-400 shrink-0"/>
+                    <div>
+                      <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold leading-none mb-0.5">Dołączył/a</p>
+                      <p className="text-xs text-zinc-300 font-medium">{new Date(user.created_at).toLocaleDateString('pl-PL',{day:'numeric',month:'long',year:'numeric'})}</p>
+                    </div>
+                  </div>
+                )}
+                {typeof user?.mutual_friends_count==='number' && user.mutual_friends_count > 0 && (
+                  <div className="flex items-center gap-2.5 bg-white/[0.03] border border-white/[0.05] rounded-xl px-3 py-2.5">
+                    <Users size={13} className="text-indigo-400 shrink-0"/>
+                    <div>
+                      <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold leading-none mb-0.5">Wspólni znajomi</p>
+                      <p className="text-xs text-zinc-300 font-medium">{user.mutual_friends_count}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Banner color picker (own) */}
+              {isOwn && (
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2 block">Kolor bannera</label>
+                  <div className="grid grid-cols-6 gap-1.5">
+                    {GRADIENTS.map(g=>(
+                      <button key={g} onClick={()=>setEditProf((p:any)=>({...p,banner_color:g}))}
+                        className={`h-7 rounded-lg bg-gradient-to-r ${g} border-2 transition-all ${editProf?.banner_color===g?'border-white scale-105':'border-transparent'}`}/>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Save button (own) */}
+              {isOwn && (
+                <button onClick={handleSaveProfile}
+                  className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 text-white font-bold py-2.5 rounded-xl shadow-lg shadow-indigo-500/25 transition-all text-sm">
+                  Zapisz zmiany
+                </button>
+              )}
+            </div>
+
+            {/* ── Main content ── */}
+            <div className="flex-1 flex flex-col gap-6 min-w-0">
+
+              {/* Games section */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                    <Gamepad2 size={13} className="text-zinc-600"/>{isOwn?'Moje ulubione gry':'Ulubione gry'}
+                  </h3>
+                  {isOwn && games.length < 6 && (
+                    <button onClick={()=>setShowGameModal(true)}
+                      className="flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 px-2.5 py-1.5 rounded-lg transition-all">
+                      <Plus size={12}/> Dodaj grę
+                    </button>
+                  )}
+                </div>
+                {games.length === 0 ? (
+                  <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-6 text-center">
+                    <Gamepad2 size={28} className="text-zinc-800 mx-auto mb-2"/>
+                    <p className="text-xs text-zinc-700">{isOwn ? 'Dodaj swoje ulubione gry' : 'Brak ulubionych gier'}</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {games.map(g => (
+                      <div key={g.id} className="group relative bg-white/[0.03] border border-white/[0.07] rounded-2xl overflow-hidden hover:border-white/[0.12] transition-all">
+                        {g.game_cover_url ? (
+                          <img src={g.game_cover_url} alt={g.game_name} className="w-full h-28 object-cover"/>
+                        ) : (
+                          <div className="w-full h-28 bg-white/[0.04] flex items-center justify-center">
+                            <Gamepad2 size={32} className="text-zinc-700"/>
+                          </div>
+                        )}
+                        <div className="px-3 py-2.5">
+                          <p className="text-sm font-semibold text-white truncate">{g.game_name}</p>
+                          {g.game_genre && <p className="text-xs text-zinc-600">{g.game_genre}</p>}
+                        </div>
+                        {isOwn && (
+                          <button onClick={()=>handleRemoveGame(g.id, g.game_name)}
+                            className="absolute top-2 right-2 w-6 h-6 bg-black/60 hover:bg-rose-500/80 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
+                            <X size={12} className="text-white"/>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Spotify section */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                    <Music size={13} className="text-zinc-600"/>Muzyka Spotify
+                  </h3>
+                  {isOwn && ownSpotify?.connected && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-zinc-600">Pokaż na profilu</span>
+                      <button onClick={()=>onSpotifyToggle(!ownSpotify.show_on_profile)}
+                        className={`relative w-10 h-5 rounded-full transition-all ${ownSpotify.show_on_profile?'bg-emerald-500':'bg-white/[0.08]'}`}>
+                        <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${ownSpotify.show_on_profile?'left-[22px]':'left-0.5'}`}/>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {isOwn && !ownSpotify?.connected ? (
+                  <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl px-5 py-6 flex flex-col items-center gap-3">
+                    <div className="w-12 h-12 bg-[#1DB954]/10 border border-[#1DB954]/25 rounded-2xl flex items-center justify-center">
+                      <Music size={22} className="text-[#1DB954]"/>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-semibold text-white mb-1">Połącz Spotify</p>
+                      <p className="text-xs text-zinc-600">Pokaż co teraz słuchasz i swoje ulubione utwory</p>
+                    </div>
+                    <button onClick={onSpotifyConnect}
+                      className="flex items-center gap-2 bg-[#1DB954] hover:bg-[#1ed760] text-black font-bold px-5 py-2.5 rounded-xl text-sm transition-all shadow-lg shadow-[#1DB954]/20">
+                      <Link2 size={14}/> Połącz Spotify
+                    </button>
+                  </div>
+                ) : isOwn && ownSpotify?.connected ? (
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between bg-[#1DB954]/8 border border-[#1DB954]/20 rounded-xl px-3.5 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 bg-[#1DB954]/15 rounded-lg flex items-center justify-center">
+                          <Music size={13} className="text-[#1DB954]"/>
+                        </div>
+                        <span className="text-sm text-[#1DB954] font-medium">Połączono jako {ownSpotify.display_name || 'Spotify'}</span>
+                      </div>
+                      <button onClick={onSpotifyDisconnect}
+                        className="text-xs text-zinc-600 hover:text-rose-400 flex items-center gap-1 transition-all">
+                        <Link2Off size={12}/> Odłącz
+                      </button>
+                    </div>
+                    <SpotifyDisplay spotify={ownSpotify}/>
+                  </div>
+                ) : spotifyToShow?.connected && spotifyToShow?.show_on_profile ? (
+                  <SpotifyDisplay spotify={spotifyToShow}/>
+                ) : (
+                  <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-6 text-center">
+                    <Music size={28} className="text-zinc-800 mx-auto mb-2"/>
+                    <p className="text-xs text-zinc-700">Brak połączenia Spotify</p>
+                  </div>
+                )}
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Game search modal */}
+      <AnimatePresence>
+        {showGameModal && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4"
+            onClick={()=>{setShowGameModal(false);setGameSearch('');setGameResults([]);}}>
+            <motion.div initial={{scale:0.93,y:16,opacity:0}} animate={{scale:1,y:0,opacity:1}} exit={{scale:0.93,y:16,opacity:0}}
+              transition={{type:'spring',stiffness:380,damping:32}}
+              onClick={e=>e.stopPropagation()}
+              className={`${gm} w-full max-w-sm overflow-hidden`}>
+              <div className="flex items-center justify-between p-4 border-b border-white/[0.06]">
+                <h3 className="font-bold text-white flex items-center gap-2"><Gamepad2 size={15} className="text-indigo-400"/> Dodaj ulubioną grę</h3>
+                <button onClick={()=>{setShowGameModal(false);setGameSearch('');setGameResults([]);}} className="text-zinc-600 hover:text-white transition-all"><X size={16}/></button>
+              </div>
+              <div className="p-4 flex flex-col gap-3">
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
+                  <input
+                    autoFocus
+                    value={gameSearch}
+                    onChange={e=>handleGameSearchChange(e.target.value)}
+                    placeholder="Szukaj gry (np. Minecraft)..."
+                    className="w-full bg-white/[0.06] border border-white/[0.08] text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 transition-all rounded-xl pl-9 pr-3 py-2.5 text-sm"
+                  />
+                </div>
+                <div className="max-h-64 overflow-y-auto custom-scrollbar flex flex-col gap-1">
+                  {gameSearching && (
+                    <div className="flex items-center justify-center py-6">
+                      <Loader2 size={20} className="text-indigo-400 animate-spin"/>
+                    </div>
+                  )}
+                  {!gameSearching && gameSearch && gameResults.length === 0 && (
+                    <p className="text-xs text-zinc-600 text-center py-4">Nie znaleziono gier</p>
+                  )}
+                  {gameResults.map(g => (
+                    <button key={g.rawg_id} onClick={()=>handleAddGame(g)}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.06] transition-all text-left w-full">
+                      {g.cover_url ? (
+                        <img src={g.cover_url} alt={g.name} className="w-10 h-10 rounded-lg object-cover shrink-0"/>
+                      ) : (
+                        <div className="w-10 h-10 bg-white/[0.04] rounded-lg flex items-center justify-center shrink-0">
+                          <Gamepad2 size={18} className="text-zinc-600"/>
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-white truncate">{g.name}</p>
+                        {g.genre && <p className="text-xs text-zinc-600">{g.genre}</p>}
+                      </div>
+                      <Plus size={14} className="text-indigo-400 shrink-0"/>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── SpotifyDisplay ────────────────────────────────────────────────────────────
+function SpotifyDisplay({ spotify }: { spotify: SpotifyData }) {
+  const { current_playing: cp, top_tracks: tt } = spotify;
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Currently playing */}
+      {cp ? (
+        <div className="bg-[#1DB954]/8 border border-[#1DB954]/20 rounded-2xl p-3.5 flex items-center gap-3">
+          {cp.album_cover && (
+            <img src={cp.album_cover} alt={cp.name} className="w-12 h-12 rounded-xl object-cover shrink-0"/>
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              {cp.is_playing && (
+                <div className="flex items-end gap-[2px] h-3">
+                  {[1,2,3].map(i=>(
+                    <span key={i} className="w-[3px] bg-[#1DB954] rounded-sm animate-bounce"
+                      style={{height:'100%',animationDelay:`${i*80}ms`,animationDuration:'0.6s'}}/>
+                  ))}
+                </div>
+              )}
+              <span className="text-[10px] text-[#1DB954] font-bold uppercase tracking-wider">
+                {cp.is_playing ? 'Teraz gra' : 'Ostatnio grał'}
+              </span>
+            </div>
+            <p className="text-sm font-semibold text-white truncate">{cp.name}</p>
+            <p className="text-xs text-zinc-500 truncate">{cp.artists}</p>
+          </div>
+          {cp.external_url && (
+            <a href={cp.external_url} target="_blank" rel="noopener noreferrer"
+              className="w-7 h-7 bg-[#1DB954]/15 hover:bg-[#1DB954]/30 rounded-lg flex items-center justify-center text-[#1DB954] transition-all shrink-0">
+              <ExternalLink size={12}/>
+            </a>
+          )}
+        </div>
+      ) : null}
+
+      {/* Top tracks */}
+      {tt && tt.length > 0 && (
+        <div>
+          <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Ulubione utwory</p>
+          <div className="flex flex-col gap-1">
+            {tt.map((t, i) => (
+              <div key={i} className="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/[0.04] transition-all group">
+                <span className="text-xs text-zinc-700 w-4 shrink-0">{i+1}</span>
+                {t.album_cover ? (
+                  <img src={t.album_cover} alt={t.name} className="w-8 h-8 rounded-lg object-cover shrink-0"/>
+                ) : (
+                  <div className="w-8 h-8 bg-white/[0.04] rounded-lg flex items-center justify-center shrink-0">
+                    <Music size={14} className="text-zinc-600"/>
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white truncate">{t.name}</p>
+                  <p className="text-xs text-zinc-600 truncate">{t.artists}</p>
+                </div>
+                {t.external_url && (
+                  <a href={t.external_url} target="_blank" rel="noopener noreferrer"
+                    className="w-6 h-6 bg-transparent hover:bg-[#1DB954]/15 rounded-lg flex items-center justify-center text-zinc-700 hover:text-[#1DB954] transition-all opacity-0 group-hover:opacity-100">
+                    <ExternalLink size={11}/>
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -1628,6 +2141,21 @@ export default function App() {
   const [editProf, setEditProf]               = useState<any>(null);
   const [profBannerFile, setProfBannerFile]   = useState<File|null>(null);
   const [profBannerPrev, setProfBannerPrev]   = useState<string|null>(null);
+
+  // ── Full profile page state ──────────────────────────────────────────
+  const [profileViewId, setProfileViewId]     = useState<string|null>(null);
+  const [profilePageData, setProfilePageData] = useState<UserProfile|null>(null);
+  const [profileGames, setProfileGames]       = useState<FavoriteGame[]>([]);
+  const [profileSpotify, setProfileSpotify]   = useState<SpotifyData|null>(null);
+  const [profileLoading, setProfileLoading]   = useState(false);
+  // Own Spotify connection status (loaded when viewing own profile)
+  const [ownSpotify, setOwnSpotify]           = useState<SpotifyData|null>(null);
+  // Game search modal
+  const [showGameModal, setShowGameModal]     = useState(false);
+  const [gameSearch, setGameSearch]           = useState('');
+  const [gameResults, setGameResults]         = useState<{rawg_id:number;name:string;cover_url:string|null;genre:string|null}[]>([]);
+  const [gameSearching, setGameSearching]     = useState(false);
+  const gameSearchRef                         = useRef<ReturnType<typeof setTimeout>|null>(null);
 
   const [createSrvOpen, setCreateSrvOpen]     = useState(false);
   const [createSrvMode, setCreateSrvMode]     = useState<'create'|'join'>('create');
@@ -1892,6 +2420,21 @@ export default function App() {
   useEffect(() => {
     if (!activeCall) { setVoiceChatOpen(false); setVoiceChatMsgs([]); }
   }, [activeCall]);
+
+  // Handle Spotify OAuth callback redirect (?spotify=connected|error)
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const s = p.get('spotify');
+    if (s === 'connected') {
+      addToast('Spotify połączono pomyślnie!', 'success');
+      window.history.replaceState({}, '', window.location.pathname);
+      spotifyApi.status().then(setOwnSpotify).catch(()=>{});
+    } else if (s === 'error') {
+      addToast('Błąd połączenia Spotify', 'error');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Init ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -3245,15 +3788,27 @@ export default function App() {
   };
 
   // ── Profile ──────────────────────────────────────────────────────
-  const openProfile = (u: any) => {
-    setSelUser(u);
-    setProfileOpen(true);
-    // Enrich with full profile (badges, bio, etc.) from API
-    if (u?.id && u.id !== currentUser?.id) {
-      users.get(u.id).then(full => setSelUser((prev: any) => prev?.id === full.id ? { ...prev, ...full } : prev)).catch(()=>{});
+  const openProfilePage = async (userId: string) => {
+    setProfileViewId(userId);
+    setProfilePageData(null); setProfileGames([]); setProfileSpotify(null);
+    setProfileLoading(true);
+    const [prof, games, spotify] = await Promise.allSettled([
+      users.get(userId),
+      gamesApi.getUser(userId),
+      spotifyApi.userPublic(userId),
+    ]);
+    if (prof.status === 'fulfilled')    setProfilePageData(prof.value);
+    if (games.status === 'fulfilled')   setProfileGames(games.value);
+    if (spotify.status === 'fulfilled') setProfileSpotify(spotify.value);
+    setProfileLoading(false);
+    // If own profile — also load Spotify connection status
+    if (userId === currentUser?.id) {
+      spotifyApi.status().then(setOwnSpotify).catch(()=>{});
     }
   };
-  const openOwnProfile = () => { setSelUser(currentUser); setProfBannerFile(null); setProfBannerPrev(null); setProfileOpen(true); };
+  const closeProfilePage = () => { setProfileViewId(null); setProfilePageData(null); };
+  const openProfile = (u: any) => { if (u?.id) openProfilePage(u.id); };
+  const openOwnProfile = () => { if (currentUser?.id) openProfilePage(currentUser.id); };
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (!f) return;
     try {
@@ -3274,6 +3829,7 @@ export default function App() {
       if (profBannerFile) { const r = await users.uploadBanner(profBannerFile); bannerUrl = r.banner_url; setProfBannerFile(null); setProfBannerPrev(null); }
       const upd = await users.updateMe({ username: editProf.username, bio: editProf.bio, custom_status: editProf.custom_status, banner_color: editProf.banner_color, banner_url: bannerUrl });
       setCurrentUser(upd); setEditProf({...upd}); setSelUser(upd);
+      setProfilePageData(upd);
       if (opts?.closeProfileModal !== false) setProfileOpen(false);
       addToast('Profil zaktualizowany', 'success');
     } catch (err) { addToast('Błąd zapisu profilu', 'error'); }
@@ -4815,6 +5371,43 @@ export default function App() {
                 </div>
               </div>
             </div>
+          ) : profileViewId ? (
+            <ProfilePage
+              viewUserId={profileViewId}
+              profileData={profilePageData}
+              games={profileGames}
+              spotify={profileSpotify}
+              ownSpotify={ownSpotify}
+              loading={profileLoading}
+              currentUser={currentUser}
+              editProf={editProf}
+              setEditProf={setEditProf}
+              profBannerFile={profBannerFile}
+              profBannerPrev={profBannerPrev}
+              onBack={closeProfilePage}
+              onOpenDm={(id)=>{ openDm(id); closeProfilePage(); }}
+              onCall={(id,un,av,t)=>{ startDmCall(id,un,t,av); closeProfilePage(); }}
+              handleAvatarUpload={handleAvatarUpload}
+              handleBannerSelect={handleBannerSelect}
+              handleSaveProfile={handleSaveProfile}
+              onGameAdded={(g)=>setProfileGames(p=>[...p,g])}
+              onGameRemoved={(id)=>setProfileGames(p=>p.filter(g=>g.id!==id))}
+              showGameModal={showGameModal}
+              setShowGameModal={setShowGameModal}
+              gameSearch={gameSearch}
+              setGameSearch={setGameSearch}
+              gameResults={gameResults}
+              setGameResults={setGameResults}
+              gameSearching={gameSearching}
+              setGameSearching={setGameSearching}
+              gameSearchRef={gameSearchRef}
+              onSpotifyConnect={()=>{ window.location.href = spotifyApi.authUrl(); }}
+              onSpotifyDisconnect={async()=>{ await spotifyApi.disconnect(); setOwnSpotify(null); addToast('Spotify odłączono','info'); }}
+              onSpotifyToggle={async(v)=>{ await spotifyApi.setSettings({show_on_profile:v}); setOwnSpotify(p=>p?{...p,show_on_profile:v}:p); }}
+              friends={friends}
+              blockedUsers={blockedUsers}
+              addToast={addToast}
+            />
           ) : srvSettOpen && serverFull ? (
             <ServerSettingsPage
               serverFull={serverFull}

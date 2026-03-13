@@ -136,6 +136,19 @@ export interface FriendRequest {
   direction: 'incoming' | 'outgoing';
   created_at: string;
 }
+export interface FavoriteGame {
+  id: string; game_name: string; game_cover_url?: string | null;
+  game_genre?: string | null; rawg_id?: number | null; display_order: number;
+}
+export interface SpotifyTrack {
+  name: string; artists: string; album_cover?: string | null;
+  preview_url?: string | null; external_url?: string | null; is_playing?: boolean;
+}
+export interface SpotifyData {
+  connected: boolean; show_on_profile: boolean; display_name?: string | null;
+  current_playing?: SpotifyTrack | null; top_tracks?: SpotifyTrack[];
+}
+
 export interface ServerMember {
   id: string; username: string; avatar_url?: string | null;
   status: string; custom_status?: string | null;
@@ -332,6 +345,24 @@ export interface AdminOverview {
   memory: { rss: number; heapUsed: number; heapTotal: number };
   node_version: string; uptime_seconds: number;
 }
+// ── Games (RAWG) ───────────────────────────────────────────────────────────
+export const gamesApi = {
+  search:  (q: string)  => req<{rawg_id:number;name:string;cover_url:string|null;genre:string|null}[]>('GET', `/games/search?q=${encodeURIComponent(q)}`),
+  getUser: (userId: string) => req<FavoriteGame[]>('GET', `/games/user/${userId}`),
+  add:     (d: { game_name: string; game_cover_url?: string|null; game_genre?: string|null; rawg_id?: number|null }) =>
+             req<FavoriteGame>('POST', '/games', d),
+  remove:  (id: string) => req<void>('DELETE', `/games/${id}`),
+};
+
+// ── Spotify ────────────────────────────────────────────────────────────────
+export const spotifyApi = {
+  authUrl:       () => `${BASE}/spotify/auth`,
+  status:        () => req<SpotifyData>('GET', '/spotify/status'),
+  userPublic:    (userId: string) => req<SpotifyData>('GET', `/spotify/user/${userId}`),
+  setSettings:   (d: { show_on_profile: boolean }) => req<{ok:boolean}>('PUT', '/spotify/settings', d),
+  disconnect:    () => req<{ok:boolean}>('DELETE', '/spotify/disconnect'),
+};
+
 export const adminApi = {
   stats: () => req<AdminStats>('GET', '/admin/stats'),
   overview: () => req<AdminOverview>('GET', '/admin/overview'),

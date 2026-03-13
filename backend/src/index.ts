@@ -24,6 +24,8 @@ import friendsRoutes from './routes/friends';
 import uploadRoutes from './routes/upload';
 import ogRoutes from './routes/og';
 import adminRoutes from './routes/admin';
+import gamesRoutes from './routes/games';
+import spotifyRoutes from './routes/spotify';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -103,7 +105,9 @@ app.use('/api/dms', dmsRoutes);
 app.use('/api/friends', friendsRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/og', ogRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/admin',   adminRoutes);
+app.use('/api/games',   gamesRoutes);
+app.use('/api/spotify', spotifyRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {
