@@ -5,10 +5,12 @@ import { AuthRequest } from '../types';
 
 const router = Router();
 
-const CLIENT_ID     = process.env.SPOTIFY_CLIENT_ID     || '';
-const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || '';
-const REDIRECT_URI  = process.env.SPOTIFY_REDIRECT_URI  || 'http://localhost:4000/api/spotify/callback';
-const FRONTEND_URL  = process.env.CORS_ORIGIN           || 'http://localhost:3000';
+const CLIENT_ID     = (process.env.SPOTIFY_CLIENT_ID     || '').trim();
+const CLIENT_SECRET = (process.env.SPOTIFY_CLIENT_SECRET || '').trim();
+const REDIRECT_URI  = (process.env.SPOTIFY_REDIRECT_URI  || 'http://localhost:4000/api/spotify/callback').trim();
+const FRONTEND_URL  = (process.env.CORS_ORIGIN           || 'http://localhost:3000').trim();
+
+console.log('[Spotify] REDIRECT_URI =', JSON.stringify(REDIRECT_URI));
 
 const SCOPES = [
   'user-read-currently-playing',
