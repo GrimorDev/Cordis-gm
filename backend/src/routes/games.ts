@@ -5,24 +5,22 @@ import { AuthRequest } from '../types';
 
 const router = Router();
 
-const RAWG_API_KEY = process.env.RAWG_API_KEY || '';
 const MAX_GAMES = 6;
 
-// GET /api/games/search?q=... — proxy RAWG (hides API key)
+// GET /api/games/search?q=... — proxy Steam Store search (no API key required)
 router.get('/search', authMiddleware, async (req: AuthRequest, res: Response) => {
   const q = (req.query.q as string || '').trim();
   if (!q) return res.json([]);
-  if (!RAWG_API_KEY) return res.status(503).json({ error: 'RAWG API not configured' });
   try {
-    const url = `https://api.rawg.io/api/games?search=${encodeURIComponent(q)}&key=${RAWG_API_KEY}&page_size=8&ordering=-rating`;
-    const r = await fetch(url);
-    if (!r.ok) return res.status(502).json({ error: 'RAWG API error' });
+    const url = `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(q)}&l=english&cc=US`;
+    const r = await fetch(url, { headers: { 'User-Agent': 'Cordis/1.0' } });
+    if (!r.ok) return res.status(502).json({ error: 'Steam API error' });
     const data: any = await r.json();
-    const results = (data.results || []).map((g: any) => ({
+    const results = (data.items || []).slice(0, 8).map((g: any) => ({
       rawg_id:   g.id,
       name:      g.name,
-      cover_url: g.background_image || null,
-      genre:     g.genres?.[0]?.name || null,
+      cover_url: `https://cdn.akamai.steamstatic.com/steam/apps/${g.id}/header.jpg`,
+      genre:     null, // Steam search doesn't return genre in this endpoint
     }));
     return res.json(results);
   } catch {
