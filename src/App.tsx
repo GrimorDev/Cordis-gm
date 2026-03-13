@@ -2012,36 +2012,67 @@ function ProfilePage({
 // ─── SpotifyDisplay ────────────────────────────────────────────────────────────
 function SpotifyDisplay({ spotify }: { spotify: SpotifyData }) {
   const { current_playing: cp, top_tracks: tt } = spotify;
+
+  const [elapsed, setElapsed] = useState(cp?.progress_ms ?? 0);
+  const elapsedRef = useRef(elapsed);
+  useEffect(() => {
+    elapsedRef.current = cp?.progress_ms ?? 0;
+    setElapsed(cp?.progress_ms ?? 0);
+    if (!cp?.is_playing || !cp.duration_ms) return;
+    const t = setInterval(() => {
+      elapsedRef.current = Math.min(elapsedRef.current + 1000, cp.duration_ms!);
+      setElapsed(elapsedRef.current);
+    }, 1000);
+    return () => clearInterval(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cp?.name, cp?.artists, cp?.is_playing]);
+
+  const fmtMs = (ms: number) => { const s=Math.floor(ms/1000); return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; };
+
   return (
     <div className="flex flex-col gap-3">
       {/* Currently playing */}
       {cp ? (
-        <div className="bg-[#1DB954]/8 border border-[#1DB954]/20 rounded-2xl p-3.5 flex items-center gap-3">
-          {cp.album_cover && (
-            <img src={cp.album_cover} alt={cp.name} className="w-12 h-12 rounded-xl object-cover shrink-0"/>
-          )}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 mb-0.5">
-              {cp.is_playing && (
-                <div className="flex items-end gap-[2px] h-3">
-                  {[1,2,3].map(i=>(
-                    <span key={i} className="w-[3px] bg-[#1DB954] rounded-sm animate-bounce"
-                      style={{height:'100%',animationDelay:`${i*80}ms`,animationDuration:'0.6s'}}/>
-                  ))}
-                </div>
-              )}
-              <span className="text-[10px] text-[#1DB954] font-bold uppercase tracking-wider">
-                {cp.is_playing ? 'Teraz gra' : 'Ostatnio grał'}
-              </span>
+        <div className="bg-[#1DB954]/8 border border-[#1DB954]/20 rounded-2xl p-3.5">
+          <div className="flex items-center gap-3 mb-2.5">
+            {cp.album_cover && (
+              <img src={cp.album_cover} alt={cp.name} className="w-12 h-12 rounded-xl object-cover shrink-0"/>
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                {cp.is_playing && (
+                  <div className="flex items-end gap-[2px] h-3">
+                    {[1,2,3].map(i=>(
+                      <span key={i} className="w-[3px] bg-[#1DB954] rounded-sm animate-bounce"
+                        style={{height:'100%',animationDelay:`${i*80}ms`,animationDuration:'0.6s'}}/>
+                    ))}
+                  </div>
+                )}
+                <span className="text-[10px] text-[#1DB954] font-bold uppercase tracking-wider">
+                  {cp.is_playing ? 'Teraz gra' : 'Ostatnio grał'}
+                </span>
+              </div>
+              <p className="text-sm font-semibold text-white truncate">{cp.name}</p>
+              <p className="text-xs text-zinc-500 truncate">{cp.artists}</p>
             </div>
-            <p className="text-sm font-semibold text-white truncate">{cp.name}</p>
-            <p className="text-xs text-zinc-500 truncate">{cp.artists}</p>
+            {cp.external_url && (
+              <a href={cp.external_url} target="_blank" rel="noopener noreferrer"
+                className="w-7 h-7 bg-[#1DB954]/15 hover:bg-[#1DB954]/30 rounded-lg flex items-center justify-center text-[#1DB954] transition-all shrink-0">
+                <ExternalLink size={12}/>
+              </a>
+            )}
           </div>
-          {cp.external_url && (
-            <a href={cp.external_url} target="_blank" rel="noopener noreferrer"
-              className="w-7 h-7 bg-[#1DB954]/15 hover:bg-[#1DB954]/30 rounded-lg flex items-center justify-center text-[#1DB954] transition-all shrink-0">
-              <ExternalLink size={12}/>
-            </a>
+          {cp.is_playing && cp.duration_ms && cp.duration_ms > 0 && (
+            <div>
+              <div className="h-1 bg-white/[0.08] rounded-full overflow-hidden mb-1.5">
+                <div className="h-full bg-[#1DB954] rounded-full"
+                  style={{ width: `${Math.min((elapsed/cp.duration_ms)*100,100)}%`, transition:'width 1s linear' }}/>
+              </div>
+              <div className="flex justify-between text-[10px] text-zinc-600">
+                <span>{fmtMs(elapsed)}</span>
+                <span>{fmtMs(cp.duration_ms)}</span>
+              </div>
+            </div>
           )}
         </div>
       ) : null}
@@ -2081,7 +2112,7 @@ function SpotifyDisplay({ spotify }: { spotify: SpotifyData }) {
 }
 
 // ─── HoverCard ────────────────────────────────────────────────────────────────
-function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfile, cache, activity }: {
+function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfile, cache, activity, onMouseEnter, onMouseLeave }: {
   userId: string; x: number; y: number;
   currentUserId: string | undefined;
   onOpenDm: (id: string) => void;
@@ -2089,6 +2120,8 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
   onOpenProfile: (id: string) => void;
   cache: React.MutableRefObject<Map<string, {profile:UserProfile|null;games:FavoriteGame[];spotify:SpotifyData|null;loadedAt:number}>>;
   activity: {name:string;artists:string;album_cover:string|null;external_url:string|null}|null|undefined;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
 }) {
   const [data, setData] = React.useState<{profile:UserProfile|null;games:FavoriteGame[];spotify:SpotifyData|null}|null>(null);
   const isSelf = userId === currentUserId;
@@ -2113,19 +2146,45 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
   }, [userId]);
 
   const sc = (st: string) => st==='online'?'bg-emerald-400':st==='idle'?'bg-amber-400':st==='dnd'?'bg-rose-500':'bg-zinc-600';
+  const scText = (st: string) => st==='online'?'Dostępny':st==='idle'?'Zaraz wracam':st==='dnd'?'Nie przeszkadzać':'Offline';
   const u = data?.profile;
-  const spotify = data?.spotify;
-  const nowPlaying = activity !== undefined ? (activity ? { name: activity.name, artists: activity.artists, album_cover: activity.album_cover, external_url: activity.external_url, is_playing: true } : null) : spotify?.current_playing;
+  // Respect show_on_profile from fetched data; activity from socket is only shown if show_on_profile is true
+  const showSpotify = data?.spotify?.show_on_profile !== false;
+  const nowPlaying: (SpotifyTrack & {is_playing?:boolean}) | null | undefined =
+    showSpotify
+      ? (activity !== undefined
+          ? (activity ? { name: activity.name, artists: activity.artists, album_cover: activity.album_cover, external_url: activity.external_url, is_playing: true } : null)
+          : data?.spotify?.current_playing)
+      : null;
+
+  // Real-time progress
+  const [elapsed, setElapsed] = React.useState(nowPlaying?.progress_ms ?? 0);
+  const elapsedRef = React.useRef(elapsed);
+  React.useEffect(() => {
+    if (!nowPlaying?.is_playing || !nowPlaying.progress_ms) { setElapsed(nowPlaying?.progress_ms ?? 0); return; }
+    elapsedRef.current = nowPlaying.progress_ms;
+    setElapsed(nowPlaying.progress_ms);
+    const t = setInterval(() => {
+      elapsedRef.current += 1000;
+      setElapsed(Math.min(elapsedRef.current, nowPlaying.duration_ms ?? elapsedRef.current));
+    }, 1000);
+    return () => clearInterval(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nowPlaying?.name, nowPlaying?.artists]);
+
+  const fmtMs = (ms: number) => { const s=Math.floor(ms/1000); return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; };
 
   // Position card: prefer right side, flip to left if near right edge
   const cardW = 280;
   const left = x + 16 + cardW > window.innerWidth ? x - cardW - 8 : x + 16;
-  const top = Math.min(y - 8, window.innerHeight - 380);
+  const top = Math.min(y - 8, window.innerHeight - 420);
 
   return (
-    <div className="fixed z-[9999] pointer-events-none"
-      style={{ left, top, width: cardW }}>
-      <div className="bg-[#18182a] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden pointer-events-auto">
+    <div className="fixed z-[9999]"
+      style={{ left, top, width: cardW }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}>
+      <div className="bg-[#18182a] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden">
         {/* Banner */}
         <div className="h-16 relative" style={u?.banner_url
           ? { backgroundImage: `url(${u.banner_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
@@ -2142,10 +2201,10 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
 
         {/* Content */}
         <div className="pt-8 px-4 pb-4">
-          <div className="flex items-start justify-between mb-3">
+          <div className="flex items-start justify-between mb-1">
             <div>
               <p className="text-base font-bold text-white leading-tight">{u?.username||'...'}</p>
-              {u?.custom_status && <p className="text-xs text-zinc-500 mt-0.5 truncate max-w-[160px]">{u.custom_status}</p>}
+              <p className={`text-[11px] mt-0.5 ${sc(u?.status||'offline').replace('bg-','text-')}`}>{scText(u?.status||'offline')}</p>
             </div>
             {!isSelf && u && (
               <div className="flex gap-1.5">
@@ -2161,26 +2220,44 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
             )}
           </div>
 
+          {/* Custom status */}
+          {u?.custom_status && <p className="text-xs text-zinc-500 mb-2 truncate max-w-[200px]">{u.custom_status}</p>}
+
           {/* Bio */}
-          {u?.bio && <p className="text-xs text-zinc-500 mb-3 leading-relaxed line-clamp-2">{u.bio}</p>}
+          {u?.bio && <p className="text-xs text-zinc-500 mb-3 leading-relaxed line-clamp-2 border-t border-white/[0.05] pt-2 mt-2">{u.bio}</p>}
 
           {/* Now playing */}
           {nowPlaying && (
-            <div className="bg-[#1DB954]/8 border border-[#1DB954]/20 rounded-xl px-3 py-2.5 mb-3 flex items-center gap-2.5">
-              {nowPlaying.album_cover
-                ? <img src={nowPlaying.album_cover} className="w-9 h-9 rounded-lg object-cover shrink-0" alt=""/>
-                : <div className="w-9 h-9 bg-[#1DB954]/15 rounded-lg flex items-center justify-center shrink-0"><Music size={14} className="text-[#1DB954]"/></div>}
-              <div className="min-w-0 flex-1">
-                <p className="text-[10px] text-[#1DB954] font-semibold uppercase tracking-widest mb-0.5">Słucha Spotify</p>
-                <p className="text-xs text-white font-medium truncate">{nowPlaying.name}</p>
-                <p className="text-[11px] text-zinc-500 truncate">{nowPlaying.artists}</p>
+            <div className="bg-[#1DB954]/8 border border-[#1DB954]/20 rounded-xl px-3 py-2.5 mb-3">
+              <div className="flex items-center gap-2.5 mb-2">
+                {nowPlaying.album_cover
+                  ? <img src={nowPlaying.album_cover} className="w-9 h-9 rounded-lg object-cover shrink-0" alt=""/>
+                  : <div className="w-9 h-9 bg-[#1DB954]/15 rounded-lg flex items-center justify-center shrink-0"><Music size={14} className="text-[#1DB954]"/></div>}
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] text-[#1DB954] font-semibold uppercase tracking-widest mb-0.5">Słucha Spotify</p>
+                  <p className="text-xs text-white font-medium truncate">{nowPlaying.name}</p>
+                  <p className="text-[11px] text-zinc-500 truncate">{nowPlaying.artists}</p>
+                </div>
               </div>
+              {/* Progress bar */}
+              {nowPlaying.duration_ms && nowPlaying.duration_ms > 0 && (
+                <div>
+                  <div className="h-1 bg-white/[0.08] rounded-full overflow-hidden mb-1">
+                    <div className="h-full bg-[#1DB954] rounded-full"
+                      style={{ width: `${Math.min((elapsed / nowPlaying.duration_ms) * 100, 100)}%`, transition: 'width 1s linear' }}/>
+                  </div>
+                  <div className="flex justify-between text-[10px] text-zinc-600">
+                    <span>{fmtMs(elapsed)}</span>
+                    <span>{fmtMs(nowPlaying.duration_ms)}</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {/* Favorite games */}
           {(data?.games?.length ?? 0) > 0 && (
-            <div>
+            <div className="mb-3">
               <p className="text-[10px] text-zinc-600 uppercase font-bold tracking-widest mb-2">Ulubione gry</p>
               <div className="flex gap-1.5 flex-wrap">
                 {data!.games.slice(0, 4).map(g => (
@@ -2197,7 +2274,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
 
           {/* View profile link */}
           <button onClick={()=>onOpenProfile(userId)}
-            className="mt-3 w-full text-[11px] text-zinc-600 hover:text-zinc-300 transition-colors text-center">
+            className="w-full text-[11px] text-zinc-600 hover:text-zinc-300 transition-colors text-center border-t border-white/[0.05] pt-2.5">
             Zobacz pełny profil →
           </button>
         </div>
@@ -2282,6 +2359,7 @@ export default function App() {
   // Hover card
   const [hoverCard, setHoverCard]             = useState<{userId:string;x:number;y:number}|null>(null);
   const hoverCardTimer                        = useRef<ReturnType<typeof setTimeout>|null>(null);
+  const hoverCardHideTimer                    = useRef<ReturnType<typeof setTimeout>|null>(null);
   const hoverCardCache                        = useRef<Map<string,{profile:UserProfile|null;games:FavoriteGame[];spotify:SpotifyData|null;loadedAt:number}>>(new Map());
   // Game search modal
   const [showGameModal, setShowGameModal]     = useState(false);
@@ -2576,25 +2654,28 @@ export default function App() {
     const poll = async () => {
       try {
         const r = await spotifyApi.nowPlaying();
-        const trackKey = r.track ? `${r.track.name}|${r.track.artists}` : null;
+        // Respect show_on_profile — emit null if disabled
+        const showOnProfile = ownSpotify?.show_on_profile !== false;
+        const effectiveTrack = (r.track && showOnProfile) ? r.track : null;
+        const trackKey = effectiveTrack ? `${effectiveTrack.name}|${effectiveTrack.artists}` : null;
         if (trackKey === lastEmittedTrack.current) return;
         lastEmittedTrack.current = trackKey;
         const sock = getSocket();
-        if (sock) (sock as any).emit('spotify_update', { track: r.track ? {
-          name: r.track.name, artists: r.track.artists,
-          album_cover: r.track.album_cover, external_url: r.track.external_url,
+        if (sock) (sock as any).emit('spotify_update', { track: effectiveTrack ? {
+          name: effectiveTrack.name, artists: effectiveTrack.artists,
+          album_cover: effectiveTrack.album_cover, external_url: effectiveTrack.external_url,
         } : null });
-        setUserActivities(p => { const n = new Map(p); n.set(currentUser.id, r.track ? {
-          name: r.track.name, artists: r.track.artists,
-          album_cover: r.track.album_cover, external_url: r.track.external_url,
+        setUserActivities(p => { const n = new Map(p); n.set(currentUser.id, effectiveTrack ? {
+          name: effectiveTrack.name, artists: effectiveTrack.artists,
+          album_cover: effectiveTrack.album_cover ?? null, external_url: effectiveTrack.external_url ?? null,
         } : null); return n; });
       } catch {}
     };
     poll();
-    const t = setInterval(poll, 30_000);
+    const t = setInterval(poll, 10_000);
     return () => clearInterval(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?.id]);
+  }, [currentUser?.id, ownSpotify?.show_on_profile]);
 
   // ── Profile page: real-time Spotify refresh every 30s ────────────
   useEffect(() => {
@@ -3988,14 +4069,18 @@ export default function App() {
   // ── Hover card ────────────────────────────────────────────────────
   const showHoverCard = (userId: string, e: React.MouseEvent) => {
     if (hoverCardTimer.current) clearTimeout(hoverCardTimer.current);
+    if (hoverCardHideTimer.current) clearTimeout(hoverCardHideTimer.current);
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     hoverCardTimer.current = setTimeout(() => {
       setHoverCard({ userId, x: rect.right, y: rect.top });
-    }, 400);
+    }, 450);
   };
   const hideHoverCard = () => {
     if (hoverCardTimer.current) clearTimeout(hoverCardTimer.current);
-    setHoverCard(null);
+    hoverCardHideTimer.current = setTimeout(() => setHoverCard(null), 180);
+  };
+  const cancelHideHoverCard = () => {
+    if (hoverCardHideTimer.current) clearTimeout(hoverCardHideTimer.current);
   };
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (!f) return;
@@ -8457,9 +8542,11 @@ export default function App() {
           currentUserId={currentUser?.id}
           onOpenDm={openDm}
           onCall={(id,un,av,t)=>{ startDmCall(id,un,t,av); hideHoverCard(); }}
-          onOpenProfile={(id)=>{ openProfilePage(id); hideHoverCard(); }}
+          onOpenProfile={(id)=>{ openProfilePage(id); setHoverCard(null); }}
           cache={hoverCardCache}
           activity={userActivities.has(hoverCard.userId) ? userActivities.get(hoverCard.userId)??null : undefined}
+          onMouseEnter={cancelHideHoverCard}
+          onMouseLeave={hideHoverCard}
         />
       )}
 

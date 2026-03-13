@@ -143,6 +143,7 @@ export interface FavoriteGame {
 export interface SpotifyTrack {
   name: string; artists: string; album_cover?: string | null;
   preview_url?: string | null; external_url?: string | null; is_playing?: boolean;
+  progress_ms?: number | null; duration_ms?: number | null;
 }
 export interface SpotifyData {
   connected: boolean; show_on_profile: boolean; display_name?: string | null;

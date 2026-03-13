@@ -61,7 +61,7 @@ async function getValidAccessToken(userId: string): Promise<string | null> {
 }
 
 // ── Helper: format a Spotify track ───────────────────────────────────
-function fmtTrack(t: any, isPlaying?: boolean) {
+function fmtTrack(t: any, isPlaying?: boolean, progressMs?: number) {
   return {
     name:         t.name,
     artists:      t.artists?.map((a: any) => a.name).join(', ') || '',
@@ -69,6 +69,8 @@ function fmtTrack(t: any, isPlaying?: boolean) {
     preview_url:  t.preview_url || null,
     external_url: t.external_urls?.spotify || null,
     is_playing:   isPlaying,
+    progress_ms:  progressMs ?? null,
+    duration_ms:  t.duration_ms ?? null,
   };
 }
 
@@ -167,7 +169,7 @@ router.get('/now-playing', authMiddleware, async (req: AuthRequest, res: Respons
     if (r.status === 204 || !r.ok) return res.json({ track: null });
     const data: any = await r.json();
     if (!data?.item) return res.json({ track: null });
-    return res.json({ track: fmtTrack(data.item, data.is_playing) });
+    return res.json({ track: fmtTrack(data.item, data.is_playing, data.progress_ms) });
   } catch {
     return res.json({ track: null });
   }
@@ -215,7 +217,7 @@ router.get('/user/:userId', async (req: Request, res: Response) => {
     let current_playing = null;
     if (nowRes.status === 'fulfilled' && nowRes.value.status !== 204 && nowRes.value.ok) {
       const d: any = await nowRes.value.json();
-      if (d?.item) current_playing = fmtTrack(d.item, d.is_playing);
+      if (d?.item) current_playing = fmtTrack(d.item, d.is_playing, d.progress_ms);
     }
 
     let top_tracks: any[] = [];
