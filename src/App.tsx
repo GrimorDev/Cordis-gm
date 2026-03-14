@@ -2192,9 +2192,9 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
           : { background: 'linear-gradient(135deg, #2e2e48 0%, #1a1a2e 100%)' }}>
           {/* Avatar */}
           <div className="absolute -bottom-6 left-4">
-            <div className="relative">
+            <div className="relative av-frozen" style={{'--av-url':`url("${u?.avatar_url||`https://api.dicebear.com/9.x/identicon/svg?seed=${u?.username||userId}`}")`} as React.CSSProperties}>
               <img src={u?.avatar_url||`https://api.dicebear.com/9.x/identicon/svg?seed=${u?.username||userId}`}
-                className="w-14 h-14 rounded-2xl object-cover border-4 border-[#18182a]" alt=""/>
+                className={`w-14 h-14 rounded-2xl object-cover border-4 border-[#18182a] av-eff-${u?.avatar_effect||'none'} av-sc`} alt=""/>
               <span className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-[#18182a] ${sc(u?.status||'offline')}`}/>
             </div>
           </div>
@@ -4610,7 +4610,7 @@ export default function App() {
                 const isActive = activeServer===srv.id&&activeView==='servers';
                 return (
                   <button key={srv.id}
-                    onClick={() => { if(activeServer===srv.id&&activeView==='servers') return; setActiveServer(srv.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); }}
+                    onClick={() => { if(activeServer===srv.id&&activeView==='servers') return; setActiveServer(srv.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); setProfileViewId(null); }}
                     onContextMenu={e => { e.preventDefault(); setSrvContextMenu({ x: e.clientX, y: e.clientY, srv }); }}
                     className={`flex items-center gap-2 h-full px-3 text-sm font-medium transition-all duration-200 border-r border-white/[0.05] whitespace-nowrap relative group shrink-0 ${isActive?'text-white bg-black/20':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'}`}>
                     {isActive&&<motion.span layoutId="nav-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"/>}
@@ -4760,7 +4760,7 @@ export default function App() {
             </AnimatePresence>
           </div>
           {(currentUser?.badges?.some(b=>b.name==='developer')||currentUser?.is_admin)&&(
-            <button onClick={()=>{setPrevView(activeView==='admin'?prevView:(activeView as 'servers'|'dms'|'friends'));setActiveView('admin');setAdminTab('dashboard');setShowCallPanel(false);}} title="Panel admina"
+            <button onClick={()=>{setPrevView(activeView==='admin'?prevView:(activeView as 'servers'|'dms'|'friends'));setActiveView('admin');setAdminTab('dashboard');setShowCallPanel(false);setProfileViewId(null);}} title="Panel admina"
               className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-violet-400 hover:bg-violet-500/10 transition-all">
               <LayoutDashboard size={15}/>
             </button>
@@ -4791,7 +4791,7 @@ export default function App() {
             <div className="w-px h-7 bg-white/[0.07] self-center mx-0.5"/>
             {serverList.map(s => (
               <button key={s.id}
-                onClick={() => { if(activeServer===s.id&&activeView==='servers') return; setActiveServer(s.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); setIsMobileOpen(false); }}
+                onClick={() => { if(activeServer===s.id&&activeView==='servers') return; setActiveServer(s.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); setIsMobileOpen(false); setProfileViewId(null); }}
                 onContextMenu={e=>{ e.preventDefault(); setSrvContextMenu({x:e.clientX,y:e.clientY,srv:s}); }}
                 className={`w-10 h-10 shrink-0 rounded-xl overflow-hidden border ${activeServer===s.id&&activeView==='servers'?'border-indigo-500/40':'border-white/[0.05]'}`}>
                 <span className="text-sm font-bold text-white flex w-full h-full items-center justify-center bg-zinc-800">{s.name.charAt(0)}</span>
@@ -4886,7 +4886,7 @@ export default function App() {
                       const ChIcon = ch.type==='forum'?MessageSquare:ch.type==='announcement'?Megaphone:Hash;
                       return (
                         <div key={ch.id} className="px-2">
-                          <button onClick={()=>{setActiveChannel(ch.id);setIsMobileOpen(false);setSrvSettOpen(false);if(activeViewRef.current==='admin')setActiveView('servers');}}
+                          <button onClick={()=>{setActiveChannel(ch.id);setIsMobileOpen(false);setSrvSettOpen(false);setProfileViewId(null);if(activeViewRef.current==='admin')setActiveView('servers');}}
                             className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${isAct?'bg-indigo-500/15 text-white border border-indigo-500/25':ping>0?'text-white hover:bg-white/[0.06] border border-amber-500/20 bg-amber-500/5':unread>0?'text-white hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
                             <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
                               <ChIcon size={16} className={`shrink-0 ${isAct?'text-indigo-400':ping>0?'text-amber-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
@@ -5538,6 +5538,43 @@ export default function App() {
                 )}
               </motion.div>
             </div>
+          ) : profileViewId ? (
+            <ProfilePage
+              viewUserId={profileViewId}
+              profileData={profilePageData}
+              games={profileGames}
+              spotify={profileSpotify}
+              ownSpotify={ownSpotify}
+              loading={profileLoading}
+              currentUser={currentUser}
+              editProf={editProf}
+              setEditProf={setEditProf}
+              profBannerFile={profBannerFile}
+              profBannerPrev={profBannerPrev}
+              onBack={closeProfilePage}
+              onOpenDm={(id)=>{ openDm(id); closeProfilePage(); }}
+              onCall={(id,un,av,t)=>{ startDmCall(id,un,t,av); closeProfilePage(); }}
+              handleAvatarUpload={handleAvatarUpload}
+              handleBannerSelect={handleBannerSelect}
+              handleSaveProfile={handleSaveProfile}
+              onGameAdded={(g)=>setProfileGames(p=>[...p,g])}
+              onGameRemoved={(id)=>setProfileGames(p=>p.filter(g=>g.id!==id))}
+              showGameModal={showGameModal}
+              setShowGameModal={setShowGameModal}
+              gameSearch={gameSearch}
+              setGameSearch={setGameSearch}
+              gameResults={gameResults}
+              setGameResults={setGameResults}
+              gameSearching={gameSearching}
+              setGameSearching={setGameSearching}
+              gameSearchRef={gameSearchRef}
+              onSpotifyConnect={async()=>{ try { const r = await spotifyApi.connect(); window.location.href = r.url; } catch(e:any){ addToast(e.message||'Błąd Spotify','error'); } }}
+              onSpotifyDisconnect={async()=>{ await spotifyApi.disconnect(); setOwnSpotify(null); addToast('Spotify odłączono','info'); }}
+              onSpotifyToggle={async(v)=>{ await spotifyApi.setSettings({show_on_profile:v}); setOwnSpotify(p=>p?{...p,show_on_profile:v}:p); lastEmittedTrack.current=undefined; if(!v&&currentUser?.id){const sock=getSocket();if(sock)(sock as any).emit('spotify_update',{track:null});setUserActivities(p=>{const n=new Map(p);n.set(currentUser.id,null);return n;});} }}
+              friends={friends}
+              blockedUsers={blockedUsers}
+              addToast={addToast}
+            />
           ) : activeView==='friends' ? (
             <div className="flex-1 flex flex-col overflow-hidden">
               <div className="h-14 border-b border-white/[0.06] flex items-center px-5 shrink-0 glass-dark border-b border-white/[0.05] z-10">
@@ -5659,43 +5696,6 @@ export default function App() {
                 </div>
               </div>
             </div>
-          ) : profileViewId ? (
-            <ProfilePage
-              viewUserId={profileViewId}
-              profileData={profilePageData}
-              games={profileGames}
-              spotify={profileSpotify}
-              ownSpotify={ownSpotify}
-              loading={profileLoading}
-              currentUser={currentUser}
-              editProf={editProf}
-              setEditProf={setEditProf}
-              profBannerFile={profBannerFile}
-              profBannerPrev={profBannerPrev}
-              onBack={closeProfilePage}
-              onOpenDm={(id)=>{ openDm(id); closeProfilePage(); }}
-              onCall={(id,un,av,t)=>{ startDmCall(id,un,t,av); closeProfilePage(); }}
-              handleAvatarUpload={handleAvatarUpload}
-              handleBannerSelect={handleBannerSelect}
-              handleSaveProfile={handleSaveProfile}
-              onGameAdded={(g)=>setProfileGames(p=>[...p,g])}
-              onGameRemoved={(id)=>setProfileGames(p=>p.filter(g=>g.id!==id))}
-              showGameModal={showGameModal}
-              setShowGameModal={setShowGameModal}
-              gameSearch={gameSearch}
-              setGameSearch={setGameSearch}
-              gameResults={gameResults}
-              setGameResults={setGameResults}
-              gameSearching={gameSearching}
-              setGameSearching={setGameSearching}
-              gameSearchRef={gameSearchRef}
-              onSpotifyConnect={async()=>{ try { const r = await spotifyApi.connect(); window.location.href = r.url; } catch(e:any){ addToast(e.message||'Błąd Spotify','error'); } }}
-              onSpotifyDisconnect={async()=>{ await spotifyApi.disconnect(); setOwnSpotify(null); addToast('Spotify odłączono','info'); }}
-              onSpotifyToggle={async(v)=>{ await spotifyApi.setSettings({show_on_profile:v}); setOwnSpotify(p=>p?{...p,show_on_profile:v}:p); lastEmittedTrack.current=undefined; if(!v&&currentUser?.id){const sock=getSocket();if(sock)(sock as any).emit('spotify_update',{track:null});setUserActivities(p=>{const n=new Map(p);n.set(currentUser.id,null);return n;});} }}
-              friends={friends}
-              blockedUsers={blockedUsers}
-              addToast={addToast}
-            />
           ) : srvSettOpen && serverFull ? (
             <ServerSettingsPage
               serverFull={serverFull}
