@@ -626,6 +626,34 @@ router.delete('/:id/roles/:roleId', authMiddleware, async (req: AuthRequest, res
 
 // ── Invites ───────────────────────────────────────────────────────────────────
 
+// GET /api/servers/invite/:code/info  — public, no auth required
+router.get('/invite/:code/info', async (req: Request, res: Response) => {
+  try {
+    const { rows: [invite] } = await query(
+      `SELECT si.code, si.expires_at,
+              s.id AS server_id, s.name AS server_name, s.icon_url,
+              u.username AS creator_username, u.avatar_url AS creator_avatar
+       FROM server_invites si
+       JOIN servers s ON s.id = si.server_id
+       JOIN users   u ON u.id = si.creator_id
+       WHERE si.code = $1`,
+      [req.params.code]
+    );
+    if (!invite) return res.status(404).json({ error: 'Invalid invite' });
+    if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
+      return res.status(410).json({ error: 'Invite expired' });
+    }
+    return res.json({
+      code: invite.code,
+      server_id: invite.server_id,
+      server_name: invite.server_name,
+      icon_url: invite.icon_url,
+      creator_username: invite.creator_username,
+      creator_avatar: invite.creator_avatar,
+    });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
 // POST /api/servers/invite/create
 router.post('/invite/create', authMiddleware, inviteCreateLimiter, async (req: AuthRequest, res: Response) => {
   const { server_id, expires_in } = req.body;

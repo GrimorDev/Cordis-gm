@@ -220,7 +220,9 @@ const AUTH_FEATURES = [
     grad: 'from-amber-500 to-orange-500', iconBg: 'bg-amber-500/15', border: 'border-amber-500/25', glow: 'hover:shadow-amber-500/10' },
 ];
 
-function AuthScreen({ onAuth }: { onAuth: (u: UserProfile, t: string, isNew: boolean) => void }) {
+interface InviteInfo { code: string; server_id: string; server_name: string; icon_url: string | null; creator_username: string; creator_avatar: string | null; }
+
+function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string, isNew: boolean) => void; inviteInfo?: InviteInfo | null }) {
   const [tab, setTab] = useState<'login' | 'register'>('login');
   // Registration: 'form' = fill details, 'verify' = enter code
   const [regStep, setRegStep] = useState<'form' | 'verify'>('form');
@@ -402,6 +404,21 @@ function AuthScreen({ onAuth }: { onAuth: (u: UserProfile, t: string, isNew: boo
             <span className="text-lg font-bold text-white">Cordyn</span>
           </div>
 
+          {/* Invite banner */}
+          {inviteInfo && (
+            <div className="mb-6 flex items-center gap-3 bg-indigo-500/10 border border-indigo-500/25 rounded-2xl px-4 py-3">
+              {inviteInfo.icon_url
+                ? <img src={inviteInfo.icon_url} className="w-10 h-10 rounded-xl object-cover shrink-0" alt=""/>
+                : <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-lg font-bold text-white shrink-0">{inviteInfo.server_name[0]}</div>
+              }
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-white truncate">Zaproszenie na serwer</p>
+                <p className="text-xs text-indigo-300 font-semibold truncate">{inviteInfo.server_name}</p>
+                <p className="text-xs text-zinc-500 truncate">od <span className="text-zinc-400">{inviteInfo.creator_username}</span></p>
+              </div>
+            </div>
+          )}
+
           {/* Header */}
           <div className="mb-7">
             <h2 className="text-2xl font-bold text-white mb-1">
@@ -409,8 +426,8 @@ function AuthScreen({ onAuth }: { onAuth: (u: UserProfile, t: string, isNew: boo
             </h2>
             <p className="text-sm text-zinc-500">
               {tab === 'login'
-                ? 'Zaloguj się na swoje konto, by kontynuować'
-                : 'Utwórz konto i zacznij budować społeczność'}
+                ? inviteInfo ? 'Zaloguj się, aby dołączyć do serwera' : 'Zaloguj się na swoje konto, by kontynuować'
+                : inviteInfo ? 'Utwórz konto, aby dołączyć do serwera' : 'Utwórz konto i zacznij budować społeczność'}
             </p>
           </div>
 
@@ -2491,9 +2508,15 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
 }
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
+// Detect /join/:code in URL (evaluated once on module load)
+const _inviteCodeFromUrl = (() => { const m = window.location.pathname.match(/^\/join\/([a-f0-9]+)$/i); return m ? m[1] : null; })();
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authLoading, setAuthLoading]         = useState(true);
+  const [pendingInvite, setPendingInvite]     = useState<InviteInfo | null>(null);
+  const [inviteDialog, setInviteDialog]       = useState(false);
+  const [inviteJoining, setInviteJoining]     = useState(false);
   const [currentUser, setCurrentUser]         = useState<UserProfile | null>(null);
   const [activeServer, setActiveServer]       = useState('');
   const [activeChannel, setActiveChannel]     = useState('');
@@ -2877,6 +2900,16 @@ export default function App() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Invite link: fetch info on load, show dialog after auth ─────
+  useEffect(() => {
+    if (!_inviteCodeFromUrl) return;
+    serversApi.inviteInfo(_inviteCodeFromUrl).then(info => {
+      setPendingInvite(info);
+      if (isAuthenticated) setInviteDialog(true);
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   // ── Poll own Spotify every 30s → broadcast track to socket ──────
   const lastEmittedTrack = useRef<string|null|undefined>(undefined);
@@ -3950,6 +3983,7 @@ export default function App() {
   const [showWelcome, setShowWelcome] = useState(false);
   const handleAuth = (u: UserProfile, _t: string, isNew = false) => {
     setCurrentUser(u); setEditProf({...u}); setIsAuthenticated(true); applyUserPrefs(u);
+    if (pendingInvite) { setInviteDialog(true); }
     if (isNew) {
       const key = `welcomed_${u.id}`;
       if (!localStorage.getItem(key)) { setShowWelcome(true); localStorage.setItem(key, '1'); }
@@ -4666,7 +4700,7 @@ export default function App() {
 
   // ──────────────────────────────────────────────────────────────────
   if (authLoading) return <div className="fixed inset-0 bg-black/20 flex items-center justify-center"><Loader2 size={32} className="text-indigo-400 animate-spin" /></div>;
-  if (!isAuthenticated) return <AuthScreen onAuth={(u, t, isNew) => handleAuth(u, t, isNew)} />;
+  if (!isAuthenticated) return <AuthScreen onAuth={(u, t, isNew) => handleAuth(u, t, isNew)} inviteInfo={pendingInvite} />;
 
   const allChs   = serverFull?.categories.flatMap(c => c.channels) ?? [];
   const activeCh = allChs.find(c => c.id === activeChannel);
@@ -8828,6 +8862,59 @@ export default function App() {
       <AnimatePresence>
         {showWelcome && currentUser && (
           <WelcomeModal username={currentUser.username} onClose={() => setShowWelcome(false)} />
+        )}
+
+        {/* ── Invite join dialog ───────────────────────────────────── */}
+        {inviteDialog && pendingInvite && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[300] p-4">
+            <motion.div initial={{scale:0.92,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.92,opacity:0}}
+              className="bg-[#16161e] border border-white/[0.08] rounded-2xl p-7 w-full max-w-sm shadow-2xl flex flex-col gap-5">
+              {/* Server info */}
+              <div className="flex items-center gap-4">
+                {pendingInvite.icon_url
+                  ? <img src={pendingInvite.icon_url} className="w-14 h-14 rounded-2xl object-cover shrink-0" alt=""/>
+                  : <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center text-2xl font-bold text-white shrink-0">{pendingInvite.server_name[0]}</div>
+                }
+                <div>
+                  <p className="text-[11px] text-zinc-500 uppercase tracking-widest mb-0.5">Zaproszenie na serwer</p>
+                  <p className="text-lg font-black text-white">{pendingInvite.server_name}</p>
+                  <p className="text-xs text-zinc-400">od <span className="text-indigo-300 font-semibold">{pendingInvite.creator_username}</span></p>
+                </div>
+              </div>
+              <p className="text-sm text-zinc-400">Czy chcesz dołączyć do serwera <span className="text-white font-semibold">{pendingInvite.server_name}</span>?</p>
+              <div className="flex gap-3">
+                <button
+                  disabled={inviteJoining}
+                  onClick={async () => {
+                    setInviteJoining(true);
+                    try {
+                      const s = await serversApi.join(pendingInvite.code);
+                      setServerList(p => [...p, s]);
+                      setActiveServer(s.id);
+                      setActiveView('servers');
+                      window.history.replaceState({}, '', '/');
+                      addToast(`Dołączono do ${s.name}!`, 'success');
+                    } catch (e: any) {
+                      addToast(e.message || 'Błąd dołączania', 'error');
+                    } finally {
+                      setInviteJoining(false);
+                      setInviteDialog(false);
+                      setPendingInvite(null);
+                    }
+                  }}
+                  className="flex-1 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2">
+                  {inviteJoining ? <Loader2 size={14} className="animate-spin"/> : <UserPlus size={14}/>}
+                  Dołącz
+                </button>
+                <button
+                  onClick={() => { setInviteDialog(false); setPendingInvite(null); window.history.replaceState({}, '', '/'); }}
+                  className="flex-1 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-zinc-300 font-semibold py-2.5 rounded-xl transition-colors">
+                  Nie
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 
