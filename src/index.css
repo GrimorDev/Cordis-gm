@@ -677,3 +677,86 @@ img.av-eff-neon-cat { transition:box-shadow 0.3s; }
   display: flex; align-items: center; justify-content: center;
   cursor: zoom-out;
 }
+
+
+/* ── av-active: all effects autoplay (used in hover cards) ─────── */
+.av-active .av-eff-pulse   { animation-play-state: running; }
+.av-active .av-eff-rainbow { animation-play-state: running; }
+.av-active img.av-eff-vortex-cw { scale: 0.82; }
+.av-active:has(img.av-eff-vortex-cw)::before { opacity: 1; scale: 1; animation: av-vortex-spin-cw 1s linear infinite; }
+.av-active:has(img.av-eff-vortex-cw)::after  { opacity: 1; scale: 1; animation: av-vortex-spin-ccw 1.5s linear infinite; }
+.av-active:has(img.av-eff-portal)::before {
+  opacity: 1; animation: portal-ring-spin 10s linear infinite;
+}
+.av-active:has(img.av-eff-portal)::after {
+  animation: portal-kawoosh 2s ease-out forwards;
+}
+.av-active:has(img.av-eff-quantum)::before { opacity: 1; animation: quantum-spin-1 3s linear infinite; }
+.av-active:has(img.av-eff-quantum)::after  { opacity: 1; animation: quantum-spin-2 4s linear infinite; }
+.av-active img.av-eff-glitch { animation: glitch-img 0.5s steps(1) infinite; }
+.av-active:has(img.av-eff-glitch)::before {
+  content: ''; position: absolute; left: 0; right: 0; height: 6%;
+  background: rgba(255,0,50,0.35); mix-blend-mode: screen;
+  pointer-events: none; z-index: 3;
+  animation: glitch-bar-r 0.5s steps(1) infinite;
+}
+.av-active:has(img.av-eff-glitch)::after {
+  content: ''; position: absolute; left: 0; right: 0; height: 4%;
+  background: rgba(0,255,220,0.35); mix-blend-mode: screen;
+  pointer-events: none; z-index: 3;
+  animation: glitch-bar-c 0.5s steps(1) infinite 0.1s;
+}
+.av-active img.av-eff-scan { filter: none; }
+.av-active:has(img.av-eff-scan)::before {
+  opacity: 1; animation: av-scan-sweep 2s linear infinite;
+}
+.av-active:has(img.av-eff-scan)::after { border-color: rgba(34,211,238,.7); }
+.av-active img.av-eff-katana { transform: translate(-3px, 3px); }
+.av-active:has(img.av-eff-katana)::before { transform: translate(3px, -3px); }
+.av-active:has(img.av-eff-katana)::after { opacity: 1; }
+.av-active:has(img.av-eff-liquid-morph)::before {
+  opacity: 1; animation: liquid-morph-shape 3s ease-in-out infinite;
+}
+.av-active img.av-eff-liquid-morph {
+  animation: liquid-morph-shape 3s ease-in-out infinite;
+}
+.av-active img.av-eff-radar-sweep { opacity: 1; }
+.av-active:has(img.av-eff-radar-sweep)::before { opacity: 1; }
+.av-active:has(img.av-eff-radar-sweep)::after {
+  opacity: 1; animation: radar-spin 2s linear infinite;
+}
+.av-active img.av-eff-vhs { opacity: 0.8; }
+.av-active:has(img.av-eff-vhs)::before { opacity: 0.6; }
+.av-active:has(img.av-eff-vhs)::after { opacity: 0.6; }
+.av-active:has(img.av-eff-toxic-slime)::before {
+  opacity:1; animation:slime-pulse 2s ease-in-out infinite;
+}
+.av-active:has(img.av-eff-toxic-slime)::after {
+  opacity:1; animation:slime-drip 2s ease-in-out infinite;
+}
+.av-active img.av-eff-toxic-slime { filter:saturate(1.3) hue-rotate(60deg); }
+.av-active:has(img.av-eff-sakura) {
+  box-shadow:0 0 0 2px rgba(249,168,212,0.85), 0 0 14px rgba(244,114,182,0.65);
+}
+.av-active:has(img.av-eff-sakura)::before {
+  animation:sakura-fall-1 2s linear infinite;
+}
+.av-active:has(img.av-eff-sakura)::after {
+  animation:sakura-fall-2 2.5s linear infinite 0.85s;
+}
+.av-active img.av-eff-sakura { filter:saturate(1.15) hue-rotate(-8deg); }
+.av-active:has(img.av-eff-demon)::before { opacity:1; }
+.av-active:has(img.av-eff-demon)::after { opacity:1; }
+.av-active img.av-eff-demon {
+  box-shadow:0 0 0 2px #dc2626, 0 0 16px rgba(220,38,38,0.65);
+  filter:saturate(1.2);
+}
+.av-active:has(img.av-eff-neon-cat)::before {
+  opacity:1; animation:cat-ear-wiggle-l 1.5s ease-in-out infinite;
+}
+.av-active:has(img.av-eff-neon-cat)::after {
+  opacity:1; animation:cat-ear-wiggle-r 1.5s ease-in-out infinite 0.2s;
+}
+.av-active img.av-eff-neon-cat {
+  box-shadow:0 0 0 2px #d946ef, 0 0 12px rgba(217,70,239,0.7);
+}

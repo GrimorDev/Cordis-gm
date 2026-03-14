@@ -2192,7 +2192,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
           : { background: 'linear-gradient(135deg, #2e2e48 0%, #1a1a2e 100%)' }}>
           {/* Avatar */}
           <div className="absolute -bottom-6 left-4">
-            <div className="relative">
+            <div className="relative av-frozen av-active" style={{'--av-url':`url("${u?.avatar_url||`https://api.dicebear.com/9.x/identicon/svg?seed=${u?.username||userId}`}")`} as React.CSSProperties}>
               <img src={u?.avatar_url||`https://api.dicebear.com/9.x/identicon/svg?seed=${u?.username||userId}`}
                 className={`w-14 h-14 rounded-2xl object-cover border-4 border-[#18182a] av-eff-${u?.avatar_effect||'none'} av-sc`} alt=""/>
               <span className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-[#18182a] ${sc(u?.status||'offline')}`}/>
@@ -5083,7 +5083,7 @@ export default function App() {
                 const unread = unreadDms[dm.other_user_id] || 0;
                 const isActive = activeDmUserId===dm.other_user_id;
                 return (
-                  <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); }}
+                  <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); setProfileViewId(null); }}
                     onMouseEnter={e=>showHoverCard(dm.other_user_id,e)}
                     onMouseLeave={hideHoverCard}
                     className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/15 text-white border border-indigo-500/25':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
