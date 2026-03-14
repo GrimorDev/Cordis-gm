@@ -186,6 +186,42 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
       }
     });
 
+    // ── Twitch live status broadcast ─────────────────────────────────
+    socket.on('twitch_update', async ({ stream }) => {
+      const { rows: serverRows } = await query(
+        `SELECT server_id FROM server_members WHERE user_id = $1`, [user.id]
+      );
+      for (const { server_id } of serverRows) {
+        socket.to(`server:${server_id}`).emit('friend_twitch_update', { user_id: user.id, stream });
+      }
+      const { rows: friendRows } = await query(
+        `SELECT CASE WHEN requester_id=$1 THEN addressee_id ELSE requester_id END AS friend_id
+         FROM friends WHERE (requester_id=$1 OR addressee_id=$1) AND status='accepted'`,
+        [user.id]
+      );
+      for (const { friend_id } of friendRows) {
+        socket.to(`user:${friend_id}`).emit('friend_twitch_update', { user_id: user.id, stream });
+      }
+    });
+
+    // ── Steam current game broadcast ──────────────────────────────────
+    socket.on('steam_update', async ({ game }) => {
+      const { rows: serverRows } = await query(
+        `SELECT server_id FROM server_members WHERE user_id = $1`, [user.id]
+      );
+      for (const { server_id } of serverRows) {
+        socket.to(`server:${server_id}`).emit('friend_steam_update', { user_id: user.id, game });
+      }
+      const { rows: friendRows } = await query(
+        `SELECT CASE WHEN requester_id=$1 THEN addressee_id ELSE requester_id END AS friend_id
+         FROM friends WHERE (requester_id=$1 OR addressee_id=$1) AND status='accepted'`,
+        [user.id]
+      );
+      for (const { friend_id } of friendRows) {
+        socket.to(`user:${friend_id}`).emit('friend_steam_update', { user_id: user.id, game });
+      }
+    });
+
     // ── 1-to-1 Calls (signaling) ─────────────────────────────────────
     socket.on('call_invite', async ({ to_user_id, type }) => {
       const { rows: [caller] } = await query('SELECT avatar_url FROM users WHERE id = $1', [user.id]);

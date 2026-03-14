@@ -26,6 +26,8 @@ import ogRoutes from './routes/og';
 import adminRoutes from './routes/admin';
 import gamesRoutes from './routes/games';
 import spotifyRoutes from './routes/spotify';
+import steamRoutes   from './routes/steam';
+import twitchRoutes  from './routes/twitch';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -108,6 +110,8 @@ app.use('/api/og', ogRoutes);
 app.use('/api/admin',   adminRoutes);
 app.use('/api/games',   gamesRoutes);
 app.use('/api/spotify', spotifyRoutes);
+app.use('/api/steam',   steamRoutes);
+app.use('/api/twitch',  twitchRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

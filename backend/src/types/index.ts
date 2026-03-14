@@ -129,6 +129,8 @@ export interface ServerToClientEvents {
   member_left: (data: { server_id: string; user_id: string }) => void;
   user_updated: (data: any) => void;
   friend_spotify_update: (data: { user_id: string; track: { name: string; artists: string; album_cover: string | null; external_url: string | null } | null }) => void;
+  friend_twitch_update: (data: { user_id: string; stream: { title: string; game_name: string; viewer_count: number; login: string } | null }) => void;
+  friend_steam_update: (data: { user_id: string; game: { name: string; gameid: string; header_image: string } | null }) => void;
   error: (data: { message: string }) => void;
 }
 
@@ -151,6 +153,8 @@ export interface ClientToServerEvents {
   screen_share_stop: (data: { to_user_id?: string; channel_id?: string }) => void;
   voice_state: (data: { muted: boolean; deafened: boolean; channel_id?: string; to_user_id?: string }) => void;
   spotify_update: (data: { track: { name: string; artists: string; album_cover: string | null; external_url: string | null } | null }) => void;
+  twitch_update: (data: { stream: { title: string; game_name: string; viewer_count: number; login: string } | null }) => void;
+  steam_update: (data: { game: { name: string; gameid: string; header_image: string } | null }) => void;
 }
 
 export interface MessageWithSender extends Message {

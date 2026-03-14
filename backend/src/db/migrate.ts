@@ -413,6 +413,21 @@ DO $$ BEGIN ALTER TABLE users ADD COLUMN spotify_token_expires  TIMESTAMPTZ; EXC
 DO $$ BEGIN ALTER TABLE users ADD COLUMN spotify_user_id        VARCHAR(255); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN spotify_display_name   VARCHAR(255); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN spotify_show_on_profile BOOLEAN DEFAULT TRUE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- ── Steam connection (OpenID — no OAuth tokens, just steam_id) ────────
+DO $$ BEGIN ALTER TABLE users ADD COLUMN steam_id VARCHAR(64); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN steam_display_name VARCHAR(255); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN steam_avatar_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN steam_show_on_profile BOOLEAN DEFAULT TRUE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- ── Twitch connection (OAuth 2.0) ─────────────────────────────────────
+DO $$ BEGIN ALTER TABLE users ADD COLUMN twitch_user_id VARCHAR(64); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN twitch_login VARCHAR(255); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN twitch_display_name VARCHAR(255); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN twitch_access_token TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN twitch_refresh_token TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN twitch_token_expires TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN twitch_show_on_profile BOOLEAN DEFAULT TRUE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 `;
 
 const SEED_SQL = `
