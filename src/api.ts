@@ -355,6 +355,28 @@ export const gamesApi = {
   remove:  (id: string) => req<void>('DELETE', `/games/${id}`),
 };
 
+// ── Twitch ─────────────────────────────────────────────────────────────────
+export interface TwitchStream {
+  title: string; game_name: string; viewer_count: number;
+  thumbnail_url: string; login: string;
+}
+export interface TwitchData {
+  connected: boolean; show_on_profile: boolean;
+  login?: string | null; display_name?: string | null;
+  is_live: boolean; stream?: TwitchStream | null;
+}
+
+// ── Steam ──────────────────────────────────────────────────────────────────
+export interface SteamGame {
+  name: string; gameid: string;
+  header_image: string; // cdn.akamai.steamstatic.com/steam/apps/{gameid}/header.jpg
+}
+export interface SteamData {
+  connected: boolean; show_on_profile: boolean;
+  display_name?: string | null; avatar_url?: string | null;
+  current_game?: SteamGame | null;
+}
+
 // ── Spotify ────────────────────────────────────────────────────────────────
 export const spotifyApi = {
   connect:       () => req<{ url: string }>('GET', '/spotify/connect'),
@@ -363,6 +385,24 @@ export const spotifyApi = {
   userPublic:    (userId: string) => req<SpotifyData>('GET', `/spotify/user/${userId}`),
   setSettings:   (d: { show_on_profile: boolean }) => req<{ok:boolean}>('PUT', '/spotify/settings', d),
   disconnect:    () => req<{ok:boolean}>('DELETE', '/spotify/disconnect'),
+};
+
+export const twitchApi = {
+  connect:     () => req<{ url: string }>('GET', '/twitch/connect'),
+  status:      () => req<TwitchData>('GET', '/twitch/status'),
+  stream:      () => req<{ stream: TwitchStream | null }>('GET', '/twitch/stream'),
+  userPublic:  (userId: string) => req<TwitchData>('GET', `/twitch/user/${userId}`),
+  setSettings: (d: { show_on_profile: boolean }) => req<{ok:boolean}>('PUT', '/twitch/settings', d),
+  disconnect:  () => req<{ok:boolean}>('DELETE', '/twitch/disconnect'),
+};
+
+export const steamApi = {
+  connect:     () => req<{ url: string }>('GET', '/steam/connect'),
+  status:      () => req<SteamData>('GET', '/steam/status'),
+  nowPlaying:  () => req<{ game: SteamGame | null }>('GET', '/steam/now-playing'),
+  userPublic:  (userId: string) => req<SteamData>('GET', `/steam/user/${userId}`),
+  setSettings: (d: { show_on_profile: boolean }) => req<{ok:boolean}>('PUT', '/steam/settings', d),
+  disconnect:  () => req<{ok:boolean}>('DELETE', '/steam/disconnect'),
 };
 
 export const adminApi = {

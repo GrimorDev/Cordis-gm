@@ -17,14 +17,14 @@ import {
 } from 'lucide-react';
 import {
   auth, users, serversApi, channelsApi, messagesApi, dmsApi, friendsApi, forumApi, adminApi,
-  gamesApi, spotifyApi,
+  gamesApi, spotifyApi, twitchApi, steamApi,
   uploadFile, setToken, clearToken, getToken,
   type UserProfile, type ServerData, type ServerFull, type ServerRole,
   type ChannelData, type MessageFull, type DmConversation,
   type DmMessageFull, type FriendEntry, type FriendRequest,
   type ServerMember, type ForumPost, type ForumReply, type ServerBan,
   type Badge, type AdminStats, type AdminUser, type AdminServer, type AdminOverview,
-  type FavoriteGame, type SpotifyData, type SpotifyTrack, ApiError
+  type FavoriteGame, type SpotifyData, type SpotifyTrack, type TwitchData, type TwitchStream, type SteamData, type SteamGame, ApiError
 } from './api';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -1571,7 +1571,7 @@ function SortableChannelItem({ id, catId, children, canManage }: { id: string; c
 
 // ─── ProfilePage ──────────────────────────────────────────────────────────────
 function ProfilePage({
-  viewUserId, profileData, games, spotify, ownSpotify, loading,
+  viewUserId, profileData, games, spotify, ownSpotify, twitch, ownTwitch, steam, ownSteam, loading,
   currentUser, editProf, setEditProf, profBannerFile, profBannerPrev,
   onBack, onOpenDm, onCall,
   handleAvatarUpload, handleBannerSelect, handleSaveProfile,
@@ -1579,10 +1579,15 @@ function ProfilePage({
   showGameModal, setShowGameModal, gameSearch, setGameSearch,
   gameResults, setGameResults, gameSearching, setGameSearching, gameSearchRef,
   onSpotifyConnect, onSpotifyDisconnect, onSpotifyToggle,
+  onTwitchConnect, onTwitchDisconnect, onTwitchToggle,
+  onSteamConnect, onSteamDisconnect, onSteamToggle,
   friends, blockedUsers, addToast,
 }: {
   viewUserId: string; profileData: UserProfile|null; games: FavoriteGame[];
-  spotify: SpotifyData|null; ownSpotify: SpotifyData|null; loading: boolean;
+  spotify: SpotifyData|null; ownSpotify: SpotifyData|null;
+  twitch: TwitchData|null; ownTwitch: TwitchData|null;
+  steam: SteamData|null; ownSteam: SteamData|null;
+  loading: boolean;
   currentUser: UserProfile|null; editProf: any; setEditProf: (fn:any)=>void;
   profBannerFile: File|null; profBannerPrev: string|null;
   onBack: ()=>void; onOpenDm: (id:string)=>void;
@@ -1598,6 +1603,8 @@ function ProfilePage({
   gameSearching: boolean; setGameSearching: (v:boolean)=>void;
   gameSearchRef: React.MutableRefObject<ReturnType<typeof setTimeout>|null>;
   onSpotifyConnect: ()=>void; onSpotifyDisconnect: ()=>void; onSpotifyToggle: (v:boolean)=>void;
+  onTwitchConnect: ()=>void; onTwitchDisconnect: ()=>void; onTwitchToggle: (v:boolean)=>void;
+  onSteamConnect: ()=>void; onSteamDisconnect: ()=>void; onSteamToggle: (v:boolean)=>void;
   friends: {id:string}[]; blockedUsers: Set<string>;
   addToast: (m:string,t?:any)=>void;
 }) {
@@ -1643,6 +1650,8 @@ function ProfilePage({
 
   // For own profile: prefer full spotify data (with tracks) from userPublic, fall back to status-only
   const spotifyToShow = isOwn ? (spotify || ownSpotify) : spotify;
+  const twitchToShow  = isOwn ? (twitch || ownTwitch)   : twitch;
+  const steamToShow   = isOwn ? (steam  || ownSteam)    : steam;
 
   const bannerSrc = isOwn
     ? (profBannerPrev || editProf?.banner_url || null)
@@ -1943,6 +1952,175 @@ function ProfilePage({
                 )}
               </div>
 
+              {/* Twitch section */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                    <span className="text-purple-500">📺</span> Twitch
+                  </h3>
+                  {isOwn && ownTwitch?.connected && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-zinc-600">Pokaż na profilu</span>
+                      <button onClick={()=>onTwitchToggle(!ownTwitch.show_on_profile)}
+                        className={`relative w-10 h-5 rounded-full transition-all ${ownTwitch.show_on_profile?'bg-purple-500':'bg-white/[0.08]'}`}>
+                        <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${ownTwitch.show_on_profile?'left-[22px]':'left-0.5'}`}/>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {isOwn && !ownTwitch?.connected ? (
+                  <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl px-5 py-6 flex flex-col items-center gap-3">
+                    <div className="w-12 h-12 bg-purple-500/10 border border-purple-500/25 rounded-2xl flex items-center justify-center">
+                      <span className="text-xl">📺</span>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-semibold text-white mb-1">Połącz Twitch</p>
+                      <p className="text-xs text-zinc-600">Pokaż swój stream na żywo na profilu</p>
+                    </div>
+                    <button onClick={onTwitchConnect}
+                      className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all shadow-lg shadow-purple-500/20">
+                      <Link2 size={14}/> Połącz Twitch
+                    </button>
+                  </div>
+                ) : isOwn && ownTwitch?.connected ? (
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between bg-purple-500/8 border border-purple-500/20 rounded-xl px-3.5 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 bg-purple-500/15 rounded-lg flex items-center justify-center">
+                          <span className="text-sm">📺</span>
+                        </div>
+                        <div>
+                          <span className="text-sm text-purple-400 font-medium">Połączono jako {ownTwitch.display_name || ownTwitch.login || 'Twitch'}</span>
+                          {ownTwitch.is_live && <span className="ml-2 text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold">NA ŻYWO</span>}
+                        </div>
+                      </div>
+                      <button onClick={onTwitchDisconnect}
+                        className="text-xs text-zinc-600 hover:text-rose-400 flex items-center gap-1 transition-all">
+                        <Link2Off size={12}/> Odłącz
+                      </button>
+                    </div>
+                    {twitchToShow?.is_live && twitchToShow.stream && twitchToShow.login && (
+                      <div className="rounded-xl overflow-hidden border border-purple-500/20">
+                        <iframe
+                          src={`https://player.twitch.tv/?channel=${twitchToShow.login}&parent=${window.location.hostname}&muted=true&autoplay=true`}
+                          height="180" width="100%" allowFullScreen title="Twitch Stream"
+                          className="block"
+                        />
+                        <div className="bg-purple-900/20 px-3 py-2 flex items-center gap-2">
+                          <span className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold">🔴 NA ŻYWO</span>
+                          <span className="text-xs text-white truncate">{twitchToShow.stream.game_name}</span>
+                          <span className="text-xs text-zinc-500 ml-auto">{twitchToShow.stream.viewer_count.toLocaleString()} widzów</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : twitchToShow?.connected && twitchToShow?.show_on_profile ? (
+                  twitchToShow.is_live && twitchToShow.stream && twitchToShow.login ? (
+                    <div className="rounded-xl overflow-hidden border border-purple-500/20">
+                      <iframe
+                        src={`https://player.twitch.tv/?channel=${twitchToShow.login}&parent=${window.location.hostname}&muted=true&autoplay=true`}
+                        height="180" width="100%" allowFullScreen title="Twitch Stream"
+                        className="block"
+                      />
+                      <div className="bg-purple-900/20 px-3 py-2 flex items-center gap-2">
+                        <span className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold">🔴 NA ŻYWO</span>
+                        <span className="text-xs text-white truncate">{twitchToShow.stream.game_name}</span>
+                        <span className="text-xs text-zinc-500 ml-auto">{twitchToShow.stream.viewer_count.toLocaleString()} widzów</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-purple-500/5 border border-purple-500/10 rounded-xl px-3.5 py-2.5 flex items-center gap-2">
+                      <span className="text-sm">📺</span>
+                      <span className="text-sm text-purple-300">{twitchToShow.display_name || twitchToShow.login}</span>
+                      <span className="text-xs text-zinc-600 ml-auto">Offline</span>
+                    </div>
+                  )
+                ) : (
+                  <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-6 text-center">
+                    <span className="text-2xl block mb-2">📺</span>
+                    <p className="text-xs text-zinc-700">Brak połączenia Twitch</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Steam section */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                    <Gamepad2 size={13} className="text-zinc-600"/> Steam
+                  </h3>
+                  {isOwn && ownSteam?.connected && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-zinc-600">Pokaż na profilu</span>
+                      <button onClick={()=>onSteamToggle(!ownSteam.show_on_profile)}
+                        className={`relative w-10 h-5 rounded-full transition-all ${ownSteam.show_on_profile?'bg-blue-500':'bg-white/[0.08]'}`}>
+                        <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${ownSteam.show_on_profile?'left-[22px]':'left-0.5'}`}/>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {isOwn && !ownSteam?.connected ? (
+                  <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl px-5 py-6 flex flex-col items-center gap-3">
+                    <div className="w-12 h-12 bg-blue-500/10 border border-blue-500/25 rounded-2xl flex items-center justify-center">
+                      <Gamepad2 size={20} className="text-blue-400"/>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-semibold text-white mb-1">Połącz Steam</p>
+                      <p className="text-xs text-zinc-600">Pokaż w co aktualnie grasz</p>
+                    </div>
+                    <button onClick={onSteamConnect}
+                      className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all shadow-lg shadow-blue-500/20">
+                      <Link2 size={14}/> Połącz Steam
+                    </button>
+                  </div>
+                ) : isOwn && ownSteam?.connected ? (
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between bg-blue-500/8 border border-blue-500/20 rounded-xl px-3.5 py-2.5">
+                      <div className="flex items-center gap-2">
+                        {ownSteam.avatar_url && <img src={ownSteam.avatar_url} className="w-7 h-7 rounded-lg object-cover" alt=""/>}
+                        <span className="text-sm text-blue-400 font-medium">{ownSteam.display_name || 'Steam'}</span>
+                      </div>
+                      <button onClick={onSteamDisconnect}
+                        className="text-xs text-zinc-600 hover:text-rose-400 flex items-center gap-1 transition-all">
+                        <Link2Off size={12}/> Odłącz
+                      </button>
+                    </div>
+                    {steamToShow?.current_game && (
+                      <div className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.06] rounded-xl p-2.5">
+                        <img src={steamToShow.current_game.header_image} alt={steamToShow.current_game.name} className="w-16 h-9 rounded-lg object-cover shrink-0"/>
+                        <div className="min-w-0">
+                          <p className="text-xs text-zinc-500 font-semibold uppercase tracking-widest mb-0.5">Gra teraz</p>
+                          <p className="text-sm text-white font-medium truncate">{steamToShow.current_game.name}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : steamToShow?.connected && steamToShow?.show_on_profile ? (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2 bg-blue-500/5 border border-blue-500/10 rounded-xl px-3.5 py-2.5">
+                      {steamToShow.avatar_url && <img src={steamToShow.avatar_url} className="w-7 h-7 rounded-lg object-cover" alt=""/>}
+                      <span className="text-sm text-blue-300">{steamToShow.display_name}</span>
+                    </div>
+                    {steamToShow.current_game && (
+                      <div className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.06] rounded-xl p-2.5">
+                        <img src={steamToShow.current_game.header_image} alt={steamToShow.current_game.name} className="w-16 h-9 rounded-lg object-cover shrink-0"/>
+                        <div className="min-w-0">
+                          <p className="text-xs text-zinc-500 font-semibold uppercase tracking-widest mb-0.5">Gra teraz</p>
+                          <p className="text-sm text-white font-medium truncate">{steamToShow.current_game.name}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-6 text-center">
+                    <Gamepad2 size={28} className="text-zinc-800 mx-auto mb-2"/>
+                    <p className="text-xs text-zinc-700">Brak połączenia Steam</p>
+                  </div>
+                )}
+              </div>
+
             </div>
           </div>
         </div>
@@ -2112,7 +2290,7 @@ function SpotifyDisplay({ spotify }: { spotify: SpotifyData }) {
 }
 
 // ─── HoverCard ────────────────────────────────────────────────────────────────
-function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfile, cache, activity, onMouseEnter, onMouseLeave }: {
+function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfile, cache, activity, twitchActivity, steamActivity, onMouseEnter, onMouseLeave }: {
   userId: string; x: number; y: number;
   currentUserId: string | undefined;
   onOpenDm: (id: string) => void;
@@ -2120,6 +2298,8 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
   onOpenProfile: (id: string) => void;
   cache: React.MutableRefObject<Map<string, {profile:UserProfile|null;games:FavoriteGame[];spotify:SpotifyData|null;loadedAt:number}>>;
   activity: {name:string;artists:string;album_cover:string|null;external_url:string|null}|null|undefined;
+  twitchActivity: TwitchStream | null | undefined;
+  steamActivity: SteamGame | null | undefined;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }) {
@@ -2256,6 +2436,28 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
             </div>
           )}
 
+          {/* Twitch live */}
+          {twitchActivity && (
+            <div className="bg-purple-900/20 border border-purple-500/20 rounded-xl px-3 py-2.5 mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-purple-400 uppercase tracking-widest">🔴 NA ŻYWO</span>
+                <span className="text-xs text-white truncate flex-1">{twitchActivity.game_name}</span>
+                <span className="text-[10px] text-zinc-500 shrink-0">{twitchActivity.viewer_count.toLocaleString()} widzów</span>
+              </div>
+            </div>
+          )}
+
+          {/* Steam game */}
+          {!twitchActivity && steamActivity && (
+            <div className="flex items-center gap-2.5 bg-white/[0.04] border border-white/[0.06] rounded-xl px-2.5 py-2 mb-3">
+              <img src={steamActivity.header_image} alt={steamActivity.name} className="w-12 h-7 rounded object-cover shrink-0"/>
+              <div className="min-w-0">
+                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Gra teraz</p>
+                <p className="text-xs text-white truncate">{steamActivity.name}</p>
+              </div>
+            </div>
+          )}
+
           {/* Favorite games */}
           {(data?.games?.length ?? 0) > 0 && (
             <div className="mb-3">
@@ -2352,11 +2554,17 @@ export default function App() {
   const [profilePageData, setProfilePageData] = useState<UserProfile|null>(null);
   const [profileGames, setProfileGames]       = useState<FavoriteGame[]>([]);
   const [profileSpotify, setProfileSpotify]   = useState<SpotifyData|null>(null);
+  const [profileTwitch, setProfileTwitch]     = useState<TwitchData|null>(null);
+  const [profileSteam, setProfileSteam]       = useState<SteamData|null>(null);
   const [profileLoading, setProfileLoading]   = useState(false);
-  // Own Spotify connection status (loaded when viewing own profile)
+  // Own connection statuses (loaded when viewing own profile)
   const [ownSpotify, setOwnSpotify]           = useState<SpotifyData|null>(null);
-  // Real-time Spotify activities: userId → track info (null = not playing)
+  const [ownTwitch, setOwnTwitch]             = useState<TwitchData|null>(null);
+  const [ownSteam, setOwnSteam]               = useState<SteamData|null>(null);
+  // Real-time activities: userId → data (null = not active)
   const [userActivities, setUserActivities]   = useState<Map<string, {name:string;artists:string;album_cover:string|null;external_url:string|null}|null>>(new Map());
+  const [userTwitchActivities, setUserTwitchActivities] = useState<Map<string, TwitchStream|null>>(new Map());
+  const [userSteamActivities, setUserSteamActivities]   = useState<Map<string, SteamGame|null>>(new Map());
   // Hover card
   const [hoverCard, setHoverCard]             = useState<{userId:string;x:number;y:number}|null>(null);
   const hoverCardTimer                        = useRef<ReturnType<typeof setTimeout>|null>(null);
@@ -2633,7 +2841,7 @@ export default function App() {
     if (!activeCall) { setVoiceChatOpen(false); setVoiceChatMsgs([]); }
   }, [activeCall]);
 
-  // Handle Spotify OAuth callback redirect (?spotify=connected|error)
+  // Handle OAuth callback redirects (?spotify|twitch|steam=connected|error)
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     const s = p.get('spotify');
@@ -2643,6 +2851,24 @@ export default function App() {
       spotifyApi.status().then(setOwnSpotify).catch(()=>{});
     } else if (s === 'error') {
       addToast('Błąd połączenia Spotify', 'error');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    const tw = p.get('twitch');
+    if (tw === 'connected') {
+      addToast('Twitch połączono pomyślnie!', 'success');
+      window.history.replaceState({}, '', window.location.pathname);
+      twitchApi.status().then(setOwnTwitch).catch(()=>{});
+    } else if (tw === 'error') {
+      addToast('Błąd połączenia Twitch', 'error');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    const st = p.get('steam');
+    if (st === 'connected') {
+      addToast('Steam połączono pomyślnie!', 'success');
+      window.history.replaceState({}, '', window.location.pathname);
+      steamApi.status().then(setOwnSteam).catch(()=>{});
+    } else if (st === 'error') {
+      addToast('Błąd połączenia Steam', 'error');
       window.history.replaceState({}, '', window.location.pathname);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2678,7 +2904,58 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id, ownSpotify?.show_on_profile]);
 
-  // ── Profile page: real-time Spotify refresh every 30s ────────────
+  // ── Poll own Twitch every 30s → broadcast to socket ─────────────
+  const lastEmittedStream = useRef<string|null|undefined>(undefined);
+  useEffect(() => {
+    if (!currentUser?.id || !ownTwitch?.connected) return;
+    const poll = async () => {
+      try {
+        const r = await twitchApi.stream();
+        const showOnProfile = ownTwitch?.show_on_profile !== false;
+        const effectiveStream = (r.stream && showOnProfile) ? r.stream : null;
+        const streamKey = effectiveStream ? `${effectiveStream.title}|${effectiveStream.viewer_count}` : null;
+        if (streamKey === lastEmittedStream.current) return;
+        lastEmittedStream.current = streamKey;
+        const sock = getSocket();
+        if (sock) (sock as any).emit('twitch_update', { stream: effectiveStream ? {
+          title: effectiveStream.title, game_name: effectiveStream.game_name,
+          viewer_count: effectiveStream.viewer_count, login: effectiveStream.login,
+        } : null });
+        setUserTwitchActivities(p => { const n = new Map(p); n.set(currentUser.id, effectiveStream); return n; });
+      } catch {}
+    };
+    poll();
+    const t = setInterval(poll, 30_000);
+    return () => clearInterval(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, ownTwitch?.connected, ownTwitch?.show_on_profile]);
+
+  // ── Poll own Steam game every 30s → broadcast to socket ──────────
+  const lastEmittedGame = useRef<string|null|undefined>(undefined);
+  useEffect(() => {
+    if (!currentUser?.id || !ownSteam?.connected) return;
+    const poll = async () => {
+      try {
+        const r = await steamApi.nowPlaying();
+        const showOnProfile = ownSteam?.show_on_profile !== false;
+        const effectiveGame = (r.game && showOnProfile) ? r.game : null;
+        const gameKey = effectiveGame ? effectiveGame.gameid : null;
+        if (gameKey === lastEmittedGame.current) return;
+        lastEmittedGame.current = gameKey;
+        const sock = getSocket();
+        if (sock) (sock as any).emit('steam_update', { game: effectiveGame ? {
+          name: effectiveGame.name, gameid: effectiveGame.gameid, header_image: effectiveGame.header_image,
+        } : null });
+        setUserSteamActivities(p => { const n = new Map(p); n.set(currentUser.id, effectiveGame); return n; });
+      } catch {}
+    };
+    poll();
+    const t = setInterval(poll, 30_000);
+    return () => clearInterval(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, ownSteam?.connected, ownSteam?.show_on_profile]);
+
+  // ── Profile page: real-time refresh every 30s ────────────────────
   useEffect(() => {
     if (!profileViewId) return;
     const t = setInterval(async () => {
@@ -2770,6 +3047,12 @@ export default function App() {
     });
     sock.on('friend_spotify_update', ({ user_id, track }) => {
       setUserActivities(p => { const n = new Map(p); n.set(user_id, track); return n; });
+    });
+    (sock as any).on('friend_twitch_update', ({ user_id, stream }: { user_id: string; stream: TwitchStream | null }) => {
+      setUserTwitchActivities(p => { const n = new Map(p); n.set(user_id, stream); return n; });
+    });
+    (sock as any).on('friend_steam_update', ({ user_id, game }: { user_id: string; game: SteamGame | null }) => {
+      setUserSteamActivities(p => { const n = new Map(p); n.set(user_id, game); return n; });
     });
     // Voice channel events (route through voiceHandlerRef for fresh closures)
     sock.on('voice_user_joined', (d: any) => {
@@ -4047,20 +4330,26 @@ export default function App() {
   // ── Profile ──────────────────────────────────────────────────────
   const openProfilePage = async (userId: string) => {
     setProfileViewId(userId);
-    setProfilePageData(null); setProfileGames([]); setProfileSpotify(null);
+    setProfilePageData(null); setProfileGames([]); setProfileSpotify(null); setProfileTwitch(null); setProfileSteam(null);
     setProfileLoading(true);
-    const [prof, games, spotify] = await Promise.allSettled([
+    const [prof, games, spotify, twitch, steam] = await Promise.allSettled([
       users.get(userId),
       gamesApi.getUser(userId),
       spotifyApi.userPublic(userId),
+      twitchApi.userPublic(userId),
+      steamApi.userPublic(userId),
     ]);
     if (prof.status === 'fulfilled')    setProfilePageData(prof.value);
     if (games.status === 'fulfilled')   setProfileGames(games.value);
     if (spotify.status === 'fulfilled') setProfileSpotify(spotify.value);
+    if (twitch.status === 'fulfilled')  setProfileTwitch(twitch.value);
+    if (steam.status === 'fulfilled')   setProfileSteam(steam.value);
     setProfileLoading(false);
-    // If own profile — also load Spotify connection status
+    // If own profile — also load connection statuses
     if (userId === currentUser?.id) {
       spotifyApi.status().then(setOwnSpotify).catch(()=>{});
+      twitchApi.status().then(setOwnTwitch).catch(()=>{});
+      steamApi.status().then(setOwnSteam).catch(()=>{});
     }
   };
   const closeProfilePage = () => { setProfileViewId(null); setProfilePageData(null); };
@@ -5545,6 +5834,10 @@ export default function App() {
               games={profileGames}
               spotify={profileSpotify}
               ownSpotify={ownSpotify}
+              twitch={profileTwitch}
+              ownTwitch={ownTwitch}
+              steam={profileSteam}
+              ownSteam={ownSteam}
               loading={profileLoading}
               currentUser={currentUser}
               editProf={editProf}
@@ -5571,6 +5864,12 @@ export default function App() {
               onSpotifyConnect={async()=>{ try { const r = await spotifyApi.connect(); window.location.href = r.url; } catch(e:any){ addToast(e.message||'Błąd Spotify','error'); } }}
               onSpotifyDisconnect={async()=>{ await spotifyApi.disconnect(); setOwnSpotify(null); addToast('Spotify odłączono','info'); }}
               onSpotifyToggle={async(v)=>{ await spotifyApi.setSettings({show_on_profile:v}); setOwnSpotify(p=>p?{...p,show_on_profile:v}:p); lastEmittedTrack.current=undefined; if(!v&&currentUser?.id){const sock=getSocket();if(sock)(sock as any).emit('spotify_update',{track:null});setUserActivities(p=>{const n=new Map(p);n.set(currentUser.id,null);return n;});} }}
+              onTwitchConnect={async()=>{ try { const r = await twitchApi.connect(); window.location.href = r.url; } catch(e:any){ addToast(e.message||'Błąd Twitch','error'); } }}
+              onTwitchDisconnect={async()=>{ await twitchApi.disconnect(); setOwnTwitch(null); addToast('Twitch odłączono','info'); }}
+              onTwitchToggle={async(v)=>{ await twitchApi.setSettings({show_on_profile:v}); setOwnTwitch(p=>p?{...p,show_on_profile:v}:p); lastEmittedStream.current=undefined; if(!v&&currentUser?.id){const sock=getSocket();if(sock)(sock as any).emit('twitch_update',{stream:null});setUserTwitchActivities(p=>{const n=new Map(p);n.set(currentUser.id,null);return n;});} }}
+              onSteamConnect={async()=>{ try { const r = await steamApi.connect(); window.location.href = r.url; } catch(e:any){ addToast(e.message||'Błąd Steam','error'); } }}
+              onSteamDisconnect={async()=>{ await steamApi.disconnect(); setOwnSteam(null); addToast('Steam odłączono','info'); }}
+              onSteamToggle={async(v)=>{ await steamApi.setSettings({show_on_profile:v}); setOwnSteam(p=>p?{...p,show_on_profile:v}:p); lastEmittedGame.current=undefined; if(!v&&currentUser?.id){const sock=getSocket();if(sock)(sock as any).emit('steam_update',{game:null});setUserSteamActivities(p=>{const n=new Map(p);n.set(currentUser.id,null);return n;});} }}
               friends={friends}
               blockedUsers={blockedUsers}
               addToast={addToast}
@@ -5670,6 +5969,8 @@ export default function App() {
                     <div className="flex flex-col gap-1.5">
                     {friends.map(f => {
                       const fActivity = userActivities.get(f.id);
+                      const fTwitch = userTwitchActivities.get(f.id);
+                      const fSteam = userSteamActivities.get(f.id);
                       return (
                       <div key={f.id}
                         className="flex items-center justify-between bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] hover:border-white/[0.07] p-3.5 rounded-2xl transition-all duration-150 group"
@@ -5681,6 +5982,10 @@ export default function App() {
                             <p className="font-semibold text-white text-sm">{f.username}</p>
                             {fActivity ? (
                               <p className="text-xs text-[#1DB954] truncate max-w-[160px]">🎵 {fActivity.artists} — {fActivity.name}</p>
+                            ) : fTwitch ? (
+                              <p className="text-xs text-purple-400 truncate max-w-[160px]">🔴 Streamuje: {fTwitch.game_name}</p>
+                            ) : fSteam ? (
+                              <p className="text-xs text-zinc-500 truncate max-w-[160px]">🎮 {fSteam.name}</p>
                             ) : (
                               <p className="text-xs text-zinc-600">{f.custom_status||f.status}</p>
                             )}
@@ -6700,6 +7005,8 @@ export default function App() {
                         const isNew = m.joined_at && (Date.now()-new Date(m.joined_at).getTime()<172800000);
                         const isOwner = m.id === serverFull?.owner_id;
                         const mActivity = userActivities.get(m.id);
+                        const mTwitch = userTwitchActivities.get(m.id);
+                        const mSteam = userSteamActivities.get(m.id);
                         return (
                         <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={()=>openProfile(m)}
                           onMouseEnter={e=>showHoverCard(m.id, e)}
@@ -6720,6 +7027,10 @@ export default function App() {
                             </div>
                             {mActivity ? (
                               <p className="text-[11px] text-[#1DB954] truncate leading-tight">🎵 {mActivity.artists}</p>
+                            ) : mTwitch ? (
+                              <p className="text-[11px] text-purple-400 truncate leading-tight">🔴 Streamuje: {mTwitch.game_name}</p>
+                            ) : mSteam ? (
+                              <p className="text-[11px] text-zinc-500 truncate leading-tight">🎮 {mSteam.name}</p>
                             ) : (()=>{const sl=statusLabel(m.status); return sl
                               ? <p className={`text-[11px] truncate leading-tight ${sl.cls}`}>{sl.text}</p>
                               : m.role_name ? <p className="text-[11px] text-zinc-600 truncate leading-tight">{m.role_name}</p> : null;
@@ -8550,6 +8861,8 @@ export default function App() {
           onOpenProfile={(id)=>{ openProfilePage(id); setHoverCard(null); }}
           cache={hoverCardCache}
           activity={userActivities.has(hoverCard.userId) ? userActivities.get(hoverCard.userId)??null : undefined}
+          twitchActivity={userTwitchActivities.has(hoverCard.userId) ? userTwitchActivities.get(hoverCard.userId)??null : undefined}
+          steamActivity={userSteamActivities.has(hoverCard.userId) ? userSteamActivities.get(hoverCard.userId)??null : undefined}
           onMouseEnter={cancelHideHoverCard}
           onMouseLeave={hideHoverCard}
         />
