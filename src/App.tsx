@@ -1679,15 +1679,34 @@ function ProfilePage({
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto custom-scrollbar">
-          {/* Banner */}
+          {/* Banner — replaced by Twitch iframe when live */}
           <div className="relative h-44 shrink-0 overflow-hidden">
-            {bannerSrc ? (
+            {twitchToShow?.is_live && twitchToShow.stream && twitchToShow.login ? (
+              <>
+                <iframe
+                  src={`https://player.twitch.tv/?channel=${twitchToShow.login}&parent=${window.location.hostname}&muted=true&autoplay=true`}
+                  width="100%" height="100%"
+                  allowFullScreen
+                  title="Twitch Stream"
+                  className="block w-full h-full border-0"
+                  style={{ pointerEvents: 'none' }}
+                />
+                {/* Live overlay badge */}
+                <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm rounded-lg px-2 py-1 pointer-events-none">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"/>
+                  <span className="text-[11px] font-bold text-white">NA ŻYWO</span>
+                  <span className="text-[11px] text-zinc-300">·</span>
+                  <span className="text-[11px] text-zinc-300 truncate max-w-[120px]">{twitchToShow.stream.game_name}</span>
+                  <span className="text-[11px] text-zinc-400">· {twitchToShow.stream.viewer_count.toLocaleString()} widzów</span>
+                </div>
+              </>
+            ) : bannerSrc ? (
               <img src={bannerSrc} className="w-full h-full object-cover" alt=""/>
             ) : (
               <div className={`w-full h-full bg-gradient-to-r ${bannerGrad}`}/>
             )}
             <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#0e0e1c]/80 pointer-events-none"/>
-            {isOwn && (
+            {isOwn && !(twitchToShow?.is_live) && (
               <label className="absolute top-3 right-3 w-9 h-9 bg-black/50 hover:bg-black/75 rounded-xl flex items-center justify-center cursor-pointer transition-all border border-white/10">
                 <Upload size={14} className="text-white"/>
                 <input type="file" accept="image/*" onChange={handleBannerSelect} className="hidden"/>
@@ -2000,34 +2019,20 @@ function ProfilePage({
                         <Link2Off size={12}/> Odłącz
                       </button>
                     </div>
-                    {twitchToShow?.is_live && twitchToShow.stream && twitchToShow.login && (
-                      <div className="rounded-xl overflow-hidden border border-purple-500/20">
-                        <iframe
-                          src={`https://player.twitch.tv/?channel=${twitchToShow.login}&parent=${window.location.hostname}&muted=true&autoplay=true`}
-                          height="180" width="100%" allowFullScreen title="Twitch Stream"
-                          className="block"
-                        />
-                        <div className="bg-purple-900/20 px-3 py-2 flex items-center gap-2">
-                          <span className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold">🔴 NA ŻYWO</span>
-                          <span className="text-xs text-white truncate">{twitchToShow.stream.game_name}</span>
-                          <span className="text-xs text-zinc-500 ml-auto">{twitchToShow.stream.viewer_count.toLocaleString()} widzów</span>
-                        </div>
+                    {twitchToShow?.is_live && twitchToShow.stream && (
+                      <div className="bg-purple-900/20 border border-purple-500/20 rounded-xl px-3 py-2 flex items-center gap-2">
+                        <span className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold shrink-0">🔴 NA ŻYWO</span>
+                        <span className="text-xs text-white truncate">{twitchToShow.stream.game_name}</span>
+                        <span className="text-xs text-zinc-500 ml-auto shrink-0">{twitchToShow.stream.viewer_count.toLocaleString()} widzów</span>
                       </div>
                     )}
                   </div>
                 ) : twitchToShow?.connected && twitchToShow?.show_on_profile ? (
-                  twitchToShow.is_live && twitchToShow.stream && twitchToShow.login ? (
-                    <div className="rounded-xl overflow-hidden border border-purple-500/20">
-                      <iframe
-                        src={`https://player.twitch.tv/?channel=${twitchToShow.login}&parent=${window.location.hostname}&muted=true&autoplay=true`}
-                        height="180" width="100%" allowFullScreen title="Twitch Stream"
-                        className="block"
-                      />
-                      <div className="bg-purple-900/20 px-3 py-2 flex items-center gap-2">
-                        <span className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold">🔴 NA ŻYWO</span>
-                        <span className="text-xs text-white truncate">{twitchToShow.stream.game_name}</span>
-                        <span className="text-xs text-zinc-500 ml-auto">{twitchToShow.stream.viewer_count.toLocaleString()} widzów</span>
-                      </div>
+                  twitchToShow.is_live && twitchToShow.stream ? (
+                    <div className="bg-purple-900/20 border border-purple-500/20 rounded-xl px-3 py-2 flex items-center gap-2">
+                      <span className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold shrink-0">🔴 NA ŻYWO</span>
+                      <span className="text-xs text-white truncate">{twitchToShow.stream.game_name}</span>
+                      <span className="text-xs text-zinc-500 ml-auto shrink-0">{twitchToShow.stream.viewer_count.toLocaleString()} widzów</span>
                     </div>
                   ) : (
                     <div className="bg-purple-500/5 border border-purple-500/10 rounded-xl px-3.5 py-2.5 flex items-center gap-2">
