@@ -1689,7 +1689,6 @@ function ProfilePage({
                   allowFullScreen
                   title="Twitch Stream"
                   className="block w-full h-full border-0"
-                  style={{ pointerEvents: 'none' }}
                 />
                 {/* Live overlay badge */}
                 <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm rounded-lg px-2 py-1 pointer-events-none">
