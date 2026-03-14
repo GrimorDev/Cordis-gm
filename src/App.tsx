@@ -2192,7 +2192,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
           : { background: 'linear-gradient(135deg, #2e2e48 0%, #1a1a2e 100%)' }}>
           {/* Avatar */}
           <div className="absolute -bottom-6 left-4">
-            <div className="relative av-frozen" style={{'--av-url':`url("${u?.avatar_url||`https://api.dicebear.com/9.x/identicon/svg?seed=${u?.username||userId}`}")`} as React.CSSProperties}>
+            <div className="relative">
               <img src={u?.avatar_url||`https://api.dicebear.com/9.x/identicon/svg?seed=${u?.username||userId}`}
                 className={`w-14 h-14 rounded-2xl object-cover border-4 border-[#18182a] av-eff-${u?.avatar_effect||'none'} av-sc`} alt=""/>
               <span className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-[#18182a] ${sc(u?.status||'offline')}`}/>
@@ -4963,7 +4963,7 @@ export default function App() {
                           <React.Fragment key={ch.id}>
                           <SortableChannelItem id={ch.id} catId={cat.id} canManage={canManageChannels}>
                           <div className="px-2">
-                            <button onClick={() => { setActiveChannel(ch.id); setIsMobileOpen(false); setSrvSettOpen(false); if(activeViewRef.current==='admin')setActiveView('servers'); }}
+                            <button onClick={() => { setActiveChannel(ch.id); setIsMobileOpen(false); setSrvSettOpen(false); setProfileViewId(null); if(activeViewRef.current==='admin')setActiveView('servers'); }}
                               className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${
                                 isAct
                                   ? 'bg-indigo-500/15 text-white border border-indigo-500/25'
