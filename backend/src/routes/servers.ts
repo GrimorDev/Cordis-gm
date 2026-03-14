@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { query, getClient } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
