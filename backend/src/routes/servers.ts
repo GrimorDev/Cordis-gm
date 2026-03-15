@@ -315,7 +315,7 @@ router.post('/:id/leave', authMiddleware, async (req: AuthRequest, res: Response
     await query('DELETE FROM server_members WHERE server_id = $1 AND user_id = $2', [req.params.id, req.user!.id]);
     const { rows: [act] } = await query(
       `INSERT INTO server_activity (server_id, type, username, icon, text) VALUES ($1,'member_leave',$2,'🚪',$3) RETURNING id, type, icon, text, created_at as time`,
-      [req.params.id, u?.username, `${u?.username} opuścił/a serwer`]
+      [req.params.id, u?.username, `**${u?.username}** opuścił/a serwer`]
     );
     const io = req.app.get('io');
     if (io) {
@@ -432,6 +432,22 @@ router.put('/:id/members/:userId/roles', authMiddleware, async (req: AuthRequest
       for (const roleId of assignedRoles) {
         runAutomations(req.params.id, 'role_assigned', { userId: req.params.userId, roleId, io }).catch(console.error);
       }
+      // Log role change to server activity
+      try {
+        const [{ rows: [admin] }, { rows: [target] }] = await Promise.all([
+          query(`SELECT username FROM users WHERE id=$1`, [req.user!.id]),
+          query(`SELECT username FROM users WHERE id=$1`, [req.params.userId]),
+        ]);
+        const roleName = role_name ?? (Array.isArray(role_ids) ? 'nowe role' : null);
+        if (roleName && admin && target) {
+          const text = `**${admin.username}** zmienił/a rolę **${target.username}** na **${roleName}**`;
+          const { rows: [act] } = await query(
+            `INSERT INTO server_activity (server_id, type, username, icon, text) VALUES ($1,'role_change',$2,'🔑',$3) RETURNING id, type, icon, text, created_at as time`,
+            [req.params.id, admin.username, text]
+          );
+          if (act && io) io.to(`server:${req.params.id}`).emit('server_activity', { ...act, server_id: req.params.id });
+        }
+      } catch {}
       return res.json({ message: 'Roles updated' });
     } catch (err) {
       await client.query('ROLLBACK');
@@ -728,7 +744,7 @@ router.post('/join/:code', authMiddleware, joinLimiter, async (req: AuthRequest,
     ]);
     const { rows: [act] } = await query(
       `INSERT INTO server_activity (server_id, type, username, icon, text) VALUES ($1,'member_join',$2,'👋',$3) RETURNING id, type, icon, text, created_at as time`,
-      [invite.server_id, u?.username, `${u?.username} dołączył/a do serwera`]
+      [invite.server_id, u?.username, `**${u?.username}** dołączył/a do serwera`]
     );
     const io = req.app.get('io');
     if (io) {

@@ -223,6 +223,15 @@ router.post('/channel/:channelId', authMiddleware, msgLimiter,
             });
           }
         }
+        // Log @everyone to server activity
+        try {
+          const text = `**${req.user!.username}** użył @everyone w **#${access.channelName}**`;
+          const { rows: [act] } = await query(
+            `INSERT INTO server_activity (server_id, type, username, icon, text) VALUES ($1,'everyone_ping',$2,'📢',$3) RETURNING id, type, icon, text, created_at as time`,
+            [ch.server_id, req.user!.username, text]
+          );
+          if (act && io) io.to(`server:${ch.server_id}`).emit('server_activity', { ...act, server_id: ch.server_id });
+        } catch {}
         // Persist @everyone notifications so offline users see them on return
         if (allMembers.length > 0) {
           const notifValues = allMembers.map((_: any, i: number) =>

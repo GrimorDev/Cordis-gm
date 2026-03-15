@@ -4205,7 +4205,7 @@ export default function App() {
     });
     sock.on('server_activity' as any, (act: any) => {
       if (activeServerRef.current === act.server_id) {
-        setServerActivity(p => [...p, act].slice(-20));
+        setServerActivity(p => [act, ...p].slice(0, 50));
       }
     });
     // Typing indicators (server channels only)
@@ -5011,7 +5011,7 @@ export default function App() {
   }, [addFriendVal]);
   const addServerActivity = (entry: {icon:string;text:string}) => {
     const id = Date.now().toString()+Math.random().toString(36).slice(2);
-    setServerActivity(p => [{id, ...entry, time: new Date().toISOString()}, ...p].slice(0, 20));
+    setServerActivity(p => [{id, ...entry, time: new Date().toISOString()}, ...p].slice(0, 50));
   };
 
   // ── Privacy helpers (read from currentUser, save to DB) ──────────
@@ -5919,6 +5919,12 @@ export default function App() {
         return <div className={`${cls} bg-emerald-500/15`}><UserPlus size={13} className="text-emerald-400"/></div>;
       case 'member_leave':
         return <div className={`${cls} bg-zinc-800`}><LogOut size={13} className="text-zinc-500"/></div>;
+      case 'channel_created':
+        return <div className={`${cls} bg-indigo-500/15`}><Hash size={13} className="text-indigo-400"/></div>;
+      case 'everyone_ping':
+        return <div className={`${cls} bg-amber-500/15`}><Bell size={13} className="text-amber-400"/></div>;
+      case 'role_change':
+        return <div className={`${cls} bg-violet-500/15`}><Shield size={13} className="text-violet-400"/></div>;
       default:
         return <div className={`${cls} bg-indigo-500/15`}><Activity size={13} className="text-indigo-400"/></div>;
     }
@@ -8392,15 +8398,23 @@ export default function App() {
               {serverActivity.length>0 ? (
                 <>
                   <div className="flex flex-col gap-1.5">
-                    {serverActivity.slice(0,4).map(a=>(
+                    {serverActivity.slice(0,4).map(a=>{
+                      const parts = a.text.split(/(\*\*[^*]+\*\*)/g);
+                      const rich = parts.map((p: string, i: number) =>
+                        p.startsWith('**') && p.endsWith('**')
+                          ? <strong key={i} className="text-white font-semibold">{p.slice(2,-2)}</strong>
+                          : <span key={i}>{p}</span>
+                      );
+                      return (
                       <div key={a.id} className="flex items-start gap-2.5 bg-white/[0.03] rounded-2xl px-3 py-2.5 border border-white/[0.06] hover:bg-white/[0.06] transition-all duration-200">
                         {activityIcon(a.type)}
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs text-zinc-300 leading-snug">{a.text}</p>
+                          <p className="text-xs text-zinc-400 leading-snug">{rich}</p>
                           <p className="text-[10px] text-zinc-600 mt-0.5">{ft(a.time)}</p>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                   {serverActivity.length>4&&(
                     <button onClick={()=>setShowActivityModal(true)}
@@ -10729,17 +10743,53 @@ export default function App() {
                 </button>
               </div>
               {/* List */}
-              <div className="overflow-y-auto custom-scrollbar max-h-[60vh] p-4 flex flex-col gap-2">
-                {serverActivity.map((a,i)=>(
-                  <motion.div key={a.id} initial={{opacity:0,x:-10}} animate={{opacity:1,x:0}} transition={{delay:i*0.025}}
-                    className="flex items-start gap-2.5 bg-white/[0.03] rounded-xl px-3 py-2.5 border border-white/[0.06] hover:bg-white/[0.06] transition-all duration-150">
-                    {activityIcon(a.type)}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs text-zinc-300 leading-snug">{a.text}</p>
-                      <p className="text-[10px] text-zinc-600 mt-0.5">{ft(a.time)}</p>
-                    </div>
-                  </motion.div>
-                ))}
+              <div className="overflow-y-auto custom-scrollbar max-h-[60vh] p-4 flex flex-col gap-1.5">
+                {(() => {
+                  // Helper: parse **bold** markers → JSX
+                  const richText = (text: string) => {
+                    const parts = text.split(/(\*\*[^*]+\*\*)/g);
+                    return parts.map((p, i) =>
+                      p.startsWith('**') && p.endsWith('**')
+                        ? <strong key={i} className="text-white font-semibold">{p.slice(2,-2)}</strong>
+                        : <span key={i}>{p}</span>
+                    );
+                  };
+                  // Group by calendar day (newest first)
+                  const today = new Date(); today.setHours(0,0,0,0);
+                  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
+                  const dayLabel = (iso: string) => {
+                    const d = new Date(iso); d.setHours(0,0,0,0);
+                    if (d.getTime() === today.getTime()) return 'Dzisiaj';
+                    if (d.getTime() === yesterday.getTime()) return 'Wczoraj';
+                    return d.toLocaleDateString('pl-PL', { day:'numeric', month:'long', year:'numeric' });
+                  };
+                  const rendered: React.ReactNode[] = [];
+                  let lastLabel = '';
+                  serverActivity.forEach((a, i) => {
+                    const label = dayLabel(a.time);
+                    if (label !== lastLabel) {
+                      lastLabel = label;
+                      rendered.push(
+                        <div key={`sep-${label}`} className="flex items-center gap-2 py-1 mt-1">
+                          <div className="h-px flex-1 bg-white/[0.07]"/>
+                          <span className="text-[10px] text-zinc-600 font-semibold uppercase tracking-widest px-1">{label}</span>
+                          <div className="h-px flex-1 bg-white/[0.07]"/>
+                        </div>
+                      );
+                    }
+                    rendered.push(
+                      <motion.div key={a.id} initial={{opacity:0,x:-10}} animate={{opacity:1,x:0}} transition={{delay:Math.min(i,10)*0.025}}
+                        className="flex items-start gap-2.5 bg-white/[0.03] rounded-xl px-3 py-2.5 border border-white/[0.06] hover:bg-white/[0.06] transition-all duration-150">
+                        {activityIcon(a.type)}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs text-zinc-400 leading-snug">{richText(a.text)}</p>
+                          <p className="text-[10px] text-zinc-600 mt-0.5">{ft(a.time)}</p>
+                        </div>
+                      </motion.div>
+                    );
+                  });
+                  return rendered;
+                })()}
               </div>
             </motion.div>
           </motion.div>

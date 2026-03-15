@@ -158,7 +158,7 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
         // Persist + broadcast activity
         const { rows: [act] } = await query(
           `INSERT INTO server_activity (server_id, type, username, icon, text) VALUES ($1,'voice_join',$2,'🎤',$3) RETURNING id, type, icon, text, created_at as time`,
-          [ch.server_id, user.username, `${user.username} dołączył/a do kanału głosowego`]
+          [ch.server_id, user.username, `**${user.username}** dołączył/a do **#${ch.name ?? 'kanał głosowy'}**`]
         );
         if (act) io.to(`server:${ch.server_id}`).emit('server_activity', { ...act, server_id: ch.server_id });
       }
@@ -169,7 +169,7 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
       socket.leave(`voice:${channelId}`);
       (socket.data as SocketData & { voiceChannelId?: string }).voiceChannelId = undefined;
 
-      const { rows: [ch] } = await query(`SELECT server_id FROM channels WHERE id = $1`, [channelId]);
+      const { rows: [ch] } = await query(`SELECT server_id, name FROM channels WHERE id = $1`, [channelId]);
       if (ch?.server_id) {
         io.to(`server:${ch.server_id}`).emit('voice_user_left', {
           channel_id: channelId,
@@ -177,7 +177,7 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
         });
         const { rows: [act] } = await query(
           `INSERT INTO server_activity (server_id, type, username, icon, text) VALUES ($1,'voice_leave',$2,'🚶',$3) RETURNING id, type, icon, text, created_at as time`,
-          [ch.server_id, user.username, `${user.username} opuścił/a kanał głosowy`]
+          [ch.server_id, user.username, `**${user.username}** opuścił/a **#${ch.name ?? 'kanał głosowy'}**`]
         );
         if (act) io.to(`server:${ch.server_id}`).emit('server_activity', { ...act, server_id: ch.server_id });
       }

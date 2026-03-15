@@ -173,6 +173,16 @@ router.post('/', authMiddleware,
       }
       const io = req.app.get('io');
       if (io) io.to(`server:${server_id}`).emit('channel_created', { ...channel, server_id, allowed_roles: [] });
+      // Log to server activity
+      try {
+        const { rows: [creator] } = await query(`SELECT username FROM users WHERE id=$1`, [req.user!.id]);
+        const typeLabel = type === 'voice' ? 'głosowy' : type === 'forum' ? 'forum' : type === 'announcement' ? 'ogłoszeniowy' : 'tekstowy';
+        const { rows: [act] } = await query(
+          `INSERT INTO server_activity (server_id, type, username, icon, text) VALUES ($1,'channel_created',$2,'#',$3) RETURNING id, type, icon, text, created_at as time`,
+          [server_id, creator?.username ?? 'Nieznany', `**${creator?.username ?? 'Nieznany'}** utworzył/a kanał ${typeLabel} **#${name}**`]
+        );
+        if (act && io) io.to(`server:${server_id}`).emit('server_activity', { ...act, server_id });
+      } catch {}
       return res.status(201).json(channel);
     } catch { return res.status(500).json({ error: 'Internal server error' }); }
   }
