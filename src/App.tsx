@@ -4359,16 +4359,6 @@ export default function App() {
     return () => clearInterval(t);
   }, [profileViewId]);
 
-  // ── Dismiss Tauri splashscreen after first paint ─────────────────
-  // useEffect fires after React paints to the DOM, ensuring the main window
-  // is never shown blank/white. The 6-second Rust timer is still a fallback.
-  useEffect(() => {
-    if (!isTauri) return;
-    import('@tauri-apps/api/core').then(({ invoke }) => {
-      invoke('close_splashscreen').catch(() => {});
-    });
-  }, []);
-
   // ── Init ────────────────────────────────────────────────────────
   useEffect(() => {
     const token = getToken();
