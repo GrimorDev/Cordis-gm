@@ -227,22 +227,92 @@ function EmojiPicker({ onSelect, onClose }: { onSelect: (e: string) => void; onC
   );
 }
 
-const AUTH_FEATURES = [
-  { icon: '💬', title: 'Wiadomości w czasie rzeczywistym', desc: 'Tekst, głos i wideo — wszystko w jednym miejscu',
-    grad: 'from-indigo-500 to-blue-500', iconBg: 'bg-indigo-500/15', border: 'border-indigo-500/25', glow: 'hover:shadow-indigo-500/10' },
-  { icon: '🎙️', title: 'Kanały głosowe i wideo', desc: 'Dołącz do rozmów z jednym kliknięciem',
-    grad: 'from-violet-500 to-purple-500', iconBg: 'bg-violet-500/15', border: 'border-violet-500/25', glow: 'hover:shadow-violet-500/10' },
-  { icon: '🛡️', title: 'Role i uprawnienia', desc: 'Pełna kontrola nad serwerem i członkami',
-    grad: 'from-emerald-500 to-teal-500', iconBg: 'bg-emerald-500/15', border: 'border-emerald-500/25', glow: 'hover:shadow-emerald-500/10' },
-  { icon: '🚀', title: 'Szybkie i niezawodne', desc: 'Socket.IO + PostgreSQL dla stale aktualnych danych',
-    grad: 'from-amber-500 to-orange-500', iconBg: 'bg-amber-500/15', border: 'border-amber-500/25', glow: 'hover:shadow-amber-500/10' },
+const LANDING_FEATURES = [
+  {
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-7 h-7">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>
+    ),
+    title: 'Wiadomości w czasie rzeczywistym',
+    desc: 'Tekst, obrazy, GIF-y i reakcje — wszystko natychmiastowe dzięki Socket.IO.',
+    grad: 'from-indigo-400 to-blue-400',
+    glow: 'shadow-indigo-500/20',
+    border: 'border-indigo-500/20',
+    bg: 'bg-indigo-500/8',
+  },
+  {
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-7 h-7">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+      </svg>
+    ),
+    title: 'Kanały głosowe i wideo',
+    desc: 'Dołącz do rozmów z jednym kliknięciem. WebRTC P2P bez opóźnień.',
+    grad: 'from-violet-400 to-purple-400',
+    glow: 'shadow-violet-500/20',
+    border: 'border-violet-500/20',
+    bg: 'bg-violet-500/8',
+  },
+  {
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-7 h-7">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+    ),
+    title: 'Serwery i społeczności',
+    desc: 'Twórz serwery, zarządzaj rolami i kanałami. Pełna kontrola nad uprawnieniami.',
+    grad: 'from-emerald-400 to-teal-400',
+    glow: 'shadow-emerald-500/20',
+    border: 'border-emerald-500/20',
+    bg: 'bg-emerald-500/8',
+  },
+  {
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-7 h-7">
+        <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+      </svg>
+    ),
+    title: 'Zaproszenia i znajomi',
+    desc: 'Zapraszaj znajomych linkiem. Listy znajomych, wnioski i bezpośrednie wiadomości.',
+    grad: 'from-pink-400 to-rose-400',
+    glow: 'shadow-pink-500/20',
+    border: 'border-pink-500/20',
+    bg: 'bg-pink-500/8',
+  },
+  {
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-7 h-7">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      </svg>
+    ),
+    title: 'Bezpieczeństwo i 2FA',
+    desc: 'JWT, szyfrowanie haseł bcrypt, weryfikacja e-mail i dwuetapowe logowanie TOTP.',
+    grad: 'from-amber-400 to-orange-400',
+    glow: 'shadow-amber-500/20',
+    border: 'border-amber-500/20',
+    bg: 'bg-amber-500/8',
+  },
+  {
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-7 h-7">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+      </svg>
+    ),
+    title: 'Integracje zewnętrzne',
+    desc: 'Spotify JAM, Voice DJ, Twitch i Steam — rozbudowane połączenia z Twoimi platformami.',
+    grad: 'from-cyan-400 to-sky-400',
+    glow: 'shadow-cyan-500/20',
+    border: 'border-cyan-500/20',
+    bg: 'bg-cyan-500/8',
+  },
 ];
 
 interface InviteInfo { code: string; server_id: string; server_name: string; icon_url: string | null; creator_username: string; creator_avatar: string | null; }
 
 function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string, isNew: boolean) => void; inviteInfo?: InviteInfo | null }) {
-  const [tab, setTab] = useState<'login' | 'register'>('login');
-  // Registration: 'form' = fill details, 'verify' = enter code
+  const [showModal, setShowModal] = useState(false);
+  const [modalTab, setModalTab] = useState<'login' | 'register'>('login');
   const [regStep, setRegStep] = useState<'form' | 'verify'>('form');
   const [form, setForm] = useState({ login: '', username: '', email: '', password: '', confirm: '' });
   const [verifyCode, setVerifyCode] = useState('');
@@ -250,13 +320,12 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
   const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
-  // 2FA login step
   const [twoFaSession, setTwoFaSession] = useState<string | null>(null);
   const [twoFaCode, setTwoFaCode] = useState('');
   const [twoFaType, setTwoFaType] = useState<'totp' | 'backup'>('totp');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
 
-  // Auto-format code as user types: "AB1XYZ789" → "AB-1XY-Z78" (xx-xxx-xxx)
   const handleCodeInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
     let formatted = raw;
@@ -265,16 +334,26 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
     setVerifyCode(formatted);
   };
 
-  const switchTab = (t: 'login' | 'register') => {
-    setTab(t); setError(''); setInfo(''); setRegStep('form'); setVerifyCode('');
+  const openModal = (tab: 'login' | 'register') => {
+    setModalTab(tab);
+    setError(''); setInfo(''); setRegStep('form'); setVerifyCode('');
+    setTwoFaSession(null); setTwoFaCode('');
+    setShowModal(true);
+    setMobileMenuOpen(false);
   };
 
-  // Step 1: send verification code
+  const closeModal = () => {
+    setShowModal(false);
+    setError(''); setInfo('');
+  };
+
+  const switchTab = (t: 'login' | 'register') => {
+    setModalTab(t); setError(''); setInfo(''); setRegStep('form'); setVerifyCode('');
+  };
+
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault(); setError(''); setInfo(''); setLoading(true);
-    if (form.password !== form.confirm) {
-      setError('Hasła nie pasują do siebie'); setLoading(false); return;
-    }
+    if (form.password !== form.confirm) { setError('Hasła nie pasują do siebie'); setLoading(false); return; }
     try {
       await auth.sendCode(form.email);
       setRegStep('verify');
@@ -284,29 +363,22 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
     } finally { setLoading(false); }
   };
 
-  // Step 2: register with code
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault(); setError(''); setLoading(true);
     try {
-      const res = await auth.register({
-        username: form.username, email: form.email,
-        password: form.password, code: verifyCode.trim(),
-      });
+      const res = await auth.register({ username: form.username, email: form.email, password: form.password, code: verifyCode.trim() });
       setToken(res.token); onAuth(res.user, res.token, true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Błąd połączenia z serwerem');
     } finally { setLoading(false); }
   };
 
-  // Login submit
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault(); setError(''); setLoading(true);
     try {
       const res = await auth.login({ login: form.login, password: form.password });
       if (res.requiresTwoFactor) {
-        setTwoFaSession(res.sessionId);
-        setTwoFaCode('');
-        setTwoFaType('totp');
+        setTwoFaSession(res.sessionId); setTwoFaCode(''); setTwoFaType('totp');
       } else {
         setToken(res.token); onAuth(res.user, res.token, false);
       }
@@ -325,366 +397,716 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
     } finally { setLoading(false); }
   };
 
+  const INTEGRATIONS = [
+    {
+      name: 'Spotify',
+      desc: 'JAM sessions — słuchaj muzyki razem ze znajomymi w czasie rzeczywistym.',
+      color: 'from-green-500/20 to-emerald-500/10',
+      border: 'border-green-500/25',
+      icon: (
+        <svg viewBox="0 0 24 24" className="w-8 h-8" fill="#1DB954">
+          <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+        </svg>
+      ),
+    },
+    {
+      name: 'Twitch',
+      desc: 'Linkuj swój kanał Twitch i pokaż znajomym, kiedy streamujesz.',
+      color: 'from-purple-500/20 to-violet-500/10',
+      border: 'border-purple-500/25',
+      icon: (
+        <svg viewBox="0 0 24 24" className="w-8 h-8" fill="#9146FF">
+          <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/>
+        </svg>
+      ),
+    },
+    {
+      name: 'Steam',
+      desc: 'Udostępnij swój profil Steam i pokaż, w co aktualnie grasz.',
+      color: 'from-blue-500/20 to-sky-500/10',
+      border: 'border-blue-500/25',
+      icon: (
+        <svg viewBox="0 0 24 24" className="w-8 h-8" fill="#1b2838">
+          <defs><linearGradient id="steamGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#66C0F4"/><stop offset="100%" stopColor="#1B2838"/></linearGradient></defs>
+          <path fill="url(#steamGrad)" d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.455 1.012H7.54zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.253 0-2.265-1.014-2.265-2.265z"/>
+        </svg>
+      ),
+    },
+  ];
+
   return (
-    <div className="fixed inset-0 flex overflow-hidden"
-      style={{ background: 'radial-gradient(ellipse at 20% 50%,rgba(99,102,241,.25) 0%,transparent 55%),radial-gradient(ellipse at 80% 20%,rgba(139,92,246,.18) 0%,transparent 50%),radial-gradient(ellipse at 60% 90%,rgba(79,70,229,.12) 0%,transparent 45%),#09090b' }}>
+    <>
+      {/* ─── LANDING PAGE ───────────────────────────────────────────────────── */}
+      <div className="min-h-screen bg-[#09090b] text-white overflow-x-hidden">
 
-      {/* Decorative animated blobs */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <motion.div animate={{ x: [0,40,-15,0], y: [0,-30,10,0], scale: [1,1.1,0.95,1] }}
-          transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute -top-32 -left-32 w-[500px] h-[500px] bg-indigo-600/15 rounded-full blur-3xl"/>
-        <motion.div animate={{ x: [0,-50,20,0], y: [0,25,-15,0], scale: [1,0.9,1.05,1] }}
-          transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
-          className="absolute -bottom-32 -right-32 w-[500px] h-[500px] bg-purple-600/15 rounded-full blur-3xl"/>
-        <motion.div animate={{ x: [0,20,-30,0], y: [0,-20,15,0], scale: [1,1.15,0.9,1] }}
-          transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut', delay: 5 }}
-          className="absolute top-1/3 right-1/4 w-72 h-72 bg-violet-500/10 rounded-full blur-3xl"/>
-        <motion.div animate={{ x: [0,-15,30,0], y: [0,30,-10,0], scale: [1,0.95,1.1,1] }}
-          transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
-          className="absolute bottom-1/4 left-1/3 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl"/>
-        {/* Floating particles */}
-        {[
-          {x:'15%',y:'20%',size:3,dur:4,delay:0,color:'bg-indigo-400/40'},
-          {x:'75%',y:'15%',size:2,dur:6,delay:1,color:'bg-purple-400/40'},
-          {x:'85%',y:'60%',size:4,dur:5,delay:2,color:'bg-violet-400/30'},
-          {x:'10%',y:'70%',size:2,dur:7,delay:0.5,color:'bg-blue-400/40'},
-          {x:'50%',y:'80%',size:3,dur:4.5,delay:3,color:'bg-indigo-400/30'},
-          {x:'30%',y:'40%',size:2,dur:8,delay:1.5,color:'bg-purple-400/30'},
-        ].map((p,i) => (
-          <motion.div key={i}
-            animate={{ y: [0,-12,0], opacity: [0.4,1,0.4] }}
-            transition={{ duration: p.dur, repeat: Infinity, ease: 'easeInOut', delay: p.delay }}
-            className={`absolute rounded-full ${p.color}`}
-            style={{ left: p.x, top: p.y, width: p.size*4, height: p.size*4 }}/>
-        ))}
-      </div>
+        {/* ── Sticky Navbar ── */}
+        <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.06]"
+          style={{ background: 'rgba(9,9,11,0.85)', backdropFilter: 'blur(20px)' }}>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+            {/* Logo */}
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center">
+                <img src="/cordyn_logo.png" alt="Cordyn" className="w-full h-full object-contain"/>
+              </div>
+              <span className="text-lg font-bold tracking-tight">Cordyn</span>
+            </div>
 
-      {/* Left panel — branding */}
-      <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5 }}
-        className="hidden lg:flex flex-col justify-between w-[52%] p-12 relative">
-        {/* Logo */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center overflow-hidden">
-            <img src="/cordyn.png" alt="Cordyn" className="w-8 h-8 object-contain"/>
+            {/* Desktop nav links */}
+            <div className="hidden md:flex items-center gap-7 text-sm text-zinc-400">
+              {['Funkcje','Integracje','Bezpieczeństwo'].map(l => (
+                <a key={l} href={`#${l.toLowerCase()}`}
+                  className="hover:text-white transition-colors cursor-pointer">{l}</a>
+              ))}
+            </div>
+
+            {/* Desktop CTA buttons */}
+            <div className="hidden md:flex items-center gap-3">
+              <button onClick={() => openModal('login')}
+                className="px-4 py-2 rounded-xl text-sm font-semibold text-zinc-300 hover:text-white hover:bg-white/[0.06] transition-all">
+                Zaloguj się
+              </button>
+              <button onClick={() => openModal('register')}
+                className="px-4 py-2 rounded-xl text-sm font-bold bg-indigo-500 hover:bg-indigo-400 text-white transition-all shadow-lg shadow-indigo-500/20">
+                Zarejestruj się
+              </button>
+            </div>
+
+            {/* Mobile hamburger */}
+            <button className="md:hidden p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-all"
+              onClick={() => setMobileMenuOpen(v => !v)}>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                {mobileMenuOpen
+                  ? <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                  : <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16"/>}
+              </svg>
+            </button>
           </div>
-          <span className="text-xl font-bold text-white tracking-tight">Cordyn</span>
-        </div>
 
-        {/* Hero text */}
-        <div className="flex-1 flex flex-col justify-center max-w-lg">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-            <div className="inline-flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/25 rounded-full px-4 py-1.5 mb-6">
+          {/* Mobile menu */}
+          <AnimatePresence>
+            {mobileMenuOpen && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                className="md:hidden border-t border-white/[0.06] px-4 py-4 flex flex-col gap-3">
+                {['Funkcje','Integracje','Bezpieczeństwo'].map(l => (
+                  <a key={l} href={`#${l.toLowerCase()}`} onClick={() => setMobileMenuOpen(false)}
+                    className="text-zinc-400 hover:text-white transition-colors py-1">{l}</a>
+                ))}
+                <div className="flex gap-3 mt-2 pt-3 border-t border-white/[0.06]">
+                  <button onClick={() => openModal('login')}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-300 bg-white/[0.04] border border-white/[0.07] hover:bg-white/[0.08] transition-all">
+                    Zaloguj się
+                  </button>
+                  <button onClick={() => openModal('register')}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-indigo-500 hover:bg-indigo-400 text-white transition-all">
+                    Zarejestruj się
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </nav>
+
+        {/* ── Hero Section ── */}
+        <section className="relative pt-32 pb-24 px-4 sm:px-6 overflow-hidden">
+          {/* Animated bg blobs */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            <motion.div animate={{ x: [0,50,-20,0], y: [0,-30,15,0], scale: [1,1.1,.95,1] }}
+              transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
+              className="absolute -top-40 -left-40 w-[600px] h-[600px] bg-indigo-600/15 rounded-full blur-3xl"/>
+            <motion.div animate={{ x: [0,-50,20,0], y: [0,30,-15,0], scale: [1,.9,1.05,1] }}
+              transition={{ duration: 17, repeat: Infinity, ease: 'easeInOut', delay: 3 }}
+              className="absolute -bottom-40 -right-40 w-[600px] h-[600px] bg-purple-600/12 rounded-full blur-3xl"/>
+            <motion.div animate={{ x: [0,25,-35,0], y: [0,-20,20,0] }}
+              transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut', delay: 6 }}
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-violet-500/8 rounded-full blur-3xl"/>
+            {/* Grid overlay */}
+            <div className="absolute inset-0 opacity-[0.025]"
+              style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px)', backgroundSize: '60px 60px' }}/>
+            {/* Particles */}
+            {[
+              {x:'8%',y:'25%',s:3,d:4,dl:0,c:'bg-indigo-400/50'},
+              {x:'72%',y:'12%',s:2,d:6,dl:1,c:'bg-purple-400/50'},
+              {x:'88%',y:'55%',s:4,d:5,dl:2,c:'bg-violet-400/40'},
+              {x:'15%',y:'75%',s:2,d:7,dl:.5,c:'bg-blue-400/50'},
+              {x:'55%',y:'82%',s:3,d:4.5,dl:3,c:'bg-indigo-400/40'},
+              {x:'35%',y:'38%',s:2,d:8,dl:1.5,c:'bg-pink-400/40'},
+              {x:'62%',y:'30%',s:3,d:5.5,dl:2.5,c:'bg-cyan-400/40'},
+            ].map((p,i) => (
+              <motion.div key={i}
+                animate={{ y:[0,-14,0], opacity:[.4,1,.4] }}
+                transition={{ duration:p.d, repeat:Infinity, ease:'easeInOut', delay:p.dl }}
+                className={`absolute rounded-full ${p.c}`}
+                style={{ left:p.x, top:p.y, width:p.s*4, height:p.s*4 }}/>
+            ))}
+          </div>
+
+          <div className="relative max-w-4xl mx-auto text-center">
+            {/* Badge */}
+            <motion.div initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} transition={{ duration:.5 }}
+              className="inline-flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/25 rounded-full px-5 py-2 mb-8">
               <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"/>
               <span className="text-sm text-indigo-300 font-medium">Platforma dla twórców i społeczności</span>
-            </div>
-            <h1 className="text-4xl xl:text-5xl font-black text-white leading-tight mb-4">
-              Twoja przestrzeń.<br/>
+            </motion.div>
+
+            {/* Headline */}
+            <motion.h1 initial={{ opacity:0, y:24 }} animate={{ opacity:1, y:0 }} transition={{ duration:.6, delay:.1 }}
+              className="text-5xl sm:text-6xl lg:text-7xl font-black leading-[1.05] tracking-tight mb-6">
+              Twoja przestrzeń.{' '}
               <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
                 Twoje zasady.
               </span>
-            </h1>
-            <p className="text-lg text-zinc-400 leading-relaxed mb-10">
-              Buduj społeczności, komunikuj się w czasie rzeczywistym i zarządzaj serwerami z pełną kontrolą.
-            </p>
-          </motion.div>
+            </motion.h1>
 
-          {/* Feature cards */}
-          <div className="grid grid-cols-2 gap-3">
-            {AUTH_FEATURES.map((f, i) => (
-              <motion.div key={f.title} initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ delay: 0.25 + i * 0.08, type: 'spring', stiffness: 200 }}
-                whileHover={{ y: -3, scale: 1.02 }}
-                className={`flex flex-col gap-3 border ${f.border} rounded-2xl p-4 cursor-default
-                  bg-white/[0.03] hover:bg-white/[0.06] transition-all duration-200 shadow-lg ${f.glow} hover:shadow-lg`}>
-                <div className={`w-10 h-10 rounded-xl ${f.iconBg} flex items-center justify-center text-xl`}>
-                  {f.icon}
+            {/* Subtext */}
+            <motion.p initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} transition={{ duration:.5, delay:.2 }}
+              className="text-lg sm:text-xl text-zinc-400 max-w-2xl mx-auto leading-relaxed mb-10">
+              Komunikuj się, buduj społeczności i łącz ze znajomymi w czasie rzeczywistym.
+              Głos, wideo, Spotify JAM i wiele więcej — wszystko w jednym miejscu.
+            </motion.p>
+
+            {/* CTA buttons */}
+            <motion.div initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ duration:.5, delay:.3 }}
+              className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+              <button onClick={() => openModal('register')}
+                className="px-8 py-4 rounded-2xl text-base font-bold bg-indigo-500 hover:bg-indigo-400 text-white transition-all shadow-xl shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:-translate-y-0.5 active:translate-y-0">
+                Zacznij za darmo →
+              </button>
+              <button onClick={() => openModal('login')}
+                className="px-8 py-4 rounded-2xl text-base font-semibold text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.1] transition-all hover:-translate-y-0.5">
+                Zaloguj się
+              </button>
+            </motion.div>
+
+            {/* Stats row */}
+            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:.5 }}
+              className="flex flex-wrap items-center justify-center gap-8 sm:gap-12">
+              {[
+                { val:'100%', label:'Open Source', color:'text-indigo-400' },
+                { val:'E2E', label:'Szyfrowanie', color:'text-violet-400' },
+                { val:'∞', label:'Wiadomości', color:'text-emerald-400' },
+                { val:'2FA', label:'Bezpieczeństwo', color:'text-amber-400' },
+              ].map(s => (
+                <div key={s.label} className="text-center">
+                  <p className={`text-2xl font-black ${s.color}`}>{s.val}</p>
+                  <p className="text-xs text-zinc-600 mt-0.5">{s.label}</p>
                 </div>
-                <div>
-                  <p className={`text-sm font-bold bg-gradient-to-r ${f.grad} bg-clip-text text-transparent`}>{f.title}</p>
-                  <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">{f.desc}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-
-        {/* Stats row */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}
-          className="flex items-center gap-6 mt-8">
-          {[
-            { val: '100%', label: 'Open Source', color: 'text-indigo-400' },
-            { val: 'E2E', label: 'Szyfrowanie', color: 'text-violet-400' },
-            { val: '∞', label: 'Wiadomości', color: 'text-emerald-400' },
-          ].map(s => (
-            <div key={s.label}>
-              <p className={`text-lg font-black ${s.color}`}>{s.val}</p>
-              <p className="text-xs text-zinc-600">{s.label}</p>
-            </div>
-          ))}
-        </motion.div>
-
-        {/* Footer */}
-        <p className="text-xs text-zinc-700 mt-4">© 2025 Cordyn. Wszelkie prawa zastrzeżone.</p>
-      </motion.div>
-
-      {/* Right panel — form */}
-      <div className="flex-1 flex items-center justify-center p-6 lg:p-12">
-        {/* Glow behind form card */}
-        <div className="relative">
-          <div className="absolute inset-0 bg-indigo-500/10 blur-3xl rounded-full scale-150 pointer-events-none"/>
-        <motion.div initial={{ opacity: 0, y: 24, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-          className={`relative w-full max-w-sm ${gm} p-8 shadow-2xl shadow-indigo-900/30`}>
-
-          {/* Mobile logo */}
-          <div className="lg:hidden flex items-center gap-2 mb-6">
-            <span className="text-lg font-bold text-white">Cordyn</span>
+              ))}
+            </motion.div>
           </div>
 
-          {/* Invite banner */}
-          {inviteInfo && (
-            <div className="mb-6 flex items-center gap-3 bg-indigo-500/10 border border-indigo-500/25 rounded-2xl px-4 py-3">
-              {inviteInfo.icon_url
-                ? <img src={inviteInfo.icon_url} className="w-10 h-10 rounded-xl object-cover shrink-0" alt=""/>
-                : <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-lg font-bold text-white shrink-0">{inviteInfo.server_name[0]}</div>
-              }
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-white truncate">Zaproszenie na serwer</p>
-                <p className="text-xs text-indigo-300 font-semibold truncate">{inviteInfo.server_name}</p>
-                <p className="text-xs text-zinc-500 truncate">od <span className="text-zinc-400">{inviteInfo.creator_username}</span></p>
+          {/* App UI mockup strip */}
+          <motion.div initial={{ opacity:0, y:40 }} animate={{ opacity:1, y:0 }} transition={{ duration:.7, delay:.45 }}
+            className="relative max-w-5xl mx-auto mt-20">
+            <div className="relative rounded-3xl border border-white/[0.08] overflow-hidden shadow-2xl shadow-black/60"
+              style={{ background: 'linear-gradient(180deg,rgba(99,102,241,.08) 0%,rgba(9,9,11,.95) 100%)' }}>
+              {/* Fake titlebar */}
+              <div className="flex items-center gap-2 px-5 py-3 border-b border-white/[0.06]">
+                <span className="w-3 h-3 rounded-full bg-red-500/70"/>
+                <span className="w-3 h-3 rounded-full bg-amber-500/70"/>
+                <span className="w-3 h-3 rounded-full bg-emerald-500/70"/>
+                <div className="flex-1 mx-4 h-5 rounded-lg bg-white/[0.04] flex items-center px-3">
+                  <span className="text-[10px] text-zinc-600">cordyn.app</span>
+                </div>
+              </div>
+              {/* Fake app layout */}
+              <div className="flex h-48 sm:h-64">
+                {/* Sidebar servers */}
+                <div className="w-14 border-r border-white/[0.05] flex flex-col items-center gap-2 py-3 px-2 shrink-0">
+                  {['#','C','G','P','M'].map((l,i) => (
+                    <div key={i} className={`w-9 h-9 rounded-${i===0?'2xl':'xl'} flex items-center justify-center text-xs font-bold
+                      ${i===0?'bg-indigo-500 text-white':'bg-white/[0.06] text-zinc-500 hover:bg-indigo-500/30 hover:text-white'} transition-all`}>
+                      {l}
+                    </div>
+                  ))}
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-base">+</div>
+                </div>
+                {/* Channel list */}
+                <div className="w-44 sm:w-52 border-r border-white/[0.05] flex flex-col py-3 px-2 shrink-0">
+                  <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest px-2 mb-2">Kanały tekstowe</p>
+                  {['ogólny','rozwój','design','random'].map((ch,i) => (
+                    <div key={ch} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${i===0?'bg-indigo-500/15 text-white':'text-zinc-500 hover:text-zinc-300'} transition-colors cursor-pointer`}>
+                      <span className="text-sm text-zinc-600">#</span>
+                      <span className="text-xs font-medium truncate">{ch}</span>
+                    </div>
+                  ))}
+                  <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest px-2 mb-2 mt-3">Głosowe</p>
+                  {['Ogólny','Gaming'].map((ch) => (
+                    <div key={ch} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer">
+                      <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                      </svg>
+                      <span className="text-xs font-medium truncate">{ch}</span>
+                    </div>
+                  ))}
+                </div>
+                {/* Chat */}
+                <div className="flex-1 flex flex-col p-3 gap-2 overflow-hidden">
+                  {[
+                    { u:'Alex', c:'bg-indigo-500', msg:'Hej, ktoś gra dziś wieczorem? 🎮', time:'21:30' },
+                    { u:'Kasia', c:'bg-pink-500', msg:'Ja jestem! Wskakuję na głosowy 🎙️', time:'21:31' },
+                    { u:'Marek', c:'bg-emerald-500', msg:'Idę, zaraz dołączę do kanału voice', time:'21:32' },
+                  ].map((m,i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <div className={`w-7 h-7 rounded-full ${m.c} flex items-center justify-center text-xs font-bold text-white shrink-0`}>{m.u[0]}</div>
+                      <div>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-xs font-semibold text-white">{m.u}</span>
+                          <span className="text-[9px] text-zinc-600">{m.time}</span>
+                        </div>
+                        <p className="text-xs text-zinc-400 mt-0.5">{m.msg}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {/* Input mock */}
+                  <div className="mt-auto flex items-center gap-2 bg-white/[0.04] rounded-xl px-3 py-2 border border-white/[0.06]">
+                    <span className="text-xs text-zinc-600 flex-1">Napisz wiadomość...</span>
+                    <span className="text-zinc-600">😊</span>
+                  </div>
+                </div>
               </div>
             </div>
-          )}
+            {/* Glow under mockup */}
+            <div className="absolute -inset-4 bg-indigo-500/5 blur-3xl rounded-full -z-10"/>
+          </motion.div>
+        </section>
 
-          {/* Header */}
-          <div className="mb-7">
-            <h2 className="text-2xl font-bold text-white mb-1">
-              {tab === 'login' ? 'Witaj z powrotem!' : 'Dołącz do Cordyn'}
-            </h2>
-            <p className="text-sm text-zinc-500">
-              {tab === 'login'
-                ? inviteInfo ? 'Zaloguj się, aby dołączyć do serwera' : 'Zaloguj się na swoje konto, by kontynuować'
-                : inviteInfo ? 'Utwórz konto, aby dołączyć do serwera' : 'Utwórz konto i zacznij budować społeczność'}
-            </p>
-          </div>
+        {/* ── Features Section ── */}
+        <section id="funkcje" className="py-24 px-4 sm:px-6">
+          <div className="max-w-7xl mx-auto">
+            <motion.div initial={{ opacity:0, y:24 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.5 }}
+              className="text-center mb-16">
+              <div className="inline-flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 rounded-full px-4 py-1.5 mb-4">
+                <span className="text-xs font-semibold text-violet-400 uppercase tracking-wider">Funkcje</span>
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-black mb-4">
+                Wszystko, czego potrzebujesz
+              </h2>
+              <p className="text-zinc-400 max-w-xl mx-auto">
+                Jeden zestaw narzędzi do komunikacji, zarządzania społecznością i rozrywki.
+              </p>
+            </motion.div>
 
-          {/* Tab switch */}
-          <div className="flex bg-white/[0.04] border border-white/[0.06] rounded-2xl p-1 mb-6">
-            {(['login','register'] as const).map(t => (
-              <button key={t} onClick={() => switchTab(t)}
-                className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                  tab===t ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-zinc-400 hover:text-white'}`}>
-                {t === 'login' ? 'Logowanie' : 'Rejestracja'}
-              </button>
-            ))}
-          </div>
-
-          <AnimatePresence mode="wait">
-            {/* ── 2FA STEP ── */}
-            {twoFaSession && (
-              <motion.form key="2fa-form" onSubmit={handleVerify2fa}
-                initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}
-                transition={{ duration: 0.2 }} className="flex flex-col gap-3.5">
-                <div className="flex items-center gap-3 p-3.5 bg-indigo-500/10 border border-indigo-500/20 rounded-xl mb-1">
-                  <Shield size={18} className="text-indigo-400 shrink-0"/>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {LANDING_FEATURES.map((f, i) => (
+                <motion.div key={f.title}
+                  initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }}
+                  transition={{ duration:.4, delay: i * .07 }}
+                  whileHover={{ y:-4, scale:1.01 }}
+                  className={`relative flex flex-col gap-4 p-6 rounded-3xl border ${f.border} ${f.bg} hover:bg-white/[0.04] shadow-xl ${f.glow} hover:shadow-lg transition-all duration-200 cursor-default overflow-hidden`}>
+                  {/* Icon */}
+                  <div className={`inline-flex p-3 rounded-2xl bg-gradient-to-br ${f.grad} bg-opacity-10 w-fit`}
+                    style={{ background: 'rgba(255,255,255,0.05)' }}>
+                    <span className={`bg-gradient-to-r ${f.grad} bg-clip-text`} style={{ color:'transparent', display:'grid', placeItems:'center' }}>
+                      {f.icon}
+                    </span>
+                  </div>
                   <div>
-                    <p className="text-sm font-semibold text-white">Weryfikacja dwuetapowa</p>
-                    <p className="text-xs text-zinc-400">
-                      {twoFaType === 'totp' ? 'Podaj 6-cyfrowy kod z aplikacji authenticator' : 'Podaj kod zapasowy (XXXXX-XXXXX)'}
-                    </p>
+                    <h3 className={`text-base font-bold mb-1.5 bg-gradient-to-r ${f.grad} bg-clip-text text-transparent`}>{f.title}</h3>
+                    <p className="text-sm text-zinc-500 leading-relaxed">{f.desc}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── Integrations Section ── */}
+        <section id="integracje" className="py-24 px-4 sm:px-6">
+          <div className="max-w-7xl mx-auto">
+            <motion.div initial={{ opacity:0, y:24 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.5 }}
+              className="text-center mb-16">
+              <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-4 py-1.5 mb-4">
+                <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Integracje</span>
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-black mb-4">
+                Połącz swoje platformy
+              </h2>
+              <p className="text-zinc-400 max-w-xl mx-auto">
+                Cordyn integruje się z Twoimi ulubionymi serwisami, żebyś wszystko miał w jednym miejscu.
+              </p>
+            </motion.div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {INTEGRATIONS.map((intg, i) => (
+                <motion.div key={intg.name}
+                  initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }}
+                  transition={{ duration:.4, delay: i * .1 }}
+                  whileHover={{ y:-4 }}
+                  className={`flex flex-col gap-5 p-7 rounded-3xl border ${intg.border} bg-gradient-to-br ${intg.color} transition-all duration-200`}>
+                  <div className="w-14 h-14 rounded-2xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center">
+                    {intg.icon}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold mb-2">{intg.name}</h3>
+                    <p className="text-sm text-zinc-400 leading-relaxed">{intg.desc}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── Security Section ── */}
+        <section id="bezpieczeństwo" className="py-24 px-4 sm:px-6">
+          <div className="max-w-7xl mx-auto">
+            <div className="grid lg:grid-cols-2 gap-12 items-center">
+              {/* Left text */}
+              <motion.div initial={{ opacity:0, x:-30 }} whileInView={{ opacity:1, x:0 }} viewport={{ once:true }} transition={{ duration:.5 }}>
+                <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-full px-4 py-1.5 mb-6">
+                  <span className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Bezpieczeństwo</span>
+                </div>
+                <h2 className="text-3xl sm:text-4xl font-black mb-5">
+                  Twoje dane są bezpieczne
+                </h2>
+                <p className="text-zinc-400 leading-relaxed mb-8">
+                  Cordyn kładzie bezpieczeństwo na pierwszym miejscu. Hasła szyfrowane przez bcrypt,
+                  tokeny JWT z odświeżaniem, weryfikacja e-mail i dwuetapowe logowanie chronią Twoje konto.
+                </p>
+                <div className="flex flex-col gap-3">
+                  {[
+                    { icon:'🔐', text:'Dwuetapowe logowanie (TOTP + kody zapasowe)' },
+                    { icon:'🔒', text:'Hasła szyfrowane bcrypt (12 rund)' },
+                    { icon:'✉️', text:'Weryfikacja adresu e-mail przy rejestracji' },
+                    { icon:'🛡️', text:'JWT access + refresh tokens z blacklistą' },
+                    { icon:'⚡', text:'Rate limiting i ochrona przed spamem' },
+                  ].map(item => (
+                    <div key={item.text} className="flex items-center gap-3">
+                      <span className="text-xl shrink-0">{item.icon}</span>
+                      <span className="text-sm text-zinc-400">{item.text}</span>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+
+              {/* Right: authenticator apps card */}
+              <motion.div initial={{ opacity:0, x:30 }} whileInView={{ opacity:1, x:0 }} viewport={{ once:true }} transition={{ duration:.5, delay:.1 }}
+                className="relative">
+                <div className="absolute inset-0 bg-amber-500/5 blur-3xl rounded-full pointer-events-none"/>
+                <div className="relative rounded-3xl border border-amber-500/20 bg-amber-500/5 p-7">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-xl">🔐</div>
+                    <div>
+                      <p className="font-bold text-white">Weryfikacja dwuetapowa</p>
+                      <p className="text-xs text-zinc-500">Obsługiwane aplikacje authenticator</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { name:'Google Authenticator', color:'bg-blue-500/15 border-blue-500/25', icon:'🔵' },
+                      { name:'Authy', color:'bg-red-500/15 border-red-500/25', icon:'🔴' },
+                      { name:'Microsoft Authenticator', color:'bg-cyan-500/15 border-cyan-500/25', icon:'🔷' },
+                      { name:'1Password', color:'bg-indigo-500/15 border-indigo-500/25', icon:'🔑' },
+                    ].map(app => (
+                      <div key={app.name} className={`flex items-center gap-2.5 p-3 rounded-2xl border ${app.color}`}>
+                        <span className="text-lg">{app.icon}</span>
+                        <span className="text-xs font-medium text-zinc-300 leading-tight">{app.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-zinc-600 mt-4 text-center">
+                    Kompatybilny z każdą aplikacją TOTP (RFC 6238)
+                  </p>
+                </div>
+              </motion.div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Final CTA Section ── */}
+        <section className="py-24 px-4 sm:px-6">
+          <div className="max-w-3xl mx-auto text-center">
+            <motion.div initial={{ opacity:0, scale:.95 }} whileInView={{ opacity:1, scale:1 }} viewport={{ once:true }} transition={{ duration:.5 }}>
+              <div className="relative inline-block">
+                <motion.div
+                  animate={{ scale:[1,1.05,1], opacity:[.3,.6,.3] }}
+                  transition={{ duration:3, repeat:Infinity, ease:'easeInOut' }}
+                  className="absolute inset-0 bg-indigo-500/30 blur-3xl rounded-full"/>
+                <div className="relative rounded-3xl border border-indigo-500/25 bg-indigo-500/8 p-10 sm:p-14">
+                  <div className="w-16 h-16 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center mx-auto mb-6 overflow-hidden">
+                    <img src="/cordyn_logo.png" alt="Cordyn" className="w-12 h-12 object-contain"/>
+                  </div>
+                  <h2 className="text-3xl sm:text-4xl font-black mb-4">
+                    Gotowy na start?
+                  </h2>
+                  <p className="text-zinc-400 mb-8 max-w-md mx-auto">
+                    Dołącz do Cordyn — bezpłatnie, bez reklam, bez limitów wiadomości.
+                  </p>
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                    <button onClick={() => openModal('register')}
+                      className="px-8 py-4 rounded-2xl text-base font-bold bg-indigo-500 hover:bg-indigo-400 text-white transition-all shadow-xl shadow-indigo-500/30 hover:-translate-y-0.5">
+                      Zarejestruj się za darmo
+                    </button>
+                    <button onClick={() => openModal('login')}
+                      className="px-8 py-4 rounded-2xl text-base font-semibold text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.1] transition-all hover:-translate-y-0.5">
+                      Mam już konto
+                    </button>
                   </div>
                 </div>
-                <input
-                  autoFocus
-                  value={twoFaCode}
-                  onChange={e => setTwoFaCode(e.target.value)}
-                  placeholder={twoFaType === 'totp' ? '000000' : 'XXXXX-XXXXX'}
-                  maxLength={twoFaType === 'totp' ? 6 : 11}
-                  inputMode={twoFaType === 'totp' ? 'numeric' : 'text'}
-                  className={`${gi} rounded-xl px-4 py-3 text-center text-xl font-mono tracking-widest w-full`}
-                />
-                <AnimatePresence>
-                  {error && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="flex items-center gap-2 text-rose-400 text-sm bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-2.5 overflow-hidden">
-                      <AlertCircle size={15} className="shrink-0"/><span>{error}</span>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-                <button type="submit" disabled={loading || !twoFaCode.trim()}
-                  className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
-                  {loading ? <><Loader2 size={17} className="animate-spin"/> Weryfikacja...</> : <><Shield size={15}/>Zatwierdź</>}
-                </button>
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => { setTwoFaSession(null); setError(''); }}
-                    className="flex-1 py-2 rounded-xl text-sm font-semibold text-zinc-400 bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.07] transition-all">
-                    ← Wróć
-                  </button>
-                  <button type="button"
-                    onClick={() => { setTwoFaType(t => t === 'totp' ? 'backup' : 'totp'); setTwoFaCode(''); setError(''); }}
-                    className="flex-1 py-2 rounded-xl text-xs font-medium text-zinc-500 hover:text-zinc-300 bg-white/[0.03] hover:bg-white/[0.05] border border-white/[0.05] transition-all">
-                    {twoFaType === 'totp' ? 'Użyj kodu zapasowego' : 'Użyj aplikacji authenticator'}
-                  </button>
-                </div>
-              </motion.form>
-            )}
+              </div>
+            </motion.div>
+          </div>
+        </section>
 
-            {/* ── LOGIN FORM ── */}
-            {!twoFaSession && tab === 'login' && (
-              <motion.form key="login-form" onSubmit={handleLogin}
-                initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}
-                transition={{ duration: 0.2 }} className="flex flex-col gap-3.5">
-                <div className="relative">
-                  <MessageSquare size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
-                  <input required value={form.login} onChange={set('login')} placeholder="Login lub email"
-                    className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`} />
-                </div>
-                <div className="relative">
-                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
-                  <input required type={showPass ? 'text' : 'password'} value={form.password} onChange={set('password')}
-                    placeholder="Hasło" minLength={6}
-                    className={`${gi} rounded-xl pl-10 pr-10 py-3 text-sm w-full`} />
-                  <button type="button" onClick={() => setShowPass(v => !v)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
-                    {showPass ? <Eye size={15}/> : <EyeOff size={15}/>}
-                  </button>
-                </div>
-                <AnimatePresence>
-                  {error && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="flex items-center gap-2 text-rose-400 text-sm bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-2.5 overflow-hidden">
-                      <AlertCircle size={15} className="shrink-0"/><span>{error}</span>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-                <button type="submit" disabled={loading}
-                  className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
-                  {loading ? <><Loader2 size={17} className="animate-spin"/> Logowanie...</> : 'Zaloguj się →'}
-                </button>
-              </motion.form>
-            )}
-
-            {/* ── REGISTER STEP 1: fill form ── */}
-            {!twoFaSession && tab === 'register' && regStep === 'form' && (
-              <motion.form key="reg-form" onSubmit={handleSendCode}
-                initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}
-                transition={{ duration: 0.2 }} className="flex flex-col gap-3.5">
-                <div className="relative">
-                  <Users size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
-                  <input required value={form.username} onChange={set('username')} placeholder="Nazwa użytkownika"
-                    pattern="[a-zA-Z0-9_]+" minLength={2} maxLength={32}
-                    className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`} />
-                </div>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 text-sm pointer-events-none">@</span>
-                  <input required type="email" value={form.email} onChange={set('email')} placeholder="Adres email"
-                    className={`${gi} rounded-xl pl-9 pr-4 py-3 text-sm w-full`} />
-                </div>
-                <div className="relative">
-                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
-                  <input required type={showPass ? 'text' : 'password'} value={form.password} onChange={set('password')}
-                    placeholder="Hasło" minLength={6}
-                    className={`${gi} rounded-xl pl-10 pr-10 py-3 text-sm w-full`} />
-                  <button type="button" onClick={() => setShowPass(v => !v)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
-                    {showPass ? <Eye size={15}/> : <EyeOff size={15}/>}
-                  </button>
-                </div>
-                <div className="relative">
-                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
-                  <input required type={showPass ? 'text' : 'password'} value={form.confirm} onChange={set('confirm')}
-                    placeholder="Potwierdź hasło" minLength={6}
-                    className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`} />
-                </div>
-                <AnimatePresence>
-                  {error && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="flex items-center gap-2 text-rose-400 text-sm bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-2.5 overflow-hidden">
-                      <AlertCircle size={15} className="shrink-0"/><span>{error}</span>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-                <button type="submit" disabled={loading}
-                  className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
-                  {loading ? <><Loader2 size={17} className="animate-spin"/> Wysyłanie kodu...</> : <>Wyślij kod weryfikacyjny →</>}
-                </button>
-              </motion.form>
-            )}
-
-            {/* ── REGISTER STEP 2: enter code ── */}
-            {!twoFaSession && tab === 'register' && regStep === 'verify' && (
-              <motion.form key="verify-form" onSubmit={handleRegister}
-                initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}
-                transition={{ duration: 0.2 }} className="flex flex-col gap-3.5">
-
-                {/* Email indicator */}
-                <div className="flex items-center gap-2.5 bg-indigo-500/10 border border-indigo-500/25 rounded-xl px-4 py-3">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center shrink-0">
-                    <span className="text-base">✉️</span>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs text-indigo-300 font-medium">Kod wysłany na:</p>
-                    <p className="text-sm text-white font-semibold truncate">{form.email}</p>
-                  </div>
-                </div>
-
-                {/* Code input */}
-                <div className="relative">
-                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none text-sm font-mono">#</div>
-                  <input
-                    required
-                    value={verifyCode}
-                    onChange={handleCodeInput}
-                    placeholder="xx-xxx-xxx"
-                    maxLength={10}
-                    className={`${gi} rounded-xl pl-9 pr-4 py-3 text-sm w-full font-mono tracking-widest text-center`}
-                  />
-                </div>
-                <p className="text-xs text-zinc-600 text-center -mt-1">Sprawdź skrzynkę mailową · Ważny przez 15 minut</p>
-
-                <AnimatePresence>
-                  {(error || info) && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className={`flex items-center gap-2 text-sm rounded-xl px-4 py-2.5 overflow-hidden border ${
-                        error
-                          ? 'text-rose-400 bg-rose-500/10 border-rose-500/20'
-                          : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
-                      }`}>
-                      <AlertCircle size={15} className="shrink-0"/>
-                      <span>{error || info}</span>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                <button type="submit" disabled={loading}
-                  className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
-                  {loading ? <><Loader2 size={17} className="animate-spin"/> Tworzenie konta...</> : 'Zarejestruj się →'}
-                </button>
-
-                <button type="button" onClick={() => { setRegStep('form'); setError(''); setInfo(''); setVerifyCode(''); }}
-                  className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors text-center">
-                  ← Zmień dane / wyślij kod ponownie
-                </button>
-              </motion.form>
-            )}
-          </AnimatePresence>
-
-          <p className="text-xs text-zinc-700 text-center mt-5">
-            {tab === 'login' ? 'Nie masz konta? ' : 'Masz już konto? '}
-            <button onClick={() => switchTab(tab === 'login' ? 'register' : 'login')}
-              className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">
-              {tab === 'login' ? 'Zarejestruj się' : 'Zaloguj się'}
-            </button>
-          </p>
-        </motion.div>
-        </div>
+        {/* ── Footer ── */}
+        <footer className="py-8 px-4 sm:px-6 border-t border-white/[0.05]">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-7 h-7 rounded-lg overflow-hidden">
+                <img src="/cordyn_logo.png" alt="Cordyn" className="w-full h-full object-contain"/>
+              </div>
+              <span className="text-sm font-bold text-zinc-400">Cordyn</span>
+            </div>
+            <p className="text-xs text-zinc-700">© 2025 Cordyn. Wszelkie prawa zastrzeżone.</p>
+            <div className="flex items-center gap-5 text-xs text-zinc-600">
+              {['Funkcje','Integracje','Bezpieczeństwo'].map(l => (
+                <a key={l} href={`#${l.toLowerCase()}`} className="hover:text-zinc-400 transition-colors">{l}</a>
+              ))}
+            </div>
+          </div>
+        </footer>
       </div>
-    </div>
+
+      {/* ─── AUTH MODAL ─────────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showModal && (
+          <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.75)', backdropFilter:'blur(8px)' }}
+            onClick={e => { if (e.target === e.currentTarget) closeModal(); }}>
+
+            <motion.div initial={{ opacity:0, y:24, scale:.97 }} animate={{ opacity:1, y:0, scale:1 }} exit={{ opacity:0, y:16, scale:.97 }}
+              transition={{ duration:.3, ease:[.16,1,.3,1] }}
+              className={`relative w-full max-w-sm ${gm} p-8 shadow-2xl shadow-black/60`}>
+
+              {/* Close button */}
+              <button onClick={closeModal}
+                className="absolute top-4 right-4 w-8 h-8 rounded-xl flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.07] transition-all">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+
+              {/* Mobile logo */}
+              <div className="flex items-center gap-2 mb-6">
+                <div className="w-7 h-7 rounded-lg overflow-hidden">
+                  <img src="/cordyn_logo.png" alt="Cordyn" className="w-full h-full object-contain"/>
+                </div>
+                <span className="text-base font-bold text-white">Cordyn</span>
+              </div>
+
+              {/* Invite banner */}
+              {inviteInfo && (
+                <div className="mb-6 flex items-center gap-3 bg-indigo-500/10 border border-indigo-500/25 rounded-2xl px-4 py-3">
+                  {inviteInfo.icon_url
+                    ? <img src={inviteInfo.icon_url} className="w-10 h-10 rounded-xl object-cover shrink-0" alt=""/>
+                    : <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-lg font-bold text-white shrink-0">{inviteInfo.server_name[0]}</div>
+                  }
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-white truncate">Zaproszenie na serwer</p>
+                    <p className="text-xs text-indigo-300 font-semibold truncate">{inviteInfo.server_name}</p>
+                    <p className="text-xs text-zinc-500 truncate">od <span className="text-zinc-400">{inviteInfo.creator_username}</span></p>
+                  </div>
+                </div>
+              )}
+
+              {/* Header */}
+              <div className="mb-7">
+                <h2 className="text-2xl font-bold text-white mb-1">
+                  {modalTab === 'login' ? 'Witaj z powrotem!' : 'Dołącz do Cordyn'}
+                </h2>
+                <p className="text-sm text-zinc-500">
+                  {modalTab === 'login'
+                    ? inviteInfo ? 'Zaloguj się, aby dołączyć do serwera' : 'Zaloguj się na swoje konto'
+                    : inviteInfo ? 'Utwórz konto, aby dołączyć do serwera' : 'Utwórz konto i zacznij budować społeczność'}
+                </p>
+              </div>
+
+              {/* Tab switch */}
+              <div className="flex bg-white/[0.04] border border-white/[0.06] rounded-2xl p-1 mb-6">
+                {(['login','register'] as const).map(t => (
+                  <button key={t} onClick={() => switchTab(t)}
+                    className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                      modalTab===t ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-zinc-400 hover:text-white'}`}>
+                    {t === 'login' ? 'Logowanie' : 'Rejestracja'}
+                  </button>
+                ))}
+              </div>
+
+              <AnimatePresence mode="wait">
+                {/* ── 2FA STEP ── */}
+                {twoFaSession && (
+                  <motion.form key="2fa-form" onSubmit={handleVerify2fa}
+                    initial={{ opacity:0, x:12 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-12 }}
+                    transition={{ duration:.2 }} className="flex flex-col gap-3.5">
+                    <div className="flex items-center gap-3 p-3.5 bg-indigo-500/10 border border-indigo-500/20 rounded-xl mb-1">
+                      <Shield size={18} className="text-indigo-400 shrink-0"/>
+                      <div>
+                        <p className="text-sm font-semibold text-white">Weryfikacja dwuetapowa</p>
+                        <p className="text-xs text-zinc-400">
+                          {twoFaType === 'totp' ? 'Podaj 6-cyfrowy kod z aplikacji authenticator' : 'Podaj kod zapasowy (XXXXX-XXXXX)'}
+                        </p>
+                      </div>
+                    </div>
+                    <input autoFocus value={twoFaCode} onChange={e => setTwoFaCode(e.target.value)}
+                      placeholder={twoFaType === 'totp' ? '000000' : 'XXXXX-XXXXX'}
+                      maxLength={twoFaType === 'totp' ? 6 : 11}
+                      inputMode={twoFaType === 'totp' ? 'numeric' : 'text'}
+                      className={`${gi} rounded-xl px-4 py-3 text-center text-xl font-mono tracking-widest w-full`}/>
+                    <AnimatePresence>
+                      {error && (
+                        <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:'auto' }} exit={{ opacity:0, height:0 }}
+                          className="flex items-center gap-2 text-rose-400 text-sm bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-2.5 overflow-hidden">
+                          <AlertCircle size={15} className="shrink-0"/><span>{error}</span>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                    <button type="submit" disabled={loading || !twoFaCode.trim()}
+                      className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
+                      {loading ? <><Loader2 size={17} className="animate-spin"/> Weryfikacja...</> : <><Shield size={15}/>Zatwierdź</>}
+                    </button>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => { setTwoFaSession(null); setError(''); }}
+                        className="flex-1 py-2 rounded-xl text-sm font-semibold text-zinc-400 bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.07] transition-all">← Wróć</button>
+                      <button type="button" onClick={() => { setTwoFaType(t => t === 'totp' ? 'backup' : 'totp'); setTwoFaCode(''); setError(''); }}
+                        className="flex-1 py-2 rounded-xl text-xs font-medium text-zinc-500 hover:text-zinc-300 bg-white/[0.03] hover:bg-white/[0.05] border border-white/[0.05] transition-all">
+                        {twoFaType === 'totp' ? 'Użyj kodu zapasowego' : 'Użyj aplikacji authenticator'}
+                      </button>
+                    </div>
+                  </motion.form>
+                )}
+
+                {/* ── LOGIN FORM ── */}
+                {!twoFaSession && modalTab === 'login' && (
+                  <motion.form key="login-form" onSubmit={handleLogin}
+                    initial={{ opacity:0, x:-12 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:12 }}
+                    transition={{ duration:.2 }} className="flex flex-col gap-3.5">
+                    <div className="relative">
+                      <MessageSquare size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
+                      <input required value={form.login} onChange={set('login')} placeholder="Login lub email"
+                        className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`}/>
+                    </div>
+                    <div className="relative">
+                      <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
+                      <input required type={showPass ? 'text' : 'password'} value={form.password} onChange={set('password')}
+                        placeholder="Hasło" minLength={6}
+                        className={`${gi} rounded-xl pl-10 pr-10 py-3 text-sm w-full`}/>
+                      <button type="button" onClick={() => setShowPass(v => !v)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                        {showPass ? <Eye size={15}/> : <EyeOff size={15}/>}
+                      </button>
+                    </div>
+                    <AnimatePresence>
+                      {error && (
+                        <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:'auto' }} exit={{ opacity:0, height:0 }}
+                          className="flex items-center gap-2 text-rose-400 text-sm bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-2.5 overflow-hidden">
+                          <AlertCircle size={15} className="shrink-0"/><span>{error}</span>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                    <button type="submit" disabled={loading}
+                      className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
+                      {loading ? <><Loader2 size={17} className="animate-spin"/> Logowanie...</> : 'Zaloguj się →'}
+                    </button>
+                  </motion.form>
+                )}
+
+                {/* ── REGISTER STEP 1 ── */}
+                {!twoFaSession && modalTab === 'register' && regStep === 'form' && (
+                  <motion.form key="reg-form" onSubmit={handleSendCode}
+                    initial={{ opacity:0, x:12 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-12 }}
+                    transition={{ duration:.2 }} className="flex flex-col gap-3.5">
+                    <div className="relative">
+                      <Users size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
+                      <input required value={form.username} onChange={set('username')} placeholder="Nazwa użytkownika"
+                        pattern="[a-zA-Z0-9_]+" minLength={2} maxLength={32}
+                        className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`}/>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 text-sm pointer-events-none">@</span>
+                      <input required type="email" value={form.email} onChange={set('email')} placeholder="Adres email"
+                        className={`${gi} rounded-xl pl-9 pr-4 py-3 text-sm w-full`}/>
+                    </div>
+                    <div className="relative">
+                      <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
+                      <input required type={showPass ? 'text' : 'password'} value={form.password} onChange={set('password')}
+                        placeholder="Hasło" minLength={6}
+                        className={`${gi} rounded-xl pl-10 pr-10 py-3 text-sm w-full`}/>
+                      <button type="button" onClick={() => setShowPass(v => !v)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                        {showPass ? <Eye size={15}/> : <EyeOff size={15}/>}
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
+                      <input required type={showPass ? 'text' : 'password'} value={form.confirm} onChange={set('confirm')}
+                        placeholder="Potwierdź hasło" minLength={6}
+                        className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`}/>
+                    </div>
+                    <AnimatePresence>
+                      {error && (
+                        <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:'auto' }} exit={{ opacity:0, height:0 }}
+                          className="flex items-center gap-2 text-rose-400 text-sm bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-2.5 overflow-hidden">
+                          <AlertCircle size={15} className="shrink-0"/><span>{error}</span>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                    <button type="submit" disabled={loading}
+                      className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
+                      {loading ? <><Loader2 size={17} className="animate-spin"/> Wysyłanie kodu...</> : 'Wyślij kod weryfikacyjny →'}
+                    </button>
+                  </motion.form>
+                )}
+
+                {/* ── REGISTER STEP 2 ── */}
+                {!twoFaSession && modalTab === 'register' && regStep === 'verify' && (
+                  <motion.form key="verify-form" onSubmit={handleRegister}
+                    initial={{ opacity:0, x:12 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-12 }}
+                    transition={{ duration:.2 }} className="flex flex-col gap-3.5">
+                    <div className="flex items-center gap-2.5 bg-indigo-500/10 border border-indigo-500/25 rounded-xl px-4 py-3">
+                      <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center shrink-0"><span className="text-base">✉️</span></div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-indigo-300 font-medium">Kod wysłany na:</p>
+                        <p className="text-sm text-white font-semibold truncate">{form.email}</p>
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none text-sm font-mono">#</div>
+                      <input required value={verifyCode} onChange={handleCodeInput} placeholder="xx-xxx-xxx" maxLength={10}
+                        className={`${gi} rounded-xl pl-9 pr-4 py-3 text-sm w-full font-mono tracking-widest text-center`}/>
+                    </div>
+                    <p className="text-xs text-zinc-600 text-center -mt-1">Sprawdź skrzynkę mailową · Ważny przez 15 minut</p>
+                    <AnimatePresence>
+                      {(error || info) && (
+                        <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:'auto' }} exit={{ opacity:0, height:0 }}
+                          className={`flex items-center gap-2 text-sm rounded-xl px-4 py-2.5 overflow-hidden border ${error ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'}`}>
+                          <AlertCircle size={15} className="shrink-0"/><span>{error || info}</span>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                    <button type="submit" disabled={loading}
+                      className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
+                      {loading ? <><Loader2 size={17} className="animate-spin"/> Tworzenie konta...</> : 'Zarejestruj się →'}
+                    </button>
+                    <button type="button" onClick={() => { setRegStep('form'); setError(''); setInfo(''); setVerifyCode(''); }}
+                      className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors text-center">
+                      ← Zmień dane / wyślij kod ponownie
+                    </button>
+                  </motion.form>
+                )}
+              </AnimatePresence>
+
+              <p className="text-xs text-zinc-700 text-center mt-5">
+                {modalTab === 'login' ? 'Nie masz konta? ' : 'Masz już konto? '}
+                <button onClick={() => switchTab(modalTab === 'login' ? 'register' : 'login')}
+                  className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">
+                  {modalTab === 'login' ? 'Zarejestruj się' : 'Zaloguj się'}
+                </button>
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
