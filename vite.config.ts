@@ -7,6 +7,10 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   return {
     plugins: [react(), tailwindcss()],
+    // Tauri: don't clear the terminal so cargo output is visible
+    clearScreen: false,
+    // Expose VITE_ and TAURI_ prefixed env vars to the app
+    envPrefix: ['VITE_', 'TAURI_'],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
     },
@@ -16,6 +20,9 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      port: 3000,
+      // Tauri needs a fixed port — fail instead of trying another
+      strictPort: true,
       hmr: process.env.DISABLE_HMR !== 'true',
       // Dev proxy: forward API/socket calls to backend
       proxy: {

@@ -20,3 +20,6 @@ backend/uploads/
 
 # OS
 Thumbs.db
+
+# Tauri
+src-tauri/target/

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cordyn</title>
+  <style>
+    *, *::before, *::after {
+      margin: 0; padding: 0; box-sizing: border-box;
+    }
+    html, body {
+      width: 100%; height: 100%;
+      background: #0a0a14;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .logo {
+      width: 72px;
+      height: 72px;
+      border-radius: 18px;
+      margin-bottom: 20px;
+      box-shadow: 0 8px 32px rgba(99, 102, 241, 0.35);
+    }
+    .app-name {
+      color: #e2e8f0;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.4px;
+      margin-bottom: 4px;
+    }
+    .tagline {
+      color: #475569;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 32px;
+    }
+    .bar-track {
+      width: 180px;
+      height: 2px;
+      background: #1a1f35;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%);
+      border-radius: 999px;
+      animation: load 1.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+    @keyframes load {
+      0%   { width: 0%;  opacity: 1; }
+      70%  { width: 80%; opacity: 1; }
+      100% { width: 96%; opacity: 0.8; }
+    }
+    /* Subtle pulse on the logo */
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 8px 32px rgba(99, 102, 241, 0.35); }
+      50%       { box-shadow: 0 8px 48px rgba(99, 102, 241, 0.55); }
+    }
+    .logo { animation: pulse 2s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+  <img class="logo" src="cordyn_logo.png" alt="Cordyn logo">
+  <div class="app-name">Cordyn</div>
+  <div class="tagline">Loading&hellip;</div>
+  <div class="bar-track">
+    <div class="bar-fill"></div>
+  </div>
+</body>
+</html>

@@ -1,9 +1,15 @@
 FROM node:20-alpine AS builder
 
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm ci
+# Copy lockfile + manifest first (better layer caching)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+# Install only frontend deps (ignore workspace packages like backend)
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 COPY . .
 
@@ -13,7 +19,7 @@ ARG VITE_SOCKET_URL=
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_SOCKET_URL=$VITE_SOCKET_URL
 
-RUN npm run build
+RUN pnpm build
 
 # ── Nginx image ───────────────────────────────────────────────────────
 FROM nginx:1.25-alpine

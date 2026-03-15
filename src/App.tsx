@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { TitleBar, isTauri } from './TitleBar';
 import { translate, resolveLocale, bcp47 as localeBcp47, loadLocale, detectLocale, LOCALES, type Locale, type TimeFormat } from './i18n';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -6141,6 +6142,9 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-transparent p-2 gap-2">
+
+      {/* Tauri frameless window titlebar — only rendered in the desktop app */}
+      {isTauri && <TitleBar />}
 
       {/* TOP NAV — 3-col grid: [left tabs] [Cordyn] [right actions]
            grid-cols: 1fr auto 1fr guarantees center is always truly centered.
