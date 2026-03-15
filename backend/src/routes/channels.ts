@@ -90,16 +90,54 @@ router.get('/server/:serverId', authMiddleware, async (req: AuthRequest, res: Re
       `SELECT id, name, position FROM channel_categories WHERE server_id = $1 ORDER BY position`,
       [req.params.serverId]
     );
+    // unread_count: messages posted after user's last_read_at for text/announcement channels.
+    // Falls back to 30-day window if user has never marked the channel as read.
     const { rows: channels } = await query(
-      `SELECT id, category_id, name, type, description, is_private, position FROM channels
-       WHERE server_id = $1 ORDER BY position`,
-      [req.params.serverId]
+      `SELECT c.id, c.category_id, c.name, c.type, c.description, c.is_private, c.position,
+              CASE WHEN c.type IN ('text','announcement')
+                THEN COALESCE((
+                  SELECT COUNT(*)::int FROM messages m
+                  WHERE m.channel_id = c.id
+                    AND m.sender_id != $2
+                    AND m.created_at > COALESCE(
+                      (SELECT crs.last_read_at FROM channel_read_state crs
+                       WHERE crs.user_id = $2 AND crs.channel_id = c.id),
+                      NOW() - INTERVAL '30 days'
+                    )
+                ), 0)
+                ELSE 0
+              END AS unread_count
+       FROM channels c
+       WHERE c.server_id = $1 ORDER BY c.position`,
+      [req.params.serverId, req.user!.id]
     );
     const result = cats.map((cat: any) => ({
       ...cat,
       channels: channels.filter((c: any) => c.category_id === cat.id),
     }));
     return res.json(result);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// POST /api/channels/:id/read — mark channel as read (update cursor + clear notifications)
+router.post('/:id/read', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const access = await canAccessChannel(req.params.id, req.user!.id);
+    if (!access) return res.status(403).json({ error: 'No access' });
+
+    await query(
+      `INSERT INTO channel_read_state (user_id, channel_id, last_read_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (user_id, channel_id) DO UPDATE SET last_read_at = NOW()`,
+      [req.user!.id, req.params.id]
+    );
+    // Clear notification badges for this channel
+    await query(
+      `UPDATE notifications SET is_read = TRUE
+       WHERE user_id = $1 AND channel_id = $2 AND is_read = FALSE`,
+      [req.user!.id, req.params.id]
+    );
+    return res.json({ ok: true });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 

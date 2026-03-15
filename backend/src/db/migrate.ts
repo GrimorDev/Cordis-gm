@@ -506,6 +506,30 @@ CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id);
 DO $$ BEGIN ALTER TABLE servers     ADD COLUMN accent_color  VARCHAR(32) DEFAULT 'indigo';                                             EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE servers     ADD COLUMN banner_color  VARCHAR(64) DEFAULT 'from-indigo-600 via-violet-600 to-purple-700';       EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE dm_messages ADD COLUMN pinned        BOOLEAN     DEFAULT false;                                                 EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- ── Channel read state (unread counts per user per channel) ───────────
+CREATE TABLE IF NOT EXISTS channel_read_state (
+  user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  channel_id   UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+  last_read_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, channel_id)
+);
+CREATE INDEX IF NOT EXISTS idx_channel_read_state_user ON channel_read_state(user_id);
+
+-- ── Stored notifications (persists pings/mentions across sessions) ────
+CREATE TABLE IF NOT EXISTS notifications (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type         VARCHAR(32) NOT NULL,  -- 'mention' | 'everyone' | 'dm' | 'friend_request'
+  message_id   UUID REFERENCES messages(id) ON DELETE CASCADE,
+  channel_id   UUID REFERENCES channels(id) ON DELETE SET NULL,
+  server_id    UUID REFERENCES servers(id) ON DELETE CASCADE,
+  from_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  content      TEXT,
+  is_read      BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at DESC);
 `;
 
 const SEED_SQL = `

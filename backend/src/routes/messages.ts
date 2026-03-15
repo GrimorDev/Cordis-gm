@@ -223,6 +223,22 @@ router.post('/channel/:channelId', authMiddleware, msgLimiter,
             });
           }
         }
+        // Persist @everyone notifications so offline users see them on return
+        if (allMembers.length > 0) {
+          const notifValues = allMembers.map((_: any, i: number) =>
+            `($${i * 6 + 1}, 'everyone', $${i * 6 + 2}, $${i * 6 + 3}, $${i * 6 + 4}, $${i * 6 + 5}, $${i * 6 + 6})`
+          ).join(',');
+          const notifParams = allMembers.flatMap((m: any) => [
+            m.user_id, msg.id, req.params.channelId, ch.server_id, req.user!.id, content.slice(0, 200),
+          ]);
+          try {
+            await query(
+              `INSERT INTO notifications (user_id, type, message_id, channel_id, server_id, from_user_id, content)
+               VALUES ${notifValues}`,
+              notifParams
+            );
+          } catch { /* non-fatal */ }
+        }
       }
 
       // ── Parse !username mentions and notify mentioned users ──────────
@@ -241,19 +257,26 @@ router.post('/channel/:channelId', authMiddleware, msgLimiter,
                VALUES ($1,$2,$3,$4) ON CONFLICT (message_id, user_id) DO NOTHING`,
               [msg.id, req.params.channelId, ch.server_id, mentioned.id]
             );
-            if (io) {
-              io.to(`user:${mentioned.id}`).emit('ping_received' as any, {
-                message_id: msg.id,
-                channel_id: req.params.channelId,
-                channel_name: access.channelName,
-                server_id: ch.server_id,
-                server_name: access.serverName,
-                from_user_id: req.user!.id,
-                from_username: req.user!.username,
-                content,
-                type: 'mention',
-              });
-            }
+            const pingPayload = {
+              message_id: msg.id,
+              channel_id: req.params.channelId,
+              channel_name: access.channelName,
+              server_id: ch.server_id,
+              server_name: access.serverName,
+              from_user_id: req.user!.id,
+              from_username: req.user!.username,
+              content,
+              type: 'mention',
+            };
+            if (io) io.to(`user:${mentioned.id}`).emit('ping_received' as any, pingPayload);
+            // Persist mention so offline users see it when they return
+            try {
+              await query(
+                `INSERT INTO notifications (user_id, type, message_id, channel_id, server_id, from_user_id, content)
+                 VALUES ($1, 'mention', $2, $3, $4, $5, $6)`,
+                [mentioned.id, msg.id, req.params.channelId, ch.server_id, req.user!.id, content.slice(0, 200)]
+              );
+            } catch { /* non-fatal */ }
           }
         }
       }
@@ -343,6 +366,72 @@ router.put('/:id/pin', authMiddleware, async (req: AuthRequest, res: Response) =
     if (io) io.to(`channel:${msg.channel_id}`).emit('message_pinned' as any, { message_id: msg.id, channel_id: msg.channel_id, pinned });
     return res.json({ message: pinned ? 'Message pinned' : 'Message unpinned' });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// GET /api/messages/search?q=&channelId=&serverId= — full-text search
+// At least one of channelId or serverId must be provided.
+router.get('/search', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const q = (req.query.q as string || '').trim();
+  if (q.length < 2) return res.status(400).json({ error: 'Minimum 2 znaki' });
+
+  const channelId = req.query.channelId as string | undefined;
+  const serverId  = req.query.serverId  as string | undefined;
+  if (!channelId && !serverId) return res.status(400).json({ error: 'Wymagany channelId lub serverId' });
+
+  try {
+    if (channelId) {
+      // Single-channel search — verify access first
+      const access = await resolveChannelAccess(channelId, req.user!.id);
+      if (!access) return res.status(403).json({ error: 'Brak dostępu' });
+
+      const { rows } = await query(
+        `SELECT m.id, m.channel_id, m.content, m.created_at, m.attachment_url, m.edited,
+                u.id AS sender_id, u.username AS sender_username, u.avatar_url AS sender_avatar
+         FROM messages m
+         INNER JOIN users u ON u.id = m.sender_id
+         WHERE m.channel_id = $1 AND m.content ILIKE $2
+         ORDER BY m.created_at DESC LIMIT 50`,
+        [channelId, `%${q}%`]
+      );
+      return res.json(rows);
+    }
+
+    // Server-wide search — user must be a member
+    const { rows: [member] } = await query(
+      `SELECT role_name FROM server_members WHERE server_id = $1 AND user_id = $2`,
+      [serverId, req.user!.id]
+    );
+    if (!member) return res.status(403).json({ error: 'Brak dostępu' });
+    const isPrivileged = ['Owner', 'Admin'].includes(member.role_name);
+
+    // Include non-private channels + private channels the user has role access to
+    const { rows } = await query(
+      `SELECT m.id, m.channel_id, m.content, m.created_at, m.attachment_url, m.edited,
+              u.id AS sender_id, u.username AS sender_username, u.avatar_url AS sender_avatar,
+              c.name AS channel_name
+       FROM messages m
+       INNER JOIN users u ON u.id = m.sender_id
+       INNER JOIN channels c ON c.id = m.channel_id
+       WHERE c.server_id = $1
+         AND m.content ILIKE $2
+         AND c.type IN ('text', 'announcement')
+         AND (
+           c.is_private = FALSE
+           OR $3 = TRUE
+           OR EXISTS (
+             SELECT 1 FROM channel_role_access cra
+             INNER JOIN member_roles mr ON mr.role_id = cra.role_id
+             WHERE cra.channel_id = c.id AND mr.user_id = $4 AND mr.server_id = $1
+           )
+         )
+       ORDER BY m.created_at DESC LIMIT 50`,
+      [serverId, `%${q}%`, isPrivileged, req.user!.id]
+    );
+    return res.json(rows);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // GET /api/messages/channel/:channelId/pinned  — list pinned messages
