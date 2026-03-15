@@ -13,6 +13,9 @@ on:
         required: false
         default: 'dev'
 
+permissions:
+  contents: write   # required to create GitHub Releases and upload assets
+
 jobs:
   build-windows:
     name: Build Windows installer
