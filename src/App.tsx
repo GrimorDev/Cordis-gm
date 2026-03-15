@@ -3304,7 +3304,7 @@ function SpotifyDisplay({ spotify }: { spotify: SpotifyData }) {
 }
 
 // ─── HoverCard ────────────────────────────────────────────────────────────────
-function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfile, cache, activity, twitchActivity, steamActivity, steamGameStartedAt, realtimeStatus, onMouseEnter, onMouseLeave }: {
+function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfile, cache, activity, twitchActivity, steamActivity, steamGameStartedAt, realtimeStatus, onMouseEnter, onMouseLeave, maskName }: {
   userId: string; x: number; y: number;
   currentUserId: string | undefined;
   onOpenDm: (id: string) => void;
@@ -3318,6 +3318,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
   steamGameStartedAt: number | null | undefined;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
+  maskName: (name: string) => string;
 }) {
   const [data, setData] = React.useState<{profile:UserProfile|null;games:FavoriteGame[];spotify:SpotifyData|null}|null>(null);
   const isSelf = userId === currentUserId;
@@ -3402,7 +3403,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
         <div className="pt-8 px-4 pb-4">
           <div className="flex items-start justify-between mb-1">
             <div>
-              <p className="text-base font-bold text-white leading-tight">{u?.username||'...'}</p>
+              <p className="text-base font-bold text-white leading-tight">{u?.username ? maskName(u.username) : '...'}</p>
               <p className={`text-[11px] mt-0.5 ${sc(effectiveStatus).replace('bg-','text-')}`}>{scText(effectiveStatus)}</p>
             </div>
             {!isSelf && u && (
@@ -6582,7 +6583,7 @@ export default function App() {
                                       <div className={`relative shrink-0 ${isSpeaking&&!isMuted?'ring-1 ring-emerald-500 rounded-full':''}`}>
                                         <img src={ava(u)} className="w-3.5 h-3.5 rounded-full object-cover" alt=""/>
                                       </div>
-                                      <span className={`text-xs truncate ${isSpeaking&&!isMuted?'text-emerald-400':isMuted?'text-rose-400/70':'text-zinc-500'}`}>{u.username}</span>
+                                      <span className={`text-xs truncate ${isSpeaking&&!isMuted?'text-emerald-400':isMuted?'text-rose-400/70':'text-zinc-500'}`}>{maskName(u.username)}</span>
                                       {isMuted    && <MicOff  size={8} className="text-rose-400 shrink-0"/>}
                                       {isDeafened && <VolumeX size={8} className="text-rose-400 shrink-0"/>}
                                     </div>
@@ -7622,7 +7623,7 @@ export default function App() {
                         <div key={msg.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
                           <div className="flex items-center gap-2 mb-1.5">
                             <img src={msg.sender_avatar||`https://api.dicebear.com/7.x/shapes/svg?seed=${msg.sender_id}`} className="w-5 h-5 rounded-full object-cover" alt=""/>
-                            <span className="text-xs font-semibold text-white">{msg.sender_username}</span>
+                            <span className="text-xs font-semibold text-white">{maskName(msg.sender_username)}</span>
                             <span className="text-[10px] text-zinc-600 ml-auto">{new Date(msg.created_at).toLocaleDateString('pl-PL')}</span>
                           </div>
                           <p className="text-xs text-zinc-400 line-clamp-3 break-words">{msg.content}</p>
@@ -7884,8 +7885,8 @@ export default function App() {
                     {activeView==='dms'&&activeDm ? (
                       <>
                         <img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className="w-20 h-20 rounded-2xl mx-auto mb-4 border-4 border-zinc-950 object-cover shadow-2xl" alt=""/>
-                        <h1 className="text-2xl font-bold text-white mb-1">{activeDm.other_username}</h1>
-                        <p className="text-sm text-zinc-500">Początek Twojej rozmowy z <span className="text-zinc-400 font-medium">{activeDm.other_username}</span>.</p>
+                        <h1 className="text-2xl font-bold text-white mb-1">{maskName(activeDm.other_username)}</h1>
+                        <p className="text-sm text-zinc-500">Początek Twojej rozmowy z <span className="text-zinc-400 font-medium">{maskName(activeDm.other_username)}</span>.</p>
                       </>
                     ) : (
                       <>
@@ -7965,7 +7966,7 @@ export default function App() {
                               <span className="text-xs font-semibold cursor-pointer hover:underline transition-opacity hover:opacity-80"
                                 style={{ color: (msg as MessageFull).sender_role_color || (isOwn ? '#818cf8' : '#a1a1aa') }}
                                 onClick={()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar})}>
-                                {msg.sender_username}
+                                {maskName(msg.sender_username)}
                               </span>
                               {getMsgSenderBadges(msg.sender_id).map(b=>{const BIcon=getBadgeIcon(b.name);return <BIcon key={b.id} size={10} style={{color:b.color}} title={b.label} className="shrink-0"/>;  })}
                               {(msg as MessageFull).sender_role&&(
@@ -8235,7 +8236,7 @@ export default function App() {
                       className="flex items-center justify-between bg-white/[0.06]/70 border border-white/[0.07] rounded-xl px-3 py-1.5 mb-2 text-xs overflow-hidden">
                       <div className="flex items-center gap-1.5 text-zinc-400 truncate">
                         <Reply size={10} className="text-zinc-500 shrink-0"/>
-                        <span className="font-semibold text-zinc-300">{replyTo.sender_username}</span>
+                        <span className="font-semibold text-zinc-300">{maskName(replyTo.sender_username)}</span>
                         <span className="truncate text-zinc-600">{replyTo.content}</span>
                       </div>
                       <button onClick={()=>setReplyTo(null)} className="text-zinc-600 hover:text-white ml-2 shrink-0"><X size={11}/></button>
@@ -8452,7 +8453,7 @@ export default function App() {
                           <img src={ava(u)} className="w-10 h-10 rounded-full object-cover" alt=""/>
                           <div className="absolute bottom-0 left-0 right-0 px-1.5 pb-1 flex items-center gap-1">
                             <div className={`w-1.5 h-1.5 rounded-full ${sc(u.status)} shrink-0`}/>
-                            <span className="text-[10px] font-semibold text-white truncate">{u.username}</span>
+                            <span className="text-[10px] font-semibold text-white truncate">{maskName(u.username)}</span>
                           </div>
                         </div>
                       );
@@ -8657,7 +8658,7 @@ export default function App() {
                     <img src={ava(dmPartnerProfile)} className={`w-14 h-14 rounded-2xl border-4 border-[#1e1e30] object-cover av-eff-${dmPartnerProfile.avatar_effect||'none'}`} alt=""/>
                     <StatusBadge status={activeDm.other_status} size={20} className="absolute -bottom-1 -right-1"/>
                   </div>
-                  <h3 className="text-sm font-bold text-white leading-tight">{dmPartnerProfile.username}</h3>
+                  <h3 className="text-sm font-bold text-white leading-tight">{maskName(dmPartnerProfile.username)}</h3>
                   {activeDm.other_custom_status&&(
                     <p className="text-xs text-zinc-500 mt-0.5 truncate">{activeDm.other_custom_status}</p>
                   )}
@@ -8885,7 +8886,7 @@ export default function App() {
                             <div className="flex items-center gap-2 mb-1.5">
                               <img src={m.sender_avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(m.sender_username)}`}
                                 className="w-5 h-5 rounded-full object-cover" alt=""/>
-                              <span className="text-[11px] font-semibold text-zinc-300">{m.sender_username}</span>
+                              <span className="text-[11px] font-semibold text-zinc-300">{maskName(m.sender_username)}</span>
                               <span className="text-[10px] text-zinc-600 ml-auto">{new Date(m.created_at).toLocaleDateString('pl-PL')}</span>
                             </div>
                             <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3">{m.content}</p>
@@ -9831,7 +9832,7 @@ export default function App() {
                       <StatusBadge status={f.status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-semibold truncate ${f.status==='offline'?'text-zinc-500':'text-white'}`}>{f.username}</p>
+                      <p className={`text-sm font-semibold truncate ${f.status==='offline'?'text-zinc-500':'text-white'}`}>{maskName(f.username)}</p>
                       <p className="text-xs text-zinc-600 capitalize">{f.status==='online'?'Dostępny':f.status==='idle'?'Zaraz wracam':f.status==='dnd'?'Nie przeszkadzać':'Offline'}</p>
                     </div>
                     <button onClick={()=>handleInviteFriend(f.id, f.username)}
@@ -11248,6 +11249,7 @@ export default function App() {
           }
           onMouseEnter={cancelHideHoverCard}
           onMouseLeave={hideHoverCard}
+          maskName={maskName}
         />
       )}
 
