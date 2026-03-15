@@ -119,7 +119,7 @@ app.use('/api/twitch',  twitchRoutes);
 app.use('/api/users',   notesRoutes);
 app.use('/api/polls',   pollsRoutes);
 app.use('/api/push',    pushRoutes);
-app.use('/api/servers', automationsRoutes);
+app.use('/api/servers/:serverId/automations', automationsRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

@@ -6045,10 +6045,20 @@ export default function App() {
     });
     // ── Step 6: links open in new tab ────────────────────────────────
     html = html.replace(/<a href=/g, '<a target="_blank" rel="noopener noreferrer" href=');
+    // ── Step 6.5: replace server custom emoji :name: → <img> ─────────
+    const srvEmojis = activeServer ? (serverEmojis.get(activeServer) ?? []) : [];
+    if (srvEmojis.length > 0) {
+      html = html.replace(/:([a-zA-Z0-9_]{2,32}):/g, (match, name) => {
+        const e = srvEmojis.find(x => x.name === name);
+        if (!e) return match;
+        const safeUrl = e.image_url.replace(/"/g, '&quot;');
+        return `<img src="${safeUrl}" alt=":${name}:" title=":${name}:" data-custom-emoji="1" style="width:1.4em;height:1.4em;vertical-align:-0.3em;display:inline;object-fit:contain;border-radius:3px">`;
+      });
+    }
     // ── Step 7: sanitize (code block placeholders survive as text) ────
     let safe = DOMPurify.sanitize(html, {
-      ALLOWED_TAGS: ['strong', 'em', 'code', 'del', 's', 'a', 'br', 'span', 'mark'],
-      ALLOWED_ATTR: ['href', 'style', 'target', 'rel'],
+      ALLOWED_TAGS: ['strong', 'em', 'code', 'del', 's', 'a', 'br', 'span', 'mark', 'img'],
+      ALLOWED_ATTR: ['href', 'style', 'target', 'rel', 'src', 'alt', 'title', 'data-custom-emoji'],
     });
     // ── Step 8: restore code blocks (already HTML-safe, injected after sanitize) ──
     safe = safe.replace(/\x00CB(\d+)\x00/g, (_, i) => codeBlocks[parseInt(i, 10)] || '');
