@@ -428,6 +428,13 @@ DO $$ BEGIN ALTER TABLE users ADD COLUMN twitch_access_token TEXT; EXCEPTION WHE
 DO $$ BEGIN ALTER TABLE users ADD COLUMN twitch_refresh_token TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN twitch_token_expires TIMESTAMPTZ; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN twitch_show_on_profile BOOLEAN DEFAULT TRUE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- ── Two-Factor Authentication (2FA) ──────────────────────────────────────────
+DO $$ BEGIN ALTER TABLE users ADD COLUMN totp_secret TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN totp_backup_codes TEXT[] DEFAULT ARRAY[]::TEXT[]; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN phone_number VARCHAR(30); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN phone_verified BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 `;
 
 const SEED_SQL = `

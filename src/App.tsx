@@ -17,14 +17,15 @@ import {
 } from 'lucide-react';
 import {
   auth, users, serversApi, channelsApi, messagesApi, dmsApi, friendsApi, forumApi, adminApi,
-  gamesApi, spotifyApi, twitchApi, steamApi,
+  gamesApi, spotifyApi, twitchApi, steamApi, twoFactorApi,
   uploadFile, setToken, clearToken, getToken,
   type UserProfile, type ServerData, type ServerFull, type ServerRole,
   type ChannelData, type MessageFull, type DmConversation,
   type DmMessageFull, type FriendEntry, type FriendRequest,
   type ServerMember, type ForumPost, type ForumReply, type ServerBan,
   type Badge, type AdminStats, type AdminUser, type AdminServer, type AdminOverview,
-  type FavoriteGame, type SpotifyData, type SpotifyTrack, type TwitchData, type TwitchStream, type SteamData, type SteamGame, ApiError
+  type FavoriteGame, type SpotifyData, type SpotifyTrack, type TwitchData, type TwitchStream, type SteamData, type SteamGame,
+  type TwoFactorStatus, type LoginResult, ApiError
 } from './api';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -232,6 +233,10 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
   const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
+  // 2FA login step
+  const [twoFaSession, setTwoFaSession] = useState<string | null>(null);
+  const [twoFaCode, setTwoFaCode] = useState('');
+  const [twoFaType, setTwoFaType] = useState<'totp' | 'backup'>('totp');
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
 
   // Auto-format code as user types: "AB1XYZ789" → "AB-1XY-Z78" (xx-xxx-xxx)
@@ -281,6 +286,22 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
     e.preventDefault(); setError(''); setLoading(true);
     try {
       const res = await auth.login({ login: form.login, password: form.password });
+      if (res.requiresTwoFactor) {
+        setTwoFaSession(res.sessionId);
+        setTwoFaCode('');
+        setTwoFaType('totp');
+      } else {
+        setToken(res.token); onAuth(res.user, res.token, false);
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Błąd połączenia z serwerem');
+    } finally { setLoading(false); }
+  };
+
+  const handleVerify2fa = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(''); setLoading(true);
+    try {
+      const res = await auth.verify2fa({ sessionId: twoFaSession!, code: twoFaCode.trim(), type: twoFaType });
       setToken(res.token); onAuth(res.user, res.token, false);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Błąd połączenia z serwerem');
@@ -443,8 +464,58 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
           </div>
 
           <AnimatePresence mode="wait">
+            {/* ── 2FA STEP ── */}
+            {twoFaSession && (
+              <motion.form key="2fa-form" onSubmit={handleVerify2fa}
+                initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}
+                transition={{ duration: 0.2 }} className="flex flex-col gap-3.5">
+                <div className="flex items-center gap-3 p-3.5 bg-indigo-500/10 border border-indigo-500/20 rounded-xl mb-1">
+                  <Shield size={18} className="text-indigo-400 shrink-0"/>
+                  <div>
+                    <p className="text-sm font-semibold text-white">Weryfikacja dwuetapowa</p>
+                    <p className="text-xs text-zinc-400">
+                      {twoFaType === 'totp' ? 'Podaj 6-cyfrowy kod z aplikacji authenticator' : 'Podaj kod zapasowy (XXXXX-XXXXX)'}
+                    </p>
+                  </div>
+                </div>
+                <input
+                  autoFocus
+                  value={twoFaCode}
+                  onChange={e => setTwoFaCode(e.target.value)}
+                  placeholder={twoFaType === 'totp' ? '000000' : 'XXXXX-XXXXX'}
+                  maxLength={twoFaType === 'totp' ? 6 : 11}
+                  inputMode={twoFaType === 'totp' ? 'numeric' : 'text'}
+                  className={`${gi} rounded-xl px-4 py-3 text-center text-xl font-mono tracking-widest w-full`}
+                />
+                <AnimatePresence>
+                  {error && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="flex items-center gap-2 text-rose-400 text-sm bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-2.5 overflow-hidden">
+                      <AlertCircle size={15} className="shrink-0"/><span>{error}</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                <button type="submit" disabled={loading || !twoFaCode.trim()}
+                  className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
+                  {loading ? <><Loader2 size={17} className="animate-spin"/> Weryfikacja...</> : <><Shield size={15}/>Zatwierdź</>}
+                </button>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => { setTwoFaSession(null); setError(''); }}
+                    className="flex-1 py-2 rounded-xl text-sm font-semibold text-zinc-400 bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.07] transition-all">
+                    ← Wróć
+                  </button>
+                  <button type="button"
+                    onClick={() => { setTwoFaType(t => t === 'totp' ? 'backup' : 'totp'); setTwoFaCode(''); setError(''); }}
+                    className="flex-1 py-2 rounded-xl text-xs font-medium text-zinc-500 hover:text-zinc-300 bg-white/[0.03] hover:bg-white/[0.05] border border-white/[0.05] transition-all">
+                    {twoFaType === 'totp' ? 'Użyj kodu zapasowego' : 'Użyj aplikacji authenticator'}
+                  </button>
+                </div>
+              </motion.form>
+            )}
+
             {/* ── LOGIN FORM ── */}
-            {tab === 'login' && (
+            {!twoFaSession && tab === 'login' && (
               <motion.form key="login-form" onSubmit={handleLogin}
                 initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}
                 transition={{ duration: 0.2 }} className="flex flex-col gap-3.5">
@@ -480,7 +551,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
             )}
 
             {/* ── REGISTER STEP 1: fill form ── */}
-            {tab === 'register' && regStep === 'form' && (
+            {!twoFaSession && tab === 'register' && regStep === 'form' && (
               <motion.form key="reg-form" onSubmit={handleSendCode}
                 initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}
                 transition={{ duration: 0.2 }} className="flex flex-col gap-3.5">
@@ -528,7 +599,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
             )}
 
             {/* ── REGISTER STEP 2: enter code ── */}
-            {tab === 'register' && regStep === 'verify' && (
+            {!twoFaSession && tab === 'register' && regStep === 'verify' && (
               <motion.form key="verify-form" onSubmit={handleRegister}
                 initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}
                 transition={{ duration: 0.2 }} className="flex flex-col gap-3.5">
@@ -2764,11 +2835,27 @@ export default function App() {
   // App Settings
   const [appSettOpen, setAppSettOpen]         = useState(false);
   const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'devices'|'privacy'>('account');
+  // ── 2FA settings state ──
+  const [twoFaStatus, setTwoFaStatus]         = useState<TwoFactorStatus | null>(null);
+  const [twoFaModal, setTwoFaModal]           = useState<'setup'|'backup_codes'|'disable'|'regen'|null>(null);
+  const [twoFaSetupData, setTwoFaSetupData]   = useState<{secret:string;qr_code:string;manual_key:string}|null>(null);
+  const [twoFaInputCode, setTwoFaInputCode]   = useState('');
+  const [twoFaPassword, setTwoFaPassword]     = useState('');
+  const [twoFaBackupCodes, setTwoFaBackupCodes] = useState<string[]>([]);
+  const [twoFaLoading, setTwoFaLoading]       = useState(false);
+  const [twoFaError, setTwoFaError]           = useState('');
 
   // Account deletion flow
   const [deleteStep, setDeleteStep]           = useState<'confirm'|'code'|null>(null);
   const [deleteCode, setDeleteCode]           = useState('');
   const [deleteLoading, setDeleteLoading]     = useState(false);
+
+  // Load 2FA status when privacy tab opens
+  useEffect(() => {
+    if (appSettTab === 'privacy' && isAuthenticated) {
+      twoFactorApi.status().then(setTwoFaStatus).catch(() => {});
+    }
+  }, [appSettTab, isAuthenticated]);
 
   // Activity modal
   const [showActivityModal, setShowActivityModal] = useState(false);
@@ -8435,6 +8522,62 @@ export default function App() {
                           </div>
                         );
                       })}
+                      {/* ── 2FA SECTION ── */}
+                      <div className="mt-1 p-4 bg-indigo-500/5 border border-indigo-500/15 rounded-2xl">
+                        <div className="flex items-center gap-2 mb-3">
+                          <ShieldCheck size={16} className="text-indigo-400"/>
+                          <h4 className="text-sm font-bold text-white">Weryfikacja dwuetapowa (2FA)</h4>
+                          {twoFaStatus?.totp_enabled && (
+                            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/25 px-2 py-0.5 rounded-full">WŁĄCZONE</span>
+                          )}
+                        </div>
+                        {twoFaStatus?.totp_enabled ? (
+                          <div className="flex flex-col gap-2.5">
+                            <p className="text-xs text-zinc-400 leading-relaxed">
+                              2FA jest aktywne. Przy logowaniu wymagany będzie kod z aplikacji authenticator (Google Authenticator, Authy).
+                              Masz <span className="text-white font-semibold">{twoFaStatus.backup_codes_count}</span> kodów zapasowych.
+                            </p>
+                            <div className="flex gap-2 flex-wrap">
+                              <button
+                                onClick={async()=>{
+                                  setTwoFaInputCode(''); setTwoFaPassword(''); setTwoFaError('');
+                                  setTwoFaModal('regen');
+                                }}
+                                className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/15 border border-indigo-500/20 px-3 py-1.5 rounded-lg transition-all">
+                                Regeneruj kody zapasowe
+                              </button>
+                              <button
+                                onClick={()=>{ setTwoFaInputCode(''); setTwoFaPassword(''); setTwoFaError(''); setTwoFaModal('disable'); }}
+                                className="text-xs font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/15 border border-rose-500/20 px-3 py-1.5 rounded-lg transition-all">
+                                Wyłącz 2FA
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-2.5">
+                            <p className="text-xs text-zinc-500 leading-relaxed">
+                              Zabezpiecz konto drugim składnikiem uwierzytelniania. Po włączeniu, przy każdym logowaniu będziesz musieć podać kod z aplikacji authenticator.
+                            </p>
+                            <button
+                              onClick={async()=>{
+                                setTwoFaLoading(true); setTwoFaError('');
+                                try {
+                                  const data = await twoFactorApi.totpSetup();
+                                  setTwoFaSetupData(data);
+                                  setTwoFaInputCode('');
+                                  setTwoFaModal('setup');
+                                } catch(e:any) { setTwoFaError(e?.message || 'Błąd'); }
+                                finally { setTwoFaLoading(false); }
+                              }}
+                              disabled={twoFaLoading}
+                              className="self-start text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 border border-indigo-500/30 px-4 py-2 rounded-xl transition-all flex items-center gap-2">
+                              {twoFaLoading ? <Loader2 size={14} className="animate-spin"/> : <ShieldCheck size={14}/>}
+                              Włącz weryfikację dwuetapową
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
                       <div className="mt-2 p-4 bg-rose-500/5 border border-rose-500/15 rounded-2xl">
                         <h4 className="text-sm font-bold text-rose-400 mb-1">Strefa zagrożenia</h4>
                         <p className="text-xs text-zinc-500 mb-3">Trwałe akcje których nie można cofnąć</p>
@@ -8571,6 +8714,240 @@ export default function App() {
                   className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-rose-600 hover:bg-rose-500 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
                   {deleteLoading ? <Loader2 size={15} className="animate-spin"/> : <Trash2 size={15}/>}
                   Usuń konto
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── 2FA MODALS ───────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {/* Setup modal: show QR code + manual key, user enters code to confirm */}
+        {twoFaModal === 'setup' && twoFaSetupData && (
+          <motion.div key="2fa-setup-bg" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={()=>setTwoFaModal(null)}>
+            <motion.div key="2fa-setup-card" initial={{opacity:0,scale:0.92,y:16}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.92,y:8}}
+              transition={{type:'spring',stiffness:380,damping:28}}
+              className="bg-[#141420] border border-indigo-500/25 rounded-2xl p-6 w-full max-w-md shadow-2xl"
+              onClick={e=>e.stopPropagation()}>
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/15 flex items-center justify-center shrink-0">
+                  <ShieldCheck size={18} className="text-indigo-400"/>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Konfiguracja 2FA</h3>
+                  <p className="text-xs text-zinc-500">Skanuj kod QR aplikacją authenticator</p>
+                </div>
+              </div>
+              <div className="flex justify-center mb-4">
+                <div className="bg-white rounded-xl p-3">
+                  <img src={twoFaSetupData.qr_code} alt="QR code 2FA" className="w-44 h-44"/>
+                </div>
+              </div>
+              <div className="mb-4">
+                <p className="text-xs text-zinc-500 mb-1.5">Jeśli nie możesz zeskanować, wprowadź klucz ręcznie:</p>
+                <div className="flex items-center gap-2 bg-black/30 border border-white/[0.07] rounded-xl px-3 py-2">
+                  <code className="text-xs text-indigo-300 font-mono flex-1 break-all">{twoFaSetupData.manual_key}</code>
+                </div>
+              </div>
+              <p className="text-xs text-zinc-500 mb-3">Po skonfigurowaniu aplikacji, wpisz wygenerowany 6-cyfrowy kod:</p>
+              <input
+                autoFocus
+                value={twoFaInputCode}
+                onChange={e=>setTwoFaInputCode(e.target.value.replace(/\D/g,'').slice(0,6))}
+                placeholder="000000"
+                maxLength={6}
+                inputMode="numeric"
+                className={`w-full bg-black/30 border border-white/[0.08] rounded-xl px-4 py-3 text-white text-center text-2xl font-mono tracking-[0.4em] placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500/50 mb-1 transition-colors`}
+              />
+              {twoFaError && <p className="text-xs text-rose-400 mt-1.5 mb-2">{twoFaError}</p>}
+              <div className="flex gap-3 mt-4">
+                <button onClick={()=>{ setTwoFaModal(null); setTwoFaError(''); }}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-400 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.07] transition-all">
+                  Anuluj
+                </button>
+                <button
+                  disabled={twoFaLoading || twoFaInputCode.length < 6}
+                  onClick={async()=>{
+                    setTwoFaLoading(true); setTwoFaError('');
+                    try {
+                      const { backup_codes } = await twoFactorApi.totpEnable(twoFaInputCode);
+                      setTwoFaBackupCodes(backup_codes);
+                      setTwoFaStatus(s => s ? { ...s, totp_enabled: true, backup_codes_count: backup_codes.length } : null);
+                      setTwoFaModal('backup_codes');
+                    } catch(e:any) { setTwoFaError(e?.message || 'Nieprawidłowy kod'); }
+                    finally { setTwoFaLoading(false); }
+                  }}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+                  {twoFaLoading ? <Loader2 size={15} className="animate-spin"/> : <Check size={15}/>}
+                  Aktywuj 2FA
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Backup codes modal */}
+        {twoFaModal === 'backup_codes' && (
+          <motion.div key="2fa-backup-bg" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={()=>setTwoFaModal(null)}>
+            <motion.div key="2fa-backup-card" initial={{opacity:0,scale:0.92,y:16}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.92,y:8}}
+              transition={{type:'spring',stiffness:380,damping:28}}
+              className="bg-[#141420] border border-emerald-500/25 rounded-2xl p-6 w-full max-w-md shadow-2xl"
+              onClick={e=>e.stopPropagation()}>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center shrink-0">
+                  <ShieldCheck size={18} className="text-emerald-400"/>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">2FA aktywowane!</h3>
+                  <p className="text-xs text-zinc-500">Zapisz kody zapasowe w bezpiecznym miejscu</p>
+                </div>
+              </div>
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl mb-4 mt-3">
+                <p className="text-xs text-amber-400 font-semibold">⚠️ Każdy kod można użyć tylko raz. Przechowuj je poza aplikacją.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 mb-5">
+                {twoFaBackupCodes.map((c,i)=>(
+                  <code key={i} className="text-center font-mono text-sm text-white bg-black/30 border border-white/[0.07] rounded-lg px-3 py-2">{c}</code>
+                ))}
+              </div>
+              <button
+                onClick={()=>{
+                  const text = twoFaBackupCodes.join('\n');
+                  navigator.clipboard?.writeText(text).catch(()=>{});
+                }}
+                className="w-full py-2 mb-3 rounded-xl text-sm font-semibold text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/15 border border-indigo-500/20 transition-all">
+                Kopiuj wszystkie kody
+              </button>
+              <button onClick={()=>setTwoFaModal(null)}
+                className="w-full py-2.5 rounded-xl text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 transition-all">
+                Gotowe, zapisałem kody
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Disable 2FA modal */}
+        {twoFaModal === 'disable' && (
+          <motion.div key="2fa-disable-bg" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={()=>setTwoFaModal(null)}>
+            <motion.div key="2fa-disable-card" initial={{opacity:0,scale:0.92,y:16}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.92,y:8}}
+              transition={{type:'spring',stiffness:380,damping:28}}
+              className="bg-[#141420] border border-rose-500/25 rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+              onClick={e=>e.stopPropagation()}>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-rose-500/15 flex items-center justify-center shrink-0">
+                  <Shield size={18} className="text-rose-400"/>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Wyłącz 2FA</h3>
+                  <p className="text-xs text-zinc-500">Potwierdź hasłem i kodem authenticator</p>
+                </div>
+              </div>
+              <div className="flex flex-col gap-3">
+                <input
+                  type="password"
+                  value={twoFaPassword}
+                  onChange={e=>setTwoFaPassword(e.target.value)}
+                  placeholder="Hasło do konta"
+                  className="w-full bg-black/30 border border-white/[0.08] rounded-xl px-4 py-3 text-white text-sm placeholder:text-zinc-600 focus:outline-none focus:border-rose-500/50 transition-colors"
+                />
+                <input
+                  value={twoFaInputCode}
+                  onChange={e=>setTwoFaInputCode(e.target.value.replace(/\D/g,'').slice(0,6))}
+                  placeholder="000000"
+                  maxLength={6}
+                  inputMode="numeric"
+                  className="w-full bg-black/30 border border-white/[0.08] rounded-xl px-4 py-3 text-white text-center text-xl font-mono tracking-widest placeholder:text-zinc-600 focus:outline-none focus:border-rose-500/50 transition-colors"
+                />
+                {twoFaError && <p className="text-xs text-rose-400">{twoFaError}</p>}
+              </div>
+              <div className="flex gap-3 mt-4">
+                <button onClick={()=>{setTwoFaModal(null);setTwoFaError('');}}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-400 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.07] transition-all">
+                  Anuluj
+                </button>
+                <button
+                  disabled={twoFaLoading || !twoFaPassword || twoFaInputCode.length < 6}
+                  onClick={async()=>{
+                    setTwoFaLoading(true); setTwoFaError('');
+                    try {
+                      await twoFactorApi.totpDisable(twoFaPassword, twoFaInputCode);
+                      setTwoFaStatus(s => s ? { ...s, totp_enabled: false, backup_codes_count: 0 } : null);
+                      setTwoFaModal(null);
+                    } catch(e:any) { setTwoFaError(e?.message || 'Błąd weryfikacji'); }
+                    finally { setTwoFaLoading(false); }
+                  }}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-rose-600 hover:bg-rose-500 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+                  {twoFaLoading ? <Loader2 size={15} className="animate-spin"/> : <Shield size={15}/>}
+                  Wyłącz 2FA
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Regenerate backup codes modal */}
+        {twoFaModal === 'regen' && (
+          <motion.div key="2fa-regen-bg" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={()=>setTwoFaModal(null)}>
+            <motion.div key="2fa-regen-card" initial={{opacity:0,scale:0.92,y:16}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.92,y:8}}
+              transition={{type:'spring',stiffness:380,damping:28}}
+              className="bg-[#141420] border border-indigo-500/25 rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+              onClick={e=>e.stopPropagation()}>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/15 flex items-center justify-center shrink-0">
+                  <ShieldCheck size={18} className="text-indigo-400"/>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Nowe kody zapasowe</h3>
+                  <p className="text-xs text-zinc-500">Stare kody zostaną unieważnione</p>
+                </div>
+              </div>
+              <div className="flex flex-col gap-3">
+                <input
+                  type="password"
+                  value={twoFaPassword}
+                  onChange={e=>setTwoFaPassword(e.target.value)}
+                  placeholder="Hasło do konta"
+                  className="w-full bg-black/30 border border-white/[0.08] rounded-xl px-4 py-3 text-white text-sm placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500/50 transition-colors"
+                />
+                <input
+                  value={twoFaInputCode}
+                  onChange={e=>setTwoFaInputCode(e.target.value.replace(/\D/g,'').slice(0,6))}
+                  placeholder="Kod z aplikacji (000000)"
+                  maxLength={6}
+                  inputMode="numeric"
+                  className="w-full bg-black/30 border border-white/[0.08] rounded-xl px-4 py-3 text-white text-center text-xl font-mono tracking-widest placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500/50 transition-colors"
+                />
+                {twoFaError && <p className="text-xs text-rose-400">{twoFaError}</p>}
+              </div>
+              <div className="flex gap-3 mt-4">
+                <button onClick={()=>{setTwoFaModal(null);setTwoFaError('');}}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-400 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.07] transition-all">
+                  Anuluj
+                </button>
+                <button
+                  disabled={twoFaLoading || !twoFaPassword || twoFaInputCode.length < 6}
+                  onClick={async()=>{
+                    setTwoFaLoading(true); setTwoFaError('');
+                    try {
+                      const { backup_codes } = await twoFactorApi.regenerateBackupCodes(twoFaPassword, twoFaInputCode);
+                      setTwoFaBackupCodes(backup_codes);
+                      setTwoFaStatus(s => s ? { ...s, backup_codes_count: backup_codes.length } : null);
+                      setTwoFaModal('backup_codes');
+                    } catch(e:any) { setTwoFaError(e?.message || 'Błąd weryfikacji'); }
+                    finally { setTwoFaLoading(false); }
+                  }}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+                  {twoFaLoading ? <Loader2 size={15} className="animate-spin"/> : <ShieldCheck size={15}/>}
+                  Generuj nowe kody
                 </button>
               </div>
             </motion.div>

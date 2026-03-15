@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
+import bcrypt from 'bcryptjs';
 import { query } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
@@ -9,6 +10,10 @@ import fs from 'fs';
 import { config } from '../config';
 import { redis } from '../redis/client';
 import { generateCode, sendDeletionEmail } from '../services/email';
+import {
+  generateTotpSecret, generateQrCode, verifyTotpCode,
+  generateBackupCodes, hashBackupCodes, verifyBackupCode,
+} from '../services/totp';
 
 const router = Router();
 
@@ -259,5 +264,148 @@ router.delete('/me', authMiddleware, async (req: AuthRequest, res: Response) => 
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// ── Two-Factor Authentication (2FA) ──────────────────────────────────────────
+
+// GET /api/users/me/2fa/status
+router.get('/me/2fa/status', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { rows } = await query(
+      'SELECT totp_enabled, totp_backup_codes, phone_number, phone_verified FROM users WHERE id = $1',
+      [req.user!.id]
+    );
+    const u = rows[0];
+    return res.json({
+      totp_enabled: u?.totp_enabled || false,
+      backup_codes_count: (u?.totp_backup_codes || []).length,
+      phone_number: u?.phone_number || null,
+      phone_verified: u?.phone_verified || false,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/users/me/2fa/totp/setup — generate TOTP secret + QR code
+router.post('/me/2fa/totp/setup', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { rows } = await query('SELECT username FROM users WHERE id = $1', [req.user!.id]);
+    const username = rows[0]?.username;
+    const { secret, otpauth_url } = generateTotpSecret(username);
+    const qr_code = await generateQrCode(otpauth_url);
+    // Store pending secret in Redis (5 min) until user confirms
+    await redis.setex(`2fa:setup:${req.user!.id}`, 300, secret);
+    return res.json({ secret, qr_code, manual_key: secret });
+  } catch (err) {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/users/me/2fa/totp/enable — verify code and activate TOTP
+router.post(
+  '/me/2fa/totp/enable',
+  authMiddleware,
+  [body('code').trim().isLength({ min: 6, max: 6 }).isNumeric()],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: 'Podaj 6-cyfrowy kod z aplikacji' });
+
+    const { code } = req.body;
+    try {
+      const secret = await redis.get(`2fa:setup:${req.user!.id}`);
+      if (!secret) return res.status(400).json({ error: 'Sesja konfiguracji wygasła. Rozpocznij od nowa.' });
+
+      if (!verifyTotpCode(secret, code)) {
+        return res.status(400).json({ error: 'Nieprawidłowy kod. Sprawdź czas w aplikacji i spróbuj ponownie.' });
+      }
+
+      const rawCodes = generateBackupCodes();
+      const hashedCodes = await hashBackupCodes(rawCodes);
+
+      await query(
+        'UPDATE users SET totp_secret = $1, totp_enabled = TRUE, totp_backup_codes = $2 WHERE id = $3',
+        [secret, hashedCodes, req.user!.id]
+      );
+      await redis.del(`2fa:setup:${req.user!.id}`);
+
+      return res.json({ backup_codes: rawCodes });
+    } catch (err) {
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+// DELETE /api/users/me/2fa/totp — disable TOTP (requires password + current code)
+router.delete(
+  '/me/2fa/totp',
+  authMiddleware,
+  [body('password').notEmpty(), body('code').trim().isLength({ min: 6, max: 6 })],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: 'Wymagane hasło i kod 2FA' });
+
+    const { password, code } = req.body;
+    try {
+      const { rows } = await query(
+        'SELECT password_hash, totp_secret, totp_enabled FROM users WHERE id = $1',
+        [req.user!.id]
+      );
+      if (!rows[0]?.totp_enabled) return res.status(400).json({ error: '2FA nie jest włączone' });
+
+      const validPass = await bcrypt.compare(password, rows[0].password_hash);
+      if (!validPass) return res.status(401).json({ error: 'Nieprawidłowe hasło' });
+
+      if (!verifyTotpCode(rows[0].totp_secret, code)) {
+        return res.status(401).json({ error: 'Nieprawidłowy kod weryfikacyjny' });
+      }
+
+      await query(
+        'UPDATE users SET totp_secret = NULL, totp_enabled = FALSE, totp_backup_codes = ARRAY[]::TEXT[] WHERE id = $1',
+        [req.user!.id]
+      );
+      return res.json({ ok: true });
+    } catch (err) {
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+// POST /api/users/me/2fa/backup-codes/regenerate
+router.post(
+  '/me/2fa/backup-codes/regenerate',
+  authMiddleware,
+  [body('password').notEmpty(), body('code').trim().isLength({ min: 6, max: 6 })],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: 'Wymagane hasło i kod 2FA' });
+
+    const { password, code } = req.body;
+    try {
+      const { rows } = await query(
+        'SELECT password_hash, totp_secret, totp_enabled FROM users WHERE id = $1',
+        [req.user!.id]
+      );
+      if (!rows[0]?.totp_enabled) return res.status(400).json({ error: '2FA nie jest włączone' });
+
+      const validPass = await bcrypt.compare(password, rows[0].password_hash);
+      if (!validPass) return res.status(401).json({ error: 'Nieprawidłowe hasło' });
+
+      if (!verifyTotpCode(rows[0].totp_secret, code)) {
+        return res.status(401).json({ error: 'Nieprawidłowy kod weryfikacyjny' });
+      }
+
+      const rawCodes = generateBackupCodes();
+      const hashedCodes = await hashBackupCodes(rawCodes);
+
+      await query(
+        'UPDATE users SET totp_backup_codes = $1 WHERE id = $2',
+        [hashedCodes, req.user!.id]
+      );
+      return res.json({ backup_codes: rawCodes });
+    } catch (err) {
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
 
 export default router;
