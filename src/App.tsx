@@ -389,7 +389,9 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
 
   // Allow scrolling on landing page (body has overflow:hidden globally for the app)
+  // On the desktop app this is a no-op — it's a fixed-height window, no scrolling needed.
   React.useEffect(() => {
+    if (isTauri) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'auto';
     document.documentElement.style.overflow = 'auto';
@@ -506,6 +508,207 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
       ),
     },
   ];
+
+  // ── Desktop app: bypass landing page, show auth form in a native window ────
+  if (isTauri) {
+    return (
+      <div style={{ height: '100vh', background: '#09090b', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Draggable titlebar with window controls */}
+        <TitleBar />
+
+        {/* Centered auth card */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 24px 48px', overflowY: 'auto' }}>
+          <div style={{ width: '100%', maxWidth: '360px' }}>
+
+            {/* Logo + branding */}
+            <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+              <img src="/cordyn_logo.png" alt="Cordyn"
+                style={{ width: 72, height: 72, margin: '0 auto 14px', borderRadius: 18, display: 'block' }} />
+              <h1 style={{ color: '#f1f5f9', fontSize: 22, fontWeight: 800, margin: '0 0 6px', letterSpacing: '-0.5px' }}>Cordyn</h1>
+              <p style={{ color: '#64748b', fontSize: 12, margin: 0 }}>Platforma dla twórców i społeczności</p>
+            </div>
+
+            {/* Tab: login / register */}
+            <div className="flex bg-white/[0.04] border border-white/[0.06] rounded-2xl p-1 mb-6">
+              {(['login', 'register'] as const).map(t => (
+                <button key={t} onClick={() => switchTab(t)}
+                  className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${modalTab === t ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-zinc-400 hover:text-white'}`}>
+                  {t === 'login' ? 'Logowanie' : 'Rejestracja'}
+                </button>
+              ))}
+            </div>
+
+            <AnimatePresence mode="wait">
+              {/* ── 2FA ── */}
+              {twoFaSession && (
+                <motion.form key="dt-2fa" onSubmit={handleVerify2fa}
+                  initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}
+                  transition={{ duration: .2 }} className="flex flex-col gap-3.5">
+                  <div className="flex items-center gap-3 p-3.5 bg-indigo-500/10 border border-indigo-500/20 rounded-xl mb-1">
+                    <Shield size={18} className="text-indigo-400 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-white">Weryfikacja dwuetapowa</p>
+                      <p className="text-xs text-zinc-400">{twoFaType === 'totp' ? 'Podaj 6-cyfrowy kod z aplikacji authenticator' : 'Podaj kod zapasowy (XXXXX-XXXXX)'}</p>
+                    </div>
+                  </div>
+                  <input autoFocus value={twoFaCode} onChange={e => setTwoFaCode(e.target.value)}
+                    placeholder={twoFaType === 'totp' ? '000000' : 'XXXXX-XXXXX'}
+                    maxLength={twoFaType === 'totp' ? 6 : 11} inputMode={twoFaType === 'totp' ? 'numeric' : 'text'}
+                    className={`${gi} rounded-xl px-4 py-3 text-center text-xl font-mono tracking-widest w-full`} />
+                  <AnimatePresence>
+                    {error && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                        className="flex items-center gap-2 text-rose-400 text-sm bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-2.5 overflow-hidden">
+                        <AlertCircle size={15} className="shrink-0" /><span>{error}</span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  <button type="submit" disabled={loading || !twoFaCode.trim()}
+                    className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
+                    {loading ? <><Loader2 size={17} className="animate-spin" /> Weryfikacja...</> : <><Shield size={15} />Zatwierdź</>}
+                  </button>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => { setTwoFaSession(null); setError(''); }}
+                      className="flex-1 py-2 rounded-xl text-sm font-semibold text-zinc-400 bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.07] transition-all">← Wróć</button>
+                    <button type="button" onClick={() => { setTwoFaType(t => t === 'totp' ? 'backup' : 'totp'); setTwoFaCode(''); setError(''); }}
+                      className="flex-1 py-2 rounded-xl text-xs font-medium text-zinc-500 hover:text-zinc-300 bg-white/[0.03] hover:bg-white/[0.05] border border-white/[0.05] transition-all">
+                      {twoFaType === 'totp' ? 'Użyj kodu zapasowego' : 'Użyj aplikacji authenticator'}
+                    </button>
+                  </div>
+                </motion.form>
+              )}
+
+              {/* ── Login ── */}
+              {!twoFaSession && modalTab === 'login' && (
+                <motion.form key="dt-login" onSubmit={handleLogin}
+                  initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}
+                  transition={{ duration: .2 }} className="flex flex-col gap-3.5">
+                  <div className="relative">
+                    <MessageSquare size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+                    <input required autoFocus value={form.login} onChange={set('login')} placeholder="Login lub email"
+                      className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`} />
+                  </div>
+                  <div className="relative">
+                    <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+                    <input required type={showPass ? 'text' : 'password'} value={form.password} onChange={set('password')}
+                      placeholder="Hasło" minLength={6} className={`${gi} rounded-xl pl-10 pr-10 py-3 text-sm w-full`} />
+                    <button type="button" onClick={() => setShowPass(v => !v)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                      {showPass ? <Eye size={15} /> : <EyeOff size={15} />}
+                    </button>
+                  </div>
+                  <AnimatePresence>
+                    {error && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                        className="flex items-center gap-2 text-rose-400 text-sm bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-2.5 overflow-hidden">
+                        <AlertCircle size={15} className="shrink-0" /><span>{error}</span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  <button type="submit" disabled={loading}
+                    className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
+                    {loading ? <><Loader2 size={17} className="animate-spin" /> Logowanie...</> : 'Zaloguj się →'}
+                  </button>
+                </motion.form>
+              )}
+
+              {/* ── Register step 1 ── */}
+              {!twoFaSession && modalTab === 'register' && regStep === 'form' && (
+                <motion.form key="dt-reg" onSubmit={handleSendCode}
+                  initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}
+                  transition={{ duration: .2 }} className="flex flex-col gap-3.5">
+                  <div className="relative">
+                    <Users size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+                    <input required value={form.username} onChange={set('username')} placeholder="Nazwa użytkownika"
+                      pattern="[a-zA-Z0-9_]+" minLength={2} maxLength={32}
+                      className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`} />
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 text-sm pointer-events-none">@</span>
+                    <input required type="email" value={form.email} onChange={set('email')} placeholder="Adres email"
+                      className={`${gi} rounded-xl pl-9 pr-4 py-3 text-sm w-full`} />
+                  </div>
+                  <div className="relative">
+                    <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+                    <input required type={showPass ? 'text' : 'password'} value={form.password} onChange={set('password')}
+                      placeholder="Hasło" minLength={6} className={`${gi} rounded-xl pl-10 pr-10 py-3 text-sm w-full`} />
+                    <button type="button" onClick={() => setShowPass(v => !v)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                      {showPass ? <Eye size={15} /> : <EyeOff size={15} />}
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+                    <input required type={showPass ? 'text' : 'password'} value={form.confirm} onChange={set('confirm')}
+                      placeholder="Potwierdź hasło" minLength={6}
+                      className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`} />
+                  </div>
+                  <AnimatePresence>
+                    {error && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                        className="flex items-center gap-2 text-rose-400 text-sm bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-2.5 overflow-hidden">
+                        <AlertCircle size={15} className="shrink-0" /><span>{error}</span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  <button type="submit" disabled={loading}
+                    className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
+                    {loading ? <><Loader2 size={17} className="animate-spin" /> Wysyłanie kodu...</> : 'Wyślij kod weryfikacyjny →'}
+                  </button>
+                </motion.form>
+              )}
+
+              {/* ── Register step 2: verify email ── */}
+              {!twoFaSession && modalTab === 'register' && regStep === 'verify' && (
+                <motion.form key="dt-verify" onSubmit={handleRegister}
+                  initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}
+                  transition={{ duration: .2 }} className="flex flex-col gap-3.5">
+                  <div className="flex items-center gap-2.5 bg-indigo-500/10 border border-indigo-500/25 rounded-xl px-4 py-3">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center shrink-0"><span className="text-base">✉️</span></div>
+                    <div className="min-w-0">
+                      <p className="text-xs text-indigo-300 font-medium">Kod wysłany na:</p>
+                      <p className="text-sm text-white font-semibold truncate">{form.email}</p>
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none text-sm font-mono">#</div>
+                    <input required value={verifyCode} onChange={handleCodeInput} placeholder="xx-xxx-xxx" maxLength={10}
+                      className={`${gi} rounded-xl pl-9 pr-4 py-3 text-sm w-full font-mono tracking-widest text-center`} />
+                  </div>
+                  <p className="text-xs text-zinc-600 text-center -mt-1">Sprawdź skrzynkę mailową · Ważny przez 15 minut</p>
+                  <AnimatePresence>
+                    {(error || info) && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                        className={`flex items-center gap-2 text-sm rounded-xl px-4 py-2.5 overflow-hidden border ${error ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'}`}>
+                        <AlertCircle size={15} className="shrink-0" /><span>{error || info}</span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  <button type="submit" disabled={loading}
+                    className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
+                    {loading ? <><Loader2 size={17} className="animate-spin" /> Tworzenie konta...</> : 'Zarejestruj się →'}
+                  </button>
+                  <button type="button" onClick={() => { setRegStep('form'); setError(''); setInfo(''); setVerifyCode(''); }}
+                    className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors text-center">
+                    ← Zmień dane / wyślij kod ponownie
+                  </button>
+                </motion.form>
+              )}
+            </AnimatePresence>
+
+            <p className="text-xs text-zinc-700 text-center mt-5">
+              {modalTab === 'login' ? 'Nie masz konta? ' : 'Masz już konto? '}
+              <button onClick={() => switchTab(modalTab === 'login' ? 'register' : 'login')}
+                className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">
+                {modalTab === 'login' ? 'Zarejestruj się' : 'Zaloguj się'}
+              </button>
+            </p>
+
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -5969,7 +6172,14 @@ export default function App() {
   };
 
   // ──────────────────────────────────────────────────────────────────
-  if (authLoading) return <div className="fixed inset-0 bg-black/20 flex items-center justify-center"><Loader2 size={32} className="text-indigo-400 animate-spin" /></div>;
+  if (authLoading) return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#09090b', overflow: 'hidden' }}>
+      {isTauri && <TitleBar />}
+      <div className="flex-1 flex items-center justify-center">
+        <Loader2 size={32} className="text-indigo-400 animate-spin" />
+      </div>
+    </div>
+  );
   if (!isAuthenticated) return <AuthScreen onAuth={(u, t, isNew) => handleAuth(u, t, isNew)} inviteInfo={pendingInvite} />;
 
   const allChs   = serverFull?.categories.flatMap(c => c.channels) ?? [];
