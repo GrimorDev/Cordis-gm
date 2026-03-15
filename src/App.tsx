@@ -14,7 +14,7 @@ import {
   Clock, Pin, PinOff, Activity, AtSign, BadgeCheck, Crown, LayoutDashboard,
   Code2, FlaskConical, ShieldCheck, Hammer, Award, CalendarDays, Quote,
   GripVertical, BarChart2, Server, Database,
-  Music, Gamepad2, ExternalLink, Link2, Link2Off, Film, PhoneIncoming, PhoneMissed,
+  Music, Gamepad2, ExternalLink, Link2, Link2Off, Film, PhoneIncoming, PhoneMissed, Download, Monitor,
   type LucideIcon
 } from 'lucide-react';
 import {
@@ -634,6 +634,12 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                 className="px-8 py-4 rounded-2xl text-base font-semibold text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.1] transition-all hover:-translate-y-0.5">
                 Zaloguj się
               </button>
+              <a href={import.meta.env.VITE_DESKTOP_DOWNLOAD_URL || 'https://github.com/GrimorDev/Cordis-gm/releases/latest'}
+                className="flex items-center gap-2.5 px-8 py-4 rounded-2xl text-base font-semibold text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.1] transition-all hover:-translate-y-0.5 group">
+                <Monitor size={18} className="text-zinc-400 group-hover:text-indigo-400 transition-colors"/>
+                <span>Pobierz na Windows</span>
+                <Download size={14} className="text-zinc-600 group-hover:text-indigo-400 transition-colors"/>
+              </a>
             </motion.div>
 
             {/* Stats row */}
@@ -899,6 +905,12 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                       className="px-8 py-4 rounded-2xl text-base font-semibold text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.1] transition-all hover:-translate-y-0.5">
                       Mam już konto
                     </button>
+                    <a href={import.meta.env.VITE_DESKTOP_DOWNLOAD_URL || 'https://github.com/GrimorDev/Cordis-gm/releases/latest'}
+                      className="flex items-center gap-2.5 px-8 py-4 rounded-2xl text-base font-semibold text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.1] transition-all hover:-translate-y-0.5 group">
+                      <Monitor size={18} className="text-zinc-400 group-hover:text-indigo-400 transition-colors"/>
+                      <span>Pobierz na Windows</span>
+                      <Download size={14} className="text-zinc-600 group-hover:text-indigo-400 transition-colors"/>
+                    </a>
                   </div>
                 </div>
               </div>
@@ -1161,6 +1173,16 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   {modalTab === 'login' ? 'Zarejestruj się' : 'Zaloguj się'}
                 </button>
               </p>
+
+              {/* Desktop app download link */}
+              <div className="mt-5 pt-4 border-t border-white/[0.06]">
+                <a href={import.meta.env.VITE_DESKTOP_DOWNLOAD_URL || 'https://github.com/GrimorDev/Cordis-gm/releases/latest'}
+                  className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-xs font-medium text-zinc-500 hover:text-zinc-300 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.05] hover:border-white/[0.1] transition-all group">
+                  <Monitor size={13} className="group-hover:text-indigo-400 transition-colors"/>
+                  Pobierz aplikację Cordyn na Windows
+                  <Download size={12} className="group-hover:text-indigo-400 transition-colors"/>
+                </a>
+              </div>
             </motion.div>
           </motion.div>
         )}
