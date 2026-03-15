@@ -22,7 +22,8 @@
         "visible": false,
         "resizable": true,
         "center": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "backgroundColor": "#09090b"
       },
       {
         "label": "splashscreen",

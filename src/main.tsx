@@ -10,11 +10,6 @@ root.render(
   </StrictMode>,
 );
 
-// When running as a Tauri desktop app, dismiss the splashscreen
-// once React has finished its first render.
-// Tauri v2 injects __TAURI_INTERNALS__ (NOT __TAURI__ like Tauri v1).
-if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
-  import('@tauri-apps/api/core').then(({ invoke }) => {
-    invoke('close_splashscreen').catch(() => {});
-  });
-}
+// Splashscreen dismissal is handled inside App.tsx via useEffect so it fires
+// after the first React paint — NOT here, to avoid closing splash before
+// the main window content is visible.
