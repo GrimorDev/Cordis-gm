@@ -3614,6 +3614,11 @@ export default function App() {
   const hoverCardTimer                        = useRef<ReturnType<typeof setTimeout>|null>(null);
   const hoverCardHideTimer                    = useRef<ReturnType<typeof setTimeout>|null>(null);
   const hoverCardCache                        = useRef<Map<string,{profile:UserProfile|null;games:FavoriteGame[];spotify:SpotifyData|null;loadedAt:number}>>(new Map());
+  // Stream mode — hides usernames/server names; auto-enables when Twitch is live
+  const [isStreamMode, setIsStreamMode]       = useState(false);
+  const [streamRevealedConvs, setStreamRevealedConvs] = useState<Set<string>>(new Set());
+  // Friends tabs
+  const [friendsTab, setFriendsTab]           = useState<'available'|'all'>('available');
   // Game search modal
   const [showGameModal, setShowGameModal]     = useState(false);
   const [gameSearch, setGameSearch]           = useState('');
@@ -5556,6 +5561,18 @@ export default function App() {
     }, 1000);
   };
 
+  // ── Stream mode: auto-enable when Twitch goes live ────────────────
+  React.useEffect(() => {
+    if (ownTwitch?.is_live && !isStreamMode) {
+      setIsStreamMode(true);
+      addToast('Tryb streamu aktywowany — nicki i serwery są ukryte 🎥', 'info');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownTwitch?.is_live]);
+
+  // Mask name in stream mode: first 4 chars + "…"
+  const maskName = (name: string) => isStreamMode && name.length > 4 ? name.slice(0, 4) + '…' : name;
+
   // ── Hover card ────────────────────────────────────────────────────
   const showHoverCard = (userId: string, e: React.MouseEvent) => {
     if (hoverCardTimer.current) clearTimeout(hoverCardTimer.current);
@@ -6126,7 +6143,7 @@ export default function App() {
                     <span className={`relative w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden transition-all duration-200 ${isActive?'bg-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.3)]':'bg-zinc-800'} ${srv.is_official?'ring-2 ring-amber-400/80 ring-offset-[2px] ring-offset-transparent':''}`}>
                       {srv.icon_url ? <img src={srv.icon_url} className="w-full h-full object-cover" alt=""/> : srv.name.charAt(0).toUpperCase()}
                     </span>
-                    <span className="max-w-[90px] truncate">{srv.name}</span>
+                    <span className="max-w-[90px] truncate">{maskName(srv.name)}</span>
                     {srv.is_official&&(
                       <BadgeCheck size={13} className="shrink-0 text-amber-400" title="Oficjalny serwer Cordyn"/>
                     )}
@@ -6158,6 +6175,13 @@ export default function App() {
               className="bg-white/[0.05] border border-white/[0.07] text-white placeholder-zinc-600 outline-none focus:border-indigo-500/40 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] rounded-xl pl-8 pr-10 py-1.5 text-xs w-44 focus:w-56 transition-all duration-300"/>
             <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-zinc-600 font-mono hidden lg:flex items-center gap-0.5"><span className="border border-zinc-700 rounded px-1 py-0.5">⌘</span><span className="border border-zinc-700 rounded px-1 py-0.5">K</span></span>
           </div>
+          {/* 🎥 Stream mode toggle */}
+          <button onClick={() => { setIsStreamMode(v => { const next=!v; if(!next) setStreamRevealedConvs(new Set()); return next; }); }}
+            title={isStreamMode ? 'Wyłącz tryb streamu' : 'Tryb streamu — ukryj nicki i serwery'}
+            className={`relative w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-200 ${isStreamMode ? 'bg-red-500/20 text-red-400 shadow-[0_0_10px_rgba(239,68,68,0.3)]' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]'}`}>
+            <Video size={15}/>
+            {isStreamMode && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_6px_rgba(239,68,68,0.8)]"/>}
+          </button>
           {/* 🔔 Notification bell with dropdown panel */}
           <div className="relative" ref={notifBellRef}>
             <button onClick={() => {
@@ -6601,7 +6625,7 @@ export default function App() {
                       <StatusBadge status={dm.other_status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
                     </div>
                     <div className="flex-1 truncate text-left min-w-0">
-                      <p className={`text-[13px] font-semibold truncate ${isActive?'text-indigo-200':unread>0?'text-white':'text-zinc-300'}`}>{dm.other_username}</p>
+                      <p className={`text-[13px] font-semibold truncate ${isActive?'text-indigo-200':unread>0?'text-white':'text-zinc-300'}`}>{maskName(dm.other_username)}</p>
                       {dm.last_message&&<p className={`text-[11px] truncate mt-0.5 ${unread>0?'text-zinc-300 font-medium':'text-zinc-600'}`}>{dm.last_message}</p>}
                     </div>
                     {unread > 0 && (
@@ -7110,7 +7134,7 @@ export default function App() {
                             <StatusBadge status={f.status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-zinc-300 group-hover:text-white transition-colors truncate">{f.username}</p>
+                            <p className="text-sm font-semibold text-zinc-300 group-hover:text-white transition-colors truncate">{maskName(f.username)}</p>
                             {f.custom_status&&<p className="text-xs text-zinc-600 truncate">{f.custom_status}</p>}
                           </div>
                           <MessageCircle size={14} className="text-zinc-700 group-hover:text-indigo-400 transition-colors shrink-0"/>
@@ -7221,10 +7245,20 @@ export default function App() {
             />
           ) : activeView==='friends' ? (
             <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="h-14 border-b border-white/[0.06] flex items-center px-5 shrink-0 glass-dark border-b border-white/[0.05] z-10">
-                <Users size={17} className="text-indigo-400 mr-2.5"/>
-                <h1 className="text-sm font-bold text-white">Znajomi</h1>
-                {incoming.length > 0 && <span className="ml-2 bg-rose-500 text-white text-[10px] font-bold px-2 py-1 rounded-full leading-none shadow-lg shadow-rose-500/30">{incoming.length} nowe</span>}
+              <div className="h-14 border-b border-white/[0.06] flex items-center px-5 shrink-0 glass-dark border-b border-white/[0.05] z-10 gap-3">
+                <Users size={17} className="text-indigo-400 shrink-0"/>
+                <h1 className="text-sm font-bold text-white shrink-0">Znajomi</h1>
+                {incoming.length > 0 && <span className="bg-rose-500 text-white text-[10px] font-bold px-2 py-1 rounded-full leading-none shadow-lg shadow-rose-500/30 shrink-0">{incoming.length} nowe</span>}
+                <div className="flex-1"/>
+                {/* Tabs */}
+                <div className="flex items-center gap-1 bg-white/[0.04] rounded-xl p-1 border border-white/[0.07]">
+                  {(['available','all'] as const).map(tab => (
+                    <button key={tab} onClick={() => setFriendsTab(tab)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 ${friendsTab===tab ? 'bg-indigo-500/30 text-indigo-200 shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>
+                      {tab==='available' ? 'Dostępni' : 'Wszyscy'}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
                 <div className="max-w-2xl mx-auto">
@@ -7309,39 +7343,61 @@ export default function App() {
                   )}
 
                   {/* ── Lista znajomych ── */}
-                  <div>
-                    <h2 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">Wszyscy znajomi — {friends.length}</h2>
-                    <div className="flex flex-col gap-1.5">
-                    {friends.map(f => {
-                      const fActivity = userActivities.get(f.id);
-                      const fTwitch = userTwitchActivities.get(f.id);
-                      const fSteam = userSteamActivities.get(f.id);
-                      return (
-                      <div key={f.id}
-                        className="flex items-center justify-between bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] hover:border-white/[0.07] p-3.5 rounded-2xl transition-all duration-150 group"
-                        onMouseEnter={e=>showHoverCard(f.id, e)}
-                        onMouseLeave={hideHoverCard}>
-                        <div className="flex items-center gap-3 cursor-pointer" onClick={()=>openProfile(f)}>
-                          <div className="relative"><img src={ava(f)} className="w-10 h-10 rounded-2xl object-cover av-sc-xs" alt=""/><StatusBadge status={f.status} size={10} className="absolute -bottom-0.5 -right-0.5"/></div>
-                          <div>
-                            <p className="font-semibold text-white text-sm">{f.username}</p>
-                            {fActivity ? (
-                              <p className="text-xs text-[#1DB954] truncate max-w-[160px] flex items-center gap-1"><SpotifyIcon size={11} className="shrink-0"/> {fActivity.artists} — {fActivity.name}</p>
-                            ) : fTwitch ? (
-                              <p className="text-xs text-purple-400 truncate max-w-[160px] flex items-center gap-1"><TwitchIcon size={11} className="shrink-0"/> Streamuje: {fTwitch.game_name}</p>
-                            ) : fSteam ? (
-                              <p className="text-xs text-zinc-400 truncate max-w-[160px] flex items-center gap-1"><Gamepad2 size={11} className="shrink-0"/> {fSteam.name}</p>
-                            ) : (
-                              <p className="text-xs text-zinc-600">{f.custom_status||f.status}</p>
-                            )}
+                  {(() => {
+                    const availableFriends = friends.filter(f => f.status==='online'||f.status==='idle'||f.status==='dnd');
+                    const displayedFriends = friendsTab==='available' ? availableFriends : friends;
+                    const label = friendsTab==='available'
+                      ? `Dostępni — ${availableFriends.length}`
+                      : `Wszyscy znajomi — ${friends.length}`;
+                    return (
+                    <div className="relative">
+                      <h2 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">{label}</h2>
+                      <div className="flex flex-col gap-1.5">
+                      {displayedFriends.map(f => {
+                        const fActivity = userActivities.get(f.id);
+                        const fTwitch = userTwitchActivities.get(f.id);
+                        const fSteam = userSteamActivities.get(f.id);
+                        return (
+                        <div key={f.id}
+                          className="flex items-center justify-between bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] hover:border-white/[0.07] p-3.5 rounded-2xl transition-all duration-150 group"
+                          onMouseEnter={e=>showHoverCard(f.id, e)}
+                          onMouseLeave={hideHoverCard}>
+                          <div className="flex items-center gap-3 cursor-pointer" onClick={()=>openProfile(f)}>
+                            <div className="relative"><img src={ava(f)} className="w-10 h-10 rounded-2xl object-cover av-sc-xs" alt=""/><StatusBadge status={f.status} size={10} className="absolute -bottom-0.5 -right-0.5"/></div>
+                            <div>
+                              <p className="font-semibold text-white text-sm">{maskName(f.username)}</p>
+                              {fActivity ? (
+                                <p className="text-xs text-[#1DB954] truncate max-w-[160px] flex items-center gap-1"><SpotifyIcon size={11} className="shrink-0"/> {fActivity.artists} — {fActivity.name}</p>
+                              ) : fTwitch ? (
+                                <p className="text-xs text-purple-400 truncate max-w-[160px] flex items-center gap-1"><TwitchIcon size={11} className="shrink-0"/> Streamuje: {fTwitch.game_name}</p>
+                              ) : fSteam ? (
+                                <p className="text-xs text-zinc-400 truncate max-w-[160px] flex items-center gap-1"><Gamepad2 size={11} className="shrink-0"/> {fSteam.name}</p>
+                              ) : (
+                                <p className="text-xs text-zinc-600">{f.custom_status||f.status}</p>
+                              )}
+                            </div>
                           </div>
+                          <button onClick={()=>openDm(f.id)} title="Wyślij wiadomość" className={`w-8 h-8 rounded-xl ${gb} flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all active:scale-90`}><MessageCircle size={15}/></button>
                         </div>
-                        <button onClick={()=>openDm(f.id)} title="Wyślij wiadomość" className={`w-8 h-8 rounded-xl ${gb} flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all active:scale-90`}><MessageCircle size={15}/></button>
+                        );
+                      })}
                       </div>
-                    )})}
+                      {/* Empty state for "Dostępni" tab */}
+                      {friendsTab==='available' && availableFriends.length===0 && friends.length>0 && (
+                        <motion.div initial={{opacity:0}} animate={{opacity:1}} className="mt-6 flex flex-col items-center justify-center py-12 rounded-2xl bg-white/[0.02] border border-white/[0.05] backdrop-blur-sm text-center px-6 gap-3">
+                          <div className="w-12 h-12 rounded-2xl bg-zinc-800/80 border border-white/[0.07] flex items-center justify-center">
+                            <Users size={20} className="text-zinc-600"/>
+                          </div>
+                          <p className="text-sm font-semibold text-zinc-500">Aktualnie żaden z twoich znajomych nie jest dostępny</p>
+                          <button onClick={()=>setFriendsTab('all')} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors font-medium">
+                            Zobacz wszystkich znajomych →
+                          </button>
+                        </motion.div>
+                      )}
+                      {friends.length===0&&<p className="text-sm text-zinc-700 py-4">Brak znajomych. Dodaj kogoś powyżej!</p>}
                     </div>
-                    {friends.length===0&&<p className="text-sm text-zinc-700 py-4">Brak znajomych. Dodaj kogoś powyżej!</p>}
-                  </div>
+                    );
+                  })()}
 
                 </div>
               </div>
@@ -7456,7 +7512,7 @@ export default function App() {
                         <StatusBadge status={activeDm.other_status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
                       </div>
                       <div>
-                        <h3 className="font-bold text-white text-sm leading-tight">{activeDm.other_username}</h3>
+                        <h3 className="font-bold text-white text-sm leading-tight">{maskName(activeDm.other_username)}</h3>
                         <p className="text-xs text-zinc-500 leading-tight capitalize">{activeDm.other_status||'offline'}</p>
                       </div>
                     </div>
@@ -7748,6 +7804,33 @@ export default function App() {
                   const file = e.dataTransfer.files[0];
                   if (file) { setAttachFile(file); if(file.type.startsWith('image/'))setAttachPreview(URL.createObjectURL(file)); else setAttachPreview(null); }
                 }}>
+                {/* ── Stream mode DM blur overlay ── */}
+                <AnimatePresence>
+                  {isStreamMode && activeView==='dms' && activeDmUserId && !streamRevealedConvs.has(activeDmUserId) && (
+                    <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.25}}
+                      className="absolute inset-0 z-40 backdrop-blur-2xl bg-black/40 flex flex-col items-center justify-center gap-5 pointer-events-auto">
+                      <div className="w-14 h-14 rounded-2xl bg-red-500/20 border border-red-500/30 flex items-center justify-center shadow-[0_0_30px_rgba(239,68,68,0.3)]">
+                        <Video size={26} className="text-red-400"/>
+                      </div>
+                      <div className="text-center px-6 max-w-xs">
+                        <p className="text-white font-bold text-base mb-1.5">Jesteś w trybie streamu</p>
+                        <p className="text-zinc-400 text-sm leading-relaxed">Czy chcesz pokazać publicznie wiadomości z tej rozmowy?</p>
+                      </div>
+                      <div className="flex gap-3">
+                        <motion.button whileTap={{scale:0.95}} whileHover={{scale:1.03}}
+                          onClick={() => setStreamRevealedConvs(p => { const n=new Set(p); n.add(activeDmUserId); return n; })}
+                          className="px-6 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-semibold text-sm transition-all shadow-lg shadow-indigo-500/30">
+                          Tak, pokaż
+                        </motion.button>
+                        <motion.button whileTap={{scale:0.95}}
+                          onClick={() => { setActiveDmUserId(''); }}
+                          className="px-6 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-zinc-300 font-medium text-sm transition-all border border-white/[0.08]">
+                          Wróć
+                        </motion.button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
                 {isDraggingOver&&(
                   <div className="absolute inset-0 z-50 bg-indigo-500/15 border-2 border-dashed border-indigo-400/70 rounded-2xl flex items-center justify-center pointer-events-none">
                     <div className="flex flex-col items-center gap-3 text-indigo-300">
@@ -8460,7 +8543,7 @@ export default function App() {
                             <div className="flex items-center gap-1 flex-wrap">
                               <p className="text-[13px] font-semibold truncate group-hover:opacity-90 transition-colors leading-tight"
                                 style={{ color: m.roles?.[0]?.color || '#d4d4d8' }}>
-                                {m.username}
+                                {maskName(m.username)}
                               </p>
                               {isOwner&&<Crown size={11} className="text-amber-400 shrink-0"/>}
                               {m.badges?.map(b=>{const BIcon=getBadgeIcon(b.name);return <BIcon key={b.id} size={11} style={{color:b.color}} title={b.label} className="shrink-0"/>;  })}
@@ -8502,7 +8585,7 @@ export default function App() {
                             <div className="flex items-center gap-1 flex-wrap">
                               <p className="text-[13px] font-medium truncate group-hover:opacity-70 transition-colors leading-tight"
                                 style={{ color: m.roles?.[0]?.color ? `${m.roles[0].color}80` : '#52525b' }}>
-                                {m.username}
+                                {maskName(m.username)}
                               </p>
                               {isOwner&&<Crown size={11} className="text-amber-400/50 shrink-0"/>}
                               {m.badges?.map(b=>{const BIcon=getBadgeIcon(b.name);return <BIcon key={b.id} size={11} style={{color:b.color+'80'}} title={b.label} className="shrink-0 opacity-50"/>;  })}
