@@ -50,22 +50,20 @@ pub fn run() {
                 )?;
             }
 
-            // Fallback: close splashscreen from Rust once the main window
-            // finishes loading its page — in case the frontend invoke fails.
+            // Fallback: if the frontend invoke('close_splashscreen') somehow
+            // never fires, close the splash after 6 seconds from a background
+            // thread.  The primary close path is still the JS invoke in main.tsx.
             let app_handle = app.handle().clone();
-            if let Some(main_win) = app.get_webview_window("main") {
-                main_win.on_page_load(move |_win, payload| {
-                    use tauri::webview::PageLoadEvent;
-                    if payload.event() == PageLoadEvent::Finished {
-                        if let Some(splash) = app_handle.get_webview_window("splashscreen") {
-                            splash.close().unwrap_or(());
-                        }
-                        if let Some(main) = app_handle.get_webview_window("main") {
-                            main.show().unwrap_or(());
-                        }
-                    }
-                });
-            }
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(6));
+                if let Some(splash) = app_handle.get_webview_window("splashscreen") {
+                    splash.close().unwrap_or(());
+                }
+                if let Some(main) = app_handle.get_webview_window("main") {
+                    main.show().unwrap_or(());
+                    main.set_focus().unwrap_or(());
+                }
+            });
 
             Ok(())
         })
