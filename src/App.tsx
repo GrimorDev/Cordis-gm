@@ -326,6 +326,17 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
 
+  // Allow scrolling on landing page (body has overflow:hidden globally for the app)
+  React.useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'auto';
+    document.documentElement.style.overflow = 'auto';
+    return () => {
+      document.body.style.overflow = prev || 'hidden';
+      document.documentElement.style.overflow = '';
+    };
+  }, []);
+
   const handleCodeInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
     let formatted = raw;
