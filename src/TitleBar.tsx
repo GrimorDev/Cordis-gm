@@ -89,4 +89,4 @@ export function TitleBar() {
 // Re-export a helper so App.tsx can conditionally render without importing
 // @tauri-apps/api on web builds (dynamic import keeps it tree-shaken).
 export const isTauri =
-  typeof window !== 'undefined' && '__TAURI__' in window;
+  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;

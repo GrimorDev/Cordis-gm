@@ -12,7 +12,8 @@ root.render(
 
 // When running as a Tauri desktop app, dismiss the splashscreen
 // once React has finished its first render.
-if (typeof window !== 'undefined' && '__TAURI__' in window) {
+// Tauri v2 injects __TAURI_INTERNALS__ (NOT __TAURI__ like Tauri v1).
+if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
   import('@tauri-apps/api/core').then(({ invoke }) => {
     invoke('close_splashscreen').catch(() => {});
   });

@@ -49,6 +49,24 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            // Fallback: close splashscreen from Rust once the main window
+            // finishes loading its page — in case the frontend invoke fails.
+            let app_handle = app.handle().clone();
+            if let Some(main_win) = app.get_webview_window("main") {
+                main_win.on_page_load(move |_win, payload| {
+                    use tauri::webview::PageLoadEvent;
+                    if payload.event() == PageLoadEvent::Finished {
+                        if let Some(splash) = app_handle.get_webview_window("splashscreen") {
+                            splash.close().unwrap_or(());
+                        }
+                        if let Some(main) = app_handle.get_webview_window("main") {
+                            main.show().unwrap_or(());
+                        }
+                    }
+                });
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

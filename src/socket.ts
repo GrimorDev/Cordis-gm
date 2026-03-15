@@ -3,7 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { getToken } from './api';
 
 // In Tauri desktop context relative paths don't work — connect explicitly.
-const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 const SOCKET_URL = isTauri
   ? (import.meta.env.VITE_API_BASE
       ? import.meta.env.VITE_API_BASE.replace(/\/api$/, '')
