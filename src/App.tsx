@@ -56,6 +56,23 @@ import DOMPurify from 'dompurify';
 // Configure marked once — GFM mode, line-break aware
 marked.use({ gfm: true });
 
+// ─── Brand SVG icons ──────────────────────────────────────────────────────────
+const SpotifyIcon = ({ size = 14, className = '' }: { size?: number; className?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-label="Spotify">
+    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+  </svg>
+);
+const TwitchIcon = ({ size = 14, className = '' }: { size?: number; className?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-label="Twitch">
+    <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/>
+  </svg>
+);
+const SteamIcon = ({ size = 14, className = '' }: { size?: number; className?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-label="Steam">
+    <path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.029 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.454 1.012H7.54zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.252 0-2.265-1.014-2.265-2.265z"/>
+  </svg>
+);
+
 // ─── Glass constants ──────────────────────────────────────────────────────────
 const gp = 'glass-panel';
 const gm = 'glass-modal rounded-3xl'; // modals: high opacity, no bleed-through
@@ -2005,7 +2022,7 @@ function ProfilePage({
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
-                    <Music size={13} className="text-zinc-600"/>Muzyka Spotify
+                    <SpotifyIcon size={13} className="text-[#1DB954]"/>Muzyka Spotify
                   </h3>
                   {isOwn && ownSpotify?.connected && (
                     <div className="flex items-center gap-2">
@@ -2062,7 +2079,7 @@ function ProfilePage({
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
-                    <span className="text-purple-500">📺</span> Twitch
+                    <TwitchIcon size={13} className="text-purple-400"/> Twitch
                   </h3>
                   {isOwn && ownTwitch?.connected && (
                     <div className="flex items-center gap-2">
@@ -2140,7 +2157,7 @@ function ProfilePage({
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
-                    <Gamepad2 size={13} className="text-zinc-600"/> Steam
+                    <SteamIcon size={13} className="text-zinc-400"/> Steam
                   </h3>
                   {isOwn && ownSteam?.connected && (
                     <div className="flex items-center gap-2">
@@ -6106,11 +6123,11 @@ export default function App() {
                           <div>
                             <p className="font-semibold text-white text-sm">{f.username}</p>
                             {fActivity ? (
-                              <p className="text-xs text-[#1DB954] truncate max-w-[160px]">🎵 {fActivity.artists} — {fActivity.name}</p>
+                              <p className="text-xs text-[#1DB954] truncate max-w-[160px] flex items-center gap-1"><SpotifyIcon size={11} className="shrink-0"/> {fActivity.artists} — {fActivity.name}</p>
                             ) : fTwitch ? (
-                              <p className="text-xs text-purple-400 truncate max-w-[160px]">🔴 Streamuje: {fTwitch.game_name}</p>
+                              <p className="text-xs text-purple-400 truncate max-w-[160px] flex items-center gap-1"><TwitchIcon size={11} className="shrink-0"/> Streamuje: {fTwitch.game_name}</p>
                             ) : fSteam ? (
-                              <p className="text-xs text-zinc-500 truncate max-w-[160px]">🎮 {fSteam.name}</p>
+                              <p className="text-xs text-zinc-400 truncate max-w-[160px] flex items-center gap-1"><Gamepad2 size={11} className="shrink-0"/> {fSteam.name}</p>
                             ) : (
                               <p className="text-xs text-zinc-600">{f.custom_status||f.status}</p>
                             )}
@@ -6976,6 +6993,19 @@ export default function App() {
                           <Edit3 size={14}/>
                         </button>
                         <textarea ref={msgInputRef} value={msgInput} rows={1}
+                          onPaste={e=>{
+                            const items = Array.from(e.clipboardData?.items||[]);
+                            const imgItem = items.find(it=>it.type.startsWith('image/'));
+                            if(imgItem){
+                              e.preventDefault();
+                              const file = imgItem.getAsFile();
+                              if(!file) return;
+                              const ext = file.type.split('/')[1]||'png';
+                              const named = new File([file], `paste-${Date.now()}.${ext}`, { type: file.type });
+                              setAttachFile(named);
+                              setAttachPreview(URL.createObjectURL(named));
+                            }
+                          }}
                           onChange={e=>{
                             const v=e.target.value; setMsgInput(v);
                             // Mention autocomplete trigger
@@ -7151,11 +7181,11 @@ export default function App() {
                               {m.badges?.map(b=>{const BIcon=getBadgeIcon(b.name);return <BIcon key={b.id} size={11} style={{color:b.color}} title={b.label} className="shrink-0"/>;  })}
                             </div>
                             {mActivity ? (
-                              <p className="text-[11px] text-[#1DB954] truncate leading-tight">🎵 {mActivity.artists}</p>
+                              <p className="text-[11px] text-[#1DB954] truncate leading-tight flex items-center gap-1"><SpotifyIcon size={10} className="shrink-0"/> {mActivity.artists}</p>
                             ) : mTwitch ? (
-                              <p className="text-[11px] text-purple-400 truncate leading-tight">🔴 Streamuje: {mTwitch.game_name}</p>
+                              <p className="text-[11px] text-purple-400 truncate leading-tight flex items-center gap-1"><TwitchIcon size={10} className="shrink-0"/> Streamuje: {mTwitch.game_name}</p>
                             ) : mSteam ? (
-                              <p className="text-[11px] text-zinc-500 truncate leading-tight">🎮 {mSteam.name}</p>
+                              <p className="text-[11px] text-zinc-400 truncate leading-tight flex items-center gap-1"><Gamepad2 size={10} className="shrink-0"/> {mSteam.name}</p>
                             ) : (()=>{const sl=statusLabel(m.status); return sl
                               ? <p className={`text-[11px] truncate leading-tight ${sl.cls}`}>{sl.text}</p>
                               : m.role_name ? <p className="text-[11px] text-zinc-600 truncate leading-tight">{m.role_name}</p> : null;
