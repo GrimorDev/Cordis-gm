@@ -3304,14 +3304,15 @@ function SpotifyDisplay({ spotify }: { spotify: SpotifyData }) {
 }
 
 // ─── HoverCard ────────────────────────────────────────────────────────────────
-function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfile, cache, activity, twitchActivity, steamActivity, steamGameStartedAt, onMouseEnter, onMouseLeave }: {
+function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfile, cache, activity, twitchActivity, steamActivity, steamGameStartedAt, realtimeStatus, onMouseEnter, onMouseLeave }: {
   userId: string; x: number; y: number;
   currentUserId: string | undefined;
   onOpenDm: (id: string) => void;
   onCall: (id: string, un: string, av: string|null, t: 'voice'|'video') => void;
   onOpenProfile: (id: string) => void;
   cache: React.MutableRefObject<Map<string, {profile:UserProfile|null;games:FavoriteGame[];spotify:SpotifyData|null;loadedAt:number}>>;
-  activity: {name:string;artists:string;album_cover:string|null;external_url:string|null}|null|undefined;
+  activity: {name:string;artists:string;album_cover:string|null;external_url:string|null;duration_ms?:number|null;progress_ms?:number|null}|null|undefined;
+  realtimeStatus?: string;
   twitchActivity: TwitchStream | null | undefined;
   steamActivity: SteamGame | null | undefined;
   steamGameStartedAt: number | null | undefined;
@@ -3344,12 +3345,14 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
   const sc = (st: string) => st==='online'?'bg-emerald-400':st==='idle'?'bg-amber-400':st==='dnd'?'bg-rose-500':'bg-zinc-600';
   const scText = (st: string) => st==='online'?'Dostępny':st==='idle'?'Zaraz wracam':st==='dnd'?'Nie przeszkadzać':'Offline';
   const u = data?.profile;
+  // Use real-time status from socket if available, fall back to fetched profile status
+  const effectiveStatus = realtimeStatus ?? u?.status ?? 'offline';
   // Respect show_on_profile from fetched data; activity from socket is only shown if show_on_profile is true
   const showSpotify = data?.spotify?.show_on_profile !== false;
   const nowPlaying: (SpotifyTrack & {is_playing?:boolean}) | null | undefined =
     showSpotify
       ? (activity !== undefined
-          ? (activity ? { name: activity.name, artists: activity.artists, album_cover: activity.album_cover, external_url: activity.external_url, is_playing: true } : null)
+          ? (activity ? { name: activity.name, artists: activity.artists, album_cover: activity.album_cover, external_url: activity.external_url, duration_ms: activity.duration_ms ?? null, progress_ms: activity.progress_ms ?? null, is_playing: true } : null)
           : data?.spotify?.current_playing)
       : null;
 
@@ -3390,7 +3393,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
             <div className="relative av-frozen av-active" style={{'--av-url':`url("${u?.avatar_url||`https://api.dicebear.com/9.x/identicon/svg?seed=${u?.username||userId}`}")`} as React.CSSProperties}>
               <img src={u?.avatar_url||`https://api.dicebear.com/9.x/identicon/svg?seed=${u?.username||userId}`}
                 className={`w-14 h-14 rounded-2xl object-cover border-4 border-[#18182a] av-eff-${u?.avatar_effect||'none'} av-sc`} alt=""/>
-              <span className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-[#18182a] ${sc(u?.status||'offline')}`}/>
+              <span className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-[#18182a] ${sc(effectiveStatus)}`}/>
             </div>
           </div>
         </div>
@@ -3400,7 +3403,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
           <div className="flex items-start justify-between mb-1">
             <div>
               <p className="text-base font-bold text-white leading-tight">{u?.username||'...'}</p>
-              <p className={`text-[11px] mt-0.5 ${sc(u?.status||'offline').replace('bg-','text-')}`}>{scText(u?.status||'offline')}</p>
+              <p className={`text-[11px] mt-0.5 ${sc(effectiveStatus).replace('bg-','text-')}`}>{scText(effectiveStatus)}</p>
             </div>
             {!isSelf && u && (
               <div className="flex gap-1.5">
@@ -3603,7 +3606,7 @@ export default function App() {
   const [ownTwitch, setOwnTwitch]             = useState<TwitchData|null>(null);
   const [ownSteam, setOwnSteam]               = useState<SteamData|null>(null);
   // Real-time activities: userId → data (null = not active)
-  const [userActivities, setUserActivities]   = useState<Map<string, {name:string;artists:string;album_cover:string|null;external_url:string|null}|null>>(new Map());
+  const [userActivities, setUserActivities]   = useState<Map<string, {name:string;artists:string;album_cover:string|null;external_url:string|null;duration_ms?:number|null;progress_ms?:number|null}|null>>(new Map());
   const [userTwitchActivities, setUserTwitchActivities] = useState<Map<string, TwitchStream|null>>(new Map());
   const [userSteamActivities, setUserSteamActivities]   = useState<Map<string, SteamGame|null>>(new Map());
   // Hover card
@@ -11105,6 +11108,11 @@ export default function App() {
           twitchActivity={userTwitchActivities.has(hoverCard.userId) ? userTwitchActivities.get(hoverCard.userId)??null : undefined}
           steamActivity={userSteamActivities.has(hoverCard.userId) ? userSteamActivities.get(hoverCard.userId)??null : undefined}
           steamGameStartedAt={steamGameStartRef.current.get(hoverCard.userId) ?? null}
+          realtimeStatus={
+            members.find(m => m.id === hoverCard.userId)?.status ??
+            friends.find(f => f.id === hoverCard.userId)?.status ??
+            dmConvs.find(d => d.other_user_id === hoverCard.userId)?.other_status
+          }
           onMouseEnter={cancelHideHoverCard}
           onMouseLeave={hideHoverCard}
         />
