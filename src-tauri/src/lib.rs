@@ -25,7 +25,11 @@ fn window_minimize(window: tauri::Window) {
 /// Toggle maximise / restore on the calling window.
 #[tauri::command]
 fn window_maximize(window: tauri::Window) {
-    let _ = window.toggle_maximize();
+    if window.is_maximized().unwrap_or(false) {
+        let _ = window.unmaximize();
+    } else {
+        let _ = window.maximize();
+    }
 }
 
 /// Close the calling window (quits the app when the main window is closed).
