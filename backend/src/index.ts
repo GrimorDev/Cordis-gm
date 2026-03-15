@@ -42,8 +42,19 @@ app.set('trust proxy', 1);
 
 // ── Security & Middleware ────────────────────────────────────────────
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+// Allow the configured web origin + Tauri desktop (tauri://localhost and https://tauri.localhost)
+const allowedOrigins = [
+  config.cors.origin,
+  'tauri://localhost',
+  'https://tauri.localhost',
+];
 app.use(cors({
-  origin: config.cors.origin,
+  origin: (origin, cb) => {
+    // Allow requests with no origin (curl, Postman, server-to-server)
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error(`CORS: origin ${origin} not allowed`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],

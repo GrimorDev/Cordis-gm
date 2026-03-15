@@ -6,7 +6,7 @@ import { getToken } from './api';
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 const SOCKET_URL = isTauri
   ? (import.meta.env.VITE_API_BASE
-      ? import.meta.env.VITE_API_BASE.replace(/\/api$/, '')
+      ? import.meta.env.VITE_API_BASE.replace(/\/api\/?$/, '')
       : 'http://localhost:4000')
   : '/';
 

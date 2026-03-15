@@ -1,9 +1,10 @@
 // In Tauri desktop context the app loads from tauri://localhost so relative
 // paths won't resolve — use an explicit backend URL provided via env var.
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-const BASE = isTauri
+const BASE = (isTauri
   ? (import.meta.env.VITE_API_BASE || 'http://localhost:4000/api')
-  : '/api';
+  : '/api'
+).replace(/\/$/, ''); // strip trailing slash so paths never get double-slash
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
