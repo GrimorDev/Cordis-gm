@@ -153,6 +153,11 @@ const sc = (s: string) => {
 };
 
 const ft = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+/** Module-level translate helper — reads saved locale so standalone components can use it. */
+const tl = (key: string): string => {
+  try { return translate(key, resolveLocale(loadLocale().locale)); } catch { return key; }
+};
+
 /** Module-level date formatter that respects the saved locale preference. */
 const fmtDateLocale = (iso: string, opts?: Intl.DateTimeFormatOptions): string => {
   try {
@@ -1712,13 +1717,13 @@ function ServerSettingsPage({
     ? members.filter(m => m.username.toLowerCase().includes(memberQ.toLowerCase()))
     : members;
   const STABS = [
-    canManageServer && { id: 'overview' as const, label: 'Ogólne',      icon: <Settings size={14}/> },
-    canManageRoles  && { id: 'roles'    as const, label: 'Role',         icon: <Shield   size={14}/> },
-    (canManageRoles||canKickMembers) && { id: 'members' as const, label: 'Członkowie', icon: <Users size={14}/> },
-    canBanMembers   && { id: 'bans'     as const, label: 'Bany',         icon: <ShieldCheck size={14}/> },
-    canCreateInvites && { id: 'invites' as const, label: 'Zaproszenia',  icon: <UserPlus size={14}/> },
-    canManageServer && { id: 'emoji' as const, label: 'Emoji',           icon: <Smile size={14}/> },
-    canManageServer && { id: 'automations' as const, label: 'Automatyzacje', icon: <Zap size={14}/> },
+    canManageServer && { id: 'overview' as const, label: tl('serverSettings.overview'),    icon: <Settings size={14}/> },
+    canManageRoles  && { id: 'roles'    as const, label: tl('serverSettings.roles'),       icon: <Shield   size={14}/> },
+    (canManageRoles||canKickMembers) && { id: 'members' as const, label: tl('serverSettings.members'), icon: <Users size={14}/> },
+    canBanMembers   && { id: 'bans'     as const, label: tl('serverSettings.bans'),        icon: <ShieldCheck size={14}/> },
+    canCreateInvites && { id: 'invites' as const, label: tl('serverSettings.invites'),     icon: <UserPlus size={14}/> },
+    canManageServer && { id: 'emoji' as const, label: tl('serverSettings.emoji'),          icon: <Smile size={14}/> },
+    canManageServer && { id: 'automations' as const, label: tl('serverSettings.automations'), icon: <Zap size={14}/> },
   ].filter(Boolean) as { id: typeof tab; label: string; icon: React.ReactNode }[];
 
   return (
@@ -3354,7 +3359,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
   }, [userId]);
 
   const sc = (st: string) => st==='online'?'bg-emerald-400':st==='idle'?'bg-amber-400':st==='dnd'?'bg-rose-500':'bg-zinc-600';
-  const scText = (st: string) => st==='online'?'Dostępny':st==='idle'?'Zaraz wracam':st==='dnd'?'Nie przeszkadzać':'Offline';
+  const scText = (st: string) => tl(`status.${['online','idle','dnd'].includes(st)?st:'offline'}`);
   const u = data?.profile;
   // Use real-time status from socket if available, fall back to fetched profile status
   const effectiveStatus = realtimeStatus ?? u?.status ?? 'offline';
@@ -5955,8 +5960,8 @@ export default function App() {
   // Highlight matching text in search results
   // Returns status label + color class for non-online statuses (idle, dnd)
   const statusLabel = (s: string | undefined) => {
-    if (s === 'idle') return { text: 'Zaraz wracam', cls: 'text-amber-400' };
-    if (s === 'dnd')  return { text: 'Nie przeszkadzać', cls: 'text-rose-400' };
+    if (s === 'idle') return { text: t('status.idle'), cls: 'text-amber-400' };
+    if (s === 'dnd')  return { text: t('status.dnd'),  cls: 'text-rose-400' };
     return null;
   };
 
@@ -6424,7 +6429,7 @@ export default function App() {
                       <button onClick={()=>{setSrvDropOpen(false);setSrvSettTab(canManageServer?'overview':canManageRoles?'roles':'members');setSrvSettOpen(true);setShowCallPanel(false);}}
                         className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
                         <Settings2 size={14} className="text-zinc-500 shrink-0"/>
-                        Ustawienia serwera
+                        {t('server.settings')}
                       </button>
                     </>}
                     {serverFull?.my_role!=='Owner'&&<>
@@ -6584,7 +6589,7 @@ export default function App() {
                         onClick={()=>setCollapsedVcats(p=>{const n=new Set(p);n.has(cat.id)?n.delete(cat.id):n.add(cat.id);return n;})}>
                         <div className="flex items-center gap-1">
                           <ChevronRight size={10} className={`text-zinc-600 transition-transform ${collapsedVcats.has(cat.id)?'':'rotate-90'}`}/>
-                          <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Pokoje głosowe</span>
+                          <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{t('sidebar.voiceRooms')}</span>
                         </div>
                         {canManageChannels&&<Plus size={12} className="text-zinc-700 hover:text-zinc-300 cursor-pointer opacity-0 group-hover/vcat:opacity-100 transition-all"
                           onClick={e=>{ e.stopPropagation(); setChCreateCatId(cat.id); setChCreateOpen(true); setNewChName(''); setNewChType('voice'); }}/>}
@@ -6715,8 +6720,8 @@ export default function App() {
                         className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition-colors text-left group ${isCurrent?'bg-white/[0.06]':'hover:bg-white/[0.05]'}`}>
                         <div className={`w-2.5 h-2.5 rounded-full ${opt.color} shrink-0`}/>
                         <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-semibold text-zinc-200 leading-tight">{opt.label}</p>
-                          <p className="text-[10px] text-zinc-600">{opt.desc}</p>
+                          <p className="text-[12px] font-semibold text-zinc-200 leading-tight">{t(`status.${opt.value}`)}</p>
+                          <p className="text-[10px] text-zinc-600">{t(`status.${opt.value}.desc`)}</p>
                         </div>
                         {isCurrent&&<Check size={12} className="text-indigo-400 shrink-0"/>}
                       </button>
@@ -6750,7 +6755,7 @@ export default function App() {
                     <span className="text-zinc-500">{currentUser.custom_status}</span>
                   ) : (
                     <span className={`${sc(currentUser?.status??'offline').replace('bg-','text-')}`}>
-                      {STATUS_OPTIONS.find(o=>o.value===(currentUser?.status||'online'))?.label||'Dostępny'}
+                      {t(`status.${currentUser?.status||'online'}`)}
                     </span>
                   )}
                 </p>
@@ -7164,10 +7169,10 @@ export default function App() {
                   <MessageCircle size={34} className="text-indigo-400"/>
                 </div>
                 <h2 className="text-xl font-bold text-white mb-2">{t('nav.dmsTitle')}</h2>
-                <p className="text-sm text-zinc-500 mb-8 leading-relaxed max-w-xs">Wybierz znajomego, do którego chcesz napisać, lub zaproś nowych znajomych do Cordyna.</p>
+                <p className="text-sm text-zinc-500 mb-8 leading-relaxed max-w-xs">{t('dm.home.subtitle')}</p>
                 {friends.length>0 ? (
                   <div className="w-full">
-                    <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 text-left">Znajomi</h3>
+                    <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 text-left">{t('friends.dmSection')}</h3>
                     <div className="flex flex-col gap-1">
                       {[...friends].sort((a,b)=>{const o=(s:string)=>['online','idle','dnd'].includes(s)?0:1;return o(a.status)-o(b.status);}).map(f=>(
                         <button key={f.id} onClick={()=>openDm(f.id)}
@@ -7308,10 +7313,10 @@ export default function App() {
 
                   {/* ── Dodaj znajomego ── */}
                   <div className="mb-8">
-                    <h2 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">Dodaj znajomego</h2>
+                    <h2 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">{t('friends.addSection')}</h2>
                     <div className="flex gap-2">
-                      <input value={addFriendVal} onChange={e=>setAddFriendVal(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAddFriend()} placeholder="Wpisz dokładną nazwę użytkownika..." className={`flex-1 ${gi} px-4 py-2.5 text-sm`}/>
-                      <button onClick={handleAddFriend} disabled={!addFriendVal.trim()} className="bg-indigo-500 hover:bg-indigo-400 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 text-sm shrink-0 shadow-lg shadow-indigo-500/20"><UserPlus size={15}/> Dodaj</button>
+                      <input value={addFriendVal} onChange={e=>setAddFriendVal(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAddFriend()} placeholder={t('friends.add.placeholder')} className={`flex-1 ${gi} px-4 py-2.5 text-sm`}/>
+                      <button onClick={handleAddFriend} disabled={!addFriendVal.trim()} className="bg-indigo-500 hover:bg-indigo-400 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 text-sm shrink-0 shadow-lg shadow-indigo-500/20"><UserPlus size={15}/> {t('action.add')}</button>
                     </div>
                     {/* Podpowiedź wyszukiwarki */}
                     {friendSearchLoading && addFriendVal.trim().length >= 2 && (
@@ -8558,7 +8563,7 @@ export default function App() {
                 {online.length>0&&(
                   <div className="mb-5">
                     <h3 className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mb-2 px-1">
-                      Online — {online.length}
+                      {t('members.online')} — {online.length}
                     </h3>
                     <div className="flex flex-col gap-0.5">
                       {online.map(m=>{
@@ -8605,7 +8610,7 @@ export default function App() {
                 {offline.length>0&&(
                   <div>
                     <h3 className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest mb-2 px-1">
-                      Offline — {offline.length}
+                      {t('members.offline')} — {offline.length}
                     </h3>
                     <div className="flex flex-col gap-0.5">
                       {offline.map(m=>{
@@ -8952,7 +8957,7 @@ export default function App() {
               <button onClick={()=>{ setSrvContextMenu(null); setSrvSettTab(canManageServer?'overview':canManageRoles?'roles':'members'); setSrvSettOpen(true); setShowCallPanel(false); setActiveServer(srvContextMenu.srv.id); setActiveView('servers'); }}
                 className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
                 <Settings2 size={13} className="text-zinc-500 shrink-0"/>
-                Ustawienia serwera
+                {t('server.settings')}
               </button>
               <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
             </>)}
@@ -9358,7 +9363,7 @@ export default function App() {
             <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
               onClick={e=>e.stopPropagation()} className={`${gm} rounded-3xl w-full max-w-2xl max-h-[85vh] flex flex-col`}>
               <div className="flex items-center justify-between p-5 border-b border-white/[0.06] shrink-0">
-                <h2 className="text-base font-bold text-white">Ustawienia serwera</h2>
+                <h2 className="text-base font-bold text-white">{t('serverSettings.title')}</h2>
                 <button onClick={()=>setSrvSettOpen(false)} className="text-zinc-600 hover:text-white"><X size={17}/></button>
               </div>
               <div className="flex border-b border-white/[0.06] shrink-0 px-5 gap-0.5 overflow-x-auto scrollbar-hide">
@@ -9368,13 +9373,13 @@ export default function App() {
                   (canManageRoles||canKickMembers) && 'members',
                   canBanMembers && 'bans',
                   canCreateInvites && 'invites',
-                ].filter(Boolean) as ('overview'|'roles'|'members'|'bans'|'invites')[]).map(t=>(
-                  <button key={t} onClick={()=>{
-                    setSrvSettTab(t);
-                    if (t==='bans' && activeServer) serversApi.bans.list(activeServer).then(setBanList).catch(console.error);
+                ].filter(Boolean) as ('overview'|'roles'|'members'|'bans'|'invites')[]).map(stab=>(
+                  <button key={stab} onClick={()=>{
+                    setSrvSettTab(stab);
+                    if (stab==='bans' && activeServer) serversApi.bans.list(activeServer).then(setBanList).catch(console.error);
                   }}
-                    className={`px-4 py-3 text-sm font-semibold transition-all border-b-2 -mb-px shrink-0 ${srvSettTab===t?'border-indigo-500 text-white':'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
-                    {t==='overview'?'Ogólne':t==='roles'?'Role':t==='members'?'Członkowie':t==='bans'?'Bany':'Zaproszenia'}
+                    className={`px-4 py-3 text-sm font-semibold transition-all border-b-2 -mb-px shrink-0 ${srvSettTab===stab?'border-indigo-500 text-white':'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
+                    {t(`serverSettings.${stab}`)}
                   </button>
                 ))}
               </div>
@@ -9852,7 +9857,7 @@ export default function App() {
               )}
 
               {/* Friends list */}
-              <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Znajomi — {friends.filter(f=>f.status!=='offline').length} online</p>
+              <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2">{t('friends.onlineCount')} — {friends.filter(f=>f.status!=='offline').length} {t('members.online').toLowerCase()}</p>
               <div className="flex flex-col gap-1 max-h-72 overflow-y-auto custom-scrollbar">
                 {friends.length === 0 && (
                   <p className="text-sm text-zinc-600 text-center py-6">Brak znajomych do zaproszenia</p>
@@ -9869,7 +9874,7 @@ export default function App() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm font-semibold truncate ${f.status==='offline'?'text-zinc-500':'text-white'}`}>{maskName(f.username)}</p>
-                      <p className="text-xs text-zinc-600 capitalize">{f.status==='online'?'Dostępny':f.status==='idle'?'Zaraz wracam':f.status==='dnd'?'Nie przeszkadzać':'Offline'}</p>
+                      <p className="text-xs text-zinc-600">{t(`status.${f.status==='online'||f.status==='idle'||f.status==='dnd'?f.status:'offline'}`)}</p>
                     </div>
                     <button onClick={()=>handleInviteFriend(f.id, f.username)}
                       disabled={inviteSending===f.id}
@@ -9952,7 +9957,7 @@ export default function App() {
                     <Settings size={15} className="text-indigo-400"/>
                   </div>
                   <div>
-                    <h2 className="text-base font-bold text-white leading-tight">Ustawienia</h2>
+                    <h2 className="text-base font-bold text-white leading-tight">{t('settings.title')}</h2>
                     <p className="text-xs text-zinc-600">{currentUser.username}</p>
                   </div>
                 </div>
@@ -9981,7 +9986,7 @@ export default function App() {
                   <div className="sm:mt-auto sm:pt-3 sm:border-t border-white/[0.06] ml-auto sm:ml-0 shrink-0">
                     <button onClick={()=>{setAppSettOpen(false);auth.logout().then(()=>{clearToken();setIsAuthenticated(false);setCurrentUser(null);}).catch(()=>{clearToken();setIsAuthenticated(false);setCurrentUser(null);});}}
                       className="flex items-center gap-2 px-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all w-full shrink-0">
-                      <LogOut size={14}/> <span className="sm:inline hidden">Wyloguj</span><span className="sm:hidden">Wyloguj</span>
+                      <LogOut size={14}/> <span>{t('action.logout')}</span>
                     </button>
                   </div>
                 </div>
@@ -9994,7 +9999,7 @@ export default function App() {
                   {appSettTab==='account'&&(
                     <motion.div key="account" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
                       className="flex flex-col gap-5">
-                      <h3 className="text-sm font-bold text-white">Informacje o koncie</h3>
+                      <h3 className="text-sm font-bold text-white">{t('account.title')}</h3>
 
                       {/* Avatar + banner preview */}
                       <div className="rounded-2xl overflow-hidden border border-white/[0.07]">
@@ -10018,20 +10023,20 @@ export default function App() {
 
                       {/* Avatar upload */}
                       <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">Avatar</label>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('account.avatar')}</label>
                         <label className={`flex items-center gap-2.5 cursor-pointer ${gi} rounded-xl px-4 py-3 text-sm hover:bg-white/[0.07] transition-all border`}>
                           <Upload size={15} className="text-zinc-500 shrink-0"/>
-                          <span className="text-zinc-400">Zmień avatar</span>
+                          <span className="text-zinc-400">{t('account.changeAvatar')}</span>
                           <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden"/>
                         </label>
                       </div>
 
                       {/* Banner */}
                       <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">Banner profilu</label>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('account.banner')}</label>
                         <label className={`flex items-center gap-2.5 cursor-pointer ${gi} rounded-xl px-4 py-3 text-sm hover:bg-white/[0.07] transition-all border mb-3`}>
                           <Upload size={15} className="text-zinc-500 shrink-0"/>
-                          <span className="text-zinc-400">{profBannerPrev?'Zmieniono (niezapisane)':'Zmień banner'}</span>
+                          <span className="text-zinc-400">{profBannerPrev ? t('account.bannerChanged') : t('account.changeBanner')}</span>
                           <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f){setProfBannerFile(f);setProfBannerPrev(URL.createObjectURL(f));}e.target.value='';}} className="hidden"/>
                         </label>
                         <div className="grid grid-cols-6 gap-2">
@@ -10044,13 +10049,13 @@ export default function App() {
 
                       {/* Fields */}
                       <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Nazwa użytkownika</label>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">{t('account.username')}</label>
                         <input value={editProf?.username||''} onChange={e=>setEditProf((p:any)=>({...p,username:e.target.value}))} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}/>
                       </div>
                       <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Status niestandardowy</label>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">{t('account.customStatus')}</label>
                         <div className="relative">
-                          <input value={editProf?.custom_status||''} onChange={e=>setEditProf((p:any)=>({...p,custom_status:e.target.value}))} placeholder="Np. Pracuję, Na przerwie..." className={`w-full ${gi} rounded-xl px-4 py-3 text-sm pr-10`}/>
+                          <input value={editProf?.custom_status||''} onChange={e=>setEditProf((p:any)=>({...p,custom_status:e.target.value}))} placeholder={t('account.customStatus.ph')} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm pr-10`}/>
                           {editProf?.custom_status&&(
                             <button type="button" onClick={()=>setEditProf((p:any)=>({...p,custom_status:''}))}
                               className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-300 transition-colors">
@@ -10058,15 +10063,15 @@ export default function App() {
                             </button>
                           )}
                         </div>
-                        <p className="text-[10px] text-zinc-700 mt-1">Ten tekst pojawi się pod Twoją nazwą w pasku bocznym</p>
+                        <p className="text-[10px] text-zinc-700 mt-1">{t('account.customStatus.hint')}</p>
                       </div>
                       <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Bio</label>
-                        <textarea value={editProf?.bio||''} onChange={e=>setEditProf((p:any)=>({...p,bio:e.target.value}))} rows={3} placeholder="Napisz coś o sobie..." className={`w-full ${gi} rounded-xl px-4 py-3 text-sm resize-none`}/>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">{t('account.bio')}</label>
+                        <textarea value={editProf?.bio||''} onChange={e=>setEditProf((p:any)=>({...p,bio:e.target.value}))} rows={3} placeholder={t('account.bio.ph')} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm resize-none`}/>
                       </div>
                       <button onClick={()=>handleSaveProfile({ closeProfileModal: false })}
                         className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">
-                        Zapisz zmiany
+                        {t('account.saveChanges')}
                       </button>
                     </motion.div>
                   )}
@@ -10075,11 +10080,11 @@ export default function App() {
                   {appSettTab==='appearance'&&(
                     <motion.div key="appearance" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
                       className="flex flex-col gap-5">
-                      <h3 className="text-sm font-bold text-white">Personalizacja wyglądu</h3>
+                      <h3 className="text-sm font-bold text-white">{t('appearance.title')}</h3>
 
                       {/* Accent color */}
                       <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Kolor akcentu</label>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">{t('appearance.accentColor')}</label>
                         <div className="grid grid-cols-5 gap-2">
                           {([
                             {key:'indigo',  label:'Indigo',     cls:'bg-indigo-500'},
@@ -10104,11 +10109,11 @@ export default function App() {
 
                       {/* Message density */}
                       <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Gęstość wiadomości</label>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">{t('appearance.msgDensity')}</label>
                         <div className="flex flex-col gap-2">
                           {([
-                            {key:false, label:'Komfortowy', desc:'Większe odstępy, łatwiejsze czytanie'},
-                            {key:true,  label:'Kompaktowy',  desc:'Mniejsze odstępy, więcej wiadomości'},
+                            {key:false, label:t('appearance.cozy.label'),    desc:t('appearance.cozy.desc')},
+                            {key:true,  label:t('appearance.compact.label'), desc:t('appearance.compact.desc')},
                           ] as const).map(opt=>(
                             <button key={String(opt.key)} onClick={()=>saveCompactMessages(opt.key)}
                               className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-all ${compactMessages===opt.key?'bg-indigo-500/10 border-indigo-500/30 text-white':'bg-white/[0.02] border-white/[0.05] text-zinc-400 hover:text-zinc-300'}`}>
@@ -10124,12 +10129,12 @@ export default function App() {
 
                       {/* Font size */}
                       <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Rozmiar czcionki</label>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">{t('appearance.fontSize')}</label>
                         <div className="flex gap-2">
                           {([
-                            {key:'small',  label:'Mała',    sample:'Aa'},
-                            {key:'normal', label:'Normalna', sample:'Aa'},
-                            {key:'large',  label:'Duża',    sample:'Aa'},
+                            {key:'small',  label:t('appearance.fontSize.small'),  sample:'Aa'},
+                            {key:'normal', label:t('appearance.fontSize.normal'), sample:'Aa'},
+                            {key:'large',  label:t('appearance.fontSize.large'),  sample:'Aa'},
                           ] as const).map(opt=>(
                             <button key={opt.key} onClick={()=>saveFontSize(opt.key)}
                               className={`flex-1 flex flex-col items-center gap-1.5 py-3 rounded-xl border text-sm transition-all ${fontSize===opt.key?'bg-indigo-500/10 border-indigo-500/30 text-white':'bg-white/[0.02] border-white/[0.05] text-zinc-400 hover:text-zinc-300'}`}>
@@ -10142,30 +10147,30 @@ export default function App() {
 
                       {/* Toggle options */}
                       <div className="flex flex-col gap-2">
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1 block font-bold">Opcje wyświetlania</label>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1 block font-bold">{t('appearance.displayOptions')}</label>
                         {([
                           {
                             key: 'show_timestamps' as const,
-                            label: 'Zawsze pokazuj sygnatury czasowe',
-                            desc: 'Godzina przy każdej wiadomości widoczna bez najechania',
+                            label: t('appearance.timestamps.label'),
+                            desc: t('appearance.timestamps.desc'),
                             value: alwaysShowTimestamps,
                           },
                           {
                             key: 'show_chat_avatars' as const,
-                            label: 'Pokaż awatary w czacie',
-                            desc: 'Zdjęcia profilowe obok wiadomości na kanałach',
+                            label: t('appearance.avatars.label'),
+                            desc: t('appearance.avatars.desc'),
                             value: showChatAvatars,
                           },
                           {
                             key: 'message_animations' as const,
-                            label: 'Animacje wiadomości',
-                            desc: 'Płynne pojawianie się nowych wiadomości',
+                            label: t('appearance.animations.label'),
+                            desc: t('appearance.animations.desc'),
                             value: messageAnimations,
                           },
                           {
                             key: 'show_link_previews' as const,
-                            label: 'Podgląd linków',
-                            desc: 'Pokazuj miniatury i opisy dla wklejonych adresów URL',
+                            label: t('appearance.linkPreview.label'),
+                            desc: t('appearance.linkPreview.desc'),
                             value: showLinkPreviews,
                           },
                         ]).map(opt=>(
@@ -10185,11 +10190,11 @@ export default function App() {
 
                       {/* Streamer mode */}
                       <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Tryb Streamera</label>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">{t('appearance.streamerMode')}</label>
                         <div className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-3 hover:border-white/[0.09] transition-colors">
                           <div className="flex-1 min-w-0 mr-4">
-                            <p className="text-sm font-medium text-white">Tryb Streamera</p>
-                            <p className="text-xs text-zinc-600 mt-0.5">Ukrywa Twoje dane — nickname, avatar i linki zaproszeń są maskowane podczas streamów</p>
+                            <p className="text-sm font-medium text-white">{t('appearance.streamerMode')}</p>
+                            <p className="text-xs text-zinc-600 mt-0.5">{t('appearance.streamerMode.desc')}</p>
                           </div>
                           <button onClick={() => setStreamerMode(p => !p)}
                             className={`w-11 h-6 rounded-full transition-all shrink-0 relative ${streamerMode ? 'bg-indigo-500' : 'bg-zinc-700'}`}>
@@ -10201,14 +10206,14 @@ export default function App() {
 
                       {/* Avatar effects */}
                       <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Efekty avatara</label>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">{t('appearance.avatarEffects')}</label>
                         {/* Live preview */}
                         <div className="flex items-center gap-4 mb-4 p-3 bg-white/[0.03] rounded-2xl border border-white/[0.06]">
                           <div className="relative av-frozen shrink-0" style={{'--av-url':`url("${currentUser?ava(currentUser):''}")`} as React.CSSProperties}>
                             <img src={currentUser?ava(currentUser):''} className={`w-14 h-14 rounded-2xl object-cover av-eff-${avatarEffect}`} alt="podgląd"/>
                           </div>
                           <div>
-                            <p className="text-sm font-semibold text-white">{AVATAR_EFFECTS.find(e=>e.key===avatarEffect)?.label ?? 'Brak efektu'}</p>
+                            <p className="text-sm font-semibold text-white">{AVATAR_EFFECTS.find(e=>e.key===avatarEffect)?.label ?? t('appearance.noEffect')}</p>
                             <p className="text-xs text-zinc-500 mt-0.5 leading-snug">{AVATAR_EFFECTS.find(e=>e.key===avatarEffect)?.desc}</p>
                           </div>
                         </div>
@@ -10235,40 +10240,40 @@ export default function App() {
                     <motion.div key="devices" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
                       className="flex flex-col gap-5">
                       <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-bold text-white">Urządzenia audio/wideo</h3>
+                        <h3 className="text-sm font-bold text-white">{t('devices.title')}</h3>
                         <button onClick={()=>getMediaDevices().then(setDevices).catch(()=>{})}
                           className={`text-xs ${gb} px-3 py-1.5 rounded-lg flex items-center gap-1.5`}>
-                          <Loader2 size={11}/> Odśwież
+                          <Loader2 size={11}/> {t('devices.check')}
                         </button>
                       </div>
                       {devices.length===0&&(
                         <div className={`${gi} rounded-2xl p-4 border flex items-center gap-3`}>
                           <AlertCircle size={16} className="text-amber-400 shrink-0"/>
                           <div>
-                            <p className="text-sm text-zinc-300 font-medium">Brak dostępu do urządzeń</p>
-                            <p className="text-xs text-zinc-500 mt-0.5">Zezwól przeglądarce na dostęp do mikrofonu, aby zobaczyć urządzenia</p>
+                            <p className="text-sm text-zinc-300 font-medium">{t('devices.noAccess')}</p>
+                            <p className="text-xs text-zinc-500 mt-0.5">{t('devices.noAccess.desc')}</p>
                           </div>
                         </div>
                       )}
                       <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">Mikrofon ({devices.filter(d=>d.kind==='audioinput').length})</label>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('devices.mic')} ({devices.filter(d=>d.kind==='audioinput').length})</label>
                         <select value={selMic} onChange={e=>setSelMic(e.target.value)} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}>
-                          <option value="">Domyślny</option>
-                          {devices.filter(d=>d.kind==='audioinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`Mikrofon ${d.deviceId.slice(0,8)}`}</option>)}
+                          <option value="">Default</option>
+                          {devices.filter(d=>d.kind==='audioinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`${t('devices.mic')} ${d.deviceId.slice(0,8)}`}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">Głośniki ({devices.filter(d=>d.kind==='audiooutput').length})</label>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('devices.speakers')} ({devices.filter(d=>d.kind==='audiooutput').length})</label>
                         <select value={selSpeaker} onChange={e=>{setSelSpeaker(e.target.value);setOutputDevice(e.target.value).catch(()=>{});}} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}>
-                          <option value="">Domyślny</option>
-                          {devices.filter(d=>d.kind==='audiooutput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`Głośnik ${d.deviceId.slice(0,8)}`}</option>)}
+                          <option value="">Default</option>
+                          {devices.filter(d=>d.kind==='audiooutput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`${t('devices.speakers')} ${d.deviceId.slice(0,8)}`}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">Kamera ({devices.filter(d=>d.kind==='videoinput').length})</label>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('devices.camera')} ({devices.filter(d=>d.kind==='videoinput').length})</label>
                         <select value={selCamera} onChange={e=>setSelCamera(e.target.value)} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}>
-                          <option value="">Domyślna</option>
-                          {devices.filter(d=>d.kind==='videoinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`Kamera ${d.deviceId.slice(0,8)}`}</option>)}
+                          <option value="">Default</option>
+                          {devices.filter(d=>d.kind==='videoinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`${t('devices.camera')} ${d.deviceId.slice(0,8)}`}</option>)}
                         </select>
                       </div>
                     </motion.div>
@@ -10278,13 +10283,13 @@ export default function App() {
                   {appSettTab==='privacy'&&(
                     <motion.div key="privacy" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
                       className="flex flex-col gap-5">
-                      <h3 className="text-sm font-bold text-white">Prywatność i bezpieczeństwo</h3>
+                      <h3 className="text-sm font-bold text-white">{t('privacy.title')}</h3>
                       {([
-                        {key:'privacy_status_visible',     label:'Status widoczny dla innych',       desc:'Inni widzą czy jesteś online/offline/zaraz wracam'},
-                        {key:'privacy_typing_visible',     label:'Podgląd "pisze..."',                desc:'Inni widzą animację gdy piszesz wiadomość'},
-                        {key:'privacy_read_receipts',      label:'Potwierdzenia odczytu',             desc:'Nadawca widzi że przeczytałeś wiadomość prywatną'},
-                        {key:'privacy_friend_requests',    label:'Zaproszenia od nieznajomych',       desc:'Osoby spoza twoich serwerów mogą cię zaprosić'},
-                        {key:'privacy_dm_from_strangers',  label:'Wiadomości prywatne od obcych',    desc:'Osoby niebędące Twoimi znajomymi mogą pisać do Ciebie w DM'},
+                        {key:'privacy_status_visible',    label:t('privacy.statusVisible.label'),   desc:t('privacy.statusVisible.desc')},
+                        {key:'privacy_typing_visible',    label:t('privacy.typing.label'),          desc:t('privacy.typing.desc')},
+                        {key:'privacy_read_receipts',     label:t('privacy.readReceipts.label'),    desc:t('privacy.readReceipts.desc')},
+                        {key:'privacy_friend_requests',   label:t('privacy.friendRequests.label'),  desc:t('privacy.friendRequests.desc')},
+                        {key:'privacy_dm_from_strangers', label:t('privacy.dmFromStrangers.label'), desc:t('privacy.dmFromStrangers.desc')},
                       ] as const).map(opt=>{
                         const on = getPrivacy(opt.key);
                         return (
@@ -10305,16 +10310,16 @@ export default function App() {
                       <div className="mt-1 p-4 bg-indigo-500/5 border border-indigo-500/15 rounded-2xl">
                         <div className="flex items-center gap-2 mb-3">
                           <ShieldCheck size={16} className="text-indigo-400"/>
-                          <h4 className="text-sm font-bold text-white">Weryfikacja dwuetapowa (2FA)</h4>
+                          <h4 className="text-sm font-bold text-white">{t('privacy.2fa.title')}</h4>
                           {twoFaStatus?.totp_enabled && (
-                            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/25 px-2 py-0.5 rounded-full">WŁĄCZONE</span>
+                            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/25 px-2 py-0.5 rounded-full">{t('privacy.2fa.enabled')}</span>
                           )}
                         </div>
                         {twoFaStatus?.totp_enabled ? (
                           <div className="flex flex-col gap-2.5">
                             <p className="text-xs text-zinc-400 leading-relaxed">
-                              2FA jest aktywne. Przy logowaniu wymagany będzie kod z aplikacji authenticator (Google Authenticator, Authy).
-                              Masz <span className="text-white font-semibold">{twoFaStatus.backup_codes_count}</span> kodów zapasowych.
+                              {t('privacy.2fa.desc')}
+                              {' '}{t('privacy.2fa.codes').replace('{n}', String(twoFaStatus.backup_codes_count))}
                             </p>
                             <div className="flex gap-2 flex-wrap">
                               <button
@@ -10323,12 +10328,12 @@ export default function App() {
                                   setTwoFaModal('regen');
                                 }}
                                 className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/15 border border-indigo-500/20 px-3 py-1.5 rounded-lg transition-all">
-                                Regeneruj kody zapasowe
+                                {t('privacy.2fa.regen')}
                               </button>
                               <button
                                 onClick={()=>{ setTwoFaInputCode(''); setTwoFaPassword(''); setTwoFaError(''); setTwoFaModal('disable'); }}
                                 className="text-xs font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/15 border border-rose-500/20 px-3 py-1.5 rounded-lg transition-all">
-                                Wyłącz 2FA
+                                {t('privacy.2fa.disable')}
                               </button>
                             </div>
                           </div>
@@ -10351,7 +10356,7 @@ export default function App() {
                               disabled={twoFaLoading}
                               className="self-start text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 border border-indigo-500/30 px-4 py-2 rounded-xl transition-all flex items-center gap-2">
                               {twoFaLoading ? <Loader2 size={14} className="animate-spin"/> : <ShieldCheck size={14}/>}
-                              Włącz weryfikację dwuetapową
+                              {t('privacy.2fa.enable')}
                             </button>
                           </div>
                         )}
@@ -10361,10 +10366,10 @@ export default function App() {
                       <div className="p-4 bg-indigo-500/5 border border-indigo-500/15 rounded-2xl">
                         <div className="flex items-center gap-2 mb-2">
                           <Bell size={15} className="text-indigo-400"/>
-                          <h4 className="text-sm font-bold text-white">Powiadomienia Push</h4>
+                          <h4 className="text-sm font-bold text-white">{t('privacy.push.title')}</h4>
                         </div>
                         <p className="text-xs text-zinc-500 mb-3 leading-relaxed">
-                          Otrzymuj powiadomienia push o nowych wiadomościach nawet gdy aplikacja jest w tle lub zamknięta.
+                          {t('privacy.push.desc')}
                         </p>
                         <button onClick={async () => {
                           if (!('Notification' in window) || !('serviceWorker' in navigator)) {
@@ -10391,16 +10396,16 @@ export default function App() {
                           }
                         }}
                           className="text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 border border-indigo-500/30 px-4 py-2 rounded-xl transition-all flex items-center gap-2">
-                          <Bell size={13}/> Włącz powiadomienia push
+                          <Bell size={13}/> {t('privacy.push.enable')}
                         </button>
                       </div>
 
                       <div className="mt-2 p-4 bg-rose-500/5 border border-rose-500/15 rounded-2xl">
-                        <h4 className="text-sm font-bold text-rose-400 mb-1">Strefa zagrożenia</h4>
-                        <p className="text-xs text-zinc-500 mb-3">Trwałe akcje których nie można cofnąć</p>
+                        <h4 className="text-sm font-bold text-rose-400 mb-1">{t('privacy.dangerZone')}</h4>
+                        <p className="text-xs text-zinc-500 mb-3">{t('privacy.dangerZone.desc')}</p>
                         <button onClick={()=>setDeleteStep('confirm')}
                           className="text-sm font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/15 border border-rose-500/20 px-4 py-2 rounded-xl transition-all">
-                          Usuń konto
+                          {t('privacy.deleteAccount')}
                         </button>
                       </div>
                     </motion.div>
