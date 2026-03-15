@@ -42,19 +42,11 @@ app.set('trust proxy', 1);
 
 // ── Security & Middleware ────────────────────────────────────────────
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-// Allow the configured web origin + Tauri desktop (tauri://localhost and https://tauri.localhost)
-const allowedOrigins = [
-  config.cors.origin,
-  'tauri://localhost',
-  'https://tauri.localhost',
-];
+// API uses JWT (Authorization header), not cookies — CORS does not add security here.
+// Accept all origins so the desktop app (tauri://localhost / https://tauri.localhost)
+// and any future clients can connect without configuration changes.
 app.use(cors({
-  origin: (origin, cb) => {
-    // Allow requests with no origin (curl, Postman, server-to-server)
-    if (!origin) return cb(null, true);
-    if (allowedOrigins.includes(origin)) return cb(null, true);
-    cb(new Error(`CORS: origin ${origin} not allowed`));
-  },
+  origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
