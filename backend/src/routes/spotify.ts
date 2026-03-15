@@ -2,6 +2,11 @@ import { Router, Request, Response } from 'express';
 import { query } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
+import {
+  startSpotifyJam, endSpotifyJam, joinSpotifyJam, leaveSpotifyJam,
+  getSpotifyJamMembers, getMyJamHostId,
+  setVoiceDj, clearVoiceDj, getVoiceDj, getMyVoiceDjChannel,
+} from '../redis/client';
 
 const router = Router();
 
@@ -16,6 +21,7 @@ const SCOPES = [
   'user-read-currently-playing',
   'user-read-playback-state',
   'user-top-read',
+  'user-modify-playback-state',
 ].join(' ');
 
 // ── Token refresh helper ──────────────────────────────────────────────
@@ -68,6 +74,7 @@ function fmtTrack(t: any, isPlaying?: boolean, progressMs?: number) {
     album_cover:  t.album?.images?.[0]?.url || null,
     preview_url:  t.preview_url || null,
     external_url: t.external_urls?.spotify || null,
+    uri:          t.uri || null,
     is_playing:   isPlaying,
     progress_ms:  progressMs ?? null,
     duration_ms:  t.duration_ms ?? null,
@@ -263,6 +270,140 @@ router.delete('/disconnect', authMiddleware, async (req: AuthRequest, res: Respo
   } catch {
     return res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// ── Playback control (requires user-modify-playback-state + Premium) ──────────
+
+// POST /api/spotify/playback/play — play a specific track at a position (auth)
+router.post('/playback/play', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { uri, position_ms } = req.body as { uri: string; position_ms?: number };
+  if (!uri) return res.status(400).json({ error: 'uri required' });
+  const token = await getValidAccessToken(req.user!.id);
+  if (!token) return res.status(401).json({ error: 'Spotify not connected' });
+  try {
+    const r = await fetch('https://api.spotify.com/v1/me/player/play', {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uris: [uri], position_ms: position_ms ?? 0 }),
+    });
+    if (r.status === 403) return res.status(403).json({ error: 'premium_required' });
+    if (r.status === 404) return res.status(404).json({ error: 'no_active_device' });
+    return res.json({ ok: true });
+  } catch {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/spotify/playback/volume — set volume (auth)
+router.put('/playback/volume', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { volume_percent } = req.body as { volume_percent: number };
+  if (typeof volume_percent !== 'number') return res.status(400).json({ error: 'volume_percent required' });
+  const token = await getValidAccessToken(req.user!.id);
+  if (!token) return res.status(401).json({ error: 'Spotify not connected' });
+  try {
+    await fetch(`https://api.spotify.com/v1/me/player/volume?volume_percent=${Math.round(Math.max(0, Math.min(100, volume_percent)))}`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    return res.json({ ok: true });
+  } catch {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── Spotify JAM (shared listening session) ────────────────────────────────────
+
+// POST /api/spotify/jam/start — start a JAM as host (auth)
+router.post('/jam/start', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const hostId = req.user!.id;
+  // End any existing JAM first
+  await endSpotifyJam(hostId);
+  await startSpotifyJam(hostId);
+  return res.json({ jam_id: hostId });
+});
+
+// POST /api/spotify/jam/join/:hostId — join someone's JAM (auth)
+router.post('/jam/join/:hostId', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { hostId } = req.params;
+  const memberId = req.user!.id;
+  if (hostId === memberId) return res.status(400).json({ error: 'Cannot join own JAM' });
+  const ok = await joinSpotifyJam(hostId, memberId);
+  if (!ok) return res.status(404).json({ error: 'JAM session not found' });
+  return res.json({ ok: true, jam_id: hostId });
+});
+
+// DELETE /api/spotify/jam — leave or end own JAM (auth)
+router.delete('/jam', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id;
+  // Check if user is a host first
+  const members = await getSpotifyJamMembers(userId);
+  if (members !== null) {
+    await endSpotifyJam(userId);
+    return res.json({ ok: true, was_host: true, notified_members: members });
+  }
+  // Otherwise leave as member
+  const hostId = await leaveSpotifyJam(userId);
+  return res.json({ ok: true, was_host: false, host_id: hostId });
+});
+
+// GET /api/spotify/jam/active — get own JAM status (auth)
+router.get('/jam/active', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id;
+  // Am I a host?
+  const myMembers = await getSpotifyJamMembers(userId);
+  if (myMembers !== null) {
+    return res.json({ role: 'host', jam_id: userId, members: myMembers });
+  }
+  // Am I a listener?
+  const hostId = await getMyJamHostId(userId);
+  if (hostId) {
+    const members = await getSpotifyJamMembers(hostId) || [];
+    // Get host info
+    const { rows: [host] } = await query('SELECT id, username, avatar_url FROM users WHERE id=$1', [hostId]);
+    return res.json({ role: 'listener', jam_id: hostId, host, members });
+  }
+  return res.json({ role: null });
+});
+
+// GET /api/spotify/jam/:hostId — get public JAM info (auth) — used to show invite details
+router.get('/jam/:hostId', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { hostId } = req.params;
+  const members = await getSpotifyJamMembers(hostId);
+  if (members === null) return res.status(404).json({ error: 'JAM not found' });
+  const { rows: [host] } = await query('SELECT id, username, avatar_url FROM users WHERE id=$1', [hostId]);
+  // Get member info
+  const memberInfoRows = members.length > 0
+    ? (await query('SELECT id, username, avatar_url FROM users WHERE id=ANY($1)', [members])).rows
+    : [];
+  return res.json({ jam_id: hostId, host, members: memberInfoRows });
+});
+
+// ── Voice Channel DJ ──────────────────────────────────────────────────────────
+
+// POST /api/spotify/voice-dj/start — start DJ session in a voice channel (auth)
+router.post('/voice-dj/start', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { channel_id } = req.body as { channel_id: string };
+  if (!channel_id) return res.status(400).json({ error: 'channel_id required' });
+  // Verify user is connected to Spotify
+  const token = await getValidAccessToken(req.user!.id);
+  if (!token) return res.status(401).json({ error: 'Spotify not connected' });
+  await setVoiceDj(channel_id, req.user!.id);
+  return res.json({ ok: true });
+});
+
+// DELETE /api/spotify/voice-dj — stop own DJ session (auth)
+router.delete('/voice-dj', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const channelId = await getMyVoiceDjChannel(req.user!.id);
+  if (channelId) await clearVoiceDj(channelId);
+  return res.json({ ok: true, channel_id: channelId });
+});
+
+// GET /api/spotify/voice-dj/:channelId — get DJ for a channel (auth)
+router.get('/voice-dj/:channelId', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const djUserId = await getVoiceDj(req.params.channelId);
+  if (!djUserId) return res.json({ dj: null });
+  const { rows: [dj] } = await query('SELECT id, username, avatar_url FROM users WHERE id=$1', [djUserId]);
+  return res.json({ dj: dj || null });
 });
 
 export default router;

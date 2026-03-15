@@ -2,7 +2,11 @@ import { Server as HttpServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
-import { setUserStatus, joinVoiceChannel, leaveVoiceChannel } from '../redis/client';
+import {
+  setUserStatus, joinVoiceChannel, leaveVoiceChannel,
+  getSpotifyJamMembers, getVoiceDj, getMyVoiceDjChannel,
+  endSpotifyJam, clearVoiceDj,
+} from '../redis/client';
 import { query } from '../db/pool';
 import { JwtPayload, ServerToClientEvents, ClientToServerEvents } from '../types';
 
@@ -184,6 +188,59 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
       for (const { friend_id } of friendRows) {
         socket.to(`user:${friend_id}`).emit('friend_spotify_update', { user_id: user.id, track });
       }
+
+      // ── JAM: if this user is a JAM host, sync all listeners ──────
+      const jamMembers = await getSpotifyJamMembers(user.id);
+      if (jamMembers && jamMembers.length > 0) {
+        for (const memberId of jamMembers) {
+          io.to(`user:${memberId}`).emit('spotify_jam_sync' as any, { host_id: user.id, track });
+        }
+      }
+
+      // ── Voice DJ: if this user is a voice DJ, sync listeners ─────
+      const djChannelId = await getMyVoiceDjChannel(user.id);
+      if (djChannelId) {
+        socket.to(`vdj:${djChannelId}`).emit('voice_dj_sync' as any, { dj_id: user.id, channel_id: djChannelId, track });
+      }
+    });
+
+    // ── Spotify JAM socket management ────────────────────────────────
+    // Client calls this when they successfully join a JAM (after REST call)
+    socket.on('spotify_jam_joined' as any, ({ host_id }: { host_id: string }) => {
+      socket.join(`jam:${host_id}`);
+    });
+
+    // Client calls this when they leave a JAM
+    socket.on('spotify_jam_left' as any, ({ host_id }: { host_id: string }) => {
+      socket.leave(`jam:${host_id}`);
+      // Notify host
+      io.to(`user:${host_id}`).emit('spotify_jam_member_left' as any, { user_id: user.id });
+    });
+
+    // Host notifies when they end the JAM — broadcast to room
+    socket.on('spotify_jam_ended' as any, ({ host_id }: { host_id: string }) => {
+      io.to(`jam:${host_id}`).emit('spotify_jam_ended' as any, { host_id });
+    });
+
+    // ── Voice DJ socket management ────────────────────────────────────
+    // User opts in to voice DJ listening
+    socket.on('voice_dj_listen' as any, ({ channel_id }: { channel_id: string }) => {
+      socket.join(`vdj:${channel_id}`);
+    });
+
+    // User opts out
+    socket.on('voice_dj_unlisten' as any, ({ channel_id }: { channel_id: string }) => {
+      socket.leave(`vdj:${channel_id}`);
+    });
+
+    // DJ notifies channel when starting/stopping
+    socket.on('voice_dj_started' as any, ({ channel_id }: { channel_id: string }) => {
+      socket.to(`voice:${channel_id}`).emit('voice_dj_started' as any, { dj_id: user.id, channel_id });
+    });
+
+    socket.on('voice_dj_stopped' as any, ({ channel_id }: { channel_id: string }) => {
+      io.to(`voice:${channel_id}`).emit('voice_dj_stopped' as any, { dj_id: user.id, channel_id });
+      io.to(`vdj:${channel_id}`).emit('voice_dj_stopped' as any, { dj_id: user.id, channel_id });
     });
 
     // ── Twitch live status broadcast ─────────────────────────────────
@@ -280,6 +337,21 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
     // ── Disconnect ───────────────────────────────────────────────────
     socket.on('disconnect', async () => {
       console.log(`Socket disconnected: ${user.username}`);
+
+      // Clean up voice DJ session if user disconnects while DJ
+      const djChannel = await getMyVoiceDjChannel(user.id);
+      if (djChannel) {
+        await clearVoiceDj(djChannel);
+        io.to(`voice:${djChannel}`).emit('voice_dj_stopped' as any, { dj_id: user.id, channel_id: djChannel });
+        io.to(`vdj:${djChannel}`).emit('voice_dj_stopped' as any, { dj_id: user.id, channel_id: djChannel });
+      }
+
+      // End JAM if user disconnects while hosting
+      const jamMembers = await getSpotifyJamMembers(user.id);
+      if (jamMembers !== null) {
+        await endSpotifyJam(user.id);
+        io.to(`jam:${user.id}`).emit('spotify_jam_ended' as any, { host_id: user.id });
+      }
 
       // Clean up voice channel if user disconnected while in one
       const voiceChannelId = (socket.data as SocketData & { voiceChannelId?: string }).voiceChannelId;
