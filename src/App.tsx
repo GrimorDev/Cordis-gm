@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { translate, resolveLocale, bcp47 as localeBcp47, loadLocale, detectLocale, LOCALES, type Locale, type TimeFormat } from './i18n';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Hash, Volume2, Video, Settings, Plus, Search, Bell, Users,
@@ -152,6 +153,14 @@ const sc = (s: string) => {
 };
 
 const ft = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+/** Module-level date formatter that respects the saved locale preference. */
+const fmtDateLocale = (iso: string, opts?: Intl.DateTimeFormatOptions): string => {
+  try {
+    const { locale } = loadLocale();
+    const tag = localeBcp47(resolveLocale(locale));
+    return new Date(iso).toLocaleDateString(tag, opts ?? { day: 'numeric', month: 'long', year: 'numeric' });
+  } catch { return new Date(iso).toLocaleDateString(); }
+};
 const fmtDur = (s: number) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
 const fmtGameDur = (startMs: number): string => {
   const sec = Math.floor((Date.now() - startMs) / 1000);
@@ -1898,7 +1907,7 @@ function ServerSettingsPage({
                     {/* Dołączył */}
                     <div>
                       <span className="text-xs text-zinc-600">
-                        {new Date(m.joined_at).toLocaleDateString('pl-PL', {day:'2-digit', month:'short', year:'numeric'})}
+                        {fmtDateLocale(m.joined_at, {day:'2-digit', month:'short', year:'numeric'})}
                       </span>
                     </div>
                     {/* Akcje */}
@@ -2768,7 +2777,7 @@ function ProfilePage({
                     <CalendarDays size={13} className="text-indigo-400 shrink-0"/>
                     <div>
                       <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold leading-none mb-0.5">Dołączył/a</p>
-                      <p className="text-xs text-zinc-300 font-medium">{new Date(user.created_at).toLocaleDateString('pl-PL',{day:'numeric',month:'long',year:'numeric'})}</p>
+                      <p className="text-xs text-zinc-300 font-medium">{fmtDateLocale(user.created_at)}</p>
                     </div>
                   </div>
                 )}
@@ -3304,7 +3313,7 @@ function SpotifyDisplay({ spotify }: { spotify: SpotifyData }) {
 }
 
 // ─── HoverCard ────────────────────────────────────────────────────────────────
-function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfile, cache, activity, twitchActivity, steamActivity, steamGameStartedAt, realtimeStatus, onMouseEnter, onMouseLeave, maskName }: {
+function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfile, cache, activity, twitchActivity, steamActivity, steamGameStartedAt, realtimeStatus, onMouseEnter, onMouseLeave, maskName, fmtDate }: {
   userId: string; x: number; y: number;
   currentUserId: string | undefined;
   onOpenDm: (id: string) => void;
@@ -3319,6 +3328,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   maskName: (name: string) => string;
+  fmtDate: (iso: string, opts?: Intl.DateTimeFormatOptions) => string;
 }) {
   const [data, setData] = React.useState<{profile:UserProfile|null;games:FavoriteGame[];spotify:SpotifyData|null}|null>(null);
   const isSelf = userId === currentUserId;
@@ -3620,6 +3630,38 @@ export default function App() {
   const [streamRevealedConvs, setStreamRevealedConvs] = useState<Set<string>>(new Set());
   // Friends tabs
   const [friendsTab, setFriendsTab]           = useState<'available'|'all'>('available');
+  // ── Locale & time format ──────────────────────────────────────────────────
+  const _savedPrefs = loadLocale();
+  const [localePref, setLocalePref]     = useState<Locale|'auto'>(_savedPrefs.locale);
+  const [timeFormat, setTimeFormat]     = useState<TimeFormat>(_savedPrefs.timeFormat);
+  const effectiveLocale                 = resolveLocale(localePref);
+  // Persist changes
+  useEffect(() => { try { localStorage.setItem('cordyn_locale', localePref); } catch {} }, [localePref]);
+  useEffect(() => { try { localStorage.setItem('cordyn_timefmt', timeFormat); } catch {} }, [timeFormat]);
+  // Translate helper
+  const t = (key: string) => translate(key, effectiveLocale);
+  // Time formatter
+  const fmtTime = (iso: string) => {
+    const d = new Date(iso);
+    const tag = localePref === 'auto' ? undefined : localeBcp47(effectiveLocale);
+    const h12 = timeFormat === '12h' ? true : timeFormat === '24h' ? false : undefined;
+    return d.toLocaleTimeString(tag, { hour: '2-digit', minute: '2-digit', hour12: h12 });
+  };
+  // Date formatter
+  const fmtDate = (iso: string, opts?: Intl.DateTimeFormatOptions) => {
+    const tag = localePref === 'auto' ? undefined : localeBcp47(effectiveLocale);
+    return new Date(iso).toLocaleDateString(tag, opts ?? { day: 'numeric', month: 'long', year: 'numeric' });
+  };
+  // Date separator label
+  const dateSepLabel = (iso: string) => {
+    const d = new Date(iso), today = new Date(), yesterday = new Date();
+    today.setHours(0,0,0,0); yesterday.setHours(0,0,0,0);
+    yesterday.setDate(yesterday.getDate()-1);
+    const dd = new Date(d); dd.setHours(0,0,0,0);
+    if (dd.getTime() === today.getTime())     return t('date.today');
+    if (dd.getTime() === yesterday.getTime()) return t('date.yesterday');
+    return fmtDate(iso, { day: 'numeric', month: 'long', year: 'numeric' });
+  };
   // Game search modal
   const [showGameModal, setShowGameModal]     = useState(false);
   const [gameSearch, setGameSearch]           = useState('');
@@ -3793,7 +3835,7 @@ export default function App() {
 
   // App Settings
   const [appSettOpen, setAppSettOpen]         = useState(false);
-  const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'devices'|'privacy'>('account');
+  const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'devices'|'privacy'|'locale'>('account');
   // ── 2FA settings state ──
   const [twoFaStatus, setTwoFaStatus]         = useState<TwoFactorStatus | null>(null);
   const [twoFaModal, setTwoFaModal]           = useState<'setup'|'backup_codes'|'disable'|'regen'|null>(null);
@@ -6106,7 +6148,7 @@ export default function App() {
           </button>
           {/* Friends / DM quick icons — always visible, shrink-0 */}
           <div className="hidden md:flex items-center h-full pl-2 gap-0.5 pr-2 border-r border-white/[0.06] shrink-0">
-            {([{v:'friends' as const,i:<Users size={15}/>,label:'Znajomi'},{v:'dms' as const,i:<MessageCircle size={15}/>,label:'Wiadomości'}]).map(({v,i,label}) => {
+            {([{v:'friends' as const,i:<Users size={15}/>,label:t('nav.friends')},{v:'dms' as const,i:<MessageCircle size={15}/>,label:t('nav.dms')}]).map(({v,i,label}) => {
               const totalUnreadDms: number = v==='dms' ? (Object.values(unreadDms) as number[]).reduce((a,b)=>a+b,0) : 0;
               return (
               <button key={v} title={label} onClick={() => { setActiveView(v); setActiveServer(''); setActiveChannel(''); }}
@@ -6214,7 +6256,7 @@ export default function App() {
                   <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07] shrink-0">
                     <div className="flex items-center gap-2">
                       <Bell size={14} className="text-indigo-400"/>
-                      <span className="text-sm font-semibold text-white">Powiadomienia</span>
+                      <span className="text-sm font-semibold text-white">{t('notif.title')}</span>
                       {notifications.filter(n=>!n.read).length > 0&&(
                         <span className="text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-full px-1.5 py-0.5 leading-none">
                           {notifications.filter(n=>!n.read).length} nowych
@@ -6223,7 +6265,7 @@ export default function App() {
                     </div>
                     <button onClick={() => setNotifications(p => p.map(n=>({...n,read:true})))}
                       className="text-[11px] text-zinc-500 hover:text-indigo-400 transition-colors">
-                      Oznacz wszystkie
+                      {t('notif.markAllRead')}
                     </button>
                   </div>
                   {/* Notifications list */}
@@ -6234,7 +6276,7 @@ export default function App() {
                           <Bell size={20} className="text-zinc-600"/>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-zinc-400">Brak powiadomień</p>
+                          <p className="text-sm font-medium text-zinc-400">{t('notif.empty')}</p>
                           <p className="text-xs text-zinc-600 mt-0.5">Powiadomienia o wzmiankowaniach pojawią się tutaj</p>
                         </div>
                       </div>
@@ -6272,7 +6314,7 @@ export default function App() {
                                 {notif.content&&(
                                   <p className="text-xs text-zinc-400 mt-1 line-clamp-2 break-words">{notif.content}</p>
                                 )}
-                                <p className="text-[10px] text-zinc-600 mt-1">{ft(notif.created_at)}</p>
+                                <p className="text-[10px] text-zinc-600 mt-1">{fmtTime(notif.created_at)}</p>
                               </div>
                               {!notif.read&&<div className="w-2 h-2 rounded-full bg-indigo-500 shrink-0 mt-2"/>}
                             </div>
@@ -6611,7 +6653,7 @@ export default function App() {
 
           {/* dms */}
           {activeView==='dms'&&<>
-            <div className="px-4 py-4 border-b border-white/[0.06]"><h2 className="text-sm font-bold text-white">Wiadomości prywatne</h2></div>
+            <div className="px-4 py-4 border-b border-white/[0.06]"><h2 className="text-sm font-bold text-white">{t('nav.dmsTitle')}</h2></div>
             <div className="flex-1 overflow-y-auto p-2.5 custom-scrollbar flex flex-col gap-0.5">
               {dmConvs.map(dm => {
                 const unread = unreadDms[dm.other_user_id] || 0;
@@ -6637,7 +6679,7 @@ export default function App() {
                   </button>
                 );
               })}
-              {dmConvs.length===0&&<p className="text-xs text-zinc-700 px-3 py-4">Brak wiadomości</p>}
+              {dmConvs.length===0&&<p className="text-xs text-zinc-700 px-3 py-4">{t('nav.dmsEmpty')}</p>}
             </div>
           </>}
 
@@ -7121,7 +7163,7 @@ export default function App() {
                 <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-600/30 to-purple-600/20 border border-indigo-500/20 flex items-center justify-center float-up mb-5 shadow-[0_0_40px_-8px_rgba(99,102,241,0.4)]">
                   <MessageCircle size={34} className="text-indigo-400"/>
                 </div>
-                <h2 className="text-xl font-bold text-white mb-2">Wiadomości prywatne</h2>
+                <h2 className="text-xl font-bold text-white mb-2">{t('nav.dmsTitle')}</h2>
                 <p className="text-sm text-zinc-500 mb-8 leading-relaxed max-w-xs">Wybierz znajomego, do którego chcesz napisać, lub zaproś nowych znajomych do Cordyna.</p>
                 {friends.length>0 ? (
                   <div className="w-full">
@@ -7248,7 +7290,7 @@ export default function App() {
             <div className="flex-1 flex flex-col overflow-hidden">
               <div className="h-14 border-b border-white/[0.06] flex items-center px-5 shrink-0 glass-dark border-b border-white/[0.05] z-10 gap-3">
                 <Users size={17} className="text-indigo-400 shrink-0"/>
-                <h1 className="text-sm font-bold text-white shrink-0">Znajomi</h1>
+                <h1 className="text-sm font-bold text-white shrink-0">{t('friends.title')}</h1>
                 {incoming.length > 0 && <span className="bg-rose-500 text-white text-[10px] font-bold px-2 py-1 rounded-full leading-none shadow-lg shadow-rose-500/30 shrink-0">{incoming.length} nowe</span>}
                 <div className="flex-1"/>
                 {/* Tabs */}
@@ -7256,7 +7298,7 @@ export default function App() {
                   {(['available','all'] as const).map(tab => (
                     <button key={tab} onClick={() => setFriendsTab(tab)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 ${friendsTab===tab ? 'bg-indigo-500/30 text-indigo-200 shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>
-                      {tab==='available' ? 'Dostępni' : 'Wszyscy'}
+                      {tab==='available' ? t('friends.available') : t('friends.all')}
                     </button>
                   ))}
                 </div>
@@ -7389,13 +7431,13 @@ export default function App() {
                           <div className="w-12 h-12 rounded-2xl bg-zinc-800/80 border border-white/[0.07] flex items-center justify-center">
                             <Users size={20} className="text-zinc-600"/>
                           </div>
-                          <p className="text-sm font-semibold text-zinc-500">Aktualnie żaden z twoich znajomych nie jest dostępny</p>
+                          <p className="text-sm font-semibold text-zinc-500">{t('friends.noneAvailable')}</p>
                           <button onClick={()=>setFriendsTab('all')} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors font-medium">
-                            Zobacz wszystkich znajomych →
+                            {t('action.viewAll')}
                           </button>
                         </motion.div>
                       )}
-                      {friends.length===0&&<p className="text-sm text-zinc-700 py-4">Brak znajomych. Dodaj kogoś powyżej!</p>}
+                      {friends.length===0&&<p className="text-sm text-zinc-700 py-4">{t('friends.none')}</p>}
                     </div>
                     );
                   })()}
@@ -7494,7 +7536,7 @@ export default function App() {
                             </div>
                             <div className="flex items-center gap-1">
                               <Clock size={11} className="text-zinc-300"/>
-                              <span className="text-xs text-zinc-200">od {new Date(serverFull.created_at).toLocaleDateString('pl-PL', { year:'numeric', month:'long', day:'numeric' })}</span>
+                              <span className="text-xs text-zinc-200">od {fmtDate(serverFull.created_at)}</span>
                             </div>
                           </motion.div>
                         )}
@@ -7624,7 +7666,7 @@ export default function App() {
                           <div className="flex items-center gap-2 mb-1.5">
                             <img src={msg.sender_avatar||`https://api.dicebear.com/7.x/shapes/svg?seed=${msg.sender_id}`} className="w-5 h-5 rounded-full object-cover" alt=""/>
                             <span className="text-xs font-semibold text-white">{maskName(msg.sender_username)}</span>
-                            <span className="text-[10px] text-zinc-600 ml-auto">{new Date(msg.created_at).toLocaleDateString('pl-PL')}</span>
+                            <span className="text-[10px] text-zinc-600 ml-auto">{fmtDate(msg.created_at, {day:'numeric',month:'short',year:'numeric'})}</span>
                           </div>
                           <p className="text-xs text-zinc-400 line-clamp-3 break-words">{msg.content}</p>
                           {canPinMessages&&(
@@ -7814,19 +7856,19 @@ export default function App() {
                         <Video size={26} className="text-red-400"/>
                       </div>
                       <div className="text-center px-6 max-w-xs">
-                        <p className="text-white font-bold text-base mb-1.5">Jesteś w trybie streamu</p>
-                        <p className="text-zinc-400 text-sm leading-relaxed">Czy chcesz pokazać publicznie wiadomości z tej rozmowy?</p>
+                        <p className="text-white font-bold text-base mb-1.5">{t('stream.title')}</p>
+                        <p className="text-zinc-400 text-sm leading-relaxed">{t('stream.question')}</p>
                       </div>
                       <div className="flex gap-3">
                         <motion.button whileTap={{scale:0.95}} whileHover={{scale:1.03}}
                           onClick={() => setStreamRevealedConvs(p => { const n=new Set(p); n.add(activeDmUserId); return n; })}
                           className="px-6 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-semibold text-sm transition-all shadow-lg shadow-indigo-500/30">
-                          Tak, pokaż
+                          {t('stream.reveal')}
                         </motion.button>
                         <motion.button whileTap={{scale:0.95}}
                           onClick={() => { setActiveDmUserId(''); }}
                           className="px-6 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-zinc-300 font-medium text-sm transition-all border border-white/[0.08]">
-                          Wróć
+                          {t('action.back')}
                         </motion.button>
                       </div>
                     </motion.div>
@@ -7905,13 +7947,7 @@ export default function App() {
                     const msgDate = new Date(msg.created_at).toDateString();
                     const prevDate = idx>0 ? new Date(messages[idx-1].created_at).toDateString() : null;
                     const showSep = idx===0 || msgDate!==prevDate;
-                    const sepLabel = (() => {
-                      const d=new Date(msg.created_at), today=new Date(), yesterday=new Date();
-                      yesterday.setDate(yesterday.getDate()-1);
-                      if(d.toDateString()===today.toDateString()) return 'Dzisiaj';
-                      if(d.toDateString()===yesterday.toDateString()) return 'Wczoraj';
-                      return d.toLocaleDateString('pl-PL',{day:'numeric',month:'long',year:'numeric'});
-                    })();
+                    const sepLabel = dateSepLabel(msg.created_at);
                     // System message (call ended, etc.)
                     if (msg.sender_id === '__system__') {
                       return (
@@ -7927,7 +7963,7 @@ export default function App() {
                             <div className="px-4 py-2 bg-white/[0.04] border border-white/[0.06] rounded-full text-xs text-zinc-500 flex items-center gap-2">
                               <Phone size={11} className="shrink-0 text-rose-400"/>
                               <span>{msg.content}</span>
-                              <span className="text-zinc-700">{ft(msg.created_at)}</span>
+                              <span className="text-zinc-700">{fmtTime(msg.created_at)}</span>
                             </div>
                           </div>
                         </React.Fragment>
@@ -7979,7 +8015,7 @@ export default function App() {
                                   {(msg as MessageFull).sender_role}
                                 </span>
                               )}
-                              <span className={`text-[10px] text-zinc-600 transition-opacity ${alwaysShowTimestamps?'':'opacity-0 group-hover:opacity-100'}`}>{ft(msg.created_at)}</span>
+                              <span className={`text-[10px] text-zinc-600 transition-opacity ${alwaysShowTimestamps?'':'opacity-0 group-hover:opacity-100'}`}>{fmtTime(msg.created_at)}</span>
                               {(msg as MessageFull).edited&&<span className="text-[10px] text-zinc-700 italic">(ed.)</span>}
                             </div>
 
@@ -8478,7 +8514,7 @@ export default function App() {
           {/* ─ ACTIVITY FEED ─ */}
           {activeView==='servers'&&(
             <div className="px-4 py-4 border-b border-white/[0.07] shrink-0">
-              <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3">Aktywność</h3>
+              <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3">{t('activity.title')}</h3>
               {serverActivity.length>0 ? (
                 <>
                   <div className="flex flex-col gap-1.5">
@@ -8494,7 +8530,7 @@ export default function App() {
                         {activityIcon(a.type)}
                         <div className="min-w-0 flex-1">
                           <p className="text-xs text-zinc-400 leading-snug">{rich}</p>
-                          <p className="text-[10px] text-zinc-600 mt-0.5">{ft(a.time)}</p>
+                          <p className="text-[10px] text-zinc-600 mt-0.5">{fmtTime(a.time)}</p>
                         </div>
                       </div>
                       );
@@ -8503,7 +8539,7 @@ export default function App() {
                   {serverActivity.length>4&&(
                     <button onClick={()=>setShowActivityModal(true)}
                       className="mt-2.5 w-full text-[11px] text-zinc-500 hover:text-zinc-300 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl py-2 transition-all font-medium">
-                      Zobacz więcej ({serverActivity.length - 4})
+                      {t('activity.viewMore')} ({serverActivity.length - 4})
                     </button>
                   )}
                 </>
@@ -8702,7 +8738,7 @@ export default function App() {
                         <div>
                           <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5">Dołączył/a</h4>
                           <p className="text-[12px] text-zinc-400">
-                            {new Date(dmPartnerProfile.created_at).toLocaleDateString('pl-PL',{day:'numeric',month:'long',year:'numeric'})}
+                            {fmtDate(dmPartnerProfile.created_at)}
                           </p>
                         </div>
                         {typeof dmPartnerProfile.mutual_friends_count==='number' && dmPartnerProfile.mutual_friends_count > 0 && (
@@ -8748,7 +8784,7 @@ export default function App() {
                             galleryItems.push({
                               url: mediaUrl,
                               isVideo: isVidUrl(mediaUrl),
-                              date: new Date(m.created_at).toLocaleDateString('pl-PL',{day:'numeric',month:'short',year:'numeric'}),
+                              date: fmtDate(m.created_at,{day:'numeric',month:'short',year:'numeric'}),
                               sender: m.sender_id === currentUser?.id ? 'Ty' : m.sender_username,
                             });
                           });
@@ -8811,7 +8847,7 @@ export default function App() {
                                   </a>
                                 ))}
                                 <p className="text-[10px] text-zinc-700 px-1">
-                                  {sentByMe ? 'Ty' : m.sender_username} · {new Date(m.created_at).toLocaleDateString('pl-PL',{day:'numeric',month:'short',year:'numeric'})}
+                                  {sentByMe ? 'Ty' : m.sender_username} · {fmtDate(m.created_at,{day:'numeric',month:'short',year:'numeric'})}
                                 </p>
                               </div>
                             );
@@ -8857,9 +8893,9 @@ export default function App() {
                                     {missed ? 'Nieodebrane' : isVideo ? 'Rozmowa wideo' : 'Rozmowa głosowa'}
                                   </p>
                                   <p className="text-[10px] text-zinc-600 mt-0.5">
-                                    {new Date(m.created_at).toLocaleDateString('pl-PL',{day:'numeric',month:'short',year:'numeric'})}
+                                    {fmtDate(m.created_at,{day:'numeric',month:'short',year:'numeric'})}
                                     {' · '}
-                                    {new Date(m.created_at).toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'})}
+                                    {fmtTime(m.created_at)}
                                   </p>
                                 </div>
                                 {dur && !missed && (
@@ -8887,7 +8923,7 @@ export default function App() {
                               <img src={m.sender_avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(m.sender_username)}`}
                                 className="w-5 h-5 rounded-full object-cover" alt=""/>
                               <span className="text-[11px] font-semibold text-zinc-300">{maskName(m.sender_username)}</span>
-                              <span className="text-[10px] text-zinc-600 ml-auto">{new Date(m.created_at).toLocaleDateString('pl-PL')}</span>
+                              <span className="text-[10px] text-zinc-600 ml-auto">{fmtDate(m.created_at,{day:'numeric',month:'short',year:'numeric'})}</span>
                             </div>
                             <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3">{m.content}</p>
                           </div>
@@ -9108,7 +9144,7 @@ export default function App() {
                           </div>
                           <div>
                             <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold leading-none mb-0.5">Dołączył/a do Cordyn</p>
-                            <p className="text-xs text-zinc-300 font-medium">{new Date(selUser.created_at).toLocaleDateString('pl-PL',{day:'numeric',month:'long',year:'numeric'})}</p>
+                            <p className="text-xs text-zinc-300 font-medium">{fmtDate(selUser.created_at)}</p>
                           </div>
                         </div>
                       )}
@@ -9928,16 +9964,17 @@ export default function App() {
                 {/* Sidebar / Tab bar */}
                 <div className="sm:w-44 shrink-0 border-b sm:border-b-0 sm:border-r border-white/[0.06] p-2 sm:p-3 flex sm:flex-col flex-row gap-0.5 overflow-x-auto scrollbar-hide">
                   {([
-                    {id:'account',label:'Konto',icon:<Users size={14}/>},
-                    {id:'appearance',label:'Wygląd',icon:<Image size={14}/>},
-                    {id:'devices',label:'Urządzenia',icon:<Mic size={14}/>},
-                    {id:'privacy',label:'Prywatność',icon:<Shield size={14}/>},
-                  ] as const).map(t=>(
-                    <button key={t.id} onClick={()=>setAppSettTab(t.id)}
+                    {id:'account',    label:t('settings.account'),    icon:<Users size={14}/>},
+                    {id:'appearance', label:t('settings.appearance'), icon:<Image size={14}/>},
+                    {id:'devices',    label:t('settings.devices'),    icon:<Mic size={14}/>},
+                    {id:'privacy',    label:t('settings.privacy'),    icon:<Shield size={14}/>},
+                    {id:'locale',     label:t('settings.locale'),     icon:<Globe size={14}/>},
+                  ] as const).map(tab=>(
+                    <button key={tab.id} onClick={()=>setAppSettTab(tab.id)}
                       className={`flex items-center gap-2 px-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all text-left shrink-0 ${
-                        appSettTab===t.id?'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] border border-transparent'}`}>
-                      <span className={appSettTab===t.id?'text-indigo-400':'text-zinc-600'}>{t.icon}</span>
-                      {t.label}
+                        appSettTab===tab.id?'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] border border-transparent'}`}>
+                      <span className={appSettTab===tab.id?'text-indigo-400':'text-zinc-600'}>{tab.icon}</span>
+                      {tab.label}
                     </button>
                   ))}
                   {/* Logout — at end of tab bar on mobile, bottom of sidebar on desktop */}
@@ -10365,6 +10402,82 @@ export default function App() {
                           className="text-sm font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/15 border border-rose-500/20 px-4 py-2 rounded-xl transition-all">
                           Usuń konto
                         </button>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* ── Language & Time ── */}
+                  {appSettTab==='locale'&&(
+                    <motion.div key="locale" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
+                      className="flex flex-col gap-6">
+                      <h3 className="text-sm font-bold text-white">{t('locale.title')}</h3>
+
+                      {/* Language selector */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Globe size={14} className="text-indigo-400 shrink-0"/>
+                          <p className="text-sm font-semibold text-white">{t('locale.language')}</p>
+                        </div>
+                        <p className="text-xs text-zinc-500 mb-3 leading-relaxed">{t('locale.language.desc')}</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {/* Auto option */}
+                          <button onClick={()=>setLocalePref('auto')}
+                            className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all text-left ${localePref==='auto' ? 'bg-indigo-500/15 border-indigo-500/40 shadow-[0_0_14px_rgba(99,102,241,0.15)]' : 'bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.06] hover:border-white/[0.12]'}`}>
+                            <span className="text-xl leading-none shrink-0">🌐</span>
+                            <div className="min-w-0">
+                              <p className={`text-sm font-semibold ${localePref==='auto'?'text-indigo-200':'text-zinc-300'}`}>{t('locale.auto')}</p>
+                              <p className="text-[11px] text-zinc-600 mt-0.5">{t('locale.auto.detected')} {LOCALES.find(l=>l.code===detectLocale())?.flag} {LOCALES.find(l=>l.code===detectLocale())?.label}</p>
+                            </div>
+                            {localePref==='auto' && <div className="ml-auto w-4 h-4 rounded-full bg-indigo-500 flex items-center justify-center shrink-0"><Check size={10} className="text-white"/></div>}
+                          </button>
+                          {/* Specific locales */}
+                          {LOCALES.map(loc => (
+                            <button key={loc.code} onClick={()=>setLocalePref(loc.code)}
+                              className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all text-left ${localePref===loc.code ? 'bg-indigo-500/15 border-indigo-500/40 shadow-[0_0_14px_rgba(99,102,241,0.15)]' : 'bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.06] hover:border-white/[0.12]'}`}>
+                              <span className="text-xl leading-none shrink-0">{loc.flag}</span>
+                              <p className={`text-sm font-semibold ${localePref===loc.code?'text-indigo-200':'text-zinc-300'}`}>{loc.label}</p>
+                              {localePref===loc.code && <div className="ml-auto w-4 h-4 rounded-full bg-indigo-500 flex items-center justify-center shrink-0"><Check size={10} className="text-white"/></div>}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Time format selector */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Clock size={14} className="text-indigo-400 shrink-0"/>
+                          <p className="text-sm font-semibold text-white">{t('locale.timeformat')}</p>
+                        </div>
+                        <p className="text-xs text-zinc-500 mb-3 leading-relaxed">{t('locale.timeformat.desc')}</p>
+                        <div className="flex flex-col gap-2">
+                          {([
+                            { value: 'auto' as TimeFormat, label: t('locale.timeformat.auto'), example: new Date().toLocaleTimeString(undefined, {hour:'2-digit',minute:'2-digit'}) },
+                            { value: '12h'  as TimeFormat, label: t('locale.timeformat.12h'),  example: new Date().toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit',hour12:true}) },
+                            { value: '24h'  as TimeFormat, label: t('locale.timeformat.24h'),  example: new Date().toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit',hour12:false}) },
+                          ]).map(opt => (
+                            <button key={opt.value} onClick={()=>setTimeFormat(opt.value)}
+                              className={`flex items-center justify-between px-4 py-3 rounded-2xl border transition-all text-left ${timeFormat===opt.value ? 'bg-indigo-500/15 border-indigo-500/40 shadow-[0_0_14px_rgba(99,102,241,0.15)]' : 'bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.06] hover:border-white/[0.12]'}`}>
+                              <p className={`text-sm font-semibold ${timeFormat===opt.value?'text-indigo-200':'text-zinc-300'}`}>{opt.label}</p>
+                              <div className="flex items-center gap-3">
+                                <span className="text-xs text-zinc-500 font-mono tabular-nums">{opt.example}</span>
+                                {timeFormat===opt.value && <div className="w-4 h-4 rounded-full bg-indigo-500 flex items-center justify-center shrink-0"><Check size={10} className="text-white"/></div>}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Live preview */}
+                      <div className="p-4 bg-white/[0.02] border border-white/[0.07] rounded-2xl">
+                        <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">{t('locale.preview')}</p>
+                        <div className="flex flex-col gap-2">
+                          {[new Date(), new Date(Date.now()-86400000), new Date(Date.now()-604800000)].map((d,i) => (
+                            <div key={i} className="flex items-center justify-between text-xs">
+                              <span className="text-zinc-500">{dateSepLabel(d.toISOString())}</span>
+                              <span className="text-zinc-400 font-mono">{fmtTime(d.toISOString())}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </motion.div>
                   )}
@@ -10817,8 +10930,8 @@ export default function App() {
                     <Activity size={14} className="text-indigo-400"/>
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-white">Aktywność serwera</h3>
-                    <p className="text-[10px] text-zinc-600">{serverActivity.length} zdarzeń</p>
+                    <h3 className="text-sm font-bold text-white">{t('activity.title')}</h3>
+                    <p className="text-[10px] text-zinc-600">{serverActivity.length} {t('activity.events')}</p>
                   </div>
                 </div>
                 <button onClick={()=>setShowActivityModal(false)}
@@ -10839,14 +10952,7 @@ export default function App() {
                     );
                   };
                   // Group by calendar day (newest first)
-                  const today = new Date(); today.setHours(0,0,0,0);
-                  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
-                  const dayLabel = (iso: string) => {
-                    const d = new Date(iso); d.setHours(0,0,0,0);
-                    if (d.getTime() === today.getTime()) return 'Dzisiaj';
-                    if (d.getTime() === yesterday.getTime()) return 'Wczoraj';
-                    return d.toLocaleDateString('pl-PL', { day:'numeric', month:'long', year:'numeric' });
-                  };
+                  const dayLabel = (iso: string) => dateSepLabel(iso);
                   const rendered: React.ReactNode[] = [];
                   let lastLabel = '';
                   serverActivity.forEach((a, i) => {
@@ -10867,7 +10973,7 @@ export default function App() {
                         {activityIcon(a.type)}
                         <div className="min-w-0 flex-1">
                           <p className="text-xs text-zinc-400 leading-snug">{richText(a.text)}</p>
-                          <p className="text-[10px] text-zinc-600 mt-0.5">{ft(a.time)}</p>
+                          <p className="text-[10px] text-zinc-600 mt-0.5">{fmtTime(a.time)}</p>
                         </div>
                       </motion.div>
                     );
@@ -11250,6 +11356,7 @@ export default function App() {
           onMouseEnter={cancelHideHoverCard}
           onMouseLeave={hideHoverCard}
           maskName={maskName}
+          fmtDate={fmtDate}
         />
       )}
 
