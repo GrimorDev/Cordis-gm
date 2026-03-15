@@ -160,13 +160,19 @@ export interface ServerMember {
 }
 
 // ── Auth ───────────────────────────────────────────────────────────────────
+export type LoginResult =
+  | { user: UserProfile; token: string; requiresTwoFactor?: never }
+  | { requiresTwoFactor: true; sessionId: string; user?: never; token?: never };
+
 export const auth = {
   sendCode: (email: string) =>
     req<{ message: string }>('POST', '/auth/send-code', { email }),
   register: (d: { username: string; email: string; password: string; code: string }) =>
     req<{ user: UserProfile; token: string }>('POST', '/auth/register', d),
   login: (d: { login: string; password: string }) =>
-    req<{ user: UserProfile; token: string }>('POST', '/auth/login', d),
+    req<LoginResult>('POST', '/auth/login', d),
+  verify2fa: (d: { sessionId: string; code: string; type: 'totp' | 'backup' }) =>
+    req<{ user: UserProfile; token: string }>('POST', '/auth/2fa-verify', d),
   logout: () => req<void>('POST', '/auth/logout'),
   me: () => req<UserProfile>('GET', '/auth/me'),
 };
@@ -201,6 +207,22 @@ export const users = {
   },
   requestDeletion: () => req<{ message: string }>('POST', '/users/me/request-deletion'),
   confirmDeletion: (code: string) => req<{ message: string }>('DELETE', '/users/me', { code }),
+};
+
+// ── Two-Factor Auth ────────────────────────────────────────────────────────
+export interface TwoFactorStatus {
+  totp_enabled: boolean;
+  backup_codes_count: number;
+  phone_number: string | null;
+  phone_verified: boolean;
+}
+export const twoFactorApi = {
+  status: () => req<TwoFactorStatus>('GET', '/users/me/2fa/status'),
+  totpSetup: () => req<{ secret: string; qr_code: string; manual_key: string }>('POST', '/users/me/2fa/totp/setup'),
+  totpEnable: (code: string) => req<{ backup_codes: string[] }>('POST', '/users/me/2fa/totp/enable', { code }),
+  totpDisable: (password: string, code: string) => req<{ ok: boolean }>('DELETE', '/users/me/2fa/totp', { password, code }),
+  regenerateBackupCodes: (password: string, code: string) =>
+    req<{ backup_codes: string[] }>('POST', '/users/me/2fa/backup-codes/regenerate', { password, code }),
 };
 
 // ── Servers ────────────────────────────────────────────────────────────────

@@ -2,12 +2,14 @@ import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
 import { query } from '../db/pool';
 import { redis, KEYS, setUserStatus } from '../redis/client';
 import { config } from '../config';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { generateCode, sendVerificationEmail } from '../services/email';
+import { verifyTotpCode, verifyBackupCode } from '../services/totp';
 
 const router = Router();
 
@@ -167,6 +169,16 @@ router.post(
         return res.status(403).json({ error: msg });
       }
 
+      // Check if 2FA is enabled
+      const { rows: settingsRows } = await query(
+        'SELECT totp_enabled FROM users WHERE id = $1', [user.id]
+      );
+      if (settingsRows[0]?.totp_enabled) {
+        const sessionId = uuidv4();
+        await redis.setex(`2fa:pending:${sessionId}`, 300, user.id); // 5 min TTL
+        return res.json({ requiresTwoFactor: true, sessionId });
+      }
+
       const token = signToken({ id: user.id, username: user.username, email: user.email });
       await setUserStatus(user.id, 'online');
       await query('UPDATE users SET status = $1 WHERE id = $2', ['online', user.id]);
@@ -175,6 +187,76 @@ router.post(
       return res.json({ token, user: safeUser });
     } catch (err) {
       console.error('Login error:', err);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+// POST /api/auth/2fa-verify
+router.post(
+  '/2fa-verify',
+  [body('sessionId').notEmpty(), body('code').trim().notEmpty()],
+  async (req: Request, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: 'Nieprawidłowe dane' });
+
+    const { sessionId, code, type = 'totp' } = req.body;
+
+    try {
+      const userId = await redis.get(`2fa:pending:${sessionId}`);
+      if (!userId) return res.status(401).json({ error: 'Sesja wygasła. Zaloguj się ponownie.' });
+
+      const { rows } = await query(
+        `SELECT id, username, email, password_hash, avatar_url, banner_url, banner_color, bio, custom_status, status,
+                accent_color, compact_messages, totp_secret, totp_backup_codes,
+                privacy_status_visible, privacy_typing_visible, privacy_read_receipts, privacy_friend_requests
+         FROM users WHERE id = $1`,
+        [userId]
+      );
+      if (!rows[0]) return res.status(401).json({ error: 'Użytkownik nie istnieje' });
+
+      const user = rows[0];
+
+      if (type === 'backup') {
+        const normalizedCode = code.toUpperCase().replace(/[^A-F0-9-]/g, '');
+        const idx = await verifyBackupCode(normalizedCode, user.totp_backup_codes || []);
+        if (idx === null) return res.status(401).json({ error: 'Nieprawidłowy kod zapasowy' });
+        // Remove used backup code
+        const newCodes = [...(user.totp_backup_codes || [])];
+        newCodes.splice(idx, 1);
+        await query('UPDATE users SET totp_backup_codes = $1 WHERE id = $2', [newCodes, userId]);
+      } else {
+        if (!verifyTotpCode(user.totp_secret, code)) {
+          return res.status(401).json({ error: 'Nieprawidłowy kod weryfikacyjny' });
+        }
+      }
+
+      await redis.del(`2fa:pending:${sessionId}`);
+
+      // Check ban
+      const { rows: bans } = await query(
+        `SELECT reason, ban_type, banned_until FROM user_bans
+         WHERE user_id=$1 AND is_active=TRUE
+           AND (banned_until IS NULL OR banned_until > NOW())
+         LIMIT 1`,
+        [userId]
+      );
+      if (bans[0]) {
+        const b = bans[0];
+        const msg = b.ban_type === 'temporary' && b.banned_until
+          ? `Twoje konto jest zawieszone do ${new Date(b.banned_until).toLocaleString('pl-PL')}. Powód: ${b.reason || 'brak'}`
+          : `Twoje konto zostało zbanowane. Powód: ${b.reason || 'brak'}`;
+        return res.status(403).json({ error: msg });
+      }
+
+      const token = signToken({ id: user.id, username: user.username, email: user.email });
+      await setUserStatus(userId, 'online');
+      await query('UPDATE users SET status = $1 WHERE id = $2', ['online', userId]);
+
+      const { password_hash: _, totp_secret: __, totp_backup_codes: ___, ...safeUser } = user;
+      return res.json({ token, user: safeUser });
+    } catch (err) {
+      console.error('2fa-verify error:', err);
       return res.status(500).json({ error: 'Internal server error' });
     }
   }
