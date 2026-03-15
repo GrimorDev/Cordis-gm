@@ -28,6 +28,7 @@ export const KEYS = {
   rateLimitMessages: (userId: string) => `ratelimit:msg:${userId}`,
   blacklistToken: (jti: string) => `blacklist:${jti}`,
   slowmode: (channelId: string, userId: string) => `slowmode:${channelId}:${userId}`,
+  msgCache: (channelId: string) => `msgcache:${channelId}:latest`,
 };
 
 // Helpers

@@ -1,5 +1,7 @@
 import { Server as HttpServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
+import Redis from 'ioredis';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import {
@@ -30,6 +32,16 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
     pingTimeout: 20000,
     pingInterval: 25000,
   });
+
+  // ── Redis adapter — required for multi-instance horizontal scaling ──
+  // Each backend replica shares room/event state via Redis pub/sub.
+  // Without this, messages only reach users connected to the same instance.
+  const redisCfg = { host: config.redis.host, port: config.redis.port, password: config.redis.password };
+  const pubClient = new Redis(redisCfg);
+  const subClient = pubClient.duplicate();
+  pubClient.on('error', (err) => console.error('Socket.IO Redis pub error:', err.message));
+  subClient.on('error', (err) => console.error('Socket.IO Redis sub error:', err.message));
+  io.adapter(createAdapter(pubClient, subClient));
 
   // Auth middleware
   io.use(async (socket, next) => {

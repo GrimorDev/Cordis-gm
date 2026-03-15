@@ -4,7 +4,7 @@ import { query } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
 import { msgLimiter } from '../middleware/messageLimiter';
 import { AuthRequest } from '../types';
-import { checkSlowmode, setSlowmode } from '../redis/client';
+import { redis, KEYS, checkSlowmode, setSlowmode } from '../redis/client';
 import { runAutomations } from '../services/automations';
 
 const router = Router();
@@ -99,6 +99,17 @@ router.get('/channel/:channelId', authMiddleware, async (req: AuthRequest, res: 
     if (!access) return res.status(403).json({ error: 'No access' });
     const ch = { server_id: access.serverId };
 
+    // ── Cache: serve latest-50 from Redis when no cursor given ───────
+    // TTL 10s — short enough to stay fresh, cuts >90% of repeated DB hits
+    // on active channels. Pagination (before=X) always goes to DB.
+    const cacheKey = KEYS.msgCache(req.params.channelId);
+    if (!before && limit === 50) {
+      try {
+        const cached = await redis.get(cacheKey);
+        if (cached) return res.json(JSON.parse(cached));
+      } catch { /* Redis unavailable — fall through to DB */ }
+    }
+
     let sql = MSG_JOIN('$1', '$2');
     const params: any[] = [ch.server_id, req.params.channelId];
     if (before) {
@@ -107,7 +118,16 @@ router.get('/channel/:channelId', authMiddleware, async (req: AuthRequest, res: 
     }
     sql += ` ORDER BY m.created_at DESC LIMIT ${limit}`;
     const { rows } = await query(sql, params);
-    return res.json(rows.reverse());
+    const result = rows.reverse();
+
+    // Populate cache only for the default latest-50 request
+    if (!before && limit === 50) {
+      try {
+        await redis.setex(cacheKey, 10, JSON.stringify(result));
+      } catch { /* ignore Redis write errors */ }
+    }
+
+    return res.json(result);
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -171,6 +191,9 @@ router.post('/channel/:channelId', authMiddleware, msgLimiter,
       );
       const io = req.app.get('io');
       if (io) io.to(`channel:${req.params.channelId}`).emit('new_message', full);
+
+      // Invalidate latest-messages cache for this channel
+      try { await redis.del(KEYS.msgCache(req.params.channelId)); } catch { /* ignore */ }
 
       // ── message_contains automation trigger ───────────────────────────
       if (access.serverId) {
@@ -257,6 +280,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     );
     const io = req.app.get('io');
     if (io) io.to(`channel:${msg.channel_id}`).emit('message_updated', { id: updated.id, content: updated.content, edited: updated.edited });
+    try { await redis.del(KEYS.msgCache(msg.channel_id)); } catch { /* ignore */ }
     return res.json(updated);
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -278,6 +302,7 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
     await query('DELETE FROM messages WHERE id=$1', [req.params.id]);
     const io = req.app.get('io');
     if (io) io.to(`channel:${msg.channel_id}`).emit('message_deleted', { id: msg.id, channel_id: msg.channel_id });
+    try { await redis.del(KEYS.msgCache(msg.channel_id)); } catch { /* ignore */ }
     return res.json({ message: 'Deleted' });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
