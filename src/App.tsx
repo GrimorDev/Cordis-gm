@@ -1341,6 +1341,231 @@ const BADGE_ICON_MAP: Record<string, LucideIcon> = {
 const getBadgeIcon = (name: string): LucideIcon => BADGE_ICON_MAP[name] ?? Award;
 
 // ─── Server Settings Page ─────────────────────────────────────────────────────
+// ─── Automations Tab (osobny komponent — hooks mogą być używane tylko w komponentach) ──
+function AutomationsTab({ serverId, gi }: { serverId: string; gi: string }) {
+  const [automations, setAutomations] = React.useState<import('./api').ServerAutomation[]>([]);
+  const [autoLoading, setAutoLoading] = React.useState(true);
+  const [editAuto, setEditAuto] = React.useState<Partial<import('./api').ServerAutomation> | null>(null);
+  const [autoSaving, setAutoSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    automationsApi.list(serverId).then(list => { setAutomations(list); setAutoLoading(false); }).catch(() => setAutoLoading(false));
+  }, [serverId]);
+
+  const saveAuto = async () => {
+    if (!editAuto) return;
+    setAutoSaving(true);
+    try {
+      if (editAuto.id) {
+        const updated = await automationsApi.update(serverId, editAuto.id, {
+          name: editAuto.name || 'Reguła',
+          enabled: editAuto.enabled ?? true,
+          trigger_type: (editAuto.trigger_type || 'member_join') as import('./api').AutomationTrigger,
+          trigger_config: editAuto.trigger_config || {},
+          actions: editAuto.actions || [],
+        });
+        setAutomations(p => p.map(a => a.id === updated.id ? updated : a));
+      } else {
+        const created = await automationsApi.create(serverId, {
+          name: editAuto.name || 'Nowa reguła',
+          enabled: true,
+          trigger_type: (editAuto.trigger_type || 'member_join') as import('./api').AutomationTrigger,
+          trigger_config: editAuto.trigger_config || {},
+          actions: editAuto.actions || [],
+        });
+        setAutomations(p => [...p, created]);
+      }
+      setEditAuto(null);
+    } catch {}
+    setAutoSaving(false);
+  };
+
+  const deleteAuto = async (id: string) => {
+    await automationsApi.delete(serverId, id).catch(() => {});
+    setAutomations(p => p.filter(a => a.id !== id));
+  };
+
+  const toggleAuto = async (id: string, enabled: boolean) => {
+    await automationsApi.toggle(serverId, id, enabled).catch(() => {});
+    setAutomations(p => p.map(a => a.id === id ? { ...a, enabled } : a));
+  };
+
+  const TRIGGER_LABELS: Record<string, string> = {
+    member_join: 'Nowy member dołącza',
+    member_leave: 'Member opuszcza serwer',
+    role_assigned: 'Rola przypisana',
+    message_contains: 'Wiadomość zawiera słowo',
+  };
+  const ACTION_LABELS: Record<string, string> = {
+    assign_role: 'Przypisz rolę',
+    remove_role: 'Usuń rolę',
+    send_channel_message: 'Wyślij wiadomość na kanał',
+    send_dm: 'Wyślij DM do usera',
+    delete_message: 'Usuń wiadomość',
+    kick_member: 'Kicknij usera',
+  };
+
+  if (editAuto !== null) {
+    return (
+      <div className="max-w-2xl mx-auto flex flex-col gap-4">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setEditAuto(null)} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-white hover:bg-white/[0.07] transition-all"><ArrowLeft size={16}/></button>
+          <h2 className="text-base font-bold text-white">{editAuto.id ? 'Edytuj regułę' : 'Nowa reguła'}</h2>
+        </div>
+
+        <div>
+          <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Nazwa reguły</label>
+          <input value={editAuto.name || ''} onChange={e => setEditAuto(p => ({...p!, name: e.target.value}))}
+            placeholder="Np. Powitanie nowego użytkownika" className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
+        </div>
+
+        <div>
+          <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Wyzwalacz</label>
+          <select value={editAuto.trigger_type || 'member_join'}
+            onChange={e => setEditAuto(p => ({...p!, trigger_type: e.target.value as any, trigger_config: {}}))}
+            className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}>
+            {Object.entries(TRIGGER_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </div>
+
+        {editAuto.trigger_type === 'role_assigned' && (
+          <div>
+            <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">ID Roli wyzwalającej</label>
+            <input value={(editAuto.trigger_config as any)?.role_id || ''}
+              onChange={e => setEditAuto(p => ({...p!, trigger_config: {...(p?.trigger_config||{}), role_id: e.target.value}}))}
+              placeholder="UUID roli" className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
+            <p className="text-xs text-zinc-600 mt-1">Akcja uruchamia się gdy ta rola zostanie przypisana</p>
+          </div>
+        )}
+        {editAuto.trigger_type === 'message_contains' && (
+          <div>
+            <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Słowo kluczowe</label>
+            <input value={(editAuto.trigger_config as any)?.keyword || ''}
+              onChange={e => setEditAuto(p => ({...p!, trigger_config: {...(p?.trigger_config||{}), keyword: e.target.value}}))}
+              placeholder="Np. spam, discord.gg, itp." className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
+          </div>
+        )}
+
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-[10px] text-zinc-600 uppercase tracking-widest block">Akcje ({(editAuto.actions||[]).length})</label>
+            <button onClick={() => setEditAuto(p => ({...p!, actions: [...(p?.actions||[]), {type:'send_dm', config:{}} as any]}))}
+              className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+              <Plus size={11}/> Dodaj akcję
+            </button>
+          </div>
+          <div className="flex flex-col gap-2">
+            {(editAuto.actions || []).map((action, idx) => (
+              <div key={idx} className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-3 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <select value={action.type} onChange={e => setEditAuto(p => {
+                    const acts = [...(p?.actions||[])];
+                    acts[idx] = {...acts[idx], type: e.target.value as any, config: {}};
+                    return {...p!, actions: acts};
+                  })} className={`flex-1 ${gi} rounded-xl px-3 py-2 text-xs`}>
+                    {Object.entries(ACTION_LABELS).map(([k,v]) => {
+                      if (editAuto.trigger_type !== 'message_contains' && (k === 'delete_message' || k === 'kick_member')) return null;
+                      return <option key={k} value={k}>{v}</option>;
+                    })}
+                  </select>
+                  <button onClick={() => setEditAuto(p => ({...p!, actions: (p?.actions||[]).filter((_,i)=>i!==idx)}))}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-500/10 text-zinc-600 hover:text-rose-400 transition-colors shrink-0">
+                    <Trash2 size={11}/>
+                  </button>
+                </div>
+                {(action.type === 'assign_role' || action.type === 'remove_role') && (
+                  <input value={(action.config as any)?.role_id || ''} onChange={e => setEditAuto(p => {
+                    const acts = [...(p?.actions||[])]; acts[idx] = {...acts[idx], config: {...(acts[idx].config||{}), role_id: e.target.value}}; return {...p!, actions: acts};
+                  })} placeholder="UUID roli" className={`${gi} rounded-xl px-3 py-2 text-xs`}/>
+                )}
+                {action.type === 'send_channel_message' && (
+                  <div className="flex flex-col gap-1.5">
+                    <input value={(action.config as any)?.channel_id || ''} onChange={e => setEditAuto(p => {
+                      const acts = [...(p?.actions||[])]; acts[idx] = {...acts[idx], config: {...(acts[idx].config||{}), channel_id: e.target.value}}; return {...p!, actions: acts};
+                    })} placeholder="UUID kanału" className={`${gi} rounded-xl px-3 py-2 text-xs`}/>
+                    <textarea value={(action.config as any)?.message || ''} onChange={e => setEditAuto(p => {
+                      const acts = [...(p?.actions||[])]; acts[idx] = {...acts[idx], config: {...(acts[idx].config||{}), message: e.target.value}}; return {...p!, actions: acts};
+                    })} placeholder="Treść wiadomości. Użyj {username} i {server}" rows={2} className={`${gi} rounded-xl px-3 py-2 text-xs resize-none`}/>
+                  </div>
+                )}
+                {action.type === 'send_dm' && (
+                  <textarea value={(action.config as any)?.message || ''} onChange={e => setEditAuto(p => {
+                    const acts = [...(p?.actions||[])]; acts[idx] = {...acts[idx], config: {...(acts[idx].config||{}), message: e.target.value}}; return {...p!, actions: acts};
+                  })} placeholder="Treść DM. Użyj {username} i {server}" rows={2} className={`${gi} rounded-xl px-3 py-2 text-xs resize-none`}/>
+                )}
+              </div>
+            ))}
+            {(editAuto.actions||[]).length === 0 && (
+              <p className="text-xs text-zinc-700 py-3 text-center">Brak akcji — dodaj przynajmniej jedną</p>
+            )}
+          </div>
+        </div>
+
+        <button onClick={saveAuto} disabled={autoSaving || !editAuto.name?.trim() || !(editAuto.actions||[]).length}
+          className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
+          {autoSaving ? <Loader2 size={15} className="animate-spin"/> : <Check size={15}/>}
+          {editAuto.id ? 'Zapisz zmiany' : 'Utwórz regułę'}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-bold text-white">Automatyzacje ({automations.length})</h2>
+          <p className="text-xs text-zinc-600 mt-0.5">Automatycznie wykonuj akcje na podstawie zdarzeń serwera</p>
+        </div>
+        <button onClick={() => setEditAuto({name:'', trigger_type:'member_join', trigger_config:{}, actions:[], enabled:true})}
+          className="bg-indigo-500 hover:bg-indigo-400 text-white px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5">
+          <Plus size={14}/> Nowa reguła
+        </button>
+      </div>
+
+      {autoLoading && <div className="flex items-center justify-center py-10"><Loader2 size={18} className="animate-spin text-zinc-600"/></div>}
+
+      {!autoLoading && automations.length === 0 && (
+        <div className="flex flex-col items-center gap-3 py-14 text-center">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+            <Zap size={22} className="text-indigo-400"/>
+          </div>
+          <p className="text-sm font-semibold text-zinc-300">Brak reguł automatyzacji</p>
+          <p className="text-xs text-zinc-600 leading-relaxed max-w-xs">Stwórz reguły które automatycznie przypisują role, wysyłają wiadomości powitalne lub moderują serwer</p>
+          <button onClick={() => setEditAuto({name:'', trigger_type:'member_join', trigger_config:{}, actions:[], enabled:true})}
+            className="mt-1 text-sm font-semibold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/15 border border-indigo-500/20 px-4 py-2 rounded-xl transition-all flex items-center gap-2">
+            <Plus size={14}/> Utwórz pierwszą regułę
+          </button>
+        </div>
+      )}
+
+      {automations.map(auto => (
+        <div key={auto.id} className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-4 flex items-start gap-3 group hover:border-white/[0.1] transition-colors">
+          <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${auto.enabled ? 'bg-emerald-500' : 'bg-zinc-600'}`}/>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white">{auto.name}</p>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Wyzwalacz: <span className="text-zinc-400">{TRIGGER_LABELS[auto.trigger_type] || auto.trigger_type}</span>
+              {' · '}{auto.actions.length} {auto.actions.length === 1 ? 'akcja' : 'akcje'}
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onClick={() => toggleAuto(auto.id, !auto.enabled)} title={auto.enabled ? 'Wyłącz' : 'Włącz'}
+              className={`w-8 h-5 rounded-full transition-all relative ${auto.enabled ? 'bg-indigo-500' : 'bg-zinc-700'}`}>
+              <span className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all"
+                style={{left: auto.enabled ? 'calc(100% - 1.125rem)' : '0.125rem'}}/>
+            </button>
+            <button onClick={() => setEditAuto(auto)}
+              className="w-7 h-7 bg-white/[0.05] hover:bg-white/[0.09] text-zinc-400 hover:text-white rounded-lg flex items-center justify-center transition-colors"><Edit3 size={12}/></button>
+            <button onClick={() => deleteAuto(auto.id)}
+              className="w-7 h-7 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg flex items-center justify-center transition-colors"><Trash2 size={12}/></button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 interface ServerSettingsPageProps {
   serverFull: ServerFull;
   tab: 'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations';
@@ -1644,278 +1869,85 @@ function ServerSettingsPage({
           )}
 
           {/* ── Emoji ── */}
-          {tab === 'emoji' && (
-            <div className="max-w-2xl mx-auto flex flex-col gap-4">
-              <h2 className="text-base font-bold text-white">Niestandardowe Emoji ({(serverEmojis||[]).length}/50)</h2>
-              {(serverEmojis||[]).length === 0 && (
-                <p className="text-sm text-zinc-600">Brak emoji. Dodaj własne emoji dla swojego serwera.</p>
-              )}
-              <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
-                {(serverEmojis||[]).map(e => (
-                  <div key={e.id} className="flex flex-col items-center gap-1.5 bg-white/[0.03] border border-white/[0.05] rounded-xl p-2 group relative">
-                    <img src={e.image_url} alt={e.name} className="w-10 h-10 object-contain rounded-lg"/>
-                    <span className="text-[10px] text-zinc-400 truncate w-full text-center">:{e.name}:</span>
-                    {canManageServer && (
-                      <button
-                        onClick={async () => {
-                          if (!activeServer) return;
-                          try { await emojisApi.delete(activeServer, e.id); } catch {}
-                        }}
-                        className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-500 rounded-full text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <X size={9}/>
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              {canManageServer && (
-                <label className="cursor-pointer flex items-center gap-2 text-sm font-semibold bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 text-indigo-400 px-4 py-3 rounded-xl transition-all">
-                  <Upload size={14}/> Dodaj emoji (PNG/GIF, maks. 256KB)
-                  <input type="file" accept="image/png,image/gif,image/webp" className="hidden" onChange={async e => {
-                    const f = e.target.files?.[0]; if (!f || !activeServer) return;
-                    try {
-                      const name = f.name.replace(/\.[^.]+$/, '').replace(/[^a-z0-9_]/gi, '_').toLowerCase();
-                      const url = await uploadFile(f, 'emojis');
-                      await emojisApi.create(activeServer, name, url);
-                    } catch {}
-                    e.target.value = '';
-                  }}/>
-                </label>
-              )}
-            </div>
-          )}
-
-          {/* ── Automatyzacje ── */}
-          {tab === 'automations' && (() => {
-            const [automations, setAutomations] = React.useState<import('./api').ServerAutomation[]>([]);
-            const [autoLoading, setAutoLoading] = React.useState(true);
-            const [editAuto, setEditAuto] = React.useState<Partial<import('./api').ServerAutomation> | null>(null);
-            const [autoSaving, setAutoSaving] = React.useState(false);
-
-            React.useEffect(() => {
-              if (!activeServer) return;
-              import('./api').then(({ automationsApi }) => {
-                automationsApi.list(activeServer!).then(list => { setAutomations(list); setAutoLoading(false); }).catch(() => setAutoLoading(false));
-              });
-            }, []);
-
-            const saveAuto = async () => {
-              if (!editAuto || !activeServer) return;
-              setAutoSaving(true);
-              try {
-                const { automationsApi } = await import('./api');
-                if (editAuto.id) {
-                  const updated = await automationsApi.update(activeServer, editAuto.id, {
-                    name: editAuto.name || 'Reguła',
-                    enabled: editAuto.enabled ?? true,
-                    trigger_type: editAuto.trigger_type as any || 'member_join',
-                    trigger_config: editAuto.trigger_config || {},
-                    actions: editAuto.actions || [],
-                  });
-                  setAutomations(p => p.map(a => a.id === updated.id ? updated : a));
-                } else {
-                  const created = await automationsApi.create(activeServer, {
-                    name: editAuto.name || 'Nowa reguła',
-                    enabled: true,
-                    trigger_type: editAuto.trigger_type as any || 'member_join',
-                    trigger_config: editAuto.trigger_config || {},
-                    actions: editAuto.actions || [],
-                  });
-                  setAutomations(p => [...p, created]);
-                }
-                setEditAuto(null);
-              } catch {}
-              setAutoSaving(false);
-            };
-
-            const deleteAuto = async (id: string) => {
-              if (!activeServer) return;
-              const { automationsApi } = await import('./api');
-              await automationsApi.delete(activeServer, id).catch(() => {});
-              setAutomations(p => p.filter(a => a.id !== id));
-            };
-
-            const toggleAuto = async (id: string, enabled: boolean) => {
-              if (!activeServer) return;
-              const { automationsApi } = await import('./api');
-              await automationsApi.toggle(activeServer, id, enabled).catch(() => {});
-              setAutomations(p => p.map(a => a.id === id ? { ...a, enabled } : a));
-            };
-
-            const TRIGGER_LABELS: Record<string, string> = {
-              member_join: 'Nowy member dołącza',
-              member_leave: 'Member opuszcza serwer',
-              role_assigned: 'Rola przypisana',
-              message_contains: 'Wiadomość zawiera słowo',
-            };
-            const ACTION_LABELS: Record<string, string> = {
-              assign_role: 'Przypisz rolę',
-              remove_role: 'Usuń rolę',
-              send_channel_message: 'Wyślij wiadomość na kanał',
-              send_dm: 'Wyślij DM do usera',
-              delete_message: 'Usuń wiadomość',
-              kick_member: 'Kicknij usera',
-            };
-
-            if (editAuto !== null) {
-              return (
-                <div className="max-w-2xl mx-auto flex flex-col gap-4">
-                  <div className="flex items-center gap-3">
-                    <button onClick={() => setEditAuto(null)} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-white hover:bg-white/[0.07] transition-all"><ArrowLeft size={16}/></button>
-                    <h2 className="text-base font-bold text-white">{editAuto.id ? 'Edytuj regułę' : 'Nowa reguła'}</h2>
-                  </div>
-
-                  {/* Name */}
-                  <div>
-                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Nazwa reguły</label>
-                    <input value={editAuto.name || ''} onChange={e => setEditAuto(p => ({...p!, name: e.target.value}))}
-                      placeholder="Np. Powitanie nowego użytkownika" className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
-                  </div>
-
-                  {/* Trigger */}
-                  <div>
-                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Wyzwalacz</label>
-                    <select value={editAuto.trigger_type || 'member_join'} onChange={e => setEditAuto(p => ({...p!, trigger_type: e.target.value as any, trigger_config: {}}))}
-                      className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}>
-                      {Object.entries(TRIGGER_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
-                    </select>
-                  </div>
-
-                  {/* Trigger config */}
-                  {editAuto.trigger_type === 'role_assigned' && (
-                    <div>
-                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Rola (ID)</label>
-                      <input value={(editAuto.trigger_config as any)?.role_id || ''} onChange={e => setEditAuto(p => ({...p!, trigger_config: {...(p?.trigger_config||{}), role_id: e.target.value}}))}
-                        placeholder="ID roli" className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
-                      <p className="text-xs text-zinc-600 mt-1">Akcja uruchamia się gdy ta rola zostanie przypisana userowi</p>
-                    </div>
-                  )}
-                  {editAuto.trigger_type === 'message_contains' && (
-                    <div>
-                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Słowo kluczowe</label>
-                      <input value={(editAuto.trigger_config as any)?.keyword || ''} onChange={e => setEditAuto(p => ({...p!, trigger_config: {...(p?.trigger_config||{}), keyword: e.target.value}}))}
-                        placeholder="Np. spam, link, itp." className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
-                    </div>
-                  )}
-
-                  {/* Actions */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest block">Akcje ({(editAuto.actions||[]).length})</label>
-                      <button onClick={() => setEditAuto(p => ({...p!, actions: [...(p?.actions||[]), {type:'send_dm', config:{}} as any]}))}
-                        className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
-                        <Plus size={11}/> Dodaj akcję
-                      </button>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      {(editAuto.actions || []).map((action, idx) => (
-                        <div key={idx} className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-3 flex flex-col gap-2">
-                          <div className="flex items-center gap-2">
-                            <select value={action.type} onChange={e => setEditAuto(p => {
-                              const acts = [...(p?.actions||[])];
-                              acts[idx] = {...acts[idx], type: e.target.value as any, config: {}};
-                              return {...p!, actions: acts};
-                            })} className={`flex-1 ${gi} rounded-xl px-3 py-2 text-xs`}>
-                              {Object.entries(ACTION_LABELS).map(([k,v]) => (
-                                (editAuto.trigger_type !== 'message_contains' && (k === 'delete_message' || k === 'kick_member')) ? null :
-                                <option key={k} value={k}>{v}</option>
-                              ))}
-                            </select>
-                            <button onClick={() => setEditAuto(p => ({...p!, actions: (p?.actions||[]).filter((_,i)=>i!==idx)}))}
-                              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-500/10 text-zinc-600 hover:text-rose-400 transition-colors shrink-0"><Trash2 size={11}/></button>
-                          </div>
-                          {(action.type === 'assign_role' || action.type === 'remove_role') && (
-                            <input value={(action.config as any)?.role_id || ''} onChange={e => setEditAuto(p => {
-                              const acts = [...(p?.actions||[])]; acts[idx] = {...acts[idx], config: {...(acts[idx].config||{}), role_id: e.target.value}}; return {...p!, actions: acts};
-                            })} placeholder="ID roli" className={`${gi} rounded-xl px-3 py-2 text-xs`}/>
-                          )}
-                          {action.type === 'send_channel_message' && (
-                            <div className="flex flex-col gap-1.5">
-                              <input value={(action.config as any)?.channel_id || ''} onChange={e => setEditAuto(p => {
-                                const acts = [...(p?.actions||[])]; acts[idx] = {...acts[idx], config: {...(acts[idx].config||{}), channel_id: e.target.value}}; return {...p!, actions: acts};
-                              })} placeholder="ID kanału" className={`${gi} rounded-xl px-3 py-2 text-xs`}/>
-                              <textarea value={(action.config as any)?.message || ''} onChange={e => setEditAuto(p => {
-                                const acts = [...(p?.actions||[])]; acts[idx] = {...acts[idx], config: {...(acts[idx].config||{}), message: e.target.value}}; return {...p!, actions: acts};
-                              })} placeholder="Treść wiadomości. Użyj {username} i {server}" rows={2} className={`${gi} rounded-xl px-3 py-2 text-xs resize-none`}/>
-                            </div>
-                          )}
-                          {action.type === 'send_dm' && (
-                            <textarea value={(action.config as any)?.message || ''} onChange={e => setEditAuto(p => {
-                              const acts = [...(p?.actions||[])]; acts[idx] = {...acts[idx], config: {...(acts[idx].config||{}), message: e.target.value}}; return {...p!, actions: acts};
-                            })} placeholder="Treść DM. Użyj {username} i {server}" rows={2} className={`${gi} rounded-xl px-3 py-2 text-xs resize-none`}/>
-                          )}
-                        </div>
-                      ))}
-                      {(editAuto.actions||[]).length === 0 && (
-                        <p className="text-xs text-zinc-700 py-3 text-center">Brak akcji — dodaj przynajmniej jedną</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <button onClick={saveAuto} disabled={autoSaving || !editAuto.name?.trim() || !(editAuto.actions||[]).length}
-                    className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
-                    {autoSaving ? <Loader2 size={15} className="animate-spin"/> : <Check size={15}/>}
-                    {editAuto.id ? 'Zapisz zmiany' : 'Utwórz regułę'}
-                  </button>
-                </div>
-              );
-            }
-
+          {tab === 'emoji' && (() => {
+            // Lokalny stan emoji — niezależny od propa, odświeża się po upload/delete
+            const [localEmojis, setLocalEmojis] = React.useState<ServerEmoji[]>(serverEmojis || []);
+            const [emojiUploading, setEmojiUploading] = React.useState(false);
+            // Sync gdy prop się zmienia (np. pierwsze załadowanie)
+            React.useEffect(() => { setLocalEmojis(serverEmojis || []); }, [serverEmojis]);
             return (
               <div className="max-w-2xl mx-auto flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-base font-bold text-white">Automatyzacje ({automations.length})</h2>
-                    <p className="text-xs text-zinc-600 mt-0.5">Automatycznie wykonuj akcje na podstawie zdarzeń serwera</p>
+                    <h2 className="text-base font-bold text-white">Niestandardowe Emoji ({localEmojis.length}/50)</h2>
+                    <p className="text-xs text-zinc-600 mt-0.5">Własne emoji dostępne dla wszystkich na serwerze w pickerze</p>
                   </div>
-                  <button onClick={() => setEditAuto({name:'', trigger_type:'member_join', trigger_config:{}, actions:[], enabled:true})}
-                    className="bg-indigo-500 hover:bg-indigo-400 text-white px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5">
-                    <Plus size={14}/> Nowa reguła
-                  </button>
                 </div>
-
-                {autoLoading && <div className="flex items-center justify-center py-10"><Loader2 size={18} className="animate-spin text-zinc-600"/></div>}
-
-                {!autoLoading && automations.length === 0 && (
-                  <div className="flex flex-col items-center gap-3 py-14 text-center">
-                    <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
-                      <Zap size={22} className="text-indigo-400"/>
-                    </div>
-                    <p className="text-sm font-semibold text-zinc-300">Brak reguł automatyzacji</p>
-                    <p className="text-xs text-zinc-600 leading-relaxed max-w-xs">Stwórz reguły które automatycznie przypisują role, wysyłają wiadomości powitalne lub moderują serwer</p>
-                    <button onClick={() => setEditAuto({name:'', trigger_type:'member_join', trigger_config:{}, actions:[], enabled:true})}
-                      className="mt-1 text-sm font-semibold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/15 border border-indigo-500/20 px-4 py-2 rounded-xl transition-all flex items-center gap-2">
-                      <Plus size={14}/> Utwórz pierwszą regułę
-                    </button>
+                {localEmojis.length === 0 && !emojiUploading && (
+                  <div className="flex flex-col items-center gap-2 py-10 text-center">
+                    <Smile size={28} className="text-zinc-700"/>
+                    <p className="text-sm text-zinc-500">Brak emoji — dodaj własne obrazki</p>
+                    <p className="text-xs text-zinc-700">PNG, GIF lub WebP, maks. 256KB, nazwa: litery/cyfry/_</p>
                   </div>
                 )}
-
-                {automations.map(auto => (
-                  <div key={auto.id} className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-4 flex items-start gap-3 group hover:border-white/[0.1] transition-colors">
-                    <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${auto.enabled ? 'bg-emerald-500' : 'bg-zinc-600'}`}/>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-white">{auto.name}</p>
-                      <p className="text-xs text-zinc-500 mt-0.5">
-                        Wyzwalacz: <span className="text-zinc-400">{TRIGGER_LABELS[auto.trigger_type] || auto.trigger_type}</span>
-                        {' · '}{auto.actions.length} {auto.actions.length === 1 ? 'akcja' : 'akcje'}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => toggleAuto(auto.id, !auto.enabled)} title={auto.enabled ? 'Wyłącz' : 'Włącz'}
-                        className={`w-8 h-5 rounded-full transition-all relative ${auto.enabled ? 'bg-indigo-500' : 'bg-zinc-700'}`}>
-                        <span className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all"
-                          style={{left: auto.enabled ? 'calc(100% - 1.125rem)' : '0.125rem'}}/>
-                      </button>
-                      <button onClick={() => setEditAuto(auto)}
-                        className="w-7 h-7 bg-white/[0.05] hover:bg-white/[0.09] text-zinc-400 hover:text-white rounded-lg flex items-center justify-center transition-colors"><Edit3 size={12}/></button>
-                      <button onClick={() => deleteAuto(auto.id)}
-                        className="w-7 h-7 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg flex items-center justify-center transition-colors"><Trash2 size={12}/></button>
-                    </div>
+                {localEmojis.length > 0 && (
+                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
+                    {localEmojis.map(e => (
+                      <div key={e.id} className="flex flex-col items-center gap-1.5 bg-white/[0.03] border border-white/[0.05] rounded-xl p-2 group relative hover:border-white/[0.1] transition-colors">
+                        <img src={e.image_url} alt={e.name} className="w-10 h-10 object-contain rounded-lg"/>
+                        <span className="text-[10px] text-zinc-400 truncate w-full text-center">:{e.name}:</span>
+                        {canManageServer && (
+                          <button
+                            onClick={async () => {
+                              if (!activeServer) return;
+                              try {
+                                await emojisApi.delete(activeServer, e.id);
+                                setLocalEmojis(p => p.filter(x => x.id !== e.id));
+                              } catch {}
+                            }}
+                            className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-500 rounded-full text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-400">
+                            <X size={9}/>
+                          </button>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
+                {canManageServer && localEmojis.length < 50 && (
+                  <label className={`cursor-pointer flex items-center gap-2 text-sm font-semibold border px-4 py-3 rounded-xl transition-all ${
+                    emojiUploading
+                      ? 'bg-zinc-800/50 border-white/[0.05] text-zinc-600 cursor-not-allowed'
+                      : 'bg-indigo-500/10 hover:bg-indigo-500/20 border-indigo-500/20 text-indigo-400'}`}>
+                    {emojiUploading
+                      ? <><Loader2 size={14} className="animate-spin"/> Wgrywanie...</>
+                      : <><Upload size={14}/> Dodaj emoji (PNG/GIF/WebP, maks. 256KB)</>
+                    }
+                    <input type="file" accept="image/png,image/gif,image/webp" disabled={emojiUploading} className="hidden" onChange={async e => {
+                      const f = e.target.files?.[0];
+                      if (!f || !activeServer) return;
+                      if (f.size > 256 * 1024) { alert('Plik za duży — maks. 256KB'); e.target.value = ''; return; }
+                      setEmojiUploading(true);
+                      try {
+                        const rawName = f.name.replace(/\.[^.]+$/, '').replace(/[^a-z0-9_]/gi, '_').toLowerCase().slice(0, 32) || 'emoji';
+                        const imageUrl = await uploadFile(f, 'emojis');
+                        const created = await emojisApi.create(activeServer, rawName, imageUrl);
+                        setLocalEmojis(p => [...p, created]);
+                      } catch (err: any) {
+                        alert('Błąd wgrywania: ' + (err?.message || 'nieznany'));
+                      }
+                      setEmojiUploading(false);
+                      e.target.value = '';
+                    }}/>
+                  </label>
+                )}
               </div>
             );
           })()}
+
+          {/* ── Automatyzacje ── */}
+          {tab === 'automations' && activeServer && (
+            <AutomationsTab serverId={activeServer} gi={gi}/>
+          )}
 
         </div>
       </div>
