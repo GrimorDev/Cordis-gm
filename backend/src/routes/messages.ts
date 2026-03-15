@@ -5,6 +5,7 @@ import { authMiddleware } from '../middleware/auth';
 import { msgLimiter } from '../middleware/messageLimiter';
 import { AuthRequest } from '../types';
 import { checkSlowmode, setSlowmode } from '../redis/client';
+import { runAutomations } from '../services/automations';
 
 const router = Router();
 
@@ -170,6 +171,13 @@ router.post('/channel/:channelId', authMiddleware, msgLimiter,
       );
       const io = req.app.get('io');
       if (io) io.to(`channel:${req.params.channelId}`).emit('new_message', full);
+
+      // ── message_contains automation trigger ───────────────────────────
+      if (access.serverId) {
+        runAutomations(access.serverId, 'message_contains', {
+          userId: req.user!.id, messageId: msg.id, messageContent: content, io
+        }).catch(console.error);
+      }
 
       // ── @everyone / @here: ping all server members ────────────────────
       if (content.includes('@everyone') || content.includes('@here')) {

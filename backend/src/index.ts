@@ -28,6 +28,10 @@ import gamesRoutes from './routes/games';
 import spotifyRoutes from './routes/spotify';
 import steamRoutes   from './routes/steam';
 import twitchRoutes  from './routes/twitch';
+import notesRoutes   from './routes/notes';
+import pollsRoutes   from './routes/polls';
+import pushRoutes    from './routes/push';
+import automationsRoutes from './routes/automations';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -112,6 +116,10 @@ app.use('/api/games',   gamesRoutes);
 app.use('/api/spotify', spotifyRoutes);
 app.use('/api/steam',   steamRoutes);
 app.use('/api/twitch',  twitchRoutes);
+app.use('/api/users',   notesRoutes);
+app.use('/api/polls',   pollsRoutes);
+app.use('/api/push',    pushRoutes);
+app.use('/api/servers', automationsRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

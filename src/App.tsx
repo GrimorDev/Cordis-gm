@@ -18,6 +18,7 @@ import {
 import {
   auth, users, serversApi, channelsApi, messagesApi, dmsApi, friendsApi, forumApi, adminApi,
   gamesApi, spotifyApi, twitchApi, steamApi, twoFactorApi,
+  emojisApi, notesApi, pollsApi, automationsApi, dmPinApi, pushApi,
   uploadFile, setToken, clearToken, getToken,
   type UserProfile, type ServerData, type ServerFull, type ServerRole,
   type ChannelData, type MessageFull, type DmConversation,
@@ -25,7 +26,8 @@ import {
   type ServerMember, type ForumPost, type ForumReply, type ServerBan,
   type Badge, type AdminStats, type AdminUser, type AdminServer, type AdminOverview,
   type FavoriteGame, type SpotifyData, type SpotifyTrack, type SpotifyJamSession, type SpotifyVoiceDj, type TwitchData, type TwitchStream, type SteamData, type SteamGame,
-  type TwoFactorStatus, type LoginResult, ApiError
+  type TwoFactorStatus, type LoginResult, ApiError,
+  type ServerEmoji, type PollData, type ServerAutomation, type AutomationTrigger, type AutomationAction, type AutomationActionType,
 } from './api';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -195,7 +197,7 @@ const EMOJI_CATS = [
   { icon: '#️⃣', label: 'Symbole', emojis: ['✅','❌','⚠️','❓','❗','‼️','💤','🔴','🟠','🟡','🟢','🔵','🟣','⚫','⚪','🔶','🔷','🔸','🔹','🔺','🔻','♻️','🚫','⛔','🔞','💯','🆕','🆗','🆙','🆒','🆓','🆖','📶','🔊','🔇','🔔','🔕','🔈','📣','📢','🔐','🗑️','⌛','⏳','⏰','📍','🏷️'],},
 ] as const;
 
-function EmojiPicker({ onSelect, onClose }: { onSelect: (e: string) => void; onClose: () => void }) {
+function EmojiPicker({ onSelect, onClose, serverEmojis }: { onSelect: (e: string) => void; onClose: () => void; serverEmojis?: ServerEmoji[] }) {
   const [cat, setCat] = React.useState(0);
   const ref = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
@@ -203,32 +205,56 @@ function EmojiPicker({ onSelect, onClose }: { onSelect: (e: string) => void; onC
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, [onClose]);
+  const hasServerEmojis = serverEmojis && serverEmojis.length > 0;
+  // cat === -1 means server emojis tab
+  const effectiveCat = hasServerEmojis ? cat - 1 : cat;
   return (
     <div ref={ref}
       className="absolute bottom-full mb-2 right-0 w-80 bg-[#0e0e1c] border border-white/[0.12] rounded-3xl shadow-2xl shadow-black/80 overflow-hidden z-50" style={{backdropFilter:'blur(24px)'}}>
       {/* Category tabs */}
       <div className="flex overflow-x-auto border-b border-white/[0.07] p-1.5 gap-0.5"
         style={{ scrollbarWidth: 'none' }}>
+        {hasServerEmojis && (
+          <button onClick={() => setCat(0)} title="Emoji serwera"
+            className={`text-base px-2 py-1.5 rounded-xl shrink-0 transition-colors ${cat === 0 ? 'bg-indigo-500/20 text-white' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]'}`}>
+            ⭐
+          </button>
+        )}
         {EMOJI_CATS.map((c, i) => (
-          <button key={i} onClick={() => setCat(i)} title={c.label}
-            className={`text-base px-2 py-1.5 rounded-xl shrink-0 transition-colors ${cat === i ? 'bg-indigo-500/20 text-white' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]'}`}>
+          <button key={i} onClick={() => setCat(hasServerEmojis ? i + 1 : i)} title={c.label}
+            className={`text-base px-2 py-1.5 rounded-xl shrink-0 transition-colors ${cat === (hasServerEmojis ? i + 1 : i) ? 'bg-indigo-500/20 text-white' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]'}`}>
             {c.icon}
           </button>
         ))}
       </div>
       {/* Category label */}
       <div className="px-3 pt-2 pb-0.5">
-        <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{EMOJI_CATS[cat].label}</p>
+        <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
+          {hasServerEmojis && cat === 0 ? 'Emoji serwera' : EMOJI_CATS[effectiveCat]?.label}
+        </p>
       </div>
       {/* Emoji grid */}
-      <div className="p-2 grid grid-cols-9 gap-0.5 max-h-52 overflow-y-auto"
+      <div className="p-2 gap-0.5 max-h-52 overflow-y-auto"
         style={{ scrollbarWidth: 'thin', scrollbarColor: '#3f3f46 transparent' }}>
-        {(EMOJI_CATS[cat].emojis as readonly string[]).map(emoji => (
-          <button key={emoji} onClick={() => { onSelect(emoji); }}
-            className="text-lg w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/[0.1] transition-colors hover:scale-110 active:scale-95">
-            {emoji}
-          </button>
-        ))}
+        {hasServerEmojis && cat === 0 ? (
+          <div className="grid grid-cols-8 gap-1">
+            {serverEmojis!.map(e => (
+              <button key={e.id} onClick={() => onSelect(`:${e.name}:`)} title={`:${e.name}:`}
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/[0.1] transition-colors hover:scale-110 active:scale-95">
+                <img src={e.image_url} alt={e.name} className="w-6 h-6 object-contain"/>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-9">
+            {(EMOJI_CATS[effectiveCat]?.emojis as readonly string[] | undefined || []).map(emoji => (
+              <button key={emoji} onClick={() => { onSelect(emoji); }}
+                className="text-lg w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/[0.1] transition-colors hover:scale-110 active:scale-95">
+                {emoji}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1317,8 +1343,8 @@ const getBadgeIcon = (name: string): LucideIcon => BADGE_ICON_MAP[name] ?? Award
 // ─── Server Settings Page ─────────────────────────────────────────────────────
 interface ServerSettingsPageProps {
   serverFull: ServerFull;
-  tab: 'overview'|'roles'|'members'|'bans'|'invites';
-  setTab: (t: 'overview'|'roles'|'members'|'bans'|'invites') => void;
+  tab: 'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations';
+  setTab: (t: 'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations') => void;
   roles: ServerRole[];
   members: ServerMember[];
   banList: ServerBan[]; setBanList: (v: ServerBan[]) => void;
@@ -1340,6 +1366,9 @@ interface ServerSettingsPageProps {
   handleDeleteRole: (id: string) => void;
   currentUser: UserProfile|null;
   onClose: () => void;
+  streamerMode?: boolean;
+  serverEmojis?: ServerEmoji[];
+  activeServer?: string;
 }
 function ServerSettingsPage({
   serverFull, tab, setTab, roles, members, banList, setBanList,
@@ -1348,6 +1377,7 @@ function ServerSettingsPage({
   canManageServer, canManageRoles, canKickMembers, canBanMembers, canCreateInvites,
   handleSetMemberRole, handleKick, handleBan, handleUnban,
   openNewRole, openEditRole, handleDeleteRole, currentUser, onClose,
+  streamerMode, serverEmojis, activeServer,
 }: ServerSettingsPageProps) {
   const [memberQ, setMemberQ] = React.useState('');
   const filteredMembers = memberQ.trim()
@@ -1359,6 +1389,8 @@ function ServerSettingsPage({
     (canManageRoles||canKickMembers) && { id: 'members' as const, label: 'Członkowie', icon: <Users size={14}/> },
     canBanMembers   && { id: 'bans'     as const, label: 'Bany',         icon: <ShieldCheck size={14}/> },
     canCreateInvites && { id: 'invites' as const, label: 'Zaproszenia',  icon: <UserPlus size={14}/> },
+    canManageServer && { id: 'emoji' as const, label: 'Emoji',           icon: <Smile size={14}/> },
+    canManageServer && { id: 'automations' as const, label: 'Automatyzacje', icon: <Zap size={14}/> },
   ].filter(Boolean) as { id: typeof tab; label: string; icon: React.ReactNode }[];
 
   return (
@@ -1433,6 +1465,28 @@ function ServerSettingsPage({
               <div>
                 <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Opis</label>
                 <textarea value={srvForm.description} onChange={e=>setSrvForm((p:any)=>({...p,description:e.target.value}))} rows={4} placeholder="Opis serwera..." className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm resize-none`}/>
+              </div>
+              <div>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Kolor akcentu serwera</label>
+                <div className="grid grid-cols-5 gap-2">
+                  {([
+                    {key:'indigo', cls:'bg-indigo-500'},
+                    {key:'violet', cls:'bg-violet-500'},
+                    {key:'pink',   cls:'bg-pink-500'},
+                    {key:'blue',   cls:'bg-blue-500'},
+                    {key:'emerald',cls:'bg-emerald-500'},
+                    {key:'teal',   cls:'bg-teal-500'},
+                    {key:'cyan',   cls:'bg-cyan-500'},
+                    {key:'amber',  cls:'bg-amber-500'},
+                    {key:'orange', cls:'bg-orange-500'},
+                    {key:'rose',   cls:'bg-rose-500'},
+                  ] as const).map(c => (
+                    <button key={c.key} onClick={() => setSrvForm((p: any) => ({...p, accent_color: c.key}))}
+                      className={`h-10 rounded-xl ${c.cls} border-2 transition-all hover:scale-105 flex items-center justify-center ${(srvForm as any).accent_color === c.key ? 'border-white scale-105' : 'border-transparent'}`}>
+                      {(srvForm as any).accent_color === c.key && <Check size={14} className="text-white"/>}
+                    </button>
+                  ))}
+                </div>
               </div>
               <button onClick={handleSaveSrv} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">Zapisz zmiany</button>
             </div>
@@ -1581,13 +1635,287 @@ function ServerSettingsPage({
                 <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-4">
                   <p className="text-[10px] text-zinc-600 mb-2">LINK DO ZAPROSZENIA</p>
                   <div className="flex items-center gap-2">
-                    <code className="text-white font-mono text-sm flex-1 bg-black/30 px-3 py-2 rounded-lg">{inviteCode}</code>
+                    <code className="text-white font-mono text-sm flex-1 bg-black/30 px-3 py-2 rounded-lg">{streamerMode ? '••••••••••' : inviteCode}</code>
                     <button onClick={() => navigator.clipboard.writeText(inviteCode)} className="text-xs text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 px-3 py-2 rounded-lg transition-colors shrink-0">Kopiuj</button>
                   </div>
                 </div>
               )}
             </div>
           )}
+
+          {/* ── Emoji ── */}
+          {tab === 'emoji' && (
+            <div className="max-w-2xl mx-auto flex flex-col gap-4">
+              <h2 className="text-base font-bold text-white">Niestandardowe Emoji ({(serverEmojis||[]).length}/50)</h2>
+              {(serverEmojis||[]).length === 0 && (
+                <p className="text-sm text-zinc-600">Brak emoji. Dodaj własne emoji dla swojego serwera.</p>
+              )}
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
+                {(serverEmojis||[]).map(e => (
+                  <div key={e.id} className="flex flex-col items-center gap-1.5 bg-white/[0.03] border border-white/[0.05] rounded-xl p-2 group relative">
+                    <img src={e.image_url} alt={e.name} className="w-10 h-10 object-contain rounded-lg"/>
+                    <span className="text-[10px] text-zinc-400 truncate w-full text-center">:{e.name}:</span>
+                    {canManageServer && (
+                      <button
+                        onClick={async () => {
+                          if (!activeServer) return;
+                          try { await emojisApi.delete(activeServer, e.id); } catch {}
+                        }}
+                        className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-500 rounded-full text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <X size={9}/>
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {canManageServer && (
+                <label className="cursor-pointer flex items-center gap-2 text-sm font-semibold bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 text-indigo-400 px-4 py-3 rounded-xl transition-all">
+                  <Upload size={14}/> Dodaj emoji (PNG/GIF, maks. 256KB)
+                  <input type="file" accept="image/png,image/gif,image/webp" className="hidden" onChange={async e => {
+                    const f = e.target.files?.[0]; if (!f || !activeServer) return;
+                    try {
+                      const name = f.name.replace(/\.[^.]+$/, '').replace(/[^a-z0-9_]/gi, '_').toLowerCase();
+                      const url = await uploadFile(f, 'emojis');
+                      await emojisApi.create(activeServer, name, url);
+                    } catch {}
+                    e.target.value = '';
+                  }}/>
+                </label>
+              )}
+            </div>
+          )}
+
+          {/* ── Automatyzacje ── */}
+          {tab === 'automations' && (() => {
+            const [automations, setAutomations] = React.useState<import('./api').ServerAutomation[]>([]);
+            const [autoLoading, setAutoLoading] = React.useState(true);
+            const [editAuto, setEditAuto] = React.useState<Partial<import('./api').ServerAutomation> | null>(null);
+            const [autoSaving, setAutoSaving] = React.useState(false);
+
+            React.useEffect(() => {
+              if (!activeServer) return;
+              import('./api').then(({ automationsApi }) => {
+                automationsApi.list(activeServer!).then(list => { setAutomations(list); setAutoLoading(false); }).catch(() => setAutoLoading(false));
+              });
+            }, []);
+
+            const saveAuto = async () => {
+              if (!editAuto || !activeServer) return;
+              setAutoSaving(true);
+              try {
+                const { automationsApi } = await import('./api');
+                if (editAuto.id) {
+                  const updated = await automationsApi.update(activeServer, editAuto.id, {
+                    name: editAuto.name || 'Reguła',
+                    enabled: editAuto.enabled ?? true,
+                    trigger_type: editAuto.trigger_type as any || 'member_join',
+                    trigger_config: editAuto.trigger_config || {},
+                    actions: editAuto.actions || [],
+                  });
+                  setAutomations(p => p.map(a => a.id === updated.id ? updated : a));
+                } else {
+                  const created = await automationsApi.create(activeServer, {
+                    name: editAuto.name || 'Nowa reguła',
+                    enabled: true,
+                    trigger_type: editAuto.trigger_type as any || 'member_join',
+                    trigger_config: editAuto.trigger_config || {},
+                    actions: editAuto.actions || [],
+                  });
+                  setAutomations(p => [...p, created]);
+                }
+                setEditAuto(null);
+              } catch {}
+              setAutoSaving(false);
+            };
+
+            const deleteAuto = async (id: string) => {
+              if (!activeServer) return;
+              const { automationsApi } = await import('./api');
+              await automationsApi.delete(activeServer, id).catch(() => {});
+              setAutomations(p => p.filter(a => a.id !== id));
+            };
+
+            const toggleAuto = async (id: string, enabled: boolean) => {
+              if (!activeServer) return;
+              const { automationsApi } = await import('./api');
+              await automationsApi.toggle(activeServer, id, enabled).catch(() => {});
+              setAutomations(p => p.map(a => a.id === id ? { ...a, enabled } : a));
+            };
+
+            const TRIGGER_LABELS: Record<string, string> = {
+              member_join: 'Nowy member dołącza',
+              member_leave: 'Member opuszcza serwer',
+              role_assigned: 'Rola przypisana',
+              message_contains: 'Wiadomość zawiera słowo',
+            };
+            const ACTION_LABELS: Record<string, string> = {
+              assign_role: 'Przypisz rolę',
+              remove_role: 'Usuń rolę',
+              send_channel_message: 'Wyślij wiadomość na kanał',
+              send_dm: 'Wyślij DM do usera',
+              delete_message: 'Usuń wiadomość',
+              kick_member: 'Kicknij usera',
+            };
+
+            if (editAuto !== null) {
+              return (
+                <div className="max-w-2xl mx-auto flex flex-col gap-4">
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setEditAuto(null)} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-white hover:bg-white/[0.07] transition-all"><ArrowLeft size={16}/></button>
+                    <h2 className="text-base font-bold text-white">{editAuto.id ? 'Edytuj regułę' : 'Nowa reguła'}</h2>
+                  </div>
+
+                  {/* Name */}
+                  <div>
+                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Nazwa reguły</label>
+                    <input value={editAuto.name || ''} onChange={e => setEditAuto(p => ({...p!, name: e.target.value}))}
+                      placeholder="Np. Powitanie nowego użytkownika" className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
+                  </div>
+
+                  {/* Trigger */}
+                  <div>
+                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Wyzwalacz</label>
+                    <select value={editAuto.trigger_type || 'member_join'} onChange={e => setEditAuto(p => ({...p!, trigger_type: e.target.value as any, trigger_config: {}}))}
+                      className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}>
+                      {Object.entries(TRIGGER_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Trigger config */}
+                  {editAuto.trigger_type === 'role_assigned' && (
+                    <div>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Rola (ID)</label>
+                      <input value={(editAuto.trigger_config as any)?.role_id || ''} onChange={e => setEditAuto(p => ({...p!, trigger_config: {...(p?.trigger_config||{}), role_id: e.target.value}}))}
+                        placeholder="ID roli" className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
+                      <p className="text-xs text-zinc-600 mt-1">Akcja uruchamia się gdy ta rola zostanie przypisana userowi</p>
+                    </div>
+                  )}
+                  {editAuto.trigger_type === 'message_contains' && (
+                    <div>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Słowo kluczowe</label>
+                      <input value={(editAuto.trigger_config as any)?.keyword || ''} onChange={e => setEditAuto(p => ({...p!, trigger_config: {...(p?.trigger_config||{}), keyword: e.target.value}}))}
+                        placeholder="Np. spam, link, itp." className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest block">Akcje ({(editAuto.actions||[]).length})</label>
+                      <button onClick={() => setEditAuto(p => ({...p!, actions: [...(p?.actions||[]), {type:'send_dm', config:{}} as any]}))}
+                        className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+                        <Plus size={11}/> Dodaj akcję
+                      </button>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {(editAuto.actions || []).map((action, idx) => (
+                        <div key={idx} className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-3 flex flex-col gap-2">
+                          <div className="flex items-center gap-2">
+                            <select value={action.type} onChange={e => setEditAuto(p => {
+                              const acts = [...(p?.actions||[])];
+                              acts[idx] = {...acts[idx], type: e.target.value as any, config: {}};
+                              return {...p!, actions: acts};
+                            })} className={`flex-1 ${gi} rounded-xl px-3 py-2 text-xs`}>
+                              {Object.entries(ACTION_LABELS).map(([k,v]) => (
+                                (editAuto.trigger_type !== 'message_contains' && (k === 'delete_message' || k === 'kick_member')) ? null :
+                                <option key={k} value={k}>{v}</option>
+                              ))}
+                            </select>
+                            <button onClick={() => setEditAuto(p => ({...p!, actions: (p?.actions||[]).filter((_,i)=>i!==idx)}))}
+                              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-500/10 text-zinc-600 hover:text-rose-400 transition-colors shrink-0"><Trash2 size={11}/></button>
+                          </div>
+                          {(action.type === 'assign_role' || action.type === 'remove_role') && (
+                            <input value={(action.config as any)?.role_id || ''} onChange={e => setEditAuto(p => {
+                              const acts = [...(p?.actions||[])]; acts[idx] = {...acts[idx], config: {...(acts[idx].config||{}), role_id: e.target.value}}; return {...p!, actions: acts};
+                            })} placeholder="ID roli" className={`${gi} rounded-xl px-3 py-2 text-xs`}/>
+                          )}
+                          {action.type === 'send_channel_message' && (
+                            <div className="flex flex-col gap-1.5">
+                              <input value={(action.config as any)?.channel_id || ''} onChange={e => setEditAuto(p => {
+                                const acts = [...(p?.actions||[])]; acts[idx] = {...acts[idx], config: {...(acts[idx].config||{}), channel_id: e.target.value}}; return {...p!, actions: acts};
+                              })} placeholder="ID kanału" className={`${gi} rounded-xl px-3 py-2 text-xs`}/>
+                              <textarea value={(action.config as any)?.message || ''} onChange={e => setEditAuto(p => {
+                                const acts = [...(p?.actions||[])]; acts[idx] = {...acts[idx], config: {...(acts[idx].config||{}), message: e.target.value}}; return {...p!, actions: acts};
+                              })} placeholder="Treść wiadomości. Użyj {username} i {server}" rows={2} className={`${gi} rounded-xl px-3 py-2 text-xs resize-none`}/>
+                            </div>
+                          )}
+                          {action.type === 'send_dm' && (
+                            <textarea value={(action.config as any)?.message || ''} onChange={e => setEditAuto(p => {
+                              const acts = [...(p?.actions||[])]; acts[idx] = {...acts[idx], config: {...(acts[idx].config||{}), message: e.target.value}}; return {...p!, actions: acts};
+                            })} placeholder="Treść DM. Użyj {username} i {server}" rows={2} className={`${gi} rounded-xl px-3 py-2 text-xs resize-none`}/>
+                          )}
+                        </div>
+                      ))}
+                      {(editAuto.actions||[]).length === 0 && (
+                        <p className="text-xs text-zinc-700 py-3 text-center">Brak akcji — dodaj przynajmniej jedną</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <button onClick={saveAuto} disabled={autoSaving || !editAuto.name?.trim() || !(editAuto.actions||[]).length}
+                    className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
+                    {autoSaving ? <Loader2 size={15} className="animate-spin"/> : <Check size={15}/>}
+                    {editAuto.id ? 'Zapisz zmiany' : 'Utwórz regułę'}
+                  </button>
+                </div>
+              );
+            }
+
+            return (
+              <div className="max-w-2xl mx-auto flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-base font-bold text-white">Automatyzacje ({automations.length})</h2>
+                    <p className="text-xs text-zinc-600 mt-0.5">Automatycznie wykonuj akcje na podstawie zdarzeń serwera</p>
+                  </div>
+                  <button onClick={() => setEditAuto({name:'', trigger_type:'member_join', trigger_config:{}, actions:[], enabled:true})}
+                    className="bg-indigo-500 hover:bg-indigo-400 text-white px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5">
+                    <Plus size={14}/> Nowa reguła
+                  </button>
+                </div>
+
+                {autoLoading && <div className="flex items-center justify-center py-10"><Loader2 size={18} className="animate-spin text-zinc-600"/></div>}
+
+                {!autoLoading && automations.length === 0 && (
+                  <div className="flex flex-col items-center gap-3 py-14 text-center">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                      <Zap size={22} className="text-indigo-400"/>
+                    </div>
+                    <p className="text-sm font-semibold text-zinc-300">Brak reguł automatyzacji</p>
+                    <p className="text-xs text-zinc-600 leading-relaxed max-w-xs">Stwórz reguły które automatycznie przypisują role, wysyłają wiadomości powitalne lub moderują serwer</p>
+                    <button onClick={() => setEditAuto({name:'', trigger_type:'member_join', trigger_config:{}, actions:[], enabled:true})}
+                      className="mt-1 text-sm font-semibold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/15 border border-indigo-500/20 px-4 py-2 rounded-xl transition-all flex items-center gap-2">
+                      <Plus size={14}/> Utwórz pierwszą regułę
+                    </button>
+                  </div>
+                )}
+
+                {automations.map(auto => (
+                  <div key={auto.id} className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-4 flex items-start gap-3 group hover:border-white/[0.1] transition-colors">
+                    <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${auto.enabled ? 'bg-emerald-500' : 'bg-zinc-600'}`}/>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-white">{auto.name}</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">
+                        Wyzwalacz: <span className="text-zinc-400">{TRIGGER_LABELS[auto.trigger_type] || auto.trigger_type}</span>
+                        {' · '}{auto.actions.length} {auto.actions.length === 1 ? 'akcja' : 'akcje'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => toggleAuto(auto.id, !auto.enabled)} title={auto.enabled ? 'Wyłącz' : 'Włącz'}
+                        className={`w-8 h-5 rounded-full transition-all relative ${auto.enabled ? 'bg-indigo-500' : 'bg-zinc-700'}`}>
+                        <span className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all"
+                          style={{left: auto.enabled ? 'calc(100% - 1.125rem)' : '0.125rem'}}/>
+                      </button>
+                      <button onClick={() => setEditAuto(auto)}
+                        className="w-7 h-7 bg-white/[0.05] hover:bg-white/[0.09] text-zinc-400 hover:text-white rounded-lg flex items-center justify-center transition-colors"><Edit3 size={12}/></button>
+                      <button onClick={() => deleteAuto(auto.id)}
+                        className="w-7 h-7 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg flex items-center justify-center transition-colors"><Trash2 size={12}/></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
         </div>
       </div>
@@ -3147,9 +3475,17 @@ export default function App() {
 
   const [serverList, setServerList]           = useState<ServerData[]>([]);
   const [serverFull, setServerFull]           = useState<ServerFull | null>(null);
+  const [serverEmojis, setServerEmojis]        = useState<Map<string, ServerEmoji[]>>(new Map());
+  const [serverAccentColor, setServerAccentColor] = useState<string>('indigo');
+  const [pollModal, setPollModal]              = useState<{open: boolean}>({open: false});
+  const [pollQuestion, setPollQuestion]        = useState('');
+  const [pollOptions, setPollOptions]          = useState(['', '']);
+  const [pollMulti, setPollMulti]              = useState(false);
+  const [polls, setPolls]                      = useState<Map<string, PollData>>(new Map());
   const [channelMsgs, setChannelMsgs]         = useState<MessageFull[]>([]);
   const [dmConvs, setDmConvs]                 = useState<DmConversation[]>([]);
   const [dmMsgs, setDmMsgs]                   = useState<DmMessageFull[]>([]);
+  const [dmPinnedMsgs, setDmPinnedMsgs]         = useState<DmMessageFull[]>([]);
   // dm_read events: maps other_user_id → read_at timestamp (when THEY read our messages)
   const [dmReadStates, setDmReadStates]       = useState<Record<string, string>>({});
   const [friends, setFriends]                 = useState<FriendEntry[]>([]);
@@ -3236,14 +3572,14 @@ export default function App() {
   const [deleteSrvConfirm, setDeleteSrvConfirm] = useState<{ id: string; name: string } | null>(null);
 
   const [srvSettOpen, setSrvSettOpen]         = useState(false);
-  const [srvSettTab, setSrvSettTab]           = useState<'overview'|'roles'|'members'|'bans'|'invites'>('overview');
+  const [srvSettTab, setSrvSettTab]           = useState<'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'>('overview');
   const [banList, setBanList]                 = useState<import('./api').ServerBan[]>([]);
   const [slowmodeLeft, setSlowmodeLeft]       = useState(0); // seconds remaining
   const [pinnedMsgs, setPinnedMsgs]           = useState<import('./api').MessageFull[]>([]);
   const [showPinned, setShowPinned]           = useState(false);
   const [inviteDur, setInviteDur]             = useState('86400');
   const [inviteCode, setInviteCode]           = useState<string|null>(null);
-  const [srvForm, setSrvForm]                 = useState({ name:'', description:'', icon_url:'', banner_url:'' });
+  const [srvForm, setSrvForm]                 = useState({ name:'', description:'', icon_url:'', banner_url:'', accent_color:'indigo' });
   const [srvIconFile, setSrvIconFile]         = useState<File|null>(null);
   const [srvBannerFile, setSrvBannerFile]     = useState<File|null>(null);
 
@@ -3339,7 +3675,7 @@ export default function App() {
   const [unreadChs, setUnreadChs]             = useState<Record<string, number>>({});
   // DM partner full profile (for BIO panel)
   const [dmPartnerProfile, setDmPartnerProfile] = useState<UserProfile | null>(null);
-  const [dmRightTab, setDmRightTab]             = useState<'profile'|'media'|'links'|'calls'>('profile');
+  const [dmRightTab, setDmRightTab]             = useState<'profile'|'media'|'links'|'calls'|'pinned'>('profile');
   // Messages loading
   const [msgsLoading, setMsgsLoading]           = useState(false);
 
@@ -3367,6 +3703,7 @@ export default function App() {
   const [showChatAvatars, setShowChatAvatars]   = useState<boolean>(true);
   const [messageAnimations, setMessageAnimations] = useState<boolean>(true);
   const [showLinkPreviews, setShowLinkPreviews] = useState<boolean>(true);
+  const [streamerMode, setStreamerMode]           = useState<boolean>(() => localStorage.getItem('cordyn_streamer') === '1');
 
   // Formatting toolbar visibility
   const [showFmtBar, setShowFmtBar] = useState<boolean>(false);
@@ -3380,6 +3717,8 @@ export default function App() {
   // Steam game session start timestamps (userId → Date.now() when game started)
   const steamGameStartRef                      = useRef<Map<string, number>>(new Map());
   const [gameTick, setGameTick]                = useState(0); // ticks every 60s to refresh elapsed time
+  const [userNotes, setUserNotes]               = useState<Map<string, string>>(new Map());
+  const userNoteDebounceRef                      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statusPickerRef                        = useRef<HTMLDivElement>(null);
   const notifBellRef                           = useRef<HTMLDivElement>(null);
 
@@ -3729,6 +4068,12 @@ export default function App() {
       setDmMsgs(p => p.map(m => m.id === id ? { ...m, content, edited } : m)));
     sock.on('dm_message_deleted', ({ id }: any) =>
       setDmMsgs(p => p.map(m => m.id === id ? { ...m, content: '__deleted__', deleted: true } : m)));
+    sock.on('dm_message_pinned', ({ id, pinned }: any) => {
+      setDmMsgs(p => p.map(m => m.id === id ? { ...m, pinned } : m));
+    });
+    sock.on('poll_updated', (pollData: any) => {
+      setPolls(p => new Map(p).set(pollData.id, pollData));
+    });
     // dm_read: the other user has read our messages in this conversation
     sock.on('dm_read', ({ reader_id, read_at }: any) => {
       setDmReadStates(p => ({ ...p, [reader_id]: read_at }));
@@ -4165,7 +4510,12 @@ export default function App() {
     setEditingRole(null);      // edytowana rola jest per-serwer
     serversApi.get(activeServer).then(s => {
       setServerFull(s);
-      setSrvForm({ name: s.name, description: s.description||'', icon_url: s.icon_url||'', banner_url: s.banner_url||'' });
+      setSrvForm({ name: s.name, description: s.description||'', icon_url: s.icon_url||'', banner_url: s.banner_url||'', accent_color: (s as any).accent_color||'indigo' });
+      setServerAccentColor((s as any).accent_color||'indigo');
+      // Load server emojis
+      emojisApi.list(activeServer).then(emojis => {
+        setServerEmojis(p => new Map(p).set(activeServer, emojis));
+      }).catch(() => {});
       // Always auto-select first non-voice channel when switching servers
       const first = s.categories.flatMap(c => c.channels).find(ch => ch.type !== 'voice');
       setActiveChannel(first?.id || '');
@@ -4182,6 +4532,18 @@ export default function App() {
   useEffect(() => {
     if (activeView !== 'servers') setTypingUsers({});
   }, [activeView]);
+
+  // ── Load polls referenced in messages ──────────────────────────
+  useEffect(() => {
+    const allMsgs = [...channelMsgs, ...dmMsgs];
+    allMsgs.forEach(m => {
+      const match = m.content?.match(/^\[POLL:([^\]]+)\]/);
+      if (match && !polls.has(match[1])) {
+        pollsApi.get(match[1]).then(p => setPolls(prev => new Map(prev).set(p.id, p))).catch(() => {});
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channelMsgs.length, dmMsgs.length]);
 
   // ── Channel change ──────────────────────────────────────────────
   useEffect(() => {
@@ -4215,6 +4577,8 @@ export default function App() {
     setDmRightTab('profile');
     // Mark conversation as read when opening
     dmsApi.markRead(activeDmUserId).catch(() => {});
+    // Load pinned DM messages
+    dmPinApi.pinned(activeDmUserId).then(setDmPinnedMsgs).catch(() => {});
   }, [activeDmUserId]);
 
   // ── Call duration timer ─────────────────────────────────────────
@@ -4384,6 +4748,7 @@ export default function App() {
   useEffect(() => { if (selMic)     localStorage.setItem('cordyn_mic',     selMic);     }, [selMic]);
   useEffect(() => { if (selSpeaker) localStorage.setItem('cordyn_speaker', selSpeaker); }, [selSpeaker]);
   useEffect(() => { if (selCamera)  localStorage.setItem('cordyn_camera',  selCamera);  }, [selCamera]);
+  useEffect(() => { localStorage.setItem('cordyn_streamer', streamerMode ? '1' : '0'); }, [streamerMode]);
 
   // ── WebRTC voice signaling handlers ─────────────────────────────
   // These are updated via ref so socket callbacks always get latest version
@@ -4733,6 +5098,15 @@ export default function App() {
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     const content = msgInput.trim();
+    // /poll command — open poll modal
+    if (content.startsWith('/poll')) {
+      setMsgInput('');
+      setPollQuestion('');
+      setPollOptions(['', '']);
+      setPollMulti(false);
+      setPollModal({ open: true });
+      return;
+    }
     if ((!content && !attachFile) || sending) return;
     setSending(true); setSendError('');
     let attachUrl: string | undefined;
@@ -4870,7 +5244,7 @@ export default function App() {
       let icon = srvForm.icon_url, banner = srvForm.banner_url;
       if (srvIconFile)   { icon   = await uploadFile(srvIconFile, 'servers');   setSrvIconFile(null); }
       if (srvBannerFile) { banner = await uploadFile(srvBannerFile, 'servers'); setSrvBannerFile(null); }
-      const upd = await serversApi.update(activeServer, { name: srvForm.name, description: srvForm.description, icon_url: icon, banner_url: banner });
+      const upd = await serversApi.update(activeServer, { name: srvForm.name, description: srvForm.description, icon_url: icon, banner_url: banner, accent_color: (srvForm as any).accent_color } as any);
       setServerList(p => p.map(s => s.id === activeServer ? { ...s, ...upd } : s));
       // Update form with saved URLs so preview doesn't disappear
       setSrvForm(p => ({...p, icon_url: upd.icon_url||icon, banner_url: upd.banner_url||banner}));
@@ -5100,10 +5474,24 @@ export default function App() {
       steamApi.status().then(setOwnSteam).catch(()=>{});
       spotifyApi.jamActive().then(setMyJam).catch(()=>{});
     }
+    // Load user note for other users
+    if (userId !== currentUser?.id && !userNotes.has(userId)) {
+      notesApi.get(userId).then(r => {
+        setUserNotes(p => new Map(p).set(userId, r.content || ''));
+      }).catch(() => {});
+    }
   };
   const closeProfilePage = () => { setProfileViewId(null); setProfilePageData(null); };
   const openProfile = (u: any) => { if (u?.id) openProfilePage(u.id); };
   const openOwnProfile = () => { if (currentUser?.id) openProfilePage(currentUser.id); };
+
+  const saveUserNote = (userId: string, content: string) => {
+    setUserNotes(p => new Map(p).set(userId, content));
+    if (userNoteDebounceRef.current) clearTimeout(userNoteDebounceRef.current);
+    userNoteDebounceRef.current = setTimeout(async () => {
+      try { await notesApi.save(userId, content); } catch {}
+    }, 1000);
+  };
 
   // ── Hover card ────────────────────────────────────────────────────
   const showHoverCard = (userId: string, e: React.MouseEvent) => {
@@ -5812,7 +6200,7 @@ export default function App() {
             <Settings size={15}/>
           </button>
           <button onClick={openOwnProfile} className="w-7 h-7 rounded-full border-2 border-white/[0.08] overflow-hidden hover:border-indigo-500/50 transition-all shrink-0 shadow-sm">
-            <img src={currentUser ? ava(currentUser) : ''} alt="" className="w-full h-full object-cover"/>
+            <img src={streamerMode ? 'https://api.dicebear.com/7.x/initials/svg?seed=S&backgroundColor=6366f1&fontColor=ffffff' : (currentUser ? ava(currentUser) : '')} alt="" className="w-full h-full object-cover"/>
           </button>
         </div>
       </nav>
@@ -6195,7 +6583,7 @@ export default function App() {
             <div className="flex items-center gap-2.5 px-2 py-2 rounded-2xl hover:bg-white/[0.05] transition-colors cursor-default">
               {/* Avatar + status dot — click opens picker */}
               <div className="relative shrink-0 cursor-pointer" onClick={()=>setStatusPickerOpen(p=>!p)} title="Zmień status">
-                <img src={currentUser?ava(currentUser):''} className={`w-8 h-8 rounded-full object-cover av-eff-${avatarEffect} av-sc-xs`} alt=""/>
+                <img src={streamerMode ? 'https://api.dicebear.com/7.x/initials/svg?seed=S&backgroundColor=6366f1&fontColor=ffffff' : (currentUser?ava(currentUser):'')} className={`w-8 h-8 rounded-full object-cover av-eff-${avatarEffect} av-sc-xs`} alt=""/>
                 {/* Status dot — red phone when in call, else normal status */}
                 {activeCall ? (
                   <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-rose-500 border-2 border-[#181828] rounded-full flex items-center justify-center">
@@ -6208,7 +6596,7 @@ export default function App() {
 
               {/* Name + status label */}
               <div className="flex-1 min-w-0 cursor-pointer" onClick={openOwnProfile}>
-                <p className="text-sm font-semibold text-white leading-tight truncate hover:text-zinc-300 transition-colors">{currentUser?.username}</p>
+                <p className="text-sm font-semibold text-white leading-tight truncate hover:text-zinc-300 transition-colors">{streamerMode ? 'Streamer' : currentUser?.username}</p>
                 <p className="text-xs truncate leading-tight mt-0.5">
                   {activeCall ? (
                     <span className="text-rose-400">W trakcie rozmowy</span>
@@ -6234,6 +6622,12 @@ export default function App() {
                 </button>
                 <button title="Ustawienia aplikacji" onClick={()=>{setAppSettTab('account');setAppSettOpen(true);}}
                   className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all"><Settings size={13}/></button>
+                <button title={streamerMode ? 'Wyłącz tryb streamera (aktywny)' : 'Tryb streamera'}
+                  onClick={() => setStreamerMode(p => !p)}
+                  className={`w-7 h-7 flex items-center justify-center rounded-md transition-all ${
+                    streamerMode ? 'text-red-400 bg-red-500/10 hover:bg-red-500/20' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07]'}`}>
+                  {streamerMode ? <EyeOff size={13}/> : <Eye size={13}/>}
+                </button>
               </div>
             </div>
           </div>
@@ -6893,6 +7287,9 @@ export default function App() {
               openNewRole={openNewRole} openEditRole={openEditRole} handleDeleteRole={handleDeleteRole}
               currentUser={currentUser}
               onClose={() => setSrvSettOpen(false)}
+              streamerMode={streamerMode}
+              serverEmojis={serverEmojis.get(activeServer)||[]}
+              activeServer={activeServer}
             />
           ) : activeView==='admin' ? (
             <AdminPanel
@@ -7496,7 +7893,57 @@ export default function App() {
                                 <Trash2 size={12} className="text-zinc-600 shrink-0"/>
                                 <p className="text-sm italic text-zinc-600">Wiadomość została usunięta</p>
                               </div>
-                            ) : (
+                            ) : msg.content?.startsWith('[POLL:') ? (() => {
+                              const pollIdMatch = msg.content.match(/^\[POLL:([^\]]+)\]/);
+                              const pollId = pollIdMatch?.[1];
+                              const poll = pollId ? polls.get(pollId) : null;
+                              if (!poll) {
+                                return (
+                                  <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-4 max-w-xs">
+                                    <div className="flex items-center gap-2 text-zinc-600 text-xs">
+                                      <BarChart2 size={13}/>
+                                      <span>Ładowanie ankiety...</span>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              const totalVotes = poll.total_votes || 0;
+                              return (
+                                <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-4 max-w-xs w-full">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <BarChart2 size={14} className="text-indigo-400 shrink-0"/>
+                                    <p className="text-sm font-bold text-white">{poll.question}</p>
+                                  </div>
+                                  <div className="flex flex-col gap-2">
+                                    {poll.options.map(opt => {
+                                      const count = poll.votes[opt.id] || 0;
+                                      const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+                                      const voted = poll.my_votes?.includes(opt.id);
+                                      return (
+                                        <button key={opt.id}
+                                          onClick={async () => {
+                                            try {
+                                              const updated = voted
+                                                ? await pollsApi.unvote(poll.id, opt.id)
+                                                : await pollsApi.vote(poll.id, opt.id);
+                                              setPolls(p => new Map(p).set(poll.id, updated));
+                                            } catch {}
+                                          }}
+                                          className={`relative flex items-center gap-2 px-3 py-2 rounded-xl border text-left overflow-hidden transition-all ${
+                                            voted ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-white/[0.08] hover:border-white/[0.15] bg-white/[0.02]'}`}>
+                                          <div className="absolute inset-0 bg-indigo-500/10 origin-left transition-all duration-500"
+                                            style={{transform:`scaleX(${pct/100})`}}/>
+                                          <span className={`relative text-xs font-medium flex-1 ${voted ? 'text-indigo-300' : 'text-zinc-300'}`}>{opt.text}</span>
+                                          <span className="relative text-[10px] text-zinc-600 shrink-0">{pct}%</span>
+                                          {voted && <Check size={10} className="relative text-indigo-400 shrink-0"/>}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                  <p className="text-[10px] text-zinc-600 mt-2">{totalVotes} głosów</p>
+                                </div>
+                              );
+                            })() : (
                               <div className={`relative px-4 py-2.5 rounded-2xl max-w-full ${isOwn
                                 ? 'bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-lg shadow-indigo-500/20 bubble-tail-right'
                                 : 'glass-bubble text-zinc-100 bubble-tail-left'
@@ -7538,6 +7985,26 @@ export default function App() {
                             {activeView==='servers'&&canPinMessages&&activeCh?.type==='text'&&(
                               <button onClick={()=>{const pinned=!(msg as MessageFull).pinned;handlePinMessage(msg.id,pinned);}} title={(msg as MessageFull).pinned?'Odepnij':'Przypnij'}
                                 className={`w-6 h-6 flex items-center justify-center rounded-lg transition-colors ${(msg as MessageFull).pinned?'text-amber-400 hover:bg-amber-500/10':'text-zinc-600 hover:bg-white/[0.1] hover:text-amber-400'}`}>
+                                <Pin size={10}/>
+                              </button>
+                            )}
+                            {activeView==='dms' && (
+                              <button
+                                onClick={async () => {
+                                  const isPinned = !!(msg as any).pinned;
+                                  try {
+                                    await dmPinApi.pin(msg.id);
+                                    const newPinned = !isPinned;
+                                    setDmMsgs(p => p.map(m => m.id === msg.id ? {...m, pinned: newPinned} : m));
+                                    if (newPinned) {
+                                      setDmPinnedMsgs(p => [msg as DmMessageFull, ...p.filter(x => x.id !== msg.id)]);
+                                    } else {
+                                      setDmPinnedMsgs(p => p.filter(x => x.id !== msg.id));
+                                    }
+                                  } catch {}
+                                }}
+                                title={(msg as any).pinned ? 'Odepnij' : 'Przypnij'}
+                                className={`w-6 h-6 flex items-center justify-center rounded-lg transition-colors ${(msg as any).pinned ? 'text-amber-400 hover:bg-amber-500/10' : 'text-zinc-600 hover:bg-white/[0.1] hover:text-amber-400'}`}>
                                 <Pin size={10}/>
                               </button>
                             )}
@@ -7772,7 +8239,7 @@ export default function App() {
                             className={`transition-all active:scale-90 ${showEmojiPicker ? 'text-indigo-400' : 'text-zinc-600 hover:text-zinc-400'}`}>
                             <Smile size={17}/>
                           </button>
-                          {showEmojiPicker && <EmojiPicker onSelect={insertEmoji} onClose={() => setShowEmojiPicker(false)}/>}
+                          {showEmojiPicker && <EmojiPicker onSelect={insertEmoji} onClose={() => setShowEmojiPicker(false)} serverEmojis={activeView==='servers'&&activeServer ? (serverEmojis.get(activeServer)||[]) : []}/>}
                         </div>
                         <button type="submit" disabled={(!msgInput.trim()&&!attachFile)||sending}
                           className="w-8 h-8 rounded-xl bg-indigo-500 hover:bg-indigo-400 disabled:opacity-25 disabled:cursor-not-allowed flex items-center justify-center text-white transition-all duration-150 active:scale-90 shrink-0 shadow-lg shadow-indigo-500/25">
@@ -7995,11 +8462,12 @@ export default function App() {
               m.content.includes('📞') || m.content.includes('📹')
             );
 
-            const DM_TABS: { id: 'profile'|'media'|'links'|'calls'; label: string; icon: React.ReactNode; count?: number }[] = [
+            const DM_TABS: { id: 'profile'|'media'|'links'|'calls'|'pinned'; label: string; icon: React.ReactNode; count?: number }[] = [
               { id: 'profile', label: 'Profil',     icon: <Users size={13}/> },
               { id: 'media',   label: 'Media',      icon: <Image size={13}/>,  count: mediaItems.length },
               { id: 'links',   label: 'Linki',      icon: <Link2 size={13}/>,  count: linkItems.length },
               { id: 'calls',   label: 'Połączenia', icon: <Phone size={13}/>,  count: callItems.length },
+              { id: 'pinned',  label: 'Przypięte',  icon: <Pin size={13}/>,    count: dmPinnedMsgs.length },
             ];
 
             return (
@@ -8074,6 +8542,17 @@ export default function App() {
                             </p>
                           </div>
                         )}
+                        {/* Private note */}
+                        <div>
+                          <label className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5 block">Prywatna notatka</label>
+                          <textarea
+                            value={userNotes.get(dmPartnerProfile.id) || ''}
+                            onChange={e => saveUserNote(dmPartnerProfile.id, e.target.value)}
+                            placeholder="Dodaj notatkę o tej osobie..."
+                            rows={3}
+                            className="w-full text-xs bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2 text-zinc-300 placeholder-zinc-600 resize-none outline-none focus:border-indigo-500/40 transition-all"
+                          />
+                        </div>
                       </motion.div>
                     )}
 
@@ -8218,6 +8697,29 @@ export default function App() {
                             );
                           })
                         )}
+                      </motion.div>
+                    )}
+
+                    {/* ── PINNED DM MESSAGES ── */}
+                    {dmRightTab==='pinned' && (
+                      <motion.div key="pinned" initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-6}}
+                        transition={{duration:0.15}} className="p-3 flex flex-col gap-2">
+                        {dmPinnedMsgs.length === 0 ? (
+                          <div className="text-center text-zinc-600 text-xs py-8">
+                            <Pin size={28} className="mx-auto mb-2 text-zinc-700"/>
+                            Brak przypiętych wiadomości
+                          </div>
+                        ) : dmPinnedMsgs.map(m => (
+                          <div key={m.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <img src={m.sender_avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(m.sender_username)}`}
+                                className="w-5 h-5 rounded-full object-cover" alt=""/>
+                              <span className="text-[11px] font-semibold text-zinc-300">{m.sender_username}</span>
+                              <span className="text-[10px] text-zinc-600 ml-auto">{new Date(m.created_at).toLocaleDateString('pl-PL')}</span>
+                            </div>
+                            <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3">{m.content}</p>
+                          </div>
+                        ))}
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -8791,7 +9293,7 @@ export default function App() {
                       <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-3">
                         <p className="text-[10px] text-zinc-600 mb-1.5">KOD</p>
                         <div className="flex items-center gap-2">
-                          <code className="text-white font-mono text-sm flex-1">{inviteCode}</code>
+                          <code className="text-white font-mono text-sm flex-1">{streamerMode ? '••••••••••' : inviteCode}</code>
                           <button onClick={()=>navigator.clipboard.writeText(inviteCode)} className="text-xs text-indigo-400 hover:text-indigo-300">Kopiuj</button>
                         </div>
                       </div>
@@ -8802,6 +9304,85 @@ export default function App() {
             </motion.div>
           </motion.div>
         )}
+
+      {/* Poll Creation Modal */}
+      <AnimatePresence>
+        {pollModal.open && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4"
+            onClick={() => setPollModal({open:false})}>
+            <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
+              onClick={e=>e.stopPropagation()} className={`${gm} p-7 w-full max-w-md`}>
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2"><BarChart2 size={18} className="text-indigo-400"/> Utwórz ankietę</h2>
+                <button onClick={()=>setPollModal({open:false})} className="text-zinc-600 hover:text-white"><X size={17}/></button>
+              </div>
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Pytanie</label>
+                  <input value={pollQuestion} onChange={e=>setPollQuestion(e.target.value)}
+                    placeholder="Wpisz pytanie ankiety..." className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
+                </div>
+                <div>
+                  <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Opcje ({pollOptions.length})</label>
+                  <div className="flex flex-col gap-2">
+                    {pollOptions.map((opt, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <input value={opt} onChange={e=>{const n=[...pollOptions];n[i]=e.target.value;setPollOptions(n);}}
+                          placeholder={`Opcja ${i+1}`} className={`flex-1 ${gi} rounded-xl px-4 py-2 text-sm`}/>
+                        {pollOptions.length > 2 && (
+                          <button onClick={()=>setPollOptions(p=>p.filter((_,j)=>j!==i))}
+                            className="w-7 h-7 text-rose-400 hover:bg-rose-500/10 rounded-lg flex items-center justify-center transition-colors">
+                            <X size={12}/>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {pollOptions.length < 10 && (
+                      <button onClick={()=>setPollOptions(p=>[...p,''])}
+                        className={`text-xs ${gb} px-3 py-2 rounded-xl flex items-center gap-1.5`}>
+                        <Plus size={11}/> Dodaj opcję
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-xl px-4 py-3">
+                  <div>
+                    <p className="text-sm text-white font-medium">Wielokrotny wybór</p>
+                    <p className="text-xs text-zinc-600">Pozwól głosować na więcej niż jedną opcję</p>
+                  </div>
+                  <button onClick={()=>setPollMulti(p=>!p)}
+                    className={`w-10 h-5 rounded-full transition-all shrink-0 relative ${pollMulti ? 'bg-indigo-500' : 'bg-zinc-700'}`}>
+                    <span className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-200"
+                      style={{left: pollMulti ? 'calc(100% - 1.125rem)' : '0.125rem'}}/>
+                  </button>
+                </div>
+                <button
+                  disabled={!pollQuestion.trim() || pollOptions.filter(o=>o.trim()).length < 2}
+                  onClick={async () => {
+                    const opts = pollOptions.filter(o=>o.trim()).map(text=>({id: Math.random().toString(36).slice(2), text}));
+                    try {
+                      const poll = await pollsApi.create({
+                        question: pollQuestion.trim(),
+                        options: opts,
+                        multi_vote: pollMulti,
+                      });
+                      setPolls(p => new Map(p).set(poll.id, poll));
+                      // Send a message with poll reference
+                      const content = `[POLL:${poll.id}] ${pollQuestion.trim()}`;
+                      if (activeView === 'dms' && activeDmUserId) await dmsApi.send(activeDmUserId, content, {});
+                      else if (activeChannel) await messagesApi.send(activeChannel, content, {});
+                      setPollModal({open:false});
+                    } catch (err: any) { addToast(err?.message || 'Błąd tworzenia ankiety', 'error'); }
+                  }}
+                  className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-colors">
+                  Utwórz ankietę
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Channel Edit */}
       <AnimatePresence>
@@ -9393,6 +9974,22 @@ export default function App() {
                         ))}
                       </div>
 
+                      {/* Streamer mode */}
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Tryb Streamera</label>
+                        <div className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-3 hover:border-white/[0.09] transition-colors">
+                          <div className="flex-1 min-w-0 mr-4">
+                            <p className="text-sm font-medium text-white">Tryb Streamera</p>
+                            <p className="text-xs text-zinc-600 mt-0.5">Ukrywa Twoje dane — nickname, avatar i linki zaproszeń są maskowane podczas streamów</p>
+                          </div>
+                          <button onClick={() => setStreamerMode(p => !p)}
+                            className={`w-11 h-6 rounded-full transition-all shrink-0 relative ${streamerMode ? 'bg-indigo-500' : 'bg-zinc-700'}`}>
+                            <span className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200"
+                              style={{left: streamerMode ? 'calc(100% - 1.375rem)' : '0.125rem'}}/>
+                          </button>
+                        </div>
+                      </div>
+
                       {/* Avatar effects */}
                       <div>
                         <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Efekty avatara</label>
@@ -9549,6 +10146,44 @@ export default function App() {
                             </button>
                           </div>
                         )}
+                      </div>
+
+                      {/* ── PUSH NOTIFICATIONS ── */}
+                      <div className="p-4 bg-indigo-500/5 border border-indigo-500/15 rounded-2xl">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Bell size={15} className="text-indigo-400"/>
+                          <h4 className="text-sm font-bold text-white">Powiadomienia Push</h4>
+                        </div>
+                        <p className="text-xs text-zinc-500 mb-3 leading-relaxed">
+                          Otrzymuj powiadomienia push o nowych wiadomościach nawet gdy aplikacja jest w tle lub zamknięta.
+                        </p>
+                        <button onClick={async () => {
+                          if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+                            addToast('Twoja przeglądarka nie obsługuje powiadomień push', 'error');
+                            return;
+                          }
+                          const perm = await Notification.requestPermission();
+                          if (perm !== 'granted') {
+                            addToast('Brak zgody na powiadomienia', 'error');
+                            return;
+                          }
+                          try {
+                            const reg = await navigator.serviceWorker.ready;
+                            // Use public VAPID key (demo — replace with real key in production)
+                            const sub = await reg.pushManager.subscribe({
+                              userVisibleOnly: true,
+                              applicationServerKey: 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjZEkIbPV3Jo8VrHH16NInS95-qPs',
+                            }).catch(() => null);
+                            if (!sub) throw new Error('Subskrypcja nieudana');
+                            await pushApi.subscribe(sub);
+                            addToast('Powiadomienia push włączone!', 'success');
+                          } catch (e: any) {
+                            addToast(e?.message || 'Błąd aktywacji push', 'error');
+                          }
+                        }}
+                          className="text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 border border-indigo-500/30 px-4 py-2 rounded-xl transition-all flex items-center gap-2">
+                          <Bell size={13}/> Włącz powiadomienia push
+                        </button>
                       </div>
 
                       <div className="mt-2 p-4 bg-rose-500/5 border border-rose-500/15 rounded-2xl">
