@@ -1341,6 +1341,86 @@ const BADGE_ICON_MAP: Record<string, LucideIcon> = {
 const getBadgeIcon = (name: string): LucideIcon => BADGE_ICON_MAP[name] ?? Award;
 
 // ─── Server Settings Page ─────────────────────────────────────────────────────
+// ─── Emoji Tab (osobny komponent — hooks muszą być w komponentach, nie w IIFE) ──
+function EmojiTab({ serverId, initialEmojis, canManage, gi }: {
+  serverId: string;
+  initialEmojis: ServerEmoji[];
+  canManage: boolean;
+  gi: string;
+}) {
+  const [localEmojis, setLocalEmojis] = React.useState<ServerEmoji[]>(initialEmojis);
+  const [emojiUploading, setEmojiUploading] = React.useState(false);
+
+  React.useEffect(() => { setLocalEmojis(initialEmojis); }, [initialEmojis]);
+
+  return (
+    <div className="max-w-2xl mx-auto flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-bold text-white">Niestandardowe Emoji ({localEmojis.length}/50)</h2>
+          <p className="text-xs text-zinc-600 mt-0.5">Własne emoji dostępne dla wszystkich na serwerze w pickerze</p>
+        </div>
+      </div>
+      {localEmojis.length === 0 && !emojiUploading && (
+        <div className="flex flex-col items-center gap-2 py-10 text-center">
+          <Smile size={28} className="text-zinc-700"/>
+          <p className="text-sm text-zinc-500">Brak emoji — dodaj własne obrazki</p>
+          <p className="text-xs text-zinc-700">PNG, GIF lub WebP, maks. 256KB</p>
+        </div>
+      )}
+      {localEmojis.length > 0 && (
+        <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
+          {localEmojis.map(e => (
+            <div key={e.id} className="flex flex-col items-center gap-1.5 bg-white/[0.03] border border-white/[0.05] rounded-xl p-2 group relative hover:border-white/[0.1] transition-colors">
+              <img src={e.image_url} alt={e.name} className="w-10 h-10 object-contain rounded-lg"/>
+              <span className="text-[10px] text-zinc-400 truncate w-full text-center">:{e.name}:</span>
+              {canManage && (
+                <button
+                  onClick={async () => {
+                    try {
+                      await emojisApi.delete(serverId, e.id);
+                      setLocalEmojis(p => p.filter(x => x.id !== e.id));
+                    } catch {}
+                  }}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-500 rounded-full text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-400">
+                  <X size={9}/>
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {canManage && localEmojis.length < 50 && (
+        <label className={`cursor-pointer flex items-center gap-2 text-sm font-semibold border px-4 py-3 rounded-xl transition-all ${
+          emojiUploading
+            ? 'bg-zinc-800/50 border-white/[0.05] text-zinc-600 cursor-not-allowed'
+            : 'bg-indigo-500/10 hover:bg-indigo-500/20 border-indigo-500/20 text-indigo-400'}`}>
+          {emojiUploading
+            ? <><Loader2 size={14} className="animate-spin"/> Wgrywanie...</>
+            : <><Upload size={14}/> Dodaj emoji (PNG/GIF/WebP, maks. 256KB)</>}
+          <input type="file" accept="image/png,image/gif,image/webp" disabled={emojiUploading} className="hidden"
+            onChange={async e => {
+              const f = e.target.files?.[0];
+              if (!f) return;
+              if (f.size > 256 * 1024) { alert('Plik za duży — maks. 256KB'); e.target.value = ''; return; }
+              setEmojiUploading(true);
+              try {
+                const rawName = f.name.replace(/\.[^.]+$/, '').replace(/[^a-z0-9_]/gi, '_').toLowerCase().slice(0, 32) || 'emoji';
+                const imageUrl = await uploadFile(f, 'emojis');
+                const created = await emojisApi.create(serverId, rawName, imageUrl);
+                setLocalEmojis(p => [...p, created]);
+              } catch (err: any) {
+                alert('Błąd wgrywania: ' + (err?.message || 'nieznany'));
+              }
+              setEmojiUploading(false);
+              e.target.value = '';
+            }}/>
+        </label>
+      )}
+    </div>
+  );
+}
+
 // ─── Automations Tab (osobny komponent — hooks mogą być używane tylko w komponentach) ──
 function AutomationsTab({ serverId, gi }: { serverId: string; gi: string }) {
   const [automations, setAutomations] = React.useState<import('./api').ServerAutomation[]>([]);
@@ -1869,80 +1949,14 @@ function ServerSettingsPage({
           )}
 
           {/* ── Emoji ── */}
-          {tab === 'emoji' && (() => {
-            // Lokalny stan emoji — niezależny od propa, odświeża się po upload/delete
-            const [localEmojis, setLocalEmojis] = React.useState<ServerEmoji[]>(serverEmojis || []);
-            const [emojiUploading, setEmojiUploading] = React.useState(false);
-            // Sync gdy prop się zmienia (np. pierwsze załadowanie)
-            React.useEffect(() => { setLocalEmojis(serverEmojis || []); }, [serverEmojis]);
-            return (
-              <div className="max-w-2xl mx-auto flex flex-col gap-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-base font-bold text-white">Niestandardowe Emoji ({localEmojis.length}/50)</h2>
-                    <p className="text-xs text-zinc-600 mt-0.5">Własne emoji dostępne dla wszystkich na serwerze w pickerze</p>
-                  </div>
-                </div>
-                {localEmojis.length === 0 && !emojiUploading && (
-                  <div className="flex flex-col items-center gap-2 py-10 text-center">
-                    <Smile size={28} className="text-zinc-700"/>
-                    <p className="text-sm text-zinc-500">Brak emoji — dodaj własne obrazki</p>
-                    <p className="text-xs text-zinc-700">PNG, GIF lub WebP, maks. 256KB, nazwa: litery/cyfry/_</p>
-                  </div>
-                )}
-                {localEmojis.length > 0 && (
-                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
-                    {localEmojis.map(e => (
-                      <div key={e.id} className="flex flex-col items-center gap-1.5 bg-white/[0.03] border border-white/[0.05] rounded-xl p-2 group relative hover:border-white/[0.1] transition-colors">
-                        <img src={e.image_url} alt={e.name} className="w-10 h-10 object-contain rounded-lg"/>
-                        <span className="text-[10px] text-zinc-400 truncate w-full text-center">:{e.name}:</span>
-                        {canManageServer && (
-                          <button
-                            onClick={async () => {
-                              if (!activeServer) return;
-                              try {
-                                await emojisApi.delete(activeServer, e.id);
-                                setLocalEmojis(p => p.filter(x => x.id !== e.id));
-                              } catch {}
-                            }}
-                            className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-500 rounded-full text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-400">
-                            <X size={9}/>
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {canManageServer && localEmojis.length < 50 && (
-                  <label className={`cursor-pointer flex items-center gap-2 text-sm font-semibold border px-4 py-3 rounded-xl transition-all ${
-                    emojiUploading
-                      ? 'bg-zinc-800/50 border-white/[0.05] text-zinc-600 cursor-not-allowed'
-                      : 'bg-indigo-500/10 hover:bg-indigo-500/20 border-indigo-500/20 text-indigo-400'}`}>
-                    {emojiUploading
-                      ? <><Loader2 size={14} className="animate-spin"/> Wgrywanie...</>
-                      : <><Upload size={14}/> Dodaj emoji (PNG/GIF/WebP, maks. 256KB)</>
-                    }
-                    <input type="file" accept="image/png,image/gif,image/webp" disabled={emojiUploading} className="hidden" onChange={async e => {
-                      const f = e.target.files?.[0];
-                      if (!f || !activeServer) return;
-                      if (f.size > 256 * 1024) { alert('Plik za duży — maks. 256KB'); e.target.value = ''; return; }
-                      setEmojiUploading(true);
-                      try {
-                        const rawName = f.name.replace(/\.[^.]+$/, '').replace(/[^a-z0-9_]/gi, '_').toLowerCase().slice(0, 32) || 'emoji';
-                        const imageUrl = await uploadFile(f, 'emojis');
-                        const created = await emojisApi.create(activeServer, rawName, imageUrl);
-                        setLocalEmojis(p => [...p, created]);
-                      } catch (err: any) {
-                        alert('Błąd wgrywania: ' + (err?.message || 'nieznany'));
-                      }
-                      setEmojiUploading(false);
-                      e.target.value = '';
-                    }}/>
-                  </label>
-                )}
-              </div>
-            );
-          })()}
+          {tab === 'emoji' && activeServer && (
+            <EmojiTab
+              serverId={activeServer}
+              initialEmojis={serverEmojis || []}
+              canManage={canManageServer}
+              gi={gi}
+            />
+          )}
 
           {/* ── Automatyzacje ── */}
           {tab === 'automations' && activeServer && (
