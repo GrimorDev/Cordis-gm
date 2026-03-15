@@ -24,7 +24,7 @@ import {
   type DmMessageFull, type FriendEntry, type FriendRequest,
   type ServerMember, type ForumPost, type ForumReply, type ServerBan,
   type Badge, type AdminStats, type AdminUser, type AdminServer, type AdminOverview,
-  type FavoriteGame, type SpotifyData, type SpotifyTrack, type TwitchData, type TwitchStream, type SteamData, type SteamGame,
+  type FavoriteGame, type SpotifyData, type SpotifyTrack, type SpotifyJamSession, type SpotifyVoiceDj, type TwitchData, type TwitchStream, type SteamData, type SteamGame,
   type TwoFactorStatus, type LoginResult, ApiError
 } from './api';
 import {
@@ -1687,6 +1687,7 @@ function ProfilePage({
   onTwitchConnect, onTwitchDisconnect, onTwitchToggle,
   onSteamConnect, onSteamDisconnect, onSteamToggle,
   friends, blockedUsers, addToast,
+  myJam, jamLoading, onJamStart, onJamStop, onJamJoin, onJamLeave, viewedUserJam,
 }: {
   viewUserId: string; profileData: UserProfile|null; games: FavoriteGame[];
   spotify: SpotifyData|null; ownSpotify: SpotifyData|null;
@@ -1712,6 +1713,10 @@ function ProfilePage({
   onSteamConnect: ()=>void; onSteamDisconnect: ()=>void; onSteamToggle: (v:boolean)=>void;
   friends: {id:string}[]; blockedUsers: Set<string>;
   addToast: (m:string,t?:any)=>void;
+  myJam: SpotifyJamSession; jamLoading: boolean;
+  onJamStart: ()=>void; onJamStop: ()=>void;
+  onJamJoin: (hostId:string)=>void; onJamLeave: ()=>void;
+  viewedUserJam?: { jam_id: string; host: any; members: any[] } | null;
 }) {
   const isOwn   = currentUser?.id === viewUserId;
   const user    = profileData || (isOwn ? currentUser : null);
@@ -2064,9 +2069,63 @@ function ProfilePage({
                       </button>
                     </div>
                     <SpotifyDisplay spotify={spotifyToShow || ownSpotify}/>
+                    {/* JAM controls for own profile */}
+                    <div className="mt-3">
+                      {myJam.role === 'host' ? (
+                        <div className="bg-[#1DB954]/8 border border-[#1DB954]/20 rounded-2xl px-4 py-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 bg-[#1DB954] rounded-full animate-pulse"/>
+                              <span className="text-xs font-bold text-[#1DB954]">JAM aktywny</span>
+                              <span className="text-xs text-zinc-500">{myJam.members.length} słuchaczy</span>
+                            </div>
+                            <button onClick={onJamStop} disabled={jamLoading}
+                              className="text-xs text-zinc-600 hover:text-rose-400 transition-all">
+                              Zakończ JAM
+                            </button>
+                          </div>
+                        </div>
+                      ) : myJam.role === 'listener' ? (
+                        <div className="bg-[#1DB954]/8 border border-[#1DB954]/20 rounded-2xl px-4 py-3 flex items-center justify-between">
+                          <span className="text-xs text-[#1DB954]">Słuchasz razem z {myJam.host?.username}</span>
+                          <button onClick={onJamLeave} disabled={jamLoading}
+                            className="text-xs text-zinc-600 hover:text-rose-400 transition-all">
+                            Opuść JAM
+                          </button>
+                        </div>
+                      ) : ownSpotify?.connected ? (
+                        <button onClick={onJamStart} disabled={jamLoading}
+                          className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-[#1DB954]/10 hover:bg-[#1DB954]/20 border border-[#1DB954]/20 text-[#1DB954] text-xs font-semibold transition-all active:scale-95">
+                          <SpotifyIcon size={13}/> {jamLoading ? 'Ładowanie...' : 'Rozpocznij JAM'}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 ) : spotifyToShow?.connected && spotifyToShow?.show_on_profile ? (
-                  <SpotifyDisplay spotify={spotifyToShow}/>
+                  <>
+                    <SpotifyDisplay spotify={spotifyToShow}/>
+                    {/* JAM join button for friend's profile */}
+                    {viewedUserJam && (
+                      <div className="mt-3 bg-[#1DB954]/8 border border-[#1DB954]/20 rounded-2xl px-4 py-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-[#1DB954] rounded-full animate-pulse"/>
+                          <span className="text-xs text-[#1DB954] font-semibold">JAM w toku</span>
+                          <span className="text-xs text-zinc-500">{viewedUserJam.members.length} słuchaczy</span>
+                        </div>
+                        {myJam.role === 'listener' && myJam.jam_id === viewedUserJam.jam_id ? (
+                          <button onClick={onJamLeave} disabled={jamLoading}
+                            className="text-xs bg-[#1DB954]/20 text-[#1DB954] hover:bg-[#1DB954]/30 px-3 py-1.5 rounded-lg transition-all">
+                            Opuszczasz ✓
+                          </button>
+                        ) : (
+                          <button onClick={()=>onJamJoin(viewedUserJam.jam_id)} disabled={jamLoading}
+                            className="text-xs bg-[#1DB954]/20 text-[#1DB954] hover:bg-[#1DB954]/30 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1">
+                            <SpotifyIcon size={11}/> Dołącz do JAM
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-6 text-center">
                     <Music size={28} className="text-zinc-800 mx-auto mb-2"/>
@@ -2669,6 +2728,7 @@ export default function App() {
   const [profilePageData, setProfilePageData] = useState<UserProfile|null>(null);
   const [profileGames, setProfileGames]       = useState<FavoriteGame[]>([]);
   const [profileSpotify, setProfileSpotify]   = useState<SpotifyData|null>(null);
+  const [profileViewedJam, setProfileViewedJam] = useState<{ jam_id: string; host: any; members: any[] } | null>(null);
   const [profileTwitch, setProfileTwitch]     = useState<TwitchData|null>(null);
   const [profileSteam, setProfileSteam]       = useState<SteamData|null>(null);
   const [profileLoading, setProfileLoading]   = useState(false);
@@ -2862,6 +2922,15 @@ export default function App() {
   const [twoFaLoading, setTwoFaLoading]       = useState(false);
   const [twoFaError, setTwoFaError]           = useState('');
 
+  // Spotify JAM session
+  const [myJam, setMyJam]                     = useState<SpotifyJamSession>({ role: null, members: [] });
+  const [jamLoading, setJamLoading]           = useState(false);
+
+  // Voice Channel DJ
+  const [voiceDj, setVoiceDj]                = useState<Record<string, SpotifyVoiceDj['dj']>>({});
+  const [voiceDjListening, setVoiceDjListening] = useState<Set<string>>(new Set());
+  const [voiceDjVolume, setVoiceDjVolume]     = useState(50);
+
   // Account deletion flow
   const [deleteStep, setDeleteStep]           = useState<'confirm'|'code'|null>(null);
   const [deleteCode, setDeleteCode]           = useState('');
@@ -3032,10 +3101,12 @@ export default function App() {
         if (sock) (sock as any).emit('spotify_update', { track: effectiveTrack ? {
           name: effectiveTrack.name, artists: effectiveTrack.artists,
           album_cover: effectiveTrack.album_cover, external_url: effectiveTrack.external_url,
+          uri: effectiveTrack.uri, progress_ms: effectiveTrack.progress_ms, duration_ms: effectiveTrack.duration_ms,
         } : null });
         setUserActivities(p => { const n = new Map(p); n.set(currentUser.id, effectiveTrack ? {
           name: effectiveTrack.name, artists: effectiveTrack.artists,
           album_cover: effectiveTrack.album_cover ?? null, external_url: effectiveTrack.external_url ?? null,
+          uri: effectiveTrack.uri ?? null, progress_ms: effectiveTrack.progress_ms ?? null, duration_ms: effectiveTrack.duration_ms ?? null,
         } : null); return n; });
       } catch {}
     };
@@ -3188,6 +3259,36 @@ export default function App() {
     });
     sock.on('friend_spotify_update', ({ user_id, track }) => {
       setUserActivities(p => { const n = new Map(p); n.set(user_id, track); return n; });
+    });
+    // JAM sync: when host updates their track, auto-sync this user's Spotify
+    (sock as any).on('spotify_jam_sync', async ({ host_id, track }: { host_id: string; track: SpotifyTrack | null }) => {
+      setUserActivities(p => { const n = new Map(p); n.set(host_id, track); return n; });
+      if (track?.uri) {
+        try { await spotifyApi.play(track.uri, track.progress_ms ?? 0); } catch {}
+      }
+    });
+    (sock as any).on('spotify_jam_ended', (_: any) => {
+      setMyJam({ role: null, members: [] });
+      addToast('JAM zakończony przez hosta', 'info');
+    });
+    (sock as any).on('spotify_jam_member_left', ({ user_id }: { user_id: string }) => {
+      setMyJam(j => ({ ...j, members: j.members.filter((m: string) => m !== user_id) }));
+    });
+    // Voice DJ
+    (sock as any).on('voice_dj_started', ({ dj_id, channel_id }: { dj_id: string; channel_id: string }) => {
+      users.get(dj_id).then((u: any) => {
+        setVoiceDj(p => ({ ...p, [channel_id]: { id: u.id, username: u.username, avatar_url: u.avatar_url ?? null } }));
+      }).catch(() => {});
+    });
+    (sock as any).on('voice_dj_stopped', ({ channel_id }: { dj_id: string; channel_id: string }) => {
+      setVoiceDj(p => { const n = { ...p }; delete n[channel_id]; return n; });
+      setVoiceDjListening(s => { const n = new Set(s); n.delete(channel_id); return n; });
+    });
+    (sock as any).on('voice_dj_sync', async ({ channel_id, track }: { dj_id: string; channel_id: string; track: SpotifyTrack | null }) => {
+      if (!voiceDjListening.has(channel_id)) return;
+      if (track?.uri) {
+        try { await spotifyApi.play(track.uri, track.progress_ms ?? 0); } catch {}
+      }
     });
     (sock as any).on('friend_twitch_update', ({ user_id, stream }: { user_id: string; stream: TwitchStream | null }) => {
       setUserTwitchActivities(p => { const n = new Map(p); n.set(user_id, stream); return n; });
@@ -4472,7 +4573,7 @@ export default function App() {
   // ── Profile ──────────────────────────────────────────────────────
   const openProfilePage = async (userId: string) => {
     setProfileViewId(userId);
-    setProfilePageData(null); setProfileGames([]); setProfileSpotify(null); setProfileTwitch(null); setProfileSteam(null);
+    setProfilePageData(null); setProfileGames([]); setProfileSpotify(null); setProfileTwitch(null); setProfileSteam(null); setProfileViewedJam(null);
     setProfileLoading(true);
     const [prof, games, spotify, twitch, steam] = await Promise.allSettled([
       users.get(userId),
@@ -4487,11 +4588,16 @@ export default function App() {
     if (twitch.status === 'fulfilled')  setProfileTwitch(twitch.value);
     if (steam.status === 'fulfilled')   setProfileSteam(steam.value);
     setProfileLoading(false);
+    // Load friend's JAM status if not own profile
+    if (userId !== currentUser?.id) {
+      spotifyApi.jamInfo(userId).then(j => setProfileViewedJam(j)).catch(() => {});
+    }
     // If own profile — also load connection statuses
     if (userId === currentUser?.id) {
       spotifyApi.status().then(setOwnSpotify).catch(()=>{});
       twitchApi.status().then(setOwnTwitch).catch(()=>{});
       steamApi.status().then(setOwnSteam).catch(()=>{});
+      spotifyApi.jamActive().then(setMyJam).catch(()=>{});
     }
   };
   const closeProfilePage = () => { setProfileViewId(null); setProfilePageData(null); };
@@ -4652,6 +4758,10 @@ export default function App() {
     joinVoiceChannel(ch.id);
     playVoiceJoin();
     setActiveCall({ type: 'voice_channel', channelId: ch.id, channelName: ch.name, serverId: activeServer, isMuted: false, isDeafened: false, isCameraOn: false, isScreenSharing: false });
+    // Load current voice DJ for this channel
+    spotifyApi.voiceDjGet(ch.id).then(r => {
+      if (r.dj) setVoiceDj(p=>({...p,[ch.id]:r.dj}));
+    }).catch(()=>{});
     setShowCallPanel(true);
     // Notify other tabs to leave voice
     try { voiceBcRef.current?.postMessage({ type: 'voice_joined' }); } catch {}
@@ -5652,9 +5762,83 @@ export default function App() {
                       <MessageSquare size={13}/>
                     </button>
                   )}
+                  {activeCall.type==='voice_channel' && ownSpotify?.connected && (
+                    voiceDj[activeCall.channelId] ? (
+                      voiceDj[activeCall.channelId]?.id === currentUser?.id ? (
+                        // I am the DJ
+                        <button onClick={async()=>{
+                          try {
+                            await spotifyApi.voiceDjStop();
+                            getSocket()?.emit('voice_dj_stopped' as any, { channel_id: activeCall.channelId });
+                            setVoiceDj(p=>{const n={...p};delete n[activeCall.channelId];return n;});
+                            addToast('DJ zatrzymany','info');
+                          } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                        }} title="Zatrzymaj Spotify DJ"
+                          className="w-7 h-7 rounded-lg flex items-center justify-center bg-[#1DB954]/20 text-[#1DB954] hover:bg-rose-500/20 hover:text-rose-400 transition-all">
+                          <SpotifyIcon size={13}/>
+                        </button>
+                      ) : (
+                        // Someone else is DJ — listen/stop toggle
+                        <button onClick={()=>{
+                          const ch = activeCall.channelId;
+                          if (voiceDjListening.has(ch)) {
+                            getSocket()?.emit('voice_dj_unlisten' as any, { channel_id: ch });
+                            setVoiceDjListening(s=>{const n=new Set(s);n.delete(ch);return n;});
+                          } else {
+                            getSocket()?.emit('voice_dj_listen' as any, { channel_id: ch });
+                            setVoiceDjListening(s=>new Set(s).add(ch));
+                          }
+                        }} title={voiceDjListening.has(activeCall.channelId) ? 'Stop Spotify sync' : 'Słuchaj Spotify DJ'}
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${voiceDjListening.has(activeCall.channelId)?'bg-[#1DB954]/20 text-[#1DB954]':gb}`}>
+                          <SpotifyIcon size={13}/>
+                        </button>
+                      )
+                    ) : (
+                      // No DJ — I can become DJ
+                      <button onClick={async()=>{
+                        try {
+                          await spotifyApi.voiceDjStart(activeCall.channelId);
+                          getSocket()?.emit('voice_dj_started' as any, { channel_id: activeCall.channelId });
+                          setVoiceDj(p=>({...p,[activeCall.channelId]:{id:currentUser!.id,username:currentUser!.username,avatar_url:currentUser!.avatar_url??null}}));
+                          addToast('Jesteś teraz DJ-em! Wszyscy mogą słuchać Twojego Spotify.','success');
+                        } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                      }} title="Uruchom Spotify DJ"
+                        className={`w-7 h-7 rounded-lg flex items-center justify-center text-zinc-600 hover:text-[#1DB954] hover:bg-[#1DB954]/10 transition-all ${gb}`}>
+                        <SpotifyIcon size={13}/>
+                      </button>
+                    )
+                  )}
                   <button onClick={()=>setShowCallPanel(false)} title="Minimalizuj" className={`w-7 h-7 ${gb} rounded-lg flex items-center justify-center`}><Minimize2 size={13}/></button>
                 </div>
               </header>
+              {/* Spotify DJ info bar */}
+              {activeCall?.type==='voice_channel' && voiceDj[activeCall.channelId] && (
+                <div className="flex items-center justify-between px-4 py-2 bg-[#1DB954]/8 border-b border-[#1DB954]/20 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <SpotifyIcon size={14} className="text-[#1DB954]"/>
+                    <span className="text-xs text-[#1DB954] font-semibold">
+                      {voiceDj[activeCall.channelId]?.id === currentUser?.id
+                        ? 'Jesteś DJ-em'
+                        : `${voiceDj[activeCall.channelId]?.username} jest DJ-em`}
+                    </span>
+                    {voiceDjListening.has(activeCall.channelId) && voiceDj[activeCall.channelId]?.id !== currentUser?.id && (
+                      <span className="text-[11px] text-zinc-500">· syncing</span>
+                    )}
+                  </div>
+                  {voiceDj[activeCall.channelId]?.id === currentUser?.id && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-zinc-500">Głośność:</span>
+                      <input type="range" min={0} max={100} value={voiceDjVolume}
+                        onChange={async e=>{
+                          const v=+e.target.value; setVoiceDjVolume(v);
+                          try { await spotifyApi.setVolume(v); } catch {}
+                        }}
+                        className="w-20 accent-[#1DB954] cursor-pointer"/>
+                      <span className="text-[11px] text-zinc-400 w-7 text-right">{voiceDjVolume}%</span>
+                    </div>
+                  )}
+                </div>
+              )}
               {/* Participants + screen share area */}
               {(()=>{
                 const remoteScreenEntries = [...remoteScreenStreamsRef.current.entries()];
@@ -6015,6 +6199,50 @@ export default function App() {
               friends={friends}
               blockedUsers={blockedUsers}
               addToast={addToast}
+              myJam={myJam}
+              jamLoading={jamLoading}
+              viewedUserJam={profileViewedJam}
+              onJamStart={async()=>{
+                setJamLoading(true);
+                try {
+                  await spotifyApi.jamStart();
+                  const j = await spotifyApi.jamActive();
+                  setMyJam(j);
+                  addToast('JAM uruchomiony! Znajomi mogą dołączyć z Twojego profilu', 'success');
+                } catch(e:any){ addToast(e.message||'Błąd JAM','error'); }
+                finally { setJamLoading(false); }
+              }}
+              onJamStop={async()=>{
+                setJamLoading(true);
+                try {
+                  await spotifyApi.jamLeave();
+                  getSocket()?.emit('spotify_jam_ended' as any, { host_id: currentUser?.id });
+                  setMyJam({ role: null, members: [] });
+                  addToast('JAM zakończony','info');
+                } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                finally { setJamLoading(false); }
+              }}
+              onJamJoin={async(hostId)=>{
+                setJamLoading(true);
+                try {
+                  await spotifyApi.jamJoin(hostId);
+                  getSocket()?.emit('spotify_jam_joined' as any, { host_id: hostId });
+                  const j = await spotifyApi.jamActive();
+                  setMyJam(j);
+                  addToast('Dołączono do JAM! Synchronizacja Spotify...','success');
+                } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                finally { setJamLoading(false); }
+              }}
+              onJamLeave={async()=>{
+                setJamLoading(true);
+                try {
+                  const r = await spotifyApi.jamLeave();
+                  if (!r.was_host) getSocket()?.emit('spotify_jam_left' as any, { host_id: r.host_id });
+                  setMyJam({ role: null, members: [] });
+                  addToast('Opuszczono JAM','info');
+                } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                finally { setJamLoading(false); }
+              }}
             />
           ) : activeView==='friends' ? (
             <div className="flex-1 flex flex-col overflow-hidden">

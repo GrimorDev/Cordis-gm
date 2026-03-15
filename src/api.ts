@@ -142,8 +142,18 @@ export interface FavoriteGame {
 }
 export interface SpotifyTrack {
   name: string; artists: string; album_cover?: string | null;
-  preview_url?: string | null; external_url?: string | null; is_playing?: boolean;
+  preview_url?: string | null; external_url?: string | null;
+  uri?: string | null; is_playing?: boolean;
   progress_ms?: number | null; duration_ms?: number | null;
+}
+export interface SpotifyJamSession {
+  role: 'host' | 'listener' | null;
+  jam_id?: string;
+  host?: { id: string; username: string; avatar_url?: string | null };
+  members: string[];
+}
+export interface SpotifyVoiceDj {
+  dj: { id: string; username: string; avatar_url?: string | null } | null;
 }
 export interface SpotifyData {
   connected: boolean; show_on_profile: boolean; display_name?: string | null;
@@ -409,6 +419,21 @@ export const spotifyApi = {
   userPublic:    (userId: string) => req<SpotifyData>('GET', `/spotify/user/${userId}`),
   setSettings:   (d: { show_on_profile: boolean }) => req<{ok:boolean}>('PUT', '/spotify/settings', d),
   disconnect:    () => req<{ok:boolean}>('DELETE', '/spotify/disconnect'),
+  // Playback control (requires Premium)
+  play:          (uri: string, position_ms?: number) =>
+    req<{ok:boolean}>('POST', '/spotify/playback/play', { uri, position_ms }),
+  setVolume:     (volume_percent: number) =>
+    req<{ok:boolean}>('PUT', '/spotify/playback/volume', { volume_percent }),
+  // JAM sessions
+  jamStart:      () => req<{ jam_id: string }>('POST', '/spotify/jam/start'),
+  jamJoin:       (hostId: string) => req<{ ok: boolean; jam_id: string }>('POST', `/spotify/jam/join/${hostId}`),
+  jamLeave:      () => req<{ ok: boolean; was_host: boolean; notified_members?: string[]; host_id?: string }>('DELETE', '/spotify/jam'),
+  jamActive:     () => req<SpotifyJamSession>('GET', '/spotify/jam/active'),
+  jamInfo:       (hostId: string) => req<{ jam_id: string; host: any; members: any[] }>('GET', `/spotify/jam/${hostId}`),
+  // Voice DJ
+  voiceDjStart:  (channel_id: string) => req<{ok:boolean}>('POST', '/spotify/voice-dj/start', { channel_id }),
+  voiceDjStop:   () => req<{ok:boolean; channel_id: string|null}>('DELETE', '/spotify/voice-dj'),
+  voiceDjGet:    (channelId: string) => req<SpotifyVoiceDj>('GET', `/spotify/voice-dj/${channelId}`),
 };
 
 export const twitchApi = {
