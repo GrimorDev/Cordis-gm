@@ -151,6 +151,13 @@ const sc = (s: string) => {
 
 const ft = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const fmtDur = (s: number) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+const fmtGameDur = (startMs: number): string => {
+  const sec = Math.floor((Date.now() - startMs) / 1000);
+  if (sec < 60) return 'Przed chwilą';
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Toast = { id: string; msg: string; type: 'info'|'success'|'error'|'warn'; onConfirm?: ()=>void; onClick?: ()=>void; avatar?: string|null; senderName?: string };
@@ -2121,11 +2128,13 @@ function ProfilePage({
   onSteamConnect, onSteamDisconnect, onSteamToggle,
   friends, blockedUsers, addToast,
   myJam, jamLoading, onJamStart, onJamStop, onJamJoin, onJamLeave, viewedUserJam,
+  steamGameStartedAt,
 }: {
   viewUserId: string; profileData: UserProfile|null; games: FavoriteGame[];
   spotify: SpotifyData|null; ownSpotify: SpotifyData|null;
   twitch: TwitchData|null; ownTwitch: TwitchData|null;
   steam: SteamData|null; ownSteam: SteamData|null;
+  steamGameStartedAt?: number | null;
   loading: boolean;
   currentUser: UserProfile|null; editProf: any; setEditProf: (fn:any)=>void;
   profBannerFile: File|null; profBannerPrev: string|null;
@@ -2692,8 +2701,16 @@ function ProfilePage({
                       <div className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.06] rounded-xl p-2.5">
                         <img src={steamToShow.current_game.header_image} alt={steamToShow.current_game.name} className="w-16 h-9 rounded-lg object-cover shrink-0"/>
                         <div className="min-w-0">
-                          <p className="text-xs text-zinc-500 font-semibold uppercase tracking-widest mb-0.5">Gra teraz</p>
+                          <p className="text-xs text-zinc-500 font-semibold uppercase tracking-widest mb-0.5 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block"/>
+                            Gra teraz
+                          </p>
                           <p className="text-sm text-white font-medium truncate">{steamToShow.current_game.name}</p>
+                          {steamGameStartedAt && (
+                            <p className="text-[11px] text-zinc-600 mt-0.5 flex items-center gap-1">
+                              <Clock size={10}/> Grasz od {fmtGameDur(steamGameStartedAt)}
+                            </p>
+                          )}
                         </div>
                       </div>
                     )}
@@ -2708,8 +2725,16 @@ function ProfilePage({
                       <div className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.06] rounded-xl p-2.5">
                         <img src={steamToShow.current_game.header_image} alt={steamToShow.current_game.name} className="w-16 h-9 rounded-lg object-cover shrink-0"/>
                         <div className="min-w-0">
-                          <p className="text-xs text-zinc-500 font-semibold uppercase tracking-widest mb-0.5">Gra teraz</p>
+                          <p className="text-xs text-zinc-500 font-semibold uppercase tracking-widest mb-0.5 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block"/>
+                            Gra teraz
+                          </p>
                           <p className="text-sm text-white font-medium truncate">{steamToShow.current_game.name}</p>
+                          {steamGameStartedAt && (
+                            <p className="text-[11px] text-zinc-600 mt-0.5 flex items-center gap-1">
+                              <Clock size={10}/> Grasz od {fmtGameDur(steamGameStartedAt)}
+                            </p>
+                          )}
                         </div>
                       </div>
                     )}
@@ -2891,7 +2916,7 @@ function SpotifyDisplay({ spotify }: { spotify: SpotifyData }) {
 }
 
 // ─── HoverCard ────────────────────────────────────────────────────────────────
-function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfile, cache, activity, twitchActivity, steamActivity, onMouseEnter, onMouseLeave }: {
+function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfile, cache, activity, twitchActivity, steamActivity, steamGameStartedAt, onMouseEnter, onMouseLeave }: {
   userId: string; x: number; y: number;
   currentUserId: string | undefined;
   onOpenDm: (id: string) => void;
@@ -2901,6 +2926,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
   activity: {name:string;artists:string;album_cover:string|null;external_url:string|null}|null|undefined;
   twitchActivity: TwitchStream | null | undefined;
   steamActivity: SteamGame | null | undefined;
+  steamGameStartedAt: number | null | undefined;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }) {
@@ -3053,8 +3079,16 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
             <div className="flex items-center gap-2.5 bg-white/[0.04] border border-white/[0.06] rounded-xl px-2.5 py-2 mb-3">
               <img src={steamActivity.header_image} alt={steamActivity.name} className="w-12 h-7 rounded object-cover shrink-0"/>
               <div className="min-w-0">
-                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Gra teraz</p>
+                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block"/>
+                  Gra teraz
+                </p>
                 <p className="text-xs text-white truncate">{steamActivity.name}</p>
+                {steamGameStartedAt && (
+                  <p className="text-[10px] text-zinc-600 mt-0.5 flex items-center gap-1">
+                    <Clock size={9}/> Grasz od {fmtGameDur(steamGameStartedAt)}
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -3343,6 +3377,9 @@ export default function App() {
   const myStatusRef                            = useRef<string>('online');
   const autoIdledRef                           = useRef(false); // true if idle was set automatically
   const idleTimerRef                           = useRef<ReturnType<typeof setTimeout>|null>(null);
+  // Steam game session start timestamps (userId → Date.now() when game started)
+  const steamGameStartRef                      = useRef<Map<string, number>>(new Map());
+  const [gameTick, setGameTick]                = useState(0); // ticks every 60s to refresh elapsed time
   const statusPickerRef                        = useRef<HTMLDivElement>(null);
   const notifBellRef                           = useRef<HTMLDivElement>(null);
 
@@ -3591,11 +3628,20 @@ export default function App() {
         const gameKey = effectiveGame ? effectiveGame.gameid : null;
         if (gameKey === lastEmittedGame.current) return;
         lastEmittedGame.current = gameKey;
+        // Track session start time
+        if (effectiveGame) {
+          steamGameStartRef.current.set(currentUser.id, Date.now());
+        } else {
+          steamGameStartRef.current.delete(currentUser.id);
+        }
         const sock = getSocket();
+        const startedAt = effectiveGame ? steamGameStartRef.current.get(currentUser.id) : undefined;
         if (sock) (sock as any).emit('steam_update', { game: effectiveGame ? {
           name: effectiveGame.name, gameid: effectiveGame.gameid, header_image: effectiveGame.header_image,
+          started_at: startedAt,
         } : null });
         setUserSteamActivities(p => { const n = new Map(p); n.set(currentUser.id, effectiveGame); return n; });
+        setGameTick(n => n + 1); // force re-render
       } catch {}
     };
     poll();
@@ -3730,7 +3776,16 @@ export default function App() {
     (sock as any).on('friend_twitch_update', ({ user_id, stream }: { user_id: string; stream: TwitchStream | null }) => {
       setUserTwitchActivities(p => { const n = new Map(p); n.set(user_id, stream); return n; });
     });
-    (sock as any).on('friend_steam_update', ({ user_id, game }: { user_id: string; game: SteamGame | null }) => {
+    (sock as any).on('friend_steam_update', ({ user_id, game }: { user_id: string; game: (SteamGame & { started_at?: number }) | null }) => {
+      if (game) {
+        // Use server-sent started_at if present, otherwise record now as new session start
+        const prev = steamGameStartRef.current.get(user_id);
+        if (!prev || (game as any).started_at) {
+          steamGameStartRef.current.set(user_id, (game as any).started_at ?? Date.now());
+        }
+      } else {
+        steamGameStartRef.current.delete(user_id);
+      }
       setUserSteamActivities(p => { const n = new Map(p); n.set(user_id, game); return n; });
     });
     // Voice channel events (route through voiceHandlerRef for fresh closures)
@@ -4246,6 +4301,12 @@ export default function App() {
     r.style.setProperty('--accent-rgb', `${r2} ${g2} ${b2}`);
   }, [accentColor]);
 
+  // ── Game session timer tick (refresh elapsed time display every minute) ──
+  useEffect(() => {
+    const t = setInterval(() => setGameTick(n => n + 1), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
   // ── Auto-idle (10 min brak aktywności) ───────────────────────────
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -4256,6 +4317,8 @@ export default function App() {
         changeStatus('online');
       }
       idleTimerRef.current = setTimeout(() => {
+        // Don't go idle while actively playing a game
+        if (currentUser?.id && steamGameStartRef.current.has(currentUser.id)) return;
         if (myStatusRef.current !== 'dnd' && myStatusRef.current !== 'offline') {
           changeStatus('idle', true);
         }
@@ -6602,6 +6665,7 @@ export default function App() {
               ownTwitch={ownTwitch}
               steam={profileSteam}
               ownSteam={ownSteam}
+              steamGameStartedAt={profileViewId ? (steamGameStartRef.current.get(profileViewId) ?? null) : null}
               loading={profileLoading}
               currentUser={currentUser}
               editProf={editProf}
@@ -10334,6 +10398,7 @@ export default function App() {
           activity={userActivities.has(hoverCard.userId) ? userActivities.get(hoverCard.userId)??null : undefined}
           twitchActivity={userTwitchActivities.has(hoverCard.userId) ? userTwitchActivities.get(hoverCard.userId)??null : undefined}
           steamActivity={userSteamActivities.has(hoverCard.userId) ? userSteamActivities.get(hoverCard.userId)??null : undefined}
+          steamGameStartedAt={steamGameStartRef.current.get(hoverCard.userId) ?? null}
           onMouseEnter={cancelHideHoverCard}
           onMouseLeave={hideHoverCard}
         />
