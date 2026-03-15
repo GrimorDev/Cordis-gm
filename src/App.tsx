@@ -12,7 +12,7 @@ import {
   Clock, Pin, PinOff, Activity, AtSign, BadgeCheck, Crown, LayoutDashboard,
   Code2, FlaskConical, ShieldCheck, Hammer, Award, CalendarDays, Quote,
   GripVertical, BarChart2, Server, Database,
-  Music, Gamepad2, ExternalLink, Link2, Link2Off,
+  Music, Gamepad2, ExternalLink, Link2, Link2Off, Film, PhoneIncoming, PhoneMissed,
   type LucideIcon
 } from 'lucide-react';
 import {
@@ -3302,6 +3302,7 @@ export default function App() {
   const [unreadChs, setUnreadChs]             = useState<Record<string, number>>({});
   // DM partner full profile (for BIO panel)
   const [dmPartnerProfile, setDmPartnerProfile] = useState<UserProfile | null>(null);
+  const [dmRightTab, setDmRightTab]             = useState<'profile'|'media'|'links'|'calls'>('profile');
   // Messages loading
   const [msgsLoading, setMsgsLoading]           = useState(false);
 
@@ -4153,6 +4154,7 @@ export default function App() {
     dmsApi.messages(activeDmUserId).then(setDmMsgs).catch(console.error).finally(()=>setMsgsLoading(false));
     users.get(activeDmUserId).then(setDmPartnerProfile).catch(console.error);
     setReplyTo(null);
+    setDmRightTab('profile');
     // Mark conversation as read when opening
     dmsApi.markRead(activeDmUserId).catch(() => {});
   }, [activeDmUserId]);
@@ -7896,53 +7898,258 @@ export default function App() {
           })()}
 
           {/* ─ DM PARTNER BIO PANEL ─ */}
-          {activeView==='dms'&&activeDm&&dmPartnerProfile&&(
-            <div className="flex flex-col">
-              {/* Banner */}
-              <div className="h-20 relative overflow-hidden shrink-0">
-                {dmPartnerProfile.banner_url ? (
-                  <img src={dmPartnerProfile.banner_url} className="w-full h-full object-cover" alt=""/>
-                ) : (
-                  <div className={`w-full h-full bg-gradient-to-br ${dmPartnerProfile.banner_color||'from-indigo-600 via-purple-600 to-pink-600'}`}/>
-                )}
-              </div>
-              {/* Avatar — wrapped in av-frozen for hover effects */}
-              <div className="px-4 pb-4 border-b border-white/[0.07]">
-                <div className="relative inline-block -mt-8 mb-3 av-frozen" style={{'--av-url':`url("${ava(dmPartnerProfile)}")`} as React.CSSProperties}>
-                  <img src={ava(dmPartnerProfile)} className={`w-16 h-16 rounded-2xl border-4 border-[#1e1e30] object-cover av-eff-${dmPartnerProfile.avatar_effect||'none'}`} alt=""/>
-                  <StatusBadge status={activeDm.other_status} size={22} className="absolute -bottom-1.5 -right-1.5"/>
+          {activeView==='dms'&&activeDm&&dmPartnerProfile&&(()=>{
+            // ── helpers for tabs ─────────────────────────────────
+            const IMG_EXT = /\.(jpe?g|png|gif|webp|avif|svg|bmp)(\?.*)?$/i;
+            const VID_EXT = /\.(mp4|webm|ogg|mov|avi)(\?.*)?$/i;
+            const URL_RE  = /https?:\/\/[^\s<>"']+/gi;
+            const isImgUrl = (u: string) => IMG_EXT.test(u);
+            const isVidUrl = (u: string) => VID_EXT.test(u);
+
+            // Media: messages with image/video attachment OR content that is just an image URL
+            const mediaItems = dmMsgs.filter(m => {
+              if (m.attachment_url) return true;
+              const urls = m.content.match(URL_RE) ?? [];
+              return urls.some(u => isImgUrl(u) || isVidUrl(u));
+            });
+
+            // Links: messages containing URLs that are NOT pure-media messages
+            const linkItems = dmMsgs.filter(m => {
+              if (!m.content) return false;
+              const urls = m.content.match(URL_RE) ?? [];
+              if (urls.length === 0) return false;
+              // Exclude if it's only image/video URLs with no other text
+              const nonMedia = urls.filter(u => !isImgUrl(u) && !isVidUrl(u));
+              return nonMedia.length > 0;
+            });
+
+            // Calls: system messages with 📞 or 📹
+            const callItems = dmMsgs.filter(m =>
+              m.content.includes('📞') || m.content.includes('📹')
+            );
+
+            const DM_TABS: { id: 'profile'|'media'|'links'|'calls'; label: string; icon: React.ReactNode; count?: number }[] = [
+              { id: 'profile', label: 'Profil',     icon: <Users size={13}/> },
+              { id: 'media',   label: 'Media',      icon: <Image size={13}/>,  count: mediaItems.length },
+              { id: 'links',   label: 'Linki',      icon: <Link2 size={13}/>,  count: linkItems.length },
+              { id: 'calls',   label: 'Połączenia', icon: <Phone size={13}/>,  count: callItems.length },
+            ];
+
+            return (
+              <div className="flex flex-col min-h-0">
+                {/* Banner */}
+                <div className="h-16 relative overflow-hidden shrink-0">
+                  {dmPartnerProfile.banner_url
+                    ? <img src={dmPartnerProfile.banner_url} className="w-full h-full object-cover" alt=""/>
+                    : <div className={`w-full h-full bg-gradient-to-br ${dmPartnerProfile.banner_color||'from-indigo-600 via-purple-600 to-pink-600'}`}/>
+                  }
                 </div>
-                <h3 className="text-sm font-bold text-white leading-tight">{dmPartnerProfile.username}</h3>
-                {activeDm.other_custom_status&&(
-                  <p className="text-xs text-zinc-500 mt-0.5 truncate">{activeDm.other_custom_status}</p>
-                )}
-              </div>
-              {/* Info */}
-              <div className="p-4 flex flex-col gap-3 overflow-y-auto custom-scrollbar flex-1">
-                {dmPartnerProfile.bio&&(
-                  <div>
-                    <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5">O mnie</h4>
-                    <p className="text-[12px] text-zinc-400 leading-relaxed">{dmPartnerProfile.bio}</p>
+
+                {/* Avatar + name */}
+                <div className="px-4 pb-3 border-b border-white/[0.07]">
+                  <div className="relative inline-block -mt-7 mb-2 av-frozen" style={{'--av-url':`url("${ava(dmPartnerProfile)}")`} as React.CSSProperties}>
+                    <img src={ava(dmPartnerProfile)} className={`w-14 h-14 rounded-2xl border-4 border-[#1e1e30] object-cover av-eff-${dmPartnerProfile.avatar_effect||'none'}`} alt=""/>
+                    <StatusBadge status={activeDm.other_status} size={20} className="absolute -bottom-1 -right-1"/>
                   </div>
-                )}
-                <div>
-                  <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5">Dołączył/a</h4>
-                  <p className="text-[12px] text-zinc-400">
-                    {new Date(dmPartnerProfile.created_at).toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' })}
-                  </p>
+                  <h3 className="text-sm font-bold text-white leading-tight">{dmPartnerProfile.username}</h3>
+                  {activeDm.other_custom_status&&(
+                    <p className="text-xs text-zinc-500 mt-0.5 truncate">{activeDm.other_custom_status}</p>
+                  )}
                 </div>
-                {typeof dmPartnerProfile.mutual_friends_count === 'number' && dmPartnerProfile.mutual_friends_count > 0 && (
-                  <div>
-                    <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5">Wspólni znajomi</h4>
-                    <p className="text-[12px] text-zinc-400 flex items-center gap-1.5">
-                      <Users size={11} className="text-indigo-400"/>
-                      {dmPartnerProfile.mutual_friends_count} wspólnych znajomych
-                    </p>
-                  </div>
-                )}
+
+                {/* Tab bar */}
+                <div className="flex border-b border-white/[0.07] shrink-0 px-1 pt-1">
+                  {DM_TABS.map(t => (
+                    <button key={t.id} onClick={() => setDmRightTab(t.id)}
+                      className={`flex-1 flex flex-col items-center gap-0.5 py-2 px-1 text-[10px] font-semibold rounded-t-xl transition-all relative
+                        ${dmRightTab===t.id ? 'text-indigo-300' : 'text-zinc-600 hover:text-zinc-400'}`}>
+                      {t.icon}
+                      <span>{t.label}</span>
+                      {typeof t.count === 'number' && t.count > 0 && (
+                        <span className={`absolute top-1 right-1 text-[9px] font-bold rounded-full px-1 leading-none py-0.5
+                          ${dmRightTab===t.id ? 'bg-indigo-500/30 text-indigo-300' : 'bg-white/[0.07] text-zinc-500'}`}>
+                          {t.count}
+                        </span>
+                      )}
+                      {dmRightTab===t.id && (
+                        <motion.div layoutId="dm-tab-indicator"
+                          className="absolute bottom-0 left-2 right-2 h-0.5 bg-indigo-400 rounded-full"/>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Tab content */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                  <AnimatePresence mode="wait">
+                    {/* ── PROFILE ── */}
+                    {dmRightTab==='profile' && (
+                      <motion.div key="profile" initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-6}}
+                        transition={{duration:0.15}} className="p-4 flex flex-col gap-3">
+                        {dmPartnerProfile.bio&&(
+                          <div>
+                            <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5">O mnie</h4>
+                            <p className="text-[12px] text-zinc-400 leading-relaxed">{dmPartnerProfile.bio}</p>
+                          </div>
+                        )}
+                        <div>
+                          <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5">Dołączył/a</h4>
+                          <p className="text-[12px] text-zinc-400">
+                            {new Date(dmPartnerProfile.created_at).toLocaleDateString('pl-PL',{day:'numeric',month:'long',year:'numeric'})}
+                          </p>
+                        </div>
+                        {typeof dmPartnerProfile.mutual_friends_count==='number' && dmPartnerProfile.mutual_friends_count > 0 && (
+                          <div>
+                            <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5">Wspólni znajomi</h4>
+                            <p className="text-[12px] text-zinc-400 flex items-center gap-1.5">
+                              <Users size={11} className="text-indigo-400"/>
+                              {dmPartnerProfile.mutual_friends_count} wspólnych znajomych
+                            </p>
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+
+                    {/* ── MEDIA ── */}
+                    {dmRightTab==='media' && (
+                      <motion.div key="media" initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-6}}
+                        transition={{duration:0.15}} className="p-3">
+                        {mediaItems.length === 0 ? (
+                          <div className="flex flex-col items-center gap-2 py-12 text-center">
+                            <Image size={28} className="text-zinc-700"/>
+                            <p className="text-xs text-zinc-600">Brak zdjęć ani filmów</p>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {[...mediaItems].reverse().map(m => {
+                              const attUrl = m.attachment_url;
+                              const urlsInContent = (m.content.match(URL_RE) ?? []);
+                              const mediaUrl = attUrl ?? urlsInContent.find(u => isImgUrl(u) || isVidUrl(u));
+                              if (!mediaUrl) return null;
+                              const isVid = isVidUrl(mediaUrl);
+                              return (
+                                <a key={m.id} href={mediaUrl} target="_blank" rel="noopener noreferrer"
+                                  className="relative aspect-square rounded-xl overflow-hidden group border border-white/[0.07] hover:border-indigo-500/40 transition-all">
+                                  {isVid ? (
+                                    <div className="w-full h-full bg-zinc-900 flex items-center justify-center">
+                                      <video src={mediaUrl} className="w-full h-full object-cover" muted/>
+                                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 group-hover:bg-black/20 transition-all">
+                                        <Film size={22} className="text-white/80"/>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <img src={mediaUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"/>
+                                  )}
+                                  <div className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="bg-black/60 rounded-md px-1.5 py-0.5 text-[9px] text-white/70">
+                                      {new Date(m.created_at).toLocaleDateString('pl-PL',{day:'numeric',month:'short'})}
+                                    </div>
+                                  </div>
+                                </a>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+
+                    {/* ── LINKS ── */}
+                    {dmRightTab==='links' && (
+                      <motion.div key="links" initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-6}}
+                        transition={{duration:0.15}} className="p-3 flex flex-col gap-2">
+                        {linkItems.length === 0 ? (
+                          <div className="flex flex-col items-center gap-2 py-12 text-center">
+                            <Link2 size={28} className="text-zinc-700"/>
+                            <p className="text-xs text-zinc-600">Brak udostępnionych linków</p>
+                          </div>
+                        ) : (
+                          [...linkItems].reverse().map(m => {
+                            const urls = (m.content.match(URL_RE) ?? []).filter(u => !isImgUrl(u) && !isVidUrl(u));
+                            if (!urls.length) return null;
+                            let host = '';
+                            try { host = new URL(urls[0]).hostname.replace(/^www\./, ''); } catch {}
+                            const sentByMe = m.sender_id === currentUser?.id;
+                            return (
+                              <div key={m.id} className="flex flex-col gap-1">
+                                {urls.map((url, i) => (
+                                  <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                                    className="flex items-start gap-2 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] hover:border-indigo-500/30 rounded-xl p-2.5 group transition-all">
+                                    <div className="w-7 h-7 rounded-lg bg-indigo-500/15 border border-indigo-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                                      <Link2 size={12} className="text-indigo-400"/>
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-[11px] text-indigo-300 group-hover:text-indigo-200 truncate font-medium leading-tight">{host || url}</p>
+                                      <p className="text-[10px] text-zinc-600 truncate mt-0.5">{url.length > 50 ? url.slice(0, 50) + '…' : url}</p>
+                                    </div>
+                                    <ExternalLink size={11} className="text-zinc-700 group-hover:text-zinc-400 shrink-0 mt-1 transition-colors"/>
+                                  </a>
+                                ))}
+                                <p className="text-[10px] text-zinc-700 px-1">
+                                  {sentByMe ? 'Ty' : m.sender_username} · {new Date(m.created_at).toLocaleDateString('pl-PL',{day:'numeric',month:'short',year:'numeric'})}
+                                </p>
+                              </div>
+                            );
+                          })
+                        )}
+                      </motion.div>
+                    )}
+
+                    {/* ── CALLS ── */}
+                    {dmRightTab==='calls' && (
+                      <motion.div key="calls" initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-6}}
+                        transition={{duration:0.15}} className="p-3 flex flex-col gap-1.5">
+                        {callItems.length === 0 ? (
+                          <div className="flex flex-col items-center gap-2 py-12 text-center">
+                            <Phone size={28} className="text-zinc-700"/>
+                            <p className="text-xs text-zinc-600">Brak historii połączeń</p>
+                          </div>
+                        ) : (
+                          [...callItems].reverse().map(m => {
+                            const isVideo = m.content.includes('📹');
+                            const sentByMe = m.sender_id === currentUser?.id;
+                            // Extract duration if present e.g. "Rozmowa zakończona · 2m 15s"
+                            const durMatch = m.content.match(/·\s*(.+)$/);
+                            const dur = durMatch ? durMatch[1].trim() : null;
+                            // Missed = very short or "Połączenie nieodebrane"
+                            const missed = m.content.toLowerCase().includes('nieodebrane') || m.content.toLowerCase().includes('odrzucone');
+                            return (
+                              <div key={m.id}
+                                className="flex items-center gap-2.5 bg-white/[0.03] hover:bg-white/[0.05] border border-white/[0.05] rounded-xl px-3 py-2.5 transition-all">
+                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0
+                                  ${missed ? 'bg-rose-500/10' : sentByMe ? 'bg-indigo-500/10' : 'bg-emerald-500/10'}`}>
+                                  {missed
+                                    ? <PhoneMissed size={14} className="text-rose-400"/>
+                                    : isVideo
+                                      ? <Video size={14} className={sentByMe ? 'text-indigo-400' : 'text-emerald-400'}/>
+                                      : sentByMe
+                                        ? <PhoneIncoming size={14} className="text-indigo-400" style={{transform:'scaleX(-1)'}}/>
+                                        : <PhoneIncoming size={14} className="text-emerald-400"/>
+                                  }
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className={`text-[12px] font-semibold leading-tight ${missed ? 'text-rose-400' : 'text-zinc-300'}`}>
+                                    {missed ? 'Nieodebrane' : isVideo ? 'Rozmowa wideo' : 'Rozmowa głosowa'}
+                                  </p>
+                                  <p className="text-[10px] text-zinc-600 mt-0.5">
+                                    {new Date(m.created_at).toLocaleDateString('pl-PL',{day:'numeric',month:'short',year:'numeric'})}
+                                    {' · '}
+                                    {new Date(m.created_at).toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'})}
+                                  </p>
+                                </div>
+                                {dur && !missed && (
+                                  <span className="text-[10px] text-zinc-600 shrink-0">{dur}</span>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </aside>
       </main>
 
