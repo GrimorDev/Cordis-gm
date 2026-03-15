@@ -1422,7 +1422,11 @@ function EmojiTab({ serverId, initialEmojis, canManage, gi }: {
 }
 
 // ─── Automations Tab (osobny komponent — hooks mogą być używane tylko w komponentach) ──
-function AutomationsTab({ serverId, gi }: { serverId: string; gi: string }) {
+function AutomationsTab({ serverId, gi, roles, channels }: {
+  serverId: string; gi: string;
+  roles: ServerRole[];
+  channels: ChannelData[];
+}) {
   const [automations, setAutomations] = React.useState<import('./api').ServerAutomation[]>([]);
   const [autoLoading, setAutoLoading] = React.useState(true);
   const [editAuto, setEditAuto] = React.useState<Partial<import('./api').ServerAutomation> | null>(null);
@@ -1510,10 +1514,13 @@ function AutomationsTab({ serverId, gi }: { serverId: string; gi: string }) {
 
         {editAuto.trigger_type === 'role_assigned' && (
           <div>
-            <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">ID Roli wyzwalającej</label>
-            <input value={(editAuto.trigger_config as any)?.role_id || ''}
+            <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Rola wyzwalająca</label>
+            <select value={(editAuto.trigger_config as any)?.role_id || ''}
               onChange={e => setEditAuto(p => ({...p!, trigger_config: {...(p?.trigger_config||{}), role_id: e.target.value}}))}
-              placeholder="UUID roli" className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
+              className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}>
+              <option value="">— wybierz rolę —</option>
+              {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
             <p className="text-xs text-zinc-600 mt-1">Akcja uruchamia się gdy ta rola zostanie przypisana</p>
           </div>
         )}
@@ -1554,15 +1561,21 @@ function AutomationsTab({ serverId, gi }: { serverId: string; gi: string }) {
                   </button>
                 </div>
                 {(action.type === 'assign_role' || action.type === 'remove_role') && (
-                  <input value={(action.config as any)?.role_id || ''} onChange={e => setEditAuto(p => {
+                  <select value={(action.config as any)?.role_id || ''} onChange={e => setEditAuto(p => {
                     const acts = [...(p?.actions||[])]; acts[idx] = {...acts[idx], config: {...(acts[idx].config||{}), role_id: e.target.value}}; return {...p!, actions: acts};
-                  })} placeholder="UUID roli" className={`${gi} rounded-xl px-3 py-2 text-xs`}/>
+                  })} className={`${gi} rounded-xl px-3 py-2 text-xs`}>
+                    <option value="">— wybierz rolę —</option>
+                    {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                  </select>
                 )}
                 {action.type === 'send_channel_message' && (
                   <div className="flex flex-col gap-1.5">
-                    <input value={(action.config as any)?.channel_id || ''} onChange={e => setEditAuto(p => {
+                    <select value={(action.config as any)?.channel_id || ''} onChange={e => setEditAuto(p => {
                       const acts = [...(p?.actions||[])]; acts[idx] = {...acts[idx], config: {...(acts[idx].config||{}), channel_id: e.target.value}}; return {...p!, actions: acts};
-                    })} placeholder="UUID kanału" className={`${gi} rounded-xl px-3 py-2 text-xs`}/>
+                    })} className={`${gi} rounded-xl px-3 py-2 text-xs`}>
+                      <option value="">— wybierz kanał —</option>
+                      {channels.filter(c => c.type === 'text' || c.type === 'announcement').map(c => <option key={c.id} value={c.id}>#{c.name}</option>)}
+                    </select>
                     <textarea value={(action.config as any)?.message || ''} onChange={e => setEditAuto(p => {
                       const acts = [...(p?.actions||[])]; acts[idx] = {...acts[idx], config: {...(acts[idx].config||{}), message: e.target.value}}; return {...p!, actions: acts};
                     })} placeholder="Treść wiadomości. Użyj {username} i {server}" rows={2} className={`${gi} rounded-xl px-3 py-2 text-xs resize-none`}/>
@@ -1674,6 +1687,7 @@ interface ServerSettingsPageProps {
   streamerMode?: boolean;
   serverEmojis?: ServerEmoji[];
   activeServer?: string;
+  channels?: ChannelData[];
 }
 function ServerSettingsPage({
   serverFull, tab, setTab, roles, members, banList, setBanList,
@@ -1682,7 +1696,7 @@ function ServerSettingsPage({
   canManageServer, canManageRoles, canKickMembers, canBanMembers, canCreateInvites,
   handleSetMemberRole, handleKick, handleBan, handleUnban,
   openNewRole, openEditRole, handleDeleteRole, currentUser, onClose,
-  streamerMode, serverEmojis, activeServer,
+  streamerMode, serverEmojis, activeServer, channels,
 }: ServerSettingsPageProps) {
   const [memberQ, setMemberQ] = React.useState('');
   const filteredMembers = memberQ.trim()
@@ -1960,7 +1974,7 @@ function ServerSettingsPage({
 
           {/* ── Automatyzacje ── */}
           {tab === 'automations' && activeServer && (
-            <AutomationsTab serverId={activeServer} gi={gi}/>
+            <AutomationsTab serverId={activeServer} gi={gi} roles={roles} channels={channels||[]}/>
           )}
 
         </div>
@@ -7336,6 +7350,7 @@ export default function App() {
               streamerMode={streamerMode}
               serverEmojis={serverEmojis.get(activeServer)||[]}
               activeServer={activeServer}
+              channels={allChs}
             />
           ) : activeView==='admin' ? (
             <AdminPanel

@@ -435,6 +435,77 @@ DO $$ BEGIN ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN DEFAULT FALSE; EXC
 DO $$ BEGIN ALTER TABLE users ADD COLUMN totp_backup_codes TEXT[] DEFAULT ARRAY[]::TEXT[]; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN phone_number VARCHAR(30); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN phone_verified BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- ── Custom server emojis ───────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS server_emojis (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    server_id   UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    name        VARCHAR(32) NOT NULL
+                CHECK (name ~ '^[a-zA-Z0-9_]{2,32}$'),
+    image_url   TEXT NOT NULL,
+    uploaded_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(server_id, name)
+);
+
+-- ── User notes (private) ──────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS user_notes (
+    noter_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    noted_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content    TEXT NOT NULL DEFAULT '',
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (noter_id, noted_id)
+);
+
+-- ── Polls ─────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS polls (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    message_id     UUID REFERENCES messages(id) ON DELETE CASCADE,
+    dm_message_id  UUID REFERENCES dm_messages(id) ON DELETE CASCADE,
+    question       TEXT NOT NULL,
+    options        JSONB NOT NULL,
+    multi_vote     BOOLEAN DEFAULT false,
+    ends_at        TIMESTAMPTZ,
+    created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS poll_votes (
+    poll_id    UUID NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    option_id  TEXT NOT NULL,
+    voted_at   TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (poll_id, user_id, option_id)
+);
+
+-- ── Server automations ────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS server_automations (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    server_id      UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    name           VARCHAR(100) NOT NULL,
+    enabled        BOOLEAN DEFAULT true,
+    trigger_type   VARCHAR(32) NOT NULL,
+    trigger_config JSONB DEFAULT '{}',
+    actions        JSONB NOT NULL DEFAULT '[]',
+    created_by     UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_automations_server  ON server_automations(server_id);
+CREATE INDEX IF NOT EXISTS idx_automations_trigger ON server_automations(server_id, trigger_type) WHERE enabled = true;
+
+-- ── PWA push subscriptions ────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    endpoint   TEXT NOT NULL UNIQUE,
+    p256dh     TEXT NOT NULL,
+    auth       TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id);
+
+-- ── Column migrations for existing deployments ────────────────────
+DO $$ BEGIN ALTER TABLE servers     ADD COLUMN accent_color  VARCHAR(32) DEFAULT 'indigo';                                             EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE servers     ADD COLUMN banner_color  VARCHAR(64) DEFAULT 'from-indigo-600 via-violet-600 to-purple-700';       EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE dm_messages ADD COLUMN pinned        BOOLEAN     DEFAULT false;                                                 EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 `;
 
 const SEED_SQL = `
