@@ -3143,6 +3143,9 @@ export default function App() {
 
   // Lightbox for image previews
   const [lightboxSrc, setLightboxSrc]         = useState<string|null>(null);
+  // DM media gallery (fullscreen slideshow)
+  type GalleryItem = { url: string; isVideo: boolean; date: string; sender: string };
+  const [dmGallery, setDmGallery] = useState<{ items: GalleryItem[]; index: number } | null>(null);
 
   // Voice channel text chat
   const [voiceChatOpen, setVoiceChatOpen]     = useState(false);
@@ -8019,37 +8022,45 @@ export default function App() {
                             <Image size={28} className="text-zinc-700"/>
                             <p className="text-xs text-zinc-600">Brak zdjęć ani filmów</p>
                           </div>
-                        ) : (
-                          <div className="grid grid-cols-2 gap-1.5">
-                            {[...mediaItems].reverse().map(m => {
-                              const attUrl = m.attachment_url;
-                              const urlsInContent = (m.content.match(URL_RE) ?? []);
-                              const mediaUrl = attUrl ?? urlsInContent.find(u => isImgUrl(u) || isVidUrl(u));
-                              if (!mediaUrl) return null;
-                              const isVid = isVidUrl(mediaUrl);
-                              return (
-                                <a key={m.id} href={mediaUrl} target="_blank" rel="noopener noreferrer"
+                        ) : (() => {
+                          // Build flat gallery items list (same order as grid)
+                          const galleryItems: GalleryItem[] = [];
+                          [...mediaItems].reverse().forEach(m => {
+                            const attUrl = m.attachment_url;
+                            const urlsInContent = (m.content.match(URL_RE) ?? []);
+                            const mediaUrl = attUrl ?? urlsInContent.find(u => isImgUrl(u) || isVidUrl(u));
+                            if (!mediaUrl) return;
+                            galleryItems.push({
+                              url: mediaUrl,
+                              isVideo: isVidUrl(mediaUrl),
+                              date: new Date(m.created_at).toLocaleDateString('pl-PL',{day:'numeric',month:'short',year:'numeric'}),
+                              sender: m.sender_id === currentUser?.id ? 'Ty' : m.sender_username,
+                            });
+                          });
+                          return (
+                            <div className="grid grid-cols-2 gap-1.5">
+                              {galleryItems.map((item, idx) => (
+                                <button key={idx}
+                                  onClick={() => setDmGallery({ items: galleryItems, index: idx })}
                                   className="relative aspect-square rounded-xl overflow-hidden group border border-white/[0.07] hover:border-indigo-500/40 transition-all">
-                                  {isVid ? (
+                                  {item.isVideo ? (
                                     <div className="w-full h-full bg-zinc-900 flex items-center justify-center">
-                                      <video src={mediaUrl} className="w-full h-full object-cover" muted/>
+                                      <video src={item.url} className="w-full h-full object-cover" muted/>
                                       <div className="absolute inset-0 flex items-center justify-center bg-black/40 group-hover:bg-black/20 transition-all">
                                         <Film size={22} className="text-white/80"/>
                                       </div>
                                     </div>
                                   ) : (
-                                    <img src={mediaUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"/>
+                                    <img src={item.url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"/>
                                   )}
                                   <div className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <div className="bg-black/60 rounded-md px-1.5 py-0.5 text-[9px] text-white/70">
-                                      {new Date(m.created_at).toLocaleDateString('pl-PL',{day:'numeric',month:'short'})}
-                                    </div>
+                                    <div className="bg-black/60 rounded-md px-1.5 py-0.5 text-[9px] text-white/70">{item.date}</div>
                                   </div>
-                                </a>
-                              );
-                            })}
-                          </div>
-                        )}
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </motion.div>
                     )}
 
@@ -10213,6 +10224,100 @@ export default function App() {
             </a>
           </motion.div>
         )}
+      </AnimatePresence>
+
+      {/* ── DM Gallery Lightbox ─────────────────────────────────────── */}
+      <AnimatePresence>
+        {dmGallery && (() => {
+          const { items, index } = dmGallery;
+          const item = items[index];
+          const prev = () => setDmGallery(g => g ? { ...g, index: (g.index - 1 + g.items.length) % g.items.length } : g);
+          const next = () => setDmGallery(g => g ? { ...g, index: (g.index + 1) % g.items.length } : g);
+          const close = () => setDmGallery(null);
+          return (
+            <motion.div key="dm-gallery"
+              initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.2}}
+              className="fixed inset-0 z-[300] flex items-center justify-center"
+              style={{background:'rgba(0,0,0,0.92)',backdropFilter:'blur(20px)'}}
+              onClick={close}
+              onKeyDown={e => { if(e.key==='Escape') close(); if(e.key==='ArrowLeft') prev(); if(e.key==='ArrowRight') next(); }}
+              tabIndex={0}
+              ref={(el) => el?.focus()}>
+
+              {/* Media */}
+              <AnimatePresence mode="wait">
+                <motion.div key={index}
+                  initial={{opacity:0, x: 40}} animate={{opacity:1, x:0}} exit={{opacity:0, x:-40}}
+                  transition={{duration:0.2, ease:[0.16,1,0.3,1]}}
+                  className="flex items-center justify-center max-w-[85vw] max-h-[85vh]"
+                  onClick={e=>e.stopPropagation()}>
+                  {item.isVideo ? (
+                    <video src={item.url} controls autoPlay
+                      className="max-w-full max-h-[85vh] rounded-2xl shadow-2xl object-contain"/>
+                  ) : (
+                    <img src={item.url} alt=""
+                      className="max-w-full max-h-[85vh] rounded-2xl shadow-2xl object-contain"/>
+                  )}
+                </motion.div>
+              </AnimatePresence>
+
+              {/* Close */}
+              <button onClick={close}
+                className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors z-10">
+                <X size={20}/>
+              </button>
+
+              {/* Counter */}
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/50 text-white text-xs font-semibold px-4 py-2 rounded-full">
+                {index + 1} / {items.length}
+              </div>
+
+              {/* Sender + date */}
+              <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/50 text-white text-xs px-4 py-2 rounded-full"
+                onClick={e=>e.stopPropagation()}>
+                <span className="text-zinc-400">{item.sender}</span>
+                <span className="text-zinc-600">·</span>
+                <span className="text-zinc-400">{item.date}</span>
+              </div>
+
+              {/* Download */}
+              <a href={item.url} download target="_blank" rel="noopener noreferrer"
+                className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-4 py-2 rounded-full transition-colors z-10"
+                onClick={e=>e.stopPropagation()}>
+                <Upload size={13}/> Pobierz
+              </a>
+
+              {/* Prev / Next arrows */}
+              {items.length > 1 && (<>
+                <button onClick={e=>{ e.stopPropagation(); prev(); }}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all hover:scale-110 active:scale-95">
+                  <ChevronLeft size={24}/>
+                </button>
+                <button onClick={e=>{ e.stopPropagation(); next(); }}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all hover:scale-110 active:scale-95">
+                  <ChevronRight size={24}/>
+                </button>
+              </>)}
+
+              {/* Thumbnail strip */}
+              {items.length > 1 && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 px-3 py-2 bg-black/40 rounded-2xl max-w-[80vw] overflow-x-auto"
+                  style={{scrollbarWidth:'none'}} onClick={e=>e.stopPropagation()}>
+                  {items.map((it, i) => (
+                    <button key={i} onClick={() => setDmGallery(g => g ? {...g, index: i} : g)}
+                      className={`w-10 h-10 rounded-lg overflow-hidden shrink-0 transition-all
+                        ${i===index ? 'ring-2 ring-indigo-400 scale-110' : 'opacity-50 hover:opacity-80'}`}>
+                      {it.isVideo
+                        ? <div className="w-full h-full bg-zinc-800 flex items-center justify-center"><Film size={14} className="text-white/60"/></div>
+                        : <img src={it.url} alt="" className="w-full h-full object-cover"/>
+                      }
+                    </button>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          );
+        })()}
       </AnimatePresence>
 
       {/* ── Hover card ── */}
