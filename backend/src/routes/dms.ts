@@ -232,4 +232,52 @@ router.delete('/messages/:id', authMiddleware, async (req: AuthRequest, res: Res
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// PUT /api/dms/messages/:id/pin  — toggle pin
+router.put('/messages/:id/pin', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { rows: [msg] } = await query('SELECT * FROM dm_messages WHERE id=$1', [req.params.id]);
+    if (!msg) return res.status(404).json({ error: 'Not found' });
+    // Only participants can pin
+    const { rows: [part] } = await query(
+      'SELECT 1 FROM dm_participants WHERE conversation_id=$1 AND user_id=$2',
+      [msg.conversation_id, req.user!.id]
+    );
+    if (!part) return res.status(403).json({ error: 'Not a participant' });
+    const newPinned = !msg.pinned;
+    await query('UPDATE dm_messages SET pinned=$1 WHERE id=$2', [newPinned, msg.id]);
+    const io = req.app.get('io');
+    if (io) {
+      const { rows: participants } = await query(
+        'SELECT user_id FROM dm_participants WHERE conversation_id=$1', [msg.conversation_id]
+      );
+      participants.forEach((p: any) => {
+        io.to(`user:${p.user_id}`).emit('dm_message_pinned', { id: msg.id, conversation_id: msg.conversation_id, pinned: newPinned });
+      });
+    }
+    return res.json({ pinned: newPinned });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// GET /api/dms/:userId/pinned
+router.get('/:userId/pinned', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const myId = req.user!.id;
+    const { rows: [conv] } = await query(
+      `SELECT c.id FROM dm_conversations c
+       JOIN dm_participants p1 ON p1.conversation_id=c.id AND p1.user_id=$1
+       JOIN dm_participants p2 ON p2.conversation_id=c.id AND p2.user_id=$2`,
+      [myId, req.params.userId]
+    );
+    if (!conv) return res.json([]);
+    const { rows } = await query(
+      `SELECT m.*, u.username AS sender_username, u.avatar_url AS sender_avatar
+       FROM dm_messages m JOIN users u ON u.id=m.sender_id
+       WHERE m.conversation_id=$1 AND m.pinned=true
+       ORDER BY m.created_at DESC LIMIT 50`,
+      [conv.id]
+    );
+    return res.json(rows);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
 export default router;

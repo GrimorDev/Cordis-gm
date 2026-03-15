@@ -9,6 +9,7 @@ import {
 } from '../redis/client';
 import { query } from '../db/pool';
 import { JwtPayload, ServerToClientEvents, ClientToServerEvents } from '../types';
+import { runAutomations } from '../services/automations';
 
 interface SocketData {
   user: {

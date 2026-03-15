@@ -1,0 +1,26 @@
+{
+  "name": "Cordis",
+  "short_name": "Cordis",
+  "description": "Platforma komunikacji dla graczy i twórców",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d0d18",
+  "theme_color": "#6366f1",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/cordyn_logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/cordyn_logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["communication", "social"],
+  "lang": "pl"
+}

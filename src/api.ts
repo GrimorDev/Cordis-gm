@@ -482,3 +482,81 @@ export const adminApi = {
   },
   servers: () => req<AdminServer[]>('GET', '/admin/servers'),
 };
+
+// ── Custom Server Emojis ───────────────────────────────────────────────────
+export interface ServerEmoji {
+  id: string; server_id: string; name: string; image_url: string;
+  uploaded_by: string | null; created_at: string;
+}
+export const emojisApi = {
+  list:   (serverId: string) => req<ServerEmoji[]>('GET', `/servers/${serverId}/emojis`),
+  create: (serverId: string, name: string, image_url: string) =>
+    req<ServerEmoji>('POST', `/servers/${serverId}/emojis`, { name, image_url }),
+  delete: (serverId: string, emojiId: string) =>
+    req<{ ok: boolean }>('DELETE', `/servers/${serverId}/emojis/${emojiId}`),
+};
+
+// ── User Notes ────────────────────────────────────────────────────────────
+export const notesApi = {
+  get:    (userId: string) => req<{ content: string }>('GET', `/users/notes/${userId}`),
+  save:   (userId: string, content: string) =>
+    req<{ ok: boolean }>('PUT', `/users/notes/${userId}`, { content }),
+  delete: (userId: string) => req<{ ok: boolean }>('DELETE', `/users/notes/${userId}`),
+};
+
+// ── Polls ─────────────────────────────────────────────────────────────────
+export interface PollOption { id: string; text: string; }
+export interface PollData {
+  id: string; question: string; options: PollOption[];
+  multi_vote: boolean; ends_at: string | null; created_at: string;
+  message_id: string | null; dm_message_id: string | null;
+  votes: Record<string, number>;   // option_id → count
+  my_votes: string[];              // option_ids I voted for
+  total_votes: number;
+}
+export const pollsApi = {
+  create: (d: { message_id?: string; dm_message_id?: string; question: string; options: PollOption[]; multi_vote?: boolean; ends_at?: string | null }) =>
+    req<PollData>('POST', '/polls', d),
+  get:    (id: string) => req<PollData>('GET', `/polls/${id}`),
+  vote:   (id: string, option_id: string) => req<PollData>('POST', `/polls/${id}/vote`, { option_id }),
+  unvote: (id: string, option_id: string) => req<PollData>('DELETE', `/polls/${id}/vote`, { option_id }),
+};
+
+// ── Push Notifications ────────────────────────────────────────────────────
+export const pushApi = {
+  subscribe:   (sub: { endpoint: string; p256dh: string; auth: string }) =>
+    req<{ ok: boolean }>('POST', '/push/subscribe', sub),
+  unsubscribe: () => req<{ ok: boolean }>('DELETE', '/push/subscribe'),
+};
+
+// ── Server Automations ────────────────────────────────────────────────────
+export type AutomationTrigger = 'member_join'|'member_leave'|'role_assigned'|'message_contains';
+export type AutomationActionType = 'assign_role'|'remove_role'|'send_channel_message'|'send_dm'|'delete_message'|'kick_member';
+export interface AutomationAction {
+  type: AutomationActionType;
+  config: { role_id?: string; channel_id?: string; message?: string };
+}
+export interface ServerAutomation {
+  id: string; server_id: string; name: string; enabled: boolean;
+  trigger_type: AutomationTrigger;
+  trigger_config: { role_id?: string; keyword?: string };
+  actions: AutomationAction[]; created_by: string | null; created_at: string;
+}
+export const automationsApi = {
+  list:   (serverId: string) => req<ServerAutomation[]>('GET', `/servers/${serverId}/automations`),
+  create: (serverId: string, d: Omit<ServerAutomation, 'id'|'server_id'|'created_by'|'created_at'>) =>
+    req<ServerAutomation>('POST', `/servers/${serverId}/automations`, d),
+  update: (serverId: string, id: string, d: Partial<Omit<ServerAutomation,'id'|'server_id'|'created_by'|'created_at'>>) =>
+    req<ServerAutomation>('PUT', `/servers/${serverId}/automations/${id}`, d),
+  delete: (serverId: string, id: string) =>
+    req<{ ok: boolean }>('DELETE', `/servers/${serverId}/automations/${id}`),
+  toggle: (serverId: string, id: string, enabled: boolean) =>
+    req<{ ok: boolean }>('PATCH', `/servers/${serverId}/automations/${id}/toggle`, { enabled }),
+};
+
+// ── DM Pinned Messages ────────────────────────────────────────────────────
+// Extending dmsApi — add to dmsApi object in your component via direct calls:
+export const dmPinApi = {
+  pin:    (messageId: string) => req<{ pinned: boolean }>('PUT', `/dms/messages/${messageId}/pin`),
+  pinned: (userId: string)    => req<DmMessageFull[]>('GET', `/dms/${userId}/pinned`),
+};

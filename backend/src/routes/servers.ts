@@ -5,6 +5,7 @@ import { authMiddleware } from '../middleware/auth';
 import { joinLimiter, inviteCreateLimiter } from '../middleware/userRateLimits';
 import { AuthRequest } from '../types';
 import crypto from 'crypto';
+import { runAutomations } from '../services/automations';
 
 const router = Router();
 
@@ -271,16 +272,20 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     if (!(await isAuthorized(req.params.id, req.user!.id, 'manage_server'))) {
       return res.status(403).json({ error: 'Not authorized' });
     }
-    const { name, description, icon_url, banner_url } = req.body;
+    const { name, description, icon_url, banner_url, accent_color, banner_color } = req.body;
     const { rows: [server] } = await query(
       `UPDATE servers SET
-         name        = COALESCE($1, name),
-         description = COALESCE($2, description),
-         icon_url    = COALESCE($3, icon_url),
-         banner_url  = COALESCE($4, banner_url)
-       WHERE id = $5 RETURNING *`,
+         name         = COALESCE($1, name),
+         description  = COALESCE($2, description),
+         icon_url     = COALESCE($3, icon_url),
+         banner_url   = COALESCE($4, banner_url),
+         accent_color = COALESCE($5, accent_color),
+         banner_color = COALESCE($6, banner_color)
+       WHERE id = $7 RETURNING *`,
       [name || null, description !== undefined ? description : null,
-       icon_url || null, banner_url || null, req.params.id]
+       icon_url || null, banner_url || null,
+       accent_color || null, banner_color || null,
+       req.params.id]
     );
     const io = req.app.get('io');
     if (io) io.to(`server:${req.params.id}`).emit('server_updated', server);
@@ -320,6 +325,8 @@ router.post('/:id/leave', authMiddleware, async (req: AuthRequest, res: Response
       // Remove leaving user's socket from server room
       const sockets = await io.in(`user:${req.user!.id}`).fetchSockets();
       for (const s of sockets) { s.leave(`server:${req.params.id}`); }
+      // Run member_leave automations
+      runAutomations(req.params.id, 'member_leave', { userId: req.user!.id, io }).catch(console.error);
     }
     return res.json({ message: 'Left server' });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
@@ -420,6 +427,11 @@ router.put('/:id/members/:userId/roles', authMiddleware, async (req: AuthRequest
       // Notify the affected user their permissions may have changed
       const io = req.app.get('io');
       if (io) io.to(`user:${req.params.userId}`).emit('permissions_updated', { server_id: req.params.id });
+      // Run role_assigned automations for each new role
+      const assignedRoles = Array.isArray(role_ids) ? role_ids : [];
+      for (const roleId of assignedRoles) {
+        runAutomations(req.params.id, 'role_assigned', { userId: req.params.userId, roleId, io }).catch(console.error);
+      }
       return res.json({ message: 'Roles updated' });
     } catch (err) {
       await client.query('ROLLBACK');
@@ -729,8 +741,62 @@ router.post('/join/:code', authMiddleware, joinLimiter, async (req: AuthRequest,
         server_id: invite.server_id,
         user: { ...u, role_name: 'Member', roles: [] },
       });
+      // Run member_join automations
+      runAutomations(invite.server_id, 'member_join', { userId: req.user!.id, io }).catch(console.error);
     }
     return res.json(server);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ── Custom Emoji ──────────────────────────────────────────────────
+// GET /api/servers/:id/emojis
+router.get('/:id/emojis', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { rows: [member] } = await query(
+      'SELECT 1 FROM server_members WHERE server_id=$1 AND user_id=$2',
+      [req.params.id, req.user!.id]
+    );
+    if (!member) return res.status(403).json({ error: 'Not a member' });
+    const { rows } = await query(
+      'SELECT * FROM server_emojis WHERE server_id=$1 ORDER BY created_at ASC',
+      [req.params.id]
+    );
+    return res.json(rows);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// POST /api/servers/:id/emojis
+router.post('/:id/emojis', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!(await isAuthorized(req.params.id, req.user!.id, 'manage_server'))) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    const { name, image_url } = req.body;
+    if (!name || !image_url) return res.status(400).json({ error: 'name and image_url required' });
+    if (!/^[a-zA-Z0-9_]{2,32}$/.test(name)) return res.status(400).json({ error: 'Invalid emoji name' });
+    const { rows: [count] } = await query(
+      'SELECT COUNT(*) FROM server_emojis WHERE server_id=$1', [req.params.id]
+    );
+    if (parseInt(count.count) >= 50) return res.status(400).json({ error: 'Max 50 custom emojis per server' });
+    const { rows: [emoji] } = await query(
+      'INSERT INTO server_emojis(server_id, name, image_url, uploaded_by) VALUES($1,$2,$3,$4) RETURNING *',
+      [req.params.id, name.toLowerCase(), image_url, req.user!.id]
+    );
+    return res.status(201).json(emoji);
+  } catch (e: any) {
+    if (e.code === '23505') return res.status(409).json({ error: 'Emoji name already exists' });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/servers/:id/emojis/:emojiId
+router.delete('/:id/emojis/:emojiId', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!(await isAuthorized(req.params.id, req.user!.id, 'manage_server'))) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    await query('DELETE FROM server_emojis WHERE id=$1 AND server_id=$2', [req.params.emojiId, req.params.id]);
+    return res.json({ ok: true });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
