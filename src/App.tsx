@@ -14,7 +14,7 @@ import {
   Clock, Pin, PinOff, Activity, AtSign, BadgeCheck, Crown, LayoutDashboard,
   Code2, FlaskConical, ShieldCheck, Hammer, Award, CalendarDays, Quote,
   GripVertical, BarChart2, Server, Database,
-  Music, Gamepad2, ExternalLink, Link2, Link2Off, Film, PhoneIncoming, PhoneMissed, Download, Monitor,
+  Music, Gamepad2, ExternalLink, Link2, Link2Off, Film, PhoneIncoming, PhoneMissed, Download, Monitor, Copy,
   type LucideIcon
 } from 'lucide-react';
 import {
@@ -148,6 +148,10 @@ const IDLE_MS = 10 * 60 * 1000; // 10 min braku aktywności → idle
 // STATIC_BASE comes from api.ts where BASE is already correctly resolved from VITE_API_BASE.
 const staticUrl = (url: string | null | undefined): string =>
   !url ? '' : url.startsWith('/') ? `${STATIC_BASE}${url}` : url;
+
+// Correct base for invite links — in Tauri window.location.origin is tauri://localhost
+// so we use the real server origin from STATIC_BASE when available.
+const APP_ORIGIN = STATIC_BASE || window.location.origin;
 
 const ava = (u: { avatar_url?: string | null; username: string }) =>
   (u.avatar_url ? staticUrl(u.avatar_url) : null) || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(u.username)}&size=40`;
@@ -2216,8 +2220,8 @@ function ServerSettingsPage({
                 <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-4">
                   <p className="text-[10px] text-zinc-600 mb-2">LINK DO ZAPROSZENIA</p>
                   <div className="flex items-center gap-2">
-                    <code className="text-white font-mono text-sm flex-1 bg-black/30 px-3 py-2 rounded-lg">{streamerMode ? '••••••••••' : inviteCode}</code>
-                    <button onClick={() => navigator.clipboard.writeText(inviteCode)} className="text-xs text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 px-3 py-2 rounded-lg transition-colors shrink-0">Kopiuj</button>
+                    <code className="text-zinc-300 font-mono text-xs flex-1 bg-black/30 px-3 py-2 rounded-lg truncate">{streamerMode ? '••••••••••' : `${APP_ORIGIN}/join/${inviteCode}`}</code>
+                    <button onClick={() => { navigator.clipboard.writeText(`${APP_ORIGIN}/join/${inviteCode}`); }} className="text-xs text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 px-3 py-2 rounded-lg transition-colors shrink-0">Kopiuj</button>
                   </div>
                 </div>
               )}
@@ -3998,6 +4002,9 @@ export default function App() {
   const [newCatName, setNewCatName]           = useState('');
   const [newCatPrivate, setNewCatPrivate]     = useState(false);
   const [newCatRoles, setNewCatRoles]         = useState<string[]>([]);
+
+  // ── Channel context menu (right-click) ───────────────────────────
+  const [chCtxMenu, setChCtxMenu] = useState<{x:number;y:number;ch:any}|null>(null);
 
   // ── Category inline edit ─────────────────────────────────────────
   const [editingCatId, setEditingCatId]       = useState<string|null>(null);
@@ -6834,7 +6841,9 @@ export default function App() {
                       const ChIcon = ch.type==='forum'?MessageSquare:ch.type==='announcement'?Megaphone:Hash;
                       return (
                         <div key={ch.id} className="px-2">
-                          <button onClick={()=>{setActiveChannel(ch.id);setIsMobileOpen(false);setSrvSettOpen(false);setProfileViewId(null);if(activeViewRef.current==='admin')setActiveView('servers');}}
+                          <button
+                            onClick={()=>{setActiveChannel(ch.id);setIsMobileOpen(false);setSrvSettOpen(false);setProfileViewId(null);if(activeViewRef.current==='admin')setActiveView('servers');}}
+                            onContextMenu={e=>{e.preventDefault();setChCtxMenu({x:e.clientX,y:e.clientY,ch});}}
                             className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${isAct?'bg-indigo-500/15 text-white border border-indigo-500/25':ping>0?'text-white hover:bg-white/[0.06] border border-amber-500/20 bg-amber-500/5':unread>0?'text-white hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
                             <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
                               <ChIcon size={16} className={`shrink-0 ${isAct?'text-indigo-400':ping>0?'text-amber-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
@@ -6911,7 +6920,9 @@ export default function App() {
                           <React.Fragment key={ch.id}>
                           <SortableChannelItem id={ch.id} catId={cat.id} canManage={canManageChannels}>
                           <div className="px-2">
-                            <button onClick={() => { setActiveChannel(ch.id); setIsMobileOpen(false); setSrvSettOpen(false); setProfileViewId(null); if(activeViewRef.current==='admin')setActiveView('servers'); }}
+                            <button
+                              onClick={() => { setActiveChannel(ch.id); setIsMobileOpen(false); setSrvSettOpen(false); setProfileViewId(null); if(activeViewRef.current==='admin')setActiveView('servers'); }}
+                              onContextMenu={e=>{ e.preventDefault(); setChCtxMenu({x:e.clientX,y:e.clientY,ch}); }}
                               className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${
                                 isAct
                                   ? 'bg-indigo-500/15 text-white border border-indigo-500/25'
@@ -9371,6 +9382,44 @@ export default function App() {
         </>
       )}
 
+      {/* Channel context menu (right-click on channel) */}
+      {chCtxMenu&&(
+        <>
+          <div className="fixed inset-0 z-[90]" onClick={()=>setChCtxMenu(null)}/>
+          <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}}
+            style={{position:'fixed',left:chCtxMenu.x,top:Math.min(chCtxMenu.y, window.innerHeight-220)}}
+            className="z-[91] bg-[#0e0e1c] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 py-1.5 min-w-[200px] overflow-hidden"
+            onClick={()=>setChCtxMenu(null)}>
+            {/* Otwórz kanał */}
+            <button onClick={()=>{ setActiveChannel(chCtxMenu.ch.id); setIsMobileOpen(false); }}
+              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
+              <Hash size={13} className="text-zinc-500 shrink-0"/>
+              Otwórz kanał
+            </button>
+            {/* Kopiuj ID kanału */}
+            <button onClick={()=>{ navigator.clipboard.writeText(chCtxMenu.ch.id); addToast('Skopiowano ID kanału','success'); }}
+              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
+              <Copy size={13} className="text-zinc-500 shrink-0"/>
+              Kopiuj ID
+            </button>
+            {canManageChannels&&(<>
+              <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
+              <button onClick={()=>{ openChEdit(chCtxMenu.ch); }}
+                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
+                <Settings2 size={13} className="text-zinc-500 shrink-0"/>
+                Edytuj kanał
+              </button>
+              <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
+              <button onClick={()=>{ handleDeleteCh(chCtxMenu.ch.id); }}
+                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-rose-400 hover:bg-rose-500/10 transition-colors text-left">
+                <Trash2 size={13} className="shrink-0"/>
+                Usuń kanał
+              </button>
+            </>)}
+          </motion.div>
+        </>
+      )}
+
       {/* Delete server confirmation */}
       <AnimatePresence>
         {deleteSrvConfirm&&(
@@ -9897,10 +9946,10 @@ export default function App() {
                     <button onClick={handleInvite} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">Generuj zaproszenie</button>
                     {inviteCode&&(
                       <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-3">
-                        <p className="text-[10px] text-zinc-600 mb-1.5">KOD</p>
+                        <p className="text-[10px] text-zinc-600 mb-1.5">LINK DO ZAPROSZENIA</p>
                         <div className="flex items-center gap-2">
-                          <code className="text-white font-mono text-sm flex-1">{streamerMode ? '••••••••••' : inviteCode}</code>
-                          <button onClick={()=>navigator.clipboard.writeText(inviteCode)} className="text-xs text-indigo-400 hover:text-indigo-300">Kopiuj</button>
+                          <code className="text-zinc-300 font-mono text-xs flex-1 truncate">{streamerMode ? '••••••••••' : `${APP_ORIGIN}/join/${inviteCode}`}</code>
+                          <button onClick={()=>{navigator.clipboard.writeText(`${APP_ORIGIN}/join/${inviteCode}`);addToast('Link skopiowany!','success');}} className="text-xs text-indigo-400 hover:text-indigo-300 shrink-0">Kopiuj</button>
                         </div>
                       </div>
                     )}
@@ -10240,9 +10289,9 @@ export default function App() {
                 <div className="flex items-center gap-2 mt-4 mb-4 bg-white/[0.04] border border-white/[0.08] rounded-2xl px-4 py-3">
                   <Globe size={14} className="text-zinc-500 shrink-0"/>
                   <code className="flex-1 text-xs text-zinc-300 truncate font-mono">
-                    {window.location.origin}/join/{inviteFriendsCode}
+                    {APP_ORIGIN}/join/{inviteFriendsCode}
                   </code>
-                  <button onClick={()=>{navigator.clipboard.writeText(`${window.location.origin}/join/${inviteFriendsCode}`);addToast('Link skopiowany!','success');}}
+                  <button onClick={()=>{navigator.clipboard.writeText(`${APP_ORIGIN}/join/${inviteFriendsCode}`);addToast('Link skopiowany!','success');}}
                     className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors shrink-0 px-2 py-1 rounded-lg hover:bg-indigo-500/10">
                     Kopiuj link
                   </button>
