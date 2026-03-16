@@ -30,8 +30,8 @@
     "fs:allow-write-file",
     "fs:allow-read-file",
     "fs:allow-exists",
-    "fs:scope-app-data",
-    "fs:scope-app-data-recursive",
+    "fs:scope-appdata",
+    "fs:scope-appdata-recursive",
     "shell:allow-open"
   ]
 }
