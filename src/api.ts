@@ -1,12 +1,19 @@
-// In Tauri desktop context the app loads from tauri://localhost so relative
-// paths won't resolve — use an explicit backend URL provided via env var.
+// VITE_API_BASE is baked in at build time by GitHub Actions (e.g. https://cordyn.pl/api).
+// When set it always wins — no need to detect Tauri at module-init time (which can be
+// unreliable because __TAURI_INTERNALS__ may not yet exist when this module is first
+// evaluated, causing isTauri=false → BASE='/api' → STATIC_BASE='' → broken image URLs).
+const _viteBase = (import.meta.env.VITE_API_BASE as string | undefined) || '';
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-const BASE = (isTauri
-  ? (import.meta.env.VITE_API_BASE || 'http://localhost:4000/api')
-  : '/api'
-).replace(/\/$/, ''); // strip trailing slash so paths never get double-slash
+const BASE = (
+  _viteBase
+    ? _viteBase                          // always use env var when baked in
+    : isTauri
+      ? 'http://localhost:4000/api'      // Tauri dev without env var
+      : '/api'                           // web (same-origin)
+).replace(/\/$/, '');
 
-// Origin without /api — used by App.tsx to resolve relative upload paths
+// Origin without /api suffix — used to resolve /uploads/... relative paths to absolute URLs.
+// e.g. 'https://cordyn.pl/api' → 'https://cordyn.pl'
 export const STATIC_BASE = BASE.replace(/\/api\/?$/, '');
 
 export class ApiError extends Error {
