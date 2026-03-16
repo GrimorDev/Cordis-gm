@@ -6422,7 +6422,7 @@ export default function App() {
       html = html.replace(/:([a-zA-Z0-9_]{2,32}):/g, (match, name) => {
         const e = srvEmojis.find(x => x.name === name);
         if (!e) return match;
-        const safeUrl = e.image_url.replace(/"/g, '&quot;');
+        const safeUrl = staticUrl(e.image_url).replace(/"/g, '&quot;');
         return `<img src="${safeUrl}" alt=":${name}:" title=":${name}:" data-custom-emoji="1" style="width:1.4em;height:1.4em;vertical-align:-0.3em;display:inline;object-fit:contain;border-radius:3px">`;
       });
     }
@@ -8077,7 +8077,7 @@ export default function App() {
                               <p className="text-xs text-zinc-500 line-clamp-2 mb-3">{post.content}</p>
                               <div className="flex items-center gap-3">
                                 <div className="flex items-center gap-1.5">
-                                  <img src={post.author_avatar||`https://ui-avatars.com/api/?name=${post.author_username}&background=random`} className="w-5 h-5 rounded-full object-cover" alt=""/>
+                                  <img src={staticUrl(post.author_avatar)||`https://ui-avatars.com/api/?name=${post.author_username}&background=random`} className="w-5 h-5 rounded-full object-cover" alt=""/>
                                   <span className="text-xs text-zinc-500">{post.author_username}</span>
                                 </div>
                                 <span className="text-xs text-zinc-600">{new Date(post.created_at).toLocaleDateString('pl-PL')}</span>
@@ -8102,7 +8102,7 @@ export default function App() {
                         <div className="p-5">
                           <h2 className="text-xl font-bold text-white mb-2">{forumPost.title}</h2>
                           <div className="flex items-center gap-3 mb-4">
-                            <img src={forumPost.author_avatar||`https://ui-avatars.com/api/?name=${forumPost.author_username}&background=random`} className="w-7 h-7 rounded-full object-cover" alt=""/>
+                            <img src={staticUrl(forumPost.author_avatar)||`https://ui-avatars.com/api/?name=${forumPost.author_username}&background=random`} className="w-7 h-7 rounded-full object-cover" alt=""/>
                             <span className="text-sm font-semibold text-zinc-300">{forumPost.author_username}</span>
                             <span className="text-xs text-zinc-600">{new Date(forumPost.created_at).toLocaleString('pl-PL')}</span>
                             {(currentUser?.id===forumPost.author_id||canManageMessages)&&(
@@ -8122,7 +8122,7 @@ export default function App() {
                         {forumPost.locked&&<div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-400"><Lock size={11}/>Ten wątek jest zablokowany</div>}
                         {(forumPost.replies||[]).map(r=>(
                           <div key={r.id} className="flex gap-3 bg-white/[0.02] border border-white/[0.06] rounded-xl p-3">
-                            <img src={r.author_avatar||`https://ui-avatars.com/api/?name=${r.author_username}&background=random`} className="w-7 h-7 rounded-full object-cover shrink-0 mt-0.5" alt=""/>
+                            <img src={staticUrl(r.author_avatar)||`https://ui-avatars.com/api/?name=${r.author_username}&background=random`} className="w-7 h-7 rounded-full object-cover shrink-0 mt-0.5" alt=""/>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
                                 <span className="text-xs font-semibold text-zinc-300">{r.author_username}</span>
