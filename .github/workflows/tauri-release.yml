@@ -54,6 +54,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # 5b — Sync version in tauri.conf.json with git tag (e.g. v0.1.11 → "0.1.11")
+      - name: Sync app version from tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}".TrimStart('v')
+          $conf = Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json
+          $conf.version = $tag
+          $conf | ConvertTo-Json -Depth 10 | Out-File "src-tauri/tauri.conf.json" -Encoding utf8NoBOM
+          Write-Host "Set app version to $tag"
+
       # 6 — Build Tauri app (with updater signing)
       - name: Build Tauri (.exe + updater bundle)
         env:
@@ -70,7 +81,15 @@ jobs:
           path: src-tauri/target/release/bundle/nsis/*.exe
           retention-days: 30
 
-      # 8 — Create GitHub Release with installer + updater bundle (only on tag push)
+      # 8 — List bundle directory (so we always know what Tauri generated)
+      - name: List bundle output
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          Write-Host "=== NSIS bundle directory ==="
+          Get-ChildItem "src-tauri/target/release/bundle/nsis/" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.Name }
+
+      # 9 — Create GitHub Release with installer + updater artifacts (only on tag push)
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
@@ -81,6 +100,7 @@ jobs:
           fail_on_unmatched_files: false
           files: |
             src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.exe.sig
             src-tauri/target/release/bundle/nsis/*.nsis.zip
             src-tauri/target/release/bundle/nsis/*.nsis.zip.sig
           body: |
@@ -98,14 +118,6 @@ jobs:
             - Windows 10 / 11 (64-bit)
             - Połączenie z internetem
 
-      # 9 — List bundle directory (debug)
-      - name: List bundle output
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: pwsh
-        run: |
-          Write-Host "=== NSIS bundle directory ==="
-          Get-ChildItem "src-tauri/target/release/bundle/nsis/" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.Name }
-
       # 10 — Generate latest.json for the auto-updater endpoint
       - name: Generate latest.json
         if: startsWith(github.ref, 'refs/tags/')
@@ -113,22 +125,21 @@ jobs:
         run: |
           $version = "${{ github.ref_name }}".TrimStart('v')
           $nsisDir = "src-tauri/target/release/bundle/nsis"
-          # Try .nsis.zip.sig first, then .zip.sig as fallback
-          $sigFile = Get-ChildItem "$nsisDir/*.nsis.zip.sig" -ErrorAction SilentlyContinue | Select-Object -First 1
+          # Tauri v2 signs the .exe directly → look for .exe.sig first, then .nsis.zip.sig
+          $sigFile = Get-ChildItem "$nsisDir/*.exe.sig" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $sigFile) {
-            $sigFile = Get-ChildItem "$nsisDir/*.zip.sig" -ErrorAction SilentlyContinue | Select-Object -First 1
+            $sigFile = Get-ChildItem "$nsisDir/*.nsis.zip.sig" -ErrorAction SilentlyContinue | Select-Object -First 1
           }
           if (-not $sigFile) {
-            Write-Host "WARNING: No .sig file found — updater signing may have failed."
-            Write-Host "Files in bundle dir:"
-            Get-ChildItem $nsisDir -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $_" }
+            Write-Host "ERROR: No .sig file found — TAURI_SIGNING_PRIVATE_KEY may be wrong or missing."
             exit 1
           }
           Write-Host "Found sig file: $($sigFile.Name)"
           $sig = Get-Content $sigFile.FullName -Raw
-          $zipName = ($sigFile.Name -replace '\.sig$', '')
+          # The download target is the file that was signed (strip .sig)
+          $targetName = ($sigFile.Name -replace '\.sig$', '')
           $repoUrl = "https://github.com/GrimorDev/Cordis-gm"
-          $downloadUrl = "$repoUrl/releases/download/${{ github.ref_name }}/$zipName"
+          $downloadUrl = "$repoUrl/releases/download/${{ github.ref_name }}/$targetName"
           $pubDate = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
           $json = @{
             version = $version
