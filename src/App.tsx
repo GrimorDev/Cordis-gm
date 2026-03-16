@@ -4388,16 +4388,27 @@ export default function App() {
   useEffect(() => {
     if (!isTauri) return;
     let cancelled = false;
-    (async () => {
+
+    const doCheck = async () => {
       try {
         const { check } = await import('@tauri-apps/plugin-updater');
         const update = await check();
+        console.log('[updater] check result:', update?.available, update?.version);
         if (!cancelled && update?.available) {
           setUpdateAvailable({ version: update.version, body: update.body ?? null });
         }
-      } catch (e) { console.warn('[updater] check failed:', e); }
-    })();
-    return () => { cancelled = true; };
+      } catch (e) {
+        console.error('[updater] check failed:', e);
+      }
+    };
+
+    // Sprawdź od razu przy starcie
+    doCheck();
+
+    // Sprawdzaj co 30 minut (gdy apka jest otwarta w tle)
+    const interval = setInterval(doCheck, 30 * 60 * 1000);
+
+    return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
   // ── Autostart: odczytaj stan przy starcie ────────────────────────────
