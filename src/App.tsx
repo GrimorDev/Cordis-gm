@@ -4089,7 +4089,8 @@ export default function App() {
 
   // App Settings
   const [appSettOpen, setAppSettOpen]         = useState(false);
-  const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'devices'|'privacy'|'locale'>('account');
+  const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'devices'|'privacy'|'locale'|'desktop'>('account');
+  const [autostartEnabled, setAutostartEnabled] = useState<boolean>(false);
   // ── 2FA settings state ──
   const [twoFaStatus, setTwoFaStatus]         = useState<TwoFactorStatus | null>(null);
   const [twoFaModal, setTwoFaModal]           = useState<'setup'|'backup_codes'|'disable'|'regen'|null>(null);
@@ -4391,6 +4392,25 @@ export default function App() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // ── Autostart: odczytaj stan przy starcie ────────────────────────────
+  useEffect(() => {
+    if (!isTauri) return;
+    (async () => {
+      try {
+        const { isEnabled } = await import('@tauri-apps/plugin-autostart');
+        setAutostartEnabled(await isEnabled());
+      } catch (e) { /* ignore */ }
+    })();
+  }, []);
+
+  const toggleAutostart = async (val: boolean) => {
+    try {
+      const { enable, disable } = await import('@tauri-apps/plugin-autostart');
+      if (val) await enable(); else await disable();
+      setAutostartEnabled(val);
+    } catch (e) { console.warn('[autostart]', e); }
+  };
 
   const installUpdate = async () => {
     if (!updateAvailable || updateInstalling) return;
@@ -4835,7 +4855,7 @@ export default function App() {
 
     // ── Ping / mention received ──────────────────────────────────────
     sock.on('ping_received' as any, (data: any) => {
-      const { channel_id, channel_name, server_id, server_name, from_username, content, type } = data;
+      const { channel_id, channel_name, server_id, server_name, from_username, from_avatar, content, type } = data;
       if (channel_id !== prevChRef.current) {
         setPingChs(p => ({ ...p, [channel_id]: (p[channel_id] || 0) + 1 }));
       }
@@ -4853,12 +4873,42 @@ export default function App() {
         read: false,
       };
       setNotifications(prev => [entry, ...prev].slice(0, 50));
-      // Browser push notification (if granted)
-      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        const n = new Notification(
-          type === 'everyone' ? `@everyone na ${server_name ?? 'serwerze'}` : `${from_username} wspomniał(-a) o Tobie`,
-          { body: content?.slice(0, 80) ?? '', icon: '/favicon.ico', tag: channel_id }
-        );
+      // Push notification — Tauri (native) lub przeglądarka
+      const notifTitle = type === 'everyone'
+        ? `@everyone na ${server_name ?? 'serwerze'}`
+        : `${from_username} wspomniał(-a) o Tobie`;
+      const notifBody  = (content ?? '').slice(0, 100);
+      if (isTauri) {
+        // Pobierz avatar do cache lokalnego, potem wyślij natywne powiadomienie
+        (async () => {
+          try {
+            const { sendNotification } = await import('@tauri-apps/plugin-notification');
+            // Pobierz avatar i zapisz jako plik tymczasowy
+            let iconPath: string | undefined;
+            const rawAvatarUrl = (from_avatar ?? '');
+            if (rawAvatarUrl) {
+              try {
+                const avatarUrl = staticUrl(rawAvatarUrl);
+                const resp = await fetch(avatarUrl);
+                if (resp.ok) {
+                  const { appDataDir } = await import('@tauri-apps/api/path');
+                  const { mkdir, writeFile } = await import('@tauri-apps/plugin-fs');
+                  const dir = (await appDataDir()) + 'notif-avatars';
+                  await mkdir(dir, { recursive: true }).catch(() => {});
+                  const ext = avatarUrl.split('.').pop()?.split('?')[0] ?? 'jpg';
+                  const filePath = `${dir}/${from_username ?? 'user'}.${ext}`;
+                  const buf = await resp.arrayBuffer();
+                  await writeFile(filePath, new Uint8Array(buf));
+                  iconPath = filePath;
+                }
+              } catch { /* brak avatara — ok */ }
+            }
+            sendNotification({ title: notifTitle, body: notifBody, ...(iconPath ? { icon: iconPath } : {}) });
+          } catch (e) { console.warn('[notif]', e); }
+        })();
+      } else if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        const avatarSrc = from_avatar ? staticUrl(from_avatar) : '/favicon.ico';
+        const n = new Notification(notifTitle, { body: notifBody, icon: avatarSrc, tag: channel_id });
         n.onclick = () => { window.focus(); };
       }
     });
@@ -10317,6 +10367,7 @@ export default function App() {
                     {id:'devices',    label:t('settings.devices'),    icon:<Mic size={14}/>},
                     {id:'privacy',    label:t('settings.privacy'),    icon:<Shield size={14}/>},
                     {id:'locale',     label:t('settings.locale'),     icon:<Globe size={14}/>},
+                    ...(isTauri ? [{id:'desktop' as const, label:'Aplikacja', icon:<Monitor size={14}/>}] : []),
                   ] as const).map(tab=>(
                     <button key={tab.id} onClick={()=>setAppSettTab(tab.id)}
                       className={`flex items-center gap-2 px-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all text-left shrink-0 ${
@@ -10825,6 +10876,44 @@ export default function App() {
                               <span className="text-zinc-400 font-mono">{fmtTime(d.toISOString())}</span>
                             </div>
                           ))}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* ─── APLIKACJA (tylko desktop) ─── */}
+                  {appSettTab==='desktop'&&isTauri&&(
+                    <motion.div key="desktop" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
+                      className="flex flex-col gap-6">
+                      <h3 className="text-sm font-bold text-white">Ustawienia aplikacji</h3>
+
+                      {/* Autostart */}
+                      <div className="p-4 bg-white/[0.02] border border-white/[0.07] rounded-2xl">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-semibold text-white">Uruchamiaj wraz z Windows</p>
+                            <p className="text-xs text-zinc-500 mt-0.5">Cordyn uruchomi się automatycznie po zalogowaniu do systemu</p>
+                          </div>
+                          <button onClick={()=>toggleAutostart(!autostartEnabled)}
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${autostartEnabled?'bg-indigo-500':'bg-zinc-700'}`}>
+                            <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${autostartEnabled?'translate-x-5':'translate-x-0'}`}/>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Minimize to tray info */}
+                      <div className="p-4 bg-white/[0.02] border border-white/[0.07] rounded-2xl">
+                        <div className="flex items-start gap-3">
+                          <div className="mt-0.5 w-8 h-8 rounded-xl bg-indigo-500/10 flex items-center justify-center shrink-0">
+                            <Monitor size={15} className="text-indigo-400"/>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-white">Minimalizacja do zasobnika</p>
+                            <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
+                              Zamknięcie okna (✕) chowa Cordyn w zasobniku systemowym — aplikacja nadal działa w tle.
+                              Kliknij ikonę Cordyn w zasobniku aby przywrócić okno. Aby w pełni zamknąć, użyj prawego przycisku myszy na ikonie → <span className="text-zinc-300">Zamknij</span>.
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </motion.div>
