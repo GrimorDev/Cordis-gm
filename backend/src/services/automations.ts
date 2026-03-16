@@ -167,37 +167,33 @@ async function executeAction(
     case 'send_channel_message': {
       if (!config.channel_id || !config.message) return;
 
-      // Replace {username} placeholder
       const content = config.message.replace(/\{username\}/g, username);
 
-      // Get a system/bot user id or use a sentinel; for now use the server owner as sender
       const { rows: serverRows } = await query(
-        'SELECT owner_id FROM servers WHERE id = $1',
+        'SELECT owner_id, name, icon_url FROM servers WHERE id = $1',
         [serverId]
       );
       if (serverRows.length === 0) return;
 
-      const senderId = serverRows[0].owner_id;
+      const { owner_id: senderId, name: serverName, icon_url: serverIcon } = serverRows[0];
 
       const { rows: msgRows } = await query(
-        `INSERT INTO messages (channel_id, sender_id, content)
-         VALUES ($1, $2, $3)
+        `INSERT INTO messages (channel_id, sender_id, content, is_automated, system_name, system_avatar)
+         VALUES ($1, $2, $3, true, $4, $5)
          RETURNING *`,
-        [config.channel_id, senderId, content]
+        [config.channel_id, senderId, content, serverName, serverIcon]
       );
 
       if (msgRows.length > 0 && context.io) {
-        // Fetch sender info for the event
-        const { rows: senderRows } = await query(
-          'SELECT id, username, avatar_url, status, custom_status FROM users WHERE id = $1',
-          [senderId]
-        );
-
-        const sender = senderRows.length > 0 ? senderRows[0] : { id: senderId, username: 'System', avatar_url: null, status: 'online', custom_status: null };
-
         context.io.to(`channel:${config.channel_id}`).emit('new_message', {
           ...msgRows[0],
-          sender,
+          sender: {
+            id: senderId,
+            username: serverName,
+            avatar_url: serverIcon,
+            status: 'online',
+            custom_status: null,
+          },
         });
       }
       break;

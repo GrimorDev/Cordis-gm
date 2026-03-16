@@ -506,6 +506,9 @@ CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id);
 DO $$ BEGIN ALTER TABLE servers     ADD COLUMN accent_color  VARCHAR(32) DEFAULT 'indigo';                                             EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE servers     ADD COLUMN banner_color  VARCHAR(64) DEFAULT 'from-indigo-600 via-violet-600 to-purple-700';       EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE dm_messages ADD COLUMN pinned        BOOLEAN     DEFAULT false;                                                 EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE messages    ADD COLUMN is_automated  BOOLEAN     DEFAULT false;                                                 EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE messages    ADD COLUMN system_name   TEXT;                                                                     EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE messages    ADD COLUMN system_avatar TEXT;                                                                     EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 
 -- ── Channel read state (unread counts per user per channel) ───────────
 CREATE TABLE IF NOT EXISTS channel_read_state (

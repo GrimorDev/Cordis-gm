@@ -67,7 +67,7 @@ async function resolveChannelAccess(channelId: string, userId: string): Promise<
 
 const MSG_JOIN = (serverIdParam: string, channelIdParam: string) => `
   SELECT m.id, m.channel_id, m.content, m.edited, m.created_at, m.updated_at,
-         m.attachment_url, m.reply_to_id,
+         m.attachment_url, m.reply_to_id, m.is_automated, m.system_name, m.system_avatar,
          u.id as sender_id, u.username as sender_username,
          u.avatar_url as sender_avatar, u.status as sender_status, u.avatar_effect as sender_avatar_effect,
          sm.role_name as sender_role,

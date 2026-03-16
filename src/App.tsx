@@ -2902,7 +2902,7 @@ function ProfilePage({
                 </div>
               </>
             ) : bannerSrc ? (
-              <img src={bannerSrc} className="w-full h-full object-cover" alt=""/>
+              <img src={staticUrl(bannerSrc)} className="w-full h-full object-cover" alt=""/>
             ) : (
               <div className={`w-full h-full bg-gradient-to-r ${bannerGrad}`}/>
             )}
@@ -3650,12 +3650,12 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
       <div className="bg-[#18182a] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden">
         {/* Banner */}
         <div className="h-16 relative" style={u?.banner_url
-          ? { backgroundImage: `url(${u.banner_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+          ? { backgroundImage: `url(${staticUrl(u.banner_url)})`, backgroundSize: 'cover', backgroundPosition: 'center' }
           : { background: 'linear-gradient(135deg, #2e2e48 0%, #1a1a2e 100%)' }}>
           {/* Avatar */}
           <div className="absolute -bottom-6 left-4">
-            <div className="relative av-frozen av-active" style={{'--av-url':`url("${u?.avatar_url||`https://api.dicebear.com/9.x/identicon/svg?seed=${u?.username||userId}`}")`} as React.CSSProperties}>
-              <img src={u?.avatar_url||`https://api.dicebear.com/9.x/identicon/svg?seed=${u?.username||userId}`}
+            <div className="relative av-frozen av-active" style={{'--av-url':`url("${staticUrl(u?.avatar_url)||`https://api.dicebear.com/9.x/identicon/svg?seed=${u?.username||userId}`}")`} as React.CSSProperties}>
+              <img src={staticUrl(u?.avatar_url)||`https://api.dicebear.com/9.x/identicon/svg?seed=${u?.username||userId}`}
                 className={`w-14 h-14 rounded-2xl object-cover border-4 border-[#18182a] av-eff-${u?.avatar_effect||'none'} av-sc`} alt=""/>
               <span className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-[#18182a] ${sc(effectiveStatus)}`}/>
             </div>
@@ -4967,16 +4967,14 @@ export default function App() {
   };
   // Set flag on channel/DM/view switch
   useEffect(() => { scrollToBottomOnLoadRef.current = true; }, [activeChannel, activeDmUserId, activeView]);
-  // PRIMARY: useLayoutEffect on msgsLoading — fires after React commits DOM synchronously.
-  // In React 18 setChannelMsgs + setMsgsLoading(false) are batched into ONE render, so
-  // when msgsLoading→false the messages are already in the DOM and scrollHeight is correct.
-  // AnimatePresence is now mode="sync" so new content is in DOM immediately too.
-  useLayoutEffect(() => {
+  // PRIMARY: scroll when msgsLoading transitions false — messages are in DOM at this point.
+  // Use requestAnimationFrame so the browser has finished layout before we read scrollHeight.
+  useEffect(() => {
     if (!msgsLoading && scrollToBottomOnLoadRef.current) {
       scrollToBottomOnLoadRef.current = false;
-      scrollToBottom(false);
+      requestAnimationFrame(() => scrollToBottom(false));
     }
-  }, [msgsLoading, activeView, activeDmUserId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [msgsLoading]); // eslint-disable-line react-hooks/exhaustive-deps
   // Smart-scroll on new incoming messages (only near bottom, not during initial load)
   useEffect(() => {
     if (scrollToBottomOnLoadRef.current) return;
@@ -8249,11 +8247,17 @@ export default function App() {
                           className={`flex ${showChatAvatars?'gap-2.5':'gap-0'} group ${compactMessages?'mb-0.5':'mb-1.5'} ${isOwn?'flex-row-reverse':'flex-row'} ${mentionsMe?'rounded-xl bg-amber-400/5 border-l-2 border-amber-400/60 pl-2 -ml-2':''}`}>
 
                           {/* Avatar */}
+                          {(()=>{
+                            const isAuto=(msg as any).is_automated;
+                            const autoAvatar=isAuto?staticUrl((msg as any).system_avatar)||'':null;
+                            const avatarSrc=isAuto?(autoAvatar||`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent((msg as any).system_name||'S')}&backgroundColor=6366f1&textColor=ffffff`):ava({avatar_url:msg.sender_avatar,username:msg.sender_username});
+                            const displayName=isAuto?((msg as any).system_name||'Serwer'):maskName(msg.sender_username);
+                            return (<>
                           {showChatAvatars&&(
-                          <div className="av-frozen shrink-0 self-end mb-0.5" style={{'--av-url':`url("${ava({avatar_url:msg.sender_avatar,username:msg.sender_username})}")`} as React.CSSProperties}>
-                            <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} alt=""
-                              onClick={()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar,status:(msg as MessageFull).sender_status})}
-                              className={`w-9 h-9 rounded-xl object-cover cursor-pointer hover:opacity-80 hover:scale-105 transition-all av-eff-${(msg as any).sender_avatar_effect||'none'}`}/>
+                          <div className="av-frozen shrink-0 self-end mb-0.5" style={{'--av-url':`url("${avatarSrc}")`} as React.CSSProperties}>
+                            <img src={avatarSrc} alt=""
+                              onClick={isAuto?undefined:()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar,status:(msg as MessageFull).sender_status})}
+                              className={`w-9 h-9 rounded-xl object-cover ${isAuto?'cursor-default':'cursor-pointer hover:opacity-80 hover:scale-105'} transition-all av-eff-${(msg as any).sender_avatar_effect||'none'}`}/>
                           </div>
                           )}
 
@@ -8262,13 +8266,18 @@ export default function App() {
 
                             {/* Meta (name + time) */}
                             <div className={`flex items-center gap-1.5 mb-1 px-1 ${isOwn?'flex-row-reverse':''}`}>
-                              <span className="text-xs font-semibold cursor-pointer hover:underline transition-opacity hover:opacity-80"
-                                style={{ color: (msg as MessageFull).sender_role_color || (isOwn ? '#818cf8' : '#a1a1aa') }}
-                                onClick={()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar})}>
-                                {maskName(msg.sender_username)}
+                              <span className={`text-xs font-semibold transition-opacity ${isAuto?'cursor-default':'cursor-pointer hover:underline hover:opacity-80'}`}
+                                style={{ color: isAuto?'#818cf8':((msg as MessageFull).sender_role_color || (isOwn ? '#818cf8' : '#a1a1aa')) }}
+                                onClick={isAuto?undefined:()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar})}>
+                                {displayName}
                               </span>
-                              {getMsgSenderBadges(msg.sender_id).map(b=>{const BIcon=getBadgeIcon(b.name);return <BIcon key={b.id} size={10} style={{color:b.color}} title={b.label} className="shrink-0"/>;  })}
-                              {(msg as MessageFull).sender_role&&(
+                              {isAuto&&(
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                  APP
+                                </span>
+                              )}
+                              {!isAuto&&getMsgSenderBadges(msg.sender_id).map(b=>{const BIcon=getBadgeIcon(b.name);return <BIcon key={b.id} size={10} style={{color:b.color}} title={b.label} className="shrink-0"/>;  })}
+                              {!isAuto&&(msg as MessageFull).sender_role&&(
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide"
                                   style={{
                                     color: (msg as MessageFull).sender_role_color || '#a1a1aa',
@@ -8439,6 +8448,7 @@ export default function App() {
                               </div>
                             )}
                           </div>
+                          </>); })()}
 
                           {/* Hover actions */}
                           {editingMsgId !== msg.id && !((msg as any).deleted || msg.content === '__deleted__') && (
