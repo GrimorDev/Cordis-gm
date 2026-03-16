@@ -143,8 +143,15 @@ const STATUS_OPTIONS = [
 const IDLE_MS = 10 * 60 * 1000; // 10 min braku aktywności → idle
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+// In Tauri, relative paths like /uploads/... resolve to tauri://localhost — prepend server origin.
+const STATIC_ORIGIN = (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window)
+  ? (import.meta.env.VITE_API_BASE || 'https://cordyn.pl/api').replace(/\/api\/?$/, '')
+  : '';
+const staticUrl = (url: string | null | undefined): string =>
+  !url ? '' : url.startsWith('/') ? `${STATIC_ORIGIN}${url}` : url;
+
 const ava = (u: { avatar_url?: string | null; username: string }) =>
-  u.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(u.username)}&size=40`;
+  (u.avatar_url ? staticUrl(u.avatar_url) : null) || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(u.username)}&size=40`;
 
 const sc = (s: string) => {
   if (s === 'online') return 'bg-emerald-500';
@@ -1187,7 +1194,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
               {inviteInfo && (
                 <div className="mb-6 flex items-center gap-3 bg-indigo-500/10 border border-indigo-500/25 rounded-2xl px-4 py-3">
                   {inviteInfo.icon_url
-                    ? <img src={inviteInfo.icon_url} className="w-10 h-10 rounded-xl object-cover shrink-0" alt=""/>
+                    ? <img src={staticUrl(inviteInfo.icon_url)} className="w-10 h-10 rounded-xl object-cover shrink-0" alt=""/>
                     : <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-lg font-bold text-white shrink-0">{inviteInfo.server_name[0]}</div>
                   }
                   <div className="min-w-0">
@@ -1977,7 +1984,7 @@ function ServerSettingsPage({
         </button>
         <div className="flex items-center gap-2.5 flex-1 min-w-0">
           {serverFull.icon_url
-            ? <img src={serverFull.icon_url} className="w-6 h-6 rounded-lg object-cover shrink-0" alt=""/>
+            ? <img src={staticUrl(serverFull.icon_url)} className="w-6 h-6 rounded-lg object-cover shrink-0" alt=""/>
             : <div className="w-6 h-6 rounded-lg bg-indigo-600 flex items-center justify-center text-xs font-bold text-white shrink-0">{serverFull.name[0]}</div>
           }
           <span className="text-sm font-bold text-white truncate">{serverFull.name}</span>
@@ -2011,7 +2018,7 @@ function ServerSettingsPage({
                 <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Banner</label>
                 <div className="relative h-32 rounded-2xl overflow-hidden bg-white/[0.03] border border-white/[0.06]">
                   {(srvBannerFile ? URL.createObjectURL(srvBannerFile) : srvForm.banner_url) ? (
-                    <img src={srvBannerFile ? URL.createObjectURL(srvBannerFile) : srvForm.banner_url} className="w-full h-full object-cover" alt=""/>
+                    <img src={srvBannerFile ? URL.createObjectURL(srvBannerFile) : staticUrl(srvForm.banner_url)} className="w-full h-full object-cover" alt=""/>
                   ) : <div className="w-full h-full flex items-center justify-center text-zinc-700"><Image size={22}/></div>}
                   <label className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 hover:opacity-100 cursor-pointer transition-opacity">
                     <span className="text-sm text-white font-semibold flex items-center gap-1.5"><Upload size={14}/> Zmień banner</span>
@@ -2024,7 +2031,7 @@ function ServerSettingsPage({
                 <div className="flex items-center gap-4">
                   <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-white/[0.04] border border-white/[0.06]">
                     {(srvIconFile ? URL.createObjectURL(srvIconFile) : srvForm.icon_url) ? (
-                      <img src={srvIconFile ? URL.createObjectURL(srvIconFile) : srvForm.icon_url} className="w-full h-full object-cover" alt=""/>
+                      <img src={srvIconFile ? URL.createObjectURL(srvIconFile) : staticUrl(srvForm.icon_url)} className="w-full h-full object-cover" alt=""/>
                     ) : <div className="w-full h-full flex items-center justify-center text-xl font-bold text-zinc-600">{serverFull.name.charAt(0)}</div>}
                   </div>
                   <label className="cursor-pointer text-sm font-semibold bg-white/[0.06] hover:bg-white/[0.09] border border-white/[0.08] text-zinc-300 hover:text-white px-3 py-2 rounded-xl flex items-center gap-1.5 transition-all">
@@ -2469,7 +2476,7 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                   <div key={u.id} className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-2 px-4 py-3 border-b border-white/[0.04] last:border-0 items-center hover:bg-white/[0.02] transition-colors">
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="w-7 h-7 rounded-lg overflow-hidden bg-zinc-800 shrink-0">
-                        {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover" alt=""/> : <div className="w-full h-full flex items-center justify-center text-xs font-bold text-zinc-400">{u.username[0].toUpperCase()}</div>}
+                        {u.avatar_url ? <img src={staticUrl(u.avatar_url)} className="w-full h-full object-cover" alt=""/> : <div className="w-full h-full flex items-center justify-center text-xs font-bold text-zinc-400">{u.username[0].toUpperCase()}</div>}
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -6441,7 +6448,7 @@ export default function App() {
                     className={`flex items-center gap-2 h-full px-3 text-sm font-medium transition-all duration-200 border-r border-white/[0.05] whitespace-nowrap relative group shrink-0 ${isActive?'text-white bg-black/20':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'}`}>
                     {isActive&&<motion.span layoutId="nav-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"/>}
                     <span className={`relative w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden transition-all duration-200 ${isActive?'bg-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.3)]':'bg-zinc-800'} ${srv.is_official?'ring-2 ring-amber-400/80 ring-offset-[2px] ring-offset-transparent':''}`}>
-                      {srv.icon_url ? <img src={srv.icon_url} className="w-full h-full object-cover" alt=""/> : srv.name.charAt(0).toUpperCase()}
+                      {srv.icon_url ? <img src={staticUrl(srv.icon_url)} className="w-full h-full object-cover" alt=""/> : srv.name.charAt(0).toUpperCase()}
                     </span>
                     <span className="max-w-[90px] truncate">{maskName(srv.name)}</span>
                     {srv.is_official&&(
@@ -7757,7 +7764,7 @@ export default function App() {
                   onMouseEnter={() => setBannerHovered(true)}
                   onMouseLeave={() => setBannerHovered(false)}
                 >
-                  <img src={serverFull.banner_url} className="w-full h-full object-cover" alt=""
+                  <img src={staticUrl(serverFull.banner_url)} className="w-full h-full object-cover" alt=""
                     style={{ transition: 'transform 0.35s ease', transform: bannerHovered ? 'scale(1.04)' : 'scale(1)' }}/>
                   {/* Gradient overlay — deeper on hover */}
                   <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/10 to-black/70"
@@ -7770,7 +7777,7 @@ export default function App() {
                       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
                       className="rounded-xl overflow-hidden border-2 border-white/25 shadow-lg shrink-0 flex items-center justify-center bg-indigo-600">
                       {serverFull.icon_url
-                        ? <img src={serverFull.icon_url} className="w-full h-full object-cover" alt=""/>
+                        ? <img src={staticUrl(serverFull.icon_url)} className="w-full h-full object-cover" alt=""/>
                         : <span className="text-white font-bold" style={{ fontSize: bannerHovered ? 20 : 12 }}>{serverFull.name?.[0]?.toUpperCase()}</span>
                       }
                     </motion.div>
@@ -8003,7 +8010,7 @@ export default function App() {
                           }} className="text-left w-full bg-white/[0.03] hover:bg-white/[0.05] border border-white/[0.07] hover:border-white/[0.12] rounded-2xl overflow-hidden transition-all duration-150 group">
                             {post.image_url && (
                               <div className="h-40 overflow-hidden">
-                                <img src={post.image_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt=""/>
+                                <img src={staticUrl(post.image_url)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt=""/>
                               </div>
                             )}
                             <div className="p-4">
@@ -8033,7 +8040,7 @@ export default function App() {
                       </button>
                       {/* Post */}
                       <div className="bg-white/[0.03] border border-white/[0.08] rounded-2xl overflow-hidden mb-4">
-                        {forumPost.image_url && <img src={forumPost.image_url} className="w-full max-h-80 object-cover" alt=""/>}
+                        {forumPost.image_url && <img src={staticUrl(forumPost.image_url)} className="w-full max-h-80 object-cover" alt=""/>}
                         <div className="p-5">
                           <h2 className="text-xl font-bold text-white mb-2">{forumPost.title}</h2>
                           <div className="flex items-center gap-3 mb-4">
