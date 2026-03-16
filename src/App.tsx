@@ -30,6 +30,7 @@ import {
   type FavoriteGame, type SpotifyData, type SpotifyTrack, type SpotifyJamSession, type SpotifyVoiceDj, type TwitchData, type TwitchStream, type SteamData, type SteamGame,
   type TwoFactorStatus, type LoginResult, ApiError,
   type ServerEmoji, type PollData, type ServerAutomation, type AutomationTrigger, type AutomationAction, type AutomationActionType,
+  STATIC_BASE,
 } from './api';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -144,11 +145,9 @@ const IDLE_MS = 10 * 60 * 1000; // 10 min braku aktywności → idle
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 // In Tauri, relative paths like /uploads/... resolve to tauri://localhost — prepend server origin.
-const STATIC_ORIGIN = (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window)
-  ? (import.meta.env.VITE_API_BASE || 'https://cordyn.pl/api').replace(/\/api\/?$/, '')
-  : '';
+// STATIC_BASE comes from api.ts where BASE is already correctly resolved from VITE_API_BASE.
 const staticUrl = (url: string | null | undefined): string =>
-  !url ? '' : url.startsWith('/') ? `${STATIC_ORIGIN}${url}` : url;
+  !url ? '' : url.startsWith('/') ? `${STATIC_BASE}${url}` : url;
 
 const ava = (u: { avatar_url?: string | null; username: string }) =>
   (u.avatar_url ? staticUrl(u.avatar_url) : null) || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(u.username)}&size=40`;

@@ -6,6 +6,9 @@ const BASE = (isTauri
   : '/api'
 ).replace(/\/$/, ''); // strip trailing slash so paths never get double-slash
 
+// Origin without /api — used by App.tsx to resolve relative upload paths
+export const STATIC_BASE = BASE.replace(/\/api\/?$/, '');
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
