@@ -10,7 +10,7 @@ import {
   LogOut, Loader2, Lock, Phone, PhoneOff, MessageSquare, Upload, MoreHorizontal, ScreenShare,
   UserX, UserCheck, UserMinus,
   CheckCircle2, AlertCircle, Info, AlertTriangle, PartyPopper, Sparkles, Zap, Globe,
-  Eye, EyeOff, Megaphone, FileText, ChevronLeft, ChevronRight, ArrowLeft,
+  Eye, EyeOff, Megaphone, FileText, ChevronLeft, ChevronRight, ChevronDown, ArrowLeft,
   Clock, Pin, PinOff, Activity, AtSign, BadgeCheck, Crown, LayoutDashboard,
   Code2, FlaskConical, ShieldCheck, Hammer, Award, CalendarDays, Quote,
   GripVertical, BarChart2, Server, Database,
@@ -3589,16 +3589,16 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
     const cached = cache.current.get(userId);
     const CACHE_TTL = 60_000;
     if (cached && Date.now() - cached.loadedAt < CACHE_TTL) { setData(cached); return; }
-    const tk = localStorage.getItem('cordyn_token') || '';
+    // Use api.ts functions — they use the correct BASE URL (VITE_API_BASE in Tauri builds)
     Promise.allSettled([
-      fetch(`/api/users/${userId}`, { headers: { Authorization: `Bearer ${tk}` } }).then(r=>r.json()),
-      fetch(`/api/games/user/${userId}`, { headers: { Authorization: `Bearer ${tk}` } }).then(r=>r.json()),
-      fetch(`/api/spotify/user/${userId}`, { headers: { Authorization: `Bearer ${tk}` } }).then(r=>r.json()),
+      users.get(userId),
+      gamesApi.getUser(userId),
+      spotifyApi.userPublic(userId),
     ]).then(([p,g,s]) => {
       const entry = {
-        profile: p.status==='fulfilled' ? p.value : null,
-        games: g.status==='fulfilled' && Array.isArray(g.value) ? g.value : [],
-        spotify: s.status==='fulfilled' ? s.value : null,
+        profile: p.status==='fulfilled' ? p.value as UserProfile : null,
+        games: g.status==='fulfilled' && Array.isArray(g.value) ? g.value as FavoriteGame[] : [],
+        spotify: s.status==='fulfilled' ? s.value as SpotifyData : null,
         loadedAt: Date.now(),
       };
       cache.current.set(userId, entry);
@@ -4016,6 +4016,7 @@ export default function App() {
   const msgScrollRef     = useRef<HTMLDivElement>(null); // ref to the scrollable message container
   const srvTabsRef       = useRef<HTMLDivElement>(null); // ref to the scrollable server tabs
   const scrollToBottomOnLoadRef = useRef(false); // flag: scroll to bottom when messages finish loading
+  const [hasNewMsgs, setHasNewMsgs] = useState(false); // show "↓ new messages" button when scrolled up
   const prevChRef        = useRef('');
   const attachRef        = useRef<HTMLInputElement>(null);
   const callTimerRef     = useRef<ReturnType<typeof setInterval>|null>(null);
@@ -4386,7 +4387,7 @@ export default function App() {
         if (!cancelled && update?.available) {
           setUpdateAvailable({ version: update.version, body: update.body ?? null });
         }
-      } catch { /* updater not configured yet — ignore */ }
+      } catch (e) { console.warn('[updater] check failed:', e); }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -5001,7 +5002,7 @@ export default function App() {
     else el.scrollTop = el.scrollHeight;
   };
   // Set flag on channel/DM/view switch
-  useEffect(() => { scrollToBottomOnLoadRef.current = true; }, [activeChannel, activeDmUserId, activeView]);
+  useEffect(() => { scrollToBottomOnLoadRef.current = true; setHasNewMsgs(false); }, [activeChannel, activeDmUserId, activeView]);
   // PRIMARY: scroll when msgsLoading transitions false — messages are in DOM at this point.
   // Use requestAnimationFrame so the browser has finished layout before we read scrollHeight.
   useEffect(() => {
@@ -5014,7 +5015,15 @@ export default function App() {
   useEffect(() => {
     if (scrollToBottomOnLoadRef.current) return;
     const el = msgScrollRef.current;
-    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 180) scrollToBottom(true);
+    if (!el) return;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distFromBottom < 250) {
+      scrollToBottom(true);
+      setHasNewMsgs(false);
+    } else {
+      // User scrolled up — show "new messages" indicator instead of force-scrolling
+      setHasNewMsgs(true);
+    }
   }, [channelMsgs, dmMsgs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Sync refs ───────────────────────────────────────────────────
@@ -8195,8 +8204,20 @@ export default function App() {
                     </div>
                   </div>
                 )}
+                {/* New messages indicator — shown when user scrolled up and new message arrived */}
+                {hasNewMsgs && (
+                  <button
+                    onClick={() => { scrollToBottom(true); setHasNewMsgs(false); }}
+                    className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-xl shadow-indigo-500/30 transition-all animate-bounce-once">
+                    <ChevronDown size={14}/> Nowe wiadomości
+                  </button>
+                )}
               {/* Messages */}
               <div ref={msgScrollRef} className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-5 custom-scrollbar flex flex-col"
+                onScroll={e => {
+                  const el = e.currentTarget;
+                  if (el.scrollHeight - el.scrollTop - el.clientHeight < 100) setHasNewMsgs(false);
+                }}
                 onClickCapture={e => {
                   const btn = (e.target as HTMLElement).closest<HTMLElement>('.copy-code-btn');
                   if (!btn) return;
