@@ -8438,10 +8438,10 @@ export default function App() {
                             {msg.attachment_url&&(
                               <div className="mt-1.5 max-w-sm">
                                 {/\.(jpg|jpeg|png|gif|webp)$/i.test(msg.attachment_url) ? (
-                                  <img src={msg.attachment_url} alt="attachment" className="rounded-2xl max-h-64 object-contain cursor-zoom-in hover:opacity-90 transition-opacity shadow-lg"
-                                    onClick={()=>setLightboxSrc(msg.attachment_url!)}/>
+                                  <img src={staticUrl(msg.attachment_url)} alt="attachment" className="rounded-2xl max-h-64 object-contain cursor-zoom-in hover:opacity-90 transition-opacity shadow-lg"
+                                    onClick={()=>setLightboxSrc(staticUrl(msg.attachment_url!))}/>
                                 ) : (
-                                  <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-2 rounded-xl glass-bubble text-xs text-zinc-400 hover:text-white transition-colors">
+                                  <a href={staticUrl(msg.attachment_url)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-2 rounded-xl glass-bubble text-xs text-zinc-400 hover:text-white transition-colors">
                                     <Paperclip size={12}/> {msg.attachment_url.split('/').pop()}
                                   </a>
                                 )}
@@ -9050,7 +9050,7 @@ export default function App() {
                           // Build flat gallery items list (same order as grid)
                           const galleryItems: GalleryItem[] = [];
                           [...mediaItems].reverse().forEach(m => {
-                            const attUrl = m.attachment_url;
+                            const attUrl = m.attachment_url ? staticUrl(m.attachment_url) : null;
                             const urlsInContent = (m.content.match(URL_RE) ?? []);
                             const mediaUrl = attUrl ?? urlsInContent.find(u => isImgUrl(u) || isVidUrl(u));
                             if (!mediaUrl) return;
