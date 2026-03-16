@@ -5776,12 +5776,23 @@ export default function App() {
   };
 
   // ── Invite Friends ───────────────────────────────────────────────
+  const [inviteFriendsLoading, setInviteFriendsLoading] = useState(false);
+  const fetchInviteCode = async () => {
+    if (!activeServer) return;
+    setInviteFriendsLoading(true);
+    try {
+      const r = await serversApi.createInvite(activeServer, '604800');
+      setInviteFriendsCode(r.code);
+    } catch (err) {
+      console.error('[invite]', err);
+    } finally {
+      setInviteFriendsLoading(false);
+    }
+  };
   const openInviteFriends = async () => {
     setSrvDropOpen(false); setInviteFriendsOpen(true);
-    if (!inviteFriendsCode) {
-      try { const r = await serversApi.createInvite(activeServer, '604800'); setInviteFriendsCode(r.code); }
-      catch (err) { console.error(err); }
-    }
+    // Zawsze pobierz/odśwież kod przy otwarciu
+    fetchInviteCode();
   };
   const handleInviteFriend = async (friendId: string, friendUsername: string) => {
     if (!inviteFriendsCode || !serverFull) return;
@@ -10296,18 +10307,29 @@ export default function App() {
               </div>
 
               {/* Copy link */}
-              {inviteFriendsCode&&(
-                <div className="flex items-center gap-2 mt-4 mb-4 bg-white/[0.04] border border-white/[0.08] rounded-2xl px-4 py-3">
-                  <Globe size={14} className="text-zinc-500 shrink-0"/>
-                  <code className="flex-1 text-xs text-zinc-300 truncate font-mono">
-                    {APP_ORIGIN}/join/{inviteFriendsCode}
-                  </code>
-                  <button onClick={()=>{navigator.clipboard.writeText(`${APP_ORIGIN}/join/${inviteFriendsCode}`);addToast('Link skopiowany!','success');}}
-                    className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors shrink-0 px-2 py-1 rounded-lg hover:bg-indigo-500/10">
-                    Kopiuj link
-                  </button>
-                </div>
-              )}
+              <div className="flex items-center gap-2 mt-4 mb-4 bg-white/[0.04] border border-white/[0.08] rounded-2xl px-4 py-3 min-h-[48px]">
+                <Globe size={14} className="text-zinc-500 shrink-0"/>
+                {inviteFriendsLoading ? (
+                  <span className="flex-1 text-xs text-zinc-500 flex items-center gap-2"><Loader2 size={12} className="animate-spin"/>Generowanie linku…</span>
+                ) : inviteFriendsCode ? (
+                  <>
+                    <code className="flex-1 text-xs text-zinc-300 truncate font-mono">
+                      {APP_ORIGIN}/join/{inviteFriendsCode}
+                    </code>
+                    <button onClick={()=>{navigator.clipboard.writeText(`${APP_ORIGIN}/join/${inviteFriendsCode}`);addToast('Link skopiowany!','success');}}
+                      className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors shrink-0 px-2 py-1 rounded-lg hover:bg-indigo-500/10">
+                      Kopiuj
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex-1 text-xs text-zinc-500">Błąd generowania linku</span>
+                    <button onClick={fetchInviteCode} className="text-xs text-indigo-400 hover:text-indigo-300 px-2 py-1 rounded-lg hover:bg-indigo-500/10">
+                      Spróbuj ponownie
+                    </button>
+                  </>
+                )}
+              </div>
 
               {/* Friends list */}
               <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2">{t('friends.onlineCount')} — {friends.filter(f=>f.status!=='offline').length} {t('members.online').toLowerCase()}</p>
