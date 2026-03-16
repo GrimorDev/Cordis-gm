@@ -54,10 +54,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # 6 — Build Tauri app
-      #     VITE_API_BASE points to your VPS backend.
-      #     Set VITE_API_BASE in repo Settings → Secrets & variables → Actions.
-      - name: Build Tauri (.exe)
+      # 6 — Build Tauri app (with updater signing)
+      - name: Build Tauri (.exe + updater bundle)
         env:
           VITE_API_BASE: ${{ secrets.VITE_API_BASE }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -72,7 +70,7 @@ jobs:
           path: src-tauri/target/release/bundle/nsis/*.exe
           retention-days: 30
 
-      # 8 — Create GitHub Release (only on tag push)
+      # 8 — Create GitHub Release with installer + updater bundle (only on tag push)
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
@@ -80,15 +78,55 @@ jobs:
           name: Cordyn ${{ github.ref_name }}
           draft: false
           prerelease: false
-          files: src-tauri/target/release/bundle/nsis/*.exe
+          files: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.nsis.zip
+            src-tauri/target/release/bundle/nsis/*.nsis.zip.sig
           body: |
             ## Cordyn Desktop ${{ github.ref_name }}
 
-            ### Instalacja
+            ### Instalacja (pierwsze uruchomienie)
             1. Pobierz plik `Cordyn_*_x64-setup.exe`
             2. Uruchom instalator
             3. Aplikacja zainstaluje się i uruchomi automatycznie
 
+            ### Automatyczna aktualizacja
+            Jeśli masz już zainstalowaną wersję, aplikacja wykryje aktualizację automatycznie i zaproponuje jej instalację.
+
             ### Wymagania
             - Windows 10 / 11 (64-bit)
-            - Połączenie z internetem (łączy się z serwerem Cordyn)
+            - Połączenie z internetem
+
+      # 9 — Generate latest.json for the auto-updater endpoint
+      - name: Generate latest.json
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          $sigFile = Get-ChildItem "src-tauri/target/release/bundle/nsis/*.nsis.zip.sig" | Select-Object -First 1
+          $sig = Get-Content $sigFile.FullName -Raw
+          $zipName = ($sigFile.Name -replace '\.sig$', '')
+          $repoUrl = "https://github.com/GrimorDev/Cordis-gm"
+          $downloadUrl = "$repoUrl/releases/download/${{ github.ref_name }}/$zipName"
+          $pubDate = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+          $json = @{
+            version = $version
+            notes = "Zaktualizowano Cordyn do wersji $version."
+            pub_date = $pubDate
+            platforms = @{
+              "windows-x86_64" = @{
+                signature = $sig.Trim()
+                url = $downloadUrl
+              }
+            }
+          } | ConvertTo-Json -Depth 5
+          $json | Out-File -FilePath "latest.json" -Encoding utf8NoBOM
+          Write-Host "Generated latest.json:"
+          Get-Content "latest.json"
+
+      # 10 — Upload latest.json to release (used by in-app auto-updater)
+      - name: Upload latest.json to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: latest.json

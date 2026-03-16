@@ -4373,6 +4373,41 @@ export default function App() {
       .catch(() => clearToken()).finally(() => setAuthLoading(false));
   }, []);
 
+  // ── Auto-update check (Tauri only) ──────────────────────────────
+  const [updateAvailable, setUpdateAvailable] = useState<{version:string;body:string|null}|null>(null);
+  const [updateInstalling, setUpdateInstalling] = useState(false);
+  useEffect(() => {
+    if (!isTauri) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { check } = await import('@tauri-apps/plugin-updater');
+        const update = await check();
+        if (!cancelled && update?.available) {
+          setUpdateAvailable({ version: update.version, body: update.body ?? null });
+        }
+      } catch { /* updater not configured yet — ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const installUpdate = async () => {
+    if (!updateAvailable || updateInstalling) return;
+    setUpdateInstalling(true);
+    try {
+      const { check } = await import('@tauri-apps/plugin-updater');
+      const { relaunch } = await import('@tauri-apps/plugin-process');
+      const update = await check();
+      if (update?.available) {
+        await update.downloadAndInstall();
+        await relaunch();
+      }
+    } catch (e) {
+      console.error('Update failed', e);
+      setUpdateInstalling(false);
+    }
+  };
+
   // ── Socket ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -6398,6 +6433,23 @@ export default function App() {
       {/* Tauri frameless window titlebar — only rendered in the desktop app */}
       {isTauri && <TitleBar />}
 
+      {/* Update available banner */}
+      {updateAvailable && (
+        <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-2 rounded-xl bg-indigo-600/20 border border-indigo-500/40 text-sm">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-indigo-300 shrink-0">🚀</span>
+            <span className="text-zinc-200">Dostępna aktualizacja <span className="font-semibold text-indigo-300">v{updateAvailable.version}</span></span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={installUpdate} disabled={updateInstalling}
+              className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors disabled:opacity-60">
+              {updateInstalling ? 'Instalowanie…' : 'Zainstaluj teraz'}
+            </button>
+            <button onClick={() => setUpdateAvailable(null)} className="text-zinc-500 hover:text-zinc-300 transition-colors"><X size={14}/></button>
+          </div>
+        </div>
+      )}
+
       {/* TOP NAV — 3-col grid: [left tabs] [Cordyn] [right actions]
            grid-cols: 1fr auto 1fr guarantees center is always truly centered.
            No items-center on nav so children use h-full correctly (stretch). */}
@@ -8318,21 +8370,23 @@ export default function App() {
                             ) : msg.content.startsWith('CINV|') ? (() => {
                               const parts = msg.content.split('|');
                               const [,srvId,code,srvName,iconUrl,bannerUrl] = parts;
+                              const iconSrc = staticUrl(iconUrl);
+                              const bannerSrc2 = staticUrl(bannerUrl);
                               const alreadyMember = serverList.some(s=>s.id===srvId);
                               return (
                                 <div className="max-w-xs glass-bubble rounded-2xl overflow-hidden shadow-xl">
                                   {/* Banner or gradient fallback */}
                                   <div className="h-16 relative overflow-hidden">
-                                    {bannerUrl ? (
-                                      <img src={bannerUrl} className="w-full h-full object-cover" alt=""/>
+                                    {bannerSrc2 ? (
+                                      <img src={bannerSrc2} className="w-full h-full object-cover" alt=""/>
                                     ) : (
                                       <div className="w-full h-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600"/>
                                     )}
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"/>
                                   </div>
                                   <div className="px-4 pb-4 pt-2 flex items-end gap-3 -mt-6 relative">
-                                    {iconUrl ? (
-                                      <img src={iconUrl} className="w-12 h-12 rounded-2xl border-4 border-black/50 object-cover shadow-lg shrink-0" alt=""/>
+                                    {iconSrc ? (
+                                      <img src={iconSrc} className="w-12 h-12 rounded-2xl border-4 border-black/50 object-cover shadow-lg shrink-0" alt=""/>
                                     ) : (
                                       <div className="w-12 h-12 rounded-2xl border-4 border-black/50 bg-indigo-600 flex items-center justify-center text-xl font-bold text-white shadow-lg shrink-0">
                                         {srvName?.[0]?.toUpperCase()||'S'}
