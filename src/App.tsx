@@ -262,7 +262,7 @@ function EmojiPicker({ onSelect, onClose, serverEmojis }: { onSelect: (e: string
             {serverEmojis!.map(e => (
               <button key={e.id} onClick={() => onSelect(`:${e.name}:`)} title={`:${e.name}:`}
                 className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/[0.1] transition-colors hover:scale-110 active:scale-95">
-                <img src={e.image_url} alt={e.name} className="w-6 h-6 object-contain"/>
+                <img src={staticUrl(e.image_url)} alt={e.name} className="w-6 h-6 object-contain"/>
               </button>
             ))}
           </div>
@@ -1634,7 +1634,7 @@ function EmojiTab({ serverId, initialEmojis, canManage, gi }: {
         <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
           {localEmojis.map(e => (
             <div key={e.id} className="flex flex-col items-center gap-1.5 bg-white/[0.03] border border-white/[0.05] rounded-xl p-2 group relative hover:border-white/[0.1] transition-colors">
-              <img src={e.image_url} alt={e.name} className="w-10 h-10 object-contain rounded-lg"/>
+              <img src={staticUrl(e.image_url)} alt={e.name} className="w-10 h-10 object-contain rounded-lg"/>
               <span className="text-[10px] text-zinc-400 truncate w-full text-center">:{e.name}:</span>
               {canManage && (
                 <button
@@ -2630,7 +2630,7 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                   <div key={s.id} className="grid grid-cols-[2fr_1.5fr_1fr_1fr_1fr] gap-2 px-4 py-3 border-b border-white/[0.04] last:border-0 items-center hover:bg-white/[0.02]">
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="w-7 h-7 rounded-lg overflow-hidden bg-zinc-800 shrink-0">
-                        {s.icon_url ? <img src={s.icon_url} className="w-full h-full object-cover" alt=""/> : <div className="w-full h-full flex items-center justify-center text-xs font-bold text-zinc-500">{s.name[0]}</div>}
+                        {s.icon_url ? <img src={staticUrl(s.icon_url)} className="w-full h-full object-cover" alt=""/> : <div className="w-full h-full flex items-center justify-center text-xs font-bold text-zinc-500">{s.name[0]}</div>}
                       </div>
                       <span className="text-sm font-semibold text-white truncate">{s.name}</span>
                     </div>
@@ -8073,7 +8073,7 @@ export default function App() {
                         ))}
                         {!forumPost.locked&&(
                           <div className="flex gap-3 mt-2">
-                            <img src={currentUser?.avatar_url||`https://ui-avatars.com/api/?name=${currentUser?.username||'?'}&background=random`} className="w-7 h-7 rounded-full object-cover shrink-0 mt-2" alt=""/>
+                            <img src={staticUrl(currentUser?.avatar_url)||`https://ui-avatars.com/api/?name=${currentUser?.username||'?'}&background=random`} className="w-7 h-7 rounded-full object-cover shrink-0 mt-2" alt=""/>
                             <div className="flex-1">
                               <textarea value={replyContent} onChange={e=>setReplyContent(e.target.value)}
                                 placeholder="Napisz odpowiedź..." rows={2}
@@ -8956,7 +8956,7 @@ export default function App() {
                 {/* Banner */}
                 <div className="h-16 relative overflow-hidden shrink-0">
                   {dmPartnerProfile.banner_url
-                    ? <img src={dmPartnerProfile.banner_url} className="w-full h-full object-cover" alt=""/>
+                    ? <img src={staticUrl(dmPartnerProfile.banner_url)} className="w-full h-full object-cover" alt=""/>
                     : <div className={`w-full h-full bg-gradient-to-br ${dmPartnerProfile.banner_color||'from-indigo-600 via-purple-600 to-pink-600'}`}/>
                   }
                 </div>
@@ -9299,7 +9299,7 @@ export default function App() {
               <div className="relative shrink-0">
                 <div className="h-28 relative overflow-hidden rounded-t-3xl">
                   {(currentUser?.id===selUser.id ? (profBannerPrev||currentUser?.banner_url) : selUser.banner_url) ? (
-                    <img src={currentUser?.id===selUser.id?(profBannerPrev||currentUser?.banner_url!):selUser.banner_url} className="w-full h-full object-cover" alt=""/>
+                    <img src={currentUser?.id===selUser.id?(profBannerPrev||staticUrl(currentUser?.banner_url)):staticUrl(selUser.banner_url)} className="w-full h-full object-cover" alt=""/>
                   ) : (
                     <div className={`w-full h-full bg-gradient-to-r ${(currentUser?.id===selUser.id ? editProf?.banner_color : selUser?.banner_color)||getBannerGradient(selUser.id||'')}`}/>
                   )}
@@ -10273,7 +10273,7 @@ export default function App() {
                       <div className="rounded-2xl overflow-hidden border border-white/[0.07]">
                         <div className="h-20 relative">
                           {(profBannerPrev||currentUser.banner_url) ? (
-                            <img src={profBannerPrev||currentUser.banner_url!} className="w-full h-full object-cover" alt=""/>
+                            <img src={profBannerPrev||staticUrl(currentUser.banner_url)} className="w-full h-full object-cover" alt=""/>
                           ) : (
                             <div className={`w-full h-full bg-gradient-to-r ${editProf?.banner_color||'from-indigo-600 via-purple-600 to-pink-600'}`}/>
                           )}
@@ -11445,7 +11445,7 @@ export default function App() {
               {/* Server info */}
               <div className="flex items-center gap-4">
                 {pendingInvite.icon_url
-                  ? <img src={pendingInvite.icon_url} className="w-14 h-14 rounded-2xl object-cover shrink-0" alt=""/>
+                  ? <img src={staticUrl(pendingInvite.icon_url)} className="w-14 h-14 rounded-2xl object-cover shrink-0" alt=""/>
                   : <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center text-2xl font-bold text-white shrink-0">{pendingInvite.server_name[0]}</div>
                 }
                 <div>
