@@ -1,20 +1,25 @@
-// VITE_API_BASE is baked in at build time by GitHub Actions (e.g. https://cordyn.pl/api).
-// When set it always wins — no need to detect Tauri at module-init time (which can be
-// unreliable because __TAURI_INTERNALS__ may not yet exist when this module is first
-// evaluated, causing isTauri=false → BASE='/api' → STATIC_BASE='' → broken image URLs).
+// Determine the API base URL — priority order:
+// 1. VITE_API_BASE baked in at build time (GitHub Actions secret → always correct)
+// 2. __TAURI_BASE__ global injected below at runtime as fallback for Tauri
+// 3. Tauri dev fallback (localhost)
+// 4. Web same-origin (/api)
 const _viteBase = (import.meta.env.VITE_API_BASE as string | undefined) || '';
-const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 const BASE = (
   _viteBase
-    ? _viteBase                          // always use env var when baked in
+    ? _viteBase
     : isTauri
-      ? 'http://localhost:4000/api'      // Tauri dev without env var
-      : '/api'                           // web (same-origin)
+      ? 'http://localhost:4000/api'
+      : '/api'
 ).replace(/\/$/, '');
 
-// Origin without /api suffix — used to resolve /uploads/... relative paths to absolute URLs.
-// e.g. 'https://cordyn.pl/api' → 'https://cordyn.pl'
+// Origin without /api — resolves /uploads/... to absolute URLs in Tauri.
 export const STATIC_BASE = BASE.replace(/\/api\/?$/, '');
+
+// Log at startup so DevTools shows what URL is being used
+if (typeof window !== 'undefined') {
+  console.log(`[api] BASE=${BASE} STATIC_BASE=${STATIC_BASE} VITE_API_BASE=${_viteBase||'(not set)'}`);
+}
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }

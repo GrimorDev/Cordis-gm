@@ -54,6 +54,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # 5a — Verify required secrets
+      - name: Verify secrets
+        shell: pwsh
+        run: |
+          $base = "${{ secrets.VITE_API_BASE }}"
+          if ($base -eq '') {
+            Write-Error "VITE_API_BASE secret is NOT SET! Images will be broken in desktop app."
+            exit 1
+          }
+          Write-Host "VITE_API_BASE is set to: $base"
+
       # 5b — Sync version in tauri.conf.json with git tag (e.g. v0.1.11 → "0.1.11")
       - name: Sync app version from tag
         if: startsWith(github.ref, 'refs/tags/')
