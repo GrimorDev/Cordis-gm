@@ -1,38 +1,25 @@
 FROM node:20-alpine AS builder
 
-WORKDIR /workspace
+WORKDIR /app
 
-# Enable corepack so pnpm is available
-RUN corepack enable && corepack prepare pnpm@latest --activate
-
-# Copy workspace manifests (pnpm needs all of these to resolve the lockfile)
-COPY pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY package.json ./package.json
-COPY backend/package.json ./backend/package.json
-
-# Install all workspace deps
-RUN pnpm install --frozen-lockfile
+# Install deps (npm ships with node:alpine; no extra tooling needed)
+COPY backend/package.json ./package.json
+RUN npm install
 
 # Compile TypeScript
-COPY backend/tsconfig.json ./backend/
-COPY backend/src ./backend/src
-RUN pnpm --filter cordis-backend run build
-
-# Create a lean prod deploy folder (prod-only node_modules, no devDeps)
-RUN pnpm deploy --filter cordis-backend --prod /deploy
+COPY backend/tsconfig.json ./tsconfig.json
+COPY backend/src ./src
+RUN node_modules/.bin/tsc
 
 # ── Production image ──────────────────────────────────────────────────
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy prod node_modules + package.json from pnpm deploy
-COPY --from=builder /deploy/node_modules ./node_modules
-COPY --from=builder /deploy/package.json ./package.json
+COPY backend/package.json ./package.json
+RUN npm install --omit=dev && npm cache clean --force
 
-# Copy compiled output
-COPY --from=builder /workspace/backend/dist ./dist
-
+COPY --from=builder /app/dist ./dist
 RUN mkdir -p uploads/avatars uploads/banners
 
 ENV NODE_ENV=production
