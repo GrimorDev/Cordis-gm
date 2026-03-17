@@ -4096,7 +4096,7 @@ export default function App() {
 
   // App Settings
   const [appSettOpen, setAppSettOpen]         = useState(false);
-  const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'devices'|'privacy'|'locale'|'desktop'>('account');
+  const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'devices'|'privacy'|'locale'|'desktop'|'about'>('account');
   const [autostartEnabled, setAutostartEnabled] = useState<boolean>(false);
   // ── 2FA settings state ──
   const [twoFaStatus, setTwoFaStatus]         = useState<TwoFactorStatus | null>(null);
@@ -10450,6 +10450,7 @@ export default function App() {
                     {id:'privacy',    label:t('settings.privacy'),    icon:<Shield size={14}/>},
                     {id:'locale',     label:t('settings.locale'),     icon:<Globe size={14}/>},
                     ...(isTauri ? [{id:'desktop' as const, label:'Aplikacja', icon:<Monitor size={14}/>}] : []),
+                    ...(isTauri ? [{id:'about' as const, label:'O aplikacji', icon:<Info size={14}/>}] : []),
                   ] as const).map(tab=>(
                     <button key={tab.id} onClick={()=>setAppSettTab(tab.id)}
                       className={`flex items-center gap-2 px-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all text-left shrink-0 ${
@@ -10861,11 +10862,14 @@ export default function App() {
                             const reg = await navigator.serviceWorker.ready;
                             const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
                             if (!vapidKey) throw new Error('Brak klucza VAPID — skontaktuj się z administratorem');
+                            // Convert base64url VAPID key → Uint8Array (browsers need raw bytes)
+                            const b64 = vapidKey.replace(/-/g,'+').replace(/_/g,'/');
+                            const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
+                            const keyBytes = Uint8Array.from(atob(padded), c => c.charCodeAt(0));
                             const sub = await reg.pushManager.subscribe({
                               userVisibleOnly: true,
-                              applicationServerKey: vapidKey,
-                            }).catch(() => null);
-                            if (!sub) throw new Error('Subskrypcja nieudana');
+                              applicationServerKey: keyBytes,
+                            }).catch((err: any) => { throw new Error(`Subskrypcja nieudana: ${err?.message || err}`); });
                             await pushApi.subscribe(sub);
                             addToast('Powiadomienia push włączone!', 'success');
                           } catch (e: any) {
@@ -10999,6 +11003,45 @@ export default function App() {
                           </div>
                         </div>
                       </div>
+                    </motion.div>
+                  )}
+
+                  {/* ─── O APLIKACJI (tylko desktop) ─── */}
+                  {appSettTab==='about'&&isTauri&&(
+                    <motion.div key="about" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
+                      className="flex flex-col gap-6">
+                      <h3 className="text-sm font-bold text-white">O aplikacji</h3>
+                      <div className="flex flex-col items-center gap-4 py-6">
+                        <img src="/cordyn_logo.png" alt="Cordyn" className="w-20 h-20 rounded-2xl shadow-lg"/>
+                        <div className="text-center">
+                          <div className="text-xl font-bold text-white">Cordyn</div>
+                          <div className="text-xs text-zinc-400 mt-1">Platforma dla twórców</div>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                          <span className="text-sm text-zinc-400">Wersja</span>
+                          <span className="text-sm font-mono text-indigo-300">{updateAvailable ? `v${updateAvailable.version} → dostępna` : 'v0.1.22'}</span>
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                          <span className="text-sm text-zinc-400">Platforma</span>
+                          <span className="text-sm text-zinc-300">Windows (Desktop)</span>
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                          <span className="text-sm text-zinc-400">Technologia</span>
+                          <span className="text-sm text-zinc-300">Tauri v2 + React</span>
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                          <span className="text-sm text-zinc-400">Deweloper</span>
+                          <span className="text-sm text-zinc-300">GrimorDev</span>
+                        </div>
+                      </div>
+                      {updateAvailable && (
+                        <button onClick={installUpdate} disabled={updateInstalling}
+                          className="w-full py-2.5 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+                          {updateInstalling ? <><Loader2 size={14} className="animate-spin"/>Instalowanie…</> : <>Zainstaluj v{updateAvailable.version}</>}
+                        </button>
+                      )}
                     </motion.div>
                   )}
 
