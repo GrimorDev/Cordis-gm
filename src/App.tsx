@@ -3,7 +3,7 @@ import { TitleBar, isTauri } from './TitleBar';
 import { translate, resolveLocale, bcp47 as localeBcp47, loadLocale, detectLocale, LOCALES, type Locale, type TimeFormat } from './i18n';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Hash, Volume2, Video, Settings, Plus, Search, Bell, Users,
+  Hash, Volume2, Video, Settings, Plus, Search, Bell, BellOff, Users,
   Mic, MicOff, VolumeX, Smile, Paperclip, Send, Image, Reply,
   Menu, X, Edit3, MessageCircle, Minimize2, Maximize2,
   Shield, Trash2, Settings2, UserPlus, Check, X as XIcon,
@@ -4098,6 +4098,7 @@ export default function App() {
   const [appSettOpen, setAppSettOpen]         = useState(false);
   const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'devices'|'privacy'|'locale'|'desktop'|'about'>('account');
   const [autostartEnabled, setAutostartEnabled] = useState<boolean>(false);
+  const [pushSubscribed, setPushSubscribed]     = useState<boolean>(false);
   // ── 2FA settings state ──
   const [twoFaStatus, setTwoFaStatus]         = useState<TwoFactorStatus | null>(null);
   const [twoFaModal, setTwoFaModal]           = useState<'setup'|'backup_codes'|'disable'|'regen'|null>(null);
@@ -4410,6 +4411,14 @@ export default function App() {
 
     return () => { cancelled = true; clearInterval(interval); };
   }, []);
+
+  // ── Push: sprawdź czy użytkownik już subskrybuje ────────────────────
+  useEffect(() => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    navigator.serviceWorker.ready.then(reg =>
+      reg.pushManager.getSubscription().then(sub => setPushSubscribed(!!sub))
+    ).catch(() => {});
+  }, [currentUser?.id]);
 
   // ── Autostart: odczytaj stan przy starcie ────────────────────────────
   useEffect(() => {
@@ -10848,39 +10857,57 @@ export default function App() {
                         <p className="text-xs text-zinc-500 mb-3 leading-relaxed">
                           {t('privacy.push.desc')}
                         </p>
-                        <button onClick={async () => {
-                          if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-                            addToast('Twoja przeglądarka nie obsługuje powiadomień push', 'error');
-                            return;
-                          }
-                          const perm = await Notification.requestPermission();
-                          if (perm !== 'granted') {
-                            addToast('Brak zgody na powiadomienia', 'error');
-                            return;
-                          }
-                          try {
-                            const reg = await navigator.serviceWorker.ready;
-                            const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
-                            if (!vapidKey) throw new Error('Brak klucza VAPID — skontaktuj się z administratorem');
-                            // Wyczyść stare subskrypcje (mogą być z innym kluczem demo)
-                            const existing = await reg.pushManager.getSubscription();
-                            if (existing) await existing.unsubscribe();
-                            const sub = await reg.pushManager.subscribe({
-                              userVisibleOnly: true,
-                              applicationServerKey: vapidKey,
-                            }).catch((err: any) => { throw new Error(`Subskrypcja nieudana: ${err?.message || err}`); });
-                            const subJson = sub.toJSON();
-                            const p256dh = subJson.keys?.p256dh ?? '';
-                            const auth   = subJson.keys?.auth   ?? '';
-                            await pushApi.subscribe({ endpoint: sub.endpoint, p256dh, auth });
-                            addToast('Powiadomienia push włączone!', 'success');
-                          } catch (e: any) {
-                            addToast(e?.message || 'Błąd aktywacji push', 'error');
-                          }
-                        }}
-                          className="text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 border border-indigo-500/30 px-4 py-2 rounded-xl transition-all flex items-center gap-2">
-                          <Bell size={13}/> {t('privacy.push.enable')}
-                        </button>
+                        {pushSubscribed ? (
+                          <button onClick={async () => {
+                            try {
+                              const reg = await navigator.serviceWorker.ready;
+                              const sub = await reg.pushManager.getSubscription();
+                              if (sub) await sub.unsubscribe();
+                              await pushApi.unsubscribe();
+                              setPushSubscribed(false);
+                              addToast('Powiadomienia push wyłączone', 'info');
+                            } catch (e: any) {
+                              addToast(e?.message || 'Błąd', 'error');
+                            }
+                          }}
+                            className="text-sm font-semibold text-zinc-300 hover:text-white bg-zinc-700/50 hover:bg-zinc-700 border border-zinc-600/30 px-4 py-2 rounded-xl transition-all flex items-center gap-2">
+                            <BellOff size={13}/> Wyłącz powiadomienia push
+                          </button>
+                        ) : (
+                          <button onClick={async () => {
+                            if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+                              addToast('Twoja przeglądarka nie obsługuje powiadomień push', 'error');
+                              return;
+                            }
+                            const perm = await Notification.requestPermission();
+                            if (perm !== 'granted') {
+                              addToast('Brak zgody na powiadomienia', 'error');
+                              return;
+                            }
+                            try {
+                              const reg = await navigator.serviceWorker.ready;
+                              const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+                              if (!vapidKey) throw new Error('Brak klucza VAPID — skontaktuj się z administratorem');
+                              const existing = await reg.pushManager.getSubscription();
+                              if (existing) await existing.unsubscribe();
+                              const sub = await reg.pushManager.subscribe({
+                                userVisibleOnly: true,
+                                applicationServerKey: vapidKey,
+                              }).catch((err: any) => { throw new Error(`Subskrypcja nieudana: ${err?.message || err}`); });
+                              const subJson = sub.toJSON();
+                              const p256dh = subJson.keys?.p256dh ?? '';
+                              const auth   = subJson.keys?.auth   ?? '';
+                              await pushApi.subscribe({ endpoint: sub.endpoint, p256dh, auth });
+                              setPushSubscribed(true);
+                              addToast('Powiadomienia push włączone!', 'success');
+                            } catch (e: any) {
+                              addToast(e?.message || 'Błąd aktywacji push', 'error');
+                            }
+                          }}
+                            className="text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 border border-indigo-500/30 px-4 py-2 rounded-xl transition-all flex items-center gap-2">
+                            <Bell size={13}/> {t('privacy.push.enable')}
+                          </button>
+                        )}
                       </div>
 
                       <div className="mt-2 p-4 bg-rose-500/5 border border-rose-500/15 rounded-2xl">
