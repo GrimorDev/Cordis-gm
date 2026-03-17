@@ -10,7 +10,7 @@
     "db:migrate": "tsx src/db/migrate.ts"
   },
   "dependencies": {
-    "@distube/ytdl-core": "^4.16.12",
+    "play-dl": "^1.9.7",
     "@socket.io/redis-adapter": "^8.3.0",
     "@types/web-push": "^3.6.4",
     "bcryptjs": "^2.4.3",

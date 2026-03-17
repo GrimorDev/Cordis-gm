@@ -5677,12 +5677,14 @@ export default function App() {
   // Reset slowmode and pinned panel when switching channels
   useEffect(() => { setSlowmodeLeft(0); setShowPinned(false); setPinnedMsgs([]); }, [activeChannel]);
 
-  // Load installed bots when apps modal opens
+  // Load installed bots whenever the active server changes (also when apps modal opens)
   useEffect(() => {
-    if (appsModalOpen && activeServer) {
+    if (activeServer) {
       botsApi.list(activeServer).then(setInstalledBots).catch(() => setInstalledBots([]));
+    } else {
+      setInstalledBots([]);
     }
-  }, [appsModalOpen, activeServer]);
+  }, [activeServer, appsModalOpen]);
 
   // Auto-resize message textarea
   useEffect(() => {
@@ -9443,6 +9445,49 @@ export default function App() {
                     </div>
                   </div>
                 )}
+                {/* ── BOTY section — installed bots shown as virtual members ── */}
+                {installedBots.length>0&&(()=>{
+                  const botDefs = installedBots.map(inst=>({inst, def:AVAILABLE_BOTS.find(b=>b.id===inst.bot_id)})).filter(x=>x.def);
+                  if (!botDefs.length) return null;
+                  return (
+                    <div className="mt-4">
+                      <h3 className="text-[11px] font-bold uppercase tracking-widest mb-2 px-1 text-violet-500/70">
+                        Boty — {botDefs.length}
+                      </h3>
+                      <div className="flex flex-col gap-0.5">
+                        {botDefs.map(({inst, def})=>{
+                          const musicState = musicBotState[inst.channel_id||''];
+                          return (
+                          <div key={inst.bot_id} className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-violet-500/5 transition-all cursor-default">
+                            <div className="relative shrink-0">
+                              <div className="w-10 h-10 rounded-xl bg-violet-500/15 border border-violet-500/20 flex items-center justify-center text-xl select-none">
+                                {def!.avatar}
+                              </div>
+                              {/* always-online green dot */}
+                              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[#1a1a2e]"/>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <p className="text-[13px] font-semibold truncate leading-tight text-violet-200">
+                                  {def!.name}
+                                </p>
+                                <span className="text-[9px] font-bold px-1 py-0.5 rounded border border-violet-500/40 text-violet-400 bg-violet-500/10 leading-none select-none shrink-0">APP</span>
+                              </div>
+                              {musicState?.playing && musicState.title ? (
+                                <p className="text-[11px] text-violet-400 truncate leading-tight flex items-center gap-1">
+                                  <Play size={9} className="shrink-0"/> {musicState.title}
+                                </p>
+                              ) : (
+                                <p className="text-[11px] text-zinc-600 truncate leading-tight">{def!.category}</p>
+                              )}
+                            </div>
+                          </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             );
           })()}

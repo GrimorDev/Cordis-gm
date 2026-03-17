@@ -518,65 +518,63 @@ async function handleMusicCommand(opts: {
       return;
     }
 
-    // Try to get video info using ytdl-core
+    // Get video info + stream using play-dl (bypasses YouTube bot detection)
     let title = 'Nieznany utwór';
     let thumbnail: string | undefined;
     let duration: number | undefined;
     let stream: PassThrough | undefined;
 
     try {
-      // Dynamic import to avoid crash if ytdl is not installed
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore – optional dependency; gracefully degraded if missing
-      const ytdl = await import('@distube/ytdl-core').catch(() => null) as any;
-      if (ytdl) {
-        const info = await ytdl.default.getInfo(ytUrl);
-        title = info.videoDetails.title;
-        thumbnail = info.videoDetails.thumbnails?.[0]?.url;
-        duration = parseInt(info.videoDetails.lengthSeconds);
-
-        // Create streaming PassThrough
-        const pt = new PassThrough();
-        const audioStream = ytdl.default(ytUrl, {
-          filter: 'audioonly',
-          quality: 'highestaudio',
-        });
-        audioStream.pipe(pt);
-        audioStream.on('error', () => { try { pt.destroy(); } catch { /* */ } });
-
-        // Store in music state
-        const existing = musicStates.get(channel_id);
-        if (existing?._stream) {
-          try { existing._stream.destroy(); } catch { /* */ }
-        }
-
-        const state: MusicBotState = {
-          playing: true, title, url: ytUrl, thumbnail, duration,
-          channel_id,
-          stream_url: `/api/servers/${server_id}/bots/music/stream/${channel_id}`,
-          requested_by: user.username,
-          queue: [],
-          _stream: pt,
-          _ytUrl: ytUrl,
-        };
-        musicStates.set(channel_id, state);
-        stream = pt;
-
-        broadcastState({ ...state, _stream: undefined, _ytUrl: undefined });
-        await sendBotMsg(`🎵 Teraz odtwarzam: **${title}** (zamówił: ${user.username})`);
-      } else {
-        // ytdl not available — send info without stream
-        const state: MusicBotState = {
-          playing: true, title: ytUrl, url: ytUrl,
-          channel_id,
-          stream_url: undefined,
-          requested_by: user.username,
-          queue: [],
-        };
-        musicStates.set(channel_id, state);
-        broadcastState(state);
-        await sendBotMsg(`🎵 Odtwarzam: ${ytUrl} (zamówił: ${user.username})\n⚠️ Streaming audio wymaga zainstalowania @distube/ytdl-core na serwerze.`);
+      // @ts-ignore – play-dl is a CJS/ESM hybrid; dynamic import works at runtime
+      const playdl = await import('play-dl').catch(() => null) as any;
+      if (!playdl) {
+        await sendBotMsg('❌ Moduł play-dl nie jest zainstalowany na serwerze.');
+        return;
       }
+
+      // Validate that the URL is a real YouTube link
+      const validateResult = playdl.yt_validate ? playdl.yt_validate(ytUrl) : 'video';
+      if (validateResult !== 'video') {
+        await sendBotMsg('❌ Podaj poprawny link do YouTube (nie playlist ani kanału).');
+        return;
+      }
+
+      // Fetch video details
+      const info = await playdl.video_info(ytUrl);
+      title = info.video_details.title ?? 'Nieznany utwór';
+      thumbnail = info.video_details.thumbnails?.[0]?.url;
+      duration = info.video_details.durationInSec;
+
+      // Destroy previous stream if any
+      const existing = musicStates.get(channel_id);
+      if (existing?._stream) {
+        try { existing._stream.destroy(); } catch { /* */ }
+      }
+
+      // Create PassThrough + pipe play-dl audio stream into it
+      const pt = new PassThrough();
+      const source = await playdl.stream(ytUrl, { quality: 2 });
+      source.stream.pipe(pt);
+      source.stream.on('error', (e: Error) => {
+        console.error('play-dl stream error:', e.message);
+        try { pt.destroy(); } catch { /* */ }
+      });
+      pt.on('error', () => { /* ignore client disconnects */ });
+
+      const state: MusicBotState = {
+        playing: true, title, url: ytUrl, thumbnail, duration,
+        channel_id,
+        stream_url: `/api/servers/${server_id}/bots/music/stream/${channel_id}`,
+        requested_by: user.username,
+        queue: [],
+        _stream: pt,
+        _ytUrl: ytUrl,
+      };
+      musicStates.set(channel_id, state);
+      stream = pt;
+
+      broadcastState({ ...state, _stream: undefined, _ytUrl: undefined });
+      await sendBotMsg(`🎵 Teraz odtwarzam: **${title}** (zamówił: ${user.username})`);
     } catch (err: any) {
       console.error('Music bot play error:', err);
       await sendBotMsg(`❌ Nie udało się odtworzyć: ${err?.message || 'Nieznany błąd'}`);
