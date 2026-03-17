@@ -10869,7 +10869,10 @@ export default function App() {
                               userVisibleOnly: true,
                               applicationServerKey: vapidKey,
                             }).catch((err: any) => { throw new Error(`Subskrypcja nieudana: ${err?.message || err}`); });
-                            await pushApi.subscribe(sub);
+                            const subJson = sub.toJSON();
+                            const p256dh = subJson.keys?.p256dh ?? '';
+                            const auth   = subJson.keys?.auth   ?? '';
+                            await pushApi.subscribe({ endpoint: sub.endpoint, p256dh, auth });
                             addToast('Powiadomienia push włączone!', 'success');
                           } catch (e: any) {
                             addToast(e?.message || 'Błąd aktywacji push', 'error');
