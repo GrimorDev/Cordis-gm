@@ -10861,14 +10861,11 @@ export default function App() {
                           try {
                             const reg = await navigator.serviceWorker.ready;
                             const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+                            console.log('[push] VAPID key length:', vapidKey?.length, 'key:', vapidKey?.slice(0,20)+'...');
                             if (!vapidKey) throw new Error('Brak klucza VAPID — skontaktuj się z administratorem');
-                            // Convert base64url VAPID key → Uint8Array (browsers need raw bytes)
-                            const b64 = vapidKey.replace(/-/g,'+').replace(/_/g,'/');
-                            const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
-                            const keyBytes = Uint8Array.from(atob(padded), c => c.charCodeAt(0));
                             const sub = await reg.pushManager.subscribe({
                               userVisibleOnly: true,
-                              applicationServerKey: keyBytes,
+                              applicationServerKey: vapidKey,
                             }).catch((err: any) => { throw new Error(`Subskrypcja nieudana: ${err?.message || err}`); });
                             await pushApi.subscribe(sub);
                             addToast('Powiadomienia push włączone!', 'success');
