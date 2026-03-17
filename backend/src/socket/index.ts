@@ -3,6 +3,7 @@ import { Server as SocketServer } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import jwt from 'jsonwebtoken';
+import { PassThrough } from 'stream';
 import { config } from '../config';
 import {
   setUserStatus, joinVoiceChannel, leaveVoiceChannel,
@@ -12,6 +13,7 @@ import {
 import { query } from '../db/pool';
 import { JwtPayload, ServerToClientEvents, ClientToServerEvents } from '../types';
 import { runAutomations } from '../services/automations';
+import { musicStates, MusicBotState } from '../routes/bots';
 
 interface SocketData {
   user: {
@@ -376,6 +378,39 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
       broadcastWatchers(channel_id, streamer_id);
     });
 
+    // ── Bot commands ─────────────────────────────────────────────────
+    socket.on('bot_command' as any, async (data: {
+      bot: string; command: string; args: string[];
+      channel_id: string; server_id: string;
+    }) => {
+      try {
+        const { bot, command, args, channel_id, server_id } = data;
+        // Validate: user must be member of server, and bot must be installed
+        const { rows: [member] } = await query(
+          'SELECT 1 FROM server_members WHERE server_id=$1 AND user_id=$2',
+          [server_id, user.id]
+        );
+        if (!member) return;
+        const { rows: [botRow] } = await query(
+          'SELECT 1 FROM server_bots WHERE server_id=$1 AND bot_id=$2',
+          [server_id, bot]
+        );
+        if (!botRow) {
+          io.to(`user:${user.id}`).emit('bot_response' as any, {
+            bot, channel_id, type: 'error',
+            message: `Bot "${bot}" nie jest zainstalowany na tym serwerze. Dodaj go przez Cordyn Apps.`,
+          });
+          return;
+        }
+
+        if (bot === 'music') {
+          await handleMusicCommand({ io, user, command, args, channel_id, server_id });
+        }
+      } catch (err) {
+        console.error('bot_command error:', err);
+      }
+    });
+
     // ── Disconnect ───────────────────────────────────────────────────
     socket.on('disconnect', async () => {
       console.log(`Socket disconnected: ${user.username}`);
@@ -429,6 +464,173 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
   });
 
   return io;
+}
+
+// ── Music bot command handler ─────────────────────────────────────────────
+async function handleMusicCommand(opts: {
+  io: SocketServer<ClientToServerEvents, ServerToClientEvents>;
+  user: { id: string; username: string };
+  command: string;
+  args: string[];
+  channel_id: string;
+  server_id: string;
+}) {
+  const { io, user, command, args, channel_id, server_id } = opts;
+  const broadcastState = (state: MusicBotState) => {
+    io.to(`server:${server_id}`).emit('music_bot_update' as any, state);
+  };
+
+  const sendBotMsg = async (content: string) => {
+    try {
+      const { rows: [msg] } = await query(
+        `INSERT INTO messages (channel_id, sender_id, content, is_automated, system_name)
+         VALUES ($1, $2, $3, TRUE, '🎵 Cordyn Music')
+         RETURNING id, channel_id, content, created_at, updated_at, edited,
+                   attachment_url, reply_to_id, is_automated, system_name, pinned`,
+        [channel_id, user.id, content]
+      );
+      if (msg) {
+        io.to(`channel:${channel_id}`).emit('new_message', {
+          ...msg,
+          sender_id: user.id,
+          sender_username: '🎵 Cordyn Music',
+          sender_avatar: null,
+          sender_status: null,
+          sender_role: null,
+          sender_role_color: null,
+          sender_avatar_effect: null,
+        });
+      }
+    } catch (err) {
+      console.error('sendBotMsg error:', err);
+    }
+  };
+
+  if (command === 'play') {
+    const ytUrl = args[0];
+    if (!ytUrl) {
+      await sendBotMsg('❌ Podaj URL YouTube: `/play <url>`');
+      return;
+    }
+    // Validate URL
+    if (!ytUrl.match(/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//)) {
+      await sendBotMsg('❌ Podaj poprawny URL YouTube.');
+      return;
+    }
+
+    // Try to get video info using ytdl-core
+    let title = 'Nieznany utwór';
+    let thumbnail: string | undefined;
+    let duration: number | undefined;
+    let stream: PassThrough | undefined;
+
+    try {
+      // Dynamic import to avoid crash if ytdl is not installed
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore – optional dependency; gracefully degraded if missing
+      const ytdl = await import('@distube/ytdl-core').catch(() => null) as any;
+      if (ytdl) {
+        const info = await ytdl.default.getInfo(ytUrl);
+        title = info.videoDetails.title;
+        thumbnail = info.videoDetails.thumbnails?.[0]?.url;
+        duration = parseInt(info.videoDetails.lengthSeconds);
+
+        // Create streaming PassThrough
+        const pt = new PassThrough();
+        const audioStream = ytdl.default(ytUrl, {
+          filter: 'audioonly',
+          quality: 'highestaudio',
+        });
+        audioStream.pipe(pt);
+        audioStream.on('error', () => { try { pt.destroy(); } catch { /* */ } });
+
+        // Store in music state
+        const existing = musicStates.get(channel_id);
+        if (existing?._stream) {
+          try { existing._stream.destroy(); } catch { /* */ }
+        }
+
+        const state: MusicBotState = {
+          playing: true, title, url: ytUrl, thumbnail, duration,
+          channel_id,
+          stream_url: `/api/servers/${server_id}/bots/music/stream/${channel_id}`,
+          requested_by: user.username,
+          queue: [],
+          _stream: pt,
+          _ytUrl: ytUrl,
+        };
+        musicStates.set(channel_id, state);
+        stream = pt;
+
+        broadcastState({ ...state, _stream: undefined, _ytUrl: undefined });
+        await sendBotMsg(`🎵 Teraz odtwarzam: **${title}** (zamówił: ${user.username})`);
+      } else {
+        // ytdl not available — send info without stream
+        const state: MusicBotState = {
+          playing: true, title: ytUrl, url: ytUrl,
+          channel_id,
+          stream_url: undefined,
+          requested_by: user.username,
+          queue: [],
+        };
+        musicStates.set(channel_id, state);
+        broadcastState(state);
+        await sendBotMsg(`🎵 Odtwarzam: ${ytUrl} (zamówił: ${user.username})\n⚠️ Streaming audio wymaga zainstalowania @distube/ytdl-core na serwerze.`);
+      }
+    } catch (err: any) {
+      console.error('Music bot play error:', err);
+      await sendBotMsg(`❌ Nie udało się odtworzyć: ${err?.message || 'Nieznany błąd'}`);
+    }
+  } else if (command === 'stop') {
+    const state = musicStates.get(channel_id);
+    if (state?._stream) {
+      try { state._stream.destroy(); } catch { /* */ }
+    }
+    const stopped: MusicBotState = { playing: false, channel_id, queue: [] };
+    musicStates.set(channel_id, stopped);
+    broadcastState(stopped);
+    await sendBotMsg('⏹️ Zatrzymano odtwarzanie.');
+  } else if (command === 'skip') {
+    const state = musicStates.get(channel_id);
+    if (state?.queue.length) {
+      const next = state.queue[0];
+      // Recursively play next
+      await handleMusicCommand({ ...opts, command: 'play', args: [next.url] });
+    } else {
+      // Stop
+      if (state?._stream) { try { state._stream.destroy(); } catch { /* */ } }
+      const stopped: MusicBotState = { playing: false, channel_id, queue: [] };
+      musicStates.set(channel_id, stopped);
+      broadcastState(stopped);
+      await sendBotMsg('⏭️ Pominięto. Kolejka jest pusta.');
+    }
+  } else if (command === 'pause') {
+    const state = musicStates.get(channel_id);
+    if (state) {
+      state.playing = false;
+      musicStates.set(channel_id, state);
+      broadcastState({ ...state, _stream: undefined, _ytUrl: undefined });
+      await sendBotMsg('⏸️ Wstrzymano odtwarzanie.');
+    }
+  } else if (command === 'queue') {
+    const state = musicStates.get(channel_id);
+    if (!state || (!state.playing && state.queue.length === 0)) {
+      await sendBotMsg('📭 Kolejka jest pusta.');
+    } else {
+      const lines = state.title ? [`▶️ Teraz: **${state.title}**`] : [];
+      state.queue.slice(0, 5).forEach((q, i) => lines.push(`${i + 1}. ${q.title || q.url}`));
+      await sendBotMsg(lines.join('\n'));
+    }
+  } else if (command === 'volume') {
+    const vol = parseInt(args[0]);
+    if (isNaN(vol) || vol < 0 || vol > 100) {
+      await sendBotMsg('❌ Podaj wartość od 0 do 100.');
+    } else {
+      await sendBotMsg(`🔊 Głośność: ${vol}% (ustawienie głośności klienta — użyj suwaka w odtwarzaczu)`);
+    }
+  } else {
+    await sendBotMsg(`❓ Nieznana komenda: \`/${command}\`. Wpisz \`/queue\`, \`/play\`, \`/skip\`, \`/stop\`, \`/pause\`.`);
+  }
 }
 
 async function broadcastUserStatus(

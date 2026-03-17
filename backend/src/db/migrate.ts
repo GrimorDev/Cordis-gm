@@ -533,6 +533,18 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at DESC);
+
+-- ── Bot system ─────────────────────────────────────────────────────
+DO $$ BEGIN ALTER TABLE users ADD COLUMN is_bot BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+CREATE TABLE IF NOT EXISTS server_bots (
+    server_id    UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    bot_id       VARCHAR(64) NOT NULL,
+    channel_id   UUID REFERENCES channels(id) ON DELETE SET NULL,
+    installed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    installed_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (server_id, bot_id)
+);
+CREATE INDEX IF NOT EXISTS idx_server_bots_server ON server_bots(server_id);
 `;
 
 const SEED_SQL = `

@@ -33,6 +33,7 @@ import notesRoutes   from './routes/notes';
 import pollsRoutes   from './routes/polls';
 import pushRoutes    from './routes/push';
 import automationsRoutes from './routes/automations';
+import botsRoutes from './routes/bots';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -125,6 +126,7 @@ app.use('/api/users',   notesRoutes);
 app.use('/api/polls',   pollsRoutes);
 app.use('/api/push',    pushRoutes);
 app.use('/api/servers/:serverId/automations', automationsRoutes);
+app.use('/api/servers/:serverId/bots', botsRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

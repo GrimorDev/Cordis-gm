@@ -15,6 +15,7 @@ import {
   Code2, FlaskConical, ShieldCheck, Hammer, Award, CalendarDays, Quote,
   GripVertical, BarChart2, Server, Database,
   Music, Gamepad2, ExternalLink, Link2, Link2Off, Film, PhoneIncoming, PhoneMissed, Download, Monitor, Copy,
+  Bot, Play, Pause, SkipForward, ListMusic, Package, Slash,
   type LucideIcon
 } from 'lucide-react';
 import {
@@ -31,6 +32,8 @@ import {
   type TwoFactorStatus, type LoginResult, ApiError,
   type ServerEmoji, type PollData, type ServerAutomation, type AutomationTrigger, type AutomationAction, type AutomationActionType,
   STATIC_BASE,
+  botsApi, AVAILABLE_BOTS,
+  type BotDefinition, type InstalledBot, type MusicBotState,
 } from './api';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -3688,6 +3691,28 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
             )}
           </div>
 
+          {/* Badges row */}
+          {u?.badges && u.badges.length > 0 && (
+            <div className="flex gap-1.5 flex-wrap mt-1 mb-2">
+              {u.badges.map(b => {
+                const BIcon = getBadgeIcon(b.name);
+                return (
+                  <div key={b.id} className="relative group/badge">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border cursor-default select-none"
+                      style={{color: b.color, borderColor: b.color+'40', background: b.color+'18'}}>
+                      <BIcon size={9}/>{b.label}
+                    </span>
+                    {b.description && (
+                      <div className="absolute bottom-full mb-1.5 left-0 bg-zinc-900 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-zinc-300 whitespace-nowrap shadow-xl opacity-0 group-hover/badge:opacity-100 transition-opacity pointer-events-none z-10">
+                        {b.description}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {/* Custom status */}
           {u?.custom_status && <p className="text-xs text-zinc-500 mb-2 truncate max-w-[200px]">{u.custom_status}</p>}
 
@@ -4004,6 +4029,18 @@ export default function App() {
   const [newCatName, setNewCatName]           = useState('');
   const [newCatPrivate, setNewCatPrivate]     = useState(false);
   const [newCatRoles, setNewCatRoles]         = useState<string[]>([]);
+
+  // ── Cordyn Apps modal ────────────────────────────────────────────
+  const [appsModalOpen, setAppsModalOpen] = useState(false);
+  const [appsTab, setAppsTab] = useState<'browse'|'installed'>('browse');
+  const [installedBots, setInstalledBots] = useState<import('./api').InstalledBot[]>([]);
+  const [botInstalling, setBotInstalling] = useState<string|null>(null);
+  // Music bot state per channel
+  const [musicBotState, setMusicBotState] = useState<Record<string, import('./api').MusicBotState>>({});
+
+  // ── Slash command autocomplete ────────────────────────────────────
+  const [slashQuery, setSlashQuery] = useState<string|null>(null);
+  const [slashSel, setSlashSel] = useState(0);
 
   // ── Channel context menu (right-click) ───────────────────────────
   const [chCtxMenu, setChCtxMenu] = useState<{x:number;y:number;ch:any}|null>(null);
@@ -4669,6 +4706,10 @@ export default function App() {
         if (currentUser && String(streamer_id) === String(currentUser.id)) next['self'] = watchers;
         return next;
       });
+    });
+    // Music bot state updates
+    sock.on('music_bot_update' as any, (state: MusicBotState) => {
+      setMusicBotState(p => ({ ...p, [state.channel_id]: state }));
     });
     // DM call events
     sock.on('call_invite', ({ from, type, conversation_id }: any) => {
@@ -5513,6 +5554,25 @@ export default function App() {
     setTimeout(() => { el.focus(); el.setSelectionRange(before.length, before.length); }, 0);
   };
 
+  // Slash command autocomplete — only in server text channels
+  const allSlashCommands = activeView === 'servers' && activeServer
+    ? installedBots.flatMap(inst => {
+        const bot = AVAILABLE_BOTS.find(b => b.id === inst.bot_id);
+        return bot ? bot.commands.map(cmd => ({ ...cmd, botName: bot.name, botId: bot.id, botAvatar: bot.avatar })) : [];
+      })
+    : [];
+  const slashSuggestions = slashQuery !== null
+    ? allSlashCommands.filter(c => c.name.toLowerCase().startsWith(slashQuery.toLowerCase())).slice(0, 8)
+    : [];
+  const insertSlash = (cmd: { name: string; description: string; usage: string; botName: string; botId: string; botAvatar: string }) => {
+    const newVal = `/${cmd.name} `;
+    setMsgInput(newVal);
+    setSlashQuery(null);
+    setSlashSel(0);
+    const el = msgInputRef.current;
+    if (el) setTimeout(() => { el.focus(); el.setSelectionRange(newVal.length, newVal.length); }, 0);
+  };
+
   // ── Appearance helpers (save to DB) ──────────────────────────────
   const saveAccentColor = async (color: string) => {
     const upd = await users.updateMe({ accent_color: color }).catch(() => null);
@@ -5617,6 +5677,13 @@ export default function App() {
   // Reset slowmode and pinned panel when switching channels
   useEffect(() => { setSlowmodeLeft(0); setShowPinned(false); setPinnedMsgs([]); }, [activeChannel]);
 
+  // Load installed bots when apps modal opens
+  useEffect(() => {
+    if (appsModalOpen && activeServer) {
+      botsApi.list(activeServer).then(setInstalledBots).catch(() => setInstalledBots([]));
+    }
+  }, [appsModalOpen, activeServer]);
+
   // Auto-resize message textarea
   useEffect(() => {
     const el = msgInputRef.current;
@@ -5637,6 +5704,24 @@ export default function App() {
       setPollMulti(false);
       setPollModal({ open: true });
       return;
+    }
+    // Bot slash commands — intercept and emit via socket
+    if (content.startsWith('/') && activeView === 'servers' && activeChannel && activeServer) {
+      const parts = content.slice(1).split(/\s+/);
+      const cmdName = parts[0].toLowerCase();
+      const args = parts.slice(1);
+      const matchedCmd = allSlashCommands.find(c => c.name === cmdName);
+      if (matchedCmd) {
+        setMsgInput(''); setSlashQuery(null);
+        getSocket()?.emit('bot_command' as any, {
+          bot: matchedCmd.botId,
+          command: cmdName,
+          args,
+          channel_id: activeChannel,
+          server_id: activeServer,
+        });
+        return;
+      }
     }
     if ((!content && !attachFile) || sending) return;
     setSending(true); setSendError('');
@@ -6885,6 +6970,12 @@ export default function App() {
                         {t('server.settings')}
                       </button>
                     </>}
+                    <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
+                    <button onClick={()=>{setSrvDropOpen(false);setAppsTab('browse');setAppsModalOpen(true);}}
+                      className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-violet-500/10 hover:text-violet-300 transition-colors text-left">
+                      <Bot size={14} className="text-violet-400 shrink-0"/>
+                      Cordyn Apps
+                    </button>
                     {serverFull?.my_role!=='Owner'&&<>
                       <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
                       <button onClick={()=>{setSrvDropOpen(false);handleLeaveServer(activeServer);}}
@@ -8595,6 +8686,7 @@ export default function App() {
                           {/* Avatar */}
                           {(()=>{
                             const isAuto=(msg as any).is_automated;
+                            const isBotSender = !isAuto && members.some(m => m.id === msg.sender_id && m.is_bot);
                             const autoAvatar=isAuto?staticUrl((msg as any).system_avatar)||'':null;
                             const avatarSrc=isAuto?(autoAvatar||`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent((msg as any).system_name||'S')}&backgroundColor=6366f1&textColor=ffffff`):ava({avatar_url:msg.sender_avatar,username:msg.sender_username});
                             const displayName=isAuto?((msg as any).system_name||'Serwer'):maskName(msg.sender_username);
@@ -8617,8 +8709,8 @@ export default function App() {
                                 onClick={isAuto?undefined:()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar})}>
                                 {displayName}
                               </span>
-                              {isAuto&&(
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                              {(isAuto||isBotSender)&&(
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide bg-violet-500/20 text-violet-300 border border-violet-500/30">
                                   APP
                                 </span>
                               )}
@@ -8948,6 +9040,30 @@ export default function App() {
                   );
                   return (
                     <form onSubmit={handleSend} className="relative">
+                      {/* Slash command autocomplete dropdown */}
+                      {slashQuery !== null && slashSuggestions.length > 0 && (
+                        <div className="absolute bottom-full left-0 right-0 mb-2 bg-[#141420] border border-white/[0.1] rounded-2xl overflow-hidden shadow-2xl z-50">
+                          <div className="px-3 py-1.5 border-b border-white/[0.05] flex items-center gap-2">
+                            <Slash size={10} className="text-violet-400 shrink-0"/>
+                            <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Komendy</span>
+                          </div>
+                          {slashSuggestions.map((cmd, i) => (
+                            <button key={`${cmd.botId}-${cmd.name}`} type="button"
+                              onMouseDown={e=>{e.preventDefault(); insertSlash(cmd);}}
+                              className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors ${i === slashSel ? 'bg-violet-500/15' : 'hover:bg-white/[0.04]'}`}>
+                              <span className="text-lg shrink-0 select-none">{cmd.botAvatar}</span>
+                              <div className="flex-1 min-w-0 text-left">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-bold text-white font-mono">/{cmd.name}</span>
+                                  <span className="text-[10px] text-zinc-600">{cmd.botName}</span>
+                                </div>
+                                <p className="text-xs text-zinc-500 truncate">{cmd.description}</p>
+                              </div>
+                              <span className="text-[10px] font-mono text-zinc-700 shrink-0 hidden sm:block">{cmd.usage}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       {/* Mention autocomplete dropdown */}
                       {mentionQuery !== null && mentionSuggestions.length > 0 && (
                         <div className="absolute bottom-full left-0 right-0 mb-2 bg-[#141420] border border-white/[0.1] rounded-2xl overflow-hidden shadow-2xl z-50">
@@ -9032,6 +9148,10 @@ export default function App() {
                             const mentionMatch = textBefore.match(/!([a-zA-Z0-9_]*)$/);
                             if (mentionMatch && activeView==='servers') { setMentionQuery(mentionMatch[1]); setMentionSel(0); }
                             else setMentionQuery(null);
+                            // Slash command autocomplete trigger
+                            const slashMatch = textBefore.match(/^\/([a-zA-Z0-9_]*)$/);
+                            if (slashMatch && activeView==='servers') { setSlashQuery(slashMatch[1]); setSlashSel(0); }
+                            else setSlashQuery(null);
                             // Typing indicator
                             if(activeChannel&&activeView==='servers'&&currentUser?.privacy_typing_visible!==false){
                               if(v.trim()){
@@ -9045,6 +9165,12 @@ export default function App() {
                             }
                           }}
                           onKeyDown={e=>{
+                            if (slashQuery !== null && slashSuggestions.length > 0) {
+                              if (e.key==='ArrowUp')   { e.preventDefault(); setSlashSel(s=>Math.max(0,s-1)); return; }
+                              if (e.key==='ArrowDown') { e.preventDefault(); setSlashSel(s=>Math.min(slashSuggestions.length-1,s+1)); return; }
+                              if (e.key==='Enter'||e.key==='Tab') { e.preventDefault(); insertSlash(slashSuggestions[slashSel]); return; }
+                              if (e.key==='Escape') { setSlashQuery(null); return; }
+                            }
                             if (mentionQuery !== null && mentionSuggestions.length > 0) {
                               if (e.key==='ArrowUp')   { e.preventDefault(); setMentionSel(s=>Math.max(0,s-1)); return; }
                               if (e.key==='ArrowDown') { e.preventDefault(); setMentionSel(s=>Math.min(mentionSuggestions.length-1,s+1)); return; }
@@ -9145,6 +9271,52 @@ export default function App() {
             );
           })()}
 
+          {/* ─ MUSIC BOT NOW PLAYING ─ */}
+          {activeView==='servers' && activeCall?.channelId && (() => {
+            const music = musicBotState[activeCall.channelId];
+            if (!music?.playing) return null;
+            const streamUrl = music.stream_url
+              ? (isTauri ? STATIC_BASE + music.stream_url : music.stream_url)
+              : null;
+            return (
+              <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}}
+                className="mx-3 my-2 bg-[#1DB954]/8 border border-[#1DB954]/20 rounded-2xl p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Music size={13} className="text-[#1DB954] shrink-0"/>
+                  <span className="text-[11px] font-bold text-[#1DB954] uppercase tracking-widest">Teraz gra</span>
+                </div>
+                <div className="flex items-start gap-2.5 mb-2.5">
+                  {music.thumbnail
+                    ? <img src={music.thumbnail} className="w-10 h-10 rounded-lg object-cover shrink-0" alt=""/>
+                    : <div className="w-10 h-10 bg-[#1DB954]/15 rounded-lg flex items-center justify-center shrink-0"><Music size={16} className="text-[#1DB954]"/></div>}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-white font-semibold truncate leading-tight">{music.title || 'Nieznany utwór'}</p>
+                    {music.requested_by && <p className="text-[10px] text-zinc-600 mt-0.5 truncate">zamówił: {music.requested_by}</p>}
+                  </div>
+                </div>
+                {/* Audio player (only if stream_url available) */}
+                {streamUrl && (
+                  <audio key={streamUrl} src={streamUrl} controls autoPlay
+                    className="w-full h-7 rounded-lg"
+                    style={{filter:'invert(1) hue-rotate(90deg) brightness(0.8)'}}/>
+                )}
+                {/* Controls */}
+                <div className="flex gap-1.5 mt-2">
+                  <button
+                    onClick={() => getSocket()?.emit('bot_command' as any, { bot:'music', command:'skip', args:[], channel_id:activeCall.channelId!, server_id:activeServer })}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-white/[0.06] hover:bg-white/[0.1] rounded-xl text-zinc-400 hover:text-white transition-all text-[11px] font-medium">
+                    <SkipForward size={12}/> Pomiń
+                  </button>
+                  <button
+                    onClick={() => getSocket()?.emit('bot_command' as any, { bot:'music', command:'stop', args:[], channel_id:activeCall.channelId!, server_id:activeServer })}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 rounded-xl text-rose-400 hover:text-rose-300 transition-all text-[11px] font-medium border border-rose-500/20">
+                    <X size={12}/> Stop
+                  </button>
+                </div>
+              </motion.div>
+            );
+          })()}
+
           {/* ─ ACTIVITY FEED ─ */}
           {activeView==='servers'&&(
             <div className="px-4 py-4 border-b border-white/[0.07] shrink-0">
@@ -9217,6 +9389,7 @@ export default function App() {
                                 {maskName(m.username)}
                               </p>
                               {isOwner&&<Crown size={11} className="text-amber-400 shrink-0"/>}
+                              {m.is_bot && <span className="text-[9px] font-bold px-1 py-0.5 rounded border border-violet-500/40 text-violet-400 bg-violet-500/10 leading-none select-none shrink-0">APP</span>}
                               {m.badges?.map(b=>{const BIcon=getBadgeIcon(b.name);return <BIcon key={b.id} size={11} style={{color:b.color}} title={b.label} className="shrink-0"/>;  })}
                             </div>
                             {mActivity ? (
@@ -9259,6 +9432,7 @@ export default function App() {
                                 {maskName(m.username)}
                               </p>
                               {isOwner&&<Crown size={11} className="text-amber-400/50 shrink-0"/>}
+                              {m.is_bot && <span className="text-[9px] font-bold px-1 py-0.5 rounded border border-violet-500/20 text-violet-500/60 bg-violet-500/5 leading-none select-none shrink-0 opacity-50">APP</span>}
                               {m.badges?.map(b=>{const BIcon=getBadgeIcon(b.name);return <BIcon key={b.id} size={11} style={{color:b.color+'80'}} title={b.label} className="shrink-0 opacity-50"/>;  })}
                             </div>
                             {m.role_name&&<p className="text-[11px] text-zinc-700 truncate leading-tight">{m.role_name}</p>}
@@ -9742,6 +9916,149 @@ export default function App() {
           </>
         );
       })()}
+
+      {/* ── Cordyn Apps Modal ──────────────────────────────────────────── */}
+      <AnimatePresence>
+        {appsModalOpen && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[92] p-4"
+            onClick={()=>setAppsModalOpen(false)}>
+            <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
+              onClick={e=>e.stopPropagation()}
+              className="bg-[#13131f] border border-white/[0.1] rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl shadow-black/60 overflow-hidden">
+              {/* Header */}
+              <div className="flex items-center gap-3 px-5 py-4 border-b border-white/[0.07]">
+                <div className="w-9 h-9 rounded-xl bg-violet-500/15 flex items-center justify-center shrink-0">
+                  <Bot size={18} className="text-violet-400"/>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="font-bold text-white text-base">Cordyn Apps</h2>
+                  <p className="text-xs text-zinc-500">Rozszerzenia i boty dla serwera <span className="text-zinc-300">{serverFull?.name}</span></p>
+                </div>
+                <button onClick={()=>setAppsModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.07] transition-all">
+                  <X size={16}/>
+                </button>
+              </div>
+              {/* Tabs */}
+              <div className="flex gap-0.5 px-3 py-2 border-b border-white/[0.05] bg-white/[0.02]">
+                {(['browse','installed'] as const).map(tab => (
+                  <button key={tab} onClick={()=>setAppsTab(tab)}
+                    className={`px-3.5 py-1.5 rounded-xl text-sm font-medium transition-all ${appsTab===tab?'bg-violet-500/15 text-violet-300 border border-violet-500/25':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]'}`}>
+                    {tab==='browse' ? 'Przeglądaj' : 'Zainstalowane'}
+                  </button>
+                ))}
+              </div>
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
+                {appsTab === 'browse' && AVAILABLE_BOTS.map(bot => {
+                  const isInstalled = installedBots.some(b => b.bot_id === bot.id);
+                  return (
+                    <div key={bot.id} className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4 hover:border-violet-500/20 transition-all">
+                      <div className="flex items-start gap-3.5">
+                        <div className="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-2xl shrink-0 select-none">
+                          {bot.avatar}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                            <h3 className="font-bold text-white text-sm">{bot.name}</h3>
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-violet-500/30 text-violet-400 bg-violet-500/10 uppercase tracking-wider">{bot.category}</span>
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-zinc-700 text-zinc-500 uppercase tracking-wider">APP</span>
+                          </div>
+                          <p className="text-xs text-zinc-500 leading-relaxed mb-3">{bot.description}</p>
+                          {/* Commands list */}
+                          <div className="flex flex-wrap gap-1.5 mb-3">
+                            {bot.commands.slice(0,4).map(cmd => (
+                              <span key={cmd.name} title={cmd.description}
+                                className="text-[10px] font-mono px-2 py-0.5 bg-zinc-800 border border-zinc-700/70 rounded-lg text-zinc-400">
+                                /{cmd.name}
+                              </span>
+                            ))}
+                            {bot.commands.length > 4 && (
+                              <span className="text-[10px] px-2 py-0.5 bg-zinc-800/50 rounded-lg text-zinc-600">+{bot.commands.length - 4} więcej</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="shrink-0">
+                          {isInstalled ? (
+                            <button
+                              onClick={async () => {
+                                if (!activeServer) return;
+                                try {
+                                  await botsApi.remove(activeServer, bot.id);
+                                  setInstalledBots(p => p.filter(b => b.bot_id !== bot.id));
+                                } catch { /* ignore */ }
+                              }}
+                              className="px-3 py-1.5 text-xs font-medium rounded-xl border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 transition-all">
+                              Usuń
+                            </button>
+                          ) : (
+                            <button
+                              disabled={botInstalling === bot.id}
+                              onClick={async () => {
+                                if (!activeServer) return;
+                                setBotInstalling(bot.id);
+                                try {
+                                  const inst = await botsApi.install(activeServer, bot.id);
+                                  setInstalledBots(p => [...p, inst]);
+                                  setAppsTab('installed');
+                                } catch { /* ignore */ } finally {
+                                  setBotInstalling(null);
+                                }
+                              }}
+                              className="px-3 py-1.5 text-xs font-medium rounded-xl bg-violet-500 hover:bg-violet-400 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5">
+                              {botInstalling === bot.id ? <Loader2 size={11} className="animate-spin"/> : <Plus size={11}/>}
+                              Dodaj do serwera
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {appsTab === 'installed' && (
+                  installedBots.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
+                      <div className="w-14 h-14 rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center">
+                        <Package size={22} className="text-zinc-600"/>
+                      </div>
+                      <p className="text-zinc-500 text-sm">Brak zainstalowanych aplikacji</p>
+                      <button onClick={()=>setAppsTab('browse')} className="text-xs text-violet-400 hover:text-violet-300 transition-colors">
+                        Przeglądaj dostępne aplikacje →
+                      </button>
+                    </div>
+                  ) : installedBots.map(inst => {
+                    const bot = AVAILABLE_BOTS.find(b => b.id === inst.bot_id);
+                    if (!bot) return null;
+                    return (
+                      <div key={inst.bot_id} className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4 flex items-center gap-3.5">
+                        <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-xl shrink-0 select-none">{bot.avatar}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <p className="font-semibold text-white text-sm">{bot.name}</p>
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-zinc-700 text-zinc-500 uppercase tracking-wider">APP</span>
+                          </div>
+                          <p className="text-[11px] text-zinc-600">Zainstalowano {new Date(inst.installed_at).toLocaleDateString('pl')}</p>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (!activeServer) return;
+                            try {
+                              await botsApi.remove(activeServer, bot.id);
+                              setInstalledBots(p => p.filter(b => b.bot_id !== bot.id));
+                            } catch { /* ignore */ }
+                          }}
+                          className="px-3 py-1.5 text-xs font-medium rounded-xl border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 transition-all shrink-0">
+                          Usuń
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Delete server confirmation */}
       <AnimatePresence>
@@ -11342,7 +11659,7 @@ export default function App() {
                       <div className="flex flex-col gap-3">
                         <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                           <span className="text-sm text-zinc-400">Wersja</span>
-                          <span className="text-sm font-mono text-indigo-300">{updateAvailable ? `v${updateAvailable.version} → dostępna` : 'v0.1.24'}</span>
+                          <span className="text-sm font-mono text-indigo-300">{updateAvailable ? `v${updateAvailable.version} → dostępna` : 'v0.1.28'}</span>
                         </div>
                         <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                           <span className="text-sm text-zinc-400">Platforma</span>

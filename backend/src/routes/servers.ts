@@ -353,6 +353,7 @@ router.get('/:id/members', authMiddleware, async (req: AuthRequest, res: Respons
     }
     const { rows } = await query(
       `SELECT u.id, u.username, u.avatar_url, u.status, u.custom_status, u.avatar_effect,
+              u.is_bot,
               sm.role_name, sm.joined_at,
               COALESCE(
                 (SELECT json_agg(json_build_object('id', gb.id, 'name', gb.name, 'label', gb.label, 'color', gb.color, 'icon', gb.icon) ORDER BY gb.position)

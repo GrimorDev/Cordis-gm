@@ -188,7 +188,62 @@ export interface ServerMember {
   roles: { role_id: string; name: string; color: string }[];
   avatar_effect?: string | null;
   badges?: Badge[];
+  is_bot?: boolean;
 }
+
+// ── Bot types ──────────────────────────────────────────────────────────────
+export interface BotDefinition {
+  id: string;           // static ID, e.g. 'music'
+  name: string;         // display name
+  description: string;
+  avatar: string;       // emoji or URL
+  category: string;     // 'Music' | 'Utility' | 'Fun'
+  commands: { name: string; description: string; usage: string }[];
+}
+export interface InstalledBot {
+  bot_id: string; server_id: string; channel_id?: string | null;
+  installed_at: string; installed_by: string;
+}
+export interface MusicBotState {
+  playing: boolean;
+  title?: string;
+  url?: string;
+  thumbnail?: string;
+  duration?: number;
+  channel_id: string;
+  stream_url?: string;
+  requested_by?: string;
+  queue: { title: string; url: string; duration?: number }[];
+}
+
+// ── Available bots (static, frontend-defined) ─────────────────────────────
+export const AVAILABLE_BOTS: BotDefinition[] = [
+  {
+    id: 'music',
+    name: 'Cordyn Music',
+    description: 'Odtwarzaj muzykę z YouTube na kanałach głosowych. Obsługuje kolejkę, pomijanie i wiele więcej.',
+    avatar: '🎵',
+    category: 'Music',
+    commands: [
+      { name: 'play',  description: 'Odtwórz utwór z YouTube', usage: '/play <url lub tytuł>' },
+      { name: 'skip',  description: 'Pomiń aktualny utwór',    usage: '/skip' },
+      { name: 'stop',  description: 'Zatrzymaj odtwarzanie',    usage: '/stop' },
+      { name: 'pause', description: 'Wstrzymaj odtwarzanie',    usage: '/pause' },
+      { name: 'queue', description: 'Pokaż kolejkę odtwarzania', usage: '/queue' },
+      { name: 'volume', description: 'Ustaw głośność (0-100)', usage: '/volume <0-100>' },
+    ],
+  },
+];
+
+// ── Bot API ──────────────────────────────────────────────────────────────
+export const botsApi = {
+  list: (serverId: string) =>
+    req<InstalledBot[]>('GET', `/servers/${serverId}/bots`),
+  install: (serverId: string, botId: string, channelId?: string) =>
+    req<InstalledBot>('POST', `/servers/${serverId}/bots`, { bot_id: botId, channel_id: channelId }),
+  remove: (serverId: string, botId: string) =>
+    req<void>('DELETE', `/servers/${serverId}/bots/${botId}`),
+};
 
 // ── Auth ───────────────────────────────────────────────────────────────────
 export type LoginResult =
