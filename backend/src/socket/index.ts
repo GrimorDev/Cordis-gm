@@ -22,6 +22,9 @@ interface SocketData {
 }
 
 
+// stream_watchers: "channel_id:streamer_id" → Map<watcher_user_id, username>
+const streamWatchers = new Map<string, Map<string, string>>();
+
 export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerEvents, ServerToClientEvents> {
   const io = new SocketServer<ClientToServerEvents, ServerToClientEvents>(httpServer, {
     cors: {
@@ -345,6 +348,32 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
     socket.on('screen_share_stop', ({ to_user_id, channel_id }) => {
       if (to_user_id) io.to(`user:${to_user_id}`).emit('screen_share_stop', { from: user.id });
       if (channel_id) socket.to(`voice:${channel_id}`).emit('screen_share_stop', { from: user.id });
+      // Clean up watchers for this stream
+      if (channel_id) {
+        const key = `${channel_id}:${user.id}`;
+        streamWatchers.delete(key);
+      }
+    });
+
+    // ── Stream viewer tracking ────────────────────────────────────────
+    const broadcastWatchers = (channelId: string, streamerId: string) => {
+      const key = `${channelId}:${streamerId}`;
+      const map = streamWatchers.get(key);
+      const watchers = map ? [...map.entries()].map(([id, username]) => ({ id, username })) : [];
+      io.to(`voice:${channelId}`).emit('stream_watchers_update' as any, { streamer_id: streamerId, watchers });
+    };
+
+    socket.on('stream_watch_start' as any, ({ channel_id, streamer_id }: { channel_id: string; streamer_id: string }) => {
+      const key = `${channel_id}:${streamer_id}`;
+      if (!streamWatchers.has(key)) streamWatchers.set(key, new Map());
+      streamWatchers.get(key)!.set(String(user.id), user.username);
+      broadcastWatchers(channel_id, streamer_id);
+    });
+
+    socket.on('stream_watch_stop' as any, ({ channel_id, streamer_id }: { channel_id: string; streamer_id: string }) => {
+      const key = `${channel_id}:${streamer_id}`;
+      streamWatchers.get(key)?.delete(String(user.id));
+      broadcastWatchers(channel_id, streamer_id);
     });
 
     // ── Disconnect ───────────────────────────────────────────────────
@@ -376,6 +405,16 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
             channel_id: voiceChannelId,
             user_id: user.id,
           });
+        }
+      }
+
+      // Clean up stream watches on disconnect
+      for (const [key, map] of streamWatchers.entries()) {
+        if (map.has(String(user.id))) {
+          map.delete(String(user.id));
+          const [channelId, streamerId] = key.split(':');
+          const watchers = [...map.entries()].map(([id, username]) => ({ id, username }));
+          io.to(`voice:${channelId}`).emit('stream_watchers_update' as any, { streamer_id: streamerId, watchers });
         }
       }
 
