@@ -10861,8 +10861,10 @@ export default function App() {
                           try {
                             const reg = await navigator.serviceWorker.ready;
                             const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
-                            console.log('[push] VAPID key length:', vapidKey?.length, 'key:', vapidKey?.slice(0,20)+'...');
                             if (!vapidKey) throw new Error('Brak klucza VAPID — skontaktuj się z administratorem');
+                            // Wyczyść stare subskrypcje (mogą być z innym kluczem demo)
+                            const existing = await reg.pushManager.getSubscription();
+                            if (existing) await existing.unsubscribe();
                             const sub = await reg.pushManager.subscribe({
                               userVisibleOnly: true,
                               applicationServerKey: vapidKey,
