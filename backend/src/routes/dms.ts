@@ -4,6 +4,7 @@ import { query, getClient } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
 import { msgLimiter } from '../middleware/messageLimiter';
 import { AuthRequest } from '../types';
+import { sendPushToUser } from '../services/push';
 
 const router = Router();
 
@@ -131,6 +132,13 @@ router.post('/:userId/messages', authMiddleware, msgLimiter,
         io.to(`user:${req.params.userId}`).emit('new_dm', full);
         io.to(`user:${req.user!.id}`).emit('new_dm', full);
       }
+      sendPushToUser(parseInt(req.params.userId), {
+        title: `Nowa wiadomość od ${req.user!.username}`,
+        body: (req.body.content || '').slice(0, 100) || '📎 Załącznik',
+        icon: full.sender_avatar || '/cordyn_logo.png',
+        url: `/dm/${req.user!.id}`,
+        tag: `dm-${req.user!.id}`,
+      }).catch(() => {});
       return res.status(201).json(full);
     } catch { return res.status(500).json({ error: 'Internal server error' }); }
   }

@@ -6,6 +6,7 @@ import { msgLimiter } from '../middleware/messageLimiter';
 import { AuthRequest } from '../types';
 import { redis, KEYS, checkSlowmode, setSlowmode } from '../redis/client';
 import { runAutomations } from '../services/automations';
+import { sendPushToUser } from '../services/push';
 
 const router = Router();
 
@@ -247,6 +248,16 @@ router.post('/channel/:channelId', authMiddleware, msgLimiter,
               notifParams
             );
           } catch { /* non-fatal */ }
+          // Push to offline members
+          for (const m of allMembers) {
+            sendPushToUser(m.user_id, {
+              title: `@everyone na ${access.serverName}`,
+              body: `${req.user!.username} w #${access.channelName}: ${content.slice(0, 80)}`,
+              icon: '/cordyn_logo.png',
+              url: `/servers/${ch.server_id}/${req.params.channelId}`,
+              tag: `everyone-${req.params.channelId}`,
+            }).catch(() => {});
+          }
         }
       }
 
@@ -286,6 +297,13 @@ router.post('/channel/:channelId', authMiddleware, msgLimiter,
                 [mentioned.id, msg.id, req.params.channelId, ch.server_id, req.user!.id, content.slice(0, 200)]
               );
             } catch { /* non-fatal */ }
+            sendPushToUser(mentioned.id, {
+              title: `${req.user!.username} wspomniał(-a) o Tobie`,
+              body: `#${access.channelName} na ${access.serverName}: ${content.slice(0, 80)}`,
+              icon: '/cordyn_logo.png',
+              url: `/servers/${ch.server_id}/${req.params.channelId}`,
+              tag: `mention-${msg.id}`,
+            }).catch(() => {});
           }
         }
       }

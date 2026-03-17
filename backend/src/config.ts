@@ -34,4 +34,10 @@ export const config = {
     maxSize: parseInt(process.env.UPLOAD_MAX_SIZE || String(5 * 1024 * 1024)), // 5MB
     dir: process.env.UPLOAD_DIR || './uploads',
   },
+
+  vapid: {
+    publicKey:  process.env.VAPID_PUBLIC_KEY  || '',
+    privateKey: process.env.VAPID_PRIVATE_KEY || '',
+    email:      process.env.VAPID_EMAIL       || 'admin@cordyn.pl',
+  },
 };

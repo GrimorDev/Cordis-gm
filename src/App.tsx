@@ -10859,10 +10859,11 @@ export default function App() {
                           }
                           try {
                             const reg = await navigator.serviceWorker.ready;
-                            // Use public VAPID key (demo — replace with real key in production)
+                            const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+                            if (!vapidKey) throw new Error('Brak klucza VAPID — skontaktuj się z administratorem');
                             const sub = await reg.pushManager.subscribe({
                               userVisibleOnly: true,
-                              applicationServerKey: 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjZEkIbPV3Jo8VrHH16NInS95-qPs',
+                              applicationServerKey: vapidKey,
                             }).catch(() => null);
                             if (!sub) throw new Error('Subskrypcja nieudana');
                             await pushApi.subscribe(sub);
