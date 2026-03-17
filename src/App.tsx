@@ -4007,6 +4007,15 @@ export default function App() {
 
   // ── Channel context menu (right-click) ───────────────────────────
   const [chCtxMenu, setChCtxMenu] = useState<{x:number;y:number;ch:any}|null>(null);
+  const [chCtxSubmenu, setChCtxSubmenu] = useState<'notifications'|null>(null);
+  // Per-channel notification pref: default | all | mentions | nothing
+  const [chNotifPref, setChNotifPref] = useState<Record<string,'default'|'all'|'mentions'|'nothing'>>(() => {
+    try { return JSON.parse(localStorage.getItem('cordyn_ch_notif')||'{}'); } catch { return {}; }
+  });
+  // Per-channel mute: true = muted
+  const [chMuted, setChMuted] = useState<Record<string,boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem('cordyn_ch_muted')||'{}'); } catch { return {}; }
+  });
 
   // ── Category inline edit ─────────────────────────────────────────
   const [editingCatId, setEditingCatId]       = useState<string|null>(null);
@@ -9599,42 +9608,140 @@ export default function App() {
       )}
 
       {/* Channel context menu (right-click on channel) */}
-      {chCtxMenu&&(
-        <>
-          <div className="fixed inset-0 z-[90]" onClick={()=>setChCtxMenu(null)}/>
-          <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}}
-            style={{position:'fixed',left:chCtxMenu.x,top:Math.min(chCtxMenu.y, window.innerHeight-220)}}
-            className="z-[91] bg-[#0e0e1c] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 py-1.5 min-w-[200px] overflow-hidden"
-            onClick={()=>setChCtxMenu(null)}>
-            {/* Otwórz kanał */}
-            <button onClick={()=>{ setActiveChannel(chCtxMenu.ch.id); setIsMobileOpen(false); }}
-              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
-              <Hash size={13} className="text-zinc-500 shrink-0"/>
-              Otwórz kanał
-            </button>
-            {/* Kopiuj ID kanału */}
-            <button onClick={()=>{ navigator.clipboard.writeText(chCtxMenu.ch.id); addToast('Skopiowano ID kanału','success'); }}
-              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
-              <Copy size={13} className="text-zinc-500 shrink-0"/>
-              Kopiuj ID
-            </button>
-            {canManageChannels&&(<>
-              <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
-              <button onClick={()=>{ openChEdit(chCtxMenu.ch); }}
-                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
-                <Settings2 size={13} className="text-zinc-500 shrink-0"/>
-                Edytuj kanał
+      {chCtxMenu&&(()=>{
+        const ch = chCtxMenu.ch;
+        const isVoice = ch.type === 'voice';
+        const isText  = ch.type === 'text' || ch.type === 'announcement' || ch.type === 'forum';
+        const hasUnread = (unreadChs[ch.id]||0) > 0 || (pingChs[ch.id]||0) > 0;
+        const isMuted = chMuted[ch.id] ?? false;
+        const notifPref = chNotifPref[ch.id] ?? 'default';
+        const menuH = 40 + (isText ? 40 : 0) + (canCreateInvites ? 40 : 0) + 40 + 40 + 40 + (canManageChannels ? 160 : 0) + 40;
+        const top = Math.min(chCtxMenu.y, window.innerHeight - menuH);
+
+        const ctxRow = (icon: React.ReactNode, label: string, onClick: ()=>void, danger = false, extra?: React.ReactNode) => (
+          <button onClick={onClick}
+            className={`w-full flex items-center gap-2.5 px-3.5 py-[9px] text-sm transition-colors text-left ${danger?'text-rose-400 hover:bg-rose-500/10':'text-zinc-300 hover:bg-white/[0.06] hover:text-white'}`}>
+            <span className="shrink-0 text-zinc-500">{icon}</span>
+            <span className="flex-1">{label}</span>
+            {extra}
+          </button>
+        );
+        const sep = () => <div className="mx-3 my-1 h-px bg-white/[0.06]"/>;
+
+        const saveNotif = (chId: string, val: 'default'|'all'|'mentions'|'nothing') => {
+          const next = { ...chNotifPref, [chId]: val };
+          setChNotifPref(next);
+          try { localStorage.setItem('cordyn_ch_notif', JSON.stringify(next)); } catch {}
+        };
+        const saveMute = (chId: string, val: boolean) => {
+          const next = { ...chMuted, [chId]: val };
+          setChMuted(next);
+          try { localStorage.setItem('cordyn_ch_muted', JSON.stringify(next)); } catch {}
+        };
+
+        return (
+          <>
+            <div className="fixed inset-0 z-[90]" onClick={()=>{setChCtxMenu(null);setChCtxSubmenu(null);}}/>
+            <motion.div initial={{opacity:0,scale:0.95,y:-4}} animate={{opacity:1,scale:1,y:0}} transition={{duration:0.12}}
+              style={{position:'fixed',left:Math.min(chCtxMenu.x, window.innerWidth-230),top}}
+              className="z-[91] bg-[#111118] border border-white/[0.09] rounded-2xl shadow-2xl shadow-black/70 py-1.5 w-[220px] overflow-visible">
+
+              {/* ── Group 1: Navigation ── */}
+              {isText && ctxRow(<Hash size={13}/>, 'Oznacz jako przeczytane', ()=>{
+                setUnreadChs(p=>{const n={...p};delete n[ch.id];return n;});
+                setPingChs(p=>{const n={...p};delete n[ch.id];return n;});
+                setChCtxMenu(null);
+              }, false, !hasUnread ? <span className="text-[10px] text-zinc-600">brak</span> : undefined)}
+
+              {isVoice && ctxRow(<Volume2 size={13}/>, 'Dołącz do kanału', ()=>{
+                joinVoiceCh(ch); setChCtxMenu(null);
+              })}
+
+              {canCreateInvites && ctxRow(<UserPlus size={13}/>, 'Zaproś do kanału', async ()=>{
+                try {
+                  const inv = await serversApi.createInvite(activeServer, undefined);
+                  const link = `https://cordyn.pl/invite/${inv.code}`;
+                  await navigator.clipboard.writeText(link);
+                  addToast('Link zaproszenia skopiowany','success');
+                } catch { addToast('Błąd tworzenia zaproszenia','error'); }
+                setChCtxMenu(null);
+              })}
+
+              {ctxRow(<Link2 size={13}/>, 'Kopiuj link', ()=>{
+                navigator.clipboard.writeText(`https://cordyn.pl/channels/${activeServer}/${ch.id}`);
+                addToast('Link skopiowany','success');
+                setChCtxMenu(null);
+              })}
+
+              {sep()}
+
+              {/* ── Group 2: Notifications ── */}
+              {ctxRow(isMuted ? <BellOff size={13}/> : <Bell size={13}/>, isMuted ? 'Wyłącz wyciszenie' : 'Wycisz kanał', ()=>{
+                saveMute(ch.id, !isMuted);
+                addToast(isMuted ? 'Kanał odwyciszony' : 'Kanał wyciszony', 'success');
+                setChCtxMenu(null);
+              })}
+
+              {/* Notification settings — inline submenu */}
+              <button
+                onClick={()=>setChCtxSubmenu(p=>p==='notifications'?null:'notifications')}
+                className="w-full flex items-center gap-2.5 px-3.5 py-[9px] text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
+                <Bell size={13} className="text-zinc-500 shrink-0"/>
+                <span className="flex-1">Ustawienia powiadomień</span>
+                <ChevronDown size={11} className={`text-zinc-600 transition-transform ${chCtxSubmenu==='notifications'?'rotate-180':''}`}/>
               </button>
-              <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
-              <button onClick={()=>{ handleDeleteCh(chCtxMenu.ch.id); }}
-                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-rose-400 hover:bg-rose-500/10 transition-colors text-left">
-                <Trash2 size={13} className="shrink-0"/>
-                Usuń kanał
-              </button>
-            </>)}
-          </motion.div>
-        </>
-      )}
+              {chCtxSubmenu==='notifications'&&(
+                <div className="mx-2 mb-1 bg-white/[0.04] rounded-xl overflow-hidden border border-white/[0.06]">
+                  {([
+                    ['default',  'Użyj domyślnych dla serwera'],
+                    ['all',      'Wszystkie wiadomości'],
+                    ['mentions', 'Tylko @wzmianki'],
+                    ['nothing',  'Nic'],
+                  ] as [typeof notifPref, string][]).map(([val,label])=>(
+                    <button key={val} onClick={()=>{ saveNotif(ch.id, val); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-300 hover:bg-white/[0.07] hover:text-white transition-colors text-left">
+                      <div className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 flex items-center justify-center ${notifPref===val?'border-indigo-500 bg-indigo-500':'border-zinc-600'}`}>
+                        {notifPref===val&&<div className="w-1.5 h-1.5 rounded-full bg-white"/>}
+                      </div>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {sep()}
+
+              {/* ── Group 3: Admin actions ── */}
+              {canManageChannels&&(<>
+                {ctxRow(<Settings2 size={13}/>, 'Edytuj kanał', ()=>{ openChEdit(ch); setChCtxMenu(null); })}
+                {ctxRow(<Copy size={13}/>, 'Powiel kanał', async ()=>{
+                  try {
+                    await channelsApi.create({
+                      server_id: activeServer,
+                      name: `${ch.name}-kopia`,
+                      type: ch.type,
+                      category_id: ch.category_id,
+                      is_private: ch.is_private,
+                    });
+                    addToast(`Powielono kanał: ${ch.name}-kopia`, 'success');
+                  } catch { addToast('Błąd powielania kanału','error'); }
+                  setChCtxMenu(null);
+                })}
+                {sep()}
+                {ctxRow(<Trash2 size={13}/>, 'Usuń kanał', ()=>{ handleDeleteCh(ch.id); setChCtxMenu(null); }, true)}
+                {sep()}
+              </>)}
+
+              {/* ── Always: Copy ID ── */}
+              {ctxRow(<Hash size={13}/>, 'Kopiuj ID kanału', ()=>{
+                navigator.clipboard.writeText(ch.id);
+                addToast('Skopiowano ID kanału','success');
+                setChCtxMenu(null);
+              })}
+            </motion.div>
+          </>
+        );
+      })()}
 
       {/* Delete server confirmation */}
       <AnimatePresence>
