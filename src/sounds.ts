@@ -118,3 +118,10 @@ export function playCallEnded() {
   tone(330, 0.12, 0.25);
   tone(260, 0.25, 0.2, 'sine', 0.1);
 }
+
+/** Joining a stream view — soft rising chime */
+export function playStreamJoin() {
+  tone(523, 0.1, 0.18, 'sine', 0);
+  tone(659, 0.1, 0.16, 'sine', 0.08);
+  tone(784, 0.18, 0.14, 'sine', 0.16);
+}

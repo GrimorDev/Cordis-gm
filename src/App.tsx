@@ -50,6 +50,7 @@ import {
   startIncomingRing, stopIncomingRing,
   playVoiceJoin, playVoiceLeave,
   playCallAccepted, playCallEnded,
+  playStreamJoin,
 } from './sounds';
 import {
   makePeerConnection, attachRemoteAudio, attachRemoteScreenAudio, detachRemoteAudio,
@@ -3798,6 +3799,7 @@ export default function App() {
   const [activeView, setActiveView]           = useState<'servers'|'dms'|'friends'|'admin'>('dms');
   const [activeCall, setActiveCall]           = useState<CallState|null>(null);
   const [showCallPanel, setShowCallPanel]     = useState(false);
+  const [rightPanelOpen, setRightPanelOpen]   = useState(() => { try { return localStorage.getItem('cordyn_right_panel') !== 'closed'; } catch { return true; } });
   const [voiceUsers, setVoiceUsers]           = useState<Record<string, VoiceUser[]>>({});
   const [incomingCall, setIncomingCall]       = useState<{from:{id:string,username:string,avatar_url:string|null},type:'voice'|'video',conversation_id:string}|null>(null);
   const [callDuration, setCallDuration]       = useState(0);
@@ -4389,6 +4391,16 @@ export default function App() {
   // ── Auto-update check (Tauri only) ──────────────────────────────
   const [updateAvailable, setUpdateAvailable] = useState<{version:string;body:string|null}|null>(null);
   const [updateInstalling, setUpdateInstalling] = useState(false);
+  // Hard-reload once after update to flush webview cache
+  useEffect(() => {
+    if (!isTauri) return;
+    try {
+      if (localStorage.getItem('cordyn_just_updated')) {
+        localStorage.removeItem('cordyn_just_updated');
+        window.location.reload();
+      }
+    } catch {}
+  }, []);
   useEffect(() => {
     if (!isTauri) return;
     let cancelled = false;
@@ -4451,6 +4463,8 @@ export default function App() {
       const update = await check();
       if (update?.available) {
         await update.downloadAndInstall();
+        // Flag: on next startup do a hard reload to clear webview cache
+        try { localStorage.setItem('cordyn_just_updated', '1'); } catch {}
         await relaunch();
       }
     } catch (e) {
@@ -4640,7 +4654,12 @@ export default function App() {
       setStreamWatchers(p => { const n = {...p}; delete n[sid]; return n; });
     });
     sock.on('stream_watchers_update' as any, ({ streamer_id, watchers }: { streamer_id: string; watchers: {id:string; username:string}[] }) => {
-      setStreamWatchers(p => ({ ...p, [String(streamer_id)]: watchers }));
+      setStreamWatchers(p => {
+        const next: typeof p = { ...p, [String(streamer_id)]: watchers };
+        // Also update the 'self' key so the own stream tile shows viewer count
+        if (currentUser && String(streamer_id) === String(currentUser.id)) next['self'] = watchers;
+        return next;
+      });
     });
     // DM call events
     sock.on('call_invite', ({ from, type, conversation_id }: any) => {
@@ -7317,15 +7336,14 @@ export default function App() {
               {/* Participants + screen share area */}
               {(()=>{
                 const remoteScreenEntries = [...remoteScreenStreamsRef.current.entries()];
-                // All active streams: own + remote sharers
+                // All active streams: own first (if sharing), then remote sharers
                 const allStreamIds: string[] = [
                   ...(activeCall.isScreenSharing && screenStreamRef.current ? ['self'] : []),
                   ...remoteScreenEntries.map(([id]) => id),
                 ];
                 const hasStreams = allStreamIds.length > 0;
-                const isWatching = watchingStreamId !== null || (activeCall.isScreenSharing && screenStreamRef.current !== null);
 
-                // Helper: get username for a voice channel participant by userId
+                // Helper: get username for a voice participant by userId
                 const getUsername = (uid: string): string => {
                   if (activeCall.channelId) {
                     const u = (voiceUsers[activeCall.channelId]||[]).find(x => x.id === uid);
@@ -7336,79 +7354,84 @@ export default function App() {
                 };
 
                 // Participant avatar block (shared between layouts)
-                const selfBlock = currentUser ? (()=>{
-                  const selfSpeaking = speakingUsers.has(currentUser.id) && !activeCall.isMuted;
-                  return (
-                    <div key="self" className="flex flex-col items-center gap-2">
-                      <div className={`relative p-1 rounded-2xl border-2 transition-all duration-150 ${selfSpeaking?'border-emerald-500 shadow-[0_0_12px_2px_rgba(16,185,129,0.45)]':activeCall.isMuted?'border-rose-500/40':'border-white/10'}`}>
-                        <img src={ava(currentUser)} className={`${hasStreams?'w-14 h-14':'w-24 h-24'} rounded-xl object-cover`} alt=""/>
-                        <div className={`absolute bottom-1 right-1 w-5 h-5 rounded-full flex items-center justify-center ${activeCall.isMuted?'bg-rose-500':'bg-emerald-500'}`}>
-                          {activeCall.isMuted?<MicOff size={9} className="text-white"/>:<Mic size={9} className="text-white"/>}
-                        </div>
-                      </div>
-                      <p className={`text-xs font-bold ${selfSpeaking?'text-emerald-400':'text-white'}`}>{currentUser.username} <span className="text-zinc-600">(Ty)</span></p>
-                    </div>
-                  );
-                })() : null;
-
-                const channelParticipants = activeCall.channelId ? (voiceUsers[activeCall.channelId]||[]).filter(u=>u.id!==currentUser?.id).map(u=>{
-                  const isSpeaking = speakingUsers.has(u.id);
-                  const uMuted    = voiceUserStates[u.id]?.muted    ?? false;
+                const participantBlock = (u: {id:string;username:string;avatar_url?:string|null;status?:string}, isSelf2=false, keyStr=u.id) => {
+                  const isSpeaking = speakingUsers.has(u.id) && !(isSelf2 ? activeCall.isMuted : (voiceUserStates[u.id]?.muted??false));
+                  const uMuted = isSelf2 ? activeCall.isMuted : (voiceUserStates[u.id]?.muted??false);
                   const uDeafened = voiceUserStates[u.id]?.deafened ?? false;
                   const uMutedByMe = mutedByMe[u.id] ?? false;
                   return (
-                    <div key={u.id} className="flex flex-col items-center gap-2"
-                      onContextMenu={e=>{e.preventDefault();setVolMenu({id:u.id,username:u.username,x:e.clientX,y:e.clientY});}}>
-                      <div className={`relative p-1 rounded-2xl border-2 transition-all duration-150 ${isSpeaking&&!uMuted?'border-emerald-500 shadow-[0_0_12px_2px_rgba(16,185,129,0.45)]':uMuted?'border-rose-500/40':'border-white/10'}`}>
+                    <div key={keyStr} className="flex flex-col items-center gap-2"
+                      onContextMenu={isSelf2?undefined:e=>{e.preventDefault();setVolMenu({id:u.id,username:u.username,x:e.clientX,y:e.clientY});}}>
+                      <div className={`relative p-1 rounded-2xl border-2 transition-all duration-150 ${isSpeaking?'border-emerald-500 shadow-[0_0_12px_2px_rgba(16,185,129,0.45)]':uMuted?'border-rose-500/40':'border-white/10'}`}>
                         <img src={ava(u)} className={`${hasStreams?'w-14 h-14':'w-24 h-24'} rounded-xl object-cover`} alt=""/>
-                        {uMutedByMe&&<div className="absolute inset-0 rounded-xl bg-zinc-900/60 flex items-center justify-center"><VolumeX size={20} className="text-rose-400"/></div>}
+                        {!isSelf2&&uMutedByMe&&<div className="absolute inset-0 rounded-xl bg-zinc-900/60 flex items-center justify-center"><VolumeX size={20} className="text-rose-400"/></div>}
                         <div className={`absolute bottom-1 right-1 w-5 h-5 rounded-full flex items-center justify-center ${uMuted?'bg-rose-500':isSpeaking?'bg-emerald-500':'bg-zinc-700'}`}>
-                          {uMuted ? <MicOff size={9} className="text-white"/> : <Mic size={9} className="text-white"/>}
+                          {uMuted?<MicOff size={9} className="text-white"/>:<Mic size={9} className="text-white"/>}
                         </div>
-                        {uDeafened && <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-rose-500 flex items-center justify-center"><VolumeX size={8} className="text-white"/></div>}
+                        {!isSelf2&&uDeafened&&<div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-rose-500 flex items-center justify-center"><VolumeX size={8} className="text-white"/></div>}
+                        {/* Streaming badge on participant */}
+                        {(isSelf2 ? activeCall.isScreenSharing : sharingUserIds.has(u.id)) && (
+                          <div className="absolute top-1 left-1 w-4 h-4 rounded-full bg-indigo-600 flex items-center justify-center">
+                            <ScreenShare size={8} className="text-white"/>
+                          </div>
+                        )}
                       </div>
-                      <p className={`text-xs font-bold ${isSpeaking&&!uMuted?'text-emerald-400':uMuted?'text-rose-400':'text-white'}`}>{u.username}</p>
+                      <p className={`text-xs font-bold ${isSpeaking?'text-emerald-400':uMuted?'text-rose-400':'text-white'}`}>
+                        {u.username}{isSelf2&&<span className="text-zinc-600"> (Ty)</span>}
+                      </p>
                     </div>
                   );
-                }) : [];
+                };
 
-                const dmPartnerBlock = activeCall.userId && activeCall.username ? (()=>{
-                  const partnerSpeaking = speakingUsers.has(activeCall.userId!);
-                  const pMuted    = voiceUserStates[activeCall.userId!]?.muted    ?? false;
-                  const pDeafened = voiceUserStates[activeCall.userId!]?.deafened ?? false;
-                  const pMutedByMe = mutedByMe[activeCall.userId!] ?? false;
-                  return (
-                    <div key="partner" className="flex flex-col items-center gap-2"
-                      onContextMenu={e=>{e.preventDefault();setVolMenu({id:activeCall.userId!,username:activeCall.username!,x:e.clientX,y:e.clientY});}}>
-                      <div className={`relative p-1 rounded-2xl border-2 transition-all duration-150 ${partnerSpeaking&&!pMuted?'border-emerald-500 shadow-[0_0_12px_2px_rgba(16,185,129,0.45)]':pMuted?'border-rose-500/40':'border-white/10'}`}>
-                        <img src={ava({avatar_url: activeCall.avatarUrl, username: activeCall.username})}
-                          className={`${hasStreams?'w-14 h-14':'w-24 h-24'} rounded-xl object-cover`} alt=""/>
-                        {pMutedByMe&&<div className="absolute inset-0 rounded-xl bg-zinc-900/60 flex items-center justify-center"><VolumeX size={20} className="text-rose-400"/></div>}
-                        <div className={`absolute bottom-1 right-1 w-5 h-5 rounded-full flex items-center justify-center ${pMuted?'bg-rose-500':partnerSpeaking?'bg-emerald-500':'bg-zinc-700'}`}>
-                          {pMuted ? <MicOff size={9} className="text-white"/> : <Mic size={9} className="text-white"/>}
-                        </div>
-                        {pDeafened && <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-rose-500 flex items-center justify-center"><VolumeX size={8} className="text-white"/></div>}
-                      </div>
-                      <p className={`text-xs font-bold ${partnerSpeaking&&!pMuted?'text-emerald-400':pMuted?'text-rose-400':'text-white'}`}>{activeCall.username}</p>
-                    </div>
-                  );
-                })() : null;
-
+                const selfUser = currentUser ? { id: currentUser.id, username: currentUser.username, avatar_url: currentUser.avatar_url, status: currentUser.status } : null;
+                const selfBlock = selfUser ? participantBlock(selfUser, true, 'self-av') : null;
+                const channelParticipants = activeCall.channelId
+                  ? (voiceUsers[activeCall.channelId]||[]).filter(u=>u.id!==currentUser?.id).map(u=>participantBlock(u))
+                  : [];
+                const dmPartnerBlock = activeCall.userId && activeCall.username
+                  ? participantBlock({ id: activeCall.userId, username: activeCall.username, avatar_url: activeCall.avatarUrl }, false, 'dm-partner')
+                  : null;
                 const allParticipants = [selfBlock, ...channelParticipants, dmPartnerBlock].filter(Boolean);
 
+                // ── Reusable: watcher count badge + dropdown ──────────────────
+                const watcherBadge = (streamId: string, dark = false) => {
+                  const wList = streamWatchers[streamId] ?? [];
+                  const wExp  = watchersExpanded[streamId] ?? false;
+                  return (
+                    <div className="relative">
+                      <button
+                        onClick={e=>{ e.stopPropagation(); setWatchersExpanded(p=>({...p,[streamId]:!wExp})); }}
+                        className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] transition-colors ${dark?'bg-black/70 text-zinc-300 hover:text-white':'bg-white/[0.08] text-zinc-400 hover:text-white'}`}>
+                        <Users size={10} className="text-indigo-400"/>
+                        <span>{wList.length}</span>
+                      </button>
+                      {wExp && wList.length > 0 && (
+                        <div className="absolute bottom-full mb-1 left-0 bg-zinc-900 border border-white/10 rounded-xl p-2 min-w-[130px] shadow-xl z-10">
+                          {wList.map(w=>(
+                            <div key={w.id} className="flex items-center gap-2 py-0.5 px-1">
+                              <div className="w-4 h-4 rounded-full bg-indigo-600 flex items-center justify-center text-[8px] font-bold text-white shrink-0">{w.username[0]?.toUpperCase()}</div>
+                              <span className="text-xs text-zinc-300 truncate">{w.username}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                };
+
                 // ── WATCHING A SPECIFIC STREAM ────────────────────────────────
-                const activeWatchId = watchingStreamId ?? (activeCall.isScreenSharing ? 'self' : null);
-                if (hasStreams && activeWatchId) {
-                  const isSelf = activeWatchId === 'self';
-                  const screenStream = isSelf
-                    ? screenStreamRef.current
-                    : (remoteScreenStreamsRef.current.get(activeWatchId) ?? null);
-                  const screenOwner = isSelf ? 'Ty' : getUsername(activeWatchId);
-                  const sid = isSelf ? 'self' : activeWatchId;
-                  const isMutedStream = streamMutedByMe[sid] ?? false;
-                  const svol = streamVols[sid] ?? 100;
-                  const watchers = streamWatchers[activeWatchId] ?? [];
-                  const wExpanded = watchersExpanded[activeWatchId] ?? false;
+                // Only enters this view when the user explicitly clicked "Dołącz" (watchingStreamId !== null)
+                if (hasStreams && watchingStreamId) {
+                  const screenStream = remoteScreenStreamsRef.current.get(watchingStreamId) ?? null;
+                  const screenOwner  = getUsername(watchingStreamId);
+                  const isMutedStream = streamMutedByMe[watchingStreamId] ?? false;
+                  const svol = streamVols[watchingStreamId] ?? 100;
+                  const watchers = streamWatchers[watchingStreamId] ?? [];
+                  const wExpanded = watchersExpanded[watchingStreamId] ?? false;
+                  const stopWatching = () => {
+                    setWatchingStreamId(null);
+                    if (activeCall.channelId) getSocket().emit('stream_watch_stop' as any, { channel_id: activeCall.channelId, streamer_id: watchingStreamId });
+                  };
                   return (
                     <div className="flex-1 flex flex-col gap-3 p-4 overflow-hidden min-h-0">
                       {/* Active stream video */}
@@ -7421,78 +7444,83 @@ export default function App() {
                             autoPlay playsInline muted
                           />
                         )}
-                        {/* Bottom bar: owner label + viewer count + audio controls */}
+                        {/* PiP: own stream while watching someone else */}
+                        {activeCall.isScreenSharing && screenStreamRef.current && (
+                          <div className="absolute bottom-16 right-3 w-36 aspect-video bg-black rounded-lg overflow-hidden border border-white/20 shadow-lg">
+                            <video
+                              ref={el => { const s = screenStreamRef.current; if (el && s && el.srcObject !== s) { el.muted=true; el.srcObject=s; el.play().catch(()=>{}); } }}
+                              className="w-full h-full object-contain" autoPlay playsInline muted/>
+                            <div className="absolute bottom-1 left-1.5 flex items-center gap-1">
+                              <ScreenShare size={8} className="text-indigo-300"/>
+                              <span className="text-[8px] text-white font-medium">Ty</span>
+                            </div>
+                          </div>
+                        )}
+                        {/* Bottom bar */}
                         <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between gap-2">
                           <div className="flex flex-col gap-1.5">
                             <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-sm rounded-lg px-2.5 py-1">
                               <ScreenShare size={12} className="text-indigo-400"/>
                               <span className="text-xs text-white font-medium">{screenOwner} udostępnia ekran</span>
                             </div>
-                            {/* Viewer count + expandable list */}
-                            {!isSelf && (
-                              <div className="relative">
-                                <button
-                                  onClick={() => setWatchersExpanded(p => ({...p, [activeWatchId]: !wExpanded}))}
-                                  className="flex items-center gap-1.5 bg-black/60 backdrop-blur-sm rounded-lg px-2.5 py-1 text-xs text-zinc-300 hover:text-white transition-colors">
-                                  <Users size={11} className="text-indigo-400"/>
-                                  <span>{watchers.length} oglądających</span>
-                                  <ChevronDown size={10} className={`transition-transform ${wExpanded?'rotate-180':''}`}/>
-                                </button>
-                                {wExpanded && watchers.length > 0 && (
-                                  <div className="absolute bottom-full mb-1 left-0 bg-zinc-900 border border-white/10 rounded-xl p-2 min-w-[140px] shadow-xl">
-                                    {watchers.map(w => (
-                                      <div key={w.id} className="flex items-center gap-2 py-1 px-1">
-                                        <div className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center text-[9px] font-bold text-white shrink-0">{w.username[0]?.toUpperCase()}</div>
-                                        <span className="text-xs text-zinc-300 truncate">{w.username}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          {/* Audio controls for remote streams */}
-                          {!isSelf && (
-                            <div className="flex items-center gap-2 bg-black/60 backdrop-blur-sm rounded-lg px-2.5 py-1.5">
-                              <button onClick={()=>{
-                                const m = !isMutedStream;
-                                setStreamMutedByMe(p=>({...p,[sid]:m}));
-                                muteRemoteScreenStream(sid, m);
-                                if (!m) setRemoteScreenVolume(sid, svol);
-                              }} title={isMutedStream ? 'Włącz dźwięk' : 'Wycisz'}
-                                className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${isMutedStream?'text-rose-400':'text-zinc-300 hover:text-white'}`}>
-                                {isMutedStream ? <VolumeX size={13}/> : <Volume2 size={13}/>}
-                              </button>
-                              <input type="range" min={0} max={100} step={5} value={isMutedStream ? 0 : svol}
-                                onChange={e=>{
-                                  const v=+e.target.value;
-                                  setStreamVols(p=>({...p,[sid]:v}));
-                                  setRemoteScreenVolume(sid, v);
-                                  if (v > 0 && isMutedStream) { setStreamMutedByMe(p=>({...p,[sid]:false})); muteRemoteScreenStream(sid, false); }
-                                  if (v === 0) { setStreamMutedByMe(p=>({...p,[sid]:true})); muteRemoteScreenStream(sid, true); }
-                                  try { localStorage.setItem(`cordyn_streamvol_${sid}`, String(v)); } catch {}
-                                }}
-                                className="w-20 accent-indigo-400 cursor-pointer" style={{height:4}}/>
-                              <span className="text-[10px] text-zinc-400 font-mono w-7 text-right">{isMutedStream ? 0 : svol}%</span>
+                            <div className="flex items-center gap-2">
+                              {watcherBadge(watchingStreamId, true)}
+                              {watchers.length === 0 && (
+                                <span className="text-[10px] text-zinc-600 px-2">0 oglądających</span>
+                              )}
                             </div>
-                          )}
-                        </div>
-                        {/* Top-right: fullscreen + stop watching */}
-                        <div className="absolute top-3 right-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {!isSelf && (
-                            <button onClick={() => {
-                              setWatchingStreamId(null);
-                              if (activeCall.channelId) getSocket().emit('stream_watch_stop' as any, { channel_id: activeCall.channelId, streamer_id: activeWatchId });
-                            }}
-                              className="h-8 bg-zinc-800/80 backdrop-blur-sm border border-white/10 rounded-lg flex items-center justify-center text-zinc-300 hover:text-white text-xs px-2.5 gap-1.5 transition-colors">
-                              <X size={12}/> Zatrzymaj oglądanie
+                          </div>
+                          {/* Audio controls */}
+                          <div className="flex items-center gap-2 bg-black/60 backdrop-blur-sm rounded-lg px-2.5 py-1.5">
+                            <button onClick={()=>{
+                              const m = !isMutedStream;
+                              setStreamMutedByMe(p=>({...p,[watchingStreamId]:m}));
+                              muteRemoteScreenStream(watchingStreamId, m);
+                              if (!m) setRemoteScreenVolume(watchingStreamId, svol);
+                            }} title={isMutedStream ? 'Włącz dźwięk' : 'Wycisz'}
+                              className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${isMutedStream?'text-rose-400':'text-zinc-300 hover:text-white'}`}>
+                              {isMutedStream ? <VolumeX size={13}/> : <Volume2 size={13}/>}
                             </button>
-                          )}
+                            <input type="range" min={0} max={100} step={5} value={isMutedStream ? 0 : svol}
+                              onChange={e=>{
+                                const v=+e.target.value;
+                                setStreamVols(p=>({...p,[watchingStreamId]:v}));
+                                setRemoteScreenVolume(watchingStreamId, v);
+                                if (v>0&&isMutedStream){setStreamMutedByMe(p=>({...p,[watchingStreamId]:false}));muteRemoteScreenStream(watchingStreamId,false);}
+                                if (v===0){setStreamMutedByMe(p=>({...p,[watchingStreamId]:true}));muteRemoteScreenStream(watchingStreamId,true);}
+                                try{localStorage.setItem(`cordyn_streamvol_${watchingStreamId}`,String(v));}catch{}
+                              }}
+                              className="w-20 accent-indigo-400 cursor-pointer" style={{height:4}}/>
+                            <span className="text-[10px] text-zinc-400 font-mono w-7 text-right">{isMutedStream?0:svol}%</span>
+                          </div>
+                        </div>
+                        {/* Top overlay: stop watching + fullscreen + switch to other streams */}
+                        <div className="absolute top-3 left-3 right-3 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center gap-2">
+                            <button onClick={stopWatching}
+                              className="h-7 bg-zinc-800/80 backdrop-blur-sm border border-white/10 rounded-lg flex items-center px-2.5 gap-1.5 text-xs text-zinc-300 hover:text-white transition-colors">
+                              <X size={11}/> Zatrzymaj oglądanie
+                            </button>
+                            {/* Quick-switch to other streams */}
+                            {allStreamIds.filter(id => id !== watchingStreamId && id !== 'self').map(sid => (
+                              <button key={sid} onClick={() => {
+                                // emit stop for current, start for new
+                                if (activeCall.channelId) {
+                                  getSocket().emit('stream_watch_stop' as any, { channel_id: activeCall.channelId, streamer_id: watchingStreamId });
+                                  getSocket().emit('stream_watch_start' as any, { channel_id: activeCall.channelId, streamer_id: sid });
+                                }
+                                setWatchingStreamId(sid);
+                                playStreamJoin();
+                              }}
+                                className="h-7 bg-indigo-600/80 backdrop-blur-sm border border-indigo-500/30 rounded-lg flex items-center px-2.5 gap-1.5 text-xs text-white hover:bg-indigo-500/80 transition-colors">
+                                <ScreenShare size={10}/> {getUsername(sid)}
+                              </button>
+                            ))}
+                          </div>
                           <button
-                            onClick={() => { const el = document.getElementById('screen-share-video') as HTMLVideoElement; el?.requestFullscreen?.(); }}
-                            className="w-8 h-8 bg-black/60 backdrop-blur-sm rounded-lg flex items-center justify-center text-white"
-                            title="Pełny ekran">
-                            <Maximize2 size={14}/>
+                            onClick={()=>{const el=document.getElementById('screen-share-video') as HTMLVideoElement;el?.requestFullscreen?.();}}
+                            className="w-7 h-7 bg-black/60 backdrop-blur-sm rounded-lg flex items-center justify-center text-white" title="Pełny ekran">
+                            <Maximize2 size={13}/>
                           </button>
                         </div>
                       </div>
@@ -7504,84 +7532,73 @@ export default function App() {
                   );
                 }
 
-                // ── STREAM GRID (multiple streams, none selected) ─────────────
-                if (hasStreams && !activeWatchId) {
+                // ── STREAM GRID (streams exist, none watched full-screen) ──────
+                if (hasStreams) {
+                  const cols = Math.min(allStreamIds.length, 3);
                   return (
                     <div className="flex-1 flex flex-col gap-3 p-4 overflow-hidden min-h-0">
-                      {/* Stream thumbnails grid */}
-                      <div className="flex-1 overflow-y-auto">
-                        <div className="grid gap-3" style={{gridTemplateColumns: `repeat(${Math.min(allStreamIds.length, 3)}, minmax(0, 1fr))`}}>
+                      <div className="flex-1 overflow-y-auto min-h-0">
+                        <div className="grid gap-3 h-full" style={{gridTemplateColumns:`repeat(${cols},minmax(0,1fr))`}}>
                           {allStreamIds.map(streamId => {
                             const isSelf = streamId === 'self';
                             const stream = isSelf ? screenStreamRef.current : remoteScreenStreamsRef.current.get(streamId);
-                            const ownerName = isSelf ? (currentUser?.username || 'Ty') : getUsername(streamId);
-                            const watchers = isSelf ? [] : (streamWatchers[streamId] ?? []);
-                            const wCount = watchers.length;
-                            const wExp = watchersExpanded[streamId] ?? false;
+                            const ownerName = isSelf ? (currentUser?.username||'Ty') : getUsername(streamId);
+                            const selfWatchers = streamWatchers['self'] ?? [];
+                            const wList = isSelf ? selfWatchers : (streamWatchers[streamId] ?? []);
                             return (
-                              <div key={streamId} className="relative bg-black rounded-xl overflow-hidden aspect-video group">
-                                {/* Blurred stream preview */}
+                              <div key={streamId} className={`relative bg-black rounded-2xl overflow-hidden aspect-video group border ${isSelf?'border-indigo-500/30':'border-white/[0.06]'} hover:border-white/20 transition-all`}>
+                                {/* Video preview — blurred for others, clear for own stream */}
                                 {stream ? (
                                   <video
-                                    ref={el => { if (el && el.srcObject !== stream) { el.muted = true; el.srcObject = stream; el.play().catch(()=>{}); } }}
+                                    ref={el=>{if(el&&el.srcObject!==stream){el.muted=true;el.srcObject=stream;el.play().catch(()=>{});}}}
                                     className="w-full h-full object-contain"
-                                    style={{filter: 'blur(12px)', transform: 'scale(1.05)'}}
-                                    autoPlay playsInline muted
-                                  />
+                                    style={isSelf?{}:{filter:'blur(14px)',transform:'scale(1.06)'}}
+                                    autoPlay playsInline muted/>
                                 ) : (
-                                  <div className="w-full h-full flex items-center justify-center bg-zinc-900">
-                                    <ScreenShare size={32} className="text-zinc-700"/>
+                                  <div className="w-full h-full bg-zinc-950 flex items-center justify-center">
+                                    <ScreenShare size={32} className="text-zinc-800"/>
                                   </div>
                                 )}
-                                {/* Overlay */}
-                                <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center gap-3">
-                                  <div className="flex flex-col items-center gap-1.5">
-                                    <ScreenShare size={20} className="text-indigo-400"/>
-                                    <span className="text-sm font-semibold text-white">{ownerName} udostępnia ekran</span>
-                                  </div>
+                                {/* Dim overlay for remote streams */}
+                                {!isSelf && <div className="absolute inset-0 bg-black/45"/>}
+                                {/* Center CTA */}
+                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
                                   {!isSelf && (
-                                    <button onClick={() => {
-                                      setWatchingStreamId(streamId);
-                                      if (activeCall.channelId) getSocket().emit('stream_watch_start' as any, { channel_id: activeCall.channelId, streamer_id: streamId });
-                                    }}
-                                      className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-all flex items-center gap-2">
-                                      <Monitor size={14}/> Dołącz do oglądania
-                                    </button>
+                                    <>
+                                      <div className="flex flex-col items-center gap-1">
+                                        <ScreenShare size={22} className="text-indigo-400 drop-shadow"/>
+                                        <span className="text-sm font-semibold text-white drop-shadow">{ownerName} udostępnia</span>
+                                      </div>
+                                      <button onClick={() => {
+                                        setWatchingStreamId(streamId);
+                                        if (activeCall.channelId) getSocket().emit('stream_watch_start' as any, { channel_id: activeCall.channelId, streamer_id: streamId });
+                                        playStreamJoin();
+                                      }}
+                                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-900/40 transition-all active:scale-95">
+                                        <Monitor size={14}/> Dołącz do oglądania
+                                      </button>
+                                    </>
                                   )}
                                   {isSelf && (
-                                    <span className="text-xs text-zinc-400 px-3 py-1 bg-black/50 rounded-lg">Twoja transmisja</span>
+                                    <div className="flex flex-col items-center gap-1">
+                                      <span className="text-xs font-semibold text-indigo-300 bg-indigo-600/30 border border-indigo-500/40 px-3 py-1 rounded-lg flex items-center gap-1.5">
+                                        <ScreenShare size={10}/> Twoja transmisja
+                                      </span>
+                                    </div>
                                   )}
                                 </div>
-                                {/* Bottom: viewer count */}
-                                {!isSelf && (
-                                  <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-                                    <div className="relative">
-                                      <button
-                                        onClick={() => setWatchersExpanded(p => ({...p, [streamId]: !wExp}))}
-                                        className="flex items-center gap-1 bg-black/70 rounded-lg px-2 py-1 text-[10px] text-zinc-300 hover:text-white transition-colors">
-                                        <Users size={10} className="text-indigo-400"/>
-                                        <span>{wCount}</span>
-                                      </button>
-                                      {wExp && wCount > 0 && (
-                                        <div className="absolute bottom-full mb-1 left-0 bg-zinc-900 border border-white/10 rounded-xl p-2 min-w-[130px] shadow-xl z-10">
-                                          {watchers.map(w => (
-                                            <div key={w.id} className="flex items-center gap-2 py-0.5 px-1">
-                                              <div className="w-4 h-4 rounded-full bg-indigo-600 flex items-center justify-center text-[8px] font-bold text-white shrink-0">{w.username[0]?.toUpperCase()}</div>
-                                              <span className="text-xs text-zinc-300 truncate">{w.username}</span>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
+                                {/* Bottom bar: owner name + viewer count */}
+                                <div className="absolute bottom-0 left-0 right-0 px-3 py-2 bg-gradient-to-t from-black/80 to-transparent flex items-center justify-between">
+                                  <span className="text-[11px] font-semibold text-white truncate">{ownerName}</span>
+                                  {watcherBadge(streamId, true)}
+                                </div>
                               </div>
                             );
                           })}
                         </div>
                       </div>
                       {/* Participants strip */}
-                      <div className="shrink-0 flex items-center justify-center gap-4 py-1">
+                      <div className="shrink-0 flex items-center justify-center gap-4 py-1 overflow-x-auto">
                         {allParticipants}
                       </div>
                     </div>
@@ -9050,8 +9067,21 @@ export default function App() {
           )}
         </section>
 
-        {/* RIGHT — Live voice + Activity */}
-        <aside className="hidden xl:flex w-64 shrink-0 flex-col gap-0 glass-panel rounded-2xl overflow-y-auto custom-scrollbar">
+        {/* RIGHT — Live voice + Activity — collapsible when in voice call */}
+        {/* Collapse toggle button (only when in voice call window) */}
+        {showCallPanel && activeCall && (
+          <button
+            onClick={() => setRightPanelOpen(p => {
+              const next = !p;
+              try { localStorage.setItem('cordyn_right_panel', next ? 'open' : 'closed'); } catch {}
+              return next;
+            })}
+            title={rightPanelOpen ? 'Zwiń panel' : 'Rozwiń panel'}
+            className="hidden xl:flex items-center justify-center w-5 shrink-0 self-stretch text-zinc-600 hover:text-zinc-300 transition-colors group">
+            <ChevronRight size={14} className={`transition-transform duration-200 ${rightPanelOpen?'rotate-180':''}`}/>
+          </button>
+        )}
+        <aside className={`hidden xl:flex shrink-0 flex-col gap-0 glass-panel rounded-2xl overflow-y-auto custom-scrollbar transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${showCallPanel && activeCall && !rightPanelOpen ? 'w-0 opacity-0 overflow-hidden p-0' : 'w-64 opacity-100'}`}>
           {/* ─ LIVE VOICE BLOCK ─ */}
           {activeView==='servers'&&(()=>{
             // find first voice channel on current server with users
