@@ -18,7 +18,7 @@ WORKDIR /app
 
 # Install ffmpeg (audio transcoding) + curl (healthcheck + yt-dlp download)
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
-    ffmpeg curl ca-certificates && \
+    ffmpeg curl wget ca-certificates && \
     curl -fsSL "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp" \
          -o /usr/local/bin/yt-dlp && chmod a+rx /usr/local/bin/yt-dlp && \
     rm -rf /var/lib/apt/lists/*
