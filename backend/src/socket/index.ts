@@ -405,7 +405,17 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
         }
 
         if (bot === 'music') {
-          await handleMusicCommand({ io, user, command, args, channel_id, server_id });
+          // For /play we need the user's current voice channel; stop/skip/pause
+          // send channel_id = their voice channel from the UI buttons — use as-is.
+          const voiceChannelId = (socket.data as any).voiceChannelId as string | undefined;
+          if (command === 'play' && !voiceChannelId) {
+            const errSender = makeBotSender(io, channel_id, user.id, '🎵 Cordyn Music');
+            await errSender('❌ Musisz dołączyć do kanału głosowego, żeby odtwarzać muzykę!');
+            return;
+          }
+          // play → voice channel as the music channel; everything else keeps channel_id
+          const musicChannelId = (command === 'play' && voiceChannelId) ? voiceChannelId : channel_id;
+          await handleMusicCommand({ io, user, command, args, channel_id: musicChannelId, text_channel_id: channel_id, server_id });
         } else if (bot === 'fun') {
           await handleFunCommand({ io, user, command, args, channel_id });
         } else if (bot === 'moderacja') {
@@ -566,10 +576,13 @@ async function handleMusicCommand(opts: {
   io: SocketServer<ClientToServerEvents, ServerToClientEvents>;
   user: { id: string; username: string };
   command: string; args: string[];
-  channel_id: string; server_id: string;
+  channel_id: string;      // voice channel — keys musicStates, used in stream_url
+  text_channel_id: string; // text channel — where bot chat messages appear
+  server_id: string;
 }) {
-  const { io, user, command, args, channel_id, server_id } = opts;
-  const sendBotMsg = makeBotSender(io, channel_id, user.id, '🎵 Cordyn Music');
+  const { io, user, command, args, channel_id, text_channel_id, server_id } = opts;
+  // Bot chat messages go to the text channel where the command was typed
+  const sendBotMsg = makeBotSender(io, text_channel_id, user.id, '🎵 Cordyn Music');
   const broadcastState = (state: MusicBotState) => {
     io.to(`server:${server_id}`).emit('music_bot_update' as any, state);
   };

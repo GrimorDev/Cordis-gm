@@ -6,6 +6,44 @@ import { AuthRequest } from '../types';
 
 const router = Router();
 
+// Helper: fetch full poll in the format the frontend expects
+async function fetchPollFull(pollId: string, userId: string) {
+  const { rows: [poll] } = await query('SELECT * FROM polls WHERE id = $1', [pollId]);
+  if (!poll) return null;
+
+  const { rows: voteCounts } = await query(
+    `SELECT option_id, COUNT(*) as count FROM poll_votes WHERE poll_id = $1 GROUP BY option_id`,
+    [pollId]
+  );
+  const { rows: userVotes } = await query(
+    'SELECT option_id FROM poll_votes WHERE poll_id = $1 AND user_id = $2',
+    [pollId, userId]
+  );
+
+  const voteCountMap: Record<string, number> = {};
+  let totalVotes = 0;
+  for (const row of voteCounts) {
+    const c = parseInt(row.count, 10);
+    voteCountMap[row.option_id] = c;
+    totalVotes += c;
+  }
+  const myVotes = userVotes.map((v: { option_id: string }) => v.option_id);
+
+  const options = (poll.options as Array<{ id: string; text: string }>).map(opt => ({
+    ...opt,
+    vote_count: voteCountMap[opt.id] || 0,
+    user_voted: myVotes.includes(opt.id),
+  }));
+
+  return {
+    ...poll,
+    options,
+    votes: voteCountMap,        // Record<option_id, count>  — used by frontend
+    my_votes: myVotes,           // option_ids this user voted for
+    total_votes: totalVotes,
+  };
+}
+
 // POST /polls - create poll
 router.post(
   '/',
@@ -47,125 +85,59 @@ router.post(
   }
 );
 
-// GET /polls/:id - get poll with vote counts and user's own votes
+// GET /polls/:id
 router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
-    const userId = req.user!.id;
-
-    const { rows: pollRows } = await query(
-      'SELECT * FROM polls WHERE id = $1',
-      [id]
-    );
-
-    if (pollRows.length === 0) {
-      return res.status(404).json({ error: 'Poll not found' });
-    }
-
-    const poll = pollRows[0];
-
-    // Get vote counts per option
-    const { rows: voteCounts } = await query(
-      `SELECT option_id, COUNT(*) as count
-       FROM poll_votes
-       WHERE poll_id = $1
-       GROUP BY option_id`,
-      [id]
-    );
-
-    // Get user's own votes
-    const { rows: userVotes } = await query(
-      'SELECT option_id FROM poll_votes WHERE poll_id = $1 AND user_id = $2',
-      [id, userId]
-    );
-
-    const voteCountMap: Record<string, number> = {};
-    for (const row of voteCounts) {
-      voteCountMap[row.option_id] = parseInt(row.count, 10);
-    }
-
-    const userVoteSet = new Set(userVotes.map((v: { option_id: string }) => v.option_id));
-
-    const optionsWithVotes = (poll.options as Array<{ id: string; text: string }>).map((opt) => ({
-      ...opt,
-      vote_count: voteCountMap[opt.id] || 0,
-      user_voted: userVoteSet.has(opt.id),
-    }));
-
-    res.json({
-      ...poll,
-      options: optionsWithVotes,
-    });
+    const poll = await fetchPollFull(req.params.id, req.user!.id);
+    if (!poll) return res.status(404).json({ error: 'Poll not found' });
+    res.json(poll);
   } catch (err) {
     console.error('GET /polls/:id error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// POST /polls/:id/vote - vote
+// POST /polls/:id/vote
 router.post(
   '/:id/vote',
   authMiddleware,
   body('option_id').isString().notEmpty().withMessage('option_id is required'),
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
     try {
       const { id } = req.params;
       const userId = req.user!.id;
       const { option_id } = req.body as { option_id: string };
 
-      // Check poll exists and is not expired
-      const { rows: pollRows } = await query(
-        'SELECT * FROM polls WHERE id = $1',
-        [id]
-      );
-
-      if (pollRows.length === 0) {
-        return res.status(404).json({ error: 'Poll not found' });
-      }
+      const { rows: pollRows } = await query('SELECT * FROM polls WHERE id = $1', [id]);
+      if (pollRows.length === 0) return res.status(404).json({ error: 'Poll not found' });
 
       const poll = pollRows[0];
-
       if (poll.ends_at && new Date(poll.ends_at) < new Date()) {
         return res.status(400).json({ error: 'Poll has ended' });
       }
 
-      // Validate option_id is in poll options
-      const validOption = (poll.options as Array<{ id: string }>).some((opt) => opt.id === option_id);
-      if (!validOption) {
-        return res.status(400).json({ error: 'Invalid option_id' });
-      }
+      const validOption = (poll.options as Array<{ id: string }>).some(opt => opt.id === option_id);
+      if (!validOption) return res.status(400).json({ error: 'Invalid option_id' });
 
-      // If not multi_vote, remove existing votes first
       if (!poll.multi_vote) {
-        await query(
-          'DELETE FROM poll_votes WHERE poll_id = $1 AND user_id = $2',
-          [id, userId]
-        );
+        await query('DELETE FROM poll_votes WHERE poll_id = $1 AND user_id = $2', [id, userId]);
       } else {
-        // Check if already voted for this option
         const { rows: existing } = await query(
           'SELECT 1 FROM poll_votes WHERE poll_id = $1 AND user_id = $2 AND option_id = $3',
           [id, userId, option_id]
         );
-        if (existing.length > 0) {
-          return res.status(400).json({ error: 'Already voted for this option' });
-        }
+        if (existing.length > 0) return res.status(400).json({ error: 'Already voted for this option' });
       }
 
-      await query(
-        'INSERT INTO poll_votes (poll_id, user_id, option_id) VALUES ($1, $2, $3)',
-        [id, userId, option_id]
-      );
+      await query('INSERT INTO poll_votes (poll_id, user_id, option_id) VALUES ($1, $2, $3)', [id, userId, option_id]);
 
-      // Emit poll_updated to channel room if linked to a channel message
-      await emitPollUpdated(req, id, poll);
+      await emitPollUpdated(req, id);
 
-      res.json({ success: true });
+      const updated = await fetchPollFull(id, userId);
+      res.json(updated);
     } catch (err) {
       console.error('POST /polls/:id/vote error:', err);
       res.status(500).json({ error: 'Internal server error' });
@@ -173,33 +145,24 @@ router.post(
   }
 );
 
-// DELETE /polls/:id/vote - unvote
+// DELETE /polls/:id/vote
 router.delete(
   '/:id/vote',
   authMiddleware,
   body('option_id').isString().notEmpty().withMessage('option_id is required'),
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
     try {
       const { id } = req.params;
       const userId = req.user!.id;
       const { option_id } = req.body as { option_id: string };
 
-      const { rows: pollRows } = await query(
-        'SELECT * FROM polls WHERE id = $1',
-        [id]
-      );
-
-      if (pollRows.length === 0) {
-        return res.status(404).json({ error: 'Poll not found' });
-      }
+      const { rows: pollRows } = await query('SELECT * FROM polls WHERE id = $1', [id]);
+      if (pollRows.length === 0) return res.status(404).json({ error: 'Poll not found' });
 
       const poll = pollRows[0];
-
       if (poll.ends_at && new Date(poll.ends_at) < new Date()) {
         return res.status(400).json({ error: 'Poll has ended' });
       }
@@ -209,10 +172,10 @@ router.delete(
         [id, userId, option_id]
       );
 
-      // Emit poll_updated to channel room if linked to a channel message
-      await emitPollUpdated(req, id, poll);
+      await emitPollUpdated(req, id);
 
-      res.json({ success: true });
+      const updated = await fetchPollFull(id, userId);
+      res.json(updated);
     } catch (err) {
       console.error('DELETE /polls/:id/vote error:', err);
       res.status(500).json({ error: 'Internal server error' });
@@ -220,38 +183,34 @@ router.delete(
   }
 );
 
-async function emitPollUpdated(req: AuthRequest, pollId: string, poll: any) {
+// Emit aggregated vote counts to channel room (no per-user data — each client merges)
+async function emitPollUpdated(req: AuthRequest, pollId: string) {
   try {
     const io = req.app.get('io');
-    if (!io || !poll.message_id) return;
+    if (!io) return;
 
-    const { rows: msgRows } = await query(
-      'SELECT channel_id FROM messages WHERE id = $1',
-      [poll.message_id]
-    );
+    const { rows: [poll] } = await query('SELECT * FROM polls WHERE id = $1', [pollId]);
+    if (!poll?.message_id) return;
 
+    const { rows: msgRows } = await query('SELECT channel_id FROM messages WHERE id = $1', [poll.message_id]);
     if (msgRows.length === 0) return;
 
-    const channelId = msgRows[0].channel_id;
-
-    // Get updated vote counts
     const { rows: voteCounts } = await query(
-      `SELECT option_id, COUNT(*) as count
-       FROM poll_votes
-       WHERE poll_id = $1
-       GROUP BY option_id`,
+      `SELECT option_id, COUNT(*) as count FROM poll_votes WHERE poll_id = $1 GROUP BY option_id`,
       [pollId]
     );
-
-    const voteCountMap: Record<string, number> = {};
+    const votes: Record<string, number> = {};
+    let total = 0;
     for (const row of voteCounts) {
-      voteCountMap[row.option_id] = parseInt(row.count, 10);
+      const c = parseInt(row.count, 10);
+      votes[row.option_id] = c;
+      total += c;
     }
 
-    io.to(`channel:${channelId}`).emit('poll_updated', {
-      poll_id: pollId,
-      message_id: poll.message_id,
-      vote_counts: voteCountMap,
+    io.to(`channel:${msgRows[0].channel_id}`).emit('poll_updated', {
+      id: pollId,
+      votes,
+      total_votes: total,
     });
   } catch (err) {
     console.error('emitPollUpdated error:', err);

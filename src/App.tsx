@@ -4590,8 +4590,13 @@ export default function App() {
     sock.on('dm_message_pinned', ({ id, pinned }: any) => {
       setDmMsgs(p => p.map(m => m.id === id ? { ...m, pinned } : m));
     });
-    sock.on('poll_updated', (pollData: any) => {
-      setPolls(p => new Map(p).set(pollData.id, pollData));
+    sock.on('poll_updated', ({ id, votes, total_votes }: any) => {
+      // Merge public vote counts into existing poll (preserves per-user my_votes)
+      setPolls(p => {
+        const existing = p.get(id);
+        if (!existing) return p;
+        return new Map(p).set(id, { ...existing, votes, total_votes });
+      });
     });
     // dm_read: the other user has read our messages in this conversation
     sock.on('dm_read', ({ reader_id, read_at }: any) => {
