@@ -11704,7 +11704,7 @@ export default function App() {
                       <div className="flex flex-col gap-3">
                         <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                           <span className="text-sm text-zinc-400">Wersja</span>
-                          <span className="text-sm font-mono text-indigo-300">{updateAvailable ? `v${updateAvailable.version} → dostępna` : 'v0.1.28'}</span>
+                          <span className="text-sm font-mono text-indigo-300">{updateAvailable ? `v${updateAvailable.version} → dostępna` : 'v0.1.30'}</span>
                         </div>
                         <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                           <span className="text-sm text-zinc-400">Platforma</span>
