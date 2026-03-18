@@ -5569,15 +5569,19 @@ export default function App() {
   };
 
   // Slash command autocomplete — only in server text channels
-  // Stable YouTube embed src — recomputed only when the video ID changes, NOT on every render.
-  // If elapsed recalculated every render, the iframe src would change → browser reload → stutter.
+  // Stable YouTube embed src — recomputed only when videoId OR started_at changes, never on
+  // unrelated re-renders. Without this, Date.now() in src changes every render → iframe reload → stutter.
   const youtubeEmbedSrc = useMemo(() => {
     const music = activeCall?.channelId ? musicBotState[activeCall.channelId] : null;
     if (!music?.playing || !music.videoId) return null;
     const elapsed = music.started_at ? Math.floor((Date.now() - music.started_at) / 1000) : 0;
     return `https://www.youtube.com/embed/${music.videoId}?autoplay=1&start=${elapsed}&controls=1&rel=0&modestbranding=1`;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCall?.channelId, musicBotState[activeCall?.channelId ?? '']?.videoId]);
+  }, [
+    activeCall?.channelId,
+    musicBotState[activeCall?.channelId ?? '']?.videoId,
+    musicBotState[activeCall?.channelId ?? '']?.started_at,  // needed: same video replayed gets new start
+  ]);
 
   const allSlashCommands = activeView === 'servers' && activeServer
     ? installedBots.flatMap(inst => {
@@ -9321,7 +9325,7 @@ export default function App() {
                 {/* Memoized src — only recomputed when videoId changes, never on re-render → no reload stutter */}
                 {youtubeEmbedSrc && (
                   <iframe
-                    key={music.videoId}
+                    key={`${music.videoId}-${music.started_at}`}
                     src={youtubeEmbedSrc}
                     className="w-full rounded-xl"
                     style={{ height: '130px', border: 'none' }}

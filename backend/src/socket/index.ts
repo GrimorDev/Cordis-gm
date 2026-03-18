@@ -518,8 +518,12 @@ function makeBotSender(
 // ── Music bot helpers ─────────────────────────────────────────────────────
 
 function extractYouTubeId(url: string): string | null {
-  const m = url.match(/(?:youtube\.com\/(?:watch\?.*v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-  return m ? m[1] : null;
+  // [?&]v= ensures we match the actual video param, not rv= or sv= etc.
+  const watchM = url.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+  if (watchM) return watchM[1];
+  // youtu.be/VIDEO_ID  or  youtube.com/shorts/VIDEO_ID  or  youtube.com/embed/VIDEO_ID
+  const shortM = url.match(/(?:youtu\.be\/|\/shorts\/|\/embed\/)([a-zA-Z0-9_-]{11})/);
+  return shortM ? shortM[1] : null;
 }
 
 // YouTube oEmbed: public, no auth, no bot detection issues
