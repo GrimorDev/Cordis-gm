@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { PassThrough } from 'stream';
+import type { ChildProcess } from 'child_process';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { query } from '../db/pool';
@@ -35,8 +36,9 @@ export interface MusicBotState {
   stream_url?: string;
   requested_by?: string;
   queue: { title: string; url: string; duration?: number }[];
-  // For streaming
+  // Internal — not sent to clients
   _stream?: PassThrough;
+  _procs?: ChildProcess[];
   _ytUrl?: string;
 }
 
@@ -105,7 +107,7 @@ router.get('/music/stream/:channelId', authMiddleware, async (req: AuthRequest, 
     if (!state || !state._stream) {
       return res.status(404).json({ error: 'No active stream for this channel' });
     }
-    res.setHeader('Content-Type', 'audio/webm; codecs=opus');
+    res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('Transfer-Encoding', 'chunked');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('X-Content-Type-Options', 'nosniff');

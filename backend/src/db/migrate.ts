@@ -534,6 +534,17 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at DESC);
 
+-- ── Member warnings (moderation bot) ────────────────────────────────
+CREATE TABLE IF NOT EXISTS member_warnings (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    server_id  UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    user_id    UUID NOT NULL REFERENCES users(id)   ON DELETE CASCADE,
+    warned_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+    reason     TEXT DEFAULT 'Brak powodu',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_member_warnings ON member_warnings(server_id, user_id, created_at DESC);
+
 -- ── Bot system ─────────────────────────────────────────────────────
 DO $$ BEGIN ALTER TABLE users ADD COLUMN is_bot BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 CREATE TABLE IF NOT EXISTS server_bots (

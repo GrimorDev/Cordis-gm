@@ -4,6 +4,7 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import jwt from 'jsonwebtoken';
 import { PassThrough } from 'stream';
+import { spawn, type ChildProcess } from 'child_process';
 import { config } from '../config';
 import {
   setUserStatus, joinVoiceChannel, leaveVoiceChannel,
@@ -405,6 +406,12 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
 
         if (bot === 'music') {
           await handleMusicCommand({ io, user, command, args, channel_id, server_id });
+        } else if (bot === 'fun') {
+          await handleFunCommand({ io, user, command, args, channel_id });
+        } else if (bot === 'moderacja') {
+          await handleModerationCommand({ io, user, command, args, channel_id, server_id });
+        } else if (bot === 'polls') {
+          await handlePollCommand({ io, user, command, args, channel_id });
         }
       } catch (err) {
         console.error('bot_command error:', err);
@@ -466,34 +473,27 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
   return io;
 }
 
-// ── Music bot command handler ─────────────────────────────────────────────
-async function handleMusicCommand(opts: {
-  io: SocketServer<ClientToServerEvents, ServerToClientEvents>;
-  user: { id: string; username: string };
-  command: string;
-  args: string[];
-  channel_id: string;
-  server_id: string;
-}) {
-  const { io, user, command, args, channel_id, server_id } = opts;
-  const broadcastState = (state: MusicBotState) => {
-    io.to(`server:${server_id}`).emit('music_bot_update' as any, state);
-  };
-
-  const sendBotMsg = async (content: string) => {
+// ── Shared bot message sender ─────────────────────────────────────────────
+function makeBotSender(
+  io: SocketServer<ClientToServerEvents, ServerToClientEvents>,
+  channel_id: string,
+  user_id: string,
+  system_name: string,
+) {
+  return async (content: string) => {
     try {
       const { rows: [msg] } = await query(
         `INSERT INTO messages (channel_id, sender_id, content, is_automated, system_name)
-         VALUES ($1, $2, $3, TRUE, '🎵 Cordyn Music')
+         VALUES ($1, $2, $3, TRUE, $4)
          RETURNING id, channel_id, content, created_at, updated_at, edited,
                    attachment_url, reply_to_id, is_automated, system_name, pinned`,
-        [channel_id, user.id, content]
+        [channel_id, user_id, content, system_name]
       );
       if (msg) {
         io.to(`channel:${channel_id}`).emit('new_message', {
           ...msg,
-          sender_id: user.id,
-          sender_username: '🎵 Cordyn Music',
+          sender_id: user_id,
+          sender_username: system_name,
           sender_avatar: null,
           sender_status: null,
           sender_role: null,
@@ -502,133 +502,366 @@ async function handleMusicCommand(opts: {
         });
       }
     } catch (err) {
-      console.error('sendBotMsg error:', err);
+      console.error('bot sendBotMsg error:', err);
     }
+  };
+}
+
+// ── yt-dlp helpers ────────────────────────────────────────────────────────
+async function ytDlpInfo(url: string): Promise<{ title: string; thumbnail?: string; duration?: number }> {
+  return new Promise((resolve) => {
+    const proc = spawn('yt-dlp', [
+      '--dump-json', '--no-playlist', '--quiet', '--no-warnings',
+      '--socket-timeout', '30', url,
+    ]);
+    let data = '';
+    proc.stdout.on('data', (d: Buffer) => { data += d.toString(); });
+    proc.on('close', () => {
+      try {
+        const j = JSON.parse(data);
+        resolve({ title: j.title ?? 'Nieznany utwór', thumbnail: j.thumbnail, duration: j.duration });
+      } catch { resolve({ title: 'Nieznany utwór' }); }
+    });
+    proc.on('error', () => resolve({ title: 'Nieznany utwór' }));
+    setTimeout(() => { try { proc.kill(); } catch {} resolve({ title: 'Nieznany utwór' }); }, 35_000);
+  });
+}
+
+function ytDlpStream(url: string): { pt: PassThrough; procs: ChildProcess[] } {
+  const pt = new PassThrough();
+  const ytdlp = spawn('yt-dlp', [
+    '--format', 'bestaudio[ext=webm]/bestaudio/best',
+    '--output', '-', '--no-playlist',
+    '--quiet', '--no-warnings', '--socket-timeout', '30', url,
+  ]);
+  const ffmpeg = spawn('ffmpeg', [
+    '-i', 'pipe:0', '-vn',
+    '-acodec', 'libmp3lame', '-ab', '128k',
+    '-f', 'mp3', '-loglevel', 'quiet', 'pipe:1',
+  ]);
+  ytdlp.stdout.pipe(ffmpeg.stdin);
+  ffmpeg.stdout.pipe(pt);
+  ytdlp.stderr.on('data', (d: Buffer) => {
+    const msg = d.toString().trim();
+    if (msg) console.warn('[yt-dlp]', msg);
+  });
+  ytdlp.on('error', (e) => { console.error('[yt-dlp spawn]', e.message); if (!pt.destroyed) pt.destroy(e); });
+  ffmpeg.on('error', (e) => { console.error('[ffmpeg spawn]', e.message); if (!pt.destroyed) pt.destroy(e); });
+  ffmpeg.on('close', (code) => {
+    if (code === 0) { if (!pt.destroyed) pt.end(); }
+    else if (!pt.destroyed) pt.destroy(new Error(`ffmpeg exited ${code}`));
+  });
+  pt.on('error', () => {}); // ignore client disconnects
+  return { pt, procs: [ytdlp, ffmpeg] };
+}
+
+function stopMusicState(state: MusicBotState | undefined) {
+  if (!state) return;
+  if (state._procs) for (const p of state._procs) try { p.kill(); } catch {}
+  if (state._stream && !state._stream.destroyed) try { state._stream.destroy(); } catch {}
+}
+
+// ── Music bot command handler ─────────────────────────────────────────────
+async function handleMusicCommand(opts: {
+  io: SocketServer<ClientToServerEvents, ServerToClientEvents>;
+  user: { id: string; username: string };
+  command: string; args: string[];
+  channel_id: string; server_id: string;
+}) {
+  const { io, user, command, args, channel_id, server_id } = opts;
+  const sendBotMsg = makeBotSender(io, channel_id, user.id, '🎵 Cordyn Music');
+  const broadcastState = (state: MusicBotState) => {
+    io.to(`server:${server_id}`).emit('music_bot_update' as any, state);
   };
 
   if (command === 'play') {
     const ytUrl = args[0];
-    if (!ytUrl) {
-      await sendBotMsg('❌ Podaj URL YouTube: `/play <url>`');
-      return;
-    }
-    // Validate URL
+    if (!ytUrl) { await sendBotMsg('❌ Podaj URL YouTube: `/play <url>`'); return; }
     if (!ytUrl.match(/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//)) {
-      await sendBotMsg('❌ Podaj poprawny URL YouTube.');
-      return;
+      await sendBotMsg('❌ Podaj poprawny URL YouTube (youtube.com lub youtu.be).'); return;
     }
 
-    // Get video info + stream using play-dl (bypasses YouTube bot detection)
-    let title = 'Nieznany utwór';
-    let thumbnail: string | undefined;
-    let duration: number | undefined;
-    let stream: PassThrough | undefined;
+    // Kill any existing stream
+    stopMusicState(musicStates.get(channel_id));
+
+    await sendBotMsg(`🔍 Szukam: ${ytUrl}`);
 
     try {
-      // @ts-ignore – play-dl is a CJS/ESM hybrid; dynamic import works at runtime
-      const playdl = await import('play-dl').catch(() => null) as any;
-      if (!playdl) {
-        await sendBotMsg('❌ Moduł play-dl nie jest zainstalowany na serwerze.');
-        return;
-      }
-
-      // Validate that the URL is a real YouTube link
-      const validateResult = playdl.yt_validate ? playdl.yt_validate(ytUrl) : 'video';
-      if (validateResult !== 'video') {
-        await sendBotMsg('❌ Podaj poprawny link do YouTube (nie playlist ani kanału).');
-        return;
-      }
-
-      // Fetch video details
-      const info = await playdl.video_info(ytUrl);
-      title = info.video_details.title ?? 'Nieznany utwór';
-      thumbnail = info.video_details.thumbnails?.[0]?.url;
-      duration = info.video_details.durationInSec;
-
-      // Destroy previous stream if any
-      const existing = musicStates.get(channel_id);
-      if (existing?._stream) {
-        try { existing._stream.destroy(); } catch { /* */ }
-      }
-
-      // Create PassThrough + pipe play-dl audio stream into it
-      const pt = new PassThrough();
-      const source = await playdl.stream(ytUrl, { quality: 2 });
-      source.stream.pipe(pt);
-      source.stream.on('error', (e: Error) => {
-        console.error('play-dl stream error:', e.message);
-        try { pt.destroy(); } catch { /* */ }
-      });
-      pt.on('error', () => { /* ignore client disconnects */ });
+      const info = await ytDlpInfo(ytUrl);
+      const { pt, procs } = ytDlpStream(ytUrl);
 
       const state: MusicBotState = {
-        playing: true, title, url: ytUrl, thumbnail, duration,
-        channel_id,
+        playing: true, ...info, url: ytUrl, channel_id,
         stream_url: `/api/servers/${server_id}/bots/music/stream/${channel_id}`,
-        requested_by: user.username,
-        queue: [],
-        _stream: pt,
-        _ytUrl: ytUrl,
+        requested_by: user.username, queue: [],
+        _stream: pt, _procs: procs, _ytUrl: ytUrl,
       };
       musicStates.set(channel_id, state);
-      stream = pt;
-
-      broadcastState({ ...state, _stream: undefined, _ytUrl: undefined });
-      await sendBotMsg(`🎵 Teraz odtwarzam: **${title}** (zamówił: ${user.username})`);
+      broadcastState({ ...state, _stream: undefined, _procs: undefined, _ytUrl: undefined });
+      await sendBotMsg(`🎵 Teraz odtwarzam: **${info.title}** (zamówił: ${user.username})`);
     } catch (err: any) {
       console.error('Music bot play error:', err);
-      await sendBotMsg(`❌ Nie udało się odtworzyć: ${err?.message || 'Nieznany błąd'}`);
+      await sendBotMsg(`❌ Nie udało się odtworzyć: ${err?.message ?? 'Nieznany błąd'}`);
     }
+
   } else if (command === 'stop') {
-    const state = musicStates.get(channel_id);
-    if (state?._stream) {
-      try { state._stream.destroy(); } catch { /* */ }
-    }
+    stopMusicState(musicStates.get(channel_id));
     const stopped: MusicBotState = { playing: false, channel_id, queue: [] };
     musicStates.set(channel_id, stopped);
     broadcastState(stopped);
     await sendBotMsg('⏹️ Zatrzymano odtwarzanie.');
+
   } else if (command === 'skip') {
     const state = musicStates.get(channel_id);
     if (state?.queue.length) {
-      const next = state.queue[0];
-      // Recursively play next
+      const next = state.queue.shift()!;
       await handleMusicCommand({ ...opts, command: 'play', args: [next.url] });
     } else {
-      // Stop
-      if (state?._stream) { try { state._stream.destroy(); } catch { /* */ } }
+      stopMusicState(state);
       const stopped: MusicBotState = { playing: false, channel_id, queue: [] };
       musicStates.set(channel_id, stopped);
       broadcastState(stopped);
       await sendBotMsg('⏭️ Pominięto. Kolejka jest pusta.');
     }
+
   } else if (command === 'pause') {
     const state = musicStates.get(channel_id);
-    if (state) {
+    if (state?.playing) {
       state.playing = false;
-      musicStates.set(channel_id, state);
-      broadcastState({ ...state, _stream: undefined, _ytUrl: undefined });
+      broadcastState({ ...state, _stream: undefined, _procs: undefined, _ytUrl: undefined });
       await sendBotMsg('⏸️ Wstrzymano odtwarzanie.');
     }
+
   } else if (command === 'queue') {
     const state = musicStates.get(channel_id);
-    if (!state || (!state.playing && state.queue.length === 0)) {
+    if (!state || (!state.playing && !state.queue.length)) {
       await sendBotMsg('📭 Kolejka jest pusta.');
     } else {
       const lines = state.title ? [`▶️ Teraz: **${state.title}**`] : [];
       state.queue.slice(0, 5).forEach((q, i) => lines.push(`${i + 1}. ${q.title || q.url}`));
       await sendBotMsg(lines.join('\n'));
     }
+
   } else if (command === 'volume') {
     const vol = parseInt(args[0]);
     if (isNaN(vol) || vol < 0 || vol > 100) {
       await sendBotMsg('❌ Podaj wartość od 0 do 100.');
     } else {
-      await sendBotMsg(`🔊 Głośność: ${vol}% (ustawienie głośności klienta — użyj suwaka w odtwarzaczu)`);
+      await sendBotMsg(`🔊 Głośność: ${vol}% (użyj suwaka głośności w odtwarzaczu)`);
     }
   } else {
-    await sendBotMsg(`❓ Nieznana komenda: \`/${command}\`. Wpisz \`/queue\`, \`/play\`, \`/skip\`, \`/stop\`, \`/pause\`.`);
+    await sendBotMsg(`❓ Nieznana komenda. Dostępne: \`/play\`, \`/stop\`, \`/skip\`, \`/pause\`, \`/queue\`, \`/volume\``);
   }
+}
+
+// ── Fun bot command handler ───────────────────────────────────────────────
+const EIGHT_BALL = [
+  '✅ Tak, zdecydowanie!', '✅ Bez wątpliwości.', '✅ Na pewno.', '✅ Można na to liczyć.',
+  '✅ Tak — według moich informacji.', '❌ Nie licz na to.', '❌ Moje źródła mówią nie.',
+  '❌ Nie wygląda to dobrze.', '❌ Bardzo wątpliwe.', '🔮 Zapytaj później.',
+  '🔮 Nie jestem teraz pewien.', '🔮 Lepiej nie odpowiadać.', '🔮 Mgliście widzę... tak.',
+  '🔮 Skup się i zapytaj ponownie.',
+];
+const MEMES = [
+  'To nie bug, to undocumented feature. 🐛',
+  'Działa u mnie. — *Push to production* 🤷',
+  'Nie dotykaj kodu w piątek po południu. ⚠️',
+  'Git blame pokazuje, że to ty napisałeś 6 miesięcy temu. 😅',
+  '99 bugów w kodzie, napraw jeden... 127 bugów w kodzie. 🔥',
+  'Skopiowałem ze Stack Overflow i nie wiem jak to działa, ale działa. ✅',
+  'Dokumentacja? Kod jest dokumentacją. 📖',
+  'To działa tylko w production, w dev nie wiem dlaczego. 🧩',
+];
+
+async function handleFunCommand(opts: {
+  io: SocketServer<ClientToServerEvents, ServerToClientEvents>;
+  user: { id: string; username: string };
+  command: string; args: string[];
+  channel_id: string;
+}) {
+  const { io, user, command, args, channel_id } = opts;
+  const send = makeBotSender(io, channel_id, user.id, '🎮 Cordyn Fun');
+
+  if (command === 'dice') {
+    const sides = Math.max(2, Math.min(1000, parseInt(args[0]) || 6));
+    const result = Math.floor(Math.random() * sides) + 1;
+    await send(`🎲 **${user.username}** rzucił kością **k${sides}** i wyrzucił: **${result}**!`);
+  } else if (command === 'flip') {
+    const result = Math.random() < 0.5 ? 'Orzeł 🦅' : 'Reszka 🪙';
+    await send(`🪙 **${user.username}** rzucił monetą: **${result}**!`);
+  } else if (command === '8ball') {
+    const q = args.join(' ');
+    const a = EIGHT_BALL[Math.floor(Math.random() * EIGHT_BALL.length)];
+    await send(`🎱 **${q || '???'}**\n> ${a}`);
+  } else if (command === 'meme') {
+    await send(MEMES[Math.floor(Math.random() * MEMES.length)]);
+  } else if (command === 'rps') {
+    const choices = ['Kamień 🪨', 'Papier 📄', 'Nożyce ✂️'];
+    const bot = choices[Math.floor(Math.random() * 3)];
+    const user_pick = args[0]?.toLowerCase();
+    const mapped: Record<string, string> = { kamien: 'Kamień 🪨', papier: 'Papier 📄', nozyce: 'Nożyce ✂️', k: 'Kamień 🪨', p: 'Papier 📄', n: 'Nożyce ✂️' };
+    if (!user_pick || !mapped[user_pick]) {
+      await send(`✂️ Użycie: \`/rps kamien|papier|nozyce\`. Bot wybrał: **${bot}**`);
+    } else {
+      const up = mapped[user_pick];
+      const wins = { 'Kamień 🪨': 'Nożyce ✂️', 'Papier 📄': 'Kamień 🪨', 'Nożyce ✂️': 'Papier 📄' };
+      const result = up === bot ? '🤝 Remis!' : wins[up as keyof typeof wins] === bot ? `🏆 **${user.username}** wygrywa!` : '🤖 Bot wygrywa!';
+      await send(`✂️ **${user.username}**: ${up} vs Bot: ${bot} → ${result}`);
+    }
+  } else {
+    await send(`❓ Nieznana komenda. Dostępne: \`/dice\`, \`/flip\`, \`/8ball\`, \`/meme\`, \`/rps\``);
+  }
+}
+
+// ── Moderation bot command handler ────────────────────────────────────────
+async function handleModerationCommand(opts: {
+  io: SocketServer<ClientToServerEvents, ServerToClientEvents>;
+  user: { id: string; username: string };
+  command: string; args: string[];
+  channel_id: string; server_id: string;
+}) {
+  const { io, user, command, args, channel_id, server_id } = opts;
+  const send = makeBotSender(io, channel_id, user.id, '🔨 Cordyn Moderacja');
+
+  // Check if caller has mod permissions
+  const { rows: [callerRow] } = await query(
+    `SELECT role_name FROM server_members WHERE server_id=$1 AND user_id=$2`,
+    [server_id, user.id]
+  );
+  const canMod = callerRow && ['Owner', 'Admin', 'Moderator'].includes(callerRow.role_name);
+  if (!canMod) {
+    await send('❌ Nie masz uprawnień do używania komend moderacji.'); return;
+  }
+
+  if (command === 'warn') {
+    const targetUsername = args[0]?.replace(/^@/, '');
+    const reason = args.slice(1).join(' ') || 'Brak powodu';
+    if (!targetUsername) { await send('❌ Użycie: `/warn <użytkownik> [powód]`'); return; }
+
+    const { rows: [target] } = await query(
+      `SELECT u.id, u.username FROM users u
+       JOIN server_members sm ON sm.user_id=u.id
+       WHERE sm.server_id=$1 AND LOWER(u.username)=LOWER($2)`,
+      [server_id, targetUsername]
+    );
+    if (!target) { await send(`❌ Nie znaleziono użytkownika **${targetUsername}** na tym serwerze.`); return; }
+
+    await query(
+      `INSERT INTO member_warnings (server_id, user_id, warned_by, reason) VALUES ($1,$2,$3,$4)`,
+      [server_id, target.id, user.id, reason]
+    );
+    const { rows: [{ count }] } = await query(
+      `SELECT COUNT(*) FROM member_warnings WHERE server_id=$1 AND user_id=$2`,
+      [server_id, target.id]
+    );
+    await send(`⚠️ **${target.username}** otrzymał ostrzeżenie od **${user.username}**.\n> Powód: ${reason}\n> Łącznie ostrzeżeń: **${count}**`);
+
+  } else if (command === 'warns') {
+    const targetUsername = args[0]?.replace(/^@/, '');
+    if (!targetUsername) { await send('❌ Użycie: `/warns <użytkownik>`'); return; }
+
+    const { rows: [target] } = await query(
+      `SELECT u.id, u.username FROM users u
+       JOIN server_members sm ON sm.user_id=u.id
+       WHERE sm.server_id=$1 AND LOWER(u.username)=LOWER($2)`,
+      [server_id, targetUsername]
+    );
+    if (!target) { await send(`❌ Nie znaleziono użytkownika **${targetUsername}**.`); return; }
+
+    const { rows: warnings } = await query(
+      `SELECT mw.reason, mw.created_at, u.username as by
+       FROM member_warnings mw LEFT JOIN users u ON u.id=mw.warned_by
+       WHERE mw.server_id=$1 AND mw.user_id=$2 ORDER BY mw.created_at DESC LIMIT 5`,
+      [server_id, target.id]
+    );
+    if (!warnings.length) {
+      await send(`✅ **${target.username}** nie ma żadnych ostrzeżeń.`);
+    } else {
+      const lines = [`⚠️ Ostrzeżenia **${target.username}** (ostatnie ${warnings.length}):`];
+      warnings.forEach((w, i) => {
+        const date = new Date(w.created_at).toLocaleDateString('pl-PL');
+        lines.push(`${i + 1}. ${date} przez **${w.by ?? '?'}** — ${w.reason}`);
+      });
+      await send(lines.join('\n'));
+    }
+
+  } else if (command === 'clear') {
+    const count = Math.max(1, Math.min(100, parseInt(args[0]) || 0));
+    if (!count) { await send('❌ Użycie: `/clear <1-100>`'); return; }
+
+    const { rows: msgs } = await query(
+      `SELECT id FROM messages WHERE channel_id=$1 AND is_automated=FALSE
+       ORDER BY created_at DESC LIMIT $2`,
+      [channel_id, count]
+    );
+    if (!msgs.length) { await send('📭 Brak wiadomości do usunięcia.'); return; }
+
+    const ids = msgs.map((m: { id: string }) => m.id);
+    await query(`DELETE FROM messages WHERE id=ANY($1::uuid[])`, [ids]);
+    for (const id of ids) {
+      io.to(`channel:${channel_id}`).emit('message_deleted', { id, channel_id });
+    }
+    await send(`🗑️ Usunięto **${ids.length}** wiadomości.`);
+
+  } else if (command === 'kick') {
+    // Only Owner/Admin can kick
+    if (!['Owner', 'Admin'].includes(callerRow.role_name)) {
+      await send('❌ Tylko Admin lub Owner może wyrzucać użytkowników.'); return;
+    }
+    const targetUsername = args[0]?.replace(/^@/, '');
+    if (!targetUsername) { await send('❌ Użycie: `/kick <użytkownik>`'); return; }
+
+    const { rows: [target] } = await query(
+      `SELECT u.id, u.username, sm.role_name FROM users u
+       JOIN server_members sm ON sm.user_id=u.id
+       WHERE sm.server_id=$1 AND LOWER(u.username)=LOWER($2)`,
+      [server_id, targetUsername]
+    );
+    if (!target) { await send(`❌ Nie znaleziono **${targetUsername}** na serwerze.`); return; }
+    if (target.role_name === 'Owner') { await send('❌ Nie możesz wyrzucić właściciela serwera.'); return; }
+
+    await query(`DELETE FROM server_members WHERE server_id=$1 AND user_id=$2`, [server_id, target.id]);
+    io.to(`user:${target.id}`).emit('kicked_from_server' as any, { server_id });
+    await send(`👟 **${target.username}** został wyrzucony z serwera przez **${user.username}**.`);
+
+  } else {
+    await send(`❓ Nieznana komenda. Dostępne: \`/warn\`, \`/warns\`, \`/clear\`, \`/kick\``);
+  }
+}
+
+// ── Polls bot command handler ─────────────────────────────────────────────
+async function handlePollCommand(opts: {
+  io: SocketServer<ClientToServerEvents, ServerToClientEvents>;
+  user: { id: string; username: string };
+  command: string; args: string[];
+  channel_id: string;
+}) {
+  const { io, user, command, args, channel_id } = opts;
+  const send = makeBotSender(io, channel_id, user.id, '📊 Cordyn Polls');
+
+  if (command !== 'poll') {
+    await send(`❓ Nieznana komenda. Użyj: \`/poll Pytanie | Opcja 1 | Opcja 2 | ...\``); return;
+  }
+
+  const raw = args.join(' ');
+  const parts = raw.split('|').map(s => s.trim()).filter(Boolean);
+  if (parts.length < 3) {
+    await send('❌ Podaj pytanie i co najmniej 2 opcje rozdzielone `|`.\nPrzykład: `/poll Ulubiony kolor | Niebieski | Czerwony | Zielony`');
+    return;
+  }
+  const [question, ...options] = parts;
+  if (options.length > 9) { await send('❌ Maksymalnie 9 opcji.'); return; }
+
+  const EMOJIS = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+  const lines = [
+    `📊 **${question}**`,
+    `> Zagłosuj reagując na tę wiadomość:`,
+    '',
+    ...options.map((opt, i) => `${EMOJIS[i]} ${opt}`),
+    '',
+    `*Ankieta od **${user.username}***`,
+  ];
+  await send(lines.join('\n'));
 }
 
 async function broadcastUserStatus(
