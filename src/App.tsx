@@ -4450,6 +4450,10 @@ export default function App() {
   useEffect(() => {
     if (!isTauri) return;
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    // Backoff: 1min → 5min → 15min → 30min (stays at 30min)
+    const retryDelays = [60_000, 5 * 60_000, 15 * 60_000, 30 * 60_000];
+    let retryIdx = 0;
 
     const doCheck = async () => {
       try {
@@ -4458,19 +4462,24 @@ export default function App() {
         console.log('[updater] check result:', update?.available, update?.version);
         if (!cancelled && update?.available) {
           setUpdateAvailable({ version: update.version, body: update.body ?? null });
+          return; // znaleziono — nie sprawdzamy dalej
         }
       } catch (e) {
         console.error('[updater] check failed:', e);
       }
+      // Nie znaleziono lub błąd — ponów z backoffem
+      if (!cancelled) {
+        const delay = retryDelays[Math.min(retryIdx++, retryDelays.length - 1)];
+        retryTimer = setTimeout(doCheck, delay);
+      }
     };
 
-    // Sprawdź od razu przy starcie
     doCheck();
 
-    // Sprawdzaj co 30 minut (gdy apka jest otwarta w tle)
-    const interval = setInterval(doCheck, 30 * 60 * 1000);
-
-    return () => { cancelled = true; clearInterval(interval); };
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, []);
 
   // ── Push: sprawdź czy użytkownik już subskrybuje ────────────────────

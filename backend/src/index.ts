@@ -153,6 +153,20 @@ const io = initSocket(httpServer);
 app.set('io', io);
 
 // ── Start ─────────────────────────────────────────────────────────────
+async function waitForPostgres(maxAttempts = 15, delayMs = 3000) {
+  for (let i = 1; i <= maxAttempts; i++) {
+    try {
+      await pool.query('SELECT 1');
+      console.log('PostgreSQL connected');
+      return;
+    } catch (err: any) {
+      console.warn(`[pg] connection attempt ${i}/${maxAttempts} failed: ${err?.message}`);
+      if (i < maxAttempts) await new Promise(r => setTimeout(r, delayMs));
+      else { console.error('PostgreSQL unavailable after max retries'); process.exit(1); }
+    }
+  }
+}
+
 async function start() {
   // Connect to Redis
   try {
@@ -162,13 +176,14 @@ async function start() {
     // Non-fatal - continue without Redis if needed
   }
 
-  // Test PostgreSQL connection + run migrations
+  // Wait for PostgreSQL (pg_isready passes before init.sql finishes on first deploy)
+  await waitForPostgres();
+
+  // Run migrations
   try {
-    await pool.query('SELECT 1');
-    console.log('PostgreSQL connected');
     await runMigrations();
   } catch (err) {
-    console.error('PostgreSQL connection/migration failed:', err);
+    console.error('Migration failed:', err);
     process.exit(1);
   }
 
