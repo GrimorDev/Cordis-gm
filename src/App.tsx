@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { TitleBar, isTauri } from './TitleBar';
 import { translate, resolveLocale, bcp47 as localeBcp47, loadLocale, detectLocale, LOCALES, type Locale, type TimeFormat } from './i18n';
 import { motion, AnimatePresence } from 'motion/react';
@@ -5569,6 +5569,16 @@ export default function App() {
   };
 
   // Slash command autocomplete — only in server text channels
+  // Stable YouTube embed src — recomputed only when the video ID changes, NOT on every render.
+  // If elapsed recalculated every render, the iframe src would change → browser reload → stutter.
+  const youtubeEmbedSrc = useMemo(() => {
+    const music = activeCall?.channelId ? musicBotState[activeCall.channelId] : null;
+    if (!music?.playing || !music.videoId) return null;
+    const elapsed = music.started_at ? Math.floor((Date.now() - music.started_at) / 1000) : 0;
+    return `https://www.youtube.com/embed/${music.videoId}?autoplay=1&start=${elapsed}&controls=1&rel=0&modestbranding=1`;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCall?.channelId, musicBotState[activeCall?.channelId ?? '']?.videoId]);
+
   const allSlashCommands = activeView === 'servers' && activeServer
     ? installedBots.flatMap(inst => {
         const bot = AVAILABLE_BOTS.find(b => b.id === inst.bot_id);
@@ -9291,8 +9301,6 @@ export default function App() {
           {activeView==='servers' && activeCall?.channelId && (() => {
             const music = musicBotState[activeCall.channelId];
             if (!music?.playing) return null;
-            // Seek to current position when iframe loads (sync for late joiners)
-            const elapsed = music.started_at ? Math.floor((Date.now() - music.started_at) / 1000) : 0;
             return (
               <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}}
                 className="mx-3 my-2 bg-[#1DB954]/8 border border-[#1DB954]/20 rounded-2xl p-3">
@@ -9307,13 +9315,14 @@ export default function App() {
                   <div className="min-w-0 flex-1">
                     <p className="text-xs text-white font-semibold truncate leading-tight">{music.title || 'Nieznany utwór'}</p>
                     {music.requested_by && <p className="text-[10px] text-zinc-600 mt-0.5 truncate">zamówił: {music.requested_by}</p>}
+                    {music.queue.length > 0 && <p className="text-[10px] text-zinc-500 mt-0.5">w kolejce: {music.queue.length}</p>}
                   </div>
                 </div>
-                {/* YouTube embed — each client plays directly from YouTube CDN */}
-                {music.videoId && (
+                {/* Memoized src — only recomputed when videoId changes, never on re-render → no reload stutter */}
+                {youtubeEmbedSrc && (
                   <iframe
                     key={music.videoId}
-                    src={`https://www.youtube.com/embed/${music.videoId}?autoplay=1&start=${elapsed}&controls=1&rel=0&modestbranding=1`}
+                    src={youtubeEmbedSrc}
                     className="w-full rounded-xl"
                     style={{ height: '130px', border: 'none' }}
                     allow="autoplay; encrypted-media; picture-in-picture"

@@ -560,6 +560,7 @@ async function handleMusicCommand(opts: {
   channel_id: string;      // voice channel — keys musicStates
   text_channel_id: string; // text channel — where bot chat messages appear
   server_id: string;
+  _carryQueue?: MusicBotState['queue']; // internal: queue carried over from skip
 }) {
   const { io, user, command, args, channel_id, text_channel_id, server_id } = opts;
   const sendBotMsg = makeBotSender(io, text_channel_id, user.id, '🎵 Cordyn Music');
@@ -576,23 +577,32 @@ async function handleMusicCommand(opts: {
       await sendBotMsg('❌ Podaj poprawny URL YouTube (youtube.com lub youtu.be).'); return;
     }
 
-    // Remove previous bot from voice channel if already there
     const prev = musicStates.get(channel_id);
+
+    // If already playing (and NOT called from skip), add to queue instead of replacing
+    if (prev?.playing && !opts._carryQueue) {
+      const info = await ytOembed(videoId);
+      prev.queue.push({ title: info.title, url: ytUrl });
+      broadcastState(prev);
+      await sendBotMsg(`➕ Dodano do kolejki: **${info.title}** (pozycja ${prev.queue.length})`);
+      return;
+    }
+
+    // Stop previous bot voice presence
     if (prev?.playing) botVoiceLeave(io, server_id, channel_id);
 
     await sendBotMsg(`🔍 Szukam: ${ytUrl}`);
 
-    // Fetch metadata via oEmbed (public API, no bot detection)
     const info = await ytOembed(videoId);
     const started_at = Date.now();
 
     const state: MusicBotState = {
       playing: true, ...info, url: ytUrl, videoId,
-      channel_id, started_at, requested_by: user.username, queue: [],
+      channel_id, started_at, requested_by: user.username,
+      queue: opts._carryQueue ?? [],  // preserve queue carried from skip
     };
     musicStates.set(channel_id, state);
 
-    // Bot joins the voice channel so it appears in the user list
     botVoiceJoin(io, server_id, channel_id);
     broadcastState(state);
     await sendBotMsg(`🎵 Teraz odtwarzam: **${info.title}** (zamówił: ${user.username})`);
@@ -609,7 +619,8 @@ async function handleMusicCommand(opts: {
     const state = musicStates.get(channel_id);
     if (state?.queue.length) {
       const next = state.queue.shift()!;
-      await handleMusicCommand({ ...opts, command: 'play', args: [next.url] });
+      const remaining = [...state.queue]; // preserve rest of queue before recursive call
+      await handleMusicCommand({ ...opts, command: 'play', args: [next.url], _carryQueue: remaining });
     } else {
       if (state?.playing) botVoiceLeave(io, server_id, channel_id);
       const stopped: MusicBotState = { playing: false, channel_id, queue: [] };
