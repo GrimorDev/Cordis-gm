@@ -1,13 +1,10 @@
 import { Router, Response } from 'express';
-import { PassThrough } from 'stream';
-import type { ChildProcess } from 'child_process';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { query } from '../db/pool';
 
 const router = Router({ mergeParams: true });
 
-// ── Helper: check if user is member of server ──────────────────────────────
 async function isMember(serverId: string, userId: string): Promise<boolean> {
   const { rows } = await query(
     'SELECT 1 FROM server_members WHERE server_id=$1 AND user_id=$2',
@@ -30,22 +27,18 @@ export interface MusicBotState {
   playing: boolean;
   title?: string;
   url?: string;
+  videoId?: string;     // YouTube video ID for client-side iframe embed
   thumbnail?: string;
   duration?: number;
   channel_id: string;
-  stream_url?: string;
+  started_at?: number;  // Unix ms — used by clients to seek to current position
   requested_by?: string;
   queue: { title: string; url: string; duration?: number }[];
-  // Internal — not sent to clients
-  _stream?: PassThrough;
-  _procs?: ChildProcess[];
-  _ytUrl?: string;
 }
 
-// channelId → state
 export const musicStates = new Map<string, MusicBotState>();
 
-// GET /api/servers/:serverId/bots — list installed bots
+// GET /api/servers/:serverId/bots
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { serverId } = req.params;
@@ -61,7 +54,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// POST /api/servers/:serverId/bots — install bot
+// POST /api/servers/:serverId/bots
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { serverId } = req.params;
@@ -81,43 +74,15 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// DELETE /api/servers/:serverId/bots/:botId — remove bot
+// DELETE /api/servers/:serverId/bots/:botId
 router.delete('/:botId', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { serverId, botId } = req.params;
     if (!(await canManage(serverId, req.user!.id))) {
       return res.status(403).json({ error: 'Forbidden' });
     }
-    await query(
-      'DELETE FROM server_bots WHERE server_id=$1 AND bot_id=$2',
-      [serverId, botId]
-    );
+    await query('DELETE FROM server_bots WHERE server_id=$1 AND bot_id=$2', [serverId, botId]);
     return res.json({ ok: true });
-  } catch { return res.status(500).json({ error: 'Internal server error' }); }
-});
-
-// GET /api/servers/:serverId/bots/music/stream/:channelId — stream music audio
-router.get('/music/stream/:channelId', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const { serverId, channelId } = req.params;
-    if (!(await isMember(serverId, req.user!.id))) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-    const state = musicStates.get(channelId);
-    if (!state || !state._stream) {
-      return res.status(404).json({ error: 'No active stream for this channel' });
-    }
-    res.setHeader('Content-Type', 'audio/mpeg');
-    res.setHeader('Transfer-Encoding', 'chunked');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-
-    const pt = state._stream;
-    pt.pipe(res, { end: false });
-
-    req.on('close', () => {
-      try { pt.unpipe(res); } catch { /* ignore */ }
-    });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 

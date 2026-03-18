@@ -5441,8 +5441,8 @@ export default function App() {
         setVoiceUsers(p => ({ ...p, [channel_id]: [...(p[channel_id]||[]).filter((u:VoiceUser)=>u.id!==user.id), user] }));
         const me = currentUserRef.current; const call = activeCallRef.current;
         if (me && user.id !== me.id && call?.channelId === channel_id) {
-          playVoiceJoin();   // someone else joined my channel
-          await openPeer(user.id, true);
+          playVoiceJoin();
+          if (!user.is_bot) await openPeer(user.id, true); // bots don't do WebRTC
         }
       },
       onUserLeft: ({ channel_id, user_id }: any) => {
@@ -9291,9 +9291,8 @@ export default function App() {
           {activeView==='servers' && activeCall?.channelId && (() => {
             const music = musicBotState[activeCall.channelId];
             if (!music?.playing) return null;
-            const streamUrl = music.stream_url
-              ? (isTauri ? STATIC_BASE + music.stream_url : music.stream_url)
-              : null;
+            // Seek to current position when iframe loads (sync for late joiners)
+            const elapsed = music.started_at ? Math.floor((Date.now() - music.started_at) / 1000) : 0;
             return (
               <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}}
                 className="mx-3 my-2 bg-[#1DB954]/8 border border-[#1DB954]/20 rounded-2xl p-3">
@@ -9310,11 +9309,16 @@ export default function App() {
                     {music.requested_by && <p className="text-[10px] text-zinc-600 mt-0.5 truncate">zamówił: {music.requested_by}</p>}
                   </div>
                 </div>
-                {/* Audio player (only if stream_url available) */}
-                {streamUrl && (
-                  <audio key={streamUrl} src={streamUrl} controls autoPlay
-                    className="w-full h-7 rounded-lg"
-                    style={{filter:'invert(1) hue-rotate(90deg) brightness(0.8)'}}/>
+                {/* YouTube embed — each client plays directly from YouTube CDN */}
+                {music.videoId && (
+                  <iframe
+                    key={music.videoId}
+                    src={`https://www.youtube.com/embed/${music.videoId}?autoplay=1&start=${elapsed}&controls=1&rel=0&modestbranding=1`}
+                    className="w-full rounded-xl"
+                    style={{ height: '130px', border: 'none' }}
+                    allow="autoplay; encrypted-media; picture-in-picture"
+                    title={music.title || 'Cordyn Music'}
+                  />
                 )}
                 {/* Controls */}
                 <div className="flex gap-1.5 mt-2">

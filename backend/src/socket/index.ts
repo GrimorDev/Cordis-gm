@@ -3,8 +3,6 @@ import { Server as SocketServer } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import jwt from 'jsonwebtoken';
-import { PassThrough } from 'stream';
-import { spawn, type ChildProcess } from 'child_process';
 import { config } from '../config';
 import {
   setUserStatus, joinVoiceChannel, leaveVoiceChannel,
@@ -517,58 +515,41 @@ function makeBotSender(
   };
 }
 
-// ── yt-dlp helpers ────────────────────────────────────────────────────────
-async function ytDlpInfo(url: string): Promise<{ title: string; thumbnail?: string; duration?: number }> {
-  return new Promise((resolve) => {
-    const proc = spawn('yt-dlp', [
-      '--dump-json', '--no-playlist', '--quiet', '--no-warnings',
-      '--socket-timeout', '30', url,
-    ]);
-    let data = '';
-    proc.stdout.on('data', (d: Buffer) => { data += d.toString(); });
-    proc.on('close', () => {
-      try {
-        const j = JSON.parse(data);
-        resolve({ title: j.title ?? 'Nieznany utwór', thumbnail: j.thumbnail, duration: j.duration });
-      } catch { resolve({ title: 'Nieznany utwór' }); }
-    });
-    proc.on('error', () => resolve({ title: 'Nieznany utwór' }));
-    setTimeout(() => { try { proc.kill(); } catch {} resolve({ title: 'Nieznany utwór' }); }, 35_000);
-  });
+// ── Music bot helpers ─────────────────────────────────────────────────────
+
+function extractYouTubeId(url: string): string | null {
+  const m = url.match(/(?:youtube\.com\/(?:watch\?.*v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
 }
 
-function ytDlpStream(url: string): { pt: PassThrough; procs: ChildProcess[] } {
-  const pt = new PassThrough();
-  const ytdlp = spawn('yt-dlp', [
-    '--format', 'bestaudio[ext=webm]/bestaudio/best',
-    '--output', '-', '--no-playlist',
-    '--quiet', '--no-warnings', '--socket-timeout', '30', url,
-  ]);
-  const ffmpeg = spawn('ffmpeg', [
-    '-i', 'pipe:0', '-vn',
-    '-acodec', 'libmp3lame', '-ab', '128k',
-    '-f', 'mp3', '-loglevel', 'quiet', 'pipe:1',
-  ]);
-  ytdlp.stdout.pipe(ffmpeg.stdin);
-  ffmpeg.stdout.pipe(pt);
-  ytdlp.stderr.on('data', (d: Buffer) => {
-    const msg = d.toString().trim();
-    if (msg) console.warn('[yt-dlp]', msg);
-  });
-  ytdlp.on('error', (e) => { console.error('[yt-dlp spawn]', e.message); if (!pt.destroyed) pt.destroy(e); });
-  ffmpeg.on('error', (e) => { console.error('[ffmpeg spawn]', e.message); if (!pt.destroyed) pt.destroy(e); });
-  ffmpeg.on('close', (code) => {
-    if (code === 0) { if (!pt.destroyed) pt.end(); }
-    else if (!pt.destroyed) pt.destroy(new Error(`ffmpeg exited ${code}`));
-  });
-  pt.on('error', () => {}); // ignore client disconnects
-  return { pt, procs: [ytdlp, ffmpeg] };
+// YouTube oEmbed: public, no auth, no bot detection issues
+async function ytOembed(videoId: string): Promise<{ title: string; thumbnail?: string }> {
+  try {
+    const res = await fetch(
+      `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (!res.ok) return { title: 'Nieznany utwór' };
+    const j = await res.json() as any;
+    return { title: j.title ?? 'Nieznany utwór', thumbnail: j.thumbnail_url };
+  } catch {
+    return { title: 'Nieznany utwór' };
+  }
 }
 
-function stopMusicState(state: MusicBotState | undefined) {
-  if (!state) return;
-  if (state._procs) for (const p of state._procs) try { p.kill(); } catch {}
-  if (state._stream && !state._stream.destroyed) try { state._stream.destroy(); } catch {}
+// Emit virtual voice_user_joined / voice_user_left for the music bot
+function botVoiceJoin(io: SocketServer<ClientToServerEvents, ServerToClientEvents>, serverId: string, channelId: string) {
+  io.to(`server:${serverId}`).emit('voice_user_joined', {
+    channel_id: channelId,
+    user: { id: `music_bot_${serverId}`, username: 'Cordyn Music', avatar_url: null, status: 'online', custom_status: null, is_bot: true },
+  } as any);
+}
+
+function botVoiceLeave(io: SocketServer<ClientToServerEvents, ServerToClientEvents>, serverId: string, channelId: string) {
+  io.to(`server:${serverId}`).emit('voice_user_left', {
+    channel_id: channelId,
+    user_id: `music_bot_${serverId}`,
+  } as any);
 }
 
 // ── Music bot command handler ─────────────────────────────────────────────
@@ -576,12 +557,11 @@ async function handleMusicCommand(opts: {
   io: SocketServer<ClientToServerEvents, ServerToClientEvents>;
   user: { id: string; username: string };
   command: string; args: string[];
-  channel_id: string;      // voice channel — keys musicStates, used in stream_url
+  channel_id: string;      // voice channel — keys musicStates
   text_channel_id: string; // text channel — where bot chat messages appear
   server_id: string;
 }) {
   const { io, user, command, args, channel_id, text_channel_id, server_id } = opts;
-  // Bot chat messages go to the text channel where the command was typed
   const sendBotMsg = makeBotSender(io, text_channel_id, user.id, '🎵 Cordyn Music');
   const broadcastState = (state: MusicBotState) => {
     io.to(`server:${server_id}`).emit('music_bot_update' as any, state);
@@ -590,35 +570,36 @@ async function handleMusicCommand(opts: {
   if (command === 'play') {
     const ytUrl = args[0];
     if (!ytUrl) { await sendBotMsg('❌ Podaj URL YouTube: `/play <url>`'); return; }
-    if (!ytUrl.match(/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//)) {
+
+    const videoId = extractYouTubeId(ytUrl);
+    if (!videoId) {
       await sendBotMsg('❌ Podaj poprawny URL YouTube (youtube.com lub youtu.be).'); return;
     }
 
-    // Kill any existing stream
-    stopMusicState(musicStates.get(channel_id));
+    // Remove previous bot from voice channel if already there
+    const prev = musicStates.get(channel_id);
+    if (prev?.playing) botVoiceLeave(io, server_id, channel_id);
 
     await sendBotMsg(`🔍 Szukam: ${ytUrl}`);
 
-    try {
-      const info = await ytDlpInfo(ytUrl);
-      const { pt, procs } = ytDlpStream(ytUrl);
+    // Fetch metadata via oEmbed (public API, no bot detection)
+    const info = await ytOembed(videoId);
+    const started_at = Date.now();
 
-      const state: MusicBotState = {
-        playing: true, ...info, url: ytUrl, channel_id,
-        stream_url: `/api/servers/${server_id}/bots/music/stream/${channel_id}`,
-        requested_by: user.username, queue: [],
-        _stream: pt, _procs: procs, _ytUrl: ytUrl,
-      };
-      musicStates.set(channel_id, state);
-      broadcastState({ ...state, _stream: undefined, _procs: undefined, _ytUrl: undefined });
-      await sendBotMsg(`🎵 Teraz odtwarzam: **${info.title}** (zamówił: ${user.username})`);
-    } catch (err: any) {
-      console.error('Music bot play error:', err);
-      await sendBotMsg(`❌ Nie udało się odtworzyć: ${err?.message ?? 'Nieznany błąd'}`);
-    }
+    const state: MusicBotState = {
+      playing: true, ...info, url: ytUrl, videoId,
+      channel_id, started_at, requested_by: user.username, queue: [],
+    };
+    musicStates.set(channel_id, state);
+
+    // Bot joins the voice channel so it appears in the user list
+    botVoiceJoin(io, server_id, channel_id);
+    broadcastState(state);
+    await sendBotMsg(`🎵 Teraz odtwarzam: **${info.title}** (zamówił: ${user.username})`);
 
   } else if (command === 'stop') {
-    stopMusicState(musicStates.get(channel_id));
+    const prev = musicStates.get(channel_id);
+    if (prev?.playing) botVoiceLeave(io, server_id, channel_id);
     const stopped: MusicBotState = { playing: false, channel_id, queue: [] };
     musicStates.set(channel_id, stopped);
     broadcastState(stopped);
@@ -630,7 +611,7 @@ async function handleMusicCommand(opts: {
       const next = state.queue.shift()!;
       await handleMusicCommand({ ...opts, command: 'play', args: [next.url] });
     } else {
-      stopMusicState(state);
+      if (state?.playing) botVoiceLeave(io, server_id, channel_id);
       const stopped: MusicBotState = { playing: false, channel_id, queue: [] };
       musicStates.set(channel_id, stopped);
       broadcastState(stopped);
@@ -641,7 +622,7 @@ async function handleMusicCommand(opts: {
     const state = musicStates.get(channel_id);
     if (state?.playing) {
       state.playing = false;
-      broadcastState({ ...state, _stream: undefined, _procs: undefined, _ytUrl: undefined });
+      broadcastState(state);
       await sendBotMsg('⏸️ Wstrzymano odtwarzanie.');
     }
 
@@ -656,14 +637,10 @@ async function handleMusicCommand(opts: {
     }
 
   } else if (command === 'volume') {
-    const vol = parseInt(args[0]);
-    if (isNaN(vol) || vol < 0 || vol > 100) {
-      await sendBotMsg('❌ Podaj wartość od 0 do 100.');
-    } else {
-      await sendBotMsg(`🔊 Głośność: ${vol}% (użyj suwaka głośności w odtwarzaczu)`);
-    }
+    await sendBotMsg(`🔊 Głośność kontrolujesz suwakiem w odtwarzaczu YouTube.`);
+
   } else {
-    await sendBotMsg(`❓ Nieznana komenda. Dostępne: \`/play\`, \`/stop\`, \`/skip\`, \`/pause\`, \`/queue\`, \`/volume\``);
+    await sendBotMsg(`❓ Nieznana komenda. Dostępne: \`/play\`, \`/stop\`, \`/skip\`, \`/pause\`, \`/queue\``);
   }
 }
 

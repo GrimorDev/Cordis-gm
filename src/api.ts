@@ -208,10 +208,11 @@ export interface MusicBotState {
   playing: boolean;
   title?: string;
   url?: string;
+  videoId?: string;       // YouTube video ID — used for iframe embed on client
   thumbnail?: string;
   duration?: number;
   channel_id: string;
-  stream_url?: string;
+  started_at?: number;    // Unix ms — used to seek iframe to current position
   requested_by?: string;
   queue: { title: string; url: string; duration?: number }[];
 }
