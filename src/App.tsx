@@ -3655,10 +3655,11 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
 
   const fmtMs = (ms: number) => { const s=Math.floor(ms/1000); return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; };
 
-  // Position card: prefer right side, flip to left if near right edge
+  // Position card: prefer LEFT of the element (overlapping chat area, not sidebar)
   const cardW = 280;
-  const left = x + 16 + cardW > window.innerWidth ? x - cardW - 8 : x + 16;
-  const top = Math.min(y - 8, window.innerHeight - 420);
+  const leftPref = x - cardW - 8;
+  const left = leftPref >= 8 ? leftPref : Math.min(x + 8, window.innerWidth - cardW - 8);
+  const top = Math.min(Math.max(8, y - 8), window.innerHeight - 440);
 
   return (
     <div className="fixed z-[9999]"
@@ -3805,10 +3806,10 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
             </div>
           )}
 
-          {/* View profile link */}
+          {/* View profile button */}
           <button onClick={()=>onOpenProfile(userId)}
-            className="w-full text-[11px] text-zinc-600 hover:text-zinc-300 transition-colors text-center border-t border-white/[0.05] pt-2.5">
-            Zobacz pełny profil →
+            className="w-full mt-1 py-2 rounded-xl bg-white/[0.05] hover:bg-indigo-500/20 border border-white/[0.08] hover:border-indigo-500/30 text-[12px] font-semibold text-zinc-400 hover:text-indigo-300 transition-all flex items-center justify-center gap-1.5">
+            Przejdź do profilu →
           </button>
         </div>
       </div>
@@ -6213,22 +6214,18 @@ export default function App() {
   // Mask name in stream mode: first 4 chars + "…"
   const maskName = (name: string) => isStreamMode && name.length > 4 ? name.slice(0, 4) + '…' : name;
 
-  // ── Hover card ────────────────────────────────────────────────────
+  // ── Hover card (click-triggered) ──────────────────────────────────
   const showHoverCard = (userId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     if (hoverCardTimer.current) clearTimeout(hoverCardTimer.current);
     if (hoverCardHideTimer.current) clearTimeout(hoverCardHideTimer.current);
+    // Toggle: click same user again → close
+    if (hoverCard?.userId === userId) { setHoverCard(null); return; }
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    hoverCardTimer.current = setTimeout(() => {
-      setHoverCard({ userId, x: rect.right, y: rect.top });
-    }, 450);
+    setHoverCard({ userId, x: rect.left, y: rect.top });
   };
-  const hideHoverCard = () => {
-    if (hoverCardTimer.current) clearTimeout(hoverCardTimer.current);
-    hoverCardHideTimer.current = setTimeout(() => setHoverCard(null), 180);
-  };
-  const cancelHideHoverCard = () => {
-    if (hoverCardHideTimer.current) clearTimeout(hoverCardHideTimer.current);
-  };
+  const hideHoverCard = () => { setHoverCard(null); };
+  const cancelHideHoverCard = () => { /* no-op for click mode */ };
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (!f) return;
     try {
@@ -7294,11 +7291,10 @@ export default function App() {
                 const isActive = activeDmUserId===dm.other_user_id;
                 return (
                   <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); setProfileViewId(null); }}
-                    onMouseEnter={e=>showHoverCard(dm.other_user_id,e)}
-                    onMouseLeave={hideHoverCard}
                     className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/15 text-white border border-indigo-500/25':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
-                    <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava({avatar_url:dm.other_avatar,username:dm.other_username})}")`} as React.CSSProperties}>
-                      <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className={`w-10 h-10 rounded-2xl object-cover av-eff-${(dm as any).other_avatar_effect||'none'}`} alt=""/>
+                    <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava({avatar_url:dm.other_avatar,username:dm.other_username})}")`} as React.CSSProperties}
+                      onClick={e=>{ e.stopPropagation(); showHoverCard(dm.other_user_id, e); }}>
+                      <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className={`w-10 h-10 rounded-2xl object-cover av-eff-${(dm as any).other_avatar_effect||'none'} cursor-pointer hover:opacity-80 transition-opacity`} alt=""/>
                       <StatusBadge status={dm.other_status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
                     </div>
                     <div className="flex-1 truncate text-left min-w-0">
@@ -8169,10 +8165,8 @@ export default function App() {
                         const fSteam = userSteamActivities.get(f.id);
                         return (
                         <div key={f.id}
-                          className="flex items-center justify-between bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] hover:border-white/[0.07] p-3.5 rounded-2xl transition-all duration-150 group"
-                          onMouseEnter={e=>showHoverCard(f.id, e)}
-                          onMouseLeave={hideHoverCard}>
-                          <div className="flex items-center gap-3 cursor-pointer" onClick={()=>openProfile(f)}>
+                          className="flex items-center justify-between bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] hover:border-white/[0.07] p-3.5 rounded-2xl transition-all duration-150 group">
+                          <div className="flex items-center gap-3 cursor-pointer" onClick={e=>showHoverCard(f.id, e)}>
                             <div className="relative"><img src={ava(f)} className="w-10 h-10 rounded-2xl object-cover av-sc-xs" alt=""/><StatusBadge status={f.status} size={10} className="absolute -bottom-0.5 -right-0.5"/></div>
                             <div>
                               <p className="font-semibold text-white text-sm">{maskName(f.username)}</p>
@@ -8775,7 +8769,7 @@ export default function App() {
                           {showChatAvatars&&(
                           <div className="av-frozen shrink-0 self-end mb-0.5" style={{'--av-url':`url("${avatarSrc}")`} as React.CSSProperties}>
                             <img src={avatarSrc} alt=""
-                              onClick={isAuto?undefined:()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar,status:(msg as MessageFull).sender_status})}
+                              onClick={isAuto?undefined:(e)=>showHoverCard(msg.sender_id, e as unknown as React.MouseEvent)}
                               className={`w-9 h-9 rounded-xl object-cover ${isAuto?'cursor-default':'cursor-pointer hover:opacity-80 hover:scale-105'} transition-all av-eff-${(msg as any).sender_avatar_effect||'none'}`}/>
                           </div>
                           )}
@@ -8787,7 +8781,7 @@ export default function App() {
                             <div className={`flex items-center gap-1.5 mb-1 px-1 ${isOwn?'flex-row-reverse':''}`}>
                               <span className={`text-xs font-semibold transition-opacity ${isAuto?'cursor-default':'cursor-pointer hover:underline hover:opacity-80'}`}
                                 style={{ color: isAuto?'#818cf8':((msg as MessageFull).sender_role_color || (isOwn ? '#818cf8' : '#a1a1aa')) }}
-                                onClick={isAuto?undefined:()=>openProfile({id:msg.sender_id,username:msg.sender_username,avatar_url:msg.sender_avatar})}>
+                                onClick={isAuto?undefined:(e)=>showHoverCard(msg.sender_id, e as unknown as React.MouseEvent)}>
                                 {displayName}
                               </span>
                               {(isAuto||isBotSender)&&(
@@ -9008,7 +9002,7 @@ export default function App() {
 
                           {/* ── Discord-style floating action bar ───────────── */}
                           {editingMsgId !== msg.id && !((msg as any).deleted || msg.content === '__deleted__') && (
-                          <div className="absolute -top-9 right-2 z-40 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all duration-150">
+                          <div className="absolute top-1 right-2 z-40 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all duration-150">
                             <div className="flex items-center bg-[#1a1a2e] border border-white/[0.1] rounded-xl shadow-2xl overflow-visible">
                               {/* Quick reactions — servers only */}
                               {activeView==='servers' && <>
@@ -9530,9 +9524,7 @@ export default function App() {
                         const mTwitch = userTwitchActivities.get(m.id);
                         const mSteam = userSteamActivities.get(m.id);
                         return (
-                        <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={()=>openProfile(m)}
-                          onMouseEnter={e=>showHoverCard(m.id, e)}
-                          onMouseLeave={hideHoverCard}>
+                        <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={e=>showHoverCard(m.id, e)}>
                           <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava(m)}")`} as React.CSSProperties}>
                             {isNew&&<div className="absolute inset-0 rounded-xl ring-2 ring-emerald-400/60 ring-offset-1 ring-offset-[#1e1e30] pointer-events-none animate-pulse z-10"/>}
                             <img src={ava(m)} className={`w-10 h-10 rounded-xl object-cover av-eff-${m.avatar_effect||'none'} av-sc`} alt=""/>
@@ -9574,9 +9566,7 @@ export default function App() {
                       {offline.map(m=>{
                         const isOwner = m.id === serverFull?.owner_id;
                         return (
-                        <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={()=>openProfile(m)}
-                          onMouseEnter={e=>showHoverCard(m.id,e)}
-                          onMouseLeave={hideHoverCard}>
+                        <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={e=>showHoverCard(m.id,e)}>
                           <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava(m)}")`} as React.CSSProperties}>
                             <img src={ava(m)} className={`w-10 h-10 rounded-xl object-cover opacity-35 av-eff-${m.avatar_effect||'none'} av-sc`} alt=""/>
                             <StatusBadge status="offline" size={10} className="absolute -bottom-0.5 -right-0.5 opacity-50"/>
@@ -12784,7 +12774,9 @@ export default function App() {
       </AnimatePresence>
 
       {/* ── Hover card ── */}
-      {hoverCard && (
+      {hoverCard && (<>
+        {/* Click-outside overlay to close card */}
+        <div className="fixed inset-0 z-[9998]" onClick={()=>setHoverCard(null)}/>
         <HoverCard
           userId={hoverCard.userId}
           x={hoverCard.x}
@@ -12808,7 +12800,7 @@ export default function App() {
           maskName={maskName}
           fmtDate={fmtDate}
         />
-      )}
+      </>)}
 
     </div>
   );
