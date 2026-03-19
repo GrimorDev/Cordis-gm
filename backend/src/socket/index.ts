@@ -420,6 +420,10 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
           await handleModerationCommand({ io, user, command, args, channel_id, server_id });
         } else if (bot === 'polls') {
           await handlePollCommand({ io, user, command, args, channel_id });
+        } else if (bot === 'info') {
+          await handleInfoCommand({ io, user, command, args, channel_id, server_id });
+        } else if (bot === 'remind') {
+          await handleRemindCommand({ io, user, command, args, channel_id });
         }
       } catch (err) {
         console.error('bot_command error:', err);
@@ -867,6 +871,125 @@ async function handlePollCommand(opts: {
     `*Ankieta od **${user.username}***`,
   ];
   await send(lines.join('\n'));
+}
+
+// ── Info bot ──────────────────────────────────────────────────────────────
+
+async function handleInfoCommand(opts: {
+  io: SocketServer<ClientToServerEvents, ServerToClientEvents>;
+  user: { id: string; username: string };
+  command: string; args: string[];
+  channel_id: string; server_id: string;
+}) {
+  const { io, user, command, args, channel_id, server_id } = opts;
+  const send = makeBotSender(io, channel_id, user.id, 'ℹ️ Cordyn Info');
+
+  if (command === 'serverinfo') {
+    const { rows: [srv] } = await query(
+      `SELECT s.name, s.created_at,
+              (SELECT COUNT(*) FROM server_members WHERE server_id = s.id)::int AS member_count,
+              (SELECT COUNT(*) FROM channels       WHERE server_id = s.id)::int AS channel_count,
+              u.username AS owner_name
+       FROM servers s LEFT JOIN users u ON u.id = s.owner_id
+       WHERE s.id = $1`, [server_id]
+    );
+    if (!srv) { await send('❌ Nie znaleziono serwera.'); return; }
+    const created = new Date(srv.created_at).toLocaleDateString('pl-PL');
+    await send([
+      `🏠 **${srv.name}**`,
+      `👥 Członkowie: **${srv.member_count}**`,
+      `📺 Kanały: **${srv.channel_count}**`,
+      `👑 Właściciel: **${srv.owner_name}**`,
+      `📅 Założony: **${created}**`,
+    ].join('\n'));
+
+  } else if (command === 'userinfo') {
+    const targetUsername = args[0]?.replace(/^@/, '');
+    let targetId: string = user.id;
+    if (targetUsername) {
+      const { rows: [found] } = await query(
+        `SELECT u.id FROM users u
+         JOIN server_members sm ON sm.user_id = u.id AND sm.server_id = $1
+         WHERE LOWER(u.username) = LOWER($2) LIMIT 1`,
+        [server_id, targetUsername]
+      );
+      if (!found) { await send(`❌ Nie znaleziono użytkownika **${targetUsername}** na tym serwerze.`); return; }
+      targetId = found.id;
+    }
+    const { rows: [u] } = await query(
+      `SELECT u.username, u.created_at AS account_created, sm.joined_at,
+              COALESCE(
+                (SELECT r.name FROM server_member_roles smr
+                 JOIN server_roles r ON r.id = smr.role_id
+                 WHERE smr.member_user_id = u.id AND smr.member_server_id = $2
+                 LIMIT 1), 'Brak'
+              ) AS role_name
+       FROM users u
+       JOIN server_members sm ON sm.user_id = u.id AND sm.server_id = $2
+       WHERE u.id = $1`, [targetId, server_id]
+    );
+    if (!u) { await send('❌ Nie znaleziono użytkownika.'); return; }
+    const joined  = new Date(u.joined_at).toLocaleDateString('pl-PL');
+    const created = new Date(u.account_created).toLocaleDateString('pl-PL');
+    await send([
+      `👤 **${u.username}**`,
+      `🎭 Rola: **${u.role_name}**`,
+      `📅 Dołączył: **${joined}**`,
+      `🎂 Konto założono: **${created}**`,
+    ].join('\n'));
+
+  } else if (command === 'ping') {
+    const t = Date.now();
+    await send(`🏓 Pong! Opóźnienie API: **${Date.now() - t}ms**`);
+
+  } else {
+    await send('❓ Nieznana komenda. Dostępne: `/serverinfo`, `/userinfo [@użytkownik]`, `/ping`');
+  }
+}
+
+// ── Remind bot ────────────────────────────────────────────────────────────
+
+// In-memory reminders — lost on server restart, acceptable for MVP
+const activeReminders = new Map<string, ReturnType<typeof setTimeout>>();
+
+async function handleRemindCommand(opts: {
+  io: SocketServer<ClientToServerEvents, ServerToClientEvents>;
+  user: { id: string; username: string };
+  command: string; args: string[];
+  channel_id: string;
+}) {
+  const { io, user, command, args, channel_id } = opts;
+  const send = makeBotSender(io, channel_id, user.id, '⏰ Cordyn Remind');
+
+  if (command !== 'remind') {
+    await send('❓ Nieznana komenda. Użyj: `/remind <czas> <treść>`'); return;
+  }
+  if (args.length < 2) {
+    await send('❌ Użycie: `/remind <czas> <treść>`\nFormaty: `30s`, `5m`, `2h`, `1d`'); return;
+  }
+
+  const timeMatch = args[0].match(/^(\d+)(s|m|h|d)$/i);
+  if (!timeMatch) { await send('❌ Nieprawidłowy format czasu. Przykłady: `30s` `5m` `2h` `1d`'); return; }
+
+  const amount = parseInt(timeMatch[1], 10);
+  const unit   = timeMatch[2].toLowerCase();
+  const msMap: Record<string, number> = { s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000 };
+  const ms     = amount * msMap[unit];
+
+  if (ms > 7 * 24 * 60 * 60_000) { await send('❌ Maksymalny czas to **7 dni**.'); return; }
+  if (ms < 5_000)                  { await send('❌ Minimalny czas to **5 sekund**.'); return; }
+
+  const message  = args.slice(1).join(' ');
+  const unitName = unit === 's' ? 'sekund' : unit === 'm' ? 'minut' : unit === 'h' ? 'godzin' : 'dni';
+  await send(`⏰ Okej **${user.username}**! Przypomnę Ci za **${amount} ${unitName}**: *${message}*`);
+
+  const reminderId = `${user.id}-${Date.now()}`;
+  const timer = setTimeout(async () => {
+    activeReminders.delete(reminderId);
+    const notify = makeBotSender(io, channel_id, user.id, '⏰ Cordyn Remind');
+    await notify(`🔔 **Przypomnienie dla ${user.username}!**\n${message}`);
+  }, ms);
+  activeReminders.set(reminderId, timer);
 }
 
 async function broadcastUserStatus(

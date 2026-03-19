@@ -271,6 +271,28 @@ export const AVAILABLE_BOTS: BotDefinition[] = [
       { name: 'poll', description: 'Utwórz ankietę z opcjami', usage: '/poll Pytanie | Opcja 1 | Opcja 2' },
     ],
   },
+  {
+    id: 'info',
+    name: 'Cordyn Info',
+    description: 'Informacje o serwerze i użytkownikach — statystyki, profile, ping.',
+    avatar: 'ℹ️',
+    category: 'Utility',
+    commands: [
+      { name: 'serverinfo', description: 'Pokaż statystyki serwera',          usage: '/serverinfo' },
+      { name: 'userinfo',   description: 'Pokaż profil użytkownika',          usage: '/userinfo [@użytkownik]' },
+      { name: 'ping',       description: 'Sprawdź opóźnienie bota',           usage: '/ping' },
+    ],
+  },
+  {
+    id: 'remind',
+    name: 'Cordyn Remind',
+    description: 'Ustawiaj przypomnienia — bot napisze do Ciebie na kanale gdy minie czas.',
+    avatar: '⏰',
+    category: 'Utility',
+    commands: [
+      { name: 'remind', description: 'Ustaw przypomnienie', usage: '/remind <czas> <treść>  np. /remind 30m Sprawdź piekarnik' },
+    ],
+  },
 ];
 
 // ── Bot API ──────────────────────────────────────────────────────────────

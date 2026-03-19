@@ -4147,7 +4147,8 @@ export default function App() {
 
   // App Settings
   const [appSettOpen, setAppSettOpen]         = useState(false);
-  const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'devices'|'privacy'|'locale'|'desktop'|'about'>('account');
+  const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'devices'|'privacy'|'locale'|'desktop'|'updates'|'about'>('account');
+  const [appVersion, setAppVersion]           = useState<string>('');
   const [autostartEnabled, setAutostartEnabled] = useState<boolean>(false);
   const [pushSubscribed, setPushSubscribed]     = useState<boolean>(false);
   // ── 2FA settings state ──
@@ -4437,22 +4438,12 @@ export default function App() {
   // ── Auto-update check (Tauri only) ──────────────────────────────
   const [updateAvailable, setUpdateAvailable] = useState<{version:string;body:string|null}|null>(null);
   const [updateInstalling, setUpdateInstalling] = useState(false);
-  // Hard-reload once after update to flush webview cache
-  useEffect(() => {
-    if (!isTauri) return;
-    try {
-      if (localStorage.getItem('cordyn_just_updated')) {
-        localStorage.removeItem('cordyn_just_updated');
-        window.location.reload();
-      }
-    } catch {}
-  }, []);
   useEffect(() => {
     if (!isTauri) return;
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
-    // Backoff: 1min → 5min → 15min → 30min (stays at 30min)
-    const retryDelays = [60_000, 5 * 60_000, 15 * 60_000, 30 * 60_000];
+    // Backoff: 10s → 2min → 10min → 30min (stays at 30min)
+    const retryDelays = [10_000, 2 * 60_000, 10 * 60_000, 30 * 60_000];
     let retryIdx = 0;
 
     const doCheck = async () => {
@@ -4480,6 +4471,14 @@ export default function App() {
       cancelled = true;
       if (retryTimer) clearTimeout(retryTimer);
     };
+  }, []);
+
+  // ── Read installed app version from Tauri ───────────────────────────
+  useEffect(() => {
+    if (!isTauri) return;
+    import('@tauri-apps/api/app').then(({ getVersion }) =>
+      getVersion().then(v => setAppVersion(v)).catch(() => {})
+    ).catch(() => {});
   }, []);
 
   // ── Push: sprawdź czy użytkownik już subskrybuje ────────────────────
@@ -4518,8 +4517,8 @@ export default function App() {
       const update = await check();
       if (update?.available) {
         await update.downloadAndInstall();
-        // Flag: on next startup do a hard reload to clear webview cache
-        try { localStorage.setItem('cordyn_just_updated', '1'); } catch {}
+        // relaunch() closes the old binary and starts the newly-installed one.
+        // The fresh process loads the new bundled assets — no extra reload needed.
         await relaunch();
       }
     } catch (e) {
@@ -8836,55 +8835,68 @@ export default function App() {
                                 <p className="text-sm italic text-zinc-600">Wiadomość została usunięta</p>
                               </div>
                             ) : msg.content?.startsWith('[POLL:') ? (() => {
-                              const pollIdMatch = msg.content.match(/^\[POLL:([^\]]+)\]/);
-                              const pollId = pollIdMatch?.[1];
-                              const poll = pollId ? polls.get(pollId) : null;
-                              if (!poll) {
+                              try {
+                                const pollIdMatch = msg.content.match(/^\[POLL:([^\]]+)\]/);
+                                const pollId = pollIdMatch?.[1];
+                                const poll = pollId ? polls.get(pollId) : null;
+                                if (!poll) {
+                                  return (
+                                    <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-4 max-w-xs">
+                                      <div className="flex items-center gap-2 text-zinc-600 text-xs">
+                                        <BarChart2 size={13}/>
+                                        <span>Ładowanie ankiety...</span>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                const totalVotes = poll.total_votes || 0;
+                                const pollOpts = poll.options ?? [];
+                                const pollVotes = poll.votes ?? {};
                                 return (
-                                  <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-4 max-w-xs">
-                                    <div className="flex items-center gap-2 text-zinc-600 text-xs">
+                                  <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-4 max-w-xs w-full">
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <BarChart2 size={14} className="text-indigo-400 shrink-0"/>
+                                      <p className="text-sm font-bold text-white">{poll.question}</p>
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                      {pollOpts.map(opt => {
+                                        const count = pollVotes[opt.id] || 0;
+                                        const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+                                        const voted = poll.my_votes?.includes(opt.id);
+                                        return (
+                                          <button key={opt.id}
+                                            onClick={async () => {
+                                              try {
+                                                const updated = voted
+                                                  ? await pollsApi.unvote(poll.id, opt.id)
+                                                  : await pollsApi.vote(poll.id, opt.id);
+                                                setPolls(p => new Map(p).set(poll.id, updated));
+                                              } catch {}
+                                            }}
+                                            className={`relative flex items-center gap-2 px-3 py-2 rounded-xl border text-left overflow-hidden transition-all ${
+                                              voted ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-white/[0.08] hover:border-white/[0.15] bg-white/[0.02]'}`}>
+                                            <div className="absolute inset-0 bg-indigo-500/10 origin-left transition-all duration-500"
+                                              style={{transform:`scaleX(${pct/100})`}}/>
+                                            <span className={`relative text-xs font-medium flex-1 ${voted ? 'text-indigo-300' : 'text-zinc-300'}`}>{opt.text}</span>
+                                            <span className="relative text-[10px] text-zinc-600 shrink-0">{pct}%</span>
+                                            {voted && <Check size={10} className="relative text-indigo-400 shrink-0"/>}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                    <p className="text-[10px] text-zinc-600 mt-2">{totalVotes} głosów</p>
+                                  </div>
+                                );
+                              } catch {
+                                return (
+                                  <div className="bg-white/[0.03] border border-rose-500/20 rounded-2xl p-4 max-w-xs">
+                                    <div className="flex items-center gap-2 text-rose-400 text-xs">
                                       <BarChart2 size={13}/>
-                                      <span>Ładowanie ankiety...</span>
+                                      <span>Nie można załadować ankiety</span>
                                     </div>
                                   </div>
                                 );
                               }
-                              const totalVotes = poll.total_votes || 0;
-                              return (
-                                <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-4 max-w-xs w-full">
-                                  <div className="flex items-center gap-2 mb-3">
-                                    <BarChart2 size={14} className="text-indigo-400 shrink-0"/>
-                                    <p className="text-sm font-bold text-white">{poll.question}</p>
-                                  </div>
-                                  <div className="flex flex-col gap-2">
-                                    {poll.options.map(opt => {
-                                      const count = poll.votes[opt.id] || 0;
-                                      const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
-                                      const voted = poll.my_votes?.includes(opt.id);
-                                      return (
-                                        <button key={opt.id}
-                                          onClick={async () => {
-                                            try {
-                                              const updated = voted
-                                                ? await pollsApi.unvote(poll.id, opt.id)
-                                                : await pollsApi.vote(poll.id, opt.id);
-                                              setPolls(p => new Map(p).set(poll.id, updated));
-                                            } catch {}
-                                          }}
-                                          className={`relative flex items-center gap-2 px-3 py-2 rounded-xl border text-left overflow-hidden transition-all ${
-                                            voted ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-white/[0.08] hover:border-white/[0.15] bg-white/[0.02]'}`}>
-                                          <div className="absolute inset-0 bg-indigo-500/10 origin-left transition-all duration-500"
-                                            style={{transform:`scaleX(${pct/100})`}}/>
-                                          <span className={`relative text-xs font-medium flex-1 ${voted ? 'text-indigo-300' : 'text-zinc-300'}`}>{opt.text}</span>
-                                          <span className="relative text-[10px] text-zinc-600 shrink-0">{pct}%</span>
-                                          {voted && <Check size={10} className="relative text-indigo-400 shrink-0"/>}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                  <p className="text-[10px] text-zinc-600 mt-2">{totalVotes} głosów</p>
-                                </div>
-                              );
                             })() : (
                               <div className={`relative px-4 py-2.5 rounded-2xl max-w-full ${isOwn
                                 ? 'bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-lg shadow-indigo-500/20 bubble-tail-right'
@@ -11143,8 +11155,9 @@ export default function App() {
                     {id:'devices',    label:t('settings.devices'),    icon:<Mic size={14}/>},
                     {id:'privacy',    label:t('settings.privacy'),    icon:<Shield size={14}/>},
                     {id:'locale',     label:t('settings.locale'),     icon:<Globe size={14}/>},
-                    ...(isTauri ? [{id:'desktop' as const, label:'Aplikacja', icon:<Monitor size={14}/>}] : []),
-                    ...(isTauri ? [{id:'about' as const, label:'O aplikacji', icon:<Info size={14}/>}] : []),
+                    ...(isTauri ? [{id:'desktop'  as const, label:'Aplikacja',   icon:<Monitor size={14}/>}] : []),
+                    ...(isTauri ? [{id:'updates'  as const, label:'Aktualizacje', icon:<Download size={14}/>}] : []),
+                    ...(isTauri ? [{id:'about'    as const, label:'O aplikacji',  icon:<Info size={14}/>}] : []),
                   ] as const).map(tab=>(
                     <button key={tab.id} onClick={()=>setAppSettTab(tab.id)}
                       className={`flex items-center gap-2 px-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all text-left shrink-0 ${
@@ -11721,6 +11734,63 @@ export default function App() {
                   )}
 
                   {/* ─── O APLIKACJI (tylko desktop) ─── */}
+                  {appSettTab==='updates'&&isTauri&&(
+                    <motion.div key="updates" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
+                      className="flex flex-col gap-5">
+                      <h3 className="text-sm font-bold text-white">Aktualizacje</h3>
+
+                      {/* Version info */}
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                          <span className="text-sm text-zinc-400">Zainstalowana wersja</span>
+                          <span className="text-sm font-mono text-zinc-200">v{appVersion || '…'}</span>
+                        </div>
+                        <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                          <span className="text-sm text-zinc-400">Najnowsza wersja</span>
+                          {updateAvailable
+                            ? <span className="text-sm font-mono text-emerald-400 font-semibold">v{updateAvailable.version} — dostępna!</span>
+                            : <span className="text-sm font-mono text-zinc-500">brak aktualizacji</span>}
+                        </div>
+                      </div>
+
+                      {/* Status banner */}
+                      {updateAvailable ? (
+                        <div className="flex items-start gap-3 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                            <Download size={15} className="text-emerald-400"/>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-emerald-300">Aktualizacja gotowa</p>
+                            <p className="text-xs text-zinc-400 mt-0.5">v{appVersion || '?'} → v{updateAvailable.version}</p>
+                            {updateAvailable.body && (
+                              <p className="text-xs text-zinc-500 mt-1.5 leading-relaxed">{updateAvailable.body}</p>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3 p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                          <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
+                            <Check size={15} className="text-indigo-400"/>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-zinc-300">Masz najnowszą wersję</p>
+                            <p className="text-xs text-zinc-500 mt-0.5">Cordyn sprawdza aktualizacje automatycznie w tle</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Install button */}
+                      {updateAvailable && (
+                        <button onClick={installUpdate} disabled={updateInstalling}
+                          className="w-full py-2.5 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20">
+                          {updateInstalling
+                            ? <><Loader2 size={14} className="animate-spin"/>Instalowanie…</>
+                            : <><Download size={14}/>Zainstaluj v{updateAvailable.version}</>}
+                        </button>
+                      )}
+                    </motion.div>
+                  )}
+
                   {appSettTab==='about'&&isTauri&&(
                     <motion.div key="about" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
                       className="flex flex-col gap-6">
@@ -11735,7 +11805,7 @@ export default function App() {
                       <div className="flex flex-col gap-3">
                         <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                           <span className="text-sm text-zinc-400">Wersja</span>
-                          <span className="text-sm font-mono text-indigo-300">{updateAvailable ? `v${updateAvailable.version} → dostępna` : 'v0.1.30'}</span>
+                          <span className="text-sm font-mono text-indigo-300">{appVersion ? `v${appVersion}` : '…'}{updateAvailable ? ` → v${updateAvailable.version} dostępna` : ''}</span>
                         </div>
                         <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                           <span className="text-sm text-zinc-400">Platforma</span>
