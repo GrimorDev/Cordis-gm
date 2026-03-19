@@ -121,14 +121,16 @@ router.get('/channel/:channelId', authMiddleware, async (req: AuthRequest, res: 
     const { rows } = await query(sql, params);
     const result = rows.reverse();
 
-    // Populate cache only for the default latest-50 request
+    // Populate cache only for the default latest-50 request (without reactions — user-specific)
     if (!before && limit === 50) {
       try {
         await redis.setex(cacheKey, 10, JSON.stringify(result));
       } catch { /* ignore Redis write errors */ }
     }
 
-    return res.json(result);
+    // Attach reactions — single batch query, user-specific "mine" field excluded from cache
+    const withReactions = await attachReactions(result, req.user!.id);
+    return res.json(withReactions);
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -357,14 +359,56 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// ── Reaction helpers ──────────────────────────────────────────────────────
+
+async function attachReactions(messages: any[], userId: string) {
+  if (!messages.length) return messages;
+  const ids = messages.map(m => m.id);
+  const { rows } = await query(
+    `SELECT message_id, emoji,
+            COUNT(*)::int              AS count,
+            BOOL_OR(user_id = $2)      AS mine
+     FROM message_reactions
+     WHERE message_id = ANY($1::uuid[])
+     GROUP BY message_id, emoji
+     ORDER BY MIN(created_at)`,
+    [ids, userId]
+  );
+  const map = new Map<string, {emoji:string;count:number;mine:boolean}[]>();
+  for (const r of rows) {
+    if (!map.has(r.message_id)) map.set(r.message_id, []);
+    map.get(r.message_id)!.push({ emoji: r.emoji, count: r.count, mine: r.mine });
+  }
+  return messages.map(m => ({ ...m, reactions: map.get(m.id) ?? [] }));
+}
+
+async function broadcastReactionUpdate(req: any, messageId: string, emoji: string) {
+  const { rows: [msg] } = await query('SELECT channel_id FROM messages WHERE id=$1', [messageId]);
+  if (!msg) return;
+  const { rows: [count] } = await query(
+    `SELECT COUNT(*)::int AS cnt, BOOL_OR(user_id=$2) AS mine
+     FROM message_reactions WHERE message_id=$1 AND emoji=$3`,
+    [messageId, req.user.id, emoji]
+  );
+  const io = req.app.get('io');
+  io?.to(`channel:${msg.channel_id}`).emit('reaction_update', {
+    message_id: messageId,
+    emoji,
+    count: count?.cnt ?? 0,
+    mine: count?.mine ?? false,
+    user_id: req.user.id,
+  });
+}
+
 // POST /api/messages/:id/reactions
 router.post('/:id/reactions', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { emoji } = req.body;
-  if (!emoji) return res.status(400).json({ error: 'Emoji required' });
+  if (!emoji || emoji.length > 12) return res.status(400).json({ error: 'Emoji required' });
   try {
     await query('INSERT INTO message_reactions (message_id,user_id,emoji) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
       [req.params.id, req.user!.id, emoji]);
-    return res.json({ message: 'Reaction added' });
+    await broadcastReactionUpdate(req, req.params.id, emoji);
+    return res.json({ ok: true });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
@@ -373,7 +417,8 @@ router.delete('/:id/reactions/:emoji', authMiddleware, async (req: AuthRequest, 
   try {
     await query('DELETE FROM message_reactions WHERE message_id=$1 AND user_id=$2 AND emoji=$3',
       [req.params.id, req.user!.id, req.params.emoji]);
-    return res.json({ message: 'Reaction removed' });
+    await broadcastReactionUpdate(req, req.params.id, req.params.emoji);
+    return res.json({ ok: true });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 

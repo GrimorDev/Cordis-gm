@@ -1610,6 +1610,16 @@ const BADGE_ICON_MAP: Record<string, LucideIcon> = {
 };
 const getBadgeIcon = (name: string): LucideIcon => BADGE_ICON_MAP[name] ?? Award;
 
+const BOT_ICON_MAP: Record<string, LucideIcon> = {
+  music:     Music,
+  fun:       Gamepad2,
+  moderacja: Hammer,
+  polls:     BarChart2,
+  info:      Info,
+  remind:    Bell,
+};
+const getBotIcon = (botId: string): LucideIcon => BOT_ICON_MAP[botId] ?? Bot;
+
 // ─── Server Settings Page ─────────────────────────────────────────────────────
 // ─── Emoji Tab (osobny komponent — hooks muszą być w komponentach, nie w IIFE) ──
 function EmojiTab({ serverId, initialEmojis, canManage, gi }: {
@@ -3863,6 +3873,7 @@ export default function App() {
   const [sending, setSending]                 = useState(false);
   const [sendError, setSendError]             = useState('');
   const [replyTo, setReplyTo]                 = useState<MessageFull|DmMessageFull|null>(null);
+  const [hoveredMsgId, setHoveredMsgId]       = useState<string|null>(null);
   const [editingMsgId, setEditingMsgId]       = useState<string|null>(null);
   const [editingMsgContent, setEditingMsgContent] = useState('');
   const [attachFile, setAttachFile]           = useState<File|null>(null);
@@ -4533,6 +4544,7 @@ export default function App() {
     const sock = connectSocket();
     sock.on('new_message', (msg: any) => {
       const chId = msg.channel_id;
+      const isOwnMsg = msg.sender_id === currentUserRef.current?.id;
       // Also route to voice chat messages if the call is on this channel
       if (chId && activeCallRef.current?.channelId === chId) {
         setVoiceChatMsgs(p => p.some(m => m.id === msg.id) ? p : [...p, msg as MessageFull]);
@@ -4540,8 +4552,12 @@ export default function App() {
       if (chId && chId !== prevChRef.current) {
         // Message in a channel we're not viewing — increment unread count
         setUnreadChs(p => ({ ...p, [chId]: (p[chId] || 0) + 1 }));
+        // Play notification sound for messages from others
+        if (!isOwnMsg) playNotifSound();
       } else {
         setChannelMsgs(p => [...p, msg as MessageFull]);
+        // Sound also for current channel messages from others (when tab is in background)
+        if (!isOwnMsg && document.hidden) playNotifSound();
       }
     });
     sock.on('new_dm', (msg: DmMessageFull) => {
@@ -4895,6 +4911,14 @@ export default function App() {
         setActiveServer(null); setServerFull(null); setActiveView('dms');
       }
     });
+    sock.on('reaction_update' as any, ({ message_id, emoji, count, mine }: any) => {
+      setChannelMsgs(p => p.map(m => {
+        if (m.id !== message_id) return m;
+        const existing = (m.reactions ?? []).filter(r => r.emoji !== emoji);
+        return { ...m, reactions: count > 0 ? [...existing, { emoji, count, mine }] : existing };
+      }));
+    });
+
     sock.on('message_pinned' as any, ({ channel_id, message_id, pinned }: any) => {
       setChannelMsgs(p => p.map(m => m.id === message_id ? { ...m, pinned } : m));
       setPinnedMsgs(p => pinned
@@ -5174,6 +5198,21 @@ export default function App() {
 
   // Scroll smoothly on new incoming messages/typing indicator
   // Scroll helper
+  // ── Subtle notification ping (Web Audio API — no file needed) ──────────
+  const playNotifSound = () => {
+    try {
+      const ctx = new AudioContext();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type = 'sine'; o.frequency.value = 880;
+      g.gain.setValueAtTime(0.08, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
+      o.start(); o.stop(ctx.currentTime + 0.25);
+      setTimeout(() => ctx.close(), 400);
+    } catch { /* ignore — may be blocked in some contexts */ }
+  };
+
   const scrollToBottom = (smooth = false) => {
     const el = msgScrollRef.current;
     if (!el) return;
@@ -5722,6 +5761,19 @@ export default function App() {
   }, [msgInput]);
 
   // ── Send message ────────────────────────────────────────────────
+  const toggleReaction = async (msgId: string, emoji: string) => {
+    const msg = channelMsgs.find(m => m.id === msgId);
+    if (!msg) return;
+    const existing = msg.reactions?.find(r => r.emoji === emoji);
+    try {
+      if (existing?.mine) {
+        await messagesApi.removeReaction(msgId, emoji);
+      } else {
+        await messagesApi.addReaction(msgId, emoji);
+      }
+    } catch { /* socket event will update state */ }
+  };
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     const content = msgInput.trim();
@@ -8929,12 +8981,40 @@ export default function App() {
                                 )}
                               </div>
                             )}
+
+                            {/* Reaction pills */}
+                            {activeView==='servers' && (() => {
+                              const rxns = (msg as MessageFull).reactions;
+                              if (!rxns?.length) return null;
+                              return (
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {rxns.map(r => (
+                                    <button key={r.emoji}
+                                      onMouseDown={e=>{e.preventDefault();toggleReaction(msg.id,r.emoji);}}
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-all hover:scale-105 active:scale-95 select-none ${
+                                        r.mine
+                                          ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300'
+                                          : 'bg-white/[0.05] border-white/[0.1] text-zinc-400 hover:border-white/[0.2]'
+                                      }`}>
+                                      <span>{r.emoji}</span>
+                                      <span className="font-semibold text-[11px]">{r.count}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              );
+                            })()}
                           </div>
                           </>); })()}
 
                           {/* Hover actions */}
                           {editingMsgId !== msg.id && !((msg as any).deleted || msg.content === '__deleted__') && (
                           <div className={`flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 self-center`}>
+                            {/* Quick reactions */}
+                            {activeView==='servers' && (['👍','❤️','😂','🔥'].map(em => (
+                              <button key={em} onMouseDown={e=>{e.preventDefault();toggleReaction(msg.id,em);}}
+                                className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/[0.1] text-xs transition-all hover:scale-110 active:scale-95"
+                                title={em}>{em}</button>
+                            )))}
                             <button onClick={()=>setReplyTo(msg)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/[0.1] text-zinc-600 hover:text-zinc-300 transition-colors" title="Odpowiedz"><Reply size={11}/></button>
                             {isOwn&&<button onClick={()=>startEditMsg(msg)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/[0.1] text-zinc-600 hover:text-zinc-300 transition-colors" title="Edytuj"><Edit3 size={11}/></button>}
                             {activeView==='servers'&&canPinMessages&&activeCh?.type==='text'&&(
@@ -9093,7 +9173,7 @@ export default function App() {
                             <button key={`${cmd.botId}-${cmd.name}`} type="button"
                               onMouseDown={e=>{e.preventDefault(); insertSlash(cmd);}}
                               className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors ${i === slashSel ? 'bg-violet-500/15' : 'hover:bg-white/[0.04]'}`}>
-                              <span className="text-lg shrink-0 select-none">{cmd.botAvatar}</span>
+                              {(() => { const BotIco = getBotIcon(cmd.botId); return <div className="w-7 h-7 rounded-lg bg-violet-500/15 flex items-center justify-center shrink-0"><BotIco size={14} className="text-violet-300"/></div>; })()}
                               <div className="flex-1 min-w-0 text-left">
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm font-bold text-white font-mono">/{cmd.name}</span>
@@ -9503,9 +9583,7 @@ export default function App() {
                           return (
                           <div key={inst.bot_id} className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-violet-500/5 transition-all cursor-default">
                             <div className="relative shrink-0">
-                              <div className="w-10 h-10 rounded-xl bg-violet-500/15 border border-violet-500/20 flex items-center justify-center text-xl select-none">
-                                {def!.avatar}
-                              </div>
+                              {(() => { const BotIco = getBotIcon(def!.id); return <div className="w-10 h-10 rounded-xl bg-violet-500/15 border border-violet-500/20 flex items-center justify-center"><BotIco size={18} className="text-violet-300"/></div>; })()}
                               {/* always-online green dot */}
                               <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[#1a1a2e]"/>
                             </div>
@@ -10043,9 +10121,7 @@ export default function App() {
                   return (
                     <div key={bot.id} className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4 hover:border-violet-500/20 transition-all">
                       <div className="flex items-start gap-3.5">
-                        <div className="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-2xl shrink-0 select-none">
-                          {bot.avatar}
-                        </div>
+                        {(() => { const BotIco = getBotIcon(bot.id); return <div className="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0"><BotIco size={22} className="text-violet-300"/></div>; })()}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap mb-0.5">
                             <h3 className="font-bold text-white text-sm">{bot.name}</h3>
@@ -10119,7 +10195,7 @@ export default function App() {
                     if (!bot) return null;
                     return (
                       <div key={inst.bot_id} className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4 flex items-center gap-3.5">
-                        <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-xl shrink-0 select-none">{bot.avatar}</div>
+                        {(() => { const BotIco = getBotIcon(bot.id); return <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0"><BotIco size={18} className="text-violet-300"/></div>; })()}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-0.5">
                             <p className="font-semibold text-white text-sm">{bot.name}</p>

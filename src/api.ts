@@ -115,6 +115,7 @@ export interface ServerBan {
   user_id: string; username: string; avatar_url?: string | null;
   reason?: string | null; created_at: string; banned_by_username?: string | null;
 }
+export interface MsgReaction { emoji: string; count: number; mine: boolean; }
 export interface MessageFull {
   id: string; channel_id: string; content: string; edited: boolean;
   created_at: string; updated_at: string;
@@ -126,6 +127,7 @@ export interface MessageFull {
   sender_role_color?: string | null;
   sender_avatar_effect?: string | null;
   pinned?: boolean;
+  reactions?: MsgReaction[];
 }
 export interface DmConversation {
   id: string; created_at: string;
