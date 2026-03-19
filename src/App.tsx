@@ -3873,7 +3873,7 @@ export default function App() {
   const [sending, setSending]                 = useState(false);
   const [sendError, setSendError]             = useState('');
   const [replyTo, setReplyTo]                 = useState<MessageFull|DmMessageFull|null>(null);
-  const [hoveredMsgId, setHoveredMsgId]       = useState<string|null>(null);
+  const [msgMenuId, setMsgMenuId]             = useState<string|null>(null);
   const [editingMsgId, setEditingMsgId]       = useState<string|null>(null);
   const [editingMsgContent, setEditingMsgContent] = useState('');
   const [attachFile, setAttachFile]           = useState<File|null>(null);
@@ -8762,7 +8762,7 @@ export default function App() {
                         <motion.div
                           initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: Math.min(idx * 0.01, 0.06), type: 'spring', stiffness: 340, damping: 28 }}
-                          className={`flex ${showChatAvatars?'gap-2.5':'gap-0'} group ${compactMessages?'mb-0.5':'mb-1.5'} ${isOwn?'flex-row-reverse':'flex-row'} ${mentionsMe?'rounded-xl bg-amber-400/5 border-l-2 border-amber-400/60 pl-2 -ml-2':''}`}>
+                          className={`relative flex ${showChatAvatars?'gap-2.5':'gap-0'} group ${compactMessages?'mb-0.5':'mb-1.5'} ${isOwn?'flex-row-reverse':'flex-row'} ${mentionsMe?'rounded-xl bg-amber-400/5 border-l-2 border-amber-400/60 pl-2 -ml-2':''}`}>
 
                           {/* Avatar */}
                           {(()=>{
@@ -8987,17 +8987,17 @@ export default function App() {
                               const rxns = (msg as MessageFull).reactions;
                               if (!rxns?.length) return null;
                               return (
-                                <div className="flex flex-wrap gap-1 mt-1">
+                                <div className="flex flex-wrap gap-1.5 mt-1.5">
                                   {rxns.map(r => (
                                     <button key={r.emoji}
                                       onMouseDown={e=>{e.preventDefault();toggleReaction(msg.id,r.emoji);}}
-                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-all hover:scale-105 active:scale-95 select-none ${
+                                      className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-lg text-xs font-medium border transition-all hover:scale-105 active:scale-95 select-none ${
                                         r.mine
-                                          ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300'
-                                          : 'bg-white/[0.05] border-white/[0.1] text-zinc-400 hover:border-white/[0.2]'
+                                          ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-200'
+                                          : 'bg-white/[0.07] border-white/[0.1] text-zinc-300 hover:bg-white/[0.12] hover:border-white/[0.2]'
                                       }`}>
-                                      <span>{r.emoji}</span>
-                                      <span className="font-semibold text-[11px]">{r.count}</span>
+                                      <span className="text-sm leading-none">{r.emoji}</span>
+                                      <span>{r.count}</span>
                                     </button>
                                   ))}
                                 </div>
@@ -9006,46 +9006,77 @@ export default function App() {
                           </div>
                           </>); })()}
 
-                          {/* Hover actions */}
+                          {/* ── Discord-style floating action bar ───────────── */}
                           {editingMsgId !== msg.id && !((msg as any).deleted || msg.content === '__deleted__') && (
-                          <div className={`flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 self-center`}>
-                            {/* Quick reactions */}
-                            {activeView==='servers' && (['👍','❤️','😂','🔥'].map(em => (
-                              <button key={em} onMouseDown={e=>{e.preventDefault();toggleReaction(msg.id,em);}}
-                                className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/[0.1] text-xs transition-all hover:scale-110 active:scale-95"
-                                title={em}>{em}</button>
-                            )))}
-                            <button onClick={()=>setReplyTo(msg)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/[0.1] text-zinc-600 hover:text-zinc-300 transition-colors" title="Odpowiedz"><Reply size={11}/></button>
-                            {isOwn&&<button onClick={()=>startEditMsg(msg)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/[0.1] text-zinc-600 hover:text-zinc-300 transition-colors" title="Edytuj"><Edit3 size={11}/></button>}
-                            {activeView==='servers'&&canPinMessages&&activeCh?.type==='text'&&(
-                              <button onClick={()=>{const pinned=!(msg as MessageFull).pinned;handlePinMessage(msg.id,pinned);}} title={(msg as MessageFull).pinned?'Odepnij':'Przypnij'}
-                                className={`w-6 h-6 flex items-center justify-center rounded-lg transition-colors ${(msg as MessageFull).pinned?'text-amber-400 hover:bg-amber-500/10':'text-zinc-600 hover:bg-white/[0.1] hover:text-amber-400'}`}>
-                                <Pin size={10}/>
-                              </button>
-                            )}
-                            {activeView==='dms' && (
-                              <button
-                                onClick={async () => {
-                                  const isPinned = !!(msg as any).pinned;
-                                  try {
-                                    await dmPinApi.pin(msg.id);
-                                    const newPinned = !isPinned;
-                                    setDmMsgs(p => p.map(m => m.id === msg.id ? {...m, pinned: newPinned} : m));
-                                    if (newPinned) {
-                                      setDmPinnedMsgs(p => [msg as DmMessageFull, ...p.filter(x => x.id !== msg.id)]);
-                                    } else {
-                                      setDmPinnedMsgs(p => p.filter(x => x.id !== msg.id));
-                                    }
-                                  } catch {}
-                                }}
-                                title={(msg as any).pinned ? 'Odepnij' : 'Przypnij'}
-                                className={`w-6 h-6 flex items-center justify-center rounded-lg transition-colors ${(msg as any).pinned ? 'text-amber-400 hover:bg-amber-500/10' : 'text-zinc-600 hover:bg-white/[0.1] hover:text-amber-400'}`}>
-                                <Pin size={10}/>
-                              </button>
-                            )}
-                            {(isOwn||(activeView==='servers'&&canManageMessages))&&(
-                              <button onClick={()=>confirmAction('Usunąć wiadomość?', () => { if(activeView==='servers') messagesApi.delete(msg.id).catch(console.error); else dmsApi.deleteMessage(msg.id).catch(console.error); })} title="Usuń" className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-rose-500/10 text-zinc-600 hover:text-rose-400 transition-colors"><Trash2 size={11}/></button>
-                            )}
+                          <div className="absolute -top-9 right-2 z-40 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all duration-150">
+                            <div className="flex items-center bg-[#1a1a2e] border border-white/[0.1] rounded-xl shadow-2xl overflow-visible">
+                              {/* Quick reactions — servers only */}
+                              {activeView==='servers' && <>
+                                {['👍','❤️','😂','🔥'].map(em => (
+                                  <button key={em} onMouseDown={e=>{e.preventDefault();toggleReaction(msg.id,em);}}
+                                    className="w-8 h-8 flex items-center justify-center text-sm hover:bg-white/[0.08] rounded-lg transition-all hover:scale-110 active:scale-95"
+                                    title={em}>{em}</button>
+                                ))}
+                                <div className="w-px h-5 bg-white/[0.1] mx-0.5 shrink-0"/>
+                              </>}
+                              {/* Reply */}
+                              <button onClick={()=>setReplyTo(msg)}
+                                className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.08] rounded-lg transition-colors"
+                                title="Odpowiedz"><Reply size={13}/></button>
+                              {/* More "…" */}
+                              <div className="relative">
+                                <button onClick={e=>{e.stopPropagation();setMsgMenuId(prev=>prev===msg.id?null:msg.id);}}
+                                  className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.08] rounded-lg transition-colors"
+                                  title="Więcej"><MoreHorizontal size={13}/></button>
+                                {msgMenuId===msg.id&&(<>
+                                  <div className="fixed inset-0 z-[49]" onClick={()=>setMsgMenuId(null)}/>
+                                  <div className="absolute top-full right-0 mt-1 z-[50] bg-[#16161f] border border-white/[0.1] rounded-xl shadow-2xl py-1 w-48"
+                                    onClick={e=>e.stopPropagation()}>
+                                    {isOwn&&activeView==='servers'&&(
+                                      <button onClick={()=>{startEditMsg(msg);setMsgMenuId(null);}}
+                                        className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors">
+                                        <Edit3 size={13}/> Edytuj
+                                      </button>
+                                    )}
+                                    <button onClick={()=>{setReplyTo(msg);setMsgMenuId(null);}}
+                                      className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors">
+                                      <Reply size={13}/> Odpowiedz
+                                    </button>
+                                    <button onClick={()=>{try{navigator.clipboard.writeText(msg.content);}catch{}addToast('Skopiowano tekst','success');setMsgMenuId(null);}}
+                                      className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors">
+                                      <Copy size={13}/> Kopiuj tekst
+                                    </button>
+                                    {activeView==='servers'&&canPinMessages&&activeCh?.type==='text'&&(
+                                      <button onClick={()=>{handlePinMessage(msg.id,!(msg as MessageFull).pinned);setMsgMenuId(null);}}
+                                        className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-sm transition-colors ${(msg as MessageFull).pinned?'text-amber-400 hover:bg-amber-500/10':'text-zinc-300 hover:bg-white/[0.06] hover:text-white'}`}>
+                                        <Pin size={13}/> {(msg as MessageFull).pinned?'Odepnij':'Przypnij'}
+                                      </button>
+                                    )}
+                                    {activeView==='dms'&&(
+                                      <button onClick={async()=>{
+                                        try{
+                                          await dmPinApi.pin(msg.id);
+                                          const np=!(msg as any).pinned;
+                                          setDmMsgs(p=>p.map(m=>m.id===msg.id?{...m,pinned:np}:m));
+                                          if(np) setDmPinnedMsgs(p=>[msg as DmMessageFull,...p.filter(x=>x.id!==msg.id)]);
+                                          else setDmPinnedMsgs(p=>p.filter(x=>x.id!==msg.id));
+                                        }catch{}
+                                        setMsgMenuId(null);
+                                      }} className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-sm transition-colors ${(msg as any).pinned?'text-amber-400 hover:bg-amber-500/10':'text-zinc-300 hover:bg-white/[0.06] hover:text-white'}`}>
+                                        <Pin size={13}/> {(msg as any).pinned?'Odepnij':'Przypnij'}
+                                      </button>
+                                    )}
+                                    {(isOwn||(activeView==='servers'&&canManageMessages))&&(<>
+                                      <div className="w-full h-px bg-white/[0.06] my-1"/>
+                                      <button onClick={()=>{confirmAction('Usunąć wiadomość?',()=>{if(activeView==='servers') messagesApi.delete(msg.id).catch(console.error); else dmsApi.deleteMessage(msg.id).catch(console.error);});setMsgMenuId(null);}}
+                                        className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors">
+                                        <Trash2 size={13}/> Usuń wiadomość
+                                      </button>
+                                    </>)}
+                                  </div>
+                                </>)}
+                              </div>
+                            </div>
                           </div>
                           )}
                         </motion.div>
