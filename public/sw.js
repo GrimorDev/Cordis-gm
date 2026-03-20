@@ -23,9 +23,11 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  // Only cache GET requests; skip API/socket calls
+  // Only cache GET requests; skip API/socket calls and non-HTTP(S) schemes
   if (request.method !== 'GET') return;
+  if (!request.url.startsWith('http://') && !request.url.startsWith('https://')) return;
   if (request.url.includes('/api/') || request.url.includes('/socket.io/')) return;
+  if (request.url.includes('/api/stream/')) return; // never cache audio streams
 
   event.respondWith(
     caches.match(request).then((cached) => {

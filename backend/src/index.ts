@@ -133,12 +133,37 @@ app.use('/api/servers/:serverId/bots', botsRoutes);
 // ── Music audio proxy stream ──────────────────────────────────────────────────
 // Streams the current music bot audio for a voice channel.
 // Uses ffmpeg to transcode from the yt-dlp direct URL, seeking to the correct position.
+// If directUrl was not cached during /play (yt-dlp was slow/failed), gets it on demand.
 // No auth required — audio is not sensitive and channel IDs are already known to members.
-app.get('/api/stream/:channelId', (req, res) => {
+app.get('/api/stream/:channelId', async (req, res) => {
   const state = musicStates.get(req.params.channelId);
-  if (!state?.playing || !state.directUrl) {
+  if (!state?.playing || !state.url) {
     return res.status(404).json({ error: 'No music playing on this channel' });
   }
+
+  // Get (or refresh) the direct CDN audio URL
+  let directUrl = state.directUrl;
+  if (!directUrl) {
+    try {
+      directUrl = await new Promise<string>((resolve, reject) => {
+        const proc = spawn('yt-dlp', ['--no-playlist', '-f', 'bestaudio', '--get-url', state.url!]);
+        let out = '';
+        proc.stdout.on('data', (d: Buffer) => { out += d.toString(); });
+        proc.stderr.on('data', () => {});
+        proc.on('close', (code) => {
+          const url = out.trim().split('\n')[0];
+          if (code === 0 && url) resolve(url);
+          else reject(new Error('yt-dlp --get-url failed'));
+        });
+      });
+      state.directUrl = directUrl; // cache for subsequent requests
+    } catch (err) {
+      console.error('[stream] yt-dlp failed:', err);
+      return res.status(503).json({ error: 'Could not obtain audio stream URL' });
+    }
+  }
+
+  if (!directUrl) return res.status(503).json({ error: 'No audio URL available' });
 
   const elapsed = state.started_at
     ? Math.max(0, Math.floor((Date.now() - state.started_at) / 1000) - 2)
@@ -156,7 +181,7 @@ app.get('/api/stream/:channelId', (req, res) => {
   ];
   if (elapsed > 5) ffmpegArgs.push('-ss', String(elapsed));
   ffmpegArgs.push(
-    '-i', state.directUrl,
+    '-i', directUrl,
     '-vn', '-f', 'mp3', '-ar', '44100', '-ab', '192k',
     '-loglevel', 'error',
     'pipe:1'

@@ -5707,10 +5707,24 @@ export default function App() {
     if (audioStreamSrc) {
       audio.src = audioStreamSrc;
       audio.volume = musicVolume / 100;
+      // onerror fires when the src returns 4xx/5xx (server still fetching directUrl)
+      audio.onerror = () => {
+        // Retry after 3 s — backend may still be running yt-dlp to get the stream URL
+        setTimeout(() => {
+          if (musicAudioRef.current && musicAudioRef.current.src === audioStreamSrc) {
+            musicAudioRef.current.load();
+            musicAudioRef.current.play()
+              .then(() => setMusicAutoplayBlocked(false))
+              .catch(() => setMusicAutoplayBlocked(true));
+          }
+        }, 3000);
+        setMusicAutoplayBlocked(true); // show "kliknij" while waiting
+      };
       audio.play().then(() => setMusicAutoplayBlocked(false)).catch(() => setMusicAutoplayBlocked(true));
     } else {
       audio.pause();
       audio.src = '';
+      audio.onerror = null;
       setMusicAutoplayBlocked(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -9549,8 +9563,7 @@ export default function App() {
                     {music.queue.length > 0 && <p className="text-[10px] text-zinc-500 mt-0.5">w kolejce: {music.queue.length}</p>}
                   </div>
                 </div>
-                {/* Hidden audio element — managed via musicAudioRef + useEffect above */}
-                <audio ref={musicAudioRef} style={{ display: 'none' }} preload="none"/>
+                {/* audio element mounted at top-level below — always present so ref is never null */}
                 {/* Visual: thumbnail */}
                 {music.thumbnail && (
                   <div className="relative rounded-xl overflow-hidden mb-2" style={{height:80}}>
@@ -9559,7 +9572,12 @@ export default function App() {
                       {musicAutoplayBlocked ? (
                         <button
                           onClick={() => {
-                            musicAudioRef.current?.play()
+                            const audio = musicAudioRef.current;
+                            if (!audio) return;
+                            // Reload src in case it was a 404 that has since resolved
+                            if (audioStreamSrc && audio.src !== audioStreamSrc) audio.src = audioStreamSrc;
+                            audio.load();
+                            audio.play()
                               .then(() => setMusicAutoplayBlocked(false))
                               .catch(() => setMusicAutoplayBlocked(true));
                           }}
@@ -12941,6 +12959,9 @@ export default function App() {
           );
         })()}
       </AnimatePresence>
+
+      {/* ── Music audio element — always mounted so musicAudioRef is never null ── */}
+      <audio ref={musicAudioRef} style={{ display: 'none' }} preload="none"/>
 
       {/* ── Hover card ── */}
       {hoverCard && (<>
