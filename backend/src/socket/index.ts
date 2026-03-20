@@ -99,12 +99,15 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
     // Join personal room for DMs and notifications
     socket.join(`user:${user.id}`);
 
-    // Update status to online
-    await setUserStatus(user.id, 'online');
-    await query('UPDATE users SET status = $1 WHERE id = $2', ['online', user.id]);
+    // Restore status from DB — only override 'offline' back to 'online'.
+    // Manual statuses (idle, dnd) are preserved across reconnects.
+    const { rows: [storedUser] } = await query('SELECT status FROM users WHERE id=$1', [user.id]);
+    const connectStatus = (!storedUser?.status || storedUser.status === 'offline') ? 'online' : storedUser.status;
+    await setUserStatus(user.id, connectStatus);
+    await query('UPDATE users SET status = $1 WHERE id = $2', [connectStatus, user.id]);
 
     // Notify user's servers about status change
-    await broadcastUserStatus(io, user.id, 'online');
+    await broadcastUserStatus(io, user.id, connectStatus);
 
     // Join server rooms the user belongs to
     const { rows: servers } = await query(

@@ -1,5 +1,6 @@
 import express from 'express';
 import http from 'http';
+import https from 'https';
 import cors from 'cors';
 import { spawn } from 'child_process';
 import helmet from 'helmet';
@@ -131,58 +132,54 @@ app.use('/api/servers/:serverId/automations', automationsRoutes);
 app.use('/api/servers/:serverId/bots', botsRoutes);
 
 // ── Music audio stream proxy ──────────────────────────────────────────────────
-// Pipes audio to the client via yt-dlp → ffmpeg transcoding.
-// YouTube CDN URLs are CORS-restricted and cannot be used directly in <audio> elements.
-// This endpoint acts as the proxy so the browser can always load the audio.
+// Proxies the YouTube CDN audio URL through our server to bypass browser CORS restrictions.
+// The directUrl is fetched once by yt-dlp in the socket music handler and cached in state.
+// This endpoint just forwards the bytes — no ffmpeg, instant start.
 // No auth required — audio is not sensitive and channel IDs are already known to members.
-app.get('/api/stream/:channelId', (req, res) => {
+app.get('/api/stream/:channelId', async (req, res) => {
   const state = musicStates.get(req.params.channelId);
-  if (!state?.playing || !state.url) {
+  if (!state?.playing) {
     return res.status(404).json({ error: 'No music playing on this channel' });
   }
 
-  res.setHeader('Content-Type', 'audio/mpeg');
-  res.setHeader('Cache-Control', 'no-cache, no-store');
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // Wait up to 30 s for yt-dlp in the socket handler to finish
+  let directUrl = state.directUrl;
+  if (!directUrl) {
+    const deadline = Date.now() + 30_000;
+    while (!state.directUrl && Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 400));
+    }
+    directUrl = state.directUrl;
+  }
 
-  const elapsed = state.started_at
-    ? Math.max(0, Math.floor((Date.now() - state.started_at) / 1000) - 2)
-    : 0;
+  if (!directUrl) {
+    return res.status(503).json({ error: 'Audio URL not ready yet, retry in a moment' });
+  }
 
-  // yt-dlp pipes audio to ffmpeg which transcodes to mp3 and streams to client.
-  // Using yt-dlp directly (not a pre-fetched URL) avoids expired CDN URL issues.
-  const ytProc = spawn('yt-dlp', [
-    '--no-playlist',
-    '-f', 'bestaudio[ext=m4a]/bestaudio[acodec=aac]/bestaudio',
-    '--no-part',
-    '-o', '-',
-    state.url,
-  ]);
-
-  const ffmpegArgs: string[] = [];
-  if (elapsed > 5) ffmpegArgs.push('-ss', String(elapsed));
-  ffmpegArgs.push(
-    '-i', 'pipe:0',
-    '-vn', '-f', 'mp3', '-ar', '44100', '-ab', '128k',
-    '-loglevel', 'error',
-    'pipe:1',
-  );
-
-  const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
-  ytProc.stdout.pipe(ffmpegProc.stdin);
-  ffmpegProc.stdout.pipe(res);
-
-  ytProc.stderr.on('data', () => {});
-  ffmpegProc.stderr.on('data', () => {});
-  ffmpegProc.on('error', () => { if (!res.headersSent) res.status(500).end(); });
-  ytProc.on('error', () => { try { ffmpegProc.kill('SIGTERM'); } catch {} if (!res.headersSent) res.status(500).end(); });
-
-  const cleanup = () => {
-    try { ytProc.kill('SIGTERM'); } catch {}
-    try { ffmpegProc.kill('SIGTERM'); } catch {}
+  // Proxy YouTube CDN → client (backend has no CORS restriction)
+  const proto = directUrl.startsWith('https') ? https : http;
+  const proxyHeaders: Record<string, string> = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': '*/*',
   };
-  req.on('close', cleanup);
-  req.on('aborted', cleanup);
+  // Forward Range header so the browser can seek / resume
+  if (req.headers['range']) proxyHeaders['Range'] = req.headers['range'] as string;
+
+  const proxyReq = proto.get(directUrl, { headers: proxyHeaders }, (proxyRes) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'no-cache, no-store');
+    res.setHeader('Content-Type', proxyRes.headers['content-type'] || 'audio/mp4');
+    if (proxyRes.headers['content-length'])  res.setHeader('Content-Length', proxyRes.headers['content-length']);
+    if (proxyRes.headers['content-range'])   res.setHeader('Content-Range',  proxyRes.headers['content-range']);
+    res.status(proxyRes.statusCode || 200);
+    proxyRes.pipe(res);
+  });
+
+  proxyReq.on('error', (err) => {
+    console.error('[stream] proxy error:', err.message);
+    if (!res.headersSent) res.status(502).end();
+  });
+  req.on('close', () => proxyReq.destroy());
 });
 
 // Health check

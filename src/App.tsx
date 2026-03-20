@@ -4168,6 +4168,17 @@ export default function App() {
       })
       .catch(() => {});
   }, [srvSettOpen, activeServer]);
+
+  // Pre-load tags for all joined servers (needed for user settings tag picker)
+  useEffect(() => {
+    if (serverList.length === 0) return;
+    serverList.forEach(s => {
+      serversApi.tag.get(s.id)
+        .then(t => { setServerTagMap(p => ({ ...p, [s.id]: t?.tag ?? null })); })
+        .catch(() => {});
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverList.length]);
   const [banList, setBanList]                 = useState<import('./api').ServerBan[]>([]);
   const [slowmodeLeft, setSlowmodeLeft]       = useState(0); // seconds remaining
   const [pinnedMsgs, setPinnedMsgs]           = useState<import('./api').MessageFull[]>([]);
@@ -11854,6 +11865,59 @@ export default function App() {
                               style={{left: streamerMode ? 'calc(100% - 1.375rem)' : '0.125rem'}}/>
                           </button>
                         </div>
+                      </div>
+
+                      {/* ── Server tag selection ── */}
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1 block font-bold">Tag serwera</label>
+                        <p className="text-xs text-zinc-500 mb-3 leading-relaxed">Wybierz tag który pojawi się przy Twoim nicku wszędzie w Cordynie. Tylko serwery z ustawionym tagiem są dostępne.</p>
+                        {(() => {
+                          const taggedServers = serverList.filter(s => serverTagMap[s.id]);
+                          if (taggedServers.length === 0) {
+                            return <p className="text-xs text-zinc-600 italic py-2">Żaden z Twoich serwerów nie ma ustawionego tagu. Poproś admina serwera o ustawienie tagu w ustawieniach serwera.</p>;
+                          }
+                          return (
+                            <div className="flex flex-col gap-2">
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await serversApi.setActiveTag(null);
+                                    setActiveTagServerId(null);
+                                    setCurrentUser(p => p ? {...p, active_tag_server_id: null, active_tag: null} : p);
+                                    addToast('Tag zdjęty', 'success');
+                                  } catch { addToast('Błąd', 'error'); }
+                                }}
+                                className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${!activeTagServerId ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+                                <div className="w-8 h-8 bg-zinc-700/80 rounded-lg flex items-center justify-center shrink-0">
+                                  <X size={13} className="text-zinc-400"/>
+                                </div>
+                                <p className="flex-1 text-sm font-medium text-white text-left">Brak tagu</p>
+                                {!activeTagServerId && <Check size={13} className="text-indigo-400 shrink-0"/>}
+                              </button>
+                              {taggedServers.map(s => (
+                                <button key={s.id}
+                                  onClick={async () => {
+                                    try {
+                                      await serversApi.setActiveTag(s.id);
+                                      setActiveTagServerId(s.id);
+                                      setCurrentUser(p => p ? {...p, active_tag_server_id: s.id, active_tag: serverTagMap[s.id] ?? null} : p);
+                                      addToast('Tag aktywowany!', 'success');
+                                    } catch { addToast('Błąd zmiany tagu', 'error'); }
+                                  }}
+                                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${activeTagServerId === s.id ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+                                  {s.icon_url
+                                    ? <img src={staticUrl(s.icon_url)} className="w-8 h-8 rounded-lg object-cover shrink-0" alt=""/>
+                                    : <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0 text-white font-bold text-sm">{s.name?.[0]?.toUpperCase()}</div>}
+                                  <div className="flex-1 min-w-0 text-left">
+                                    <p className="text-sm font-medium text-white truncate">{s.name}</p>
+                                    <TagBadge tag={serverTagMap[s.id]!}/>
+                                  </div>
+                                  {activeTagServerId === s.id && <Check size={13} className="text-indigo-400 shrink-0"/>}
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Avatar effects */}
