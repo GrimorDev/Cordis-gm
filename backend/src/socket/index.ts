@@ -616,12 +616,20 @@ async function handleMusicCommand(opts: {
     await sendBotMsg(`🎵 Teraz odtwarzam: **${info.title}** (zamówił: ${user.username})`);
 
   } else if (command === 'stop') {
+    // Stop music but keep bot in voice channel
+    const stopped: MusicBotState = { playing: false, channel_id, queue: [] };
+    musicStates.set(channel_id, stopped);
+    broadcastState(stopped);
+    await sendBotMsg('⏹️ Zatrzymano muzykę. Bot nadal jest na kanale głosowym.');
+
+  } else if (command === 'leave') {
+    // Stop music AND remove bot from voice channel
     const prev = musicStates.get(channel_id);
     if (prev?.playing) botVoiceLeave(io, server_id, channel_id);
     const stopped: MusicBotState = { playing: false, channel_id, queue: [] };
     musicStates.set(channel_id, stopped);
     broadcastState(stopped);
-    await sendBotMsg('⏹️ Zatrzymano odtwarzanie.');
+    await sendBotMsg('👋 Bot opuścił kanał głosowy.');
 
   } else if (command === 'skip') {
     const state = musicStates.get(channel_id);
@@ -659,7 +667,7 @@ async function handleMusicCommand(opts: {
     await sendBotMsg(`🔊 Głośność kontrolujesz suwakiem w odtwarzaczu YouTube.`);
 
   } else {
-    await sendBotMsg(`❓ Nieznana komenda. Dostępne: \`/play\`, \`/stop\`, \`/skip\`, \`/pause\`, \`/queue\``);
+    await sendBotMsg(`❓ Nieznana komenda. Dostępne: \`/play\`, \`/stop\`, \`/skip\`, \`/pause\`, \`/queue\`, \`/leave\``);
   }
 }
 

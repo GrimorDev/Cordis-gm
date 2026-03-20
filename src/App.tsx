@@ -4049,6 +4049,8 @@ export default function App() {
   const [botInstalling, setBotInstalling] = useState<string|null>(null);
   // Music bot state per channel
   const [musicBotState, setMusicBotState] = useState<Record<string, import('./api').MusicBotState>>({});
+  const [musicVolume, setMusicVolume]   = useState(() => { try { return parseInt(localStorage.getItem('cordyn_music_vol') ?? '100'); } catch { return 100; } });
+  const musicIframeRef                   = useRef<HTMLIFrameElement>(null);
 
   // ── Slash command autocomplete ────────────────────────────────────
   const [slashQuery, setSlashQuery] = useState<string|null>(null);
@@ -5227,7 +5229,7 @@ export default function App() {
   useEffect(() => {
     if (!msgsLoading && scrollToBottomOnLoadRef.current) {
       scrollToBottomOnLoadRef.current = false;
-      requestAnimationFrame(() => scrollToBottom(false));
+      requestAnimationFrame(() => requestAnimationFrame(() => scrollToBottom(false)));
     }
   }, [msgsLoading]); // eslint-disable-line react-hooks/exhaustive-deps
   // Smart-scroll on new incoming messages (only near bottom, not during initial load)
@@ -5258,7 +5260,11 @@ export default function App() {
   // ── Per-conversation message drafts ─────────────────────────────
   // Save current input draft when switching DM/channel, restore for new conversation
   useLayoutEffect(() => {
-    const key = activeDmUserId ? `dm:${activeDmUserId}` : activeChannel ? `ch:${activeChannel}` : '';
+    const key = (activeView === 'dms' || activeView === 'friends') && activeDmUserId
+      ? `dm:${activeDmUserId}`
+      : activeView === 'servers' && activeChannel
+        ? `ch:${activeChannel}`
+        : '';
     const prev = prevConvKeyRef.current;
     if (key === prev) return;
     // Save draft for previous conversation (read from DOM to get latest value)
@@ -5266,7 +5272,7 @@ export default function App() {
     // Restore draft for new conversation
     setMsgInput(msgDraftsRef.current[key] ?? '');
     prevConvKeyRef.current = key;
-  }, [activeDmUserId, activeChannel]);
+  }, [activeDmUserId, activeChannel, activeView]);
 
   // Apply accent color — override Tailwind v4 color CSS variables so every bg-indigo-*, text-indigo-* etc. uses the chosen color
   useEffect(() => {
@@ -5614,7 +5620,7 @@ export default function App() {
     const music = activeCall?.channelId ? musicBotState[activeCall.channelId] : null;
     if (!music?.playing || !music.videoId) return null;
     const elapsed = music.started_at ? Math.floor((Date.now() - music.started_at) / 1000) : 0;
-    return `https://www.youtube.com/embed/${music.videoId}?autoplay=1&start=${elapsed}&controls=1&rel=0&modestbranding=1`;
+    return `https://www.youtube.com/embed/${music.videoId}?autoplay=1&start=${elapsed}&controls=1&rel=0&modestbranding=1&enablejsapi=1`;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     activeCall?.channelId,
@@ -9442,16 +9448,41 @@ export default function App() {
                 {/* Memoized src — only recomputed when videoId changes, never on re-render → no reload stutter */}
                 {youtubeEmbedSrc && (
                   <iframe
+                    ref={musicIframeRef}
                     key={`${music.videoId}-${music.started_at}`}
                     src={youtubeEmbedSrc}
                     className="w-full rounded-xl"
                     style={{ height: '130px', border: 'none' }}
                     allow="autoplay; encrypted-media; picture-in-picture"
                     title={music.title || 'Cordyn Music'}
+                    onLoad={() => {
+                      // Apply saved volume after iframe loads
+                      setTimeout(() => {
+                        musicIframeRef.current?.contentWindow?.postMessage(
+                          JSON.stringify({ event: 'command', func: 'setVolume', args: [musicVolume] }), '*'
+                        );
+                      }, 1000);
+                    }}
                   />
                 )}
+                {/* Volume slider */}
+                <div className="flex items-center gap-2 mt-2">
+                  <VolumeX size={10} className="text-zinc-600 shrink-0"/>
+                  <input type="range" min="0" max="100" value={musicVolume}
+                    onChange={e => {
+                      const vol = parseInt(e.target.value);
+                      setMusicVolume(vol);
+                      try { localStorage.setItem('cordyn_music_vol', String(vol)); } catch {}
+                      musicIframeRef.current?.contentWindow?.postMessage(
+                        JSON.stringify({ event: 'command', func: 'setVolume', args: [vol] }), '*'
+                      );
+                    }}
+                    className="flex-1 h-1 rounded-full accent-[#1DB954] cursor-pointer"/>
+                  <Volume2 size={10} className="text-zinc-600 shrink-0"/>
+                  <span className="text-[10px] text-zinc-600 w-6 text-right shrink-0">{musicVolume}</span>
+                </div>
                 {/* Controls */}
-                <div className="flex gap-1.5 mt-2">
+                <div className="flex gap-1.5 mt-1.5">
                   <button
                     onClick={() => getSocket()?.emit('bot_command' as any, { bot:'music', command:'skip', args:[], channel_id:activeCall.channelId!, server_id:activeServer })}
                     className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-white/[0.06] hover:bg-white/[0.1] rounded-xl text-zinc-400 hover:text-white transition-all text-[11px] font-medium">
@@ -9459,8 +9490,15 @@ export default function App() {
                   </button>
                   <button
                     onClick={() => getSocket()?.emit('bot_command' as any, { bot:'music', command:'stop', args:[], channel_id:activeCall.channelId!, server_id:activeServer })}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 rounded-xl text-rose-400 hover:text-rose-300 transition-all text-[11px] font-medium border border-rose-500/20">
-                    <X size={12}/> Stop
+                    className="flex items-center justify-center gap-1 px-2.5 py-1.5 bg-white/[0.06] hover:bg-white/[0.1] rounded-xl text-zinc-400 hover:text-white transition-all text-[11px] font-medium"
+                    title="Zatrzymaj muzykę">
+                    <Pause size={12}/>
+                  </button>
+                  <button
+                    onClick={() => getSocket()?.emit('bot_command' as any, { bot:'music', command:'leave', args:[], channel_id:activeCall.channelId!, server_id:activeServer })}
+                    className="flex items-center justify-center gap-1 px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 rounded-xl text-rose-400 hover:text-rose-300 transition-all text-[11px] font-medium border border-rose-500/20"
+                    title="Rozłącz bota z kanału">
+                    <LogOut size={12}/>
                   </button>
                 </div>
               </motion.div>
@@ -10017,6 +10055,20 @@ export default function App() {
               {isVoice && ctxRow(<Volume2 size={13}/>, 'Dołącz do kanału', ()=>{
                 joinVoiceCh(ch); setChCtxMenu(null);
               })}
+
+              {isVoice && (() => {
+                const vcMusic = musicBotState[ch.id];
+                return vcMusic?.playing ? (<>
+                  {ctxRow(<Pause size={13}/>, 'Zatrzymaj muzykę', () => {
+                    getSocket()?.emit('bot_command' as any, { bot:'music', command:'stop', args:[], channel_id:ch.id, server_id:activeServer });
+                    setChCtxMenu(null);
+                  })}
+                  {ctxRow(<LogOut size={13}/>, 'Rozłącz bota muzycznego', () => {
+                    getSocket()?.emit('bot_command' as any, { bot:'music', command:'leave', args:[], channel_id:ch.id, server_id:activeServer });
+                    setChCtxMenu(null);
+                  }, false)}
+                </>) : null;
+              })()}
 
               {canCreateInvites && ctxRow(<UserPlus size={13}/>, 'Zaproś do kanału', async ()=>{
                 try {
@@ -12530,7 +12582,12 @@ export default function App() {
                   <p className="text-xs font-bold text-white truncate">
                     {activeCall.type==='voice_channel'?activeCall.channelName:activeCall.username}
                   </p>
-                  <p className="text-[10px] text-emerald-400/80 font-mono">{fmtDur(callDuration)}</p>
+                  {(() => {
+                    const miniMusic = activeCall.channelId ? musicBotState[activeCall.channelId] : null;
+                    return miniMusic?.playing
+                      ? <p className="text-[10px] text-[#1DB954] truncate flex items-center gap-1"><Music size={9} className="shrink-0"/> {miniMusic.title || 'Muzyka gra'}</p>
+                      : <p className="text-[10px] text-emerald-400/80 font-mono">{fmtDur(callDuration)}</p>;
+                  })()}
                 </div>
                 <div className="flex gap-1.5 shrink-0">
                   <button onClick={toggleMute} title="Mikrofon" className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all active:scale-90 ${activeCall.isMuted?'bg-rose-500 text-white shadow-lg shadow-rose-500/30':'bg-white/[0.07] text-zinc-400 hover:text-white hover:bg-white/[0.12]'}`}>
