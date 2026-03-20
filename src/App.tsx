@@ -5837,18 +5837,16 @@ export default function App() {
   const audioStreamSrc = useMemo(() => {
     const music = activeCall?.channelId ? musicBotState[activeCall.channelId] : null;
     if (!music?.playing) return null;
-    // Use directUrl (CDN link from yt-dlp) directly — no server ffmpeg needed.
-    // directUrl is broadcast via socket after yt-dlp finishes; it's natively playable
-    // by Tauri WebView (webm/opus) and modern browsers (m4a/aac).
-    if (music.directUrl) return music.directUrl;
-    // Fallback: server stream proxy (slower, requires ffmpeg)
+    // Always use the server-side stream proxy.
+    // YouTube CDN URLs (directUrl) are CORS-restricted and cannot be loaded
+    // directly in an <audio> element — the browser blocks them and fires onerror.
+    // The /api/stream proxy runs yt-dlp → ffmpeg server-side and serves plain mp3.
     return `${API_BASE}/stream/${music.channel_id}?_t=${music.started_at}`;
   }, [
     activeCall?.channelId,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     musicBotState[activeCall?.channelId ?? '']?.playing,
     musicBotState[activeCall?.channelId ?? '']?.started_at,
-    musicBotState[activeCall?.channelId ?? '']?.directUrl,
   ]);
 
   // ── Music audio element effects ────────────────────────────────────
@@ -5857,39 +5855,42 @@ export default function App() {
     const audio = musicAudioRef.current;
     if (!audio) return;
     if (audioStreamSrc) {
-      audio.src = audioStreamSrc;
-      // onerror fires when the src returns 4xx/5xx (server still fetching directUrl)
+      setMusicAutoplayBlocked(true); // show loading while yt-dlp + ffmpeg warm up
+
+      // onplaying fires as soon as audio actually starts outputting samples
+      audio.onplaying = () => { setMusicAutoplayBlocked(false); };
+      // onwaiting/stalled = buffering mid-stream (reconnects etc.)
+      audio.onwaiting = () => { setMusicAutoplayBlocked(true); };
+      audio.onstalled = () => { setMusicAutoplayBlocked(true); };
       audio.onerror = () => {
-        // Retry after 3 s — backend may still be running yt-dlp to get the stream URL
+        setMusicAutoplayBlocked(true);
+        // Retry after 6 s — yt-dlp in the stream endpoint needs time to start
         setTimeout(() => {
-          if (musicAudioRef.current && musicAudioRef.current.src === audioStreamSrc) {
+          if (musicAudioRef.current && musicAudioRef.current.src.includes(audioStreamSrc.split('?')[0])) {
             musicAudioRef.current.load();
-            tryPlay(musicAudioRef.current);
+            musicAudioRef.current.muted = true;
+            musicAudioRef.current.play()
+              .then(() => { if (musicAudioRef.current) { musicAudioRef.current.muted = false; musicAudioRef.current.volume = musicVolume / 100; } })
+              .catch(() => { if (musicAudioRef.current) musicAudioRef.current.muted = false; });
           }
-        }, 3000);
-        setMusicAutoplayBlocked(true); // show "kliknij" while waiting
+        }, 6000);
       };
-      const tryPlay = (el: HTMLAudioElement) => {
-        // Muted autoplay bypasses browser/WebView autoplay policy,
-        // then immediately unmute so the user hears audio.
-        el.muted = true;
-        el.volume = musicVolume / 100;
-        el.play()
-          .then(() => {
-            el.muted = false;
-            el.volume = musicVolume / 100;
-            setMusicAutoplayBlocked(false);
-          })
-          .catch(() => {
-            el.muted = false;
-            setMusicAutoplayBlocked(true);
-          });
-      };
-      tryPlay(audio);
+
+      audio.src = audioStreamSrc;
+      audio.volume = musicVolume / 100;
+      // Muted autoplay bypasses browser/WebView autoplay policy,
+      // then immediately unmute so the user hears audio.
+      audio.muted = true;
+      audio.play()
+        .then(() => { audio.muted = false; audio.volume = musicVolume / 100; })
+        .catch(() => { audio.muted = false; });
     } else {
       audio.pause();
       audio.src = '';
       audio.onerror = null;
+      audio.onplaying = null;
+      audio.onwaiting = null;
+      audio.onstalled = null;
       setMusicAutoplayBlocked(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -9771,24 +9772,17 @@ export default function App() {
                   </div>
                 </div>
                 {/* audio element mounted at top-level below — always present so ref is never null */}
-                {/* Visual: thumbnail */}
-                {music.thumbnail && (
-                  <div className="relative rounded-xl overflow-hidden mb-2" style={{height:80}}>
-                    <img src={music.thumbnail} className="w-full h-full object-cover" alt=""/>
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2">
-                      <div className="flex items-center gap-1.5">
-                        <div className="flex gap-0.5 items-end h-3">
-                          {[3,5,4,6,3].map((h,i) => (
-                            <div key={i} className={`w-0.5 rounded-full animate-pulse ${musicAutoplayBlocked ? 'bg-zinc-500' : 'bg-[#1DB954]'}`} style={{height:`${h*2}px`,animationDelay:`${i*0.1}s`}}/>
-                          ))}
-                        </div>
-                        <span className={`text-[9px] font-bold ${musicAutoplayBlocked ? 'text-zinc-500' : 'text-[#1DB954]'}`}>
-                          {musicAutoplayBlocked ? 'ŁADOWANIE…' : 'NA ŻYWO'}
-                        </span>
-                      </div>
-                    </div>
+                {/* Live indicator */}
+                <div className="flex items-center gap-1.5 mb-2">
+                  <div className="flex gap-0.5 items-end h-3">
+                    {[3,5,4,6,3].map((h,i) => (
+                      <div key={i} className={`w-0.5 rounded-full ${musicAutoplayBlocked ? 'bg-zinc-600' : 'bg-[#1DB954] animate-pulse'}`} style={{height:`${h*2}px`,animationDelay:`${i*0.1}s`}}/>
+                    ))}
                   </div>
-                )}
+                  <span className={`text-[9px] font-bold ${musicAutoplayBlocked ? 'text-zinc-500' : 'text-[#1DB954]'}`}>
+                    {musicAutoplayBlocked ? 'ŁĄCZENIE…' : 'NA ŻYWO'}
+                  </span>
+                </div>
                 {/* Volume slider */}
                 <div className="flex items-center gap-2 mt-2">
                   <VolumeX size={10} className="text-zinc-600 shrink-0"/>

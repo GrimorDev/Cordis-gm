@@ -130,43 +130,59 @@ app.use('/api/push',    pushRoutes);
 app.use('/api/servers/:serverId/automations', automationsRoutes);
 app.use('/api/servers/:serverId/bots', botsRoutes);
 
-// ── Music audio redirect ──────────────────────────────────────────────────────
-// Redirects to the direct CDN audio URL obtained by yt-dlp.
-// If directUrl was not cached during /play (yt-dlp was slow/failed), gets it on demand.
+// ── Music audio stream proxy ──────────────────────────────────────────────────
+// Pipes audio to the client via yt-dlp → ffmpeg transcoding.
+// YouTube CDN URLs are CORS-restricted and cannot be used directly in <audio> elements.
+// This endpoint acts as the proxy so the browser can always load the audio.
 // No auth required — audio is not sensitive and channel IDs are already known to members.
-app.get('/api/stream/:channelId', async (req, res) => {
+app.get('/api/stream/:channelId', (req, res) => {
   const state = musicStates.get(req.params.channelId);
   if (!state?.playing || !state.url) {
     return res.status(404).json({ error: 'No music playing on this channel' });
   }
 
-  // Get (or refresh) the direct CDN audio URL
-  let directUrl = state.directUrl;
-  if (!directUrl) {
-    try {
-      directUrl = await new Promise<string>((resolve, reject) => {
-        const proc = spawn('yt-dlp', ['--no-playlist', '-f', 'bestaudio[ext=m4a]/bestaudio[acodec=aac]/bestaudio', '--get-url', state.url!]);
-        let out = '';
-        proc.stdout.on('data', (d: Buffer) => { out += d.toString(); });
-        proc.stderr.on('data', () => {});
-        proc.on('close', (code) => {
-          const url = out.trim().split('\n')[0];
-          if (code === 0 && url) resolve(url);
-          else reject(new Error('yt-dlp --get-url failed'));
-        });
-      });
-      state.directUrl = directUrl; // cache for subsequent requests
-    } catch (err) {
-      console.error('[stream] yt-dlp failed:', err);
-      return res.status(503).json({ error: 'Could not obtain audio stream URL' });
-    }
-  }
+  res.setHeader('Content-Type', 'audio/mpeg');
+  res.setHeader('Cache-Control', 'no-cache, no-store');
+  res.setHeader('Access-Control-Allow-Origin', '*');
 
-  if (!directUrl) return res.status(503).json({ error: 'No audio URL available' });
+  const elapsed = state.started_at
+    ? Math.max(0, Math.floor((Date.now() - state.started_at) / 1000) - 2)
+    : 0;
 
-  // Redirect directly to the CDN URL — browser/Tauri WebView handles playback natively.
-  // This avoids the ffmpeg transcoding pipeline entirely.
-  return res.redirect(302, directUrl);
+  // yt-dlp pipes audio to ffmpeg which transcodes to mp3 and streams to client.
+  // Using yt-dlp directly (not a pre-fetched URL) avoids expired CDN URL issues.
+  const ytProc = spawn('yt-dlp', [
+    '--no-playlist',
+    '-f', 'bestaudio[ext=m4a]/bestaudio[acodec=aac]/bestaudio',
+    '--no-part',
+    '-o', '-',
+    state.url,
+  ]);
+
+  const ffmpegArgs: string[] = [];
+  if (elapsed > 5) ffmpegArgs.push('-ss', String(elapsed));
+  ffmpegArgs.push(
+    '-i', 'pipe:0',
+    '-vn', '-f', 'mp3', '-ar', '44100', '-ab', '128k',
+    '-loglevel', 'error',
+    'pipe:1',
+  );
+
+  const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
+  ytProc.stdout.pipe(ffmpegProc.stdin);
+  ffmpegProc.stdout.pipe(res);
+
+  ytProc.stderr.on('data', () => {});
+  ffmpegProc.stderr.on('data', () => {});
+  ffmpegProc.on('error', () => { if (!res.headersSent) res.status(500).end(); });
+  ytProc.on('error', () => { try { ffmpegProc.kill('SIGTERM'); } catch {} if (!res.headersSent) res.status(500).end(); });
+
+  const cleanup = () => {
+    try { ytProc.kill('SIGTERM'); } catch {}
+    try { ffmpegProc.kill('SIGTERM'); } catch {}
+  };
+  req.on('close', cleanup);
+  req.on('aborted', cleanup);
 });
 
 // Health check
