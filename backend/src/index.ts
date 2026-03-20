@@ -130,9 +130,8 @@ app.use('/api/push',    pushRoutes);
 app.use('/api/servers/:serverId/automations', automationsRoutes);
 app.use('/api/servers/:serverId/bots', botsRoutes);
 
-// ── Music audio proxy stream ──────────────────────────────────────────────────
-// Streams the current music bot audio for a voice channel.
-// Uses ffmpeg to transcode from the yt-dlp direct URL, seeking to the correct position.
+// ── Music audio redirect ──────────────────────────────────────────────────────
+// Redirects to the direct CDN audio URL obtained by yt-dlp.
 // If directUrl was not cached during /play (yt-dlp was slow/failed), gets it on demand.
 // No auth required — audio is not sensitive and channel IDs are already known to members.
 app.get('/api/stream/:channelId', async (req, res) => {
@@ -146,7 +145,7 @@ app.get('/api/stream/:channelId', async (req, res) => {
   if (!directUrl) {
     try {
       directUrl = await new Promise<string>((resolve, reject) => {
-        const proc = spawn('yt-dlp', ['--no-playlist', '-f', 'bestaudio', '--get-url', state.url!]);
+        const proc = spawn('yt-dlp', ['--no-playlist', '-f', 'bestaudio[ext=m4a]/bestaudio[acodec=aac]/bestaudio', '--get-url', state.url!]);
         let out = '';
         proc.stdout.on('data', (d: Buffer) => { out += d.toString(); });
         proc.stderr.on('data', () => {});
@@ -165,36 +164,9 @@ app.get('/api/stream/:channelId', async (req, res) => {
 
   if (!directUrl) return res.status(503).json({ error: 'No audio URL available' });
 
-  const elapsed = state.started_at
-    ? Math.max(0, Math.floor((Date.now() - state.started_at) / 1000) - 2)
-    : 0;
-
-  res.setHeader('Content-Type', 'audio/mpeg');
-  res.setHeader('Cache-Control', 'no-cache, no-store');
-  res.setHeader('Transfer-Encoding', 'chunked');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-
-  const ffmpegArgs: string[] = [
-    '-reconnect', '1',
-    '-reconnect_streamed', '1',
-    '-reconnect_delay_max', '5',
-  ];
-  if (elapsed > 5) ffmpegArgs.push('-ss', String(elapsed));
-  ffmpegArgs.push(
-    '-i', directUrl,
-    '-vn', '-f', 'mp3', '-ar', '44100', '-ab', '192k',
-    '-loglevel', 'error',
-    'pipe:1'
-  );
-
-  const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
-  ffmpegProc.stdout.pipe(res);
-  ffmpegProc.stderr.on('data', () => {});
-  ffmpegProc.on('error', () => { if (!res.headersSent) res.status(500).end(); });
-
-  const cleanup = () => { try { ffmpegProc.kill('SIGTERM'); } catch {} };
-  req.on('close', cleanup);
-  req.on('aborted', cleanup);
+  // Redirect directly to the CDN URL — browser/Tauri WebView handles playback natively.
+  // This avoids the ffmpeg transcoding pipeline entirely.
+  return res.redirect(302, directUrl);
 });
 
 // Health check

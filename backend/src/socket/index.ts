@@ -621,7 +621,7 @@ async function handleMusicCommand(opts: {
     try {
       const { spawn } = await import('child_process');
       directUrl = await new Promise<string>((resolve, reject) => {
-        const proc = spawn('yt-dlp', ['--no-playlist', '-f', 'bestaudio', '--get-url', ytUrl]);
+        const proc = spawn('yt-dlp', ['--no-playlist', '-f', 'bestaudio[ext=m4a]/bestaudio[acodec=aac]/bestaudio', '--get-url', ytUrl]);
         let out = '';
         proc.stdout.on('data', (d: Buffer) => { out += d.toString(); });
         proc.stderr.on('data', () => {});

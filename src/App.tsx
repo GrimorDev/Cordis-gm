@@ -5837,13 +5837,18 @@ export default function App() {
   const audioStreamSrc = useMemo(() => {
     const music = activeCall?.channelId ? musicBotState[activeCall.channelId] : null;
     if (!music?.playing) return null;
-    return `${API_BASE}/stream/${music.channel_id}?_t=${music.started_at}&v=${music.videoId || ''}`;
+    // Use directUrl (CDN link from yt-dlp) directly — no server ffmpeg needed.
+    // directUrl is broadcast via socket after yt-dlp finishes; it's natively playable
+    // by Tauri WebView (webm/opus) and modern browsers (m4a/aac).
+    if (music.directUrl) return music.directUrl;
+    // Fallback: server stream proxy (slower, requires ffmpeg)
+    return `${API_BASE}/stream/${music.channel_id}?_t=${music.started_at}`;
   }, [
     activeCall?.channelId,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     musicBotState[activeCall?.channelId ?? '']?.playing,
     musicBotState[activeCall?.channelId ?? '']?.started_at,
-    musicBotState[activeCall?.channelId ?? '']?.videoId,
+    musicBotState[activeCall?.channelId ?? '']?.directUrl,
   ]);
 
   // ── Music audio element effects ────────────────────────────────────
