@@ -4034,6 +4034,7 @@ export default function App() {
   const msgInputRef      = useRef<HTMLTextAreaElement>(null);
   const msgDraftsRef     = useRef<Record<string, string>>({});
   const prevConvKeyRef   = useRef('');
+  const [draftKeys, setDraftKeys] = useState<Set<string>>(new Set()); // tracks channels with unsaved drafts
   const [srvContextMenu, setSrvContextMenu]   = useState<{ x: number; y: number; srv: ServerData } | null>(null);
   const [deleteSrvConfirm, setDeleteSrvConfirm] = useState<{ id: string; name: string } | null>(null);
 
@@ -4118,6 +4119,7 @@ export default function App() {
   const [musicVolume, setMusicVolume]   = useState(() => { try { return parseInt(localStorage.getItem('cordyn_music_vol') ?? '100'); } catch { return 100; } });
   const [musicAutoplayBlocked, setMusicAutoplayBlocked] = useState(false);
   const musicIframeRef                   = useRef<HTMLIFrameElement>(null);
+  const musicAudioRef                    = useRef<HTMLAudioElement>(null);
 
   // ── Slash command autocomplete ────────────────────────────────────
   const [slashQuery, setSlashQuery] = useState<string|null>(null);
@@ -5334,8 +5336,12 @@ export default function App() {
         : '';
     const prev = prevConvKeyRef.current;
     if (key === prev) return;
-    // Save draft for previous conversation (read from DOM to get latest value)
-    if (prev) msgDraftsRef.current[prev] = msgInputRef.current?.value ?? '';
+    // Save draft for previous conversation (use React state — DOM ref may be null when unmounted)
+    if (prev) {
+      const val = msgInput.trim();
+      msgDraftsRef.current[prev] = msgInput;
+      setDraftKeys(s => { const n = new Set(s); val ? n.add(prev) : n.delete(prev); return n; });
+    }
     // Restore draft for new conversation
     setMsgInput(msgDraftsRef.current[key] ?? '');
     prevConvKeyRef.current = key;
@@ -5693,6 +5699,28 @@ export default function App() {
     musicBotState[activeCall?.channelId ?? '']?.videoId,
   ]);
 
+  // ── Music audio element effects ────────────────────────────────────
+  // When the stream source changes (new song or song stopped), update the audio element
+  useEffect(() => {
+    const audio = musicAudioRef.current;
+    if (!audio) return;
+    if (audioStreamSrc) {
+      audio.src = audioStreamSrc;
+      audio.volume = musicVolume / 100;
+      audio.play().then(() => setMusicAutoplayBlocked(false)).catch(() => setMusicAutoplayBlocked(true));
+    } else {
+      audio.pause();
+      audio.src = '';
+      setMusicAutoplayBlocked(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioStreamSrc]);
+  // Sync volume slider → audio element
+  useEffect(() => {
+    const audio = musicAudioRef.current;
+    if (audio) audio.volume = musicVolume / 100;
+  }, [musicVolume]);
+
   const allSlashCommands = activeView === 'servers' && activeServer
     ? installedBots.flatMap(inst => {
         const bot = AVAILABLE_BOTS.find(b => b.id === inst.bot_id);
@@ -5890,6 +5918,9 @@ export default function App() {
     const finalContent = content;
     const opts = { reply_to_id: replyTo?.id, attachment_url: attachUrl };
     setMsgInput(''); setAttachFile(null); setAttachPreview(null); setReplyTo(null);
+    // Clear draft for current conversation
+    const curKey = prevConvKeyRef.current;
+    if (curKey) { delete msgDraftsRef.current[curKey]; setDraftKeys(s=>{const n=new Set(s);n.delete(curKey);return n;}); }
     try {
       if (activeView === 'dms' && activeDmUserId) await dmsApi.send(activeDmUserId, finalContent, opts);
       else if (activeChannel) await messagesApi.send(activeChannel, finalContent, opts);
@@ -7234,6 +7265,7 @@ export default function App() {
                         const isAct = activeChannel===ch.id;
                         const unread = unreadChs[ch.id] || 0;
                         const ping = pingChs[ch.id] || 0;
+                        const hasDraft = !isAct && draftKeys.has(`ch:${ch.id}`);
                         const ChIcon = ch.type==='forum'?MessageSquare:ch.type==='announcement'?Megaphone:Hash;
                         return (
                           <React.Fragment key={ch.id}>
@@ -7254,6 +7286,7 @@ export default function App() {
                                 <ChIcon size={16} className={`shrink-0 transition-colors ${isAct?'text-indigo-400':ping>0?'text-amber-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
                                 <span className={`text-sm truncate transition-colors ${(unread>0||ping>0)&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
                                 {ch.is_private&&<Lock size={9} className="text-zinc-700 shrink-0"/>}
+                                {hasDraft&&<span className="text-[9px] font-bold text-amber-400/80 shrink-0 leading-none">— szkic</span>}
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
                                 {ping > 0 && !isAct && (
@@ -7298,6 +7331,7 @@ export default function App() {
                         return (
                           <div key={ch.id} className="px-2">
                             <button onClick={() => joinVoiceCh(ch)}
+                              onContextMenu={e=>{e.preventDefault();setChCtxMenu({x:e.clientX,y:e.clientY,ch});}}
                               className={`w-full px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${
                                 isActiveVoice?'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 shadow-[inset_0_0_12px_rgba(52,211,153,0.08)]':'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
                               <div className="flex items-center justify-between">
@@ -9515,21 +9549,8 @@ export default function App() {
                     {music.queue.length > 0 && <p className="text-[10px] text-zinc-500 mt-0.5">w kolejce: {music.queue.length}</p>}
                   </div>
                 </div>
-                {/* Hidden audio element for actual playback (server-side stream, no YouTube CAPTCHA) */}
-                {audioStreamSrc && (
-                  <audio
-                    key={audioStreamSrc}
-                    ref={el => {
-                      if (el) {
-                        el.volume = musicVolume / 100;
-                        el.play().catch(() => setMusicAutoplayBlocked(true));
-                      }
-                    }}
-                    src={audioStreamSrc}
-                    style={{ display: 'none' }}
-                    onVolumeChange={() => {}}
-                  />
-                )}
+                {/* Hidden audio element — managed via musicAudioRef + useEffect above */}
+                <audio ref={musicAudioRef} style={{ display: 'none' }} preload="none"/>
                 {/* Visual: thumbnail */}
                 {music.thumbnail && (
                   <div className="relative rounded-xl overflow-hidden mb-2" style={{height:80}}>
@@ -9538,9 +9559,9 @@ export default function App() {
                       {musicAutoplayBlocked ? (
                         <button
                           onClick={() => {
-                            setMusicAutoplayBlocked(false);
-                            const audio = document.querySelector(`audio[src="${audioStreamSrc}"]`) as HTMLAudioElement;
-                            audio?.play().catch(() => setMusicAutoplayBlocked(true));
+                            musicAudioRef.current?.play()
+                              .then(() => setMusicAutoplayBlocked(false))
+                              .catch(() => setMusicAutoplayBlocked(true));
                           }}
                           className="text-[10px] font-bold text-white bg-[#1DB954]/80 hover:bg-[#1DB954] px-2.5 py-1 rounded-full flex items-center gap-1 transition-all">
                           <Play size={9}/> Kliknij aby odtworzyć
@@ -9566,9 +9587,7 @@ export default function App() {
                       const vol = parseInt(e.target.value);
                       setMusicVolume(vol);
                       try { localStorage.setItem('cordyn_music_vol', String(vol)); } catch {}
-                      // Apply to audio element
-                      const audioEl = document.querySelector(`audio[src="${audioStreamSrc}"]`) as HTMLAudioElement;
-                      if (audioEl) audioEl.volume = vol / 100;
+                      if (musicAudioRef.current) musicAudioRef.current.volume = vol / 100;
                     }}
                     className="flex-1 h-1 rounded-full accent-[#1DB954] cursor-pointer"/>
                   <Volume2 size={10} className="text-zinc-600 shrink-0"/>

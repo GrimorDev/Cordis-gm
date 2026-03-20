@@ -667,11 +667,11 @@ async function handleMusicCommand(opts: {
       const remaining = [...state.queue]; // preserve rest of queue before recursive call
       await handleMusicCommand({ ...opts, command: 'play', args: [next.url], _carryQueue: remaining });
     } else {
-      if (state?.playing) botVoiceLeave(io, server_id, channel_id);
+      // No queue — stop playback but keep bot in voice channel (use /stop or /leave to disconnect)
       const stopped: MusicBotState = { playing: false, channel_id, queue: [] };
       musicStates.set(channel_id, stopped);
       broadcastState(stopped);
-      await sendBotMsg('⏭️ Pominięto. Kolejka jest pusta.');
+      await sendBotMsg('⏭️ Kolejka jest pusta — odtwarzanie zatrzymane. Użyj `/stop leave` żeby rozłączyć bota.');
     }
 
   } else if (command === 'pause') {
