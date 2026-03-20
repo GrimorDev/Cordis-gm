@@ -78,6 +78,7 @@ export interface UserProfile {
   avatar_effect?: string | null;
   active_tag_server_id?: string | null;
   active_tag?: string | null;
+  theme_id?: string | null;
 }
 export interface ServerData {
   id: string; name: string; description?: string | null;
@@ -361,7 +362,7 @@ export const users = {
     'accent_color' | 'compact_messages' | 'voice_noise_cancel' |
     'font_size' | 'show_timestamps' | 'show_chat_avatars' | 'message_animations' | 'show_link_previews' |
     'privacy_status_visible' | 'privacy_typing_visible' | 'privacy_read_receipts' |
-    'privacy_friend_requests' | 'privacy_dm_from_strangers' | 'avatar_effect'
+    'privacy_friend_requests' | 'privacy_dm_from_strangers' | 'avatar_effect' | 'theme_id'
   >>) => req<UserProfile>('PUT', '/users/me', d),
   updateStatus: (s: string) => req<{ status: string }>('PUT', '/users/me/status', { status: s }),
   uploadAvatar: async (file: File): Promise<{ avatar_url: string }> => {

@@ -15,7 +15,7 @@ import {
   Code2, FlaskConical, ShieldCheck, Hammer, Award, CalendarDays, Quote,
   GripVertical, BarChart2, Server, Database,
   Music, Gamepad2, ExternalLink, Link2, Link2Off, Film, PhoneIncoming, PhoneMissed, Download, Monitor, Copy,
-  Bot, Play, Pause, SkipForward, ListMusic, Package, Slash,
+  Bot, Play, Pause, SkipForward, ListMusic, Package, Slash, Palette,
   type LucideIcon
 } from 'lucide-react';
 import {
@@ -133,6 +133,17 @@ const GRADIENTS = [
   'from-amber-500 via-orange-500 to-red-500',
   'from-zinc-700 via-zinc-600 to-zinc-700',
 ];
+// ─── Theme system ──────────────────────────────────────────────────────────────
+const THEMES = [
+  { id: 'default',  name: 'Ciemny',        desc: 'Domyślny motyw Cordyna',     vars: {} },
+  { id: 'midnight', name: 'Midnight',       desc: 'Głęboki granat nocnego nieba', vars: { '--app-bg': '#030310', '--app-sidebar': '#05051a', '--app-card': '#0a0a25', '--app-surface': '#0f0f30' } },
+  { id: 'amoled',   name: 'AMOLED',         desc: 'Czysta czerń, max oszczędność baterii', vars: { '--app-bg': '#000000', '--app-sidebar': '#040404', '--app-card': '#080808', '--app-surface': '#0e0e0e' } },
+  { id: 'forest',   name: 'Las',            desc: 'Mroczna zieleń leśna',       vars: { '--app-bg': '#030d06', '--app-sidebar': '#05150a', '--app-card': '#091a0f', '--app-surface': '#0e2416' } },
+  { id: 'sakura',   name: 'Sakura',         desc: 'Różowe wiśniowe akcenty',    vars: { '--app-bg': '#0d0408', '--app-sidebar': '#170610', '--app-card': '#200a18', '--app-surface': '#2b1020' } },
+  { id: 'sunset',   name: 'Zachód słońca',  desc: 'Ciepłe brązowo-pomarańczowe', vars: { '--app-bg': '#0d0703', '--app-sidebar': '#160d05', '--app-card': '#1d1208', '--app-surface': '#261a0d' } },
+] as const;
+type ThemeId = typeof THEMES[number]['id'];
+
 // Deterministic banner gradient from user ID (fallback when no custom banner)
 const getBannerGradient = (userId: string): string => {
   const hash = (userId || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
@@ -3303,50 +3314,16 @@ function ProfilePage({
               </div>
 
               {/* Spotify section */}
+              {((isOwn && ownSpotify?.connected) || (spotifyToShow?.connected && spotifyToShow?.show_on_profile)) && (
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
                     <SpotifyIcon size={13} className="text-[#1DB954]"/>Muzyka Spotify
                   </h3>
-                  {isOwn && ownSpotify?.connected && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-zinc-600">Pokaż na profilu</span>
-                      <button onClick={()=>onSpotifyToggle(!ownSpotify.show_on_profile)}
-                        className={`relative w-10 h-5 rounded-full transition-all ${ownSpotify.show_on_profile?'bg-emerald-500':'bg-white/[0.08]'}`}>
-                        <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${ownSpotify.show_on_profile?'left-[22px]':'left-0.5'}`}/>
-                      </button>
-                    </div>
-                  )}
                 </div>
 
-                {isOwn && !ownSpotify?.connected ? (
-                  <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl px-5 py-6 flex flex-col items-center gap-3">
-                    <div className="w-12 h-12 bg-[#1DB954]/10 border border-[#1DB954]/25 rounded-2xl flex items-center justify-center">
-                      <Music size={22} className="text-[#1DB954]"/>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm font-semibold text-white mb-1">Połącz Spotify</p>
-                      <p className="text-xs text-zinc-600">Pokaż co teraz słuchasz i swoje ulubione utwory</p>
-                    </div>
-                    <button onClick={onSpotifyConnect}
-                      className="flex items-center gap-2 bg-[#1DB954] hover:bg-[#1ed760] text-black font-bold px-5 py-2.5 rounded-xl text-sm transition-all shadow-lg shadow-[#1DB954]/20">
-                      <Link2 size={14}/> Połącz Spotify
-                    </button>
-                  </div>
-                ) : isOwn && ownSpotify?.connected ? (
+                {isOwn && ownSpotify?.connected ? (
                   <div className="flex flex-col gap-3">
-                    <div className="flex items-center justify-between bg-[#1DB954]/8 border border-[#1DB954]/20 rounded-xl px-3.5 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 bg-[#1DB954]/15 rounded-lg flex items-center justify-center">
-                          <Music size={13} className="text-[#1DB954]"/>
-                        </div>
-                        <span className="text-sm text-[#1DB954] font-medium">Połączono jako {ownSpotify.display_name || 'Spotify'}</span>
-                      </div>
-                      <button onClick={onSpotifyDisconnect}
-                        className="text-xs text-zinc-600 hover:text-rose-400 flex items-center gap-1 transition-all">
-                        <Link2Off size={12}/> Odłącz
-                      </button>
-                    </div>
                     <SpotifyDisplay spotify={spotifyToShow || ownSpotify}/>
                     {/* JAM controls for own profile */}
                     <div className="mt-3">
@@ -3405,62 +3382,21 @@ function ProfilePage({
                       </div>
                     )}
                   </>
-                ) : (
-                  <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-6 text-center">
-                    <Music size={28} className="text-zinc-800 mx-auto mb-2"/>
-                    <p className="text-xs text-zinc-700">Brak połączenia Spotify</p>
-                  </div>
-                )}
+                ) : null}
               </div>
+              )}
 
               {/* Twitch section */}
+              {((isOwn && ownTwitch?.connected) || (twitchToShow?.connected && twitchToShow?.show_on_profile)) && (
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
                     <TwitchIcon size={13} className="text-purple-400"/> Twitch
                   </h3>
-                  {isOwn && ownTwitch?.connected && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-zinc-600">Pokaż na profilu</span>
-                      <button onClick={()=>onTwitchToggle(!ownTwitch.show_on_profile)}
-                        className={`relative w-10 h-5 rounded-full transition-all ${ownTwitch.show_on_profile?'bg-purple-500':'bg-white/[0.08]'}`}>
-                        <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${ownTwitch.show_on_profile?'left-[22px]':'left-0.5'}`}/>
-                      </button>
-                    </div>
-                  )}
                 </div>
 
-                {isOwn && !ownTwitch?.connected ? (
-                  <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl px-5 py-6 flex flex-col items-center gap-3">
-                    <div className="w-12 h-12 bg-purple-500/10 border border-purple-500/25 rounded-2xl flex items-center justify-center">
-                      <span className="text-xl">📺</span>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm font-semibold text-white mb-1">Połącz Twitch</p>
-                      <p className="text-xs text-zinc-600">Pokaż swój stream na żywo na profilu</p>
-                    </div>
-                    <button onClick={onTwitchConnect}
-                      className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all shadow-lg shadow-purple-500/20">
-                      <Link2 size={14}/> Połącz Twitch
-                    </button>
-                  </div>
-                ) : isOwn && ownTwitch?.connected ? (
+                {isOwn && ownTwitch?.connected ? (
                   <div className="flex flex-col gap-3">
-                    <div className="flex items-center justify-between bg-purple-500/8 border border-purple-500/20 rounded-xl px-3.5 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 bg-purple-500/15 rounded-lg flex items-center justify-center">
-                          <span className="text-sm">📺</span>
-                        </div>
-                        <div>
-                          <span className="text-sm text-purple-400 font-medium">Połączono jako {ownTwitch.display_name || ownTwitch.login || 'Twitch'}</span>
-                          {ownTwitch.is_live && <span className="ml-2 text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold">NA ŻYWO</span>}
-                        </div>
-                      </div>
-                      <button onClick={onTwitchDisconnect}
-                        className="text-xs text-zinc-600 hover:text-rose-400 flex items-center gap-1 transition-all">
-                        <Link2Off size={12}/> Odłącz
-                      </button>
-                    </div>
                     {twitchToShow?.is_live && twitchToShow.stream && (
                       <div className="bg-purple-900/20 border border-purple-500/20 rounded-xl px-3 py-2 flex items-center gap-2">
                         <span className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold shrink-0">🔴 NA ŻYWO</span>
@@ -3483,57 +3419,21 @@ function ProfilePage({
                       <span className="text-xs text-zinc-600 ml-auto">Offline</span>
                     </div>
                   )
-                ) : (
-                  <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-6 text-center">
-                    <span className="text-2xl block mb-2">📺</span>
-                    <p className="text-xs text-zinc-700">Brak połączenia Twitch</p>
-                  </div>
-                )}
+                ) : null}
               </div>
+              )}
 
               {/* Steam section */}
+              {((isOwn && ownSteam?.connected) || (steamToShow?.connected && steamToShow?.show_on_profile)) && (
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
                     <SteamIcon size={13} className="text-zinc-400"/> Steam
                   </h3>
-                  {isOwn && ownSteam?.connected && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-zinc-600">Pokaż na profilu</span>
-                      <button onClick={()=>onSteamToggle(!ownSteam.show_on_profile)}
-                        className={`relative w-10 h-5 rounded-full transition-all ${ownSteam.show_on_profile?'bg-blue-500':'bg-white/[0.08]'}`}>
-                        <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${ownSteam.show_on_profile?'left-[22px]':'left-0.5'}`}/>
-                      </button>
-                    </div>
-                  )}
                 </div>
 
-                {isOwn && !ownSteam?.connected ? (
-                  <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl px-5 py-6 flex flex-col items-center gap-3">
-                    <div className="w-12 h-12 bg-blue-500/10 border border-blue-500/25 rounded-2xl flex items-center justify-center">
-                      <Gamepad2 size={20} className="text-blue-400"/>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm font-semibold text-white mb-1">Połącz Steam</p>
-                      <p className="text-xs text-zinc-600">Pokaż w co aktualnie grasz</p>
-                    </div>
-                    <button onClick={onSteamConnect}
-                      className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all shadow-lg shadow-blue-500/20">
-                      <Link2 size={14}/> Połącz Steam
-                    </button>
-                  </div>
-                ) : isOwn && ownSteam?.connected ? (
+                {isOwn && ownSteam?.connected ? (
                   <div className="flex flex-col gap-3">
-                    <div className="flex items-center justify-between bg-blue-500/8 border border-blue-500/20 rounded-xl px-3.5 py-2.5">
-                      <div className="flex items-center gap-2">
-                        {ownSteam.avatar_url && <img src={ownSteam.avatar_url} className="w-7 h-7 rounded-lg object-cover" alt=""/>}
-                        <span className="text-sm text-blue-400 font-medium">{ownSteam.display_name || 'Steam'}</span>
-                      </div>
-                      <button onClick={onSteamDisconnect}
-                        className="text-xs text-zinc-600 hover:text-rose-400 flex items-center gap-1 transition-all">
-                        <Link2Off size={12}/> Odłącz
-                      </button>
-                    </div>
                     {steamToShow?.current_game && (
                       <div className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.06] rounded-xl p-2.5">
                         <img src={steamToShow.current_game.header_image} alt={steamToShow.current_game.name} className="w-16 h-9 rounded-lg object-cover shrink-0"/>
@@ -3576,13 +3476,9 @@ function ProfilePage({
                       </div>
                     )}
                   </div>
-                ) : (
-                  <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-6 text-center">
-                    <Gamepad2 size={28} className="text-zinc-800 mx-auto mb-2"/>
-                    <p className="text-xs text-zinc-700">Brak połączenia Steam</p>
-                  </div>
-                )}
+                ) : null}
               </div>
+              )}
 
             </div>
           </div>
@@ -4334,6 +4230,7 @@ export default function App() {
 
   // App preferences — initialized from currentUser (DB), updated via users.updateMe()
   const [accentColor, setAccentColor]           = useState<string>('indigo');
+  const [selectedTheme, setSelectedTheme]       = useState<ThemeId>('default');
   const [avatarEffect, setAvatarEffect]         = useState<string>('none');
   const [compactMessages, setCompactMessages]   = useState<boolean>(false);
   const [fontSize, setFontSize]                 = useState<'small'|'normal'|'large'>('normal');
@@ -4362,7 +4259,7 @@ export default function App() {
 
   // App Settings
   const [appSettOpen, setAppSettOpen]         = useState(false);
-  const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'devices'|'privacy'|'locale'|'desktop'|'updates'|'about'>('account');
+  const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'devices'|'privacy'|'locale'|'connections'|'theme'|'desktop'|'updates'|'about'>('account');
   const [appVersion, setAppVersion]           = useState<string>('');
   const [autostartEnabled, setAutostartEnabled] = useState<boolean>(false);
   const [pushSubscribed, setPushSubscribed]     = useState<boolean>(false);
@@ -5527,6 +5424,20 @@ export default function App() {
     r.style.setProperty('--accent-rgb', `${r2} ${g2} ${b2}`);
   }, [accentColor]);
 
+  // ── Theme CSS variables ───────────────────────────────────────────────────
+  useEffect(() => {
+    const theme = THEMES.find(t => t.id === selectedTheme);
+    const root = document.documentElement;
+    root.style.removeProperty('--app-bg');
+    root.style.removeProperty('--app-sidebar');
+    root.style.removeProperty('--app-card');
+    root.style.removeProperty('--app-surface');
+    if (theme && Object.keys(theme.vars).length > 0) {
+      Object.entries(theme.vars).forEach(([k, v]) => root.style.setProperty(k, v));
+    }
+    root.setAttribute('data-theme', selectedTheme);
+  }, [selectedTheme]);
+
   // ── Game session timer tick (refresh elapsed time display every minute) ──
   useEffect(() => {
     const t = setInterval(() => setGameTick(n => n + 1), 60_000);
@@ -5936,6 +5847,10 @@ export default function App() {
     if (upd) { setCurrentUser(upd); setEditProf({...upd}); setAccentColor(color); addToast('Kolor akcentu zmieniony', 'success'); }
     else addToast('Błąd zapisu', 'error');
   };
+  const saveTheme = async (themeId: ThemeId) => {
+    setSelectedTheme(themeId);
+    try { await users.updateMe({ theme_id: themeId }); } catch { /* silent */ }
+  };
   const saveAvatarEffect = async (effect: string) => {
     const upd = await users.updateMe({ avatar_effect: effect } as any).catch(() => null);
     if (upd) { setCurrentUser(upd); setEditProf({...upd}); setAvatarEffect(effect); addToast('Efekt avatara zmieniony', 'success'); }
@@ -5998,6 +5913,7 @@ export default function App() {
     setShowChatAvatars(u.show_chat_avatars !== false); // default true
     setMessageAnimations(u.message_animations !== false); // default true
     setShowLinkPreviews(u.show_link_previews !== false); // default true
+    setSelectedTheme((u.theme_id as ThemeId) || 'default');
   };
   const [showWelcome, setShowWelcome] = useState(false);
   const handleAuth = (u: UserProfile, _t: string, isNew = false) => {
@@ -11629,11 +11545,13 @@ export default function App() {
                 {/* Sidebar / Tab bar */}
                 <div className="sm:w-44 shrink-0 border-b sm:border-b-0 sm:border-r border-white/[0.06] p-2 sm:p-3 flex sm:flex-col flex-row gap-0.5 overflow-x-auto scrollbar-hide">
                   {([
-                    {id:'account',    label:t('settings.account'),    icon:<Users size={14}/>},
-                    {id:'appearance', label:t('settings.appearance'), icon:<Image size={14}/>},
-                    {id:'devices',    label:t('settings.devices'),    icon:<Mic size={14}/>},
-                    {id:'privacy',    label:t('settings.privacy'),    icon:<Shield size={14}/>},
-                    {id:'locale',     label:t('settings.locale'),     icon:<Globe size={14}/>},
+                    {id:'account',     label:t('settings.account'),    icon:<Users size={14}/>},
+                    {id:'appearance',  label:t('settings.appearance'), icon:<Image size={14}/>},
+                    {id:'theme',       label:'Motyw',                  icon:<Palette size={14}/>},
+                    {id:'connections', label:'Połączone konta',        icon:<Link2 size={14}/>},
+                    {id:'devices',     label:t('settings.devices'),    icon:<Mic size={14}/>},
+                    {id:'privacy',     label:t('settings.privacy'),    icon:<Shield size={14}/>},
+                    {id:'locale',      label:t('settings.locale'),     icon:<Globe size={14}/>},
                     ...(isTauri ? [{id:'desktop'  as const, label:'Aplikacja',   icon:<Monitor size={14}/>}] : []),
                     ...(isTauri ? [{id:'updates'  as const, label:'Aktualizacje', icon:<Download size={14}/>}] : []),
                     ...(isTauri ? [{id:'about'    as const, label:'O aplikacji',  icon:<Info size={14}/>}] : []),
@@ -12147,6 +12065,138 @@ export default function App() {
                           className="text-sm font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/15 border border-rose-500/20 px-4 py-2 rounded-xl transition-all">
                           {t('privacy.deleteAccount')}
                         </button>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* ─── MOTYW ─── */}
+                  {appSettTab==='theme'&&(
+                    <motion.div key="theme" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
+                      className="flex flex-col gap-5">
+                      <h3 className="text-sm font-bold text-white">Motyw interfejsu</h3>
+                      <p className="text-xs text-zinc-500 -mt-3">Zmień wygląd Cordyna. Motyw jest przypisany do Twojego konta — będzie działał na wszystkich urządzeniach.</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        {THEMES.map(theme => (
+                          <button key={theme.id}
+                            onClick={() => saveTheme(theme.id as ThemeId)}
+                            className={`relative flex flex-col gap-2 p-4 rounded-2xl border transition-all text-left ${selectedTheme === theme.id ? 'border-indigo-500/60 bg-indigo-500/10' : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+                            {/* Theme preview */}
+                            <div className="w-full h-16 rounded-xl overflow-hidden flex gap-1 p-1.5"
+                              style={{ backgroundColor: (theme.vars as any)['--app-bg'] || '#07070f' }}>
+                              <div className="w-5 h-full rounded-lg flex-shrink-0"
+                                style={{ backgroundColor: (theme.vars as any)['--app-sidebar'] || '#0d0d18' }}/>
+                              <div className="flex-1 h-full rounded-lg"
+                                style={{ backgroundColor: (theme.vars as any)['--app-card'] || '#161622' }}/>
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold text-white">{theme.name}</p>
+                              <p className="text-[10px] text-zinc-500 mt-0.5 leading-relaxed">{theme.desc}</p>
+                            </div>
+                            {selectedTheme === theme.id && (
+                              <span className="absolute top-2 right-2 w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center">
+                                <Check size={11} className="text-white"/>
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* ─── POŁĄCZONE KONTA ─── */}
+                  {appSettTab==='connections'&&(
+                    <motion.div key="connections" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
+                      className="flex flex-col gap-6">
+                      <h3 className="text-sm font-bold text-white">Połączone konta</h3>
+
+                      {/* Spotify */}
+                      <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-8 h-8 bg-[#1DB954]/15 rounded-xl flex items-center justify-center">
+                            <SpotifyIcon size={16} className="text-[#1DB954]"/>
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-white">Spotify</p>
+                            {ownSpotify?.connected
+                              ? <p className="text-xs text-zinc-500">Połączono jako {ownSpotify.display_name}</p>
+                              : <p className="text-xs text-zinc-500">Nie połączono</p>}
+                          </div>
+                          {ownSpotify?.connected
+                            ? <button onClick={async()=>{ await spotifyApi.disconnect(); setOwnSpotify(null); addToast('Spotify odłączono','info'); }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
+                            : <button onClick={async()=>{ try { const r = await spotifyApi.connect(); window.location.href = r.url; } catch(e:any){ addToast(e.message||'Błąd Spotify','error'); } }} className="text-xs text-[#1DB954] flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-[#1DB954]/30 hover:bg-[#1DB954]/10">Połącz</button>}
+                        </div>
+                        {ownSpotify?.connected && (
+                          <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
+                            <div>
+                              <p className="text-sm text-white">Wyświetlaj w profilu</p>
+                              <p className="text-xs text-zinc-500 mt-0.5">Inni widzą co teraz grasz</p>
+                            </div>
+                            <button onClick={async()=>{ const v=!ownSpotify.show_on_profile; await spotifyApi.setSettings({show_on_profile:v}); setOwnSpotify(p=>p?{...p,show_on_profile:v}:p); }}
+                              className={`relative w-11 h-6 rounded-full transition-all ${ownSpotify.show_on_profile?'bg-[#1DB954]':'bg-white/[0.1]'}`}>
+                              <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${ownSpotify.show_on_profile?'left-[26px]':'left-1'}`}/>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Twitch */}
+                      <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-8 h-8 bg-purple-500/15 rounded-xl flex items-center justify-center">
+                            <TwitchIcon size={16} className="text-purple-400"/>
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-white">Twitch</p>
+                            {ownTwitch?.connected
+                              ? <p className="text-xs text-zinc-500">Połączono jako {ownTwitch.display_name || ownTwitch.login}</p>
+                              : <p className="text-xs text-zinc-500">Nie połączono</p>}
+                          </div>
+                          {ownTwitch?.connected
+                            ? <button onClick={async()=>{ await twitchApi.disconnect(); setOwnTwitch(null); addToast('Twitch odłączono','info'); }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
+                            : <button onClick={async()=>{ try { const r = await twitchApi.connect(); window.location.href = r.url; } catch(e:any){ addToast(e.message||'Błąd Twitch','error'); } }} className="text-xs text-purple-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-purple-500/30 hover:bg-purple-500/10">Połącz</button>}
+                        </div>
+                        {ownTwitch?.connected && (
+                          <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
+                            <div>
+                              <p className="text-sm text-white">Wyświetlaj w profilu</p>
+                              <p className="text-xs text-zinc-500 mt-0.5">Inni widzą kiedy streamujesz</p>
+                            </div>
+                            <button onClick={async()=>{ const v=!ownTwitch.show_on_profile; await twitchApi.setSettings({show_on_profile:v}); setOwnTwitch(p=>p?{...p,show_on_profile:v}:p); }}
+                              className={`relative w-11 h-6 rounded-full transition-all ${ownTwitch.show_on_profile?'bg-purple-500':'bg-white/[0.1]'}`}>
+                              <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${ownTwitch.show_on_profile?'left-[26px]':'left-1'}`}/>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Steam */}
+                      <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-8 h-8 bg-blue-500/10 rounded-xl flex items-center justify-center">
+                            <SteamIcon size={16} className="text-blue-300"/>
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-white">Steam</p>
+                            {ownSteam?.connected
+                              ? <p className="text-xs text-zinc-500">Połączono jako {ownSteam.display_name}</p>
+                              : <p className="text-xs text-zinc-500">Nie połączono</p>}
+                          </div>
+                          {ownSteam?.connected
+                            ? <button onClick={async()=>{ await steamApi.disconnect(); setOwnSteam(null); addToast('Steam odłączono','info'); }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
+                            : <button onClick={async()=>{ try { const r = await steamApi.connect(); window.location.href = r.url; } catch(e:any){ addToast(e.message||'Błąd Steam','error'); } }} className="text-xs text-blue-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-blue-500/30 hover:bg-blue-500/10">Połącz</button>}
+                        </div>
+                        {ownSteam?.connected && (
+                          <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
+                            <div>
+                              <p className="text-sm text-white">Wyświetlaj w profilu</p>
+                              <p className="text-xs text-zinc-500 mt-0.5">Inni widzą co grasz na Steam</p>
+                            </div>
+                            <button onClick={async()=>{ const v=!ownSteam.show_on_profile; await steamApi.setSettings({show_on_profile:v}); setOwnSteam(p=>p?{...p,show_on_profile:v}:p); }}
+                              className={`relative w-11 h-6 rounded-full transition-all ${ownSteam.show_on_profile?'bg-blue-500':'bg-white/[0.1]'}`}>
+                              <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${ownSteam.show_on_profile?'left-[26px]':'left-1'}`}/>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </motion.div>
                   )}

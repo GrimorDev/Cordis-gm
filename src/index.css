@@ -760,3 +760,17 @@ img.av-eff-neon-cat { transition:box-shadow 0.3s; }
 .av-active img.av-eff-neon-cat {
   box-shadow:0 0 0 2px #d946ef, 0 0 12px rgba(217,70,239,0.7);
 }
+
+/* ── Theme system ── */
+:root {
+  --app-bg: #07070f;
+  --app-sidebar: #0d0d18;
+  --app-card: #161622;
+  --app-surface: #1e1e2e;
+}
+
+/* Apply theme vars to main structural elements */
+.theme-bg      { background-color: var(--app-bg) !important; }
+.theme-sidebar { background-color: var(--app-sidebar) !important; }
+.theme-card    { background-color: var(--app-card) !important; }
+.theme-surface { background-color: var(--app-surface) !important; }

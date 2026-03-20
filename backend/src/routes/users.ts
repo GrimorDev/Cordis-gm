@@ -118,6 +118,7 @@ router.put('/me', authMiddleware,
     body('privacy_friend_requests').optional().isBoolean(),
     body('privacy_dm_from_strangers').optional().isBoolean(),
     body('avatar_effect').optional().isIn(['none','glow','pulse','rainbow','neon','vortex-cw','portal','quantum','glitch','scan','katana','liquid-morph','radar-sweep','vhs','toxic-slime','sakura','demon','neon-cat']),
+    body('theme_id').optional().isIn(['default','midnight','amoled','forest','sakura','sunset']),
   ],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
@@ -127,7 +128,7 @@ router.put('/me', authMiddleware,
       accent_color, compact_messages, voice_noise_cancel,
       font_size, show_timestamps, show_chat_avatars, message_animations, show_link_previews,
       privacy_status_visible, privacy_typing_visible, privacy_read_receipts, privacy_friend_requests,
-      privacy_dm_from_strangers, avatar_effect,
+      privacy_dm_from_strangers, avatar_effect, theme_id,
     } = req.body;
     const updates: string[] = [];
     const values: any[] = [];
@@ -151,6 +152,7 @@ router.put('/me', authMiddleware,
     if (privacy_friend_requests   !== undefined) { updates.push(`privacy_friend_requests=$${idx++}`);   values.push(privacy_friend_requests); }
     if (privacy_dm_from_strangers !== undefined) { updates.push(`privacy_dm_from_strangers=$${idx++}`); values.push(privacy_dm_from_strangers); }
     if (avatar_effect             !== undefined) { updates.push(`avatar_effect=$${idx++}`);             values.push(avatar_effect); }
+    if (theme_id                  !== undefined) { updates.push(`theme_id=$${idx++}`);                  values.push(theme_id); }
     if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update' });
     updates.push(`updated_at=NOW()`);
     values.push(req.user!.id);
@@ -165,7 +167,7 @@ router.put('/me', authMiddleware,
                    accent_color,compact_messages,voice_noise_cancel,
                    font_size,show_timestamps,show_chat_avatars,message_animations,show_link_previews,
                    privacy_status_visible,privacy_typing_visible,privacy_read_receipts,
-                   privacy_friend_requests,privacy_dm_from_strangers,avatar_effect`,
+                   privacy_friend_requests,privacy_dm_from_strangers,avatar_effect,theme_id`,
         values
       );
       await broadcastUserUpdate(req, { id: rows[0].id, username: rows[0].username, avatar_url: rows[0].avatar_url, banner_url: rows[0].banner_url, banner_color: rows[0].banner_color, bio: rows[0].bio, custom_status: rows[0].custom_status, privacy_read_receipts: rows[0].privacy_read_receipts, avatar_effect: rows[0].avatar_effect });

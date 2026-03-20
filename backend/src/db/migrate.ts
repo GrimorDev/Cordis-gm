@@ -566,6 +566,7 @@ CREATE TABLE IF NOT EXISTS server_tags (
 );
 
 DO $$ BEGIN ALTER TABLE users ADD COLUMN active_tag_server_id UUID REFERENCES servers(id) ON DELETE SET NULL; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN theme_id VARCHAR(32) DEFAULT 'default'; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 `;
 
 const SEED_SQL = `
