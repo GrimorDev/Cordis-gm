@@ -31,7 +31,7 @@ import {
   type FavoriteGame, type SpotifyData, type SpotifyTrack, type SpotifyJamSession, type SpotifyVoiceDj, type TwitchData, type TwitchStream, type SteamData, type SteamGame,
   type TwoFactorStatus, type LoginResult, ApiError,
   type ServerEmoji, type PollData, type ServerAutomation, type AutomationTrigger, type AutomationAction, type AutomationActionType,
-  STATIC_BASE,
+  STATIC_BASE, API_BASE,
   botsApi, AVAILABLE_BOTS,
   type BotDefinition, type InstalledBot, type MusicBotState,
 } from './api';
@@ -1941,8 +1941,8 @@ function AutomationsTab({ serverId, gi, roles, channels }: {
 
 interface ServerSettingsPageProps {
   serverFull: ServerFull;
-  tab: 'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations';
-  setTab: (t: 'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations') => void;
+  tab: 'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots';
+  setTab: (t: 'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots') => void;
   roles: ServerRole[];
   members: ServerMember[];
   banList: ServerBan[]; setBanList: (v: ServerBan[]) => void;
@@ -1968,6 +1968,11 @@ interface ServerSettingsPageProps {
   serverEmojis?: ServerEmoji[];
   activeServer?: string;
   channels?: ChannelData[];
+  botChannelId?: string|null;
+  setBotChannelId?: (v: string|null) => void;
+  botChLoading?: boolean;
+  setBotChLoading?: (v: boolean) => void;
+  addToast?: (msg: string, type?: 'success'|'error'|'info'|'warning') => void;
 }
 function ServerSettingsPage({
   serverFull, tab, setTab, roles, members, banList, setBanList,
@@ -1977,6 +1982,7 @@ function ServerSettingsPage({
   handleSetMemberRole, handleKick, handleBan, handleUnban,
   openNewRole, openEditRole, handleDeleteRole, currentUser, onClose,
   streamerMode, serverEmojis, activeServer, channels,
+  botChannelId, setBotChannelId, botChLoading, setBotChLoading, addToast,
 }: ServerSettingsPageProps) {
   const [memberQ, setMemberQ] = React.useState('');
   const filteredMembers = memberQ.trim()
@@ -1990,6 +1996,7 @@ function ServerSettingsPage({
     canCreateInvites && { id: 'invites' as const, label: tl('serverSettings.invites'),     icon: <UserPlus size={14}/> },
     canManageServer && { id: 'emoji' as const, label: tl('serverSettings.emoji'),          icon: <Smile size={14}/> },
     canManageServer && { id: 'automations' as const, label: tl('serverSettings.automations'), icon: <Zap size={14}/> },
+    canManageServer && { id: 'bots' as const, label: 'Boty', icon: <Bot size={14}/> },
   ].filter(Boolean) as { id: typeof tab; label: string; icon: React.ReactNode }[];
 
   return (
@@ -2255,6 +2262,58 @@ function ServerSettingsPage({
           {/* ── Automatyzacje ── */}
           {tab === 'automations' && activeServer && (
             <AutomationsTab serverId={activeServer} gi={gi} roles={roles} channels={channels||[]}/>
+          )}
+
+          {/* ── Boty ── */}
+          {tab === 'bots' && (
+            <div className="p-6">
+              <h3 className="text-base font-bold text-white mb-1">Ustawienia botów</h3>
+              <p className="text-xs text-zinc-500 mb-6">Ogranicz komendy botów do jednego wybranego kanału tekstowego.</p>
+
+              {/* Bot channel selector */}
+              <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-4 mb-4">
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="w-8 h-8 rounded-xl bg-violet-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                    <Bot size={15} className="text-violet-400"/>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">Kanał botów</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">Jeśli wybierzesz kanał, boty będą reagować tylko na komendy z tego kanału. Zostaw puste aby pozwolić na komendy z każdego kanału.</p>
+                  </div>
+                </div>
+                <select
+                  value={botChannelId || ''}
+                  onChange={async e => {
+                    const val = e.target.value || null;
+                    if (setBotChLoading) setBotChLoading(true);
+                    try {
+                      const result = await botsApi.setBotSettings(serverFull.id, { bot_channel_id: val });
+                      if (setBotChannelId) setBotChannelId(result.bot_channel_id);
+                      if (addToast) addToast(val ? 'Kanał botów ustawiony' : 'Ograniczenie kanału usunięte', 'success');
+                    } catch { if (addToast) addToast('Błąd zapisu ustawień', 'error'); }
+                    if (setBotChLoading) setBotChLoading(false);
+                  }}
+                  disabled={botChLoading}
+                  className="w-full bg-white/[0.06] border border-white/[0.08] text-white text-sm rounded-xl px-3 py-2.5 outline-none focus:border-indigo-500/50 transition-all cursor-pointer">
+                  <option value="">— Wszystkie kanały (brak ograniczeń) —</option>
+                  {(channels || []).filter((c: any) => c.type === 'text').map((c: any) => (
+                    <option key={c.id} value={c.id}>#{c.name}</option>
+                  ))}
+                </select>
+                {botChannelId && (
+                  <p className="text-[10px] text-zinc-500 mt-2 flex items-center gap-1">
+                    <Hash size={9}/> Aktywny kanał botów: #{(channels || []).find((c: any) => c.id === botChannelId)?.name || botChannelId}
+                  </p>
+                )}
+              </div>
+
+              <div className="bg-amber-500/8 border border-amber-500/20 rounded-2xl p-3.5">
+                <p className="text-xs text-amber-300/80 flex items-start gap-2">
+                  <AlertTriangle size={12} className="shrink-0 mt-0.5"/>
+                  Komendy wysłane z innych kanałów będą odrzucane z informacją skierowaną do użytkownika.
+                </p>
+              </div>
+            </div>
           )}
 
         </div>
@@ -3979,7 +4038,14 @@ export default function App() {
   const [deleteSrvConfirm, setDeleteSrvConfirm] = useState<{ id: string; name: string } | null>(null);
 
   const [srvSettOpen, setSrvSettOpen]         = useState(false);
-  const [srvSettTab, setSrvSettTab]           = useState<'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'>('overview');
+  const [srvSettTab, setSrvSettTab]           = useState<'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots'>('overview');
+  const [botChannelId, setBotChannelId]       = useState<string|null>(null);
+  const [botChLoading, setBotChLoading]       = useState(false);
+  // Load bot settings when server settings opens
+  useEffect(() => {
+    if (!srvSettOpen || !activeServer) return;
+    botsApi.getBotSettings(activeServer).then(s => setBotChannelId(s.bot_channel_id)).catch(() => {});
+  }, [srvSettOpen, activeServer]);
   const [banList, setBanList]                 = useState<import('./api').ServerBan[]>([]);
   const [slowmodeLeft, setSlowmodeLeft]       = useState(0); // seconds remaining
   const [pinnedMsgs, setPinnedMsgs]           = useState<import('./api').MessageFull[]>([]);
@@ -4050,6 +4116,7 @@ export default function App() {
   // Music bot state per channel
   const [musicBotState, setMusicBotState] = useState<Record<string, import('./api').MusicBotState>>({});
   const [musicVolume, setMusicVolume]   = useState(() => { try { return parseInt(localStorage.getItem('cordyn_music_vol') ?? '100'); } catch { return 100; } });
+  const [musicAutoplayBlocked, setMusicAutoplayBlocked] = useState(false);
   const musicIframeRef                   = useRef<HTMLIFrameElement>(null);
 
   // ── Slash command autocomplete ────────────────────────────────────
@@ -5614,18 +5681,16 @@ export default function App() {
   };
 
   // Slash command autocomplete — only in server text channels
-  // Stable YouTube embed src — recomputed only when videoId OR started_at changes, never on
-  // unrelated re-renders. Without this, Date.now() in src changes every render → iframe reload → stutter.
-  const youtubeEmbedSrc = useMemo(() => {
+  const audioStreamSrc = useMemo(() => {
     const music = activeCall?.channelId ? musicBotState[activeCall.channelId] : null;
-    if (!music?.playing || !music.videoId) return null;
-    const elapsed = music.started_at ? Math.floor((Date.now() - music.started_at) / 1000) : 0;
-    return `https://www.youtube.com/embed/${music.videoId}?autoplay=1&start=${elapsed}&controls=1&rel=0&modestbranding=1&enablejsapi=1`;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!music?.playing) return null;
+    return `${API_BASE}/stream/${music.channel_id}?_t=${music.started_at}&v=${music.videoId || ''}`;
   }, [
     activeCall?.channelId,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    musicBotState[activeCall?.channelId ?? '']?.playing,
+    musicBotState[activeCall?.channelId ?? '']?.started_at,
     musicBotState[activeCall?.channelId ?? '']?.videoId,
-    musicBotState[activeCall?.channelId ?? '']?.started_at,  // needed: same video replayed gets new start
   ]);
 
   const allSlashCommands = activeView === 'servers' && activeServer
@@ -8236,6 +8301,11 @@ export default function App() {
               serverEmojis={serverEmojis.get(activeServer)||[]}
               activeServer={activeServer}
               channels={allChs}
+              botChannelId={botChannelId}
+              setBotChannelId={setBotChannelId}
+              botChLoading={botChLoading}
+              setBotChLoading={setBotChLoading}
+              addToast={addToast}
             />
           ) : activeView==='admin' ? (
             <AdminPanel
@@ -9445,25 +9515,48 @@ export default function App() {
                     {music.queue.length > 0 && <p className="text-[10px] text-zinc-500 mt-0.5">w kolejce: {music.queue.length}</p>}
                   </div>
                 </div>
-                {/* Memoized src — only recomputed when videoId changes, never on re-render → no reload stutter */}
-                {youtubeEmbedSrc && (
-                  <iframe
-                    ref={musicIframeRef}
-                    key={`${music.videoId}-${music.started_at}`}
-                    src={youtubeEmbedSrc}
-                    className="w-full rounded-xl"
-                    style={{ height: '130px', border: 'none' }}
-                    allow="autoplay; encrypted-media; picture-in-picture"
-                    title={music.title || 'Cordyn Music'}
-                    onLoad={() => {
-                      // Apply saved volume after iframe loads
-                      setTimeout(() => {
-                        musicIframeRef.current?.contentWindow?.postMessage(
-                          JSON.stringify({ event: 'command', func: 'setVolume', args: [musicVolume] }), '*'
-                        );
-                      }, 1000);
+                {/* Hidden audio element for actual playback (server-side stream, no YouTube CAPTCHA) */}
+                {audioStreamSrc && (
+                  <audio
+                    key={audioStreamSrc}
+                    ref={el => {
+                      if (el) {
+                        el.volume = musicVolume / 100;
+                        el.play().catch(() => setMusicAutoplayBlocked(true));
+                      }
                     }}
+                    src={audioStreamSrc}
+                    style={{ display: 'none' }}
+                    onVolumeChange={() => {}}
                   />
+                )}
+                {/* Visual: thumbnail */}
+                {music.thumbnail && (
+                  <div className="relative rounded-xl overflow-hidden mb-2" style={{height:80}}>
+                    <img src={music.thumbnail} className="w-full h-full object-cover" alt=""/>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2">
+                      {musicAutoplayBlocked ? (
+                        <button
+                          onClick={() => {
+                            setMusicAutoplayBlocked(false);
+                            const audio = document.querySelector(`audio[src="${audioStreamSrc}"]`) as HTMLAudioElement;
+                            audio?.play().catch(() => setMusicAutoplayBlocked(true));
+                          }}
+                          className="text-[10px] font-bold text-white bg-[#1DB954]/80 hover:bg-[#1DB954] px-2.5 py-1 rounded-full flex items-center gap-1 transition-all">
+                          <Play size={9}/> Kliknij aby odtworzyć
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <div className="flex gap-0.5 items-end h-3">
+                            {[3,5,4,6,3].map((h,i) => (
+                              <div key={i} className="w-0.5 bg-[#1DB954] rounded-full animate-pulse" style={{height:`${h*2}px`,animationDelay:`${i*0.1}s`}}/>
+                            ))}
+                          </div>
+                          <span className="text-[9px] text-[#1DB954] font-bold">NA ŻYWO</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
                 {/* Volume slider */}
                 <div className="flex items-center gap-2 mt-2">
@@ -9473,9 +9566,9 @@ export default function App() {
                       const vol = parseInt(e.target.value);
                       setMusicVolume(vol);
                       try { localStorage.setItem('cordyn_music_vol', String(vol)); } catch {}
-                      musicIframeRef.current?.contentWindow?.postMessage(
-                        JSON.stringify({ event: 'command', func: 'setVolume', args: [vol] }), '*'
-                      );
+                      // Apply to audio element
+                      const audioEl = document.querySelector(`audio[src="${audioStreamSrc}"]`) as HTMLAudioElement;
+                      if (audioEl) audioEl.volume = vol / 100;
                     }}
                     className="flex-1 h-1 rounded-full accent-[#1DB954] cursor-pointer"/>
                   <Volume2 size={10} className="text-zinc-600 shrink-0"/>

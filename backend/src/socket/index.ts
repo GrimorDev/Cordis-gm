@@ -402,6 +402,18 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
           return;
         }
 
+        // Check if this server restricts bot commands to a specific channel
+        try {
+          const { rows: srvRows } = await query('SELECT bot_channel_id FROM servers WHERE id=$1', [server_id]);
+          const botChannelId = srvRows[0]?.bot_channel_id;
+          if (botChannelId && channel_id !== botChannelId) {
+            // Silently ignore command from wrong channel, or send a hint
+            const sendHint = makeBotSender(io, channel_id, user.id, '🤖 System');
+            await sendHint(`❌ Komendy botów są ograniczone do kanału <#${botChannelId}>. Użyj tamtego kanału.`);
+            return;
+          }
+        } catch { /* ignore DB errors — don't block commands */ }
+
         if (bot === 'music') {
           // For /play we need the user's current voice channel; stop/skip/pause
           // send channel_id = their voice channel from the UI buttons — use as-is.
@@ -604,8 +616,25 @@ async function handleMusicCommand(opts: {
     const info = await ytOembed(videoId);
     const started_at = Date.now();
 
+    // Get direct CDN audio URL for server-side streaming (avoids client-side YouTube bot detection)
+    let directUrl: string | undefined;
+    try {
+      const { spawn } = await import('child_process');
+      directUrl = await new Promise<string>((resolve, reject) => {
+        const proc = spawn('yt-dlp', ['--no-playlist', '-f', 'bestaudio', '--get-url', ytUrl]);
+        let out = '';
+        proc.stdout.on('data', (d: Buffer) => { out += d.toString(); });
+        proc.stderr.on('data', () => {});
+        proc.on('close', (code: number) => {
+          const url = out.trim().split('\n')[0];
+          if (code === 0 && url) resolve(url);
+          else reject(new Error('yt-dlp --get-url failed'));
+        });
+      });
+    } catch { /* directUrl stays undefined; clients fall back to thumbnail only */ }
+
     const state: MusicBotState = {
-      playing: true, ...info, url: ytUrl, videoId,
+      playing: true, ...info, url: ytUrl, directUrl, videoId,
       channel_id, started_at, requested_by: user.username,
       queue: opts._carryQueue ?? [],  // preserve queue carried from skip
     };

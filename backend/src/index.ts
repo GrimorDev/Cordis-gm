@@ -1,6 +1,7 @@
 import express from 'express';
 import http from 'http';
 import cors from 'cors';
+import { spawn } from 'child_process';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
@@ -34,6 +35,7 @@ import pollsRoutes   from './routes/polls';
 import pushRoutes    from './routes/push';
 import automationsRoutes from './routes/automations';
 import botsRoutes from './routes/bots';
+import { musicStates } from './routes/bots';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -127,6 +129,48 @@ app.use('/api/polls',   pollsRoutes);
 app.use('/api/push',    pushRoutes);
 app.use('/api/servers/:serverId/automations', automationsRoutes);
 app.use('/api/servers/:serverId/bots', botsRoutes);
+
+// ── Music audio proxy stream ──────────────────────────────────────────────────
+// Streams the current music bot audio for a voice channel.
+// Uses ffmpeg to transcode from the yt-dlp direct URL, seeking to the correct position.
+// No auth required — audio is not sensitive and channel IDs are already known to members.
+app.get('/api/stream/:channelId', (req, res) => {
+  const state = musicStates.get(req.params.channelId);
+  if (!state?.playing || !state.directUrl) {
+    return res.status(404).json({ error: 'No music playing on this channel' });
+  }
+
+  const elapsed = state.started_at
+    ? Math.max(0, Math.floor((Date.now() - state.started_at) / 1000) - 2)
+    : 0;
+
+  res.setHeader('Content-Type', 'audio/mpeg');
+  res.setHeader('Cache-Control', 'no-cache, no-store');
+  res.setHeader('Transfer-Encoding', 'chunked');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  const ffmpegArgs: string[] = [
+    '-reconnect', '1',
+    '-reconnect_streamed', '1',
+    '-reconnect_delay_max', '5',
+  ];
+  if (elapsed > 5) ffmpegArgs.push('-ss', String(elapsed));
+  ffmpegArgs.push(
+    '-i', state.directUrl,
+    '-vn', '-f', 'mp3', '-ar', '44100', '-ab', '192k',
+    '-loglevel', 'error',
+    'pipe:1'
+  );
+
+  const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
+  ffmpegProc.stdout.pipe(res);
+  ffmpegProc.stderr.on('data', () => {});
+  ffmpegProc.on('error', () => { if (!res.headersSent) res.status(500).end(); });
+
+  const cleanup = () => { try { ffmpegProc.kill('SIGTERM'); } catch {} };
+  req.on('close', cleanup);
+  req.on('aborted', cleanup);
+});
 
 // Health check
 app.get('/health', (_req, res) => {

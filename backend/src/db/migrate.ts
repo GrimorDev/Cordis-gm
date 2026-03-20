@@ -556,6 +556,7 @@ CREATE TABLE IF NOT EXISTS server_bots (
     PRIMARY KEY (server_id, bot_id)
 );
 CREATE INDEX IF NOT EXISTS idx_server_bots_server ON server_bots(server_id);
+DO $$ BEGIN ALTER TABLE servers ADD COLUMN bot_channel_id UUID REFERENCES channels(id) ON DELETE SET NULL; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 `;
 
 const SEED_SQL = `

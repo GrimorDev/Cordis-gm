@@ -27,6 +27,7 @@ export interface MusicBotState {
   playing: boolean;
   title?: string;
   url?: string;
+  directUrl?: string;     // Direct CDN audio URL from yt-dlp (for server proxy streaming)
   videoId?: string;     // YouTube video ID for client-side iframe embed
   thumbnail?: string;
   duration?: number;
@@ -83,6 +84,30 @@ router.delete('/:botId', authMiddleware, async (req: AuthRequest, res: Response)
     }
     await query('DELETE FROM server_bots WHERE server_id=$1 AND bot_id=$2', [serverId, botId]);
     return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// GET /api/servers/:serverId/bots/settings — returns bot settings (bot_channel_id)
+router.get('/settings', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { serverId } = req.params;
+    if (!(await isMember(serverId, req.user!.id))) return res.status(403).json({ error: 'Forbidden' });
+    const { rows } = await query('SELECT bot_channel_id FROM servers WHERE id=$1', [serverId]);
+    return res.json({ bot_channel_id: rows[0]?.bot_channel_id ?? null });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// PUT /api/servers/:serverId/bots/settings — update bot_channel_id (admin/owner only)
+router.put('/settings', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { serverId } = req.params;
+    if (!(await canManage(serverId, req.user!.id))) return res.status(403).json({ error: 'Forbidden' });
+    const { bot_channel_id } = req.body;
+    await query(
+      'UPDATE servers SET bot_channel_id = $1 WHERE id = $2',
+      [bot_channel_id || null, serverId]
+    );
+    return res.json({ bot_channel_id: bot_channel_id || null });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 

@@ -13,6 +13,8 @@ const BASE = (
       : '/api'
 ).replace(/\/$/, '');
 
+export const API_BASE = BASE;
+
 // Origin without /api — resolves /uploads/... to absolute URLs in Tauri.
 export const STATIC_BASE = BASE.replace(/\/api\/?$/, '');
 
@@ -210,6 +212,7 @@ export interface MusicBotState {
   playing: boolean;
   title?: string;
   url?: string;
+  directUrl?: string;     // Direct CDN audio URL from yt-dlp (for server proxy streaming)
   videoId?: string;       // YouTube video ID — used for iframe embed on client
   thumbnail?: string;
   duration?: number;
@@ -305,6 +308,10 @@ export const botsApi = {
     req<InstalledBot>('POST', `/servers/${serverId}/bots`, { bot_id: botId, channel_id: channelId }),
   remove: (serverId: string, botId: string) =>
     req<void>('DELETE', `/servers/${serverId}/bots/${botId}`),
+  getBotSettings: (serverId: string) =>
+    req<{ bot_channel_id: string | null }>('GET', `/servers/${serverId}/bots/settings`),
+  setBotSettings: (serverId: string, data: { bot_channel_id: string | null }) =>
+    req<{ bot_channel_id: string | null }>('PUT', `/servers/${serverId}/bots/settings`, data),
 };
 
 // ── Auth ───────────────────────────────────────────────────────────────────
