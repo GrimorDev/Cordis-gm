@@ -76,12 +76,19 @@ export interface UserProfile {
   privacy_friend_requests?: boolean | null;
   privacy_dm_from_strangers?: boolean | null;
   avatar_effect?: string | null;
+  active_tag_server_id?: string | null;
+  active_tag?: string | null;
 }
 export interface ServerData {
   id: string; name: string; description?: string | null;
   icon_url?: string | null; banner_url?: string | null;
   is_official?: boolean;
   owner_id: string; created_at: string;
+}
+export interface ServerTag {
+  server_id: string;
+  tag: string;
+  created_at: string;
 }
 export interface ServerRole {
   id: string; server_id: string; name: string; color: string;
@@ -128,6 +135,8 @@ export interface MessageFull {
   sender_role?: string | null;
   sender_role_color?: string | null;
   sender_avatar_effect?: string | null;
+  sender_tag?: string | null;
+  sender_tag_server_id?: string | null;
   pinned?: boolean;
   reactions?: MsgReaction[];
 }
@@ -138,6 +147,7 @@ export interface DmConversation {
   other_custom_status?: string | null;
   other_last_read_at?: string | null;
   other_avatar_effect?: string | null;
+  other_tag?: string | null;
   last_message?: string | null; last_message_at?: string | null;
 }
 export interface DmMessageFull {
@@ -193,6 +203,8 @@ export interface ServerMember {
   avatar_effect?: string | null;
   badges?: Badge[];
   is_bot?: boolean;
+  active_tag?: string | null;
+  active_tag_server_id?: string | null;
 }
 
 // ── Bot types ──────────────────────────────────────────────────────────────
@@ -416,6 +428,13 @@ export const serversApi = {
     unban: (serverId: string, userId: string) =>
       req<void>('DELETE', `/servers/${serverId}/bans/${userId}`),
   },
+  tag: {
+    get: (serverId: string) => req<ServerTag | null>('GET', `/servers/${serverId}/tag`),
+    set: (serverId: string, tag: string) => req<ServerTag>('PUT', `/servers/${serverId}/tag`, { tag }),
+    remove: (serverId: string) => req<{ ok: boolean }>('DELETE', `/servers/${serverId}/tag`),
+  },
+  setActiveTag: (serverId: string | null) =>
+    req<{ active_tag_server_id: string | null; tag: string | null }>('PUT', '/users/me/active-tag', { server_id: serverId }),
 };
 
 // ── Channels ───────────────────────────────────────────────────────────────

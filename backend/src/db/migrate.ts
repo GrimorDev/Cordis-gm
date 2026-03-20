@@ -557,6 +557,15 @@ CREATE TABLE IF NOT EXISTS server_bots (
 );
 CREATE INDEX IF NOT EXISTS idx_server_bots_server ON server_bots(server_id);
 DO $$ BEGIN ALTER TABLE servers ADD COLUMN bot_channel_id UUID REFERENCES channels(id) ON DELETE SET NULL; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Server tag system
+CREATE TABLE IF NOT EXISTS server_tags (
+    server_id   UUID PRIMARY KEY REFERENCES servers(id) ON DELETE CASCADE,
+    tag         VARCHAR(4) NOT NULL CHECK (char_length(tag) BETWEEN 2 AND 4),
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+DO $$ BEGIN ALTER TABLE users ADD COLUMN active_tag_server_id UUID REFERENCES servers(id) ON DELETE SET NULL; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 `;
 
 const SEED_SQL = `

@@ -353,14 +353,16 @@ router.get('/:id/members', authMiddleware, async (req: AuthRequest, res: Respons
     }
     const { rows } = await query(
       `SELECT u.id, u.username, u.avatar_url, u.status, u.custom_status, u.avatar_effect,
-              u.is_bot,
+              u.is_bot, u.active_tag_server_id, st.tag as active_tag,
               sm.role_name, sm.joined_at,
               COALESCE(
                 (SELECT json_agg(json_build_object('id', gb.id, 'name', gb.name, 'label', gb.label, 'color', gb.color, 'icon', gb.icon) ORDER BY gb.position)
                  FROM user_badges ub INNER JOIN global_badges gb ON gb.id = ub.badge_id WHERE ub.user_id = u.id),
                 '[]'::json
               ) as badges
-       FROM server_members sm INNER JOIN users u ON u.id = sm.user_id
+       FROM server_members sm
+       INNER JOIN users u ON u.id = sm.user_id
+       LEFT JOIN server_tags st ON st.server_id = u.active_tag_server_id
        WHERE sm.server_id = $1 ORDER BY sm.role_name, u.username`,
       [req.params.id]
     );
@@ -813,6 +815,61 @@ router.delete('/:id/emojis/:emojiId', authMiddleware, async (req: AuthRequest, r
       return res.status(403).json({ error: 'Not authorized' });
     }
     await query('DELETE FROM server_emojis WHERE id=$1 AND server_id=$2', [req.params.emojiId, req.params.id]);
+    return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ── Server Tag ────────────────────────────────────────────────────────────────
+
+// GET /api/servers/:id/tag — anyone can read a server's tag
+router.get('/:id/tag', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!(await isMember(req.params.id, req.user!.id))) {
+      return res.status(403).json({ error: 'Not a member' });
+    }
+    const { rows: [tag] } = await query(
+      'SELECT tag, created_at FROM server_tags WHERE server_id = $1',
+      [req.params.id]
+    );
+    return res.json(tag || null);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// PUT /api/servers/:id/tag — Owner/Admin only; upserts tag
+router.put('/:id/tag',
+  authMiddleware,
+  body('tag').isString().trim().isLength({ min: 2, max: 4 }).matches(/^[A-Z0-9]+$/i),
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: 'Tag must be 2–4 alphanumeric characters' });
+    try {
+      if (!(await isAuthorized(req.params.id, req.user!.id, 'manage_server'))) {
+        return res.status(403).json({ error: 'Not authorized' });
+      }
+      const tag = (req.body.tag as string).toUpperCase();
+      const { rows: [row] } = await query(
+        `INSERT INTO server_tags (server_id, tag) VALUES ($1, $2)
+         ON CONFLICT (server_id) DO UPDATE SET tag = EXCLUDED.tag
+         RETURNING tag, created_at`,
+        [req.params.id, tag]
+      );
+      // Broadcast tag change to all server members
+      const io = req.app.get('io');
+      if (io) io.to(`server:${req.params.id}`).emit('server_tag_updated', { server_id: req.params.id, tag: row.tag });
+      return res.json(row);
+    } catch { return res.status(500).json({ error: 'Internal server error' }); }
+  }
+);
+
+// DELETE /api/servers/:id/tag — Owner/Admin only; removes tag
+router.delete('/:id/tag', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!(await isAuthorized(req.params.id, req.user!.id, 'manage_server'))) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    await query('DELETE FROM server_tags WHERE server_id = $1', [req.params.id]);
+    const io = req.app.get('io');
+    if (io) io.to(`server:${req.params.id}`).emit('server_tag_updated', { server_id: req.params.id, tag: null });
     return res.json({ ok: true });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });

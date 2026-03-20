@@ -1601,6 +1601,18 @@ function StatusBadge({ status, size = 14, className = '' }: { status: string; si
   );
 }
 
+// ─── Tag badge — shows server tag next to a username ───────────────────────────
+function TagBadge({ tag }: { tag: string }) {
+  return (
+    <span
+      className="inline-flex items-center text-[9px] font-black tracking-widest uppercase px-1.5 py-px rounded-md border border-indigo-400/40 bg-indigo-500/15 text-indigo-300 shrink-0 select-none"
+      title={`Tag serwera: ${tag}`}
+    >
+      {tag}
+    </span>
+  );
+}
+
 // ─── Badge icon map ────────────────────────────────────────────────────────────
 const BADGE_ICON_MAP: Record<string, LucideIcon> = {
   developer: Code2,
@@ -1941,8 +1953,8 @@ function AutomationsTab({ serverId, gi, roles, channels }: {
 
 interface ServerSettingsPageProps {
   serverFull: ServerFull;
-  tab: 'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots';
-  setTab: (t: 'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots') => void;
+  tab: 'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots'|'tag';
+  setTab: (t: 'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots'|'tag') => void;
   roles: ServerRole[];
   members: ServerMember[];
   banList: ServerBan[]; setBanList: (v: ServerBan[]) => void;
@@ -1973,6 +1985,16 @@ interface ServerSettingsPageProps {
   botChLoading?: boolean;
   setBotChLoading?: (v: boolean) => void;
   addToast?: (msg: string, type?: 'success'|'error'|'info'|'warning') => void;
+  // Tag
+  serverTag?: string|null;
+  onSaveTag?: (tag: string) => void;
+  onDeleteTag?: () => void;
+  tagInput?: string;
+  setTagInput?: (v: string) => void;
+  tagSaving?: boolean;
+  activeTagServerId?: string|null;
+  onSetActiveTag?: (serverId: string|null) => void;
+  currentUserId?: string;
 }
 function ServerSettingsPage({
   serverFull, tab, setTab, roles, members, banList, setBanList,
@@ -1983,6 +2005,8 @@ function ServerSettingsPage({
   openNewRole, openEditRole, handleDeleteRole, currentUser, onClose,
   streamerMode, serverEmojis, activeServer, channels,
   botChannelId, setBotChannelId, botChLoading, setBotChLoading, addToast,
+  serverTag, onSaveTag, onDeleteTag, tagInput, setTagInput, tagSaving,
+  activeTagServerId, onSetActiveTag, currentUserId,
 }: ServerSettingsPageProps) {
   const [memberQ, setMemberQ] = React.useState('');
   const filteredMembers = memberQ.trim()
@@ -1997,6 +2021,7 @@ function ServerSettingsPage({
     canManageServer && { id: 'emoji' as const, label: tl('serverSettings.emoji'),          icon: <Smile size={14}/> },
     canManageServer && { id: 'automations' as const, label: tl('serverSettings.automations'), icon: <Zap size={14}/> },
     canManageServer && { id: 'bots' as const, label: 'Boty', icon: <Bot size={14}/> },
+    canManageServer && { id: 'tag' as const, label: 'Tag serwera', icon: <Hash size={14}/> },
   ].filter(Boolean) as { id: typeof tab; label: string; icon: React.ReactNode }[];
 
   return (
@@ -2146,12 +2171,15 @@ function ServerSettingsPage({
                     {/* Użytkownik */}
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="relative shrink-0">
-                        <img src={m.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(m.username)}&size=36`}
+                        <img src={ava(m)}
                           className="w-9 h-9 rounded-full object-cover" alt=""/>
                         <StatusBadge status={m.status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-white truncate">{m.username}</p>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{m.username}</p>
+                          {(m as any).active_tag && <TagBadge tag={(m as any).active_tag}/>}
+                        </div>
                         {m.badges && m.badges.length > 0 && (
                           <div className="flex gap-1 mt-0.5 flex-wrap">
                             {m.badges.slice(0, 3).map(b => {
@@ -2264,7 +2292,89 @@ function ServerSettingsPage({
             <AutomationsTab serverId={activeServer} gi={gi} roles={roles} channels={channels||[]}/>
           )}
 
-          {/* ── Boty ── */}
+          {/* ── Tag serwera ── */}
+          {tab === 'tag' && (
+            <div className="max-w-xl mx-auto p-6 flex flex-col gap-6">
+              <div>
+                <h3 className="text-base font-bold text-white mb-1">Tag serwera</h3>
+                <p className="text-xs text-zinc-500">Tag to krótki skrót (2–4 znaki) identyfikujący Twój serwer. Członkowie mogą go wyświetlać przy swoim nicku — widoczny wszędzie na Cordynie.</p>
+              </div>
+
+              {/* Current tag preview */}
+              <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-4">
+                <p className="text-[10px] text-zinc-600 uppercase tracking-widest mb-3">Aktualny tag</p>
+                {serverTag ? (
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex items-center text-sm font-black tracking-widest uppercase px-3 py-1.5 rounded-lg border border-indigo-400/40 bg-indigo-500/15 text-indigo-300">
+                      {serverTag}
+                    </span>
+                    <span className="text-xs text-zinc-400">Przykład: <span className="text-white font-semibold">NazwaUżytkownika</span> <span className="text-[10px] font-black tracking-widest uppercase px-1.5 py-px rounded-md border border-indigo-400/40 bg-indigo-500/15 text-indigo-300">{serverTag}</span></span>
+                  </div>
+                ) : (
+                  <p className="text-sm text-zinc-600 italic">Brak tagu — ustaw poniżej</p>
+                )}
+              </div>
+
+              {/* Edit tag */}
+              <div className="flex flex-col gap-3">
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest">Ustaw / zmień tag</label>
+                <div className="flex gap-2">
+                  <input
+                    value={tagInput ?? ''}
+                    onChange={e => setTagInput && setTagInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4))}
+                    maxLength={4}
+                    placeholder="np. CORD"
+                    className="flex-1 bg-white/[0.06] border border-white/[0.08] text-white placeholder-zinc-600 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500/50 transition-all font-mono tracking-widest uppercase"
+                  />
+                  <button
+                    onClick={() => onSaveTag && tagInput && tagInput.length >= 2 && onSaveTag(tagInput)}
+                    disabled={tagSaving || !tagInput || tagInput.length < 2}
+                    className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold px-5 py-2.5 rounded-xl transition-all text-sm shrink-0">
+                    {tagSaving ? 'Zapisywanie…' : 'Zapisz'}
+                  </button>
+                  {serverTag && (
+                    <button
+                      onClick={() => onDeleteTag && onDeleteTag()}
+                      className="bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 font-bold px-4 py-2.5 rounded-xl transition-all text-sm shrink-0 border border-rose-500/25">
+                      Usuń
+                    </button>
+                  )}
+                </div>
+                <p className="text-[10px] text-zinc-700">2–4 znaki, tylko litery i cyfry (A–Z, 0–9)</p>
+              </div>
+
+              {/* User: set/remove active tag */}
+              <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-4">
+                <p className="text-[10px] text-zinc-600 uppercase tracking-widest mb-3">Twój aktywny tag</p>
+                {serverTag ? (
+                  <>
+                    <p className="text-xs text-zinc-400 mb-3">
+                      {activeTagServerId === serverFull.id
+                        ? <>Wyświetlasz tag <span className="font-black text-indigo-300">{serverTag}</span> przy swoim nicku na całym Cordynie.</>
+                        : <>Możesz wyświetlać tag <span className="font-black text-indigo-300">{serverTag}</span> przy swoim nicku.</>
+                      }
+                    </p>
+                    {activeTagServerId === serverFull.id ? (
+                      <button
+                        onClick={() => onSetActiveTag && onSetActiveTag(null)}
+                        className="text-sm bg-white/[0.05] hover:bg-white/[0.09] text-zinc-300 font-semibold px-4 py-2 rounded-xl transition-all border border-white/[0.07]">
+                        Zdejmij tag
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => onSetActiveTag && onSetActiveTag(serverFull.id)}
+                        className="text-sm bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 font-semibold px-4 py-2 rounded-xl transition-all border border-indigo-500/25">
+                        Załóż ten tag
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-xs text-zinc-600 italic">Najpierw ustaw tag serwera powyżej.</p>
+                )}
+              </div>
+            </div>
+          )}
+
           {tab === 'bots' && (
             <div className="p-6">
               <h3 className="text-base font-bold text-white mb-1">Ustawienia botów</h3>
@@ -4039,13 +4149,24 @@ export default function App() {
   const [deleteSrvConfirm, setDeleteSrvConfirm] = useState<{ id: string; name: string } | null>(null);
 
   const [srvSettOpen, setSrvSettOpen]         = useState(false);
-  const [srvSettTab, setSrvSettTab]           = useState<'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots'>('overview');
+  const [srvSettTab, setSrvSettTab]           = useState<'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots'|'tag'>('overview');
   const [botChannelId, setBotChannelId]       = useState<string|null>(null);
   const [botChLoading, setBotChLoading]       = useState(false);
+  // ── Server tag state ─────────────────────────────────────────────
+  const [serverTagMap, setServerTagMap]       = useState<Record<string, string | null>>({});  // server_id → tag
+  const [tagInput, setTagInput]               = useState('');
+  const [tagSaving, setTagSaving]             = useState(false);
+  const [activeTagServerId, setActiveTagServerId] = useState<string|null>(null); // current user's active tag server
   // Load bot settings when server settings opens
   useEffect(() => {
     if (!srvSettOpen || !activeServer) return;
     botsApi.getBotSettings(activeServer).then(s => setBotChannelId(s.bot_channel_id)).catch(() => {});
+    serversApi.tag.get(activeServer)
+      .then(t => {
+        setServerTagMap(p => ({ ...p, [activeServer]: t?.tag ?? null }));
+        setTagInput(t?.tag ?? '');
+      })
+      .catch(() => {});
   }, [srvSettOpen, activeServer]);
   const [banList, setBanList]                 = useState<import('./api').ServerBan[]>([]);
   const [slowmodeLeft, setSlowmodeLeft]       = useState(0); // seconds remaining
@@ -4514,7 +4635,16 @@ export default function App() {
   useEffect(() => {
     const token = getToken();
     if (!token) { setAuthLoading(false); return; }
-    auth.me().then(u => { setCurrentUser(u); setEditProf({...u}); setIsAuthenticated(true); applyUserPrefs(u); })
+    auth.me().then(u => {
+      setCurrentUser(u); setEditProf({...u}); setIsAuthenticated(true); applyUserPrefs(u);
+      if (u.active_tag_server_id) {
+        setActiveTagServerId(u.active_tag_server_id);
+        // Pre-load the tag text so the bottom bar renders immediately
+        if (u.active_tag) {
+          setServerTagMap(p => ({ ...p, [u.active_tag_server_id!]: u.active_tag! }));
+        }
+      }
+    })
       .catch(() => clearToken()).finally(() => setAuthLoading(false));
   }, []);
 
@@ -5010,14 +5140,31 @@ export default function App() {
       setFriends(p => p.map(f => f.id === u.id ? { ...f, ...u } : f));
       setMembers(p => p.map(m => m.id === u.id ? { ...m, ...u } : m));
       setDmConvs(p => p.map(d => d.other_user_id === u.id
-        ? { ...d, other_username: u.username ?? d.other_username, other_avatar_url: u.avatar_url ?? d.other_avatar_url }
+        ? { ...d,
+            other_username: u.username ?? d.other_username,
+            other_avatar_url: u.avatar_url ?? d.other_avatar_url,
+            ...(u.active_tag !== undefined ? { other_tag: u.active_tag ?? null } : {}),
+          }
         : d));
       // Update own profile if it's the current user
       setCurrentUser(p => p && p.id === u.id ? { ...p, ...u } : p);
+      // Update own active tag if this is our profile update
+      if (u.id === currentUser?.id && u.active_tag !== undefined) {
+        const newServerId = u.active_tag ? (u.active_tag_server_id ?? null) : null;
+        setActiveTagServerId(newServerId);
+        if (newServerId && u.active_tag) {
+          setServerTagMap(p => ({ ...p, [newServerId]: u.active_tag }));
+        }
+      }
       // Update open profile popup
       setSelUser((p: any) => p && p.id === u.id ? { ...p, ...u } : p);
       // Update DM partner profile if visible
       setDmPartnerProfile(p => p && p.id === u.id ? { ...p, ...u } : p);
+    });
+
+    // ── Server tag updated ────────────────────────────────────────────
+    sock.on('server_tag_updated' as any, ({ server_id, tag }: { server_id: string; tag: string | null }) => {
+      setServerTagMap(p => ({ ...p, [server_id]: tag }));
     });
 
     // ── Badges updated (admin assigns/removes) ───────────────────────
@@ -5706,21 +5853,34 @@ export default function App() {
     if (!audio) return;
     if (audioStreamSrc) {
       audio.src = audioStreamSrc;
-      audio.volume = musicVolume / 100;
       // onerror fires when the src returns 4xx/5xx (server still fetching directUrl)
       audio.onerror = () => {
         // Retry after 3 s — backend may still be running yt-dlp to get the stream URL
         setTimeout(() => {
           if (musicAudioRef.current && musicAudioRef.current.src === audioStreamSrc) {
             musicAudioRef.current.load();
-            musicAudioRef.current.play()
-              .then(() => setMusicAutoplayBlocked(false))
-              .catch(() => setMusicAutoplayBlocked(true));
+            tryPlay(musicAudioRef.current);
           }
         }, 3000);
         setMusicAutoplayBlocked(true); // show "kliknij" while waiting
       };
-      audio.play().then(() => setMusicAutoplayBlocked(false)).catch(() => setMusicAutoplayBlocked(true));
+      const tryPlay = (el: HTMLAudioElement) => {
+        // Muted autoplay bypasses browser/WebView autoplay policy,
+        // then immediately unmute so the user hears audio.
+        el.muted = true;
+        el.volume = musicVolume / 100;
+        el.play()
+          .then(() => {
+            el.muted = false;
+            el.volume = musicVolume / 100;
+            setMusicAutoplayBlocked(false);
+          })
+          .catch(() => {
+            el.muted = false;
+            setMusicAutoplayBlocked(true);
+          });
+      };
+      tryPlay(audio);
     } else {
       audio.pause();
       audio.src = '';
@@ -7417,7 +7577,10 @@ export default function App() {
                       <StatusBadge status={dm.other_status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
                     </div>
                     <div className="flex-1 truncate text-left min-w-0">
-                      <p className={`text-[13px] font-semibold truncate ${isActive?'text-indigo-200':unread>0?'text-white':'text-zinc-300'}`}>{maskName(dm.other_username)}</p>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <p className={`text-[13px] font-semibold truncate ${isActive?'text-indigo-200':unread>0?'text-white':'text-zinc-300'}`}>{maskName(dm.other_username)}</p>
+                        {dm.other_tag && <TagBadge tag={dm.other_tag}/>}
+                      </div>
                       {dm.last_message&&<p className={`text-[11px] truncate mt-0.5 ${unread>0?'text-zinc-300 font-medium':'text-zinc-600'}`}>{dm.last_message}</p>}
                     </div>
                     {unread > 0 && (
@@ -7491,7 +7654,12 @@ export default function App() {
 
               {/* Name + status label */}
               <div className="flex-1 min-w-0 cursor-pointer" onClick={openOwnProfile}>
-                <p className="text-sm font-semibold text-white leading-tight truncate hover:text-zinc-300 transition-colors">{streamerMode ? 'Streamer' : currentUser?.username}</p>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <p className="text-sm font-semibold text-white leading-tight truncate hover:text-zinc-300 transition-colors">{streamerMode ? 'Streamer' : currentUser?.username}</p>
+                  {!streamerMode && activeTagServerId && serverTagMap[activeTagServerId] && (
+                    <TagBadge tag={serverTagMap[activeTagServerId]!}/>
+                  )}
+                </div>
                 <p className="text-xs truncate leading-tight mt-0.5">
                   {activeCall ? (
                     <span className="text-rose-400">W trakcie rozmowy</span>
@@ -8354,6 +8522,39 @@ export default function App() {
               botChLoading={botChLoading}
               setBotChLoading={setBotChLoading}
               addToast={addToast}
+              serverTag={activeServer ? (serverTagMap[activeServer] ?? null) : null}
+              tagInput={tagInput}
+              setTagInput={setTagInput}
+              tagSaving={tagSaving}
+              activeTagServerId={activeTagServerId}
+              currentUserId={currentUser?.id}
+              onSaveTag={async (tag) => {
+                if (!activeServer) return;
+                setTagSaving(true);
+                try {
+                  const result = await serversApi.tag.set(activeServer, tag);
+                  setServerTagMap(p => ({ ...p, [activeServer]: result.tag }));
+                  addToast('Tag serwera zapisany!', 'success');
+                } catch { addToast('Błąd zapisu tagu', 'error'); }
+                setTagSaving(false);
+              }}
+              onDeleteTag={async () => {
+                if (!activeServer) return;
+                try {
+                  await serversApi.tag.remove(activeServer);
+                  setServerTagMap(p => ({ ...p, [activeServer]: null }));
+                  // If user's active tag was from this server, clear it
+                  if (activeTagServerId === activeServer) setActiveTagServerId(null);
+                  addToast('Tag usunięty', 'success');
+                } catch { addToast('Błąd usuwania tagu', 'error'); }
+              }}
+              onSetActiveTag={async (serverId) => {
+                try {
+                  await serversApi.setActiveTag(serverId);
+                  setActiveTagServerId(serverId);
+                  addToast(serverId ? 'Tag aktywowany!' : 'Tag zdjęty', 'success');
+                } catch { addToast('Błąd zmiany tagu', 'error'); }
+              }}
             />
           ) : activeView==='admin' ? (
             <AdminPanel
@@ -8908,6 +9109,7 @@ export default function App() {
                                 onClick={isAuto?undefined:(e)=>showHoverCard(msg.sender_id, e as unknown as React.MouseEvent)}>
                                 {displayName}
                               </span>
+                              {!isAuto&&(msg as MessageFull).sender_tag&&<TagBadge tag={(msg as MessageFull).sender_tag!}/>}
                               {(isAuto||isBotSender)&&(
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide bg-violet-500/20 text-violet-300 border border-violet-500/30">
                                   APP
@@ -9569,31 +9771,16 @@ export default function App() {
                   <div className="relative rounded-xl overflow-hidden mb-2" style={{height:80}}>
                     <img src={music.thumbnail} className="w-full h-full object-cover" alt=""/>
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2">
-                      {musicAutoplayBlocked ? (
-                        <button
-                          onClick={() => {
-                            const audio = musicAudioRef.current;
-                            if (!audio) return;
-                            // Reload src in case it was a 404 that has since resolved
-                            if (audioStreamSrc && audio.src !== audioStreamSrc) audio.src = audioStreamSrc;
-                            audio.load();
-                            audio.play()
-                              .then(() => setMusicAutoplayBlocked(false))
-                              .catch(() => setMusicAutoplayBlocked(true));
-                          }}
-                          className="text-[10px] font-bold text-white bg-[#1DB954]/80 hover:bg-[#1DB954] px-2.5 py-1 rounded-full flex items-center gap-1 transition-all">
-                          <Play size={9}/> Kliknij aby odtworzyć
-                        </button>
-                      ) : (
-                        <div className="flex items-center gap-1.5">
-                          <div className="flex gap-0.5 items-end h-3">
-                            {[3,5,4,6,3].map((h,i) => (
-                              <div key={i} className="w-0.5 bg-[#1DB954] rounded-full animate-pulse" style={{height:`${h*2}px`,animationDelay:`${i*0.1}s`}}/>
-                            ))}
-                          </div>
-                          <span className="text-[9px] text-[#1DB954] font-bold">NA ŻYWO</span>
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex gap-0.5 items-end h-3">
+                          {[3,5,4,6,3].map((h,i) => (
+                            <div key={i} className={`w-0.5 rounded-full animate-pulse ${musicAutoplayBlocked ? 'bg-zinc-500' : 'bg-[#1DB954]'}`} style={{height:`${h*2}px`,animationDelay:`${i*0.1}s`}}/>
+                          ))}
                         </div>
-                      )}
+                        <span className={`text-[9px] font-bold ${musicAutoplayBlocked ? 'text-zinc-500' : 'text-[#1DB954]'}`}>
+                          {musicAutoplayBlocked ? 'ŁADOWANIE…' : 'NA ŻYWO'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -9706,6 +9893,7 @@ export default function App() {
                               </p>
                               {isOwner&&<Crown size={11} className="text-amber-400 shrink-0"/>}
                               {m.is_bot && <span className="text-[9px] font-bold px-1 py-0.5 rounded border border-violet-500/40 text-violet-400 bg-violet-500/10 leading-none select-none shrink-0">APP</span>}
+                              {(m as any).active_tag && <TagBadge tag={(m as any).active_tag}/>}
                               {m.badges?.map(b=>{const BIcon=getBadgeIcon(b.name);return <BIcon key={b.id} size={11} style={{color:b.color}} title={b.label} className="shrink-0"/>;  })}
                             </div>
                             {mActivity ? (
@@ -9747,6 +9935,7 @@ export default function App() {
                               </p>
                               {isOwner&&<Crown size={11} className="text-amber-400/50 shrink-0"/>}
                               {m.is_bot && <span className="text-[9px] font-bold px-1 py-0.5 rounded border border-violet-500/20 text-violet-500/60 bg-violet-500/5 leading-none select-none shrink-0 opacity-50">APP</span>}
+                              {(m as any).active_tag && <span className="opacity-50"><TagBadge tag={(m as any).active_tag}/></span>}
                               {m.badges?.map(b=>{const BIcon=getBadgeIcon(b.name);return <BIcon key={b.id} size={11} style={{color:b.color+'80'}} title={b.label} className="shrink-0 opacity-50"/>;  })}
                             </div>
                             {m.role_name&&<p className="text-[11px] text-zinc-700 truncate leading-tight">{m.role_name}</p>}
@@ -10822,13 +11011,14 @@ export default function App() {
                   (canManageRoles||canKickMembers) && 'members',
                   canBanMembers && 'bans',
                   canCreateInvites && 'invites',
-                ].filter(Boolean) as ('overview'|'roles'|'members'|'bans'|'invites')[]).map(stab=>(
+                  canManageServer && 'tag',
+                ].filter(Boolean) as ('overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots'|'tag')[]).map(stab=>(
                   <button key={stab} onClick={()=>{
                     setSrvSettTab(stab);
                     if (stab==='bans' && activeServer) serversApi.bans.list(activeServer).then(setBanList).catch(console.error);
                   }}
                     className={`px-4 py-3 text-sm font-semibold transition-all border-b-2 -mb-px shrink-0 ${srvSettTab===stab?'border-indigo-500 text-white':'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
-                    {t(`serverSettings.${stab}`)}
+                    {stab === 'tag' ? 'Tag' : t(`serverSettings.${stab}`)}
                   </button>
                 ))}
               </div>

@@ -81,11 +81,13 @@ const MSG_JOIN = (serverIdParam: string, channelIdParam: string) => `
             WHERE sr.server_id = ${serverIdParam} AND sr.name = sm.role_name
             LIMIT 1)
          ) as sender_role_color,
+         ut.tag as sender_tag, ut.server_id as sender_tag_server_id,
          rm.content as reply_content,
          ru.username as reply_username, ru.id as reply_sender_id
   FROM messages m
   INNER JOIN users u ON u.id = m.sender_id
   LEFT JOIN server_members sm ON sm.server_id = ${serverIdParam} AND sm.user_id = m.sender_id
+  LEFT JOIN server_tags ut ON ut.server_id = u.active_tag_server_id
   LEFT JOIN messages rm ON rm.id = m.reply_to_id
   LEFT JOIN users ru ON ru.id = rm.sender_id
   WHERE m.channel_id = ${channelIdParam}

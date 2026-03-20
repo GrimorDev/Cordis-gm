@@ -408,4 +408,41 @@ router.post(
   }
 );
 
+// ── Active tag ───────────────────────────────────────────────────────────────
+
+// PUT /api/users/me/active-tag — set or clear the user's displayed tag
+// body: { server_id: string | null }
+router.put('/me/active-tag', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { server_id } = req.body as { server_id: string | null };
+  try {
+    if (server_id) {
+      // Verify user is a member of that server AND the server has a tag
+      const { rowCount } = await query(
+        `SELECT 1 FROM server_members sm
+         INNER JOIN server_tags st ON st.server_id = sm.server_id
+         WHERE sm.server_id = $1 AND sm.user_id = $2`,
+        [server_id, req.user!.id]
+      );
+      if (!rowCount) return res.status(400).json({ error: 'Server not found, no tag, or not a member' });
+    }
+    await query('UPDATE users SET active_tag_server_id = $1 WHERE id = $2', [server_id || null, req.user!.id]);
+
+    // Fetch resulting tag text so we can broadcast it
+    let tag: string | null = null;
+    if (server_id) {
+      const { rows: [row] } = await query('SELECT tag FROM server_tags WHERE server_id = $1', [server_id]);
+      tag = row?.tag || null;
+    }
+
+    // Broadcast updated tag to all servers the user belongs to
+    await broadcastUserUpdate(req, {
+      id: req.user!.id,
+      active_tag_server_id: server_id || null,
+      active_tag: tag,  // null when removing
+    });
+
+    return res.json({ active_tag_server_id: server_id, tag });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
 export default router;
