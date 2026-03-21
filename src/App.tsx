@@ -5944,6 +5944,59 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handler);
   }, [notifOpen]);
 
+  // ── Tauri: file drag-and-drop via OS (dragDropEnabled:false lets HTML5 work,
+  //    but as extra safety we also listen to Tauri's file-drop events) ─────────
+  useEffect(() => {
+    if (!isTauri || !isAuthenticated) return;
+    let unlisten: (() => void) | null = null;
+    (async () => {
+      try {
+        const { listen } = await import('@tauri-apps/api/event');
+        const { readFile } = await import('@tauri-apps/plugin-fs');
+        unlisten = await listen<{ paths: string[]; position?: { x: number; y: number } }>('tauri://drag-drop', async (event) => {
+          const paths: string[] = event.payload?.paths ?? (event.payload as any) ?? [];
+          if (!paths.length) return;
+          const filePath = paths[0];
+          const fileName = filePath.split(/[\\/]/).pop() ?? 'plik';
+          const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+          // MIME guess
+          const mimeMap: Record<string, string> = {
+            jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',gif:'image/gif',
+            webp:'image/webp',svg:'image/svg+xml',avif:'image/avif',bmp:'image/bmp',
+            mp3:'audio/mpeg',ogg:'audio/ogg',wav:'audio/wav',flac:'audio/flac',
+            m4a:'audio/mp4',aac:'audio/aac',opus:'audio/ogg',
+            mp4:'video/mp4',webm:'video/webm',mov:'video/quicktime',
+            pdf:'application/pdf',
+            zip:'application/zip',rar:'application/x-rar-compressed',
+            '7z':'application/x-7z-compressed',gz:'application/gzip',
+          };
+          const mime = mimeMap[ext] || 'application/octet-stream';
+          try {
+            const bytes = await readFile(filePath);
+            if (bytes.byteLength > 50 * 1024 * 1024) {
+              addToast('Plik jest za duży (max 50MB)', 'error');
+              return;
+            }
+            const file = new File([bytes], fileName, { type: mime });
+            setAttachFile(file);
+            setIsDraggingOver(false);
+            if (mime.startsWith('image/')) setAttachPreview(URL.createObjectURL(file));
+            else setAttachPreview(null);
+          } catch (err) {
+            addToast('Nie można odczytać pliku', 'error');
+          }
+        });
+        // Show drag overlay on enter
+        const unlistenEnter = await listen('tauri://drag-enter', () => setIsDraggingOver(true));
+        const unlistenLeave = await listen('tauri://drag-leave', () => setIsDraggingOver(false));
+        const origUnlisten = unlisten;
+        unlisten = () => { origUnlisten(); unlistenEnter(); unlistenLeave(); };
+      } catch { /* not Tauri or plugin not available */ }
+    })();
+    return () => { unlisten?.(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTauri, isAuthenticated]);
+
   // ── Enumerate devices ────────────────────────────────────────────
   useEffect(() => {
     if (!isAuthenticated) return;
