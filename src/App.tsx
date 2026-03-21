@@ -4255,17 +4255,21 @@ export default function App() {
       .catch(() => {});
   }, [srvSettOpen, activeServer]);
 
-  // Pre-load tags for all joined servers (needed for user settings tag picker)
+  // Pre-load tags for all joined servers — only fetch for new servers
+  const loadedTagServersRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (serverList.length === 0) return;
-    serverList.forEach(s => {
+    const toFetch = serverList.filter(s => !loadedTagServersRef.current.has(s.id));
+    if (toFetch.length === 0) return;
+    toFetch.forEach(s => {
+      loadedTagServersRef.current.add(s.id);
       serversApi.tag.get(s.id)
         .then(t => {
           setServerTagMap(p => ({ ...p, [s.id]: t?.tag ?? null }));
           setServerTagColorMap(p => ({ ...p, [s.id]: t?.color ?? null }));
           setServerTagIconMap(p => ({ ...p, [s.id]: t?.icon ?? null }));
         })
-        .catch(() => {});
+        .catch(() => { loadedTagServersRef.current.delete(s.id); }); // allow retry on error
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverList.length]);
@@ -4474,6 +4478,7 @@ export default function App() {
   // Voice Channel DJ
   const [voiceDj, setVoiceDj]                = useState<Record<string, SpotifyVoiceDj['dj']>>({});
   const [voiceDjListening, setVoiceDjListening] = useState<Set<string>>(new Set());
+  const voiceDjListeningRef = useRef<Set<string>>(new Set());
   const [voiceDjVolume, setVoiceDjVolume]     = useState(50);
 
   // Account deletion flow
@@ -4886,8 +4891,22 @@ export default function App() {
       if (isOpenConversation) {
         setDmMsgs(p => p.some(m => m.id === msg.id) ? p : [...p, msg]);
       }
-      // Always refresh sidebar conversation list (updates last_message + shows new convs)
-      dmsApi.conversations().then(setDmConvs).catch(console.error);
+      // Update conversation list in-place (avoid full refetch)
+      setDmConvs(p => {
+        const existing = p.find(d =>
+          d.other_user_id === msg.sender_id ||
+          (msg.sender_id === myId && d.other_user_id === activeDmUserIdRef.current)
+        );
+        if (existing) {
+          return p.map(d => d.id === existing.id
+            ? { ...d, last_message: msg.content || (msg.attachment_url ? '📎 Załącznik' : ''), last_message_at: msg.created_at }
+            : d
+          ).sort((a, b) => new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime());
+        }
+        // New conversation — do a full fetch to get proper data
+        dmsApi.conversations().then(setDmConvs).catch(console.error);
+        return p;
+      });
       // Toast + unread count + sound only when NOT actively viewing this DM
       if (msg.sender_id !== myId && !isActivelyViewing) {
         const preview = msg.content
@@ -4926,13 +4945,19 @@ export default function App() {
     // dm_read: the other user has read our messages in this conversation
     sock.on('dm_read', ({ reader_id, read_at }: any) => {
       setDmReadStates(p => ({ ...p, [reader_id]: read_at }));
-      // Also refresh conversation list to update other_last_read_at
-      dmsApi.conversations().then(setDmConvs).catch(() => {});
+      setDmConvs(p => p.map(d => d.other_user_id === reader_id ? { ...d, other_last_read_at: read_at } : d));
     });
     sock.on('user_status', ({ user_id, status }) => {
       setFriends(p => p.map(f => f.id === user_id ? { ...f, status } : f));
       setDmConvs(p => p.map(d => d.other_user_id === user_id ? { ...d, other_status: status } : d));
       setMembers(p => p.map(m => m.id === user_id ? { ...m, status } : m));
+      // Clear stale realtime activity when user goes offline
+      if (status === 'offline') {
+        setUserActivities(p => { const n = new Map(p); n.delete(user_id); return n; });
+        setUserTwitchActivities(p => { const n = new Map(p); n.delete(user_id); return n; });
+        setUserSteamActivities(p => { const n = new Map(p); n.delete(user_id); return n; });
+        steamGameStartRef.current.delete(user_id);
+      }
     });
     sock.on('friend_spotify_update', ({ user_id, track }) => {
       setUserActivities(p => { const n = new Map(p); n.set(user_id, track); return n; });
@@ -4960,9 +4985,10 @@ export default function App() {
     (sock as any).on('voice_dj_stopped', ({ channel_id }: { dj_id: string; channel_id: string }) => {
       setVoiceDj(p => { const n = { ...p }; delete n[channel_id]; return n; });
       setVoiceDjListening(s => { const n = new Set(s); n.delete(channel_id); return n; });
+      voiceDjListeningRef.current.delete(channel_id);
     });
     (sock as any).on('voice_dj_sync', async ({ channel_id, track }: { dj_id: string; channel_id: string; track: SpotifyTrack | null }) => {
-      if (!voiceDjListening.has(channel_id)) return;
+      if (!voiceDjListeningRef.current.has(channel_id)) return;
       if (track?.uri) {
         try { await spotifyApi.play(track.uri, track.progress_ms ?? 0); } catch {}
       }
@@ -5231,10 +5257,16 @@ export default function App() {
 
     sock.on('message_pinned' as any, ({ channel_id, message_id, pinned }: any) => {
       setChannelMsgs(p => p.map(m => m.id === message_id ? { ...m, pinned } : m));
-      setPinnedMsgs(p => pinned
-        ? p // full list refetched when panel opened
-        : p.filter(m => m.id !== message_id)
-      );
+      if (pinned) {
+        // Add to pinned panel immediately without refetch
+        setChannelMsgs(prev => {
+          const msg = prev.find(m => m.id === message_id);
+          if (msg) setPinnedMsgs(p => p.some(m => m.id === message_id) ? p : [{ ...msg, pinned: true }, ...p]);
+          return prev;
+        });
+      } else {
+        setPinnedMsgs(p => p.filter(m => m.id !== message_id));
+      }
     });
     sock.on('member_joined' as any, ({ server_id, user }: any) => {
       if (server_id !== activeServerRef.current) return;
@@ -5422,11 +5454,17 @@ export default function App() {
       loadServers();
       loadFriends();
     });
-    sock.on('disconnect', () => setIsConnected(false));
+    sock.on('disconnect', () => {
+      setIsConnected(false);
+      // Clear all typing timers to avoid stale state after reconnect
+      Object.values(typingTimersRef.current).forEach(t => clearTimeout(t as ReturnType<typeof setTimeout>));
+      typingTimersRef.current = {};
+      setTypingUsers({});
+    });
     sock.on('connect_error', () => setIsConnected(false));
 
-    loadServers(); loadFriends(); loadDms();
-    return () => { disconnectSocket(); };
+    loadServers(); loadDms();
+    return () => { sock.removeAllListeners(); disconnectSocket(); };
   }, [isAuthenticated]);
 
   // ── Server change ───────────────────────────────────────────────
@@ -5530,10 +5568,15 @@ export default function App() {
 
   // Scroll smoothly on new incoming messages/typing indicator
   // Scroll helper
-  // ── Subtle notification ping (Web Audio API — no file needed) ──────────
+  // ── Subtle notification ping (Web Audio API — reused AudioContext) ──────
+  const audioCtxRef = useRef<AudioContext | null>(null);
   const playNotifSound = () => {
     try {
-      const ctx = new AudioContext();
+      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+        audioCtxRef.current = new AudioContext();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
       const o = ctx.createOscillator();
       const g = ctx.createGain();
       o.connect(g); g.connect(ctx.destination);
@@ -5541,7 +5584,6 @@ export default function App() {
       g.gain.setValueAtTime(0.08, ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
       o.start(); o.stop(ctx.currentTime + 0.25);
-      setTimeout(() => ctx.close(), 400);
     } catch { /* ignore — may be blocked in some contexts */ }
   };
 
@@ -5747,8 +5789,9 @@ export default function App() {
   useEffect(() => {
     if (!isAuthenticated) return;
     getMediaDevices().then(setDevices).catch(() => {});
-    navigator.mediaDevices?.addEventListener('devicechange', () =>
-      getMediaDevices().then(setDevices).catch(() => {}));
+    const onDeviceChange = () => getMediaDevices().then(setDevices).catch(() => {});
+    navigator.mediaDevices?.addEventListener('devicechange', onDeviceChange);
+    return () => { navigator.mediaDevices?.removeEventListener('devicechange', onDeviceChange); };
   }, [isAuthenticated]);
 
   // ── Persist selected devices across sessions ─────────────────────
@@ -7908,9 +7951,11 @@ export default function App() {
                           if (voiceDjListening.has(ch)) {
                             getSocket()?.emit('voice_dj_unlisten' as any, { channel_id: ch });
                             setVoiceDjListening(s=>{const n=new Set(s);n.delete(ch);return n;});
+                            voiceDjListeningRef.current.delete(ch);
                           } else {
                             getSocket()?.emit('voice_dj_listen' as any, { channel_id: ch });
                             setVoiceDjListening(s=>new Set(s).add(ch));
+                            voiceDjListeningRef.current.add(ch);
                           }
                         }} title={voiceDjListening.has(activeCall.channelId) ? 'Stop Spotify sync' : 'Słuchaj Spotify DJ'}
                           className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${voiceDjListening.has(activeCall.channelId)?'bg-[#1DB954]/20 text-[#1DB954]':gb}`}>
@@ -9230,6 +9275,8 @@ export default function App() {
                       && prevMsg.sender_id === msg.sender_id
                       && msg.sender_id !== '__system__'
                       && prevMsg.sender_id !== '__system__'
+                      && !(msg as any).reply_to_id
+                      && !(prevMsg as any).deleted
                       && (new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime()) < 5 * 60 * 1000;
                     const sepLabel = dateSepLabel(msg.created_at);
                     // System message (call ended, etc.)

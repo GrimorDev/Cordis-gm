@@ -1091,11 +1091,26 @@ async function broadcastUserStatus(
   );
   const broadcastStatus = user?.privacy_status_visible === false ? 'offline' : status;
 
-  // Get all servers the user belongs to
+  // Emit to all server rooms the user belongs to
   const { rows: servers } = await query(
     `SELECT server_id FROM server_members WHERE user_id = $1`, [userId]
   );
   for (const { server_id } of servers) {
     io.to(`server:${server_id}`).emit('user_status', { user_id: userId, status: broadcastStatus });
+  }
+
+  // Also emit to friends who share NO server (DM-only friends) via their personal room
+  const { rows: dmOnlyFriends } = await query(
+    `SELECT CASE WHEN requester_id=$1 THEN addressee_id ELSE requester_id END as friend_id
+     FROM friends
+     WHERE (requester_id=$1 OR addressee_id=$1) AND status='accepted'
+     AND NOT EXISTS (
+       SELECT 1 FROM server_members sm1
+       JOIN server_members sm2 ON sm1.server_id=sm2.server_id
+       WHERE sm1.user_id=$1 AND sm2.user_id=CASE WHEN requester_id=$1 THEN addressee_id ELSE requester_id END
+     )`, [userId]
+  );
+  for (const { friend_id } of dmOnlyFriends) {
+    io.to(`user:${friend_id}`).emit('user_status', { user_id: userId, status: broadcastStatus });
   }
 }
