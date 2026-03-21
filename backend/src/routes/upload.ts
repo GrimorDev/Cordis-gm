@@ -21,24 +21,69 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({
+// MIME types allowed for attachments (images + audio + video + docs + archives + code)
+const ALLOWED_ATTACHMENT_MIMES = new Set([
+  // images
+  'image/jpeg','image/png','image/gif','image/webp','image/svg+xml','image/bmp','image/avif',
+  // audio
+  'audio/mpeg','audio/ogg','audio/wav','audio/flac','audio/mp4','audio/aac','audio/opus','audio/x-wav',
+  // video
+  'video/mp4','video/webm','video/quicktime','video/x-msvideo','video/x-matroska','video/ogg',
+  // documents
+  'application/pdf',
+  'text/plain','text/html','text/css','text/javascript','text/typescript','text/csv',
+  'text/x-python','text/x-php','text/x-ruby','text/x-java-source','text/x-c','text/x-c++',
+  'text/x-go','text/x-rust','text/x-swift','text/x-kotlin','text/x-shellscript',
+  'application/json','application/xml','application/x-yaml','application/toml',
+  'application/javascript','application/typescript',
+  // archives
+  'application/zip','application/x-rar-compressed','application/x-7z-compressed',
+  'application/x-tar','application/gzip','application/x-bzip2','application/x-xz',
+]);
+
+const imageOnlyFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
+  if (!file.mimetype.startsWith('image/')) cb(new Error('Only images allowed'));
+  else cb(null, true);
+};
+
+const attachmentFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
+  // Allow by MIME or by extension for text/code files (browsers often send application/octet-stream)
+  const ext = file.originalname.split('.').pop()?.toLowerCase() ?? '';
+  const codeExts = new Set(['js','jsx','ts','tsx','html','htm','css','scss','sass','less',
+    'json','xml','yaml','yml','toml','ini','env','php','py','rb','rs','go','java','c','cpp',
+    'cs','sh','bash','zsh','ps1','sql','graphql','md','mdx','vue','svelte','kt','swift',
+    'dart','r','lua','ex','exs','txt','log','csv','tsv','conf','cfg','nfo','readme']);
+  if (ALLOWED_ATTACHMENT_MIMES.has(file.mimetype) || codeExts.has(ext)) {
+    cb(null, true);
+  } else {
+    cb(new Error(`Typ pliku nieobsługiwany: ${file.mimetype} (.${ext})`));
+  }
+};
+
+const uploadImages = multer({
   storage,
   limits: { fileSize: config.uploads.maxSize },
-  fileFilter: (_req, file, cb) => {
-    if (!file.mimetype.startsWith('image/')) {
-      cb(new Error('Only images allowed'));
-    } else {
-      cb(null, true);
-    }
-  },
+  fileFilter: imageOnlyFilter,
 });
 
-// POST /api/upload?folder=avatars|banners|servers|attachments
-router.post('/', authMiddleware, upload.single('file'), (req: AuthRequest, res: Response) => {
-  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+const uploadAttachments = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB for attachments
+  fileFilter: attachmentFilter,
+});
+
+// POST /api/upload?folder=avatars|banners|servers|attachments|emojis
+router.post('/', authMiddleware, (req: AuthRequest, res: Response, next) => {
   const folder = (req.query.folder as string) || 'misc';
-  const url = `/uploads/${folder}/${req.file.filename}`;
-  return res.json({ url });
+  const middleware = folder === 'attachments'
+    ? uploadAttachments.single('file')
+    : uploadImages.single('file');
+  middleware(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const url = `/uploads/${folder}/${req.file.filename}`;
+    return res.json({ url });
+  });
 });
 
 export default router;
