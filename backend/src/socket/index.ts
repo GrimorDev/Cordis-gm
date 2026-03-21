@@ -32,7 +32,7 @@ interface ActivityEntry<T> { data: T; ts: number; }
 const spotifyCache = new Map<string, ActivityEntry<any>>();
 const twitchCache  = new Map<string, ActivityEntry<any>>();
 const steamCache   = new Map<string, ActivityEntry<any>>();
-const ACTIVITY_STALE_MS = 5 * 60 * 1000; // 5 min — clear stale state
+const ACTIVITY_STALE_MS = 30 * 60 * 1000; // 30 min — keep activity visible across brief disconnects
 
 export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerEvents, ServerToClientEvents> {
   const io = new SocketServer<ClientToServerEvents, ServerToClientEvents>(httpServer, {
@@ -107,10 +107,12 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
     // Join personal room for DMs and notifications
     socket.join(`user:${user.id}`);
 
-    // Restore status from DB — only override 'offline' back to 'online'.
-    // Manual statuses (idle, dnd) are preserved across reconnects.
-    const { rows: [storedUser] } = await query('SELECT status FROM users WHERE id=$1', [user.id]);
-    const connectStatus = (!storedUser?.status || storedUser.status === 'offline') ? 'online' : storedUser.status;
+    // Restore preferred_status from DB (dnd/offline/idle/online) — never force online
+    // preferred_status is set by the user manually and survives disconnects
+    const { rows: [storedUser] } = await query('SELECT preferred_status FROM users WHERE id=$1', [user.id]);
+    const connectStatus = (storedUser?.preferred_status && storedUser.preferred_status !== 'online')
+      ? storedUser.preferred_status
+      : 'online';
     await setUserStatus(user.id, connectStatus);
     await query('UPDATE users SET status = $1 WHERE id = $2', [connectStatus, user.id]);
 
@@ -532,6 +534,7 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
       const userSockets = await io.in(`user:${user.id}`).fetchSockets();
       if (userSockets.length === 0) {
         await setUserStatus(user.id, 'offline');
+        // Only reset runtime status to offline — preferred_status stays untouched
         await query('UPDATE users SET status = $1 WHERE id = $2', ['offline', user.id]);
         await broadcastUserStatus(io, user.id, 'offline');
         // Clear activity caches for offline user

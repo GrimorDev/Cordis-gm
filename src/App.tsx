@@ -5700,19 +5700,18 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
-  // ── Set status on login — respect user's saved preference ───────
+  // ── Set status on login — respect preferred_status from DB ──────
   useEffect(() => {
     if (isAuthenticated && currentUser) {
-      const saved = localStorage.getItem('cordis_preferred_status') as 'online'|'idle'|'dnd'|'offline'|null;
-      if (!saved || saved === 'online') {
-        // No preference or explicitly online → go online if server says offline
+      const pref = (currentUser as any).preferred_status as string | null | undefined;
+      if (!pref || pref === 'online') {
+        // Default: go online (socket connect also does this, but set immediately for UI)
         if (!currentUser.status || currentUser.status === 'offline') {
           changeStatus('online');
         }
-      } else {
-        // Restore: invisible / dnd / idle — don't override with online
-        changeStatus(saved);
       }
+      // dnd / offline (invisible) / idle → socket connect handler restores preferred_status
+      // from DB automatically — no frontend override needed
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);

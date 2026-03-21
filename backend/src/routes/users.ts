@@ -181,7 +181,8 @@ router.put('/me/status', authMiddleware, async (req: AuthRequest, res: Response)
   const { status } = req.body;
   if (!['online','idle','dnd','offline'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
   try {
-    await query('UPDATE users SET status=$1 WHERE id=$2', [status, req.user!.id]);
+    // Save both current status and preferred_status so restarts remember the choice
+    await query('UPDATE users SET status=$1, preferred_status=$1 WHERE id=$2', [status, req.user!.id]);
     // Broadcast real-time status change to all servers the user belongs to
     const io = req.app.get('io');
     if (io) {

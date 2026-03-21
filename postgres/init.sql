@@ -344,3 +344,4 @@ ALTER TABLE servers     ADD COLUMN IF NOT EXISTS banner_color  VARCHAR(64)  DEFA
 ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS pinned        BOOLEAN      DEFAULT false;
 ALTER TABLE server_tags ADD COLUMN IF NOT EXISTS color         VARCHAR(32);
 ALTER TABLE server_tags ADD COLUMN IF NOT EXISTS icon          VARCHAR(32);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_status VARCHAR(20) DEFAULT 'online';

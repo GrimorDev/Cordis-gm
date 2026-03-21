@@ -284,7 +284,7 @@ router.post('/logout', authMiddleware, async (req: AuthRequest, res: Response) =
 router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { rows } = await query(
-      `SELECT u.id, u.username, u.email, u.avatar_url, u.banner_url, u.banner_color, u.bio, u.custom_status, u.status,
+      `SELECT u.id, u.username, u.email, u.avatar_url, u.banner_url, u.banner_color, u.bio, u.custom_status, u.status, u.preferred_status,
               u.accent_color, u.compact_messages, u.voice_noise_cancel,
               u.font_size, u.show_timestamps, u.show_chat_avatars, u.message_animations, u.show_link_previews,
               u.privacy_status_visible, u.privacy_typing_visible, u.privacy_read_receipts,
