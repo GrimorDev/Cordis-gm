@@ -36,6 +36,7 @@ import pollsRoutes   from './routes/polls';
 import pushRoutes    from './routes/push';
 import automationsRoutes from './routes/automations';
 import botsRoutes from './routes/bots';
+import filesRoutes from './routes/files';
 import { musicStates } from './routes/bots';
 
 const app = express();
@@ -118,6 +119,7 @@ app.use('/api/messages', messagesRoutes);
 app.use('/api/dms', dmsRoutes);
 app.use('/api/friends', friendsRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/files',  filesRoutes);   // R2 pre-signed URL proxy
 app.use('/api/og', ogRoutes);
 app.use('/api/admin',         adminRoutes);
 app.use('/api/games',         gamesRoutes);

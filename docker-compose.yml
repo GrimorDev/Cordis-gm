@@ -72,12 +72,15 @@ services:
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-30d}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
       UPLOAD_MAX_SIZE: ${UPLOAD_MAX_SIZE:-52428800}
-      # ── Cloudflare R2 (opcjonalne) ──────────────────────────────────
+      # ── Cloudflare R2 ────────────────────────────────────────────────
+      # Endpoint i bucket zahardkodowane (stałe dla projektu)
       R2_ENDPOINT: "https://f33e20b4cd126676f4659f7838db83cd.r2.cloudflarestorage.com"
       R2_BUCKET: "cordyn"
+      # Te dwie zmienne ustaw w Portainer → Stack → Environment:
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
-      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
+      # Publiczny URL bucketu — pliki serwowane przez Cloudflare CDN (zero egress)
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-https://pub-3f56fb1df8af4fcbb4f843cebfe0bf42.r2.dev}
       STORAGE_FREE_QUOTA: ${STORAGE_FREE_QUOTA:-52428800}
       STORAGE_PREMIUM_QUOTA: ${STORAGE_PREMIUM_QUOTA:-629145600}
       SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
