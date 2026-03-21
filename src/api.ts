@@ -89,6 +89,8 @@ export interface ServerData {
 export interface ServerTag {
   server_id: string;
   tag: string;
+  color?: string | null;
+  icon?: string | null;
   created_at: string;
 }
 export interface ServerRole {
@@ -137,6 +139,8 @@ export interface MessageFull {
   sender_role_color?: string | null;
   sender_avatar_effect?: string | null;
   sender_tag?: string | null;
+  sender_tag_color?: string | null;
+  sender_tag_icon?: string | null;
   sender_tag_server_id?: string | null;
   pinned?: boolean;
   reactions?: MsgReaction[];
@@ -149,6 +153,9 @@ export interface DmConversation {
   other_last_read_at?: string | null;
   other_avatar_effect?: string | null;
   other_tag?: string | null;
+  other_tag_color?: string | null;
+  other_tag_icon?: string | null;
+  other_tag_server_id?: string | null;
   last_message?: string | null; last_message_at?: string | null;
 }
 export interface DmMessageFull {
@@ -431,7 +438,7 @@ export const serversApi = {
   },
   tag: {
     get: (serverId: string) => req<ServerTag | null>('GET', `/servers/${serverId}/tag`),
-    set: (serverId: string, tag: string) => req<ServerTag>('PUT', `/servers/${serverId}/tag`, { tag }),
+    set: (serverId: string, tag: string, color?: string|null, icon?: string|null) => req<ServerTag>('PUT', `/servers/${serverId}/tag`, { tag, color, icon }),
     remove: (serverId: string) => req<{ ok: boolean }>('DELETE', `/servers/${serverId}/tag`),
   },
   setActiveTag: (serverId: string | null) =>

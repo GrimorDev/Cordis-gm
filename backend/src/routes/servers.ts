@@ -353,7 +353,7 @@ router.get('/:id/members', authMiddleware, async (req: AuthRequest, res: Respons
     }
     const { rows } = await query(
       `SELECT u.id, u.username, u.avatar_url, u.status, u.custom_status, u.avatar_effect,
-              u.is_bot, u.active_tag_server_id, st.tag as active_tag,
+              u.is_bot, u.active_tag_server_id, st.tag as active_tag, st.color as active_tag_color, st.icon as active_tag_icon,
               sm.role_name, sm.joined_at,
               COALESCE(
                 (SELECT json_agg(json_build_object('id', gb.id, 'name', gb.name, 'label', gb.label, 'color', gb.color, 'icon', gb.icon) ORDER BY gb.position)
@@ -828,7 +828,7 @@ router.get('/:id/tag', authMiddleware, async (req: AuthRequest, res: Response) =
       return res.status(403).json({ error: 'Not a member' });
     }
     const { rows: [tag] } = await query(
-      'SELECT tag, created_at FROM server_tags WHERE server_id = $1',
+      'SELECT tag, color, icon, created_at FROM server_tags WHERE server_id = $1',
       [req.params.id]
     );
     return res.json(tag || null);
@@ -847,15 +847,17 @@ router.put('/:id/tag',
         return res.status(403).json({ error: 'Not authorized' });
       }
       const tag = (req.body.tag as string).toUpperCase();
+      const color = typeof req.body.color === 'string' ? req.body.color.slice(0, 32) : null;
+      const icon  = typeof req.body.icon  === 'string' ? req.body.icon.slice(0, 32)  : null;
       const { rows: [row] } = await query(
-        `INSERT INTO server_tags (server_id, tag) VALUES ($1, $2)
-         ON CONFLICT (server_id) DO UPDATE SET tag = EXCLUDED.tag
-         RETURNING tag, created_at`,
-        [req.params.id, tag]
+        `INSERT INTO server_tags (server_id, tag, color, icon) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (server_id) DO UPDATE SET tag = EXCLUDED.tag, color = EXCLUDED.color, icon = EXCLUDED.icon
+         RETURNING tag, color, icon, created_at`,
+        [req.params.id, tag, color, icon]
       );
       // Broadcast tag change to all server members
       const io = req.app.get('io');
-      if (io) io.to(`server:${req.params.id}`).emit('server_tag_updated', { server_id: req.params.id, tag: row.tag });
+      if (io) io.to(`server:${req.params.id}`).emit('server_tag_updated', { server_id: req.params.id, tag: row.tag, color: row.color, icon: row.icon });
       return res.json(row);
     } catch { return res.status(500).json({ error: 'Internal server error' }); }
   }

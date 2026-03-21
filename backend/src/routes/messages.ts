@@ -81,7 +81,7 @@ const MSG_JOIN = (serverIdParam: string, channelIdParam: string) => `
             WHERE sr.server_id = ${serverIdParam} AND sr.name = sm.role_name
             LIMIT 1)
          ) as sender_role_color,
-         ut.tag as sender_tag, ut.server_id as sender_tag_server_id,
+         ut.tag as sender_tag, ut.color as sender_tag_color, ut.icon as sender_tag_icon, ut.server_id as sender_tag_server_id,
          rm.content as reply_content,
          ru.username as reply_username, ru.id as reply_sender_id
   FROM messages m

@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
+import ReactDOM from 'react-dom';
 import { TitleBar, isTauri } from './TitleBar';
 import { translate, resolveLocale, bcp47 as localeBcp47, loadLocale, detectLocale, LOCALES, type Locale, type TimeFormat } from './i18n';
 import { motion, AnimatePresence } from 'motion/react';
@@ -16,6 +17,7 @@ import {
   GripVertical, BarChart2, Server, Database,
   Music, Gamepad2, ExternalLink, Link2, Link2Off, Film, PhoneIncoming, PhoneMissed, Download, Monitor, Copy,
   Bot, Play, Pause, SkipForward, ListMusic, Package, Slash, Palette,
+  Star, Flame, Trophy, Rocket, Gem, Swords, Heart,
   type LucideIcon
 } from 'lucide-react';
 import {
@@ -1612,15 +1614,88 @@ function StatusBadge({ status, size = 14, className = '' }: { status: string; si
   );
 }
 
-// ─── Tag badge — shows server tag next to a username ───────────────────────────
-function TagBadge({ tag }: { tag: string }) {
+// ─── Tag icon map ───────────────────────────────────────────────────────────────
+const TAG_ICON_MAP: Record<string, LucideIcon> = {
+  shield: Shield, star: Star, zap: Zap, crown: Crown, code: Code2,
+  gamepad: Gamepad2, music: Music, globe: Globe, award: Award,
+  flame: Flame, trophy: Trophy, rocket: Rocket, gem: Gem,
+  swords: Swords, heart: Heart,
+};
+
+// ─── Tag server card tooltip ────────────────────────────────────────────────────
+function TagServerTooltip({ server, x, y }: {
+  server: { name: string; icon_url?: string|null; description?: string|null; banner_url?: string|null };
+  x: number; y: number;
+}) {
+  const cardW = 220;
+  const left = Math.min(Math.max(8, x - cardW / 2), window.innerWidth - cardW - 8);
+  const top = y - 8;
   return (
-    <span
-      className="inline-flex items-center text-[9px] font-black tracking-widest uppercase px-1.5 py-px rounded-md border border-indigo-400/40 bg-indigo-500/15 text-indigo-300 shrink-0 select-none"
-      title={`Tag serwera: ${tag}`}
-    >
-      {tag}
-    </span>
+    <div className="fixed z-[99999] pointer-events-none" style={{ left, top: top - 8, width: cardW }}>
+      <div className="bg-[#18182a] border border-white/[0.12] rounded-2xl shadow-2xl shadow-black/70 overflow-hidden">
+        {/* Mini banner */}
+        <div className="h-10 relative" style={server.banner_url
+          ? { backgroundImage: `url(${staticUrl(server.banner_url)})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+          : { background: 'linear-gradient(135deg, #2e2e48 0%, #1a1a2e 100%)' }}>
+          <div className="absolute -bottom-4 left-3">
+            {server.icon_url
+              ? <img src={staticUrl(server.icon_url)} className="w-8 h-8 rounded-xl object-cover border-2 border-[#18182a]" alt=""/>
+              : <div className="w-8 h-8 rounded-xl bg-indigo-600 border-2 border-[#18182a] flex items-center justify-center text-white font-bold text-sm">{server.name?.[0]?.toUpperCase()}</div>}
+          </div>
+        </div>
+        <div className="pt-5 px-3 pb-3">
+          <p className="text-sm font-bold text-white leading-tight truncate">{server.name}</p>
+          {server.description && <p className="text-[11px] text-zinc-500 mt-0.5 line-clamp-2 leading-relaxed">{server.description}</p>}
+        </div>
+      </div>
+      {/* Arrow pointing down */}
+      <div className="flex justify-center mt-0.5">
+        <div className="w-2 h-2 bg-[#18182a] border-r border-b border-white/[0.12] rotate-45 -mt-1.5"/>
+      </div>
+    </div>
+  );
+}
+
+// ─── Tag badge — shows server tag next to a username ───────────────────────────
+function TagBadge({ tag, color, icon, serverInfo }: {
+  tag: string;
+  color?: string | null;
+  icon?: string | null;
+  serverInfo?: { name: string; icon_url?: string|null; description?: string|null; banner_url?: string|null } | null;
+}) {
+  const [tooltip, setTooltip] = React.useState<{ x: number; y: number } | null>(null);
+  const timerRef = React.useRef<ReturnType<typeof setTimeout>|null>(null);
+  const tagColor = color || '#818cf8';
+  const TagIcon = icon ? TAG_ICON_MAP[icon] : null;
+
+  const handleEnter = (e: React.MouseEvent) => {
+    if (!serverInfo) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    timerRef.current = setTimeout(() => setTooltip({ x: rect.left + rect.width / 2, y: rect.top }), 400);
+  };
+  const handleLeave = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setTooltip(null);
+  };
+
+  return (
+    <>
+      <span
+        className="inline-flex items-center gap-0.5 text-[9px] font-black tracking-widest uppercase px-1.5 py-px rounded-md shrink-0 select-none cursor-default"
+        style={{ color: tagColor, background: tagColor + '26', border: `1px solid ${tagColor}55` }}
+        onMouseEnter={handleEnter}
+        onMouseLeave={handleLeave}
+      >
+        {TagIcon && <TagIcon size={8}/>}
+        {tag}
+      </span>
+      {tooltip && serverInfo && typeof document !== 'undefined' &&
+        ReactDOM.createPortal(
+          <TagServerTooltip server={serverInfo} x={tooltip.x} y={tooltip.y}/>,
+          document.body
+        )
+      }
+    </>
   );
 }
 
@@ -1998,10 +2073,18 @@ interface ServerSettingsPageProps {
   addToast?: (msg: string, type?: 'success'|'error'|'info'|'warning') => void;
   // Tag
   serverTag?: string|null;
-  onSaveTag?: (tag: string) => void;
+  serverTagColor?: string|null;
+  serverTagIcon?: string|null;
+  serverTagColorMap?: Record<string, string|null>;
+  serverTagIconMap?: Record<string, string|null>;
+  onSaveTag?: (tag: string, color?: string|null, icon?: string|null) => void;
   onDeleteTag?: () => void;
   tagInput?: string;
   setTagInput?: (v: string) => void;
+  tagColor?: string|null;
+  setTagColor?: (v: string|null) => void;
+  tagIcon?: string|null;
+  setTagIcon?: (v: string|null) => void;
   tagSaving?: boolean;
   activeTagServerId?: string|null;
   onSetActiveTag?: (serverId: string|null) => void;
@@ -2016,7 +2099,9 @@ function ServerSettingsPage({
   openNewRole, openEditRole, handleDeleteRole, currentUser, onClose,
   streamerMode, serverEmojis, activeServer, channels,
   botChannelId, setBotChannelId, botChLoading, setBotChLoading, addToast,
-  serverTag, onSaveTag, onDeleteTag, tagInput, setTagInput, tagSaving,
+  serverTag, serverTagColor, serverTagIcon, serverTagColorMap, serverTagIconMap,
+  onSaveTag, onDeleteTag,
+  tagInput, setTagInput, tagColor, setTagColor, tagIcon, setTagIcon, tagSaving,
   activeTagServerId, onSetActiveTag, currentUserId,
 }: ServerSettingsPageProps) {
   const [memberQ, setMemberQ] = React.useState('');
@@ -2189,7 +2274,7 @@ function ServerSettingsPage({
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <p className="text-sm font-semibold text-white truncate">{m.username}</p>
-                          {(m as any).active_tag && <TagBadge tag={(m as any).active_tag}/>}
+                          {(m as any).active_tag && <TagBadge tag={(m as any).active_tag} color={(m as any).active_tag_server_id ? ((serverTagColorMap ?? {})[(m as any).active_tag_server_id] ?? null) : null} icon={(m as any).active_tag_server_id ? ((serverTagIconMap ?? {})[(m as any).active_tag_server_id] ?? null) : null}/>}
                         </div>
                         {m.badges && m.badges.length > 0 && (
                           <div className="flex gap-1 mt-0.5 flex-wrap">
@@ -2304,7 +2389,41 @@ function ServerSettingsPage({
           )}
 
           {/* ── Tag serwera ── */}
-          {tab === 'tag' && (
+          {tab === 'tag' && (() => {
+            const TAG_COLOR_PRESETS = [
+              { label: 'Indygo',   value: '#818cf8' },
+              { label: 'Fiolet',   value: '#a78bfa' },
+              { label: 'Róż',      value: '#f472b6' },
+              { label: 'Czerwień', value: '#f87171' },
+              { label: 'Pomarańcz', value: '#fb923c' },
+              { label: 'Bursztyn', value: '#fbbf24' },
+              { label: 'Zieleń',   value: '#34d399' },
+              { label: 'Cyan',     value: '#22d3ee' },
+              { label: 'Błękit',   value: '#60a5fa' },
+              { label: 'Biel',     value: '#e4e4e7' },
+            ];
+            const TAG_ICONS_LIST: { key: string; Icon: LucideIcon; label: string }[] = [
+              { key: 'none',    Icon: Hash,     label: 'Brak' },
+              { key: 'shield',  Icon: Shield,   label: 'Tarcza' },
+              { key: 'star',    Icon: Star,     label: 'Gwiazda' },
+              { key: 'zap',     Icon: Zap,      label: 'Błysk' },
+              { key: 'crown',   Icon: Crown,    label: 'Korona' },
+              { key: 'code',    Icon: Code2,    label: 'Kod' },
+              { key: 'gamepad', Icon: Gamepad2, label: 'Joystick' },
+              { key: 'music',   Icon: Music,    label: 'Muzyka' },
+              { key: 'globe',   Icon: Globe,    label: 'Kula' },
+              { key: 'award',   Icon: Award,    label: 'Nagroda' },
+              { key: 'flame',   Icon: Flame,    label: 'Ogień' },
+              { key: 'trophy',  Icon: Trophy,   label: 'Puchar' },
+              { key: 'rocket',  Icon: Rocket,   label: 'Rakieta' },
+              { key: 'gem',     Icon: Gem,      label: 'Klejnot' },
+              { key: 'swords',  Icon: Swords,   label: 'Miecze' },
+              { key: 'heart',   Icon: Heart,    label: 'Serce' },
+            ];
+            const previewColor = tagColor || '#818cf8';
+            const previewIconEntry = TAG_ICONS_LIST.find(e => e.key === (tagIcon || 'none'));
+            const PreviewIcon = previewIconEntry && previewIconEntry.key !== 'none' ? previewIconEntry.Icon : null;
+            return (
             <div className="max-w-xl mx-auto p-6 flex flex-col gap-6">
               <div>
                 <h3 className="text-base font-bold text-white mb-1">Tag serwera</h3>
@@ -2315,16 +2434,31 @@ function ServerSettingsPage({
               <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-4">
                 <p className="text-[10px] text-zinc-600 uppercase tracking-widest mb-3">Aktualny tag</p>
                 {serverTag ? (
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex items-center text-sm font-black tracking-widest uppercase px-3 py-1.5 rounded-lg border border-indigo-400/40 bg-indigo-500/15 text-indigo-300">
-                      {serverTag}
-                    </span>
-                    <span className="text-xs text-zinc-400">Przykład: <span className="text-white font-semibold">NazwaUżytkownika</span> <span className="text-[10px] font-black tracking-widest uppercase px-1.5 py-px rounded-md border border-indigo-400/40 bg-indigo-500/15 text-indigo-300">{serverTag}</span></span>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <TagBadge tag={serverTag} color={serverTagColor} icon={serverTagIcon}/>
+                    <span className="text-xs text-zinc-400">Przykład: <span className="text-white font-semibold">NazwaUżytkownika</span> <TagBadge tag={serverTag} color={serverTagColor} icon={serverTagIcon}/></span>
                   </div>
                 ) : (
                   <p className="text-sm text-zinc-600 italic">Brak tagu — ustaw poniżej</p>
                 )}
               </div>
+
+              {/* Live preview during editing */}
+              {tagInput && tagInput.length >= 2 && (
+                <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-4">
+                  <p className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2">Podgląd na żywo</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-white">NazwaUżytkownika</span>
+                    <span
+                      className="inline-flex items-center gap-0.5 text-[9px] font-black tracking-widest uppercase px-1.5 py-px rounded-md select-none"
+                      style={{ color: previewColor, background: previewColor + '26', border: `1px solid ${previewColor}55` }}
+                    >
+                      {PreviewIcon && <PreviewIcon size={8}/>}
+                      {tagInput}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Edit tag */}
               <div className="flex flex-col gap-3">
@@ -2338,7 +2472,7 @@ function ServerSettingsPage({
                     className="flex-1 bg-white/[0.06] border border-white/[0.08] text-white placeholder-zinc-600 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500/50 transition-all font-mono tracking-widest uppercase"
                   />
                   <button
-                    onClick={() => onSaveTag && tagInput && tagInput.length >= 2 && onSaveTag(tagInput)}
+                    onClick={() => onSaveTag && tagInput && tagInput.length >= 2 && onSaveTag(tagInput, tagColor, tagIcon)}
                     disabled={tagSaving || !tagInput || tagInput.length < 2}
                     className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold px-5 py-2.5 rounded-xl transition-all text-sm shrink-0">
                     {tagSaving ? 'Zapisywanie…' : 'Zapisz'}
@@ -2354,6 +2488,40 @@ function ServerSettingsPage({
                 <p className="text-[10px] text-zinc-700">2–4 znaki, tylko litery i cyfry (A–Z, 0–9)</p>
               </div>
 
+              {/* Color picker */}
+              <div className="flex flex-col gap-3">
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest">Kolor tagu</label>
+                <div className="flex gap-2 flex-wrap">
+                  {TAG_COLOR_PRESETS.map(p => (
+                    <button key={p.value} title={p.label}
+                      onClick={() => setTagColor && setTagColor(p.value)}
+                      className="w-7 h-7 rounded-lg border-2 transition-all hover:scale-110"
+                      style={{ background: p.value, borderColor: tagColor === p.value ? '#fff' : p.value + '00' }}/>
+                  ))}
+                  {/* Custom color */}
+                  <label title="Kolor niestandardowy" className="relative w-7 h-7 rounded-lg border-2 border-dashed border-white/20 hover:border-white/40 cursor-pointer flex items-center justify-center transition-all overflow-hidden" style={tagColor && !TAG_COLOR_PRESETS.some(p=>p.value===tagColor) ? {borderColor:'#fff',background:tagColor} : {}}>
+                    <Palette size={12} className="text-zinc-500 pointer-events-none"/>
+                    <input type="color" value={tagColor || '#818cf8'} onChange={e => setTagColor && setTagColor(e.target.value)}
+                      className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"/>
+                  </label>
+                </div>
+              </div>
+
+              {/* Icon picker */}
+              <div className="flex flex-col gap-3">
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest">Ikona przed tagiem</label>
+                <div className="grid grid-cols-8 gap-1.5">
+                  {TAG_ICONS_LIST.map(({ key, Icon, label }) => (
+                    <button key={key} title={label}
+                      onClick={() => setTagIcon && setTagIcon(key === 'none' ? null : key)}
+                      className={`flex items-center justify-center w-9 h-9 rounded-xl border transition-all ${(tagIcon||'none') === key ? 'border-indigo-500/70 bg-indigo-500/15' : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05]'}`}
+                      style={(tagIcon||'none') === key ? { borderColor: previewColor + 'b3', background: previewColor + '26' } : {}}>
+                      <Icon size={15} style={(tagIcon||'none') === key ? { color: previewColor } : { color: '#71717a' }}/>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* User: set/remove active tag */}
               <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-4">
                 <p className="text-[10px] text-zinc-600 uppercase tracking-widest mb-3">Twój aktywny tag</p>
@@ -2361,8 +2529,8 @@ function ServerSettingsPage({
                   <>
                     <p className="text-xs text-zinc-400 mb-3">
                       {activeTagServerId === serverFull.id
-                        ? <>Wyświetlasz tag <span className="font-black text-indigo-300">{serverTag}</span> przy swoim nicku na całym Cordynie.</>
-                        : <>Możesz wyświetlać tag <span className="font-black text-indigo-300">{serverTag}</span> przy swoim nicku.</>
+                        ? <>Wyświetlasz tag <TagBadge tag={serverTag} color={serverTagColor} icon={serverTagIcon}/> przy swoim nicku na całym Cordynie.</>
+                        : <>Możesz wyświetlać tag <TagBadge tag={serverTag} color={serverTagColor} icon={serverTagIcon}/> przy swoim nicku.</>
                       }
                     </p>
                     {activeTagServerId === serverFull.id ? (
@@ -2384,7 +2552,8 @@ function ServerSettingsPage({
                 )}
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {tab === 'bots' && (
             <div className="p-6">
@@ -3649,7 +3818,7 @@ function SpotifyDisplay({ spotify }: { spotify: SpotifyData }) {
 }
 
 // ─── HoverCard ────────────────────────────────────────────────────────────────
-function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfile, cache, activity, twitchActivity, steamActivity, steamGameStartedAt, realtimeStatus, onMouseEnter, onMouseLeave, maskName, fmtDate }: {
+function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfile, cache, activity, twitchActivity, steamActivity, steamGameStartedAt, realtimeStatus, onMouseEnter, onMouseLeave, maskName, fmtDate, serverTagColorMap, serverTagIconMap, serverList }: {
   userId: string; x: number; y: number;
   currentUserId: string | undefined;
   onOpenDm: (id: string) => void;
@@ -3665,6 +3834,9 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
   onMouseLeave: () => void;
   maskName: (name: string) => string;
   fmtDate: (iso: string, opts?: Intl.DateTimeFormatOptions) => string;
+  serverTagColorMap: Record<string, string|null>;
+  serverTagIconMap: Record<string, string|null>;
+  serverList: ServerData[];
 }) {
   const [data, setData] = React.useState<{profile:UserProfile|null;games:FavoriteGame[];spotify:SpotifyData|null}|null>(null);
   const isSelf = userId === currentUserId;
@@ -3750,7 +3922,17 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
         <div className="pt-8 px-4 pb-4">
           <div className="flex items-start justify-between mb-1">
             <div>
-              <p className="text-base font-bold text-white leading-tight">{u?.username ? maskName(u.username) : '...'}</p>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <p className="text-base font-bold text-white leading-tight">{u?.username ? maskName(u.username) : '...'}</p>
+                {u?.active_tag && u?.active_tag_server_id && (
+                  <TagBadge
+                    tag={u.active_tag}
+                    color={serverTagColorMap[u.active_tag_server_id] ?? null}
+                    icon={serverTagIconMap[u.active_tag_server_id] ?? null}
+                    serverInfo={serverList.find(s => s.id === u.active_tag_server_id) ?? null}
+                  />
+                )}
+              </div>
               <p className={`text-[11px] mt-0.5 ${sc(effectiveStatus).replace('bg-','text-')}`}>{scText(effectiveStatus)}</p>
             </div>
             {!isSelf && u && (
@@ -4049,9 +4231,13 @@ export default function App() {
   const [botChannelId, setBotChannelId]       = useState<string|null>(null);
   const [botChLoading, setBotChLoading]       = useState(false);
   // ── Server tag state ─────────────────────────────────────────────
-  const [serverTagMap, setServerTagMap]       = useState<Record<string, string | null>>({});  // server_id → tag
-  const [tagInput, setTagInput]               = useState('');
-  const [tagSaving, setTagSaving]             = useState(false);
+  const [serverTagMap, setServerTagMap]         = useState<Record<string, string | null>>({});  // server_id → tag text
+  const [serverTagColorMap, setServerTagColorMap] = useState<Record<string, string | null>>({});  // server_id → color
+  const [serverTagIconMap, setServerTagIconMap]   = useState<Record<string, string | null>>({});  // server_id → icon key
+  const [tagInput, setTagInput]                 = useState('');
+  const [tagColor, setTagColor]                 = useState<string|null>(null);
+  const [tagIcon, setTagIcon]                   = useState<string|null>(null);
+  const [tagSaving, setTagSaving]               = useState(false);
   const [activeTagServerId, setActiveTagServerId] = useState<string|null>(null); // current user's active tag server
   // Load bot settings when server settings opens
   useEffect(() => {
@@ -4060,7 +4246,11 @@ export default function App() {
     serversApi.tag.get(activeServer)
       .then(t => {
         setServerTagMap(p => ({ ...p, [activeServer]: t?.tag ?? null }));
+        setServerTagColorMap(p => ({ ...p, [activeServer]: t?.color ?? null }));
+        setServerTagIconMap(p => ({ ...p, [activeServer]: t?.icon ?? null }));
         setTagInput(t?.tag ?? '');
+        setTagColor(t?.color ?? null);
+        setTagIcon(t?.icon ?? null);
       })
       .catch(() => {});
   }, [srvSettOpen, activeServer]);
@@ -4070,7 +4260,11 @@ export default function App() {
     if (serverList.length === 0) return;
     serverList.forEach(s => {
       serversApi.tag.get(s.id)
-        .then(t => { setServerTagMap(p => ({ ...p, [s.id]: t?.tag ?? null })); })
+        .then(t => {
+          setServerTagMap(p => ({ ...p, [s.id]: t?.tag ?? null }));
+          setServerTagColorMap(p => ({ ...p, [s.id]: t?.color ?? null }));
+          setServerTagIconMap(p => ({ ...p, [s.id]: t?.icon ?? null }));
+        })
         .catch(() => {});
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -5076,8 +5270,10 @@ export default function App() {
     });
 
     // ── Server tag updated ────────────────────────────────────────────
-    sock.on('server_tag_updated' as any, ({ server_id, tag }: { server_id: string; tag: string | null }) => {
+    sock.on('server_tag_updated' as any, ({ server_id, tag, color, icon }: { server_id: string; tag: string | null; color?: string|null; icon?: string|null }) => {
       setServerTagMap(p => ({ ...p, [server_id]: tag }));
+      setServerTagColorMap(p => ({ ...p, [server_id]: color ?? null }));
+      setServerTagIconMap(p => ({ ...p, [server_id]: icon ?? null }));
     });
 
     // ── Badges updated (admin assigns/removes) ───────────────────────
@@ -7540,7 +7736,7 @@ export default function App() {
                     <div className="flex-1 truncate text-left min-w-0">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <p className={`text-[13px] font-semibold truncate ${isActive?'text-indigo-200':unread>0?'text-white':'text-zinc-300'}`}>{maskName(dm.other_username)}</p>
-                        {dm.other_tag && <TagBadge tag={dm.other_tag}/>}
+                        {dm.other_tag && <TagBadge tag={dm.other_tag} color={dm.other_tag_color ?? (dm.other_tag_server_id ? (serverTagColorMap[dm.other_tag_server_id] ?? null) : null)} icon={dm.other_tag_icon ?? (dm.other_tag_server_id ? (serverTagIconMap[dm.other_tag_server_id] ?? null) : null)} serverInfo={dm.other_tag_server_id ? (serverList.find(s=>s.id===dm.other_tag_server_id) ?? null) : null}/>}
                       </div>
                       {dm.last_message&&<p className={`text-[11px] truncate mt-0.5 ${unread>0?'text-zinc-300 font-medium':'text-zinc-600'}`}>{dm.last_message}</p>}
                     </div>
@@ -7618,7 +7814,12 @@ export default function App() {
                 <div className="flex items-center gap-1.5 min-w-0">
                   <p className="text-sm font-semibold text-white leading-tight truncate hover:text-zinc-300 transition-colors">{streamerMode ? 'Streamer' : currentUser?.username}</p>
                   {!streamerMode && activeTagServerId && serverTagMap[activeTagServerId] && (
-                    <TagBadge tag={serverTagMap[activeTagServerId]!}/>
+                    <TagBadge
+                      tag={serverTagMap[activeTagServerId]!}
+                      color={serverTagColorMap[activeTagServerId] ?? null}
+                      icon={serverTagIconMap[activeTagServerId] ?? null}
+                      serverInfo={serverList.find(s => s.id === activeTagServerId) ?? null}
+                    />
                   )}
                 </div>
                 <p className="text-xs truncate leading-tight mt-0.5">
@@ -8484,17 +8685,27 @@ export default function App() {
               setBotChLoading={setBotChLoading}
               addToast={addToast}
               serverTag={activeServer ? (serverTagMap[activeServer] ?? null) : null}
+              serverTagColor={activeServer ? (serverTagColorMap[activeServer] ?? null) : null}
+              serverTagIcon={activeServer ? (serverTagIconMap[activeServer] ?? null) : null}
+              serverTagColorMap={serverTagColorMap}
+              serverTagIconMap={serverTagIconMap}
               tagInput={tagInput}
               setTagInput={setTagInput}
+              tagColor={tagColor}
+              setTagColor={setTagColor}
+              tagIcon={tagIcon}
+              setTagIcon={setTagIcon}
               tagSaving={tagSaving}
               activeTagServerId={activeTagServerId}
               currentUserId={currentUser?.id}
-              onSaveTag={async (tag) => {
+              onSaveTag={async (tag, color, icon) => {
                 if (!activeServer) return;
                 setTagSaving(true);
                 try {
-                  const result = await serversApi.tag.set(activeServer, tag);
+                  const result = await serversApi.tag.set(activeServer, tag, color, icon);
                   setServerTagMap(p => ({ ...p, [activeServer]: result.tag }));
+                  setServerTagColorMap(p => ({ ...p, [activeServer]: result.color ?? null }));
+                  setServerTagIconMap(p => ({ ...p, [activeServer]: result.icon ?? null }));
                   addToast('Tag serwera zapisany!', 'success');
                 } catch { addToast('Błąd zapisu tagu', 'error'); }
                 setTagSaving(false);
@@ -8504,6 +8715,8 @@ export default function App() {
                 try {
                   await serversApi.tag.remove(activeServer);
                   setServerTagMap(p => ({ ...p, [activeServer]: null }));
+                  setServerTagColorMap(p => ({ ...p, [activeServer]: null }));
+                  setServerTagIconMap(p => ({ ...p, [activeServer]: null }));
                   // If user's active tag was from this server, clear it
                   if (activeTagServerId === activeServer) setActiveTagServerId(null);
                   addToast('Tag usunięty', 'success');
@@ -9070,7 +9283,7 @@ export default function App() {
                                 onClick={isAuto?undefined:(e)=>showHoverCard(msg.sender_id, e as unknown as React.MouseEvent)}>
                                 {displayName}
                               </span>
-                              {!isAuto&&(msg as MessageFull).sender_tag&&<TagBadge tag={(msg as MessageFull).sender_tag!}/>}
+                              {!isAuto&&(msg as MessageFull).sender_tag&&<TagBadge tag={(msg as MessageFull).sender_tag!} color={(msg as MessageFull).sender_tag_color ?? ((msg as MessageFull).sender_tag_server_id ? (serverTagColorMap[(msg as MessageFull).sender_tag_server_id!] ?? null) : null)} icon={(msg as MessageFull).sender_tag_icon ?? ((msg as MessageFull).sender_tag_server_id ? (serverTagIconMap[(msg as MessageFull).sender_tag_server_id!] ?? null) : null)} serverInfo={(msg as MessageFull).sender_tag_server_id ? (serverList.find(s=>s.id===(msg as MessageFull).sender_tag_server_id) ?? null) : null}/>}
                               {(isAuto||isBotSender)&&(
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide bg-violet-500/20 text-violet-300 border border-violet-500/30">
                                   APP
@@ -9847,7 +10060,7 @@ export default function App() {
                               </p>
                               {isOwner&&<Crown size={11} className="text-amber-400 shrink-0"/>}
                               {m.is_bot && <span className="text-[9px] font-bold px-1 py-0.5 rounded border border-violet-500/40 text-violet-400 bg-violet-500/10 leading-none select-none shrink-0">APP</span>}
-                              {(m as any).active_tag && <TagBadge tag={(m as any).active_tag}/>}
+                              {(m as any).active_tag && <TagBadge tag={(m as any).active_tag} color={(m as any).active_tag_server_id ? (serverTagColorMap[(m as any).active_tag_server_id] ?? null) : null} icon={(m as any).active_tag_server_id ? (serverTagIconMap[(m as any).active_tag_server_id] ?? null) : null} serverInfo={(m as any).active_tag_server_id ? (serverList.find(s=>s.id===(m as any).active_tag_server_id) ?? null) : null}/>}
                               {m.badges?.map(b=>{const BIcon=getBadgeIcon(b.name);return <BIcon key={b.id} size={11} style={{color:b.color}} title={b.label} className="shrink-0"/>;  })}
                             </div>
                             {mActivity ? (
@@ -9889,7 +10102,7 @@ export default function App() {
                               </p>
                               {isOwner&&<Crown size={11} className="text-amber-400/50 shrink-0"/>}
                               {m.is_bot && <span className="text-[9px] font-bold px-1 py-0.5 rounded border border-violet-500/20 text-violet-500/60 bg-violet-500/5 leading-none select-none shrink-0 opacity-50">APP</span>}
-                              {(m as any).active_tag && <span className="opacity-50"><TagBadge tag={(m as any).active_tag}/></span>}
+                              {(m as any).active_tag && <span className="opacity-50"><TagBadge tag={(m as any).active_tag} color={(m as any).active_tag_server_id ? (serverTagColorMap[(m as any).active_tag_server_id] ?? null) : null} icon={(m as any).active_tag_server_id ? (serverTagIconMap[(m as any).active_tag_server_id] ?? null) : null} serverInfo={(m as any).active_tag_server_id ? (serverList.find(s=>s.id===(m as any).active_tag_server_id) ?? null) : null}/></span>}
                               {m.badges?.map(b=>{const BIcon=getBadgeIcon(b.name);return <BIcon key={b.id} size={11} style={{color:b.color+'80'}} title={b.label} className="shrink-0 opacity-50"/>;  })}
                             </div>
                             {m.role_name&&<p className="text-[11px] text-zinc-700 truncate leading-tight">{m.role_name}</p>}
@@ -11856,7 +12069,7 @@ export default function App() {
                                     : <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0 text-white font-bold text-sm">{s.name?.[0]?.toUpperCase()}</div>}
                                   <div className="flex-1 min-w-0 text-left">
                                     <p className="text-sm font-medium text-white truncate">{s.name}</p>
-                                    <TagBadge tag={serverTagMap[s.id]!}/>
+                                    <TagBadge tag={serverTagMap[s.id]!} color={serverTagColorMap[s.id] ?? null} icon={serverTagIconMap[s.id] ?? null} serverInfo={s}/>
                                   </div>
                                   {activeTagServerId === s.id && <Check size={13} className="text-indigo-400 shrink-0"/>}
                                 </button>
@@ -13320,6 +13533,9 @@ export default function App() {
           onMouseLeave={hideHoverCard}
           maskName={maskName}
           fmtDate={fmtDate}
+          serverTagColorMap={serverTagColorMap}
+          serverTagIconMap={serverTagIconMap}
+          serverList={serverList}
         />
       </>)}
 
