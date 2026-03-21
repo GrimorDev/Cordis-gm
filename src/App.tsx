@@ -18,6 +18,7 @@ import {
   Music, Gamepad2, ExternalLink, Link2, Link2Off, Film, PhoneIncoming, PhoneMissed, Download, Monitor, Copy,
   Bot, Play, Pause, SkipForward, ListMusic, Package, Slash, Palette,
   Star, Flame, Trophy, Rocket, Gem, Swords, Heart,
+  FileAudio, FileVideo, FileCode2, FileArchive, FileImage, File, ChevronUp,
   type LucideIcon
 } from 'lucide-react';
 import {
@@ -1611,6 +1612,163 @@ function StatusBadge({ status, size = 14, className = '' }: { status: string; si
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className={className}>
       <circle cx={r} cy={r} r={r} fill={col}/>
     </svg>
+  );
+}
+
+// ─── File type helpers ────────────────────────────────────────────────────────
+function getFileRenderType(url: string): 'image' | 'audio' | 'video' | 'pdf' | 'code' | 'text' | 'archive' | 'file' {
+  const ext = url.split('?')[0].split('.').pop()?.toLowerCase() ?? '';
+  if (/^(jpg|jpeg|png|gif|webp|svg|bmp|ico|avif)$/.test(ext)) return 'image';
+  if (/^(mp3|ogg|wav|flac|m4a|aac|opus|wma)$/.test(ext)) return 'audio';
+  if (/^(mp4|webm|mov|avi|mkv|m4v|ogv)$/.test(ext)) return 'video';
+  if (ext === 'pdf') return 'pdf';
+  if (/^(zip|rar|7z|tar|gz|bz2|xz|zst)$/.test(ext)) return 'archive';
+  if (/^(js|jsx|ts|tsx|html|htm|css|scss|sass|less|json|xml|yaml|yml|toml|ini|env|php|py|rb|rs|go|java|c|cpp|cs|sh|bash|zsh|fish|ps1|sql|graphql|md|mdx|vue|svelte|kt|swift|dart|r|lua|ex|exs)$/.test(ext)) return 'code';
+  if (/^(txt|log|csv|tsv|conf|cfg|nfo|readme)$/.test(ext)) return 'text';
+  return 'file';
+}
+
+function getFileIcon(type: ReturnType<typeof getFileRenderType>, size = 14): React.ReactElement {
+  switch (type) {
+    case 'image':   return <FileImage size={size} className="text-sky-400"/>;
+    case 'audio':   return <FileAudio size={size} className="text-purple-400"/>;
+    case 'video':   return <FileVideo size={size} className="text-pink-400"/>;
+    case 'pdf':     return <FileText size={size} className="text-red-400"/>;
+    case 'archive': return <FileArchive size={size} className="text-amber-400"/>;
+    case 'code':    return <FileCode2 size={size} className="text-emerald-400"/>;
+    case 'text':    return <FileText size={size} className="text-zinc-400"/>;
+    default:        return <File size={size} className="text-zinc-400"/>;
+  }
+}
+
+// ─── Attachment renderer ─────────────────────────────────────────────────────
+function AttachmentRenderer({ url, staticUrl }: { url: string; staticUrl: (u: string) => string }) {
+  const full = staticUrl(url);
+  const type = getFileRenderType(url);
+  const name = url.split('/').pop()?.split('?')[0] ?? 'plik';
+  const ext  = name.split('.').pop()?.toLowerCase() ?? '';
+  const [expanded, setExpanded] = React.useState(false);
+  const [textContent, setTextContent] = React.useState<string|null>(null);
+  const [textLoading, setTextLoading] = React.useState(false);
+
+  const loadText = async () => {
+    if (textContent !== null) { setExpanded(p => !p); return; }
+    setTextLoading(true);
+    try {
+      const r = await fetch(full);
+      const t = await r.text();
+      setTextContent(t);
+      setExpanded(true);
+    } catch { setTextContent('Nie można załadować pliku.'); setExpanded(true); }
+    finally { setTextLoading(false); }
+  };
+
+  // ── IMAGE ──
+  if (type === 'image') return null; // handled by existing lightbox logic above
+
+  // ── AUDIO ──
+  if (type === 'audio') return (
+    <div className="mt-1.5 max-w-sm">
+      <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl bg-purple-500/10 border border-purple-500/20">
+        <FileAudio size={18} className="text-purple-400 shrink-0"/>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold text-purple-300 truncate mb-1.5">{name}</p>
+          <audio controls className="w-full h-7" style={{height:'28px'}} preload="metadata">
+            <source src={full}/>
+          </audio>
+        </div>
+        <a href={full} download={name} className="shrink-0 text-zinc-600 hover:text-purple-400 transition-colors" title="Pobierz">
+          <Download size={13}/>
+        </a>
+      </div>
+    </div>
+  );
+
+  // ── VIDEO ──
+  if (type === 'video') return (
+    <div className="mt-1.5 max-w-sm">
+      <div className="rounded-2xl overflow-hidden bg-black/40 border border-white/[0.08]">
+        <video controls className="w-full max-h-56 object-contain" preload="metadata">
+          <source src={full}/>
+        </video>
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.03]">
+          <FileVideo size={11} className="text-pink-400 shrink-0"/>
+          <span className="text-xs text-zinc-500 truncate flex-1">{name}</span>
+          <a href={full} download={name} className="text-zinc-600 hover:text-pink-400 transition-colors" title="Pobierz"><Download size={11}/></a>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── CODE or TEXT — expandable viewer ──
+  if (type === 'code' || type === 'text') return (
+    <div className="mt-1.5 max-w-lg w-full">
+      <div className="rounded-2xl overflow-hidden border border-white/[0.08] bg-[#0e0e1c]">
+        {/* Header */}
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.06] bg-white/[0.02]">
+          {getFileIcon(type, 13)}
+          <span className="text-xs font-mono text-zinc-400 truncate flex-1">{name}</span>
+          <a href={full} download={name} className="text-zinc-600 hover:text-zinc-300 transition-colors shrink-0" title="Pobierz"><Download size={11}/></a>
+          <button onClick={loadText} className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-200 transition-colors shrink-0 ml-1">
+            {textLoading ? <span className="text-[10px]">Ładowanie...</span> : expanded ? <ChevronUp size={11}/> : <ChevronDown size={11}/>}
+            {!textLoading && <span className="text-[10px]">{expanded ? 'Zwiń' : 'Podgląd'}</span>}
+          </button>
+        </div>
+        {/* Content */}
+        {expanded && textContent !== null && (
+          <div className="max-h-80 overflow-auto">
+            <pre className="p-3 text-[11px] font-mono text-zinc-300 leading-relaxed whitespace-pre-wrap break-words">
+              {textContent.length > 8000 ? textContent.slice(0, 8000) + '\n\n… (plik jest za długi, pobierz aby zobaczyć całość)' : textContent}
+            </pre>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ── ARCHIVE ──
+  if (type === 'archive') return (
+    <div className="mt-1.5">
+      <a href={full} download={name}
+        className="inline-flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 hover:bg-amber-500/20 transition-colors">
+        <FileArchive size={15} className="shrink-0"/>
+        <div className="min-w-0">
+          <p className="font-semibold truncate max-w-[220px]">{name}</p>
+          <p className="text-amber-500/70 text-[10px]">{ext.toUpperCase()} · Kliknij aby pobrać</p>
+        </div>
+        <Download size={13} className="shrink-0 ml-1"/>
+      </a>
+    </div>
+  );
+
+  // ── PDF ──
+  if (type === 'pdf') return (
+    <div className="mt-1.5">
+      <a href={full} target="_blank" rel="noopener noreferrer"
+        className="inline-flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl bg-red-500/10 border border-red-500/20 text-xs text-red-300 hover:bg-red-500/20 transition-colors">
+        <FileText size={15} className="shrink-0"/>
+        <div className="min-w-0">
+          <p className="font-semibold truncate max-w-[220px]">{name}</p>
+          <p className="text-red-500/70 text-[10px]">PDF · Otwórz lub pobierz</p>
+        </div>
+        <ExternalLink size={11} className="shrink-0 ml-1"/>
+      </a>
+    </div>
+  );
+
+  // ── GENERIC FILE ──
+  return (
+    <div className="mt-1.5">
+      <a href={full} download={name}
+        className="inline-flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs text-zinc-300 hover:bg-white/[0.07] transition-colors">
+        <File size={15} className="shrink-0 text-zinc-500"/>
+        <div className="min-w-0">
+          <p className="font-semibold truncate max-w-[220px]">{name}</p>
+          <p className="text-zinc-600 text-[10px]">{ext.toUpperCase() || 'PLIK'} · Pobierz</p>
+        </div>
+        <Download size={13} className="shrink-0 ml-1"/>
+      </a>
+    </div>
   );
 }
 
@@ -9151,12 +9309,17 @@ export default function App() {
               {/* ── Announcement / Text Messages / DMs ── */}
               {(activeView!=='servers' || activeCh?.type!=='forum') && <div
                 className="flex-1 flex flex-col min-h-0 relative"
-                onDragOver={e=>{e.preventDefault();setIsDraggingOver(true);}}
+                onDragOver={e=>{e.preventDefault();e.dataTransfer.dropEffect='copy';setIsDraggingOver(true);}}
                 onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget as Node))setIsDraggingOver(false);}}
                 onDrop={e=>{
                   e.preventDefault(); setIsDraggingOver(false);
                   const file = e.dataTransfer.files[0];
-                  if (file) { setAttachFile(file); if(file.type.startsWith('image/'))setAttachPreview(URL.createObjectURL(file)); else setAttachPreview(null); }
+                  if (!file) return;
+                  // Size check: 50MB max
+                  if (file.size > 50 * 1024 * 1024) { addToast('Plik jest za duży (max 50MB)', 'error'); return; }
+                  setAttachFile(file);
+                  if (file.type.startsWith('image/')) setAttachPreview(URL.createObjectURL(file));
+                  else setAttachPreview(null);
                 }}>
                 {/* ── Stream mode DM blur overlay ── */}
                 <AnimatePresence>
@@ -9185,12 +9348,17 @@ export default function App() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-                {isDraggingOver&&(
-                  <div className="absolute inset-0 z-50 bg-indigo-500/15 border-2 border-dashed border-indigo-400/70 rounded-2xl flex items-center justify-center pointer-events-none">
-                    <div className="flex flex-col items-center gap-3 text-indigo-300">
-                      <Upload size={32}/>
-                      <span className="text-sm font-semibold">Upuść plik tutaj</span>
+                {isDraggingOver && (
+                  <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-indigo-500/10 border-2 border-dashed border-indigo-400/60 rounded-2xl backdrop-blur-sm pointer-events-none">
+                    <div className="flex items-center gap-3 mb-3">
+                      <FileImage size={28} className="text-sky-400 opacity-80"/>
+                      <FileAudio size={28} className="text-purple-400 opacity-80"/>
+                      <FileVideo size={28} className="text-pink-400 opacity-80"/>
+                      <FileCode2 size={28} className="text-emerald-400 opacity-80"/>
+                      <FileArchive size={28} className="text-amber-400 opacity-80"/>
                     </div>
+                    <p className="text-base font-bold text-white">Upuść plik tutaj</p>
+                    <p className="text-xs text-zinc-400 mt-1">Obrazy, audio, wideo, kod, archiwa i więcej</p>
                   </div>
                 )}
                 {/* New messages indicator — shown when user scrolled up and new message arrived */}
@@ -9530,13 +9698,11 @@ export default function App() {
                             {/* Attachment */}
                             {msg.attachment_url&&(
                               <div className="mt-1.5 max-w-sm">
-                                {/\.(jpg|jpeg|png|gif|webp)$/i.test(msg.attachment_url) ? (
+                                {getFileRenderType(msg.attachment_url) === 'image' ? (
                                   <img src={staticUrl(msg.attachment_url)} alt="attachment" className="rounded-2xl max-h-64 object-contain cursor-zoom-in hover:opacity-90 transition-opacity shadow-lg"
                                     onClick={()=>setLightboxSrc(staticUrl(msg.attachment_url!))}/>
                                 ) : (
-                                  <a href={staticUrl(msg.attachment_url)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-2 rounded-xl glass-bubble text-xs text-zinc-400 hover:text-white transition-colors">
-                                    <Paperclip size={12}/> {msg.attachment_url.split('/').pop()}
-                                  </a>
+                                  <AttachmentRenderer url={msg.attachment_url} staticUrl={staticUrl}/>
                                 )}
                               </div>
                             )}
@@ -9711,9 +9877,11 @@ export default function App() {
                   )}
                   {attachFile&&!attachPreview&&(
                     <motion.div initial={{opacity:0,height:0}} animate={{opacity:1,height:'auto'}} exit={{opacity:0,height:0}} className="overflow-hidden mb-2">
-                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-white/[0.07] text-xs text-zinc-400">
-                        <Paperclip size={10}/> {attachFile.name}
-                        <button onClick={()=>setAttachFile(null)} className="ml-1 text-zinc-600 hover:text-rose-400"><X size={9}/></button>
+                      <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-900 border border-white/[0.08] text-xs text-zinc-300 max-w-xs">
+                        {getFileIcon(getFileRenderType(attachFile.name), 13)}
+                        <span className="truncate flex-1">{attachFile.name}</span>
+                        <span className="text-zinc-600 shrink-0">{attachFile.size > 1024*1024 ? (attachFile.size/1024/1024).toFixed(1)+'MB' : Math.round(attachFile.size/1024)+'KB'}</span>
+                        <button onClick={()=>setAttachFile(null)} className="ml-1 text-zinc-600 hover:text-rose-400 shrink-0"><X size={9}/></button>
                       </div>
                     </motion.div>
                   )}
