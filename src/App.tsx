@@ -1642,7 +1642,7 @@ function getFileIcon(type: ReturnType<typeof getFileRenderType>, size = 14): Rea
 }
 
 // ─── Attachment renderer ─────────────────────────────────────────────────────
-function AttachmentRenderer({ url, staticUrl }: { url: string; staticUrl: (u: string) => string }) {
+function AttachmentRenderer({ url, staticUrl, addToast }: { url: string; staticUrl: (u: string) => string; addToast?: (msg: string, type?: string) => void }) {
   const full = staticUrl(url);
   const type = getFileRenderType(url);
   const name = url.split('/').pop()?.split('?')[0] ?? 'plik';
@@ -1650,6 +1650,27 @@ function AttachmentRenderer({ url, staticUrl }: { url: string; staticUrl: (u: st
   const [expanded, setExpanded] = React.useState(false);
   const [textContent, setTextContent] = React.useState<string|null>(null);
   const [textLoading, setTextLoading] = React.useState(false);
+  const [downloading, setDownloading] = React.useState(false);
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (downloading) return;
+    setDownloading(true);
+    addToast?.(`⬇️ Pobieranie: ${name}`, 'info');
+    try {
+      const resp = await fetch(full);
+      const blob = await resp.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl; a.download = name;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objUrl);
+      addToast?.(`✅ Pobrano: ${name}`, 'success');
+    } catch {
+      addToast?.(`Błąd pobierania: ${name}`, 'error');
+    } finally { setDownloading(false); }
+  };
 
   const loadText = async () => {
     if (textContent !== null) { setExpanded(p => !p); return; }
@@ -1739,15 +1760,15 @@ function AttachmentRenderer({ url, staticUrl }: { url: string; staticUrl: (u: st
   // ── ARCHIVE ──
   if (type === 'archive') return (
     <div className="mt-1.5">
-      <a href={full} download={name}
-        className="inline-flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 hover:bg-amber-500/20 transition-colors">
+      <button onClick={handleDownload} disabled={downloading}
+        className="inline-flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 hover:bg-amber-500/20 transition-colors disabled:opacity-60 cursor-pointer w-auto">
         <FileArchive size={15} className="shrink-0"/>
-        <div className="min-w-0">
+        <div className="min-w-0 text-left">
           <p className="font-semibold truncate max-w-[220px]">{name}</p>
-          <p className="text-amber-500/70 text-[10px]">{ext.toUpperCase()} · Kliknij aby pobrać</p>
+          <p className="text-amber-500/70 text-[10px]">{ext.toUpperCase()} · {downloading ? 'Pobieranie…' : 'Kliknij aby pobrać'}</p>
         </div>
-        <Download size={13} className="shrink-0 ml-1"/>
-      </a>
+        {downloading ? <Loader2 size={13} className="shrink-0 ml-1 animate-spin"/> : <Download size={13} className="shrink-0 ml-1"/>}
+      </button>
     </div>
   );
 
@@ -1769,15 +1790,15 @@ function AttachmentRenderer({ url, staticUrl }: { url: string; staticUrl: (u: st
   // ── GENERIC FILE ──
   return (
     <div className="mt-1.5">
-      <a href={full} download={name}
-        className="inline-flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs text-zinc-300 hover:bg-white/[0.07] transition-colors">
+      <button onClick={handleDownload} disabled={downloading}
+        className="inline-flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs text-zinc-300 hover:bg-white/[0.07] transition-colors disabled:opacity-60 cursor-pointer w-auto">
         <File size={15} className="shrink-0 text-zinc-500"/>
-        <div className="min-w-0">
+        <div className="min-w-0 text-left">
           <p className="font-semibold truncate max-w-[220px]">{name}</p>
-          <p className="text-zinc-600 text-[10px]">{ext.toUpperCase() || 'PLIK'} · Pobierz</p>
+          <p className="text-zinc-600 text-[10px]">{ext.toUpperCase() || 'PLIK'} · {downloading ? 'Pobieranie…' : 'Pobierz'}</p>
         </div>
-        <Download size={13} className="shrink-0 ml-1"/>
-      </a>
+        {downloading ? <Loader2 size={13} className="shrink-0 ml-1 animate-spin"/> : <Download size={13} className="shrink-0 ml-1"/>}
+      </button>
     </div>
   );
 }
@@ -9758,14 +9779,14 @@ export default function App() {
                               return <span key={firstUrl}><LinkPreview url={firstUrl} show={showLinkPreviews}/></span>;
                             })()}
 
-                            {/* Attachment */}
-                            {msg.attachment_url&&(
+                            {/* Attachment — hidden when message deleted */}
+                            {msg.attachment_url && !(msg as any).deleted && msg.content !== '__deleted__' && (
                               <div className="mt-1.5 max-w-sm">
                                 {getFileRenderType(msg.attachment_url) === 'image' ? (
                                   <img src={staticUrl(msg.attachment_url)} alt="attachment" className="rounded-2xl max-h-64 object-contain cursor-zoom-in hover:opacity-90 transition-opacity shadow-lg"
                                     onClick={()=>setLightboxSrc(staticUrl(msg.attachment_url!))}/>
                                 ) : (
-                                  <AttachmentRenderer url={msg.attachment_url} staticUrl={staticUrl}/>
+                                  <AttachmentRenderer url={msg.attachment_url} staticUrl={staticUrl} addToast={addToast}/>
                                 )}
                               </div>
                             )}
