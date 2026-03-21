@@ -74,9 +74,11 @@ router.get('/:userId/messages', authMiddleware, async (req: AuthRequest, res: Re
       SELECT dm.id, dm.conversation_id, dm.content, dm.edited, dm.created_at,
              dm.attachment_url, dm.reply_to_id, dm.is_system,
              u.id as sender_id, u.username as sender_username, u.avatar_url as sender_avatar, u.avatar_effect as sender_avatar_effect,
+             st.tag as sender_tag, st.color as sender_tag_color, st.icon as sender_tag_icon, u.active_tag_server_id as sender_tag_server_id,
              rm.content as reply_content, ru.username as reply_username
       FROM dm_messages dm
       INNER JOIN users u ON u.id=dm.sender_id
+      LEFT JOIN server_tags st ON st.server_id = u.active_tag_server_id
       LEFT JOIN dm_messages rm ON rm.id=dm.reply_to_id
       LEFT JOIN users ru ON ru.id=rm.sender_id
       WHERE dm.conversation_id=$1

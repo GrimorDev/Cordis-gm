@@ -164,6 +164,10 @@ export interface DmMessageFull {
   reply_to_id?: string | null; reply_content?: string | null; reply_username?: string | null;
   sender_id: string; sender_username: string; sender_avatar?: string | null;
   sender_avatar_effect?: string | null;
+  sender_tag?: string | null;
+  sender_tag_color?: string | null;
+  sender_tag_icon?: string | null;
+  sender_tag_server_id?: string | null;
 }
 export interface FriendEntry {
   id: string; username: string; avatar_url?: string | null;

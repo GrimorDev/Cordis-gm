@@ -7813,14 +7813,6 @@ export default function App() {
               <div className="flex-1 min-w-0 cursor-pointer" onClick={openOwnProfile}>
                 <div className="flex items-center gap-1.5 min-w-0">
                   <p className="text-sm font-semibold text-white leading-tight truncate hover:text-zinc-300 transition-colors">{streamerMode ? 'Streamer' : currentUser?.username}</p>
-                  {!streamerMode && activeTagServerId && serverTagMap[activeTagServerId] && (
-                    <TagBadge
-                      tag={serverTagMap[activeTagServerId]!}
-                      color={serverTagColorMap[activeTagServerId] ?? null}
-                      icon={serverTagIconMap[activeTagServerId] ?? null}
-                      serverInfo={serverList.find(s => s.id === activeTagServerId) ?? null}
-                    />
-                  )}
                 </div>
                 <p className="text-xs truncate leading-tight mt-0.5">
                   {activeCall ? (
@@ -9219,6 +9211,14 @@ export default function App() {
                     const msgDate = new Date(msg.created_at).toDateString();
                     const prevDate = idx>0 ? new Date(messages[idx-1].created_at).toDateString() : null;
                     const showSep = idx===0 || msgDate!==prevDate;
+                    // Message grouping: same sender, within 5 minutes, no date separator
+                    const prevMsg = idx > 0 ? messages[idx - 1] : null;
+                    const isGrouped = !showSep
+                      && !!prevMsg
+                      && prevMsg.sender_id === msg.sender_id
+                      && msg.sender_id !== '__system__'
+                      && prevMsg.sender_id !== '__system__'
+                      && (new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime()) < 5 * 60 * 1000;
                     const sepLabel = dateSepLabel(msg.created_at);
                     // System message (call ended, etc.)
                     if (msg.sender_id === '__system__') {
@@ -9255,7 +9255,7 @@ export default function App() {
                         <motion.div
                           initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: Math.min(idx * 0.01, 0.06), type: 'spring', stiffness: 340, damping: 28 }}
-                          className={`relative flex ${showChatAvatars?'gap-2.5':'gap-0'} group ${compactMessages?'mb-0.5':'mb-1.5'} ${isOwn?'flex-row-reverse':'flex-row'} ${mentionsMe?'rounded-xl bg-amber-400/5 border-l-2 border-amber-400/60 pl-2 -ml-2':''}`}>
+                          className={`relative flex ${showChatAvatars?'gap-2.5':'gap-0'} group ${compactMessages || isGrouped ? 'mb-0.5' : 'mb-1.5'} ${isGrouped ? 'mt-0' : ''} ${isOwn?'flex-row-reverse':'flex-row'} ${mentionsMe?'rounded-xl bg-amber-400/5 border-l-2 border-amber-400/60 pl-2 -ml-2':''}`}>
 
                           {/* Avatar */}
                           {(()=>{
@@ -9265,25 +9265,28 @@ export default function App() {
                             const avatarSrc=isAuto?(autoAvatar||`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent((msg as any).system_name||'S')}&backgroundColor=6366f1&textColor=ffffff`):ava({avatar_url:msg.sender_avatar,username:msg.sender_username});
                             const displayName=isAuto?((msg as any).system_name||'Serwer'):maskName(msg.sender_username);
                             return (<>
-                          {showChatAvatars&&(
-                          <div className="av-frozen shrink-0 self-end mb-0.5" style={{'--av-url':`url("${avatarSrc}")`} as React.CSSProperties}>
-                            <img src={avatarSrc} alt=""
-                              onClick={isAuto?undefined:(e)=>showHoverCard(msg.sender_id, e as unknown as React.MouseEvent)}
-                              className={`w-9 h-9 rounded-xl object-cover ${isAuto?'cursor-default':'cursor-pointer hover:opacity-80 hover:scale-105'} transition-all av-eff-${(msg as any).sender_avatar_effect||'none'}`}/>
-                          </div>
+                          {showChatAvatars && (
+                            isGrouped
+                              ? <div className="w-9 shrink-0"/>
+                              : <div className="av-frozen shrink-0 self-end mb-0.5" style={{'--av-url':`url("${avatarSrc}")`} as React.CSSProperties}>
+                                  <img src={avatarSrc} alt=""
+                                    onClick={isAuto?undefined:(e)=>showHoverCard(msg.sender_id, e as unknown as React.MouseEvent)}
+                                    className={`w-9 h-9 rounded-xl object-cover ${isAuto?'cursor-default':'cursor-pointer hover:opacity-80 hover:scale-105'} transition-all av-eff-${(msg as any).sender_avatar_effect||'none'}`}/>
+                                </div>
                           )}
 
                           {/* Content column */}
                           <div className={`flex flex-col max-w-[72%] ${isOwn?'items-end':'items-start'} min-w-0`}>
 
                             {/* Meta (name + time) */}
+                            {!isGrouped && (
                             <div className={`flex items-center gap-1.5 mb-1 px-1 ${isOwn?'flex-row-reverse':''}`}>
                               <span className={`text-xs font-semibold transition-opacity ${isAuto?'cursor-default':'cursor-pointer hover:underline hover:opacity-80'}`}
                                 style={{ color: isAuto?'#818cf8':((msg as MessageFull).sender_role_color || (isOwn ? '#818cf8' : '#a1a1aa')) }}
                                 onClick={isAuto?undefined:(e)=>showHoverCard(msg.sender_id, e as unknown as React.MouseEvent)}>
                                 {displayName}
                               </span>
-                              {!isAuto&&(msg as MessageFull).sender_tag&&<TagBadge tag={(msg as MessageFull).sender_tag!} color={(msg as MessageFull).sender_tag_color ?? ((msg as MessageFull).sender_tag_server_id ? (serverTagColorMap[(msg as MessageFull).sender_tag_server_id!] ?? null) : null)} icon={(msg as MessageFull).sender_tag_icon ?? ((msg as MessageFull).sender_tag_server_id ? (serverTagIconMap[(msg as MessageFull).sender_tag_server_id!] ?? null) : null)} serverInfo={(msg as MessageFull).sender_tag_server_id ? (serverList.find(s=>s.id===(msg as MessageFull).sender_tag_server_id) ?? null) : null}/>}
+                              {!isAuto&&(msg as any).sender_tag&&<TagBadge tag={(msg as any).sender_tag} color={(msg as any).sender_tag_color ?? ((msg as any).sender_tag_server_id ? (serverTagColorMap[(msg as any).sender_tag_server_id] ?? null) : null)} icon={(msg as any).sender_tag_icon ?? ((msg as any).sender_tag_server_id ? (serverTagIconMap[(msg as any).sender_tag_server_id] ?? null) : null)} serverInfo={(msg as any).sender_tag_server_id ? (serverList.find(s=>s.id===(msg as any).sender_tag_server_id) ?? null) : null}/>}
                               {(isAuto||isBotSender)&&(
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide bg-violet-500/20 text-violet-300 border border-violet-500/30">
                                   APP
@@ -9303,6 +9306,7 @@ export default function App() {
                               <span className={`text-[10px] text-zinc-600 transition-opacity ${alwaysShowTimestamps?'':'opacity-0 group-hover:opacity-100'}`}>{fmtTime(msg.created_at)}</span>
                               {(msg as MessageFull).edited&&<span className="text-[10px] text-zinc-700 italic">(ed.)</span>}
                             </div>
+                            )}
 
                             {/* Reply preview */}
                             {msg.reply_to_id&&msg.reply_content&&(
