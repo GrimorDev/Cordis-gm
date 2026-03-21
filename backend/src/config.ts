@@ -31,8 +31,22 @@ export const config = {
   },
 
   uploads: {
-    maxSize: parseInt(process.env.UPLOAD_MAX_SIZE || String(5 * 1024 * 1024)), // 5MB
+    maxSize: parseInt(process.env.UPLOAD_MAX_SIZE || String(50 * 1024 * 1024)), // 50MB (Cordyn Power)
     dir: process.env.UPLOAD_DIR || './uploads',
+  },
+
+  r2: {
+    endpoint:        process.env.R2_ENDPOINT         || '',
+    accessKeyId:     process.env.R2_ACCESS_KEY_ID    || '',
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
+    bucket:          process.env.R2_BUCKET           || 'cordis-uploads',
+    publicUrl:       (process.env.R2_PUBLIC_URL      || '').replace(/\/$/, ''),
+  },
+
+  storage: {
+    // Quota in bytes — free: 50MB, premium: 600MB
+    freeQuota:    parseInt(process.env.STORAGE_FREE_QUOTA    || String(50  * 1024 * 1024)),
+    premiumQuota: parseInt(process.env.STORAGE_PREMIUM_QUOTA || String(600 * 1024 * 1024)),
   },
 
   vapid: {

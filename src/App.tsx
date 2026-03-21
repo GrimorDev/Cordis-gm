@@ -19,6 +19,7 @@ import {
   Bot, Play, Pause, SkipForward, ListMusic, Package, Slash, Palette,
   Star, Flame, Trophy, Rocket, Gem, Swords, Heart,
   FileAudio, FileVideo, FileCode2, FileArchive, FileImage, File, ChevronUp,
+  HardDrive, PieChart, Trash,
   type LucideIcon
 } from 'lucide-react';
 import {
@@ -2823,13 +2824,306 @@ function ServerSettingsPage({
   );
 }
 
+// ─── Storage Tab ─────────────────────────────────────────────────────────────
+function StorageTab({ addToast }: { addToast: (m:string,t?:any)=>void }) {
+  const { adminApi, staticUrl } = (window as any).__cordisApi__ || {};
+  const [stats, setStats]       = React.useState<import('./api').AdminStorageStats | null>(null);
+  const [loading, setLoading]   = React.useState(true);
+  const [storageView, setStorageView] = React.useState<'overview'|'users'|'files'>('overview');
+  const [suUsers, setSuUsers]   = React.useState<import('./api').StorageUser[]>([]);
+  const [suTotal, setSuTotal]   = React.useState(0);
+  const [suPage, setSuPage]     = React.useState(1);
+  const [suQ, setSuQ]           = React.useState('');
+  const [suLoading, setSuLoading] = React.useState(false);
+  const [deleting, setDeleting] = React.useState<number|null>(null);
+
+  const fmtBytes = (b: number) => {
+    if (b >= 1073741824) return `${(b/1073741824).toFixed(2)} GB`;
+    if (b >= 1048576)    return `${(b/1048576).toFixed(1)} MB`;
+    if (b >= 1024)       return `${(b/1024).toFixed(0)} KB`;
+    return `${b} B`;
+  };
+  const pct = (used: number, quota: number) => Math.min(100, Math.round((used / Math.max(1, quota)) * 100));
+  const pctColor = (p: number) => p > 90 ? 'bg-rose-500' : p > 70 ? 'bg-amber-500' : 'bg-indigo-500';
+
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const s = await import('./api').then(m => m.adminApi.storage.stats());
+      setStats(s);
+    } catch { addToast('Błąd ładowania statystyk', 'error'); }
+    setLoading(false);
+  }, []);
+
+  const loadUsers = React.useCallback(async (page = 1, q = '') => {
+    setSuLoading(true);
+    try {
+      const d = await import('./api').then(m => m.adminApi.storage.users(page, q));
+      setSuUsers(d.users); setSuTotal(d.total);
+    } catch { addToast('Błąd ładowania użytkowników', 'error'); }
+    setSuLoading(false);
+  }, []);
+
+  React.useEffect(() => { load(); }, []);
+  React.useEffect(() => {
+    if (storageView === 'users') loadUsers(suPage, suQ);
+  }, [storageView, suPage]);
+
+  const handleDeleteAtt = async (id: number) => {
+    if (!confirm('Usunąć ten plik z R2 i odjąć z limitu użytkownika?')) return;
+    setDeleting(id);
+    try {
+      await import('./api').then(m => m.adminApi.storage.deleteAtt(id));
+      addToast('Plik usunięty', 'success');
+      load();
+    } catch { addToast('Błąd usuwania', 'error'); }
+    setDeleting(null);
+  };
+
+  const handleRecalc = async () => {
+    try {
+      await import('./api').then(m => m.adminApi.storage.recalc());
+      addToast('Przeliczono storage wszystkich użytkowników', 'success');
+      load();
+    } catch { addToast('Błąd przeliczania', 'error'); }
+  };
+
+  const handleSetPremium = async (userId: string, is_premium: boolean) => {
+    try {
+      const quota_mb = is_premium ? 600 : 50;
+      await import('./api').then(m => m.adminApi.storage.setQuota(userId, { is_premium, quota_mb }));
+      addToast(is_premium ? 'Nadano Cordyn Power' : 'Odebrano Cordyn Power', 'success');
+      if (storageView === 'users') loadUsers(suPage, suQ);
+      else load();
+    } catch { addToast('Błąd', 'error'); }
+  };
+
+  if (loading) return (
+    <div className="flex justify-center items-center py-24">
+      <Loader2 size={24} className="animate-spin text-violet-400"/>
+    </div>
+  );
+
+  const st = stats?.totals;
+  const COLORS = ['bg-violet-500','bg-blue-500','bg-emerald-500','bg-amber-500','bg-rose-500','bg-pink-500'];
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <HardDrive size={16} className="text-violet-400"/>
+          <h2 className="text-base font-bold text-white">Przestrzeń dyskowa</h2>
+          {stats?.r2_enabled
+            ? <span className="text-[9px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 rounded-full px-2 py-0.5">R2 aktywne</span>
+            : <span className="text-[9px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/25 rounded-full px-2 py-0.5">Dysk lokalny</span>
+          }
+        </div>
+        <div className="flex gap-2">
+          <button onClick={handleRecalc}
+            className="text-xs px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] text-zinc-400 hover:text-white transition-all border border-white/[0.07]">
+            Przelicz limity
+          </button>
+          <button onClick={load}
+            className="text-xs px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] text-zinc-400 hover:text-white transition-all border border-white/[0.07]">
+            Odśwież
+          </button>
+        </div>
+      </div>
+
+      {/* Sub-tabs */}
+      <div className="flex gap-1 bg-white/[0.03] border border-white/[0.07] rounded-xl p-1">
+        {(['overview','users','files'] as const).map(v => (
+          <button key={v} onClick={() => { setStorageView(v); if (v==='users') loadUsers(1,''); }}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${storageView===v ? 'bg-violet-500/20 text-violet-300' : 'text-zinc-500 hover:text-zinc-300'}`}>
+            {v==='overview' ? 'Przegląd' : v==='users' ? 'Użytkownicy' : 'Ostatnie pliki'}
+          </button>
+        ))}
+      </div>
+
+      {/* ── OVERVIEW ── */}
+      {storageView==='overview' && st && (
+        <div className="space-y-4">
+          {/* Big stat cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label:'Łączny rozmiar', val: fmtBytes(st.total_bytes), icon:<HardDrive size={15} className="text-violet-400"/>, color:'violet' },
+              { label:'Pliki', val: st.total_files.toLocaleString(), icon:<FileText size={15} className="text-blue-400"/>, color:'blue' },
+              { label:'Uploadujący', val: st.unique_uploaders, icon:<Users size={15} className="text-emerald-400"/>, color:'emerald' },
+              { label:'Obrazy', val: fmtBytes(st.image_bytes), icon:<FileImage size={15} className="text-pink-400"/>, color:'pink' },
+            ].map(c => (
+              <div key={c.label} className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4">
+                <div className="flex items-center gap-2 mb-2">{c.icon}<span className="text-xs text-zinc-500">{c.label}</span></div>
+                <div className={`text-lg font-bold text-${c.color}-400`}>{c.val}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Category breakdown */}
+          {stats?.by_mime && stats.by_mime.length > 0 && (
+            <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-5 space-y-3">
+              <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                <PieChart size={12}/> Według kategorii
+              </h3>
+              {stats.by_mime.map((row, i) => {
+                const p = st.total_bytes > 0 ? Math.round((row.bytes / st.total_bytes) * 100) : 0;
+                return (
+                  <div key={row.category}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-zinc-300">{row.category}</span>
+                      <span className="text-zinc-500">{fmtBytes(row.bytes)} · {row.count} plików · {p}%</span>
+                    </div>
+                    <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
+                      <div className={`h-full ${COLORS[i % COLORS.length]} rounded-full`} style={{width:`${p}%`}}/>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Top 10 users */}
+          {stats?.top_users && stats.top_users.length > 0 && (
+            <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-white/[0.06]">
+                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Top użytkownicy</h3>
+              </div>
+              <div className="divide-y divide-white/[0.04]">
+                {stats.top_users.slice(0,10).map(u => {
+                  const p = pct(Number(u.storage_used_bytes), Number(u.storage_quota_bytes));
+                  return (
+                    <div key={u.id} className="flex items-center gap-3 px-4 py-2.5">
+                      <div className="w-7 h-7 rounded-xl overflow-hidden bg-white/[0.06] shrink-0">
+                        {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-xs text-zinc-400">{u.username[0]}</div>}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="text-xs font-semibold text-white truncate">{u.username}</span>
+                          {u.is_premium && <span className="text-[9px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30 rounded-full px-1.5">Power</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                            <div className={`h-full ${pctColor(p)} rounded-full`} style={{width:`${p}%`}}/>
+                          </div>
+                          <span className="text-[10px] text-zinc-500 shrink-0">{fmtBytes(Number(u.storage_used_bytes))} / {fmtBytes(Number(u.storage_quota_bytes))}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => handleSetPremium(u.id, !u.is_premium)}
+                          title={u.is_premium ? 'Odbierz Cordyn Power' : 'Nadaj Cordyn Power'}
+                          className={`w-6 h-6 flex items-center justify-center rounded-lg text-[10px] transition-colors ${u.is_premium ? 'bg-violet-500/20 text-violet-400 hover:bg-rose-500/20 hover:text-rose-400' : 'bg-white/[0.04] text-zinc-600 hover:bg-violet-500/15 hover:text-violet-400'}`}>
+                          <Crown size={11}/>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── USERS ── */}
+      {storageView==='users' && (
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <input value={suQ} onChange={e=>{setSuQ(e.target.value);setSuPage(1);loadUsers(1,e.target.value);}}
+              placeholder="Szukaj użytkownika…"
+              className="flex-1 bg-white/[0.06] border border-white/[0.08] text-white placeholder-zinc-600 outline-none focus:border-violet-500/50 rounded-xl px-3 py-2 text-sm"/>
+          </div>
+          {suLoading ? (
+            <div className="flex justify-center py-8"><Loader2 size={18} className="animate-spin text-zinc-600"/></div>
+          ) : (
+            <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl overflow-hidden">
+              <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-4 py-2 border-b border-white/[0.06] text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                <span>Użytkownik</span><span>Użyte</span><span>Pliki</span><span>Akcje</span>
+              </div>
+              <div className="divide-y divide-white/[0.04]">
+                {suUsers.map(u => {
+                  const p = pct(Number(u.storage_used_bytes), Number(u.storage_quota_bytes));
+                  return (
+                    <div key={u.id} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center px-4 py-2.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-6 h-6 rounded-lg overflow-hidden bg-white/[0.06] shrink-0">
+                          {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-[10px] text-zinc-400">{u.username[0]}</div>}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs font-semibold text-white truncate">{u.username}</span>
+                            {u.is_premium && <span className="text-[8px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30 rounded-full px-1">Power</span>}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <div className="w-16 h-1 bg-white/[0.06] rounded-full overflow-hidden">
+                              <div className={`h-full ${pctColor(p)}`} style={{width:`${p}%`}}/>
+                            </div>
+                            <span className="text-[10px] text-zinc-600">{p}%</span>
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-xs text-zinc-400">{fmtBytes(Number(u.storage_used_bytes))}<span className="text-zinc-600">/{fmtBytes(Number(u.storage_quota_bytes))}</span></span>
+                      <span className="text-xs text-zinc-500">{u.file_count}</span>
+                      <div className="flex gap-1">
+                        <button onClick={() => handleSetPremium(u.id, !u.is_premium)}
+                          title={u.is_premium ? 'Odbierz Power' : 'Nadaj Power'}
+                          className={`w-6 h-6 flex items-center justify-center rounded-lg text-[10px] transition-colors ${u.is_premium ? 'bg-violet-500/20 text-violet-400 hover:bg-rose-500/20 hover:text-rose-400' : 'bg-white/[0.04] text-zinc-600 hover:bg-violet-500/15 hover:text-violet-400'}`}>
+                          <Crown size={10}/>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {suUsers.length===0 && <div className="text-center py-8 text-xs text-zinc-600">Brak użytkowników ze storage</div>}
+              </div>
+            </div>
+          )}
+          {suTotal > 50 && (
+            <div className="flex justify-center gap-2">
+              <button disabled={suPage===1} onClick={()=>{setSuPage(p=>p-1);loadUsers(suPage-1,suQ);}} className="px-3 py-1.5 text-xs rounded-lg bg-white/[0.05] text-zinc-400 hover:text-white disabled:opacity-30"><ChevronLeft size={12}/></button>
+              <span className="px-3 py-1.5 text-xs text-zinc-400">str. {suPage} / {Math.ceil(suTotal/50)}</span>
+              <button disabled={suPage>=Math.ceil(suTotal/50)} onClick={()=>{setSuPage(p=>p+1);loadUsers(suPage+1,suQ);}} className="px-3 py-1.5 text-xs rounded-lg bg-white/[0.05] text-zinc-400 hover:text-white disabled:opacity-30"><ChevronRight size={12}/></button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── RECENT FILES ── */}
+      {storageView==='files' && stats && (
+        <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl overflow-hidden">
+          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-4 py-2 border-b border-white/[0.06] text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+            <span>Plik</span><span>Rozmiar</span><span>Przez</span><span>Usuń</span>
+          </div>
+          <div className="divide-y divide-white/[0.04]">
+            {stats.recent.map(f => (
+              <div key={f.id} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center px-4 py-2">
+                <div className="min-w-0">
+                  <a href={f.url} target="_blank" rel="noreferrer"
+                    className="text-xs text-indigo-400 hover:text-indigo-300 truncate block max-w-[220px]">{f.original_name || f.r2_key}</a>
+                  <span className="text-[10px] text-zinc-600">{f.mime_type} · {new Date(f.created_at).toLocaleDateString('pl')}</span>
+                </div>
+                <span className="text-xs text-zinc-400">{fmtBytes(f.file_size)}</span>
+                <span className="text-xs text-zinc-500">{f.username}</span>
+                <button onClick={() => handleDeleteAtt(f.id)} disabled={deleting===f.id}
+                  className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/[0.04] hover:bg-rose-500/20 hover:text-rose-400 text-zinc-600 transition-colors disabled:opacity-40">
+                  {deleting===f.id ? <Loader2 size={10} className="animate-spin"/> : <Trash size={10}/>}
+                </button>
+              </div>
+            ))}
+            {stats.recent.length===0 && <div className="text-center py-8 text-xs text-zinc-600">Brak plików</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Admin Panel component ────────────────────────────────────────────────────
 interface AdminPanelProps {
   currentUser: import('./api').UserProfile | null;
   overview: import('./api').AdminOverview | null;
   setOverview: (v: import('./api').AdminOverview | null) => void;
-  tab: 'dashboard'|'users'|'servers'|'badges'|'system';
-  setTab: (t: 'dashboard'|'users'|'servers'|'badges'|'system') => void;
+  tab: 'dashboard'|'users'|'servers'|'badges'|'system'|'storage';
+  setTab: (t: 'dashboard'|'users'|'servers'|'badges'|'system'|'storage') => void;
   badges: Badge[]; setBadges: (v: Badge[]) => void;
   users: AdminUser[]; setUsers: (v: AdminUser[]) => void;
   usersTotal: number; setUsersTotal: (v: number) => void;
@@ -2952,12 +3246,13 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
     } catch (e: any) { addToast({ type:'error', message: e?.message || 'Błąd odbanowania' }); }
   };
 
-  const TABS: { id: 'dashboard'|'users'|'servers'|'badges'|'system'; label: string; icon: React.ReactNode }[] = [
-    { id:'dashboard', label:'Dashboard', icon: <LayoutDashboard size={14}/> },
-    { id:'users',     label:'Użytkownicy', icon: <Users size={14}/> },
-    { id:'servers',   label:'Serwery', icon: <Server size={14}/> },
-    { id:'badges',    label:'Odznaki', icon: <Award size={14}/> },
-    { id:'system',    label:'System', icon: <Database size={14}/> },
+  const TABS: { id: 'dashboard'|'users'|'servers'|'badges'|'system'|'storage'; label: string; icon: React.ReactNode }[] = [
+    { id:'dashboard', label:'Dashboard',        icon: <LayoutDashboard size={14}/> },
+    { id:'users',     label:'Użytkownicy',      icon: <Users size={14}/> },
+    { id:'servers',   label:'Serwery',          icon: <Server size={14}/> },
+    { id:'badges',    label:'Odznaki',          icon: <Award size={14}/> },
+    { id:'storage',   label:'Przestrzeń dys.',  icon: <HardDrive size={14}/> },
+    { id:'system',    label:'System',           icon: <Database size={14}/> },
   ];
 
   const fmtUptime = (s: number) => {
@@ -3261,6 +3556,11 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                 {badges.length===0&&<p className="text-xs text-zinc-600 text-center py-4">Brak odznak</p>}
               </div>
             </div>
+          )}
+
+          {/* ── Przestrzeń dyskowa ── */}
+          {tab==='storage'&&(
+            <StorageTab addToast={addToast}/>
           )}
 
           {/* ── System ── */}
@@ -4516,7 +4816,7 @@ export default function App() {
 
   // ── Admin panel ──────────────────────────────────────────────────
   const [prevView, setPrevView]               = useState<'servers'|'dms'|'friends'>('dms');
-  const [adminTab, setAdminTab]               = useState<'dashboard'|'users'|'servers'|'badges'|'system'>('dashboard');
+  const [adminTab, setAdminTab]               = useState<'dashboard'|'users'|'servers'|'badges'|'system'|'storage'>('dashboard');
   const [adminOverview, setAdminOverview]     = useState<AdminOverview|null>(null);
   const [adminStats, setAdminStats]           = useState<AdminStats|null>(null);
   const [adminBadges, setAdminBadges]         = useState<Badge[]>([]);

@@ -657,7 +657,31 @@ export const adminApi = {
     unban: (userId: string) => req<{ ok: boolean }>('DELETE', `/admin/users/${userId}/ban`),
   },
   servers: () => req<AdminServer[]>('GET', '/admin/servers'),
+  storage: {
+    stats:     () => req<AdminStorageStats>('GET', '/admin/storage'),
+    users:     (page = 1, q = '') => req<{ users: StorageUser[]; total: number }>('GET', `/admin/storage/users?page=${page}&limit=50${q ? `&q=${encodeURIComponent(q)}` : ''}`),
+    deleteAtt: (id: number) => req<{ ok: boolean }>('DELETE', `/admin/storage/attachment/${id}`),
+    setQuota:  (userId: string, data: { quota_mb?: number; is_premium?: boolean }) =>
+      req<{ ok: boolean }>('POST', `/admin/storage/users/${userId}/quota`, data),
+    recalc:    () => req<{ ok: boolean }>('POST', '/admin/storage/recalc'),
+  },
 };
+
+export interface StorageUser {
+  id: string; username: string; avatar_url: string | null; is_premium: boolean;
+  storage_used_bytes: number; storage_quota_bytes: number; file_count: number; real_bytes: number;
+}
+export interface AdminStorageStats {
+  r2_enabled: boolean;
+  totals: {
+    total_files: number; total_bytes: number;
+    image_bytes: number; video_bytes: number; audio_bytes: number; other_bytes: number;
+    unique_uploaders: number;
+  };
+  by_mime: { category: string; count: number; bytes: number }[];
+  top_users: StorageUser[];
+  recent: { id: number; r2_key: string; url: string; file_size: number; mime_type: string; original_name: string; created_at: string; username: string; avatar_url: string | null }[];
+}
 
 // ── Custom Server Emojis ───────────────────────────────────────────────────
 export interface ServerEmoji {

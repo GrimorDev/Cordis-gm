@@ -574,6 +574,29 @@ DO $$ BEGIN ALTER TABLE server_tags ADD COLUMN color VARCHAR(32); EXCEPTION WHEN
 DO $$ BEGIN ALTER TABLE server_tags ADD COLUMN icon  VARCHAR(32); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 -- Preferred status persists across restarts
 DO $$ BEGIN ALTER TABLE users ADD COLUMN preferred_status VARCHAR(20) DEFAULT 'online'; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Storage tracking
+DO $$ BEGIN ALTER TABLE users ADD COLUMN storage_used_bytes BIGINT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN storage_quota_bytes BIGINT DEFAULT 52428800; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN is_premium BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Attachments table (tracks files on R2 for quota + deletion)
+CREATE TABLE IF NOT EXISTS attachments (
+  id            SERIAL PRIMARY KEY,
+  message_id    INT,
+  dm_message_id INT,
+  user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  r2_key        TEXT NOT NULL,
+  url           TEXT NOT NULL,
+  file_size     BIGINT NOT NULL,
+  mime_type     VARCHAR(128),
+  original_name VARCHAR(255),
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_attachments_user    ON attachments(user_id);
+CREATE INDEX IF NOT EXISTS idx_attachments_r2key   ON attachments(r2_key);
+CREATE INDEX IF NOT EXISTS idx_attachments_msg     ON attachments(message_id);
+CREATE INDEX IF NOT EXISTS idx_attachments_dm_msg  ON attachments(dm_message_id);
 `;
 
 const SEED_SQL = `

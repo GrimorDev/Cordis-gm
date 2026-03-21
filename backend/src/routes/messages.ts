@@ -7,6 +7,7 @@ import { AuthRequest } from '../types';
 import { redis, KEYS, checkSlowmode, setSlowmode } from '../redis/client';
 import { runAutomations } from '../services/automations';
 import { sendPushToUser } from '../services/push';
+import { deleteFromR2 } from '../services/r2';
 
 const router = Router();
 
@@ -352,6 +353,23 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
       );
       if (!member || !await hasPermission(ch.server_id, req.user!.id, 'manage_messages', member.role_name))
         return res.status(403).json({ error: 'Not authorized' });
+    }
+    // Delete R2 attachment if present
+    if (msg.attachment_url) {
+      try {
+        const { rows: [att] } = await query(
+          'SELECT id, r2_key, file_size, user_id FROM attachments WHERE message_id=$1 LIMIT 1',
+          [req.params.id]
+        );
+        if (att?.r2_key) {
+          await deleteFromR2(att.r2_key);
+          await query(
+            'UPDATE users SET storage_used_bytes = GREATEST(0, storage_used_bytes - $1) WHERE id=$2',
+            [att.file_size, att.user_id]
+          );
+          await query('DELETE FROM attachments WHERE id=$1', [att.id]);
+        }
+      } catch { /* ignore R2 errors */ }
     }
     await query('DELETE FROM messages WHERE id=$1', [req.params.id]);
     const io = req.app.get('io');

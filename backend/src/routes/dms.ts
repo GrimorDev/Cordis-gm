@@ -5,6 +5,7 @@ import { authMiddleware } from '../middleware/auth';
 import { msgLimiter } from '../middleware/messageLimiter';
 import { AuthRequest } from '../types';
 import { sendPushToUser } from '../services/push';
+import { deleteFromR2 } from '../services/r2';
 
 const router = Router();
 
@@ -229,6 +230,23 @@ router.delete('/messages/:id', authMiddleware, async (req: AuthRequest, res: Res
     const { rows: [msg] } = await query('SELECT * FROM dm_messages WHERE id=$1', [req.params.id]);
     if (!msg) return res.status(404).json({ error: 'Not found' });
     if (msg.sender_id !== req.user!.id) return res.status(403).json({ error: 'Not your message' });
+    // Delete R2 attachment if present
+    if (msg.attachment_url) {
+      try {
+        const { rows: [att] } = await query(
+          'SELECT id, r2_key, file_size, user_id FROM attachments WHERE dm_message_id=$1 LIMIT 1',
+          [req.params.id]
+        );
+        if (att?.r2_key) {
+          await deleteFromR2(att.r2_key);
+          await query(
+            'UPDATE users SET storage_used_bytes = GREATEST(0, storage_used_bytes - $1) WHERE id=$2',
+            [att.file_size, att.user_id]
+          );
+          await query('DELETE FROM attachments WHERE id=$1', [att.id]);
+        }
+      } catch { /* ignore */ }
+    }
     await query('DELETE FROM dm_messages WHERE id=$1', [req.params.id]);
     // Notify both participants in real-time
     const io = req.app.get('io');

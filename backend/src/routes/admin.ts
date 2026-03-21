@@ -3,6 +3,7 @@ import { body, validationResult } from 'express-validator';
 import { query } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
+import { deleteFromR2, r2Enabled } from '../services/r2';
 
 const router = Router();
 
@@ -349,6 +350,157 @@ router.post('/users/:userId/ban',
 router.delete('/users/:userId/ban', async (req: AuthRequest, res: Response) => {
   try {
     await query(`UPDATE user_bans SET is_active=FALSE WHERE user_id=$1 AND is_active=TRUE`, [req.params.userId]);
+    return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STORAGE MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── GET /api/admin/storage — overall stats ────────────────────────────
+router.get('/storage', async (_req, res: Response) => {
+  try {
+    const [totals, byMime, topUsers, recent] = await Promise.all([
+      // Global totals
+      query(`
+        SELECT
+          COUNT(*)::int                                         AS total_files,
+          COALESCE(SUM(file_size),0)::bigint                   AS total_bytes,
+          COALESCE(SUM(CASE WHEN mime_type LIKE 'image/%' THEN file_size ELSE 0 END),0)::bigint AS image_bytes,
+          COALESCE(SUM(CASE WHEN mime_type LIKE 'video/%' THEN file_size ELSE 0 END),0)::bigint AS video_bytes,
+          COALESCE(SUM(CASE WHEN mime_type LIKE 'audio/%' THEN file_size ELSE 0 END),0)::bigint AS audio_bytes,
+          COALESCE(SUM(CASE WHEN mime_type NOT LIKE 'image/%'
+                             AND mime_type NOT LIKE 'video/%'
+                             AND mime_type NOT LIKE 'audio/%'
+                             THEN file_size ELSE 0 END),0)::bigint AS other_bytes,
+          COUNT(DISTINCT user_id)::int                         AS unique_uploaders
+        FROM attachments
+      `),
+      // By MIME category
+      query(`
+        SELECT
+          CASE
+            WHEN mime_type LIKE 'image/%' THEN 'Obrazy'
+            WHEN mime_type LIKE 'video/%' THEN 'Wideo'
+            WHEN mime_type LIKE 'audio/%' THEN 'Audio'
+            WHEN mime_type LIKE 'application/pdf' THEN 'PDF'
+            WHEN mime_type IN ('application/zip','application/x-zip-compressed','application/x-zip',
+                               'application/x-rar-compressed','application/vnd.rar',
+                               'application/x-7z-compressed') THEN 'Archiwa'
+            ELSE 'Inne'
+          END AS category,
+          COUNT(*)::int AS count,
+          COALESCE(SUM(file_size),0)::bigint AS bytes
+        FROM attachments
+        GROUP BY 1 ORDER BY bytes DESC
+      `),
+      // Top users by storage
+      query(`
+        SELECT u.id, u.username, u.avatar_url, u.is_premium,
+               u.storage_used_bytes::bigint,
+               u.storage_quota_bytes::bigint,
+               COUNT(a.id)::int AS file_count
+        FROM users u
+        LEFT JOIN attachments a ON a.user_id = u.id
+        WHERE u.storage_used_bytes > 0
+        GROUP BY u.id, u.username, u.avatar_url, u.is_premium, u.storage_used_bytes, u.storage_quota_bytes
+        ORDER BY u.storage_used_bytes DESC
+        LIMIT 20
+      `),
+      // Recent uploads
+      query(`
+        SELECT a.id, a.r2_key, a.url, a.file_size, a.mime_type, a.original_name, a.created_at,
+               u.username, u.avatar_url
+        FROM attachments a
+        JOIN users u ON u.id = a.user_id
+        ORDER BY a.created_at DESC LIMIT 30
+      `),
+    ]);
+    return res.json({
+      r2_enabled: r2Enabled,
+      totals:     totals.rows[0],
+      by_mime:    byMime.rows,
+      top_users:  topUsers.rows,
+      recent:     recent.rows,
+    });
+  } catch (e) { console.error(e); return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ── GET /api/admin/storage/users — paginated user storage ────────────
+router.get('/storage/users', async (req, res: Response) => {
+  try {
+    const page  = Math.max(1, parseInt(String(req.query.page  || 1)));
+    const limit = Math.min(50, parseInt(String(req.query.limit || 50)));
+    const q     = (req.query.q as string || '').trim();
+    const off   = (page - 1) * limit;
+
+    const where = q ? `WHERE u.username ILIKE $3` : '';
+    const params: any[] = q ? [limit, off, `%${q}%`] : [limit, off];
+
+    const { rows } = await query(`
+      SELECT u.id, u.username, u.avatar_url, u.is_premium,
+             u.storage_used_bytes::bigint,
+             u.storage_quota_bytes::bigint,
+             COUNT(a.id)::int AS file_count,
+             COALESCE(SUM(a.file_size),0)::bigint AS real_bytes
+      FROM users u
+      LEFT JOIN attachments a ON a.user_id = u.id
+      ${where}
+      GROUP BY u.id, u.username, u.avatar_url, u.is_premium, u.storage_used_bytes, u.storage_quota_bytes
+      ORDER BY u.storage_used_bytes DESC
+      LIMIT $1 OFFSET $2
+    `, params);
+
+    const { rows: [cnt] } = await query(`SELECT COUNT(*)::int AS n FROM users ${q ? 'WHERE username ILIKE $1' : ''}`, q ? [`%${q}%`] : []);
+    return res.json({ users: rows, total: cnt.n });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ── DELETE /api/admin/storage/attachment/:id ──────────────────────────
+router.delete('/storage/attachment/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const { rows: [att] } = await query('SELECT * FROM attachments WHERE id=$1', [req.params.id]);
+    if (!att) return res.status(404).json({ error: 'Nie znaleziono' });
+
+    // Delete from R2
+    if (att.r2_key) await deleteFromR2(att.r2_key);
+
+    // Subtract from user quota
+    await query(
+      'UPDATE users SET storage_used_bytes = GREATEST(0, storage_used_bytes - $1) WHERE id=$2',
+      [att.file_size, att.user_id]
+    );
+    await query('DELETE FROM attachments WHERE id=$1', [req.params.id]);
+    return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ── POST /api/admin/storage/users/:userId/quota ─── set user quota ───
+router.post('/storage/users/:userId/quota', async (req: AuthRequest, res: Response) => {
+  try {
+    const { quota_mb, is_premium } = req.body;
+    const updates: string[] = [];
+    const vals: any[] = [];
+    let idx = 1;
+    if (quota_mb !== undefined) { updates.push(`storage_quota_bytes=$${idx++}`); vals.push(Math.round(Number(quota_mb) * 1024 * 1024)); }
+    if (is_premium !== undefined) { updates.push(`is_premium=$${idx++}`); vals.push(Boolean(is_premium)); }
+    if (!updates.length) return res.status(400).json({ error: 'Brak danych' });
+    vals.push(req.params.userId);
+    await query(`UPDATE users SET ${updates.join(',')} WHERE id=$${idx}`, vals);
+    return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ── POST /api/admin/storage/recalc ─── recalculate all user quotas ────
+router.post('/storage/recalc', async (_req, res: Response) => {
+  try {
+    await query(`
+      UPDATE users u SET storage_used_bytes = COALESCE((
+        SELECT SUM(a.file_size) FROM attachments a
+        WHERE a.user_id = u.id
+      ), 0)
+    `);
     return res.json({ ok: true });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
