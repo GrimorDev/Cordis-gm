@@ -40,7 +40,7 @@ router.get('/conversations', authMiddleware, async (req: AuthRequest, res: Respo
               u.id as other_user_id, u.username as other_username,
               u.avatar_url as other_avatar, u.status as other_status,
               u.avatar_effect as other_avatar_effect, u.custom_status as other_custom_status,
-              st.tag as other_tag,
+              st.tag as other_tag, st.color as other_tag_color, st.icon as other_tag_icon, u.active_tag_server_id as other_tag_server_id,
               CASE WHEN u.privacy_read_receipts = FALSE THEN NULL ELSE dp2.last_read_at END as other_last_read_at,
               (SELECT content FROM dm_messages WHERE conversation_id=dc.id ORDER BY created_at DESC LIMIT 1) as last_message,
               (SELECT created_at FROM dm_messages WHERE conversation_id=dc.id ORDER BY created_at DESC LIMIT 1) as last_message_at

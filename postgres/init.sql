@@ -329,7 +329,18 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 );
 CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id);
 
+-- ── Server tags ────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS server_tags (
+    server_id  UUID PRIMARY KEY REFERENCES servers(id) ON DELETE CASCADE,
+    tag        VARCHAR(4) NOT NULL CHECK (tag ~ '^[A-Z0-9]+$'),
+    color      VARCHAR(32),
+    icon       VARCHAR(32),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ── Schema migrations for existing deployments ────────────────────
 ALTER TABLE servers     ADD COLUMN IF NOT EXISTS accent_color  VARCHAR(32)  DEFAULT 'indigo';
 ALTER TABLE servers     ADD COLUMN IF NOT EXISTS banner_color  VARCHAR(64)  DEFAULT 'from-indigo-600 via-violet-600 to-purple-700';
 ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS pinned        BOOLEAN      DEFAULT false;
+ALTER TABLE server_tags ADD COLUMN IF NOT EXISTS color         VARCHAR(32);
+ALTER TABLE server_tags ADD COLUMN IF NOT EXISTS icon          VARCHAR(32);
