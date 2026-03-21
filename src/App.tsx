@@ -9433,19 +9433,28 @@ export default function App() {
                   else setAttachPreview(null);
                 }}
                 onPaste={e=>{
-                  // Global paste on chat area — also handles Ctrl+V when textarea not focused
-                  const items = Array.from(e.clipboardData?.items||[] as unknown as DataTransferItemList) as DataTransferItem[];
-                  const fileItem = items.find(it=>it.kind==='file');
-                  if(fileItem){
-                    const file = fileItem.getAsFile();
-                    if(!file) return;
-                    if(file.size > 50*1024*1024){ setShowPowerModal(true); return; }
+                  const items = Array.from(e.clipboardData?.items ?? []) as DataTransferItem[];
+                  // 1) Szukamy obrazka po TYPE (screenshoty, skopiowane grafiki)
+                  const imgItem = items.find(it => it.type.startsWith('image/'));
+                  if (imgItem) {
                     e.preventDefault();
-                    const ext = file.type.split('/').pop()?.split('+')[0]||'bin';
+                    const file = imgItem.getAsFile();
+                    if (!file) return;
+                    const ext = file.type.split('/').pop()?.split('+')[0] || 'png';
                     const named = new File([file], `paste-${Date.now()}.${ext}`, { type: file.type });
-                    setAttachFile(named);
-                    if(file.type.startsWith('image/')) setAttachPreview(URL.createObjectURL(named));
-                    else setAttachPreview(null);
+                    setAttachFile(named); setAttachPreview(URL.createObjectURL(named));
+                    msgInputRef.current?.focus(); return;
+                  }
+                  // 2) Inne pliki (zip, mp3, itd.) po KIND
+                  const fileItem = items.find(it => it.kind === 'file');
+                  if (fileItem) {
+                    const file = fileItem.getAsFile();
+                    if (!file) return;
+                    if (file.size > 50*1024*1024) { setShowPowerModal(true); return; }
+                    e.preventDefault();
+                    const ext = file.type.split('/').pop()?.split('+')[0] || 'bin';
+                    const named = new File([file], `paste-${Date.now()}.${ext}`, { type: file.type });
+                    setAttachFile(named); setAttachPreview(null);
                     msgInputRef.current?.focus();
                   }
                 }}>
@@ -10136,19 +10145,27 @@ export default function App() {
                         </button>
                         <textarea ref={msgInputRef} value={msgInput} rows={1}
                           onPaste={e=>{
-                            const items = Array.from(e.clipboardData?.items||[] as unknown as DataTransferItemList) as DataTransferItem[];
-                            // First priority: any file (image, audio, zip, etc)
-                            const fileItem = items.find(it=>it.kind==='file');
-                            if(fileItem){
-                              const file = fileItem.getAsFile();
-                              if(!file) return;
-                              if(file.size > 50*1024*1024){ setShowPowerModal(true); return; }
+                            const items = Array.from(e.clipboardData?.items ?? []) as DataTransferItem[];
+                            // 1) Obrazki (screenshoty, print screen) — szukaj po type, nie kind
+                            const imgItem = items.find(it => it.type.startsWith('image/'));
+                            if (imgItem) {
                               e.preventDefault();
-                              const ext = file.type.split('/').pop()?.split('+')[0]||'bin';
+                              const file = imgItem.getAsFile();
+                              if (!file) return;
+                              const ext = file.type.split('/').pop()?.split('+')[0] || 'png';
                               const named = new File([file], `paste-${Date.now()}.${ext}`, { type: file.type });
-                              setAttachFile(named);
-                              if(file.type.startsWith('image/')) setAttachPreview(URL.createObjectURL(named));
-                              else setAttachPreview(null);
+                              setAttachFile(named); setAttachPreview(URL.createObjectURL(named)); return;
+                            }
+                            // 2) Inne pliki
+                            const fileItem = items.find(it => it.kind === 'file');
+                            if (fileItem) {
+                              const file = fileItem.getAsFile();
+                              if (!file) return;
+                              if (file.size > 50*1024*1024) { setShowPowerModal(true); return; }
+                              e.preventDefault();
+                              const ext = file.type.split('/').pop()?.split('+')[0] || 'bin';
+                              const named = new File([file], `paste-${Date.now()}.${ext}`, { type: file.type });
+                              setAttachFile(named); setAttachPreview(null);
                             }
                           }}
                           onChange={e=>{
