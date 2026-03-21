@@ -1666,20 +1666,30 @@ function AttachmentRenderer({ url, staticUrl }: { url: string; staticUrl: (u: st
   // ── IMAGE ──
   if (type === 'image') return null; // handled by existing lightbox logic above
 
-  // ── AUDIO ──
+  // ── AUDIO — Discord-style player ──
   if (type === 'audio') return (
-    <div className="mt-1.5 max-w-sm">
-      <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl bg-purple-500/10 border border-purple-500/20">
-        <FileAudio size={18} className="text-purple-400 shrink-0"/>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-purple-300 truncate mb-1.5">{name}</p>
-          <audio controls className="w-full h-7" style={{height:'28px'}} preload="metadata">
+    <div className="mt-1.5 max-w-[360px]">
+      <div className="rounded-2xl overflow-hidden bg-[#1e1e30] border border-white/[0.08] shadow-lg">
+        {/* Top bar: icon + name + download */}
+        <div className="flex items-center gap-2.5 px-3 pt-3 pb-2">
+          <div className="w-9 h-9 rounded-xl bg-purple-500/20 flex items-center justify-center shrink-0">
+            <FileAudio size={18} className="text-purple-400"/>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-white truncate leading-tight">{name}</p>
+            <p className="text-[10px] text-zinc-500 mt-0.5">{ext.toUpperCase()} · Audio</p>
+          </div>
+          <a href={full} download={name} title="Pobierz"
+            className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all">
+            <Download size={13}/>
+          </a>
+        </div>
+        {/* Native audio — styled via CSS */}
+        <div className="px-3 pb-3">
+          <audio controls className="w-full" style={{height:'32px',filter:'invert(1) hue-rotate(200deg) brightness(0.9) contrast(1.2)'}} preload="metadata">
             <source src={full}/>
           </audio>
         </div>
-        <a href={full} download={name} className="shrink-0 text-zinc-600 hover:text-purple-400 transition-colors" title="Pobierz">
-          <Download size={13}/>
-        </a>
       </div>
     </div>
   );
@@ -9729,14 +9739,14 @@ export default function App() {
                                   </div>
                                 );
                               }
-                            })() : (
+                            })() : msg.content?.trim() ? (
                               <div className={`relative px-4 py-2.5 rounded-2xl max-w-full ${isOwn
                                 ? 'bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-lg shadow-indigo-500/20 bubble-tail-right'
                                 : 'glass-bubble text-zinc-100 bubble-tail-left'
                               }`}>
                                 <p className={`${msgFontCls} leading-relaxed break-words msg-md`} dangerouslySetInnerHTML={{__html: renderMsgHTML(msg.content)}}/>
                               </div>
-                            )}
+                            ) : null}
 
                             {/* Link preview */}
                             {(()=>{

@@ -36,9 +36,12 @@ const ALLOWED_ATTACHMENT_MIMES = new Set([
   'text/x-go','text/x-rust','text/x-swift','text/x-kotlin','text/x-shellscript',
   'application/json','application/xml','application/x-yaml','application/toml',
   'application/javascript','application/typescript',
-  // archives
-  'application/zip','application/x-rar-compressed','application/x-7z-compressed',
-  'application/x-tar','application/gzip','application/x-bzip2','application/x-xz',
+  // archives — browsers send many different MIME variants for same format
+  'application/zip','application/x-zip','application/x-zip-compressed',
+  'application/x-rar-compressed','application/vnd.rar','application/x-7z-compressed',
+  'application/x-tar','application/gzip','application/x-gzip','application/x-bzip2','application/x-xz',
+  // octet-stream fallback (used for unknown/binary files incl. zips on some OSes)
+  'application/octet-stream',
 ]);
 
 const imageOnlyFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
