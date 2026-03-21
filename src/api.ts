@@ -43,7 +43,7 @@ async function req<T>(method: string, path: string, body?: unknown, isFormData =
 }
 
 // ── Token ──────────────────────────────────────────────────────────────────
-export const getToken = () => localStorage.getItem('cordyn_token');
+export const getToken = () => localStorage.getItem('cordyn_token') || sessionStorage.getItem('cordyn_token');
 export const setToken = (t: string) => localStorage.setItem('cordyn_token', t);
 export const clearToken = () => localStorage.removeItem('cordyn_token');
 

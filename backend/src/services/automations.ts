@@ -135,21 +135,32 @@ async function executeAction(
         [serverId, userId, config.role_id]
       );
 
-      // Get role name and update server_members if appropriate
+      // Get role info
       const { rows: roleRows } = await query(
-        'SELECT name FROM server_roles WHERE id = $1',
+        'SELECT id, name, color, position FROM server_roles WHERE id = $1',
         [config.role_id]
       );
 
       if (roleRows.length > 0) {
-        const roleName = roleRows[0].name;
-        // Only update role_name if the current role is not Owner/Admin (don't demote)
+        const role = roleRows[0];
+        // Update server_members display role (don't demote Owner/Admin)
         await query(
           `UPDATE server_members
            SET role_name = $1
            WHERE server_id = $2 AND user_id = $3 AND role_name NOT IN ('Owner', 'Admin')`,
-          [roleName, serverId, userId]
+          [role.name, serverId, userId]
         );
+
+        // Emit socket event so all clients update the member list in real-time
+        if (context.io) {
+          context.io.to(`server:${serverId}`).emit('member_role_updated', {
+            server_id: serverId,
+            user_id: userId,
+            role_id: role.id,
+            role_name: role.name,
+            role_color: role.color,
+          });
+        }
       }
       break;
     }

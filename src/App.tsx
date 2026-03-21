@@ -400,6 +400,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
   const [twoFaCode, setTwoFaCode] = useState('');
   const [twoFaType, setTwoFaType] = useState<'totp' | 'backup'>('totp');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
 
   // Direct .exe download URL — use env override or resolve from GitHub Releases API
   const [desktopUrl, setDesktopUrl] = useState(import.meta.env.VITE_DESKTOP_DOWNLOAD_URL || '');
@@ -483,7 +484,14 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
       if (res.requiresTwoFactor) {
         setTwoFaSession(res.sessionId); setTwoFaCode(''); setTwoFaType('totp');
       } else {
-        setToken(res.token); onAuth(res.user, res.token, false);
+        if (!rememberMe) {
+          // Session only — clear on browser close via sessionStorage
+          localStorage.removeItem('cordyn_token');
+          sessionStorage.setItem('cordyn_token', res.token);
+        } else {
+          setToken(res.token); // persist in localStorage
+        }
+        onAuth(res.user, res.token, false);
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Błąd połączenia z serwerem');
@@ -633,6 +641,13 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                       </motion.div>
                     )}
                   </AnimatePresence>
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none group">
+                    <div onClick={()=>setRememberMe(v=>!v)}
+                      className={`w-4 h-4 rounded flex items-center justify-center border transition-all shrink-0 ${rememberMe?'bg-indigo-500 border-indigo-500':'border-zinc-600 bg-transparent group-hover:border-zinc-400'}`}>
+                      {rememberMe && <Check size={10} className="text-white"/>}
+                    </div>
+                    <span className="text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors">Zapamiętaj mnie</span>
+                  </label>
                   <button type="submit" disabled={loading}
                     className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
                     {loading ? <><Loader2 size={17} className="animate-spin" /> Logowanie...</> : 'Zaloguj się →'}
@@ -1320,6 +1335,13 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                         </motion.div>
                       )}
                     </AnimatePresence>
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none group">
+                      <div onClick={()=>setRememberMe(v=>!v)}
+                        className={`w-4 h-4 rounded flex items-center justify-center border transition-all shrink-0 ${rememberMe?'bg-indigo-500 border-indigo-500':'border-zinc-600 bg-transparent group-hover:border-zinc-400'}`}>
+                        {rememberMe && <Check size={10} className="text-white"/>}
+                      </div>
+                      <span className="text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors">Zapamiętaj mnie</span>
+                    </label>
                     <button type="submit" disabled={loading}
                       className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
                       {loading ? <><Loader2 size={17} className="animate-spin"/> Logowanie...</> : 'Zaloguj się →'}
@@ -5463,6 +5485,10 @@ export default function App() {
       if (server_id !== activeServerRef.current) return;
       setMembers(p => p.some(m => m.id === user.id) ? p : [...p, user]);
     });
+    sock.on('member_role_updated' as any, ({ server_id, user_id, role_name, role_color }: any) => {
+      if (server_id !== activeServerRef.current) return;
+      setMembers(p => p.map(m => m.id === user_id ? { ...m, role_name, role_color } : m));
+    });
     sock.on('member_left' as any, ({ server_id, user_id }: any) => {
       if (server_id !== activeServerRef.current) return;
       setMembers(p => p.filter(m => m.id !== user_id));
@@ -9405,6 +9431,23 @@ export default function App() {
                   setAttachFile(file);
                   if (file.type.startsWith('image/')) setAttachPreview(URL.createObjectURL(file));
                   else setAttachPreview(null);
+                }}
+                onPaste={e=>{
+                  // Global paste on chat area — also handles Ctrl+V when textarea not focused
+                  const items = Array.from(e.clipboardData?.items||[] as unknown as DataTransferItemList) as DataTransferItem[];
+                  const fileItem = items.find(it=>it.kind==='file');
+                  if(fileItem){
+                    const file = fileItem.getAsFile();
+                    if(!file) return;
+                    if(file.size > 50*1024*1024){ setShowPowerModal(true); return; }
+                    e.preventDefault();
+                    const ext = file.type.split('/').pop()?.split('+')[0]||'bin';
+                    const named = new File([file], `paste-${Date.now()}.${ext}`, { type: file.type });
+                    setAttachFile(named);
+                    if(file.type.startsWith('image/')) setAttachPreview(URL.createObjectURL(named));
+                    else setAttachPreview(null);
+                    msgInputRef.current?.focus();
+                  }
                 }}>
                 {/* ── Stream mode DM blur overlay ── */}
                 <AnimatePresence>
@@ -10093,16 +10136,19 @@ export default function App() {
                         </button>
                         <textarea ref={msgInputRef} value={msgInput} rows={1}
                           onPaste={e=>{
-                            const items = Array.from(e.clipboardData?.items||[]);
-                            const imgItem = items.find(it=>it.type.startsWith('image/'));
-                            if(imgItem){
-                              e.preventDefault();
-                              const file = imgItem.getAsFile();
+                            const items = Array.from(e.clipboardData?.items||[] as unknown as DataTransferItemList) as DataTransferItem[];
+                            // First priority: any file (image, audio, zip, etc)
+                            const fileItem = items.find(it=>it.kind==='file');
+                            if(fileItem){
+                              const file = fileItem.getAsFile();
                               if(!file) return;
-                              const ext = file.type.split('/')[1]||'png';
+                              if(file.size > 50*1024*1024){ setShowPowerModal(true); return; }
+                              e.preventDefault();
+                              const ext = file.type.split('/').pop()?.split('+')[0]||'bin';
                               const named = new File([file], `paste-${Date.now()}.${ext}`, { type: file.type });
                               setAttachFile(named);
-                              setAttachPreview(URL.createObjectURL(named));
+                              if(file.type.startsWith('image/')) setAttachPreview(URL.createObjectURL(named));
+                              else setAttachPreview(null);
                             }
                           }}
                           onChange={e=>{
