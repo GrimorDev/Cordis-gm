@@ -562,11 +562,16 @@ DO $$ BEGIN ALTER TABLE servers ADD COLUMN bot_channel_id UUID REFERENCES channe
 CREATE TABLE IF NOT EXISTS server_tags (
     server_id   UUID PRIMARY KEY REFERENCES servers(id) ON DELETE CASCADE,
     tag         VARCHAR(4) NOT NULL CHECK (char_length(tag) BETWEEN 2 AND 4),
+    color       VARCHAR(32),
+    icon        VARCHAR(32),
     created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
 DO $$ BEGIN ALTER TABLE users ADD COLUMN active_tag_server_id UUID REFERENCES servers(id) ON DELETE SET NULL; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN theme_id VARCHAR(32) DEFAULT 'default'; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+-- Tag color & icon for existing deployments
+DO $$ BEGIN ALTER TABLE server_tags ADD COLUMN color VARCHAR(32); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE server_tags ADD COLUMN icon  VARCHAR(32); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 `;
 
 const SEED_SQL = `
