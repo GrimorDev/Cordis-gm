@@ -9,7 +9,7 @@ import {
   Menu, X, Edit3, MessageCircle, Minimize2, Maximize2,
   Shield, Trash2, Settings2, UserPlus, Check, X as XIcon,
   LogOut, Loader2, Lock, Phone, PhoneOff, MessageSquare, Upload, MoreHorizontal, ScreenShare,
-  UserX, UserCheck, UserMinus,
+  UserX, UserCheck, UserMinus, ShieldOff, CheckCheck, User,
   CheckCircle2, AlertCircle, Info, AlertTriangle, PartyPopper, Sparkles, Zap, Globe,
   Eye, EyeOff, Megaphone, FileText, ChevronLeft, ChevronRight, ChevronDown, ArrowLeft,
   Clock, Pin, PinOff, Activity, AtSign, BadgeCheck, Crown, LayoutDashboard,
@@ -4225,6 +4225,7 @@ export default function App() {
   const [draftKeys, setDraftKeys] = useState<Set<string>>(new Set()); // tracks channels with unsaved drafts
   const [srvContextMenu, setSrvContextMenu]   = useState<{ x: number; y: number; srv: ServerData } | null>(null);
   const [deleteSrvConfirm, setDeleteSrvConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [dmCtxMenu, setDmCtxMenu] = useState<{ x: number; y: number; dm: typeof dmConvs[0] } | null>(null);
 
   const [srvSettOpen, setSrvSettOpen]         = useState(false);
   const [srvSettTab, setSrvSettTab]           = useState<'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots'|'tag'>('overview');
@@ -7782,6 +7783,7 @@ export default function App() {
                 const isActive = activeDmUserId===dm.other_user_id;
                 return (
                   <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); setProfileViewId(null); }}
+                    onContextMenu={e => { e.preventDefault(); const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setDmCtxMenu({ x: e.clientX, y: Math.min(e.clientY, window.innerHeight - 300), dm }); }}
                     className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/15 text-white border border-indigo-500/25':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
                     <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava({avatar_url:dm.other_avatar,username:dm.other_username})}")`} as React.CSSProperties}
                       onClick={e=>{ e.stopPropagation(); showHoverCard(dm.other_user_id, e); }}>
@@ -10554,6 +10556,51 @@ export default function App() {
           </motion.div>
         </>
       )}
+
+      {/* DM list context menu */}
+      {dmCtxMenu&&(()=>{
+        const { dm } = dmCtxMenu;
+        const friend = friends.find(f => f.id === dm.other_user_id);
+        const isBlocked = blockedUsers.has(dm.other_user_id);
+        const close = () => setDmCtxMenu(null);
+        const sep = <div className="mx-3 my-1 h-px bg-white/[0.06]"/>;
+        const btn = (icon: React.ReactNode, label: string, onClick: () => void, danger = false) => (
+          <button onClick={() => { onClick(); close(); }}
+            className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-sm transition-colors text-left ${danger ? 'text-rose-400 hover:bg-rose-500/10' : 'text-zinc-300 hover:bg-white/[0.06] hover:text-white'}`}>
+            {icon}{label}
+          </button>
+        );
+        return (
+          <>
+            <div className="fixed inset-0 z-[90]" onClick={close}/>
+            <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:0.95}}
+              style={{position:'fixed',left:dmCtxMenu.x,top:dmCtxMenu.y,backdropFilter:'blur(24px)'}}
+              className="z-[91] bg-[#0e0e1c] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 py-1.5 min-w-[210px] overflow-hidden">
+              {/* User info header */}
+              <div className="flex items-center gap-2.5 px-3.5 py-2 mb-0.5">
+                <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className="w-7 h-7 rounded-full object-cover shrink-0" alt=""/>
+                <span className="text-sm font-semibold text-white truncate">{maskName(dm.other_username)}</span>
+              </div>
+              {sep}
+              {btn(<User size={13} className="text-zinc-500 shrink-0"/>,'Profil', () => openProfilePage(dm.other_user_id))}
+              {btn(<MessageCircle size={13} className="text-zinc-500 shrink-0"/>,'Otwórz rozmowę', () => { setActiveDmUserId(dm.other_user_id); setActiveView('dms'); setUnreadDms(p => ({...p,[dm.other_user_id]:0})); })}
+              {btn(<Phone size={13} className="text-zinc-500 shrink-0"/>,'Zadzwoń', () => startDmCall(dm.other_user_id, dm.other_username, 'voice', dm.other_avatar))}
+              {btn(<Video size={13} className="text-zinc-500 shrink-0"/>,'Połączenie wideo', () => startDmCall(dm.other_user_id, dm.other_username, 'video', dm.other_avatar))}
+              {sep}
+              {(unreadDms[dm.other_user_id]||0) > 0 && btn(<CheckCheck size={13} className="text-zinc-500 shrink-0"/>,'Oznacz jako przeczytane', () => setUnreadDms(p => ({...p,[dm.other_user_id]:0})))}
+              {btn(<BellOff size={13} className="text-zinc-500 shrink-0"/>,'Wycisz rozmowę', () => {})}
+              {sep}
+              {btn(<Copy size={13} className="text-zinc-500 shrink-0"/>,'Kopiuj ID użytkownika', () => navigator.clipboard.writeText(dm.other_user_id))}
+              {sep}
+              {friend?.friendship_id && btn(<UserMinus size={13} className="text-zinc-500 shrink-0"/>,'Usuń ze znajomych', () => handleRemoveFriend(friend.friendship_id!, dm.other_username), false)}
+              {!isBlocked
+                ? btn(<ShieldOff size={13} className="shrink-0"/>,'Zablokuj', () => handleBlockUser(dm.other_user_id, dm.other_username), true)
+                : btn(<Shield size={13} className="shrink-0"/>,'Odblokuj', () => handleUnblockUser(dm.other_user_id, dm.other_username))}
+              {btn(<X size={13} className="shrink-0"/>,'Zamknij rozmowę', () => setDmConvs(p => p.filter(d => d.id !== dm.id)), true)}
+            </motion.div>
+          </>
+        );
+      })()}
 
       {/* Channel context menu (right-click on channel) */}
       {chCtxMenu&&(()=>{
