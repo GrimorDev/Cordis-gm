@@ -16,6 +16,25 @@
     <link rel="apple-touch-icon" href="/cordyn_logo.png" />
   </head>
   <body>
+    <!-- Hard-reload after auto-update: clears stale webview/SW cache BEFORE React loads -->
+    <script>
+      (function () {
+        if (localStorage.getItem('cordis_just_updated')) {
+          localStorage.removeItem('cordis_just_updated');
+          if ('caches' in window) {
+            caches.keys().then(function (names) {
+              names.forEach(function (n) { caches.delete(n); });
+            });
+          }
+          // Navigate to cache-busted URL so webview fetches fresh assets
+          var clean = location.href.split('?')[0];
+          location.replace(clean + '?_r=' + Date.now());
+        } else if (location.search.indexOf('_r=') !== -1) {
+          // Already on fresh URL — strip the cache-buster param silently
+          history.replaceState(null, '', location.pathname);
+        }
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>

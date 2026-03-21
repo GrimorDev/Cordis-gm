@@ -4837,8 +4837,9 @@ export default function App() {
       const update = await check();
       if (update?.available) {
         await update.downloadAndInstall();
-        // relaunch() closes the old binary and starts the newly-installed one.
-        // The fresh process loads the new bundled assets — no extra reload needed.
+        // Mark that the app was just updated so the new instance does a hard
+        // refresh of the webview cache on startup (clears stale JS/CSS assets).
+        localStorage.setItem('cordis_just_updated', '1');
         await relaunch();
       }
     } catch (e) {
@@ -5673,9 +5674,10 @@ export default function App() {
     if (!isAuthenticated) return;
     const resetTimer = () => {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-      // If we were auto-idled, come back online on any activity
+      // If we were auto-idled, restore to preferred status on any activity
       if (autoIdledRef.current && myStatusRef.current === 'idle') {
-        changeStatus('online');
+        const pref = localStorage.getItem('cordis_preferred_status') as 'online'|'idle'|'dnd'|'offline'|null;
+        changeStatus((!pref || pref === 'idle') ? 'online' : pref);
       }
       idleTimerRef.current = setTimeout(() => {
         // Don't go idle while actively playing a game
@@ -5698,12 +5700,18 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
-  // ── Set online on login, offline/invisible on logout ────────────
+  // ── Set status on login — respect user's saved preference ───────
   useEffect(() => {
     if (isAuthenticated && currentUser) {
-      // Only push online if user was previously offline/not set
-      if (!currentUser.status || currentUser.status === 'offline') {
-        changeStatus('online');
+      const saved = localStorage.getItem('cordis_preferred_status') as 'online'|'idle'|'dnd'|'offline'|null;
+      if (!saved || saved === 'online') {
+        // No preference or explicitly online → go online if server says offline
+        if (!currentUser.status || currentUser.status === 'offline') {
+          changeStatus('online');
+        }
+      } else {
+        // Restore: invisible / dnd / idle — don't override with online
+        changeStatus(saved);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -6112,6 +6120,8 @@ export default function App() {
       await users.updateStatus(s);
       myStatusRef.current = s;
       autoIdledRef.current = auto;
+      // Persist manual status choice so it survives app restarts
+      if (!auto) localStorage.setItem('cordis_preferred_status', s);
       setCurrentUser(p => p ? {...p, status: s} : p);
     } catch { /* silent */ }
   };
