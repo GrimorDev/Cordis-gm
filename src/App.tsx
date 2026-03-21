@@ -5424,18 +5424,41 @@ export default function App() {
     r.style.setProperty('--accent-rgb', `${r2} ${g2} ${b2}`);
   }, [accentColor]);
 
-  // ── Theme CSS variables ───────────────────────────────────────────────────
+  // ── Theme: inject <style> tag that overrides Tailwind hardcoded bg classes ──
+  // CSS variables alone don't work because Tailwind uses hardcoded hex values.
+  // We inject a <style> block targeting the exact Tailwind utility classes used
+  // throughout the app, so ALL elements change without touching JSX.
   useEffect(() => {
     const theme = THEMES.find(t => t.id === selectedTheme);
-    const root = document.documentElement;
-    root.style.removeProperty('--app-bg');
-    root.style.removeProperty('--app-sidebar');
-    root.style.removeProperty('--app-card');
-    root.style.removeProperty('--app-surface');
-    if (theme && Object.keys(theme.vars).length > 0) {
-      Object.entries(theme.vars).forEach(([k, v]) => root.style.setProperty(k, v));
+    document.documentElement.setAttribute('data-theme', selectedTheme);
+    let styleTag = document.getElementById('cordyn-theme-override') as HTMLStyleElement | null;
+    if (!styleTag) {
+      styleTag = document.createElement('style');
+      styleTag.id = 'cordyn-theme-override';
+      document.head.appendChild(styleTag);
     }
-    root.setAttribute('data-theme', selectedTheme);
+    if (!theme || Object.keys(theme.vars).length === 0) {
+      // Default theme — remove overrides
+      styleTag.textContent = '';
+      return;
+    }
+    const v = theme.vars as Record<string, string>;
+    const bg      = v['--app-bg']      || '#07070f';
+    const sidebar = v['--app-sidebar'] || '#0d0d18';
+    const card    = v['--app-card']    || '#161622';
+    const surface = v['--app-surface'] || '#1e1e2e';
+    // Tailwind arbitrary-value classes need CSS escaping: [ → \[ , # → \# , ] → \]
+    // In JS strings we double the backslash.
+    styleTag.textContent = `
+      body, #root { background-color: ${bg} !important; }
+      .bg-\\[\\#07070f\\], .bg-\\[\\#08080f\\], .bg-\\[\\#09090b\\] { background-color: ${bg} !important; }
+      .bg-\\[\\#0d0d18\\] { background-color: ${sidebar} !important; }
+      .bg-\\[\\#0e0e1c\\] { background-color: ${card} !important; }
+      .bg-\\[\\#141420\\], .bg-\\[\\#16161f\\], .bg-\\[\\#161622\\] { background-color: ${card} !important; }
+      .bg-\\[\\#18182a\\], .bg-\\[\\#1a1a2e\\] { background-color: ${surface} !important; }
+      .glass-panel { background: ${sidebar}D0 !important; }
+      .glass-modal { background: ${bg} !important; }
+    `;
   }, [selectedTheme]);
 
   // ── Game session timer tick (refresh elapsed time display every minute) ──

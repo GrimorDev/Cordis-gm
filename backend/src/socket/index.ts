@@ -26,6 +26,14 @@ interface SocketData {
 // stream_watchers: "channel_id:streamer_id" → Map<watcher_user_id, username>
 const streamWatchers = new Map<string, Map<string, string>>();
 
+// ── Activity caches (real-time state, cleared on disconnect) ──────
+// Keyed by user_id. Stores last known state + timestamp for freshness check.
+interface ActivityEntry<T> { data: T; ts: number; }
+const spotifyCache = new Map<string, ActivityEntry<any>>();
+const twitchCache  = new Map<string, ActivityEntry<any>>();
+const steamCache   = new Map<string, ActivityEntry<any>>();
+const ACTIVITY_STALE_MS = 5 * 60 * 1000; // 5 min — clear stale state
+
 export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerEvents, ServerToClientEvents> {
   const io = new SocketServer<ClientToServerEvents, ServerToClientEvents>(httpServer, {
     cors: {
@@ -118,6 +126,35 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
       socket.join(`server:${server_id}`);
     }
 
+    // ── Broadcast current activities of friends/co-members to newly connected user ──
+    // This ensures that on login, the user immediately sees who is playing/streaming.
+    try {
+      const { rows: coUsers } = await query(
+        `SELECT DISTINCT m2.user_id AS id FROM server_members m2
+         WHERE m2.server_id IN (SELECT server_id FROM server_members WHERE user_id=$1)
+           AND m2.user_id <> $1
+         UNION
+         SELECT CASE WHEN requester_id=$1 THEN addressee_id ELSE requester_id END AS id
+         FROM friends WHERE (requester_id=$1 OR addressee_id=$1) AND status='accepted'`,
+        [user.id]
+      );
+      const now = Date.now();
+      for (const { id } of coUsers) {
+        const sp = spotifyCache.get(id);
+        if (sp && now - sp.ts < ACTIVITY_STALE_MS) {
+          socket.emit('friend_spotify_update' as any, { user_id: id, track: sp.data });
+        }
+        const tw = twitchCache.get(id);
+        if (tw && now - tw.ts < ACTIVITY_STALE_MS) {
+          socket.emit('friend_twitch_update' as any, { user_id: id, stream: tw.data });
+        }
+        const st = steamCache.get(id);
+        if (st && now - st.ts < ACTIVITY_STALE_MS) {
+          socket.emit('friend_steam_update' as any, { user_id: id, game: st.data });
+        }
+      }
+    } catch { /* non-critical, ignore errors */ }
+
     // ── Channel events ──────────────────────────────────────────────
     socket.on('join_channel', (channelId) => {
       socket.join(`channel:${channelId}`);
@@ -192,6 +229,8 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
 
     // ── Spotify now-playing broadcast ────────────────────────────────
     socket.on('spotify_update', async ({ track }) => {
+      // Cache for re-broadcast on connect
+      spotifyCache.set(user.id, { data: track, ts: Date.now() });
       // Broadcast to all server rooms this user is in
       const { rows: serverRows } = await query(
         `SELECT server_id FROM server_members WHERE user_id = $1`, [user.id]
@@ -265,6 +304,7 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
 
     // ── Twitch live status broadcast ─────────────────────────────────
     socket.on('twitch_update', async ({ stream }) => {
+      twitchCache.set(user.id, { data: stream, ts: Date.now() });
       const { rows: serverRows } = await query(
         `SELECT server_id FROM server_members WHERE user_id = $1`, [user.id]
       );
@@ -283,6 +323,7 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
 
     // ── Steam current game broadcast ──────────────────────────────────
     socket.on('steam_update', async ({ game }) => {
+      steamCache.set(user.id, { data: game, ts: Date.now() });
       const { rows: serverRows } = await query(
         `SELECT server_id FROM server_members WHERE user_id = $1`, [user.id]
       );
@@ -493,6 +534,10 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
         await setUserStatus(user.id, 'offline');
         await query('UPDATE users SET status = $1 WHERE id = $2', ['offline', user.id]);
         await broadcastUserStatus(io, user.id, 'offline');
+        // Clear activity caches for offline user
+        spotifyCache.delete(user.id);
+        twitchCache.delete(user.id);
+        steamCache.delete(user.id);
       }
     });
   });
