@@ -572,6 +572,8 @@ DO $$ BEGIN ALTER TABLE users ADD COLUMN theme_id VARCHAR(32) DEFAULT 'default';
 -- Tag color & icon for existing deployments
 DO $$ BEGIN ALTER TABLE server_tags ADD COLUMN color VARCHAR(32); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE server_tags ADD COLUMN icon  VARCHAR(32); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+-- Preferred status persists across restarts
+DO $$ BEGIN ALTER TABLE users ADD COLUMN preferred_status VARCHAR(20) DEFAULT 'online'; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 `;
 
 const SEED_SQL = `
