@@ -1,7 +1,7 @@
 version: "3.9"
 
 # ═══════════════════════════════════════════════════════════════════
-#  Cordis – Docker Compose Stack
+#  Cordyn – Docker Compose Stack
 #  Deploy via Portainer as a new Stack from GitHub repository
 #  Repository: https://github.com/GrimorDev/Cordis-gm
 #
@@ -11,6 +11,11 @@ version: "3.9"
 #    JWT_SECRET         – sekret JWT (min. 32 znaki)
 #    JWT_REFRESH_SECRET – sekret refresh token (min. 32 znaki)
 #    CORS_ORIGIN        – URL frontendu np. https://twoja-domena.com
+#
+#  Cloudflare R2 (opcjonalne — bez tych zmiennych pliki idą na dysk):
+#    R2_ACCESS_KEY_ID     – z CF Dashboard → R2 → Manage R2 API Tokens
+#    R2_SECRET_ACCESS_KEY – j.w.
+#    R2_PUBLIC_URL        – pub-xxx.r2.dev lub własna domena
 # ═══════════════════════════════════════════════════════════════════
 
 services:
@@ -66,7 +71,15 @@ services:
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change_me_refresh_secret_32chars}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-30d}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
-      UPLOAD_MAX_SIZE: ${UPLOAD_MAX_SIZE:-5242880}
+      UPLOAD_MAX_SIZE: ${UPLOAD_MAX_SIZE:-52428800}
+      # ── Cloudflare R2 (opcjonalne) ──────────────────────────────────
+      R2_ENDPOINT: "https://f33e20b4cd126676f4659f7838db83cd.r2.cloudflarestorage.com"
+      R2_BUCKET: "cordyn"
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
+      STORAGE_FREE_QUOTA: ${STORAGE_FREE_QUOTA:-52428800}
+      STORAGE_PREMIUM_QUOTA: ${STORAGE_PREMIUM_QUOTA:-629145600}
       SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
       SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
       SPOTIFY_REDIRECT_URI: ${SPOTIFY_REDIRECT_URI:-}

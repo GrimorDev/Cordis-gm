@@ -39,7 +39,7 @@ export const config = {
     endpoint:        process.env.R2_ENDPOINT         || '',
     accessKeyId:     process.env.R2_ACCESS_KEY_ID    || '',
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
-    bucket:          process.env.R2_BUCKET           || 'cordis-uploads',
+    bucket:          process.env.R2_BUCKET           || 'cordyn',
     publicUrl:       (process.env.R2_PUBLIC_URL      || '').replace(/\/$/, ''),
   },
 
