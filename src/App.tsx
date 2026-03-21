@@ -4547,11 +4547,16 @@ export default function App() {
       setCurrentUser(u); setEditProf({...u}); setIsAuthenticated(true); applyUserPrefs(u);
       if (u.active_tag_server_id) {
         setActiveTagServerId(u.active_tag_server_id);
-        // Pre-load the tag text so the bottom bar renders immediately
         if (u.active_tag) {
           setServerTagMap(p => ({ ...p, [u.active_tag_server_id!]: u.active_tag! }));
         }
       }
+      // Load own integration status globally on startup — so settings and
+      // member list show correct state immediately without visiting profile.
+      spotifyApi.status().then(setOwnSpotify).catch(() => {});
+      twitchApi.status().then(setOwnTwitch).catch(() => {});
+      steamApi.status().then(setOwnSteam).catch(() => {});
+      spotifyApi.jamActive().then(setMyJam).catch(() => {});
     })
       .catch(() => clearToken()).finally(() => setAuthLoading(false));
   }, []);
