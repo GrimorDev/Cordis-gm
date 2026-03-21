@@ -5398,6 +5398,9 @@ export default function App() {
     // ── Reconnection: re-join rooms + refresh data ──────────────────
     sock.on('connect', () => {
       setIsConnected(true);
+      // Reset Steam emission guard so the next poll re-broadcasts current game
+      // (backend in-memory cache is cleared on restart, so friends need a fresh emit)
+      lastEmittedGame.current = undefined;
       // Re-join the current channel room — critical so new_message events arrive
       if (prevChRef.current && activeViewRef.current === 'servers') {
         joinChannel(prevChRef.current);
@@ -8624,8 +8627,9 @@ export default function App() {
                                 <p className="text-xs text-[#1DB954] truncate max-w-[160px] flex items-center gap-1"><SpotifyIcon size={11} className="shrink-0"/> {fActivity.artists} — {fActivity.name}</p>
                               ) : fTwitch ? (
                                 <p className="text-xs text-purple-400 truncate max-w-[160px] flex items-center gap-1"><TwitchIcon size={11} className="shrink-0"/> Streamuje: {fTwitch.game_name}</p>
-                              ) : fSteam ? (
-                                <p className="text-xs text-zinc-400 truncate max-w-[160px] flex items-center gap-1"><Gamepad2 size={11} className="shrink-0"/> {fSteam.name}</p>
+                              ) : fSteam ? (()=>{const fSteamStart=steamGameStartRef.current.get(f.id);return(
+                                <p className="text-xs text-zinc-400 truncate max-w-[200px] flex items-center gap-1"><Gamepad2 size={11} className="shrink-0 text-emerald-400"/> <span className="text-emerald-400 font-semibold shrink-0">Gra:</span> {fSteam.name}{fSteamStart?<span className="text-zinc-600 shrink-0">· {fmtGameDur(fSteamStart)}</span>:null}</p>
+                              );})():
                               ) : (
                                 <p className="text-xs text-zinc-600">{f.custom_status||f.status}</p>
                               )}
@@ -10080,8 +10084,9 @@ export default function App() {
                               <p className="text-[11px] text-[#1DB954] truncate leading-tight flex items-center gap-1"><SpotifyIcon size={10} className="shrink-0"/> {mActivity.artists}</p>
                             ) : mTwitch ? (
                               <p className="text-[11px] text-purple-400 truncate leading-tight flex items-center gap-1"><TwitchIcon size={10} className="shrink-0"/> Streamuje: {mTwitch.game_name}</p>
-                            ) : mSteam ? (
-                              <p className="text-[11px] text-zinc-400 truncate leading-tight flex items-center gap-1"><Gamepad2 size={10} className="shrink-0"/> {mSteam.name}</p>
+                            ) : mSteam ? (()=>{const mSteamStart=steamGameStartRef.current.get(m.id);return(
+                              <p className="text-[11px] text-zinc-400 truncate leading-tight flex items-center gap-1"><Gamepad2 size={10} className="shrink-0 text-emerald-400"/> <span className="text-emerald-400 font-semibold shrink-0">Gra teraz:</span> {mSteam.name}{mSteamStart?<span className="text-zinc-600 shrink-0">· {fmtGameDur(mSteamStart)}</span>:null}</p>
+                            );})():
                             ) : (()=>{const sl=statusLabel(m.status); return sl
                               ? <p className={`text-[11px] truncate leading-tight ${sl.cls}`}>{sl.text}</p>
                               : m.role_name ? <p className="text-[11px] text-zinc-600 truncate leading-tight">{m.role_name}</p> : null;
