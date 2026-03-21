@@ -6064,6 +6064,53 @@ export default function App() {
     return () => { navigator.mediaDevices?.removeEventListener('devicechange', onDeviceChange); };
   }, [isAuthenticated]);
 
+  // ── Global paste listener — łapie Ctrl+V z całego okna (screenshoty!) ──
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const handler = (e: ClipboardEvent) => {
+      // Jeśli focus jest w innym input/textarea poza msgInputRef — nie przechwytuj
+      const active = document.activeElement;
+      const isMsgInput = active === msgInputRef.current;
+      const isOtherInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') && !isMsgInput;
+      if (isOtherInput) return;
+      // Musimy być w widoku czatu (serwer lub DM)
+      if (!activeChannelRef.current && !activeDmUserIdRef.current) return;
+
+      const items = Array.from(e.clipboardData?.items ?? []) as DataTransferItem[];
+      // 1) Obrazki i screenshoty — priorytet po type
+      const imgItem = items.find(it => it.type.startsWith('image/'));
+      if (imgItem) {
+        e.preventDefault();
+        const file = imgItem.getAsFile();
+        if (!file) return;
+        const ext = file.type.split('/').pop()?.split('+')[0] || 'png';
+        const named = new File([file], `paste-${Date.now()}.${ext}`, { type: file.type });
+        setAttachFile(named);
+        setAttachPreview(URL.createObjectURL(named));
+        setTimeout(() => msgInputRef.current?.focus(), 0);
+        return;
+      }
+      // 2) Inne pliki (tylko gdy focus nie jest w textarea — żeby nie blokować copy-paste tekstu)
+      if (!isMsgInput) {
+        const fileItem = items.find(it => it.kind === 'file');
+        if (fileItem) {
+          const file = fileItem.getAsFile();
+          if (!file) return;
+          if (file.size > 50 * 1024 * 1024) { setShowPowerModal(true); return; }
+          e.preventDefault();
+          const ext = file.type.split('/').pop()?.split('+')[0] || 'bin';
+          const named = new File([file], `paste-${Date.now()}.${ext}`, { type: file.type });
+          setAttachFile(named);
+          setAttachPreview(null);
+          setTimeout(() => msgInputRef.current?.focus(), 0);
+        }
+      }
+    };
+    document.addEventListener('paste', handler);
+    return () => document.removeEventListener('paste', handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
+
   // ── Persist selected devices across sessions ─────────────────────
   useEffect(() => { if (selMic)     localStorage.setItem('cordyn_mic',     selMic);     }, [selMic]);
   useEffect(() => { if (selSpeaker) localStorage.setItem('cordyn_speaker', selSpeaker); }, [selSpeaker]);
