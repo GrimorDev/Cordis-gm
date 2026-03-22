@@ -6914,7 +6914,10 @@ export default function App() {
       try { attachUrl = await uploadFile(attachFile, 'attachments'); }
       catch (err: any) {
         const msg = err?.message || 'Błąd przesyłania pliku';
-        setSendError(msg.includes('413') || msg.includes('large') ? 'Plik za duży (max 5MB)' : `Błąd uploadu: ${msg}`);
+        if (err?.status === 413 || msg.includes('413') || msg.includes('large') || msg.includes('limit') || msg.includes('duży')) {
+          setShowPowerModal(true); setSending(false); return;
+        }
+        setSendError(`Błąd uploadu: ${msg}`);
         setSending(false); return;
       }
     }

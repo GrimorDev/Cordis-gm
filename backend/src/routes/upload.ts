@@ -96,7 +96,14 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response, next) => {
     : uploadImages.single('file');
 
   middleware(req, res, async (err) => {
-    if (err) return res.status(400).json({ error: err.message });
+    if (err) {
+      // multer LIMIT_FILE_SIZE → 413 żeby frontend pokazał Power modal
+      const code = (err as any).code;
+      if (code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ error: 'Plik za duży — maksymalny rozmiar to 50 MB (Cordyn Power: 600 MB)' });
+      }
+      return res.status(400).json({ error: err.message });
+    }
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
     const userId   = req.user!.id;
