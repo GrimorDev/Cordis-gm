@@ -205,6 +205,8 @@ router.put('/messages/:id', authMiddleware,
       const { rows: [msg] } = await query('SELECT * FROM dm_messages WHERE id=$1', [req.params.id]);
       if (!msg) return res.status(404).json({ error: 'Not found' });
       if (msg.sender_id !== req.user!.id) return res.status(403).json({ error: 'Not your message' });
+      // Zapisz starą wersję do historii
+      await query('INSERT INTO dm_message_edits (message_id, old_content) VALUES ($1, $2)', [msg.id, msg.content]);
       const { rows: [updated] } = await query(
         'UPDATE dm_messages SET content=$1, edited=true, updated_at=NOW() WHERE id=$2 RETURNING *',
         [req.body.content, req.params.id]
@@ -223,6 +225,19 @@ router.put('/messages/:id', authMiddleware,
     } catch { return res.status(500).json({ error: 'Internal server error' }); }
   }
 );
+
+// GET /api/dms/messages/:id/edits — historia edycji DM
+router.get('/messages/:id/edits', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { rows: [msg] } = await query('SELECT conversation_id FROM dm_messages WHERE id=$1', [req.params.id]);
+    if (!msg) return res.status(404).json({ error: 'Not found' });
+    const { rows } = await query(
+      'SELECT old_content, edited_at FROM dm_message_edits WHERE message_id=$1 ORDER BY edited_at ASC',
+      [req.params.id]
+    );
+    return res.json(rows);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
 
 // DELETE /api/dms/messages/:id
 router.delete('/messages/:id', authMiddleware, async (req: AuthRequest, res: Response) => {

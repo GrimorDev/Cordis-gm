@@ -496,6 +496,7 @@ export const messagesApi = {
   removeReaction: (id: string, emoji: string) => req<void>('DELETE', `/messages/${id}/reactions/${emoji}`),
   pin: (id: string, pinned?: boolean) => req<void>('PUT', `/messages/${id}/pin`, { pinned: pinned !== false }),
   listPinned: (channelId: string) => req<MessageFull[]>('GET', `/messages/channel/${channelId}/pinned`),
+  edits: (id: string) => req<{old_content:string;edited_at:string}[]>('GET', `/messages/${id}/edits`),
 };
 
 // ── DMs ────────────────────────────────────────────────────────────────────
@@ -509,6 +510,7 @@ export const dmsApi = {
     req<DmMessageFull>('POST', `/dms/${userId}/system-message`, { content }),
   editMessage: (id: string, content: string) => req<DmMessageFull>('PUT', `/dms/messages/${id}`, { content }),
   deleteMessage: (id: string) => req<void>('DELETE', `/dms/messages/${id}`),
+  messageEdits: (id: string) => req<{old_content:string;edited_at:string}[]>('GET', `/dms/messages/${id}/edits`),
   markRead: (userId: string) => req<{ok:boolean}>('PUT', `/dms/${userId}/read`),
 };
 

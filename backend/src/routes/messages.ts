@@ -329,6 +329,8 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     const { rows: [msg] } = await query('SELECT * FROM messages WHERE id = $1', [req.params.id]);
     if (!msg) return res.status(404).json({ error: 'Not found' });
     if (msg.sender_id !== req.user!.id) return res.status(403).json({ error: 'Not your message' });
+    // Zapisz starą wersję do historii edycji
+    await query('INSERT INTO message_edits (message_id, old_content) VALUES ($1, $2)', [msg.id, msg.content]);
     const { rows: [updated] } = await query(
       'UPDATE messages SET content=$1,edited=true,updated_at=NOW() WHERE id=$2 RETURNING *',
       [content.trim(), req.params.id]
@@ -337,6 +339,19 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     if (io) io.to(`channel:${msg.channel_id}`).emit('message_updated', { id: updated.id, content: updated.content, edited: updated.edited });
     try { await redis.del(KEYS.msgCache(msg.channel_id)); } catch { /* ignore */ }
     return res.json(updated);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// GET /api/messages/:id/edits — historia edycji wiadomości
+router.get('/:id/edits', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { rows: [msg] } = await query('SELECT channel_id FROM messages WHERE id=$1', [req.params.id]);
+    if (!msg) return res.status(404).json({ error: 'Not found' });
+    const { rows } = await query(
+      'SELECT old_content, edited_at FROM message_edits WHERE message_id=$1 ORDER BY edited_at ASC',
+      [req.params.id]
+    );
+    return res.json(rows);
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 

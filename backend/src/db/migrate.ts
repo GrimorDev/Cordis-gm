@@ -606,6 +606,23 @@ CREATE INDEX IF NOT EXISTS idx_attachments_user    ON attachments(user_id);
 CREATE INDEX IF NOT EXISTS idx_attachments_r2key   ON attachments(r2_key);
 CREATE INDEX IF NOT EXISTS idx_attachments_msg     ON attachments(message_id);
 CREATE INDEX IF NOT EXISTS idx_attachments_dm_msg  ON attachments(dm_message_id);
+
+-- ── Historia edycji wiadomości ─────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS message_edits (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  old_content TEXT NOT NULL,
+  edited_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_message_edits ON message_edits(message_id, edited_at DESC);
+
+CREATE TABLE IF NOT EXISTS dm_message_edits (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_id UUID NOT NULL REFERENCES dm_messages(id) ON DELETE CASCADE,
+  old_content TEXT NOT NULL,
+  edited_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_dm_message_edits ON dm_message_edits(message_id, edited_at DESC);
 `;
 
 const SEED_SQL = `

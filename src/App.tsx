@@ -20,7 +20,7 @@ import {
   Bot, Play, Pause, SkipForward, ListMusic, Package, Slash, Palette,
   Star, Flame, Trophy, Rocket, Gem, Swords, Heart,
   FileAudio, FileVideo, FileCode2, FileArchive, FileImage, File, ChevronUp,
-  HardDrive, PieChart, Trash,
+  HardDrive, PieChart, Trash, History,
   type LucideIcon
 } from 'lucide-react';
 import {
@@ -4653,6 +4653,8 @@ export default function App() {
   const [msgInput, setMsgInput]               = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [searchQuery, setSearchQuery]         = useState('');
+  const searchInputRef                        = useRef<HTMLInputElement>(null);
+  const [editHistoryPopover, setEditHistoryPopover] = useState<{msgId:string;isDm:boolean;entries:{old_content:string;edited_at:string}[]|null}|null>(null);
   const [addFriendVal, setAddFriendVal]       = useState('');
   const [friendSearchResult, setFriendSearchResult] = useState<UserProfile | null>(null);
   const [friendSearchLoading, setFriendSearchLoading] = useState(false);
@@ -6292,6 +6294,25 @@ export default function App() {
   useEffect(() => {
     const t = setInterval(() => setGameTick(n => n + 1), 15_000);
     return () => clearInterval(t);
+  }, []);
+
+  // ── Ctrl+F → focus wyszukiwarki wiadomości ────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        const el = searchInputRef.current;
+        if (!el) return;
+        e.preventDefault();
+        el.focus();
+        el.select();
+      }
+      if (e.key === 'Escape' && document.activeElement === searchInputRef.current) {
+        setSearchQuery('');
+        searchInputRef.current?.blur();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, []);
 
   // ── Auto-idle (10 min brak aktywności) ───────────────────────────
@@ -8021,9 +8042,10 @@ export default function App() {
         <div className="flex items-center justify-end gap-1.5 pr-1">
           <div className="relative group hidden sm:block">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-zinc-400 transition-colors"/>
-            <input placeholder="Szukaj w wiadomościach..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-              className="bg-white/[0.05] border border-white/[0.07] text-white placeholder-zinc-600 outline-none focus:border-indigo-500/40 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] rounded-xl pl-8 pr-10 py-1.5 text-xs w-44 focus:w-56 transition-all duration-300"/>
-            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-zinc-600 font-mono hidden lg:flex items-center gap-0.5"><span className="border border-zinc-700 rounded px-1 py-0.5">⌘</span><span className="border border-zinc-700 rounded px-1 py-0.5">K</span></span>
+            <input ref={searchInputRef} placeholder="Szukaj w wiadomościach..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Escape') { setSearchQuery(''); (e.target as HTMLInputElement).blur(); } }}
+              className="bg-white/[0.05] border border-white/[0.07] text-white placeholder-zinc-600 outline-none focus:border-indigo-500/40 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] rounded-xl pl-8 pr-14 py-1.5 text-xs w-44 focus:w-64 transition-all duration-300"/>
+            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-zinc-600 font-mono hidden lg:flex items-center gap-0.5"><span className="border border-zinc-700 rounded px-1 py-0.5">Ctrl</span><span className="border border-zinc-700 rounded px-1 py-0.5">F</span></span>
           </div>
           {/* 🎥 Stream mode toggle */}
           <button onClick={() => { setIsStreamMode(v => { const next=!v; if(!next) setStreamRevealedConvs(new Set()); return next; }); }}
@@ -10101,7 +10123,19 @@ export default function App() {
                                 </span>
                               )}
                               <span className={`text-[10px] text-zinc-600 transition-opacity ${alwaysShowTimestamps?'':'opacity-0 group-hover:opacity-100'}`}>{fmtTime(msg.created_at)}</span>
-                              {(msg as MessageFull).edited&&<span className="text-[10px] text-zinc-700 italic">(ed.)</span>}
+                              {(msg as MessageFull).edited&&(
+                                <button className="text-[10px] text-zinc-600 italic hover:text-zinc-400 transition-colors"
+                                  onClick={async()=>{
+                                    const isDm = activeView==='dms';
+                                    if(editHistoryPopover?.msgId===msg.id){setEditHistoryPopover(null);return;}
+                                    setEditHistoryPopover({msgId:msg.id,isDm,entries:null});
+                                    try{
+                                      const api=await import('./api');
+                                      const rows=isDm?await api.dmsApi.messageEdits(msg.id):await api.messagesApi.edits(msg.id);
+                                      setEditHistoryPopover({msgId:msg.id,isDm,entries:rows});
+                                    }catch{setEditHistoryPopover(null);}
+                                  }}>(edytowano)</button>
+                              )}
                             </div>
                             )}
 
@@ -14128,6 +14162,51 @@ export default function App() {
             className="fixed top-0 left-0 right-0 z-[300] flex items-center justify-center gap-2 py-2.5 px-4 bg-amber-500/95 backdrop-blur-sm text-black text-xs font-bold tracking-wide uppercase">
             <div className="w-3 h-3 border-2 border-black/40 border-t-black rounded-full animate-spin shrink-0"/>
             Łączenie z serwerem…
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── HISTORIA EDYCJI POPOVER ──────────────────────────────────────── */}
+      <AnimatePresence>
+        {editHistoryPopover && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 z-[9990] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+            onClick={()=>setEditHistoryPopover(null)}>
+            <motion.div initial={{scale:0.95,y:8}} animate={{scale:1,y:0}} exit={{scale:0.95,y:8}}
+              transition={{type:'spring',stiffness:380,damping:28}}
+              onClick={e=>e.stopPropagation()}
+              className="bg-[#18182a] border border-white/[0.08] rounded-2xl shadow-2xl w-full max-w-lg max-h-[70vh] flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06] shrink-0">
+                <div className="flex items-center gap-2">
+                  <History size={15} className="text-zinc-400"/>
+                  <span className="text-sm font-bold text-white">Historia edycji</span>
+                </div>
+                <button onClick={()=>setEditHistoryPopover(null)} className="text-zinc-500 hover:text-white transition-colors"><X size={16}/></button>
+              </div>
+              <div className="overflow-y-auto flex-1 p-4 space-y-2">
+                {editHistoryPopover.entries === null ? (
+                  <div className="flex justify-center py-6"><Loader2 size={18} className="animate-spin text-zinc-600"/></div>
+                ) : editHistoryPopover.entries.length === 0 ? (
+                  <p className="text-center text-zinc-600 text-sm py-6">Brak zapisanej historii</p>
+                ) : (
+                  <>
+                    {editHistoryPopover.entries.map((e,i) => (
+                      <div key={i} className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3">
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Wersja {i+1}</span>
+                          <span className="text-[10px] text-zinc-700">·</span>
+                          <span className="text-[10px] text-zinc-600">{new Date(e.edited_at).toLocaleString('pl-PL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
+                        </div>
+                        <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap break-words">{e.old_content}</p>
+                      </div>
+                    ))}
+                    <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3">
+                      <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Aktualna wersja</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
