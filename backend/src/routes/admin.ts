@@ -505,4 +505,26 @@ router.post('/storage/recalc', async (_req, res: Response) => {
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// ── GET /api/admin/r2/debug — lista obiektów w R2 (max 30) ───────────
+router.get('/r2/debug', async (_req, res: Response) => {
+  try {
+    const { r2Client, r2Enabled } = await import('../services/r2');
+    const { config } = await import('../config');
+    if (!r2Client || !r2Enabled) return res.json({ error: 'R2 not configured', r2Enabled: false });
+    const { ListObjectsV2Command } = await import('@aws-sdk/client-s3');
+    const result = await r2Client.send(new ListObjectsV2Command({
+      Bucket: config.r2.bucket,
+      MaxKeys: 30,
+    }));
+    return res.json({
+      bucket: config.r2.bucket,
+      endpoint: config.r2.endpoint,
+      key_count: result.KeyCount,
+      keys: (result.Contents || []).map(o => ({ key: o.Key, size: o.Size })),
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message, name: err.name, http_status: err.$metadata?.httpStatusCode });
+  }
+});
+
 export default router;
