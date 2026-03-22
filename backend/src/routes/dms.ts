@@ -230,12 +230,12 @@ router.delete('/messages/:id', authMiddleware, async (req: AuthRequest, res: Res
     const { rows: [msg] } = await query('SELECT * FROM dm_messages WHERE id=$1', [req.params.id]);
     if (!msg) return res.status(404).json({ error: 'Not found' });
     if (msg.sender_id !== req.user!.id) return res.status(403).json({ error: 'Not your message' });
-    // Delete R2 attachment if present
+    // Delete R2 attachment if present — szukaj po URL (dm_message_id może być NULL)
     if (msg.attachment_url) {
       try {
         const { rows: [att] } = await query(
-          'SELECT id, r2_key, file_size, user_id FROM attachments WHERE dm_message_id=$1 LIMIT 1',
-          [req.params.id]
+          'SELECT id, r2_key, file_size, user_id FROM attachments WHERE url=$1 LIMIT 1',
+          [msg.attachment_url]
         );
         if (att?.r2_key) {
           await deleteFromR2(att.r2_key);

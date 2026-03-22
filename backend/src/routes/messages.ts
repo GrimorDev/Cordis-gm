@@ -354,12 +354,12 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
       if (!member || !await hasPermission(ch.server_id, req.user!.id, 'manage_messages', member.role_name))
         return res.status(403).json({ error: 'Not authorized' });
     }
-    // Delete R2 attachment if present
+    // Delete R2 attachment if present — szukaj po URL (message_id może być NULL)
     if (msg.attachment_url) {
       try {
         const { rows: [att] } = await query(
-          'SELECT id, r2_key, file_size, user_id FROM attachments WHERE message_id=$1 LIMIT 1',
-          [req.params.id]
+          'SELECT id, r2_key, file_size, user_id FROM attachments WHERE url=$1 LIMIT 1',
+          [msg.attachment_url]
         );
         if (att?.r2_key) {
           await deleteFromR2(att.r2_key);

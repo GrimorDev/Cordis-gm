@@ -71,10 +71,10 @@ const uploadImages = multer({
   fileFilter: imageOnlyFilter,
 });
 
-// Attachments: memory when R2 enabled (to pipe buffer), disk otherwise
+// Attachments: multer limit = 600MB (max dla Power), per-user limit sprawdzany w handlerze
 const uploadAttachments = multer({
   storage: r2Enabled ? multer.memoryStorage() : diskStorage,
-  limits: { fileSize: config.uploads.maxSize },
+  limits: { fileSize: 600 * 1024 * 1024 }, // 600MB max (Cordyn Power)
   fileFilter: attachmentFilter,
 });
 
@@ -109,20 +109,24 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response, next) => {
     const userId   = req.user!.id;
     const fileSize = req.file.size;
 
-    // ── Quota check ────────────────────────────────────────────────────────
+    // ── Per-file size limit (nie całkowity storage, tylko rozmiar jednego pliku) ──
+    // Free: 50MB, Cordyn Power: 600MB
     if (folder === 'attachments') {
       try {
         const { rows: [u] } = await query(
-          'SELECT storage_used_bytes, storage_quota_bytes FROM users WHERE id=$1', [userId]
+          'SELECT is_premium FROM users WHERE id=$1', [userId]
         );
-        if (u && (Number(u.storage_used_bytes) + fileSize) > Number(u.storage_quota_bytes)) {
+        const maxFileSize = u?.is_premium
+          ? 600 * 1024 * 1024  // 600MB dla Cordyn Power
+          : 50  * 1024 * 1024; // 50MB  dla free
+        if (fileSize > maxFileSize) {
           return res.status(413).json({
-            error: 'Przekroczono limit przestrzeni dyskowej',
-            used:  Number(u.storage_used_bytes),
-            quota: Number(u.storage_quota_bytes),
+            error: u?.is_premium
+              ? 'Plik za duży — maksymalny rozmiar to 600 MB'
+              : 'Plik za duży — maksymalny rozmiar to 50 MB (Cordyn Power: 600 MB)',
           });
         }
-      } catch { /* quota check failure → allow through */ }
+      } catch { /* błąd sprawdzenia → przepuść */ }
     }
 
     // ── R2 upload or disk fallback ─────────────────────────────────────────

@@ -2994,7 +2994,7 @@ function StorageTab({ addToast }: { addToast: (m:string,t?:any)=>void }) {
                   return (
                     <div key={u.id} className="flex items-center gap-3 px-4 py-2.5">
                       <div className="w-7 h-7 rounded-xl overflow-hidden bg-white/[0.06] shrink-0">
-                        {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-xs text-zinc-400">{u.username[0]}</div>}
+                        {u.avatar_url ? <img src={staticUrl(u.avatar_url)} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-xs text-zinc-400">{u.username[0]}</div>}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-1">
@@ -3046,7 +3046,7 @@ function StorageTab({ addToast }: { addToast: (m:string,t?:any)=>void }) {
                     <div key={u.id} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center px-4 py-2.5">
                       <div className="flex items-center gap-2 min-w-0">
                         <div className="w-6 h-6 rounded-lg overflow-hidden bg-white/[0.06] shrink-0">
-                          {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-[10px] text-zinc-400">{u.username[0]}</div>}
+                          {u.avatar_url ? <img src={staticUrl(u.avatar_url)} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-[10px] text-zinc-400">{u.username[0]}</div>}
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1">
