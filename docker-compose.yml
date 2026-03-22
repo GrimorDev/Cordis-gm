@@ -71,7 +71,7 @@ services:
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change_me_refresh_secret_32chars}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-30d}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
-      UPLOAD_MAX_SIZE: ${UPLOAD_MAX_SIZE:-52428800}
+      UPLOAD_MAX_SIZE: "52428800"   # 50MB — hardcoded, nie zmieniaj przez Portainer
       # ── Cloudflare R2 ────────────────────────────────────────────────
       # Endpoint i bucket zahardkodowane (stałe dla projektu)
       R2_ENDPOINT: "https://f33e20b4cd126676f4659f7838db83cd.r2.cloudflarestorage.com"
