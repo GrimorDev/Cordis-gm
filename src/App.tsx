@@ -2826,7 +2826,6 @@ function ServerSettingsPage({
 
 // ─── Storage Tab ─────────────────────────────────────────────────────────────
 function StorageTab({ addToast }: { addToast: (m:string,t?:any)=>void }) {
-  const { adminApi, staticUrl } = (window as any).__cordisApi__ || {};
   const [stats, setStats]       = React.useState<import('./api').AdminStorageStats | null>(null);
   const [loading, setLoading]   = React.useState(true);
   const [storageView, setStorageView] = React.useState<'overview'|'users'|'files'>('overview');
