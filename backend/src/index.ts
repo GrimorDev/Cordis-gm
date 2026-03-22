@@ -121,24 +121,6 @@ app.use('/api/friends', friendsRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/files',  filesRoutes);   // R2 pre-signed URL proxy
 
-// ── TYMCZASOWY DEBUG — usuń po diagnozie ────────────────────────────────────
-app.get('/api/r2debug', async (_req, res) => {
-  try {
-    const { r2Client, r2Enabled } = await import('./services/r2');
-    const { config } = await import('./config');
-    if (!r2Client || !r2Enabled) return res.json({ r2Enabled: false });
-    const { ListObjectsV2Command } = await import('@aws-sdk/client-s3');
-    const result = await r2Client.send(new ListObjectsV2Command({ Bucket: config.r2.bucket, MaxKeys: 50 }));
-    return res.json({
-      bucket: config.r2.bucket,
-      endpoint: config.r2.endpoint,
-      key_count: result.KeyCount,
-      keys: (result.Contents || []).map(o => ({ key: o.Key, size: o.Size })),
-    });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message, name: err.name, http: err.$metadata?.httpStatusCode });
-  }
-});
 app.use('/api/og', ogRoutes);
 app.use('/api/admin',         adminRoutes);
 app.use('/api/games',         gamesRoutes);

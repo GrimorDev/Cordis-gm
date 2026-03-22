@@ -1,6 +1,7 @@
 ﻿import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { TitleBar, isTauri } from './TitleBar';
+import ImageCropModal, { type CropShape } from './ImageCropModal';
 import { translate, resolveLocale, bcp47 as localeBcp47, loadLocale, detectLocale, LOCALES, type Locale, type TimeFormat } from './i18n';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -2271,6 +2272,8 @@ interface ServerSettingsPageProps {
   setSrvForm: (v: any) => void;
   srvBannerFile: File|null; setSrvBannerFile: (f: File|null) => void;
   srvIconFile: File|null; setSrvIconFile: (f: File|null) => void;
+  onSelectSrvBanner: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onSelectSrvIcon: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleSaveSrv: () => void;
   inviteDur: string; setInviteDur: (v: string) => void;
   inviteCode: string|null; handleInvite: () => void;
@@ -2316,6 +2319,7 @@ interface ServerSettingsPageProps {
 function ServerSettingsPage({
   serverFull, tab, setTab, roles, members, banList, setBanList,
   srvForm, setSrvForm, srvBannerFile, setSrvBannerFile, srvIconFile, setSrvIconFile,
+  onSelectSrvBanner, onSelectSrvIcon,
   handleSaveSrv, inviteDur, setInviteDur, inviteCode, handleInvite,
   canManageServer, canManageRoles, canKickMembers, canBanMembers, canCreateInvites,
   handleSetMemberRole, handleKick, handleBan, handleUnban,
@@ -2390,7 +2394,7 @@ function ServerSettingsPage({
                   ) : <div className="w-full h-full flex items-center justify-center text-zinc-700"><Image size={22}/></div>}
                   <label className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 hover:opacity-100 cursor-pointer transition-opacity">
                     <span className="text-sm text-white font-semibold flex items-center gap-1.5"><Upload size={14}/> Zmień banner</span>
-                    <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f)setSrvBannerFile(f);e.target.value='';}} className="hidden"/>
+                    <input type="file" accept="image/*" onChange={onSelectSrvBanner} className="hidden"/>
                   </label>
                 </div>
               </div>
@@ -2404,7 +2408,7 @@ function ServerSettingsPage({
                   </div>
                   <label className="cursor-pointer text-sm font-semibold bg-white/[0.06] hover:bg-white/[0.09] border border-white/[0.08] text-zinc-300 hover:text-white px-3 py-2 rounded-xl flex items-center gap-1.5 transition-all">
                     <Upload size={13}/> Zmień ikonę
-                    <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f)setSrvIconFile(f);e.target.value='';}} className="hidden"/>
+                    <input type="file" accept="image/*" onChange={onSelectSrvIcon} className="hidden"/>
                   </label>
                 </div>
               </div>
@@ -4827,6 +4831,14 @@ export default function App() {
   const [srvForm, setSrvForm]                 = useState({ name:'', description:'', icon_url:'', banner_url:'', accent_color:'indigo' });
   const [srvIconFile, setSrvIconFile]         = useState<File|null>(null);
   const [srvBannerFile, setSrvBannerFile]     = useState<File|null>(null);
+
+  // ── Image crop modal ──────────────────────────────────────────────────
+  const [cropPending, setCropPending] = useState<{
+    file: File; aspect: number; cropShape: CropShape; title: string;
+    onDone: (f: File) => void;
+  } | null>(null);
+  const openCrop = (file: File, aspect: number, cropShape: CropShape, title: string, onDone: (f: File) => void) =>
+    setCropPending({ file, aspect, cropShape, title, onDone });
 
   const [chCreateOpen, setChCreateOpen]       = useState(false);
   const [chCreateCatId, setChCreateCatId]     = useState('');
@@ -7383,18 +7395,24 @@ export default function App() {
   };
   const hideHoverCard = () => { setHoverCard(null); };
   const cancelHideHoverCard = () => { /* no-op for click mode */ };
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]; if (!f) return;
-    try {
-      const r = await users.uploadAvatar(f);
-      setCurrentUser(p => p ? { ...p, avatar_url: r.avatar_url } : p);
-      setEditProf((p: any) => p ? { ...p, avatar_url: r.avatar_url } : p);
-      setSelUser((p: any) => p ? { ...p, avatar_url: r.avatar_url } : p);
-    } catch (err) { console.error(err); }
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]; e.target.value = ''; if (!f) return;
+    openCrop(f, 1, 'round', 'Kadruj avatar', async (cropped) => {
+      setCropPending(null);
+      try {
+        const r = await users.uploadAvatar(cropped);
+        setCurrentUser(p => p ? { ...p, avatar_url: r.avatar_url } : p);
+        setEditProf((p: any) => p ? { ...p, avatar_url: r.avatar_url } : p);
+        setSelUser((p: any) => p ? { ...p, avatar_url: r.avatar_url } : p);
+      } catch (err) { console.error(err); }
+    });
   };
   const handleBannerSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]; if (!f) return;
-    setProfBannerFile(f); setProfBannerPrev(URL.createObjectURL(f));
+    const f = e.target.files?.[0]; e.target.value = ''; if (!f) return;
+    openCrop(f, 3, 'rect', 'Kadruj baner profilu', (cropped) => {
+      setCropPending(null);
+      setProfBannerFile(cropped); setProfBannerPrev(URL.createObjectURL(cropped));
+    });
   };
   const handleSaveProfile = async (opts?: { closeProfileModal?: boolean }) => {
     if (!editProf) return;
@@ -9385,6 +9403,8 @@ export default function App() {
               srvForm={srvForm} setSrvForm={setSrvForm}
               srvBannerFile={srvBannerFile} setSrvBannerFile={setSrvBannerFile}
               srvIconFile={srvIconFile} setSrvIconFile={setSrvIconFile}
+              onSelectSrvBanner={e=>{const f=e.target.files?.[0];(e.target as HTMLInputElement).value='';if(f)openCrop(f,3,'rect','Kadruj banner serwera',c=>{setCropPending(null);setSrvBannerFile(c);});}}
+              onSelectSrvIcon={e=>{const f=e.target.files?.[0];(e.target as HTMLInputElement).value='';if(f)openCrop(f,1,'rect','Kadruj ikonę serwera',c=>{setCropPending(null);setSrvIconFile(c);});}}
               handleSaveSrv={handleSaveSrv}
               inviteDur={inviteDur} setInviteDur={setInviteDur}
               inviteCode={inviteCode} handleInvite={handleInvite}
@@ -12139,7 +12159,7 @@ export default function App() {
                         ) : <div className="w-full h-full flex items-center justify-center text-zinc-700"><Image size={22}/></div>}
                         <label className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 hover:opacity-100 cursor-pointer transition-opacity">
                           <span className="text-sm text-white font-semibold flex items-center gap-1.5"><Upload size={14}/> Zmień banner</span>
-                          <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f)setSrvBannerFile(f);e.target.value='';}} className="hidden"/>
+                          <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];(e.target as HTMLInputElement).value='';if(f)openCrop(f,3,'rect','Kadruj banner serwera',c=>{setCropPending(null);setSrvBannerFile(c);});}} className="hidden"/>
                         </label>
                       </div>
                     </div>
@@ -12153,7 +12173,7 @@ export default function App() {
                         </div>
                         <label className={`cursor-pointer text-sm font-semibold ${gb} px-3 py-2 rounded-xl flex items-center gap-1.5`}>
                           <Upload size={13}/> Zmień ikonę
-                          <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f)setSrvIconFile(f);e.target.value='';}} className="hidden"/>
+                          <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];(e.target as HTMLInputElement).value='';if(f)openCrop(f,1,'rect','Kadruj ikonę serwera',c=>{setCropPending(null);setSrvIconFile(c);});}} className="hidden"/>
                         </label>
                       </div>
                     </div>
@@ -12798,7 +12818,7 @@ export default function App() {
                         <label className={`flex items-center gap-2.5 cursor-pointer ${gi} rounded-xl px-4 py-3 text-sm hover:bg-white/[0.07] transition-all border mb-3`}>
                           <Upload size={15} className="text-zinc-500 shrink-0"/>
                           <span className="text-zinc-400">{profBannerPrev ? t('account.bannerChanged') : t('account.changeBanner')}</span>
-                          <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f){setProfBannerFile(f);setProfBannerPrev(URL.createObjectURL(f));}e.target.value='';}} className="hidden"/>
+                          <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)openCrop(f,3,'rect','Kadruj baner profilu',c=>{setCropPending(null);setProfBannerFile(c);setProfBannerPrev(URL.createObjectURL(c));});}} className="hidden"/>
                         </label>
                         <div className="grid grid-cols-6 gap-2">
                           {GRADIENTS.map(g=>(
@@ -14477,6 +14497,18 @@ export default function App() {
           serverList={serverList}
         />
       </>)}
+
+      {/* Image crop modal — avatar, banner, server icon/banner */}
+      {cropPending && (
+        <ImageCropModal
+          file={cropPending.file}
+          aspect={cropPending.aspect}
+          cropShape={cropPending.cropShape}
+          title={cropPending.title}
+          onCancel={() => setCropPending(null)}
+          onDone={cropPending.onDone}
+        />
+      )}
 
     </div>
   );
