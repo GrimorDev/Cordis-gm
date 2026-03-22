@@ -392,7 +392,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
   const [showModal, setShowModal] = useState(false);
   const [modalTab, setModalTab] = useState<'login' | 'register'>('login');
   const [regStep, setRegStep] = useState<'form' | 'verify'>('form');
-  const [form, setForm] = useState({ login: '', username: '', email: '', password: '', confirm: '' });
+  const [form, setForm] = useState({ login: localStorage.getItem('cordyn_saved_login') || '', username: '', email: '', password: '', confirm: '' });
   const [verifyCode, setVerifyCode] = useState('');
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
@@ -486,6 +486,8 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
       if (res.requiresTwoFactor) {
         setTwoFaSession(res.sessionId); setTwoFaCode(''); setTwoFaType('totp');
       } else {
+        // Zawsze zapisuj email/login do autouzupełniania na desktopie
+        localStorage.setItem('cordyn_saved_login', form.login);
         if (!rememberMe) {
           // Session only — clear on browser close via sessionStorage
           localStorage.removeItem('cordyn_token');
@@ -7496,9 +7498,11 @@ export default function App() {
       // because our AudioWorklet handles noise (they'd conflict if both active).
       const audioConstraints: MediaTrackConstraints = {
         ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
-        echoCancellation: true,   // hardware echo cancel — always useful
-        autoGainControl:  true,   // normalize mic level
-        noiseSuppression: !useNoise, // browser's basic filter only when our gate is off
+        echoCancellation: true,      // hardware echo cancel — always useful
+        autoGainControl:  true,      // normalize mic level
+        noiseSuppression: !useNoise, // browser's basic filter tylko gdy nasz gate jest wyłączony
+        sampleRate: 48000,           // 48 kHz — standard Opus/WebRTC, najlepsza jakość głosu
+        channelCount: 1,             // mono — wystarczy dla głosu, mniejsze opóźnienie
       };
       const rawStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
 

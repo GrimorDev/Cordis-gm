@@ -31,7 +31,24 @@ function makeAudioEl(): HTMLAudioElement {
 
 export function attachRemoteAudio(userId: string, stream: MediaStream) {
   let el = remoteAudios.get(userId);
-  if (!el) { el = makeAudioEl(); remoteAudios.set(userId, el); }
+  if (!el) {
+    el = makeAudioEl();
+    remoteAudios.set(userId, el);
+    // Twórz GainNode od razu — aby volume 0–200% działało zanim użytkownik ruszy suwakiem.
+    // AudioContext musi być wznowiony po pierwszym zdarzeniu play (polityka autoplay).
+    try {
+      const ctx = new AudioContext({ sampleRate: 48000 });
+      const src = ctx.createMediaElementSource(el);
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = 1;
+      src.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      gainNodes.set(userId, { ctx, gain: gainNode });
+      el.addEventListener('play', () => ctx.resume().catch(() => {}));
+    } catch {
+      // AudioContext niedostępny — głośność ograniczona do 100% przez el.volume
+    }
+  }
   el.srcObject = stream;
 }
 
@@ -56,38 +73,19 @@ export function detachRemoteAudio(userId: string) {
 const gainNodes = new Map<string, { ctx: AudioContext; gain: GainNode }>();
 
 export function setRemoteVolume(userId: string, volumePct: number) {
-  // volumePct: 0–200 (100 = normal, 200 = double gain)
+  // volumePct: 0–200 (100 = normal, 200 = double gain przez GainNode)
   const gain = Math.max(0, volumePct / 100);
   const el = remoteAudios.get(userId);
   if (!el) return;
 
-  // For 0–100%: use native HTML5 volume (simpler, always works)
-  // For 100–200%: use WebAudio GainNode to boost beyond normal
-  if (volumePct <= 100) {
-    el.volume = gain;
-    // If we have a GainNode, set it to 1 and use native volume for fine control
-    const gn = gainNodes.get(userId);
-    if (gn) gn.gain.gain.value = 1;
-    return;
-  }
-
-  // Above 100% — use GainNode
-  el.volume = 1; // native at max, GainNode boosts further
-  if (!gainNodes.has(userId)) {
-    try {
-      const ctx = new AudioContext();
-      ctx.resume().catch(() => {}); // ensure AudioContext is not suspended
-      const src = ctx.createMediaElementSource(el);
-      const gainNode = ctx.createGain();
-      gainNode.gain.value = gain;
-      src.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      gainNodes.set(userId, { ctx, gain: gainNode });
-    } catch {
-      // AudioContext unavailable or element already connected — cap at native 1.0
-    }
+  const gn = gainNodes.get(userId);
+  if (gn) {
+    // GainNode obsługuje cały zakres 0.0–2.0 (el.volume zostaje na 1.0)
+    gn.gain.gain.value = gain;
+    gn.ctx.resume().catch(() => {}); // upewnij się że context nie jest suspended
   } else {
-    gainNodes.get(userId)!.gain.gain.value = gain;
+    // Fallback (np. przeglądarka bez WebAudio) — natywne el.volume, max 100%
+    el.volume = Math.min(1, gain);
   }
 }
 

@@ -21,7 +21,7 @@ export const config = {
 
   jwt: {
     secret: process.env.JWT_SECRET || 'cordis_jwt_super_secret_change_in_prod',
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    expiresIn: process.env.JWT_EXPIRES_IN || '30d',
     refreshSecret: process.env.JWT_REFRESH_SECRET || 'cordis_refresh_super_secret_change_in_prod',
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
   },
