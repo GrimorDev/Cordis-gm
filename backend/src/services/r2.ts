@@ -35,9 +35,16 @@ const SIGNED_URL_TTL = 3600; // 1 godzina
  * Generuje pre-signed GET URL dla klucza w R2.
  * Używane przez /api/files/* do serwowania plików bez publicznego bucketu.
  */
-export async function getR2SignedUrl(key: string): Promise<string> {
+export async function getR2SignedUrl(key: string, downloadFilename?: string): Promise<string> {
   if (!r2Client || !config.r2.bucket) throw new Error('R2 not configured');
-  const cmd = new GetObjectCommand({ Bucket: config.r2.bucket, Key: key });
+  const cmd = new GetObjectCommand({
+    Bucket: config.r2.bucket,
+    Key:    key,
+    // Gdy podana nazwa → przeglądarka zapisze plik pod tą nazwą (navigation, bez CORS)
+    ...(downloadFilename ? {
+      ResponseContentDisposition: `attachment; filename="${encodeURIComponent(downloadFilename)}"`,
+    } : {}),
+  });
   return getSignedUrl(r2Client, cmd, { expiresIn: SIGNED_URL_TTL });
 }
 

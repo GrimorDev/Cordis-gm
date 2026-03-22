@@ -1675,24 +1675,36 @@ function AttachmentRenderer({ url, staticUrl, addToast }: { url: string; staticU
   const [textLoading, setTextLoading] = React.useState(false);
   const [downloading, setDownloading] = React.useState(false);
 
-  const handleDownload = async (e: React.MouseEvent) => {
+  const handleDownload = (e: React.MouseEvent) => {
     e.preventDefault();
     if (downloading) return;
+    // Jeśli plik jest na R2 (/api/files/...) → navigation z ?dl=1
+    // backend generuje signed URL z Content-Disposition: attachment
+    // Brak fetch() = brak problemu CORS
+    if (full.includes('/api/files/')) {
+      const dlUrl = `${full}${full.includes('?') ? '&' : '?'}dl=1&name=${encodeURIComponent(name)}`;
+      const a = document.createElement('a');
+      a.href = dlUrl; a.target = '_blank'; a.rel = 'noopener noreferrer';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      addToast?.(`⬇️ Pobieranie: ${name}`, 'info');
+      return;
+    }
+    // Fallback: lokalne pliki (stary dysk) — blob download
     setDownloading(true);
     addToast?.(`⬇️ Pobieranie: ${name}`, 'info');
-    try {
-      const resp = await fetch(full);
-      const blob = await resp.blob();
-      const objUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = objUrl; a.download = name;
-      document.body.appendChild(a); a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(objUrl);
-      addToast?.(`✅ Pobrano: ${name}`, 'success');
-    } catch {
-      addToast?.(`Błąd pobierania: ${name}`, 'error');
-    } finally { setDownloading(false); }
+    fetch(full)
+      .then(r => r.blob())
+      .then(blob => {
+        const objUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objUrl; a.download = name;
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(objUrl);
+        addToast?.(`✅ Pobrano: ${name}`, 'success');
+      })
+      .catch(() => addToast?.(`Błąd pobierania: ${name}`, 'error'))
+      .finally(() => setDownloading(false));
   };
 
   const loadText = async () => {
