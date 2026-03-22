@@ -3641,6 +3641,27 @@ function SortableChannelItem({ id, catId, children, canManage }: { id: string; c
   );
 }
 
+// Merguje live track z socketu w SpotifyData — socket ma świeższe dane niż REST API
+function mergeSpotifyLive(
+  spotify: SpotifyData | null,
+  live?: {name:string;artists:string;album_cover:string|null;external_url:string|null;duration_ms?:number|null;progress_ms?:number|null}|null,
+): SpotifyData {
+  if (!spotify) return { connected: false, show_on_profile: false, current_playing: null, top_tracks: [] };
+  if (!live) return spotify;
+  return {
+    ...spotify,
+    current_playing: {
+      name: live.name,
+      artists: live.artists,
+      album_cover: live.album_cover ?? undefined,
+      external_url: live.external_url ?? undefined,
+      is_playing: true,
+      progress_ms: live.progress_ms ?? 0,
+      duration_ms: live.duration_ms ?? 0,
+    },
+  };
+}
+
 // ─── ProfilePage ──────────────────────────────────────────────────────────────
 function ProfilePage({
   viewUserId, profileData, games, spotify, ownSpotify, twitch, ownTwitch, steam, ownSteam, loading,
@@ -3655,13 +3676,14 @@ function ProfilePage({
   onSteamConnect, onSteamDisconnect, onSteamToggle,
   friends, blockedUsers, addToast,
   myJam, jamLoading, onJamStart, onJamStop, onJamJoin, onJamLeave, viewedUserJam,
-  steamGameStartedAt,
+  steamGameStartedAt, liveSpotifyTrack,
 }: {
   viewUserId: string; profileData: UserProfile|null; games: FavoriteGame[];
   spotify: SpotifyData|null; ownSpotify: SpotifyData|null;
   twitch: TwitchData|null; ownTwitch: TwitchData|null;
   steam: SteamData|null; ownSteam: SteamData|null;
   steamGameStartedAt?: number | null;
+  liveSpotifyTrack?: {name:string;artists:string;album_cover:string|null;external_url:string|null;duration_ms?:number|null;progress_ms?:number|null}|null;
   loading: boolean;
   currentUser: UserProfile|null; editProf: any; setEditProf: (fn:any)=>void;
   profBannerFile: File|null; profBannerPrev: string|null;
@@ -4003,7 +4025,7 @@ function ProfilePage({
 
                 {isOwn && ownSpotify?.connected ? (
                   <div className="flex flex-col gap-3">
-                    <SpotifyDisplay spotify={spotifyToShow || ownSpotify}/>
+                    <SpotifyDisplay spotify={mergeSpotifyLive(spotifyToShow || ownSpotify, liveSpotifyTrack)}/>
                     {/* JAM controls for own profile */}
                     <div className="mt-3">
                       {myJam.role === 'host' ? (
@@ -4038,7 +4060,7 @@ function ProfilePage({
                   </div>
                 ) : spotifyToShow?.connected && spotifyToShow?.show_on_profile ? (
                   <>
-                    <SpotifyDisplay spotify={spotifyToShow}/>
+                    <SpotifyDisplay spotify={mergeSpotifyLive(spotifyToShow, liveSpotifyTrack)}/>
                     {/* JAM join button for friend's profile */}
                     {viewedUserJam && (
                       <div className="mt-3 bg-[#1DB954]/8 border border-[#1DB954]/20 rounded-2xl px-4 py-3 flex items-center justify-between">
@@ -9104,6 +9126,7 @@ export default function App() {
               steam={profileSteam}
               ownSteam={ownSteam}
               steamGameStartedAt={profileViewId ? (steamGameStartRef.current.get(profileViewId) ?? null) : null}
+              liveSpotifyTrack={profileViewId ? (userActivities.get(profileViewId) ?? null) : null}
               loading={profileLoading}
               currentUser={currentUser}
               editProf={editProf}
