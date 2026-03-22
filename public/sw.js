@@ -27,7 +27,8 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
   if (!request.url.startsWith('http://') && !request.url.startsWith('https://')) return;
   if (request.url.includes('/api/') || request.url.includes('/socket.io/')) return;
-  if (request.url.includes('/api/stream/')) return; // never cache audio streams
+  if (request.url.includes('r2.cloudflarestorage.com')) return; // R2 signed URLs — pomiń SW
+  if (request.url.includes('.r2.dev')) return; // R2 public dev URLs — pomiń SW
 
   event.respondWith(
     caches.match(request).then((cached) => {

@@ -1682,10 +1682,9 @@ function AttachmentRenderer({ url, staticUrl, addToast }: { url: string; staticU
     // backend generuje signed URL z Content-Disposition: attachment
     // Brak fetch() = brak problemu CORS
     if (full.includes('/api/files/')) {
+      // Navigation bez _blank — Content-Disposition: attachment zatrzymuje pobieranie w tle
       const dlUrl = `${full}${full.includes('?') ? '&' : '?'}dl=1&name=${encodeURIComponent(name)}`;
-      const a = document.createElement('a');
-      a.href = dlUrl; a.target = '_blank'; a.rel = 'noopener noreferrer';
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      window.location.href = dlUrl;
       addToast?.(`⬇️ Pobieranie: ${name}`, 'info');
       return;
     }
