@@ -4970,6 +4970,8 @@ export default function App() {
   // App Settings
   const [appSettOpen, setAppSettOpen]         = useState(false);
   const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'devices'|'privacy'|'locale'|'connections'|'theme'|'desktop'|'updates'|'about'>('account');
+  // Globalny hook żeby OAuth callback mógł otworzyć zakładkę połączeń
+  useEffect(() => { (window as any).__cordisGoToSettingsTab = (tab: typeof appSettTab) => setAppSettTab(tab); }, []);
   const [appVersion, setAppVersion]           = useState<string>('');
   const [autostartEnabled, setAutostartEnabled] = useState<boolean>(false);
   const [pushSubscribed, setPushSubscribed]     = useState<boolean>(false);
@@ -5104,37 +5106,46 @@ export default function App() {
   }, [activeCall]);
 
   // Handle OAuth callback redirects (?spotify|twitch|steam=connected|error)
+  // Czekamy na isAuthenticated — po przeładowaniu strony token musi być odczytany z localStorage
   useEffect(() => {
+    if (!isAuthenticated) return; // poczekaj na zalogowanie po reload
     const p = new URLSearchParams(window.location.search);
     const s = p.get('spotify');
     if (s === 'connected') {
-      addToast('Spotify połączono pomyślnie!', 'success');
+      addToast('Spotify połączono pomyślnie! 🎵', 'success');
       window.history.replaceState({}, '', window.location.pathname);
       spotifyApi.status().then(setOwnSpotify).catch(()=>{});
+      // otwórz ustawienia na zakładce połączeń
+      setActiveView('settings');
+      setTimeout(() => (window as any).__cordisGoToSettingsTab?.('connections'), 300);
     } else if (s === 'error') {
-      addToast('Błąd połączenia Spotify', 'error');
+      addToast('Błąd połączenia Spotify — sprawdź czy konto jest aktywne', 'error');
       window.history.replaceState({}, '', window.location.pathname);
     }
     const tw = p.get('twitch');
     if (tw === 'connected') {
-      addToast('Twitch połączono pomyślnie!', 'success');
+      addToast('Twitch połączono pomyślnie! 🎮', 'success');
       window.history.replaceState({}, '', window.location.pathname);
       twitchApi.status().then(setOwnTwitch).catch(()=>{});
+      setActiveView('settings');
+      setTimeout(() => (window as any).__cordisGoToSettingsTab?.('connections'), 300);
     } else if (tw === 'error') {
       addToast('Błąd połączenia Twitch', 'error');
       window.history.replaceState({}, '', window.location.pathname);
     }
     const st = p.get('steam');
     if (st === 'connected') {
-      addToast('Steam połączono pomyślnie!', 'success');
+      addToast('Steam połączono pomyślnie! 🎮', 'success');
       window.history.replaceState({}, '', window.location.pathname);
       steamApi.status().then(setOwnSteam).catch(()=>{});
+      setActiveView('settings');
+      setTimeout(() => (window as any).__cordisGoToSettingsTab?.('connections'), 300);
     } else if (st === 'error') {
       addToast('Błąd połączenia Steam', 'error');
       window.history.replaceState({}, '', window.location.pathname);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isAuthenticated]);
 
   // ── Invite link: fetch info on load, show dialog after auth ─────
   useEffect(() => {

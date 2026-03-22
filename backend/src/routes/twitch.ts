@@ -8,7 +8,7 @@ const router = Router();
 const CLIENT_ID     = (process.env.TWITCH_CLIENT_ID     || '').trim();
 const CLIENT_SECRET = (process.env.TWITCH_CLIENT_SECRET || '').trim();
 const REDIRECT_URI  = (process.env.TWITCH_REDIRECT_URI  || 'http://localhost:4000/api/twitch/callback').trim();
-const FRONTEND_URL  = (process.env.CORS_ORIGIN          || 'http://localhost:3000').trim();
+const FRONTEND_URL  = (process.env.FRONTEND_URL || (process.env.CORS_ORIGIN || 'http://localhost:3000').split(',')[0]).trim();
 
 console.log('[Twitch] REDIRECT_URI =', JSON.stringify(REDIRECT_URI));
 

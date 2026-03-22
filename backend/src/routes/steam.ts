@@ -7,7 +7,7 @@ const router = Router();
 
 const STEAM_API_KEY   = (process.env.STEAM_API_KEY   || '').trim();
 const REDIRECT_URI    = (process.env.STEAM_REDIRECT_URI || 'http://localhost:4000/api/steam/callback').trim();
-const FRONTEND_URL    = (process.env.CORS_ORIGIN      || 'http://localhost:3000').trim();
+const FRONTEND_URL    = (process.env.FRONTEND_URL || (process.env.CORS_ORIGIN || 'http://localhost:3000').split(',')[0]).trim();
 
 const OPENID_NS       = 'http://specs.openid.net/auth/2.0';
 const OPENID_IDENTITY = 'http://specs.openid.net/auth/2.0/identifier_select';

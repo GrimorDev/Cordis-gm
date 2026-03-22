@@ -13,7 +13,8 @@ const router = Router();
 const CLIENT_ID     = (process.env.SPOTIFY_CLIENT_ID     || '').trim();
 const CLIENT_SECRET = (process.env.SPOTIFY_CLIENT_SECRET || '').trim();
 const REDIRECT_URI  = (process.env.SPOTIFY_REDIRECT_URI  || 'http://localhost:4000/api/spotify/callback').trim();
-const FRONTEND_URL  = (process.env.CORS_ORIGIN           || 'http://localhost:3000').trim();
+// FRONTEND_URL — dedykowana zmienna; fallback: pierwszy origin z CORS_ORIGIN (może być lista)
+const FRONTEND_URL  = (process.env.FRONTEND_URL || (process.env.CORS_ORIGIN || 'http://localhost:3000').split(',')[0]).trim();
 
 console.log('[Spotify] REDIRECT_URI =', JSON.stringify(REDIRECT_URI));
 

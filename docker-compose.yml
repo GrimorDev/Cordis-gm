@@ -71,6 +71,9 @@ services:
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change_me_refresh_secret_32chars}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-30d}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      # FRONTEND_URL — URL do którego wraca redirect po OAuth (Spotify/Twitch/Steam)
+      # Ustaw w Portainer np. https://cordyn.pl (bez trailing slash!)
+      FRONTEND_URL: ${FRONTEND_URL:-}
       UPLOAD_MAX_SIZE: "52428800"   # 50MB — hardcoded, nie zmieniaj przez Portainer
       # ── Cloudflare R2 ────────────────────────────────────────────────
       # Endpoint i bucket zahardkodowane (stałe dla projektu)
