@@ -144,7 +144,8 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
       for (const { id } of coUsers) {
         const sp = spotifyCache.get(id);
         if (sp && now - sp.ts < ACTIVITY_STALE_MS) {
-          socket.emit('friend_spotify_update' as any, { user_id: id, track: sp.data });
+          // progress_captured_at = moment when progress_ms was fetched from Spotify API
+          socket.emit('friend_spotify_update' as any, { user_id: id, track: sp.data, progress_captured_at: sp.ts });
         }
         const tw = twitchCache.get(id);
         if (tw && now - tw.ts < ACTIVITY_STALE_MS) {
@@ -230,15 +231,16 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
     });
 
     // ── Spotify now-playing broadcast ────────────────────────────────
-    socket.on('spotify_update', async ({ track }) => {
-      // Cache for re-broadcast on connect
-      spotifyCache.set(user.id, { data: track, ts: Date.now() });
+    socket.on('spotify_update', async ({ track, progress_captured_at }: { track: any; progress_captured_at?: number }) => {
+      // Cache — ts = kiedy progress_ms był pobrany ze Spotify API (przesyłany przez frontend)
+      const capturedAt = progress_captured_at ?? Date.now();
+      spotifyCache.set(user.id, { data: track, ts: capturedAt });
       // Broadcast to all server rooms this user is in
       const { rows: serverRows } = await query(
         `SELECT server_id FROM server_members WHERE user_id = $1`, [user.id]
       );
       for (const { server_id } of serverRows) {
-        socket.to(`server:${server_id}`).emit('friend_spotify_update', { user_id: user.id, track });
+        socket.to(`server:${server_id}`).emit('friend_spotify_update', { user_id: user.id, track, progress_captured_at: capturedAt });
       }
       // Also notify friends directly (for DM/friends-list context)
       const { rows: friendRows } = await query(
@@ -247,7 +249,7 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
         [user.id]
       );
       for (const { friend_id } of friendRows) {
-        socket.to(`user:${friend_id}`).emit('friend_spotify_update', { user_id: user.id, track });
+        socket.to(`user:${friend_id}`).emit('friend_spotify_update', { user_id: user.id, track, progress_captured_at: capturedAt });
       }
 
       // ── JAM: if this user is a JAM host, sync all listeners ──────

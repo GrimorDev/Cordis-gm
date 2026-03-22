@@ -5224,19 +5224,28 @@ export default function App() {
         const showOnProfile = ownSpotify?.show_on_profile !== false;
         const effectiveTrack = (r.track && showOnProfile) ? r.track : null;
         const trackKey = effectiveTrack ? `${effectiveTrack.name}|${effectiveTrack.artists}` : null;
-        if (trackKey === lastEmittedTrack.current) return;
-        lastEmittedTrack.current = trackKey;
+        const trackChanged = trackKey !== lastEmittedTrack.current;
+        if (trackChanged) lastEmittedTrack.current = trackKey;
         const sock = getSocket();
-        if (sock) (sock as any).emit('spotify_update', { track: effectiveTrack ? {
-          name: effectiveTrack.name, artists: effectiveTrack.artists,
-          album_cover: effectiveTrack.album_cover, external_url: effectiveTrack.external_url,
-          uri: effectiveTrack.uri, progress_ms: effectiveTrack.progress_ms, duration_ms: effectiveTrack.duration_ms,
-        } : null });
-        setUserActivities(p => { const n = new Map(p); n.set(currentUser.id, effectiveTrack ? {
-          name: effectiveTrack.name, artists: effectiveTrack.artists,
-          album_cover: effectiveTrack.album_cover ?? null, external_url: effectiveTrack.external_url ?? null,
-          uri: effectiveTrack.uri ?? null, progress_ms: effectiveTrack.progress_ms ?? null, duration_ms: effectiveTrack.duration_ms ?? null,
-        } : null); return n; });
+        const capturedAt = Date.now(); // moment pobrania progress_ms ze Spotify API
+        // Zawsze emituj — progress_ms zmienia się co 10s, backend musi mieć aktualny timestamp
+        if (sock) (sock as any).emit('spotify_update', {
+          progress_captured_at: capturedAt,
+          track: effectiveTrack ? {
+            name: effectiveTrack.name, artists: effectiveTrack.artists,
+            album_cover: effectiveTrack.album_cover, external_url: effectiveTrack.external_url,
+            uri: effectiveTrack.uri, progress_ms: effectiveTrack.progress_ms, duration_ms: effectiveTrack.duration_ms,
+          } : null,
+        });
+        // Aktualizuj lokalny stan tylko przy zmianie utworu lub dla własnego profilu (z aktualnym _receivedAt)
+        if (trackChanged || effectiveTrack) {
+          setUserActivities(p => { const n = new Map(p); n.set(currentUser.id, effectiveTrack ? {
+            name: effectiveTrack.name, artists: effectiveTrack.artists,
+            album_cover: effectiveTrack.album_cover ?? null, external_url: effectiveTrack.external_url ?? null,
+            uri: effectiveTrack.uri ?? null, progress_ms: effectiveTrack.progress_ms ?? null, duration_ms: effectiveTrack.duration_ms ?? null,
+            _receivedAt: capturedAt,
+          } : null); return n; });
+        }
       } catch {}
     };
     poll();
@@ -5538,9 +5547,10 @@ export default function App() {
         steamGameStartRef.current.delete(user_id);
       }
     });
-    sock.on('friend_spotify_update', ({ user_id, track }) => {
-      // Dodaj timestamp odbioru — potrzebny do korekty postępu przy otwarciu karty
-      const stamped = track ? { ...track, _receivedAt: Date.now() } : null;
+    sock.on('friend_spotify_update', ({ user_id, track, progress_captured_at }: { user_id: string; track: any; progress_captured_at?: number }) => {
+      // _receivedAt = kiedy backend pobrał progress_ms ze Spotify API
+      // Offset = Date.now() - _receivedAt → realna pozycja w utworze bez resetowania do starych wartości
+      const stamped = track ? { ...track, _receivedAt: progress_captured_at ?? Date.now() } : null;
       setUserActivities(p => { const n = new Map(p); n.set(user_id, stamped); return n; });
     });
     // JAM sync: when host updates their track, auto-sync this user's Spotify
