@@ -10238,7 +10238,8 @@ export default function App() {
                               <div className="mt-1.5 max-w-sm">
                                 {getFileRenderType(msg.attachment_url) === 'image' ? (
                                   <img src={staticUrl(msg.attachment_url)} alt="attachment" className="rounded-2xl max-h-64 object-contain cursor-zoom-in hover:opacity-90 transition-opacity shadow-lg"
-                                    onClick={()=>setLightboxSrc(staticUrl(msg.attachment_url!))}/>
+                                    onClick={()=>setLightboxSrc(staticUrl(msg.attachment_url!))}
+                                    onError={e=>{const t=e.currentTarget;t.onerror=null;t.style.display='none';const p=document.createElement('div');p.className='flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.04] text-zinc-500 text-xs';p.innerHTML='<span>🖼️ Obraz niedostępny</span>';t.parentElement?.appendChild(p);}}/>
                                 ) : (
                                   <AttachmentRenderer url={msg.attachment_url} staticUrl={staticUrl} addToast={addToast}/>
                                 )}
