@@ -4837,8 +4837,11 @@ export default function App() {
     file: File; aspect: number; cropShape: CropShape; title: string;
     onDone: (f: File) => void;
   } | null>(null);
-  const openCrop = (file: File, aspect: number, cropShape: CropShape, title: string, onDone: (f: File) => void) =>
+  const openCrop = (file: File, aspect: number, cropShape: CropShape, title: string, onDone: (f: File) => void) => {
+    // GIF-y pomijają kadrowanie — canvas zniszczyłby animację
+    if (file.type === 'image/gif') { onDone(file); return; }
     setCropPending({ file, aspect, cropShape, title, onDone });
+  };
 
   const [chCreateOpen, setChCreateOpen]       = useState(false);
   const [chCreateCatId, setChCreateCatId]     = useState('');
