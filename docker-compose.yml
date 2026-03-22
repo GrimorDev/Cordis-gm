@@ -15,7 +15,7 @@ version: "3.9"
 #  Cloudflare R2 (opcjonalne — bez tych zmiennych pliki idą na dysk):
 #    R2_ACCESS_KEY_ID     – z CF Dashboard → R2 → Manage R2 API Tokens
 #    R2_SECRET_ACCESS_KEY – j.w.
-#    R2_PUBLIC_URL        – pub-xxx.r2.dev lub własna domena
+#    R2_PUBLIC_URL        – własna domena CDN (zostaw puste = proxy przez backend)
 # ═══════════════════════════════════════════════════════════════════
 
 services:
@@ -82,8 +82,9 @@ services:
       # Te dwie zmienne ustaw w Portainer → Stack → Environment:
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
-      # Publiczny URL bucketu — pliki serwowane przez Cloudflare CDN (zero egress)
-      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-https://pub-3f56fb1df8af4fcbb4f843cebfe0bf42.r2.dev}
+      # Publiczny URL bucketu — zostaw puste = pliki przez /api/files/ proxy (zalecane)
+      # Ustaw tylko jeśli masz własną domenę CDN np. https://cdn.cordyn.pl
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
       STORAGE_FREE_QUOTA: ${STORAGE_FREE_QUOTA:-52428800}
       STORAGE_PREMIUM_QUOTA: ${STORAGE_PREMIUM_QUOTA:-629145600}
       SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
