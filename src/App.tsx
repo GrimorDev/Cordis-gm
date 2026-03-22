@@ -10949,10 +10949,10 @@ export default function App() {
             const isImgUrl = (u: string) => IMG_EXT.test(u);
             const isVidUrl = (u: string) => VID_EXT.test(u);
 
-            // Media: messages with image/video attachment OR content that is just an image URL
+            // Media: tylko obrazy i video (nie ZIP, MP3 itp.)
             const mediaItems = dmMsgs.filter(m => {
-              if (m.attachment_url) return true;
-              const urls = m.content.match(URL_RE) ?? [];
+              if (m.attachment_url && (isImgUrl(m.attachment_url) || isVidUrl(m.attachment_url))) return true;
+              const urls = m.content?.match(URL_RE) ?? [];
               return urls.some(u => isImgUrl(u) || isVidUrl(u));
             });
 

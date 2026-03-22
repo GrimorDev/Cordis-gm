@@ -1,18 +1,13 @@
 /**
  * GET /api/files/*
- *
- * Streamuje pliki z Cloudflare R2 przez backend (bez redirect).
- * SW pomija /api/ więc nie ma CORS. Obsługuje Range (seek audio/video).
- *
- * ?dl=1  → Content-Disposition: attachment (pobieranie pliku)
- * brak   → wyświetlanie (img, video, audio)
+ * Streamuje pliki z R2 przez backend (brak redirect = brak CORS).
+ * Obsługuje Range (seek audio/video). ?dl=1 = download.
  */
 
 import { Router, Request, Response } from 'express';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { r2Client, r2Enabled } from '../services/r2';
 import { config } from '../config';
-import { Readable } from 'stream';
 
 const router = Router();
 
@@ -32,7 +27,6 @@ router.get('/*', async (req: Request, res: Response) => {
   const range    = req.headers.range;
 
   try {
-    // Pobierz metadata żeby wiedzieć ContentLength
     const cmd = new GetObjectCommand({
       Bucket: config.r2.bucket,
       Key:    key,
@@ -40,10 +34,14 @@ router.get('/*', async (req: Request, res: Response) => {
     });
 
     const result = await r2Client.send(cmd);
+
+    if (!result.Body) {
+      return res.status(404).json({ error: 'Plik pusty lub nie znaleziony' });
+    }
+
     const contentType   = result.ContentType   || 'application/octet-stream';
     const contentLength = result.ContentLength;
 
-    // Nagłówki
     res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'private, max-age=3300');
     res.setHeader('Accept-Ranges', 'bytes');
@@ -53,23 +51,45 @@ router.get('/*', async (req: Request, res: Response) => {
     }
 
     if (range && result.ContentRange) {
-      // Partial content (seeking)
       res.setHeader('Content-Range', result.ContentRange);
-      if (contentLength != null) res.setHeader('Content-Length', contentLength);
+      if (contentLength != null) res.setHeader('Content-Length', String(contentLength));
       res.status(206);
     } else {
-      if (contentLength != null) res.setHeader('Content-Length', contentLength);
+      if (contentLength != null) res.setHeader('Content-Length', String(contentLength));
       res.status(200);
     }
 
-    // Stream bytes bezpośrednio do klienta
-    (result.Body as Readable).pipe(res);
+    // AWS SDK v3: Body jest SdkStreamMixin — użyj transformToWebStream lub pipe bezpośrednio
+    const body = result.Body as any;
+    if (typeof body.pipe === 'function') {
+      // Node.js Readable — bezpośrednie pipe
+      body.on('error', (err: Error) => {
+        console.error('[R2 stream error]', key, err.message);
+        if (!res.headersSent) res.status(500).end();
+      });
+      body.pipe(res);
+    } else if (typeof body.transformToByteArray === 'function') {
+      // SDK mixin — pobierz jako buffer i wyślij
+      const bytes = await body.transformToByteArray();
+      res.end(Buffer.from(bytes));
+    } else {
+      // Web ReadableStream fallback
+      const reader = (body as ReadableStream<Uint8Array>).getReader();
+      const pump = async () => {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) { res.end(); break; }
+          res.write(Buffer.from(value));
+        }
+      };
+      await pump();
+    }
   } catch (err: any) {
     if (err.name === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404) {
       return res.status(404).json({ error: 'Plik nie znaleziony' });
     }
     console.error('[R2 stream error]', key, err.message);
-    return res.status(500).json({ error: 'Błąd pobierania pliku z R2' });
+    if (!res.headersSent) return res.status(500).json({ error: 'Błąd pobierania pliku z R2' });
   }
 });
 
