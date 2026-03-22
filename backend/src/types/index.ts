@@ -128,7 +128,7 @@ export interface ServerToClientEvents {
   member_joined: (data: { server_id: string; user: any }) => void;
   member_left: (data: { server_id: string; user_id: string }) => void;
   user_updated: (data: any) => void;
-  friend_spotify_update: (data: { user_id: string; track: { name: string; artists: string; album_cover: string | null; external_url: string | null } | null }) => void;
+  friend_spotify_update: (data: { user_id: string; track: { name: string; artists: string; album_cover: string | null; external_url: string | null; progress_ms?: number | null; duration_ms?: number | null } | null; progress_captured_at?: number }) => void;
   friend_twitch_update: (data: { user_id: string; stream: { title: string; game_name: string; viewer_count: number; login: string } | null }) => void;
   friend_steam_update: (data: { user_id: string; game: { name: string; gameid: string; header_image: string } | null }) => void;
   error: (data: { message: string }) => void;
