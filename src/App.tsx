@@ -3659,7 +3659,7 @@ function SortableChannelItem({ id, catId, children, canManage }: { id: string; c
 // Merguje live track z socketu w SpotifyData — socket ma świeższe dane niż REST API
 function mergeSpotifyLive(
   spotify: SpotifyData | null,
-  live?: {name:string;artists:string;album_cover:string|null;external_url:string|null;duration_ms?:number|null;progress_ms?:number|null}|null,
+  live?: {name:string;artists:string;album_cover:string|null;external_url:string|null;duration_ms?:number|null;progress_ms?:number|null;_receivedAt?:number}|null,
 ): SpotifyData {
   if (!spotify) return { connected: false, show_on_profile: false, current_playing: null, top_tracks: [] };
   if (!live) return spotify;
@@ -3673,7 +3673,8 @@ function mergeSpotifyLive(
       is_playing: true,
       progress_ms: live.progress_ms ?? 0,
       duration_ms: live.duration_ms ?? 0,
-    },
+      _receivedAt: live._receivedAt ?? Date.now(),
+    } as any,
   };
 }
 
@@ -4269,8 +4270,12 @@ function SpotifyDisplay({ spotify }: { spotify: SpotifyData }) {
   const [elapsed, setElapsed] = useState(cp?.progress_ms ?? 0);
   const elapsedRef = useRef(elapsed);
   useEffect(() => {
-    elapsedRef.current = cp?.progress_ms ?? 0;
-    setElapsed(cp?.progress_ms ?? 0);
+    // Korekta: progress_ms był wysłany przez serwer X ms temu — dodaj offset
+    const receivedAt = (cp as any)?._receivedAt as number | undefined;
+    const offset = receivedAt ? Math.max(0, Date.now() - receivedAt) : 0;
+    const startMs = Math.min((cp?.progress_ms ?? 0) + offset, cp?.duration_ms ?? Infinity);
+    elapsedRef.current = startMs;
+    setElapsed(startMs);
     if (!cp?.is_playing || !cp.duration_ms) return;
     const t = setInterval(() => {
       elapsedRef.current = Math.min(elapsedRef.current + 1000, cp.duration_ms!);
@@ -4422,13 +4427,16 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
           : data?.spotify?.current_playing)
       : null;
 
-  // Real-time progress
+  // Real-time progress — z korektą czasu od odebrania eventu socket
   const [elapsed, setElapsed] = React.useState(nowPlaying?.progress_ms ?? 0);
   const elapsedRef = React.useRef(elapsed);
   React.useEffect(() => {
     if (!nowPlaying?.is_playing || !nowPlaying.progress_ms) { setElapsed(nowPlaying?.progress_ms ?? 0); return; }
-    elapsedRef.current = nowPlaying.progress_ms;
-    setElapsed(nowPlaying.progress_ms);
+    const receivedAt = (nowPlaying as any)?._receivedAt ?? (activity as any)?._receivedAt;
+    const offset = receivedAt ? Math.max(0, Date.now() - receivedAt) : 0;
+    const startMs = Math.min(nowPlaying.progress_ms + offset, nowPlaying.duration_ms ?? Infinity);
+    elapsedRef.current = startMs;
+    setElapsed(startMs);
     const t = setInterval(() => {
       elapsedRef.current += 1000;
       setElapsed(Math.min(elapsedRef.current, nowPlaying.duration_ms ?? elapsedRef.current));
@@ -5531,7 +5539,9 @@ export default function App() {
       }
     });
     sock.on('friend_spotify_update', ({ user_id, track }) => {
-      setUserActivities(p => { const n = new Map(p); n.set(user_id, track); return n; });
+      // Dodaj timestamp odbioru — potrzebny do korekty postępu przy otwarciu karty
+      const stamped = track ? { ...track, _receivedAt: Date.now() } : null;
+      setUserActivities(p => { const n = new Map(p); n.set(user_id, stamped); return n; });
     });
     // JAM sync: when host updates their track, auto-sync this user's Spotify
     (sock as any).on('spotify_jam_sync', async ({ host_id, track }: { host_id: string; track: SpotifyTrack | null }) => {
@@ -5852,6 +5862,8 @@ export default function App() {
       setMembers(p => p.filter(m => m.id !== user_id));
     });
     sock.on('user_updated' as any, (u: any) => {
+      // Usuń cache HoverCard — avatar/banner mógł się zmienić
+      hoverCardCache.current.delete(u.id);
       setFriends(p => p.map(f => f.id === u.id ? { ...f, ...u } : f));
       setMembers(p => p.map(m => m.id === u.id ? { ...m, ...u } : m));
       setDmConvs(p => p.map(d => d.other_user_id === u.id
@@ -6285,7 +6297,7 @@ export default function App() {
 
   // ── Game session timer tick (refresh elapsed time display every minute) ──
   useEffect(() => {
-    const t = setInterval(() => setGameTick(n => n + 1), 60_000);
+    const t = setInterval(() => setGameTick(n => n + 1), 15_000);
     return () => clearInterval(t);
   }, []);
 
