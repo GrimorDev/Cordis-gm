@@ -580,6 +580,14 @@ DO $$ BEGIN ALTER TABLE users ADD COLUMN storage_used_bytes BIGINT DEFAULT 0; EX
 DO $$ BEGIN ALTER TABLE users ADD COLUMN storage_quota_bytes BIGINT DEFAULT 52428800; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN is_premium BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 
+-- Migracja URLi: przepisz stare pub-*.r2.dev URLs na /api/files/ proxy
+UPDATE messages SET attachment_url = REPLACE(attachment_url, 'https://pub-3f56fb1df8af4fcbb4f843cebfe0bf42.r2.dev/', '/api/files/')
+  WHERE attachment_url LIKE 'https://pub-3f56fb1df8af4fcbb4f843cebfe0bf42.r2.dev/%';
+UPDATE dm_messages SET attachment_url = REPLACE(attachment_url, 'https://pub-3f56fb1df8af4fcbb4f843cebfe0bf42.r2.dev/', '/api/files/')
+  WHERE attachment_url LIKE 'https://pub-3f56fb1df8af4fcbb4f843cebfe0bf42.r2.dev/%';
+UPDATE attachments SET url = REPLACE(url, 'https://pub-3f56fb1df8af4fcbb4f843cebfe0bf42.r2.dev/', '/api/files/')
+  WHERE url LIKE 'https://pub-3f56fb1df8af4fcbb4f843cebfe0bf42.r2.dev/%';
+
 -- Attachments table (tracks files on R2 for quota + deletion)
 CREATE TABLE IF NOT EXISTS attachments (
   id            SERIAL PRIMARY KEY,
