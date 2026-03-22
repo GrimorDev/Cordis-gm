@@ -3005,35 +3005,25 @@ function StorageTab({ addToast }: { addToast: (m:string,t?:any)=>void }) {
                 <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Top użytkownicy</h3>
               </div>
               <div className="divide-y divide-white/[0.04]">
-                {stats.top_users.slice(0,10).map(u => {
-                  const p = pct(Number(u.storage_used_bytes), Number(u.storage_quota_bytes));
-                  return (
+                {stats.top_users.slice(0,10).map((u, i) => (
                     <div key={u.id} className="flex items-center gap-3 px-4 py-2.5">
+                      <span className="text-[10px] font-bold text-zinc-600 w-4 shrink-0 text-right">{i+1}</span>
                       <div className="w-7 h-7 rounded-xl overflow-hidden bg-white/[0.06] shrink-0">
                         {u.avatar_url ? <img src={staticUrl(u.avatar_url)} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-xs text-zinc-400">{u.username[0]}</div>}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span className="text-xs font-semibold text-white truncate">{u.username}</span>
-                          {u.is_premium && <span className="text-[9px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30 rounded-full px-1.5">Power</span>}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
-                            <div className={`h-full ${pctColor(p)} rounded-full`} style={{width:`${p}%`}}/>
-                          </div>
-                          <span className="text-[10px] text-zinc-500 shrink-0">{fmtBytes(Number(u.storage_used_bytes))} / {fmtBytes(Number(u.storage_quota_bytes))}</span>
-                        </div>
+                      <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                        <span className="text-xs font-semibold text-white truncate">{u.username}</span>
+                        {u.is_premium && <span className="text-[8px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30 rounded-full px-1.5 shrink-0">Power</span>}
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button onClick={() => handleSetPremium(u.id, !u.is_premium)}
-                          title={u.is_premium ? 'Odbierz Cordyn Power' : 'Nadaj Cordyn Power'}
-                          className={`w-6 h-6 flex items-center justify-center rounded-lg text-[10px] transition-colors ${u.is_premium ? 'bg-violet-500/20 text-violet-400 hover:bg-rose-500/20 hover:text-rose-400' : 'bg-white/[0.04] text-zinc-600 hover:bg-violet-500/15 hover:text-violet-400'}`}>
-                          <Crown size={11}/>
-                        </button>
-                      </div>
+                      <span className="text-xs font-semibold text-zinc-300 tabular-nums shrink-0">{fmtBytes(Number(u.storage_used_bytes))}</span>
+                      <span className="text-[10px] text-zinc-600 shrink-0">{(u as any).file_count ?? ''} plików</span>
+                      <button onClick={() => handleSetPremium(u.id, !u.is_premium)}
+                        title={u.is_premium ? 'Odbierz Cordyn Power' : 'Nadaj Cordyn Power'}
+                        className={`w-6 h-6 flex items-center justify-center rounded-lg shrink-0 transition-colors ${u.is_premium ? 'bg-violet-500/20 text-violet-400 hover:bg-rose-500/20 hover:text-rose-400' : 'bg-white/[0.04] text-zinc-600 hover:bg-violet-500/15 hover:text-violet-400'}`}>
+                        <Crown size={11}/>
+                      </button>
                     </div>
-                  );
-                })}
+                  ))}
               </div>
             </div>
           )}
@@ -3052,44 +3042,35 @@ function StorageTab({ addToast }: { addToast: (m:string,t?:any)=>void }) {
             <div className="flex justify-center py-8"><Loader2 size={18} className="animate-spin text-zinc-600"/></div>
           ) : (
             <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl overflow-hidden">
-              <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-4 py-2 border-b border-white/[0.06] text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                <span>Użytkownik</span><span>Użyte</span><span>Pliki</span><span>Akcje</span>
+              <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 px-4 py-2 border-b border-white/[0.06] text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                <span>Użytkownik</span><span>Łącznie</span><span>Pliki</span><span>Akcje</span>
               </div>
               <div className="divide-y divide-white/[0.04]">
-                {suUsers.map(u => {
-                  const p = pct(Number(u.storage_used_bytes), Number(u.storage_quota_bytes));
-                  return (
-                    <div key={u.id} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center px-4 py-2.5">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-6 h-6 rounded-lg overflow-hidden bg-white/[0.06] shrink-0">
-                          {u.avatar_url ? <img src={staticUrl(u.avatar_url)} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-[10px] text-zinc-400">{u.username[0]}</div>}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs font-semibold text-white truncate">{u.username}</span>
-                            {u.is_premium && <span className="text-[8px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30 rounded-full px-1">Power</span>}
-                          </div>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <div className="w-16 h-1 bg-white/[0.06] rounded-full overflow-hidden">
-                              <div className={`h-full ${pctColor(p)}`} style={{width:`${p}%`}}/>
-                            </div>
-                            <span className="text-[10px] text-zinc-600">{p}%</span>
-                          </div>
-                        </div>
+                {[...suUsers].sort((a,b) => Number(b.storage_used_bytes) - Number(a.storage_used_bytes)).map(u => (
+                  <div key={u.id} className="grid grid-cols-[1fr_auto_auto_auto] gap-3 items-center px-4 py-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-7 h-7 rounded-lg overflow-hidden bg-white/[0.06] shrink-0">
+                        {u.avatar_url ? <img src={staticUrl(u.avatar_url)} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-[10px] text-zinc-400">{u.username[0]}</div>}
                       </div>
-                      <span className="text-xs text-zinc-400">{fmtBytes(Number(u.storage_used_bytes))}<span className="text-zinc-600">/{fmtBytes(Number(u.storage_quota_bytes))}</span></span>
-                      <span className="text-xs text-zinc-500">{u.file_count}</span>
-                      <div className="flex gap-1">
-                        <button onClick={() => handleSetPremium(u.id, !u.is_premium)}
-                          title={u.is_premium ? 'Odbierz Power' : 'Nadaj Power'}
-                          className={`w-6 h-6 flex items-center justify-center rounded-lg text-[10px] transition-colors ${u.is_premium ? 'bg-violet-500/20 text-violet-400 hover:bg-rose-500/20 hover:text-rose-400' : 'bg-white/[0.04] text-zinc-600 hover:bg-violet-500/15 hover:text-violet-400'}`}>
-                          <Crown size={10}/>
-                        </button>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-semibold text-white truncate">{u.username}</span>
+                          {u.is_premium && <span className="text-[8px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30 rounded-full px-1.5">Power</span>}
+                        </div>
                       </div>
                     </div>
-                  );
-                })}
-                {suUsers.length===0 && <div className="text-center py-8 text-xs text-zinc-600">Brak użytkowników ze storage</div>}
+                    <span className="text-xs font-semibold text-zinc-300 tabular-nums">{fmtBytes(Number(u.storage_used_bytes))}</span>
+                    <span className="text-xs text-zinc-500 tabular-nums text-right">{u.file_count}</span>
+                    <div className="flex gap-1">
+                      <button onClick={() => handleSetPremium(u.id, !u.is_premium)}
+                        title={u.is_premium ? 'Odbierz Power' : 'Nadaj Power'}
+                        className={`w-6 h-6 flex items-center justify-center rounded-lg transition-colors ${u.is_premium ? 'bg-violet-500/20 text-violet-400 hover:bg-rose-500/20 hover:text-rose-400' : 'bg-white/[0.04] text-zinc-600 hover:bg-violet-500/15 hover:text-violet-400'}`}>
+                        <Crown size={10}/>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {suUsers.length===0 && <div className="text-center py-8 text-xs text-zinc-600">Brak użytkowników z plikami</div>}
               </div>
             </div>
           )}
@@ -12753,7 +12734,7 @@ export default function App() {
             className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={()=>setAppSettOpen(false)}>
             <motion.div initial={{scale:0.96,opacity:0,y:12}} animate={{scale:1,opacity:1,y:0}} exit={{scale:0.96,opacity:0,y:12}}
               transition={{duration:0.25,ease:[0.16,1,0.3,1]}}
-              onClick={e=>e.stopPropagation()} className={`${gm} w-full max-w-2xl max-h-[88vh] flex flex-col overflow-hidden`}>
+              onClick={e=>e.stopPropagation()} className={`${gm} w-full max-w-3xl max-h-[88vh] flex flex-col overflow-hidden`}>
 
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-5 border-b border-white/[0.06] shrink-0">
