@@ -7686,10 +7686,11 @@ export default function App() {
   const canKickMembers         = hasAdminPerm || myPerms.includes('kick_members');
   const canManageServer        = hasAdminPerm || myPerms.includes('manage_server');
   const canManageMessages      = hasAdminPerm || myPerms.includes('manage_messages');
-  const canSendMessages        = hasAdminPerm || myPerms.length === 0 || myPerms.includes('send_messages');
+  const canSendMessages        = activeView === 'dms' || hasAdminPerm || myPerms.length === 0 || myPerms.includes('send_messages');
   const canBanMembers          = hasAdminPerm || myPerms.includes('ban_members');
   const canCreateInvites       = hasAdminPerm || myPerms.length === 0 || myPerms.includes('create_invites');
-  const canAttachFiles         = hasAdminPerm || myPerms.length === 0 || myPerms.includes('attach_files');
+  // W DM uprawnienia serwera nie obowiązują — zawsze można wysyłać pliki
+  const canAttachFiles         = activeView === 'dms' || hasAdminPerm || myPerms.length === 0 || myPerms.includes('attach_files');
   const canMentionEveryone     = hasAdminPerm || myPerms.includes('mention_everyone');
   const canPinMessages         = hasAdminPerm || myPerms.includes('pin_messages');
   const incoming = friendReqs.filter(r => r.direction === 'incoming');
