@@ -17,7 +17,7 @@ export const r2Client = hasCredentials
   ? new S3Client({
       region: 'auto',
       endpoint: config.r2.endpoint,
-      forcePathStyle: false, // R2 używa virtual-hosted style (bucket w subdomenie)
+      forcePathStyle: true,  // R2 wymaga path-style: endpoint/bucket/key (nie subdomena)
       credentials: {
         accessKeyId:     config.r2.accessKeyId,
         secretAccessKey: config.r2.secretAccessKey,
