@@ -6913,10 +6913,16 @@ export default function App() {
     if (attachFile) {
       try { attachUrl = await uploadFile(attachFile, 'attachments'); }
       catch (err: any) {
-        const msg = err?.message || 'Błąd przesyłania pliku';
-        if (err?.status === 413 || msg.includes('413') || msg.includes('large') || msg.includes('limit') || msg.includes('duży')) {
-          setShowPowerModal(true); setSending(false); return;
-        }
+        const msg = (err?.message || 'Błąd przesyłania pliku') as string;
+        // 413 = plik za duży lub quota — pokaż Power modal zamiast błędu
+        const isTooLarge = err?.status === 413
+          || msg.toLowerCase().includes('du') // duży/dużo
+          || msg.toLowerCase().includes('large')
+          || msg.toLowerCase().includes('limit')
+          || msg.toLowerCase().includes('413')
+          || msg.toLowerCase().includes('quota')
+          || msg.toLowerCase().includes('rozmiar');
+        if (isTooLarge) { setShowPowerModal(true); setSending(false); return; }
         setSendError(`Błąd uploadu: ${msg}`);
         setSending(false); return;
       }
