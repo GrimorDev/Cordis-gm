@@ -360,20 +360,26 @@ function TenorGifPicker({ onSelect, onClose }: { onSelect: (url: string) => void
           placeholder="Szukaj GIF-ów…"
           className="w-full bg-white/[0.06] border border-white/[0.08] rounded-xl px-3 py-1.5 text-sm text-zinc-200 placeholder-zinc-600 outline-none focus:border-indigo-500/40 transition-colors"/>
       </div>
-      <div className="overflow-y-auto custom-scrollbar p-2 flex-1 grid grid-cols-2 gap-1.5 content-start">
+      <div className="overflow-y-auto custom-scrollbar p-2 flex-1">
         {loading && results.length === 0 && (
-          <div className="col-span-2 flex items-center justify-center py-8">
+          <div className="flex items-center justify-center py-8">
             <Loader2 size={18} className="animate-spin text-zinc-600"/>
           </div>
         )}
-        {results.map(gif => (
-          <button key={gif.id} onClick={() => { onSelect(gif.url); onClose(); }}
-            className="block w-full rounded-xl overflow-hidden hover:opacity-80 active:scale-95 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/40">
-            <img src={gif.preview} alt="" className="w-full h-20 object-cover rounded-xl" loading="lazy"/>
-          </button>
-        ))}
+        {/* masonry — 2 kolumny, naturalne proporcje GIF-ów */}
+        {results.length > 0 && (
+          <div style={{columns:2, columnGap:'6px'}}>
+            {results.map(gif => (
+              <button key={gif.id} onClick={() => { onSelect(gif.url); onClose(); }}
+                style={{breakInside:'avoid', display:'block', marginBottom:'6px', width:'100%'}}
+                className="rounded-xl overflow-hidden hover:opacity-80 active:scale-95 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/40">
+                <img src={gif.preview} alt="" className="w-full h-auto rounded-xl block" loading="lazy"/>
+              </button>
+            ))}
+          </div>
+        )}
         {!loading && results.length === 0 && query && (
-          <p className="col-span-2 text-xs text-zinc-600 text-center py-6">Brak wyników dla „{query}"</p>
+          <p className="text-xs text-zinc-600 text-center py-6">Brak wyników dla „{query}"</p>
         )}
       </div>
       <div className="shrink-0 px-3 py-1.5 border-t border-white/[0.05] flex justify-end">
