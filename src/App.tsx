@@ -4817,6 +4817,7 @@ export default function App() {
   const [msgInput, setMsgInput]               = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showGifPicker,   setShowGifPicker]   = useState(false);
+  const [plusMenuOpen,    setPlusMenuOpen]    = useState(false);
   const [searchQuery, setSearchQuery]         = useState('');
   const searchInputRef                        = useRef<HTMLInputElement>(null);
   const settContentRef                        = useRef<HTMLDivElement>(null);
@@ -10975,12 +10976,73 @@ export default function App() {
                         )}
                       </AnimatePresence>
                       <div className={`flex items-center gap-3 bg-white/[0.06] border border-white/[0.08] rounded-2xl px-4 py-3.5 hover:border-white/[0.12] focus-within:border-indigo-500/40 focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] transition-all duration-200 ${slowmodeLeft > 0 && activeView === 'servers' ? 'opacity-40 pointer-events-none' : ''}`}>
-                        <input type="file" ref={attachRef} onChange={handleAttach} accept="image/*" className="hidden"/>
-                        <button type="button" onClick={()=>canAttachFiles?attachRef.current?.click():setSendError('Nie masz uprawnień do wysyłania plików')}
-                          title={canAttachFiles?'Wyślij plik':'Brak uprawnień do wysyłania plików'}
-                          className={`w-7 h-7 flex items-center justify-center rounded-xl transition-all shrink-0 active:scale-90 ${canAttachFiles?'text-zinc-600 hover:text-indigo-400 hover:bg-indigo-500/10':'text-zinc-700 cursor-not-allowed'}`}>
-                          <Plus size={16}/>
-                        </button>
+                        <input type="file" ref={attachRef} onChange={handleAttach} accept="*/*" className="hidden"/>
+                        {/* Plus menu — Discord-style */}
+                        <div className="relative shrink-0">
+                          <button type="button"
+                            onClick={()=>{
+                              if (!canAttachFiles) { setSendError('Nie masz uprawnień do wysyłania plików'); return; }
+                              setPlusMenuOpen(v=>!v);
+                              setShowEmojiPicker(false); setShowGifPicker(false);
+                            }}
+                            title="Dodaj załącznik"
+                            className={`w-7 h-7 flex items-center justify-center rounded-xl transition-all shrink-0 active:scale-90 ${plusMenuOpen?'text-indigo-400 bg-indigo-500/10':canAttachFiles?'text-zinc-600 hover:text-indigo-400 hover:bg-indigo-500/10':'text-zinc-700 cursor-not-allowed'}`}>
+                            <Plus size={16}/>
+                          </button>
+                          <AnimatePresence>
+                            {plusMenuOpen && (
+                              <motion.div
+                                initial={{opacity:0,scale:0.95,y:6}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.95,y:6}}
+                                transition={{duration:0.12,ease:[0.16,1,0.3,1]}}
+                                className="absolute bottom-full left-0 mb-2 w-52 bg-[#111120] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 z-50 overflow-hidden py-1">
+                                {/* Prześlij plik */}
+                                <button type="button"
+                                  onClick={()=>{ setPlusMenuOpen(false); attachRef.current?.click(); }}
+                                  className="flex items-center gap-3 w-full px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
+                                  <div className="w-8 h-8 rounded-xl bg-indigo-500/15 flex items-center justify-center shrink-0">
+                                    <Paperclip size={15} className="text-indigo-400"/>
+                                  </div>
+                                  <div>
+                                    <p className="font-semibold text-sm leading-tight">Prześlij plik</p>
+                                    <p className="text-[10px] text-zinc-600 leading-tight">Zdjęcia, wideo, dokumenty…</p>
+                                  </div>
+                                </button>
+                                {/* Utwórz ankietę — tylko na serwerach */}
+                                {activeView==='servers' && (
+                                  <button type="button"
+                                    onClick={()=>{ setPlusMenuOpen(false); setPollModal({open:true}); }}
+                                    className="flex items-center gap-3 w-full px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
+                                    <div className="w-8 h-8 rounded-xl bg-violet-500/15 flex items-center justify-center shrink-0">
+                                      <BarChart2 size={15} className="text-violet-400"/>
+                                    </div>
+                                    <div>
+                                      <p className="font-semibold text-sm leading-tight">Utwórz ankietę</p>
+                                      <p className="text-[10px] text-zinc-600 leading-tight">Głosowanie dla członków serwera</p>
+                                    </div>
+                                  </button>
+                                )}
+                                {/* Użyj aplikacji */}
+                                {activeView==='servers' && (
+                                  <button type="button"
+                                    onClick={()=>{
+                                      setPlusMenuOpen(false);
+                                      setMsgInput('/');
+                                      setTimeout(()=>{ msgInputRef.current?.focus(); },50);
+                                    }}
+                                    className="flex items-center gap-3 w-full px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
+                                    <div className="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center shrink-0">
+                                      <Zap size={15} className="text-emerald-400"/>
+                                    </div>
+                                    <div>
+                                      <p className="font-semibold text-sm leading-tight">Użyj aplikacji</p>
+                                      <p className="text-[10px] text-zinc-600 leading-tight">Komendy botów zaczynające się od /</p>
+                                    </div>
+                                  </button>
+                                )}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
                         <button type="button" onClick={()=>setShowFmtBar(v=>!v)}
                           title="Formatowanie tekstu"
                           className={`w-7 h-7 flex items-center justify-center rounded-xl transition-all shrink-0 active:scale-90 ${showFmtBar?'text-indigo-400 bg-indigo-500/10':'text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.07]'}`}>
@@ -11054,7 +11116,7 @@ export default function App() {
                           className="flex-1 bg-transparent text-sm text-zinc-200 placeholder-zinc-600 outline-none min-w-0 resize-none overflow-hidden leading-[1.4] self-center"/>
                         {/* GIF picker */}
                         <div className="relative shrink-0">
-                          <button type="button" onClick={() => { setShowGifPicker(v => !v); setShowEmojiPicker(false); }}
+                          <button type="button" onClick={() => { setShowGifPicker(v => !v); setShowEmojiPicker(false); setPlusMenuOpen(false); }}
                             className={`transition-all active:scale-90 px-1.5 py-0.5 rounded-md text-[11px] font-black leading-none tracking-wide ${showGifPicker ? 'text-indigo-400 bg-indigo-500/15' : 'text-zinc-600 hover:text-zinc-400'}`}>
                             GIF
                           </button>
@@ -11062,7 +11124,7 @@ export default function App() {
                         </div>
                         {/* Emoji picker */}
                         <div className="relative shrink-0">
-                          <button type="button" onClick={() => { setShowEmojiPicker(v => !v); setShowGifPicker(false); }}
+                          <button type="button" onClick={() => { setShowEmojiPicker(v => !v); setShowGifPicker(false); setPlusMenuOpen(false); }}
                             className={`transition-all active:scale-90 ${showEmojiPicker ? 'text-indigo-400' : 'text-zinc-600 hover:text-zinc-400'}`}>
                             <Smile size={17}/>
                           </button>
