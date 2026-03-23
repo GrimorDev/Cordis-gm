@@ -305,6 +305,94 @@ function EmojiPicker({ onSelect, onClose, serverEmojis }: { onSelect: (e: string
   );
 }
 
+// ─── Tenor GIF Picker ─────────────────────────────────────────────────────────
+const TENOR_KEY = (import.meta.env.VITE_TENOR_API_KEY as string | undefined) || '';
+
+interface TenorGif { id: string; url: string; preview: string; }
+
+function TenorGifPicker({ onSelect, onClose }: { onSelect: (url: string) => void; onClose: () => void }) {
+  const [query, setQuery]       = useState('');
+  const [pending, setPending]   = useState('');
+  const [results, setResults]   = useState<TenorGif[]>([]);
+  const [loading, setLoading]   = useState(false);
+  const inputRef  = useRef<HTMLInputElement>(null);
+  const wrapRef   = useRef<HTMLDivElement>(null);
+
+  // focus on mount
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  // debounce input → pending
+  useEffect(() => {
+    const t = setTimeout(() => setPending(query), 400);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  // fetch from Tenor
+  useEffect(() => {
+    if (!TENOR_KEY) return;
+    setLoading(true);
+    const ep = pending
+      ? `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(pending)}&key=${TENOR_KEY}&limit=24&media_filter=gif&contentfilter=medium`
+      : `https://tenor.googleapis.com/v2/featured?key=${TENOR_KEY}&limit=24&media_filter=gif&contentfilter=medium`;
+    fetch(ep)
+      .then(r => r.json())
+      .then(data => setResults((data.results ?? []).map((r: any) => ({
+        id:      r.id,
+        url:     r.media_formats?.gif?.url     || r.url || '',
+        preview: r.media_formats?.tinygif?.url || r.media_formats?.gif?.url || '',
+      }))))
+      .catch(() => setResults([]))
+      .finally(() => setLoading(false));
+  }, [pending]);
+
+  // click-outside closes
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) onClose(); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [onClose]);
+
+  return (
+    <div ref={wrapRef}
+      className="absolute bottom-full right-0 mb-2 w-80 bg-[#0d0d1a] border border-white/[0.12] rounded-2xl shadow-2xl shadow-black/80 z-[60] flex flex-col overflow-hidden"
+      style={{maxHeight:'380px'}}>
+      {/* Search bar */}
+      <div className="p-2 shrink-0 border-b border-white/[0.07]">
+        <input ref={inputRef} value={query} onChange={e=>setQuery(e.target.value)}
+          placeholder="Szukaj GIF-ów na Tenor…"
+          className="w-full bg-white/[0.06] border border-white/[0.08] rounded-xl px-3 py-1.5 text-sm text-zinc-200 placeholder-zinc-600 outline-none focus:border-indigo-500/40 transition-colors"/>
+      </div>
+      {/* Grid */}
+      {!TENOR_KEY ? (
+        <p className="text-xs text-zinc-500 text-center py-8 px-4 leading-relaxed">
+          Brak klucza Tenor API.<br/>Dodaj <code className="text-indigo-400 font-mono">VITE_TENOR_API_KEY</code> do <code className="text-indigo-400 font-mono">.env</code>
+        </p>
+      ) : (
+        <div className="overflow-y-auto custom-scrollbar p-2 flex-1 grid grid-cols-2 gap-1.5 content-start">
+          {loading && results.length === 0 && (
+            <div className="col-span-2 flex items-center justify-center py-8">
+              <Loader2 size={18} className="animate-spin text-zinc-600"/>
+            </div>
+          )}
+          {results.map(gif => (
+            <button key={gif.id} onClick={() => { onSelect(gif.url); onClose(); }}
+              className="block w-full rounded-xl overflow-hidden hover:opacity-80 active:scale-95 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/40">
+              <img src={gif.preview} alt="" className="w-full h-20 object-cover rounded-xl" loading="lazy"/>
+            </button>
+          ))}
+          {!loading && results.length === 0 && query && (
+            <p className="col-span-2 text-xs text-zinc-600 text-center py-6">Brak wyników dla „{query}"</p>
+          )}
+        </div>
+      )}
+      {/* Tenor branding */}
+      <div className="shrink-0 px-3 py-1.5 border-t border-white/[0.05] flex justify-end">
+        <span className="text-[9px] text-zinc-700 font-medium tracking-wide">Powered by Tenor</span>
+      </div>
+    </div>
+  );
+}
+
 const LANDING_FEATURES = [
   {
     icon: (
@@ -4732,6 +4820,7 @@ export default function App() {
 
   const [msgInput, setMsgInput]               = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showGifPicker,   setShowGifPicker]   = useState(false);
   const [searchQuery, setSearchQuery]         = useState('');
   const searchInputRef                        = useRef<HTMLInputElement>(null);
   const settContentRef                        = useRef<HTMLDivElement>(null);
@@ -7079,6 +7168,18 @@ export default function App() {
     setMsgInput(newVal);
     setShowEmojiPicker(false);
     setTimeout(() => { input?.focus(); input?.setSelectionRange(pos + emoji.length, pos + emoji.length); }, 0);
+  };
+
+  // ── Send a Tenor GIF directly (bypasses text input) ─────────────
+  const sendGif = async (gifUrl: string) => {
+    if (sending) return;
+    setSending(true);
+    try {
+      if (activeView === 'dms' && activeDmUserId) await dmsApi.send(activeDmUserId, gifUrl, {});
+      else if (activeChannel) await messagesApi.send(activeChannel, gifUrl, {});
+    } catch (err: any) {
+      addToast(err?.message || 'Nie udało się wysłać GIF-a', 'error');
+    } finally { setSending(false); }
   };
 
   // ── Slowmode countdown ──────────────────────────────────────────
@@ -10543,22 +10644,37 @@ export default function App() {
                                   </div>
                                 );
                               }
-                            })() : msg.content?.trim() ? (
-                              <div className={`relative px-4 py-2.5 rounded-2xl max-w-full ${isOwn
-                                ? 'bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-lg shadow-indigo-500/20 bubble-tail-right'
-                                : 'glass-bubble text-zinc-100 bubble-tail-left'
-                              }`}>
-                                <p className={`${msgFontCls} leading-relaxed break-words msg-md`} dangerouslySetInnerHTML={{__html: renderMsgHTML(msg.content)}}/>
-                              </div>
-                            ) : null}
+                            })() : (()=>{
+                              const c = msg.content?.trim() ?? '';
+                              // ── Tenor GIF: content is exactly a tenor media URL ──
+                              if (/^https:\/\/media\.tenor\.com\/[^\s]+$/i.test(c)) {
+                                return (
+                                  <div className="max-w-[280px] rounded-2xl overflow-hidden shadow-lg cursor-zoom-in hover:opacity-90 transition-opacity"
+                                    onClick={()=>setLightboxSrc(c)}>
+                                    <img src={c} alt="GIF" className="w-full h-auto rounded-2xl" loading="lazy"/>
+                                  </div>
+                                );
+                              }
+                              if (!c) return null;
+                              return (
+                                <div className={`relative px-4 py-2.5 rounded-2xl max-w-full ${isOwn
+                                  ? 'bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-lg shadow-indigo-500/20 bubble-tail-right'
+                                  : 'glass-bubble text-zinc-100 bubble-tail-left'
+                                }`}>
+                                  <p className={`${msgFontCls} leading-relaxed break-words msg-md`} dangerouslySetInnerHTML={{__html: renderMsgHTML(msg.content)}}/>
+                                </div>
+                              );
+                            })()}
 
-                            {/* Link preview */}
+                            {/* Link preview — skip for tenor GIFs */}
                             {(()=>{
-                              const urls = msg.content?.match(URL_RE);
+                              const c = msg.content?.trim() ?? '';
+                              if (/^https:\/\/media\.tenor\.com\/[^\s]+$/i.test(c)) return null;
+                              const urls = c.match(URL_RE);
                               const firstUrl = urls?.[0];
-                              if (!firstUrl || !msg.content) return null;
+                              if (!firstUrl || !c) return null;
                               // Don't show for invite links (already rendered as card)
-                              if (msg.content.includes('/join/')) return null;
+                              if (c.includes('/join/')) return null;
                               return <span key={firstUrl}><LinkPreview url={firstUrl} show={showLinkPreviews}/></span>;
                             })()}
 
@@ -10940,8 +11056,17 @@ export default function App() {
                           }}
                           placeholder={activeView==='dms'&&activeDm?`Wiadomość do ${activeDm.other_username}...`:`Wiadomość w #${activeCh?.name||''}...`}
                           className="flex-1 bg-transparent text-sm text-zinc-200 placeholder-zinc-600 outline-none min-w-0 resize-none overflow-hidden leading-[1.4] self-center"/>
+                        {/* GIF picker */}
                         <div className="relative shrink-0">
-                          <button type="button" onClick={() => setShowEmojiPicker(v => !v)}
+                          <button type="button" onClick={() => { setShowGifPicker(v => !v); setShowEmojiPicker(false); }}
+                            className={`transition-all active:scale-90 px-1.5 py-0.5 rounded-md text-[11px] font-black leading-none tracking-wide ${showGifPicker ? 'text-indigo-400 bg-indigo-500/15' : 'text-zinc-600 hover:text-zinc-400'}`}>
+                            GIF
+                          </button>
+                          {showGifPicker && <TenorGifPicker onSelect={sendGif} onClose={() => setShowGifPicker(false)}/>}
+                        </div>
+                        {/* Emoji picker */}
+                        <div className="relative shrink-0">
+                          <button type="button" onClick={() => { setShowEmojiPicker(v => !v); setShowGifPicker(false); }}
                             className={`transition-all active:scale-90 ${showEmojiPicker ? 'text-indigo-400' : 'text-zinc-600 hover:text-zinc-400'}`}>
                             <Smile size={17}/>
                           </button>
