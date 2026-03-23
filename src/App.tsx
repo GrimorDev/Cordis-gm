@@ -5242,40 +5242,45 @@ export default function App() {
       setVoiceDetailsOpen(false);
       return;
     }
-    const id = setInterval(async () => {
+    // ── Socket.IO ping (reliable RTT regardless of WebRTC state) ──────
+    const measurePing = () => {
+      const s = getSocket();
+      if (!s?.connected) return;
+      const start = Date.now();
+      (s as any).emit('client_ping', {}, () => {
+        const rtt = Date.now() - start;
+        setVoiceStats(p => ({
+          avgRtt: p.avgRtt === 0 ? rtt : Math.round(p.avgRtt * 0.8 + rtt * 0.2),
+          lastRtt: rtt,
+          pktLoss: p.pktLoss,
+        }));
+        setVoiceRttHistory(prev => [...prev.slice(-59), {rtt, t: Date.now()}]);
+      });
+    };
+
+    // ── WebRTC packet loss (supplementary, no RTT from here) ─────────
+    const measurePktLoss = async () => {
       const pcs = [...peerConnsRef.current.values()];
       if (!pcs.length) return;
-      let sumRtt = 0, cntRtt = 0, lost = 0, recv = 0;
+      let lost = 0, recv = 0;
       await Promise.all(pcs.map(async pc => {
         const stats = await pc.getStats().catch(() => null);
         if (!stats) return;
         stats.forEach((r: any) => {
-          // Primary RTT source (Chrome 91+): remote-inbound-rtp.roundTripTime
-          if (r.type === 'remote-inbound-rtp' && typeof r.roundTripTime === 'number' && r.roundTripTime > 0) {
-            sumRtt += r.roundTripTime * 1000;
-            cntRtt++;
-          }
-          // Fallback: nominated ICE candidate-pair
-          if (r.type === 'candidate-pair' && (r.nominated || r.state === 'succeeded') && typeof r.currentRoundTripTime === 'number' && r.currentRoundTripTime > 0) {
-            sumRtt += r.currentRoundTripTime * 1000;
-            cntRtt++;
-          }
           if (r.type === 'inbound-rtp' && r.kind === 'audio') {
             lost += r.packetsLost ?? 0;
             recv += r.packetsReceived ?? 0;
           }
         });
       }));
-      const rtt = cntRtt > 0 ? sumRtt / cntRtt : 0;
       const pktLoss = (recv + lost) > 0 ? Math.min(100, (lost / (recv + lost)) * 100) : 0;
-      setVoiceStats(p => ({
-        avgRtt: p.avgRtt === 0 ? rtt : p.avgRtt * 0.85 + rtt * 0.15,
-        lastRtt: rtt,
-        pktLoss,
-      }));
-      setVoiceRttHistory(prev => [...prev.slice(-59), {rtt, t: Date.now()}]);
-    }, 1000);
-    return () => clearInterval(id);
+      setVoiceStats(p => ({...p, pktLoss}));
+    };
+
+    measurePing(); // immediate first sample
+    const pingId = setInterval(measurePing, 2000);
+    const statsId = setInterval(measurePktLoss, 5000);
+    return () => { clearInterval(pingId); clearInterval(statsId); };
   }, [activeCall]);
 
   // ── Privacy code — regenerate when participants change ────────────────────

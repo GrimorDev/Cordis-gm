@@ -155,6 +155,7 @@ export interface ClientToServerEvents {
   spotify_update: (data: { track: { name: string; artists: string; album_cover: string | null; external_url: string | null } | null }) => void;
   twitch_update: (data: { stream: { title: string; game_name: string; viewer_count: number; login: string } | null }) => void;
   steam_update: (data: { game: { name: string; gameid: string; header_image: string } | null }) => void;
+  client_ping: (data: Record<string, never>, cb: () => void) => void;
 }
 
 export interface MessageWithSender extends Message {

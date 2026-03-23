@@ -158,6 +158,11 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
       }
     } catch { /* non-critical, ignore errors */ }
 
+    // ── Latency ping — client sends, server ACKs immediately ────────
+    socket.on('client_ping', (_: unknown, cb: (...args: any[]) => void) => {
+      if (typeof cb === 'function') cb();
+    });
+
     // ── Channel events ──────────────────────────────────────────────
     socket.on('join_channel', (channelId) => {
       socket.join(`channel:${channelId}`);
