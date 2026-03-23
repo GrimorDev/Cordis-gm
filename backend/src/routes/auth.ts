@@ -262,6 +262,22 @@ router.post(
   }
 );
 
+// PUT /api/auth/change-password
+router.put('/change-password', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword || newPassword.length < 8)
+    return res.status(400).json({ error: 'Podaj obecne i nowe hasło (min. 8 znaków)' });
+  try {
+    const { rows: [user] } = await query('SELECT password_hash FROM users WHERE id=$1', [req.user!.id]);
+    if (!user) return res.status(404).json({ error: 'Not found' });
+    const ok = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!ok) return res.status(403).json({ error: 'Nieprawidłowe obecne hasło' });
+    const hash = await bcrypt.hash(newPassword, 12);
+    await query('UPDATE users SET password_hash=$1 WHERE id=$2', [hash, req.user!.id]);
+    return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
 // POST /api/auth/logout
 router.post('/logout', authMiddleware, async (req: AuthRequest, res: Response) => {
   const token = req.headers.authorization!.slice(7);

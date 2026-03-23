@@ -4654,6 +4654,8 @@ export default function App() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [searchQuery, setSearchQuery]         = useState('');
   const searchInputRef                        = useRef<HTMLInputElement>(null);
+  const settContentRef                        = useRef<HTMLDivElement>(null);
+  const [activeSettSection, setActiveSettSection] = useState<string>('');
   const [editHistoryPopover, setEditHistoryPopover] = useState<{msgId:string;isDm:boolean;entries:{old_content:string;edited_at:string}[]|null}|null>(null);
   const [addFriendVal, setAddFriendVal]       = useState('');
   const [friendSearchResult, setFriendSearchResult] = useState<UserProfile | null>(null);
@@ -5489,7 +5491,7 @@ export default function App() {
           preview,
           'info',
           () => { setActiveDmUserId(msg.sender_id); setActiveView('dms'); },
-          msg.sender_avatar,
+          msg.sender_avatar ? staticUrl(msg.sender_avatar) : null,
           msg.sender_username
         );
         setUnreadDms(p => ({ ...p, [msg.sender_id]: (p[msg.sender_id] || 0) + 1 }));
@@ -12768,7 +12770,7 @@ export default function App() {
             className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={()=>setAppSettOpen(false)}>
             <motion.div initial={{scale:0.96,opacity:0,y:12}} animate={{scale:1,opacity:1,y:0}} exit={{scale:0.96,opacity:0,y:12}}
               transition={{duration:0.25,ease:[0.16,1,0.3,1]}}
-              onClick={e=>e.stopPropagation()} className={`${gm} w-full max-w-3xl max-h-[88vh] flex flex-col overflow-hidden`}>
+              onClick={e=>e.stopPropagation()} className={`${gm} w-full max-w-3xl h-[88vh] flex flex-col overflow-hidden`}>
 
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-5 border-b border-white/[0.06] shrink-0">
@@ -12787,25 +12789,55 @@ export default function App() {
               {/* Responsive: flex-col on mobile (tab bar on top), flex-row on sm+ (sidebar) */}
               <div className="flex flex-col sm:flex-row flex-1 min-h-0 overflow-hidden">
                 {/* Sidebar / Tab bar */}
-                <div className="sm:w-44 shrink-0 border-b sm:border-b-0 sm:border-r border-white/[0.06] p-2 sm:p-3 flex sm:flex-col flex-row gap-0.5 overflow-x-auto scrollbar-hide">
+                <div className="sm:w-52 shrink-0 border-b sm:border-b-0 sm:border-r border-white/[0.06] p-2 sm:p-3 flex sm:flex-col flex-row gap-0.5 overflow-x-auto overflow-y-auto scrollbar-hide">
+                  {/* Grupy zakładek — styl Discord */}
                   {([
-                    {id:'account',     label:t('settings.account'),    icon:<Users size={14}/>},
-                    {id:'appearance',  label:t('settings.appearance'), icon:<Image size={14}/>},
-                    {id:'theme',       label:'Motyw',                  icon:<Palette size={14}/>},
-                    {id:'connections', label:'Połączone konta',        icon:<Link2 size={14}/>},
-                    {id:'devices',     label:t('settings.devices'),    icon:<Mic size={14}/>},
-                    {id:'privacy',     label:t('settings.privacy'),    icon:<Shield size={14}/>},
-                    {id:'locale',      label:t('settings.locale'),     icon:<Globe size={14}/>},
-                    ...(isTauri ? [{id:'desktop'  as const, label:'Aplikacja',   icon:<Monitor size={14}/>}] : []),
-                    ...(isTauri ? [{id:'updates'  as const, label:'Aktualizacje', icon:<Download size={14}/>}] : []),
-                    ...(isTauri ? [{id:'about'    as const, label:'O aplikacji',  icon:<Info size={14}/>}] : []),
-                  ] as const).map(tab=>(
-                    <button key={tab.id} onClick={()=>setAppSettTab(tab.id)}
-                      className={`flex items-center gap-2 px-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all text-left shrink-0 ${
-                        appSettTab===tab.id?'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] border border-transparent'}`}>
-                      <span className={appSettTab===tab.id?'text-indigo-400':'text-zinc-600'}>{tab.icon}</span>
-                      {tab.label}
-                    </button>
+                    { group: 'KONTO UŻYTKOWNIKA', items: [
+                      {id:'account',     label:t('settings.account'),    icon:<Users size={14}/>,
+                        sections:[{id:'s-profil',label:'Profil'},{id:'s-info',label:'Informacje'},{id:'s-password',label:'Hasło & bezpieczeństwo'}]},
+                      {id:'appearance',  label:t('settings.appearance'), icon:<Image size={14}/>,
+                        sections:[{id:'s-chat',label:'Czat'},{id:'s-accessibility',label:'Dostępność'}]},
+                      {id:'theme',       label:'Motyw',                  icon:<Palette size={14}/>, sections:[]},
+                      {id:'connections', label:'Połączone konta',        icon:<Link2 size={14}/>, sections:[]},
+                    ]},
+                    { group: 'APLIKACJA', items: [
+                      {id:'devices',  label:t('settings.devices'),  icon:<Mic size={14}/>,    sections:[{id:'s-input',label:'Wejście'},{id:'s-output',label:'Wyjście'}]},
+                      {id:'privacy',  label:t('settings.privacy'),  icon:<Shield size={14}/>, sections:[{id:'s-status',label:'Status'},{id:'s-messages',label:'Wiadomości'}]},
+                      {id:'locale',   label:t('settings.locale'),   icon:<Globe size={14}/>,  sections:[]},
+                      ...(isTauri?[{id:'desktop' as const, label:'Aplikacja', icon:<Monitor size={14}/>, sections:[]}]:[]),
+                      ...(isTauri?[{id:'updates' as const, label:'Aktualizacje', icon:<Download size={14}/>, sections:[]}]:[]),
+                      ...(isTauri?[{id:'about'   as const, label:'O aplikacji', icon:<Info size={14}/>,    sections:[]}]:[]),
+                    ]},
+                  ] as const).map(group=>(
+                    <div key={group.group} className="mb-1">
+                      <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest px-3 pt-2 pb-1 hidden sm:block">{group.group}</p>
+                      {group.items.map((tab:any)=>(
+                        <div key={tab.id}>
+                          <button onClick={()=>{setAppSettTab(tab.id);setActiveSettSection('');settContentRef.current?.scrollTo({top:0});}}
+                            className={`flex items-center gap-2 px-3 py-2 sm:py-2 rounded-xl text-xs sm:text-sm font-medium transition-all text-left w-full shrink-0 ${
+                              appSettTab===tab.id?'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] border border-transparent'}`}>
+                            <span className={appSettTab===tab.id?'text-indigo-400':'text-zinc-600'}>{tab.icon}</span>
+                            {tab.label}
+                          </button>
+                          {/* Sub-sekcje — widoczne tylko gdy zakładka aktywna i ma sekcje */}
+                          {appSettTab===tab.id && tab.sections?.length>0 && (
+                            <div className="ml-4 mt-0.5 mb-1 flex flex-col gap-0.5 border-l border-white/[0.07] pl-2">
+                              {tab.sections.map((sec:any)=>(
+                                <button key={sec.id}
+                                  onClick={()=>{
+                                    setActiveSettSection(sec.id);
+                                    document.getElementById(sec.id)?.scrollIntoView({behavior:'smooth',block:'start'});
+                                  }}
+                                  className={`text-left px-2 py-1 rounded-lg text-[11px] font-medium transition-all ${
+                                    activeSettSection===sec.id?'text-indigo-300 bg-indigo-500/10':'text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.04]'}`}>
+                                  {sec.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   ))}
                   {/* Logout — at end of tab bar on mobile, bottom of sidebar on desktop */}
                   <div className="sm:mt-auto sm:pt-3 sm:border-t border-white/[0.06] ml-auto sm:ml-0 shrink-0">
@@ -12817,87 +12849,133 @@ export default function App() {
                 </div>
 
                 {/* Tab content */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6">
+                <div ref={settContentRef} className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6">
                   <AnimatePresence mode="wait">
 
                   {/* ─── KONTO ─── */}
                   {appSettTab==='account'&&(
                     <motion.div key="account" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
-                      className="flex flex-col gap-5">
-                      <h3 className="text-sm font-bold text-white">{t('account.title')}</h3>
+                      className="flex flex-col gap-6">
 
-                      {/* Avatar + banner preview */}
-                      <div className="rounded-2xl overflow-hidden border border-white/[0.07]">
-                        <div className="h-20 relative">
-                          {(profBannerPrev||currentUser.banner_url) ? (
-                            <img src={profBannerPrev||staticUrl(currentUser.banner_url)} className="w-full h-full object-cover" alt=""/>
-                          ) : (
-                            <div className={`w-full h-full bg-gradient-to-r ${editProf?.banner_color||'from-indigo-600 via-purple-600 to-pink-600'}`}/>
-                          )}
-                        </div>
-                        <div className="bg-zinc-900/80 px-4 pb-4 pt-0 relative">
-                          <div className="absolute -top-6 left-4">
-                            <img src={ava(currentUser)} className="w-12 h-12 rounded-2xl border-4 border-zinc-900 object-cover" alt=""/>
+                      {/* ── SEKCJA: Profil ─────────────────────────────── */}
+                      <div id="s-profil" className="scroll-mt-4">
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 pb-1.5 border-b border-white/[0.06]">Profil</p>
+
+                        {/* Avatar + banner preview */}
+                        <div className="rounded-2xl overflow-hidden border border-white/[0.07] mb-4">
+                          <div className="h-20 relative">
+                            {(profBannerPrev||currentUser.banner_url) ? (
+                              <img src={profBannerPrev||staticUrl(currentUser.banner_url)} className="w-full h-full object-cover" alt=""/>
+                            ) : (
+                              <div className={`w-full h-full bg-gradient-to-r ${editProf?.banner_color||'from-indigo-600 via-purple-600 to-pink-600'}`}/>
+                            )}
                           </div>
-                          <div className="pt-8">
-                            <p className="font-bold text-white">{editProf?.username||currentUser.username}</p>
-                            <p className="text-xs text-zinc-500">{currentUser.email}</p>
+                          <div className="bg-zinc-900/80 px-4 pb-4 pt-0 relative">
+                            <div className="absolute -top-6 left-4">
+                              <img src={ava(currentUser)} className="w-12 h-12 rounded-2xl border-4 border-zinc-900 object-cover" alt=""/>
+                            </div>
+                            <div className="pt-8">
+                              <p className="font-bold text-white">{editProf?.username||currentUser.username}</p>
+                              <p className="text-xs text-zinc-500">{currentUser.email}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Avatar upload */}
+                        <div className="mb-3">
+                          <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('account.avatar')}</label>
+                          <label className={`flex items-center gap-2.5 cursor-pointer ${gi} rounded-xl px-4 py-3 text-sm hover:bg-white/[0.07] transition-all border`}>
+                            <Upload size={15} className="text-zinc-500 shrink-0"/>
+                            <span className="text-zinc-400">{t('account.changeAvatar')}</span>
+                            <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden"/>
+                          </label>
+                        </div>
+
+                        {/* Banner */}
+                        <div>
+                          <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('account.banner')}</label>
+                          <label className={`flex items-center gap-2.5 cursor-pointer ${gi} rounded-xl px-4 py-3 text-sm hover:bg-white/[0.07] transition-all border mb-3`}>
+                            <Upload size={15} className="text-zinc-500 shrink-0"/>
+                            <span className="text-zinc-400">{profBannerPrev ? t('account.bannerChanged') : t('account.changeBanner')}</span>
+                            <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)openCrop(f,3,'rect','Kadruj baner profilu',c=>{setCropPending(null);setProfBannerFile(c);setProfBannerPrev(URL.createObjectURL(c));});}} className="hidden"/>
+                          </label>
+                          <div className="grid grid-cols-6 gap-2">
+                            {GRADIENTS.map(g=>(
+                              <button key={g} onClick={()=>setEditProf((p:any)=>({...p,banner_color:g}))}
+                                className={`h-7 rounded-xl bg-gradient-to-r ${g} border-2 transition-all ${editProf?.banner_color===g?'border-white scale-105':'border-transparent hover:scale-105'}`}/>
+                            ))}
                           </div>
                         </div>
                       </div>
 
-                      {/* Avatar upload */}
-                      <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('account.avatar')}</label>
-                        <label className={`flex items-center gap-2.5 cursor-pointer ${gi} rounded-xl px-4 py-3 text-sm hover:bg-white/[0.07] transition-all border`}>
-                          <Upload size={15} className="text-zinc-500 shrink-0"/>
-                          <span className="text-zinc-400">{t('account.changeAvatar')}</span>
-                          <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden"/>
-                        </label>
-                      </div>
-
-                      {/* Banner */}
-                      <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('account.banner')}</label>
-                        <label className={`flex items-center gap-2.5 cursor-pointer ${gi} rounded-xl px-4 py-3 text-sm hover:bg-white/[0.07] transition-all border mb-3`}>
-                          <Upload size={15} className="text-zinc-500 shrink-0"/>
-                          <span className="text-zinc-400">{profBannerPrev ? t('account.bannerChanged') : t('account.changeBanner')}</span>
-                          <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)openCrop(f,3,'rect','Kadruj baner profilu',c=>{setCropPending(null);setProfBannerFile(c);setProfBannerPrev(URL.createObjectURL(c));});}} className="hidden"/>
-                        </label>
-                        <div className="grid grid-cols-6 gap-2">
-                          {GRADIENTS.map(g=>(
-                            <button key={g} onClick={()=>setEditProf((p:any)=>({...p,banner_color:g}))}
-                              className={`h-7 rounded-xl bg-gradient-to-r ${g} border-2 transition-all ${editProf?.banner_color===g?'border-white scale-105':'border-transparent hover:scale-105'}`}/>
-                          ))}
+                      {/* ── SEKCJA: Informacje ─────────────────────────── */}
+                      <div id="s-info" className="scroll-mt-4">
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 pb-1.5 border-b border-white/[0.06]">Informacje o koncie</p>
+                        <div className="flex flex-col gap-4">
+                          <div>
+                            <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">{t('account.username')}</label>
+                            <input value={editProf?.username||''} onChange={e=>setEditProf((p:any)=>({...p,username:e.target.value}))} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}/>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">{t('account.customStatus')}</label>
+                            <div className="relative">
+                              <input value={editProf?.custom_status||''} onChange={e=>setEditProf((p:any)=>({...p,custom_status:e.target.value}))} placeholder={t('account.customStatus.ph')} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm pr-10`}/>
+                              {editProf?.custom_status&&(
+                                <button type="button" onClick={()=>setEditProf((p:any)=>({...p,custom_status:''}))}
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-300 transition-colors"><X size={14}/></button>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-zinc-700 mt-1">{t('account.customStatus.hint')}</p>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">{t('account.bio')}</label>
+                            <textarea value={editProf?.bio||''} onChange={e=>setEditProf((p:any)=>({...p,bio:e.target.value}))} rows={3} placeholder={t('account.bio.ph')} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm resize-none`}/>
+                          </div>
+                          <button onClick={()=>handleSaveProfile({ closeProfileModal: false })}
+                            className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">
+                            {t('account.saveChanges')}
+                          </button>
                         </div>
                       </div>
 
-                      {/* Fields */}
-                      <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">{t('account.username')}</label>
-                        <input value={editProf?.username||''} onChange={e=>setEditProf((p:any)=>({...p,username:e.target.value}))} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}/>
+                      {/* ── SEKCJA: Hasło & bezpieczeństwo ────────────── */}
+                      <div id="s-password" className="scroll-mt-4 pb-4">
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 pb-1.5 border-b border-white/[0.06]">Hasło i bezpieczeństwo</p>
+                        {(()=>{
+                          const [pwForm, setPwForm] = React.useState({current:'',next:'',confirm:''});
+                          const [pwLoading, setPwLoading] = React.useState(false);
+                          const handlePwChange = async(e:React.FormEvent)=>{
+                            e.preventDefault();
+                            if(pwForm.next!==pwForm.confirm){addToast('Hasła nie pasują do siebie','error');return;}
+                            if(pwForm.next.length<8){addToast('Nowe hasło musi mieć min. 8 znaków','error');return;}
+                            setPwLoading(true);
+                            try{
+                              await (await import('./api')).req('PUT','/auth/change-password',{currentPassword:pwForm.current,newPassword:pwForm.next});
+                              addToast('Hasło zmienione pomyślnie','success');
+                              setPwForm({current:'',next:'',confirm:''});
+                            }catch(err:any){addToast(err?.message||'Błąd zmiany hasła','error');}
+                            finally{setPwLoading(false);}
+                          };
+                          return(
+                            <form onSubmit={handlePwChange} className="flex flex-col gap-3">
+                              {['current','next','confirm'].map((field,i)=>(
+                                <div key={field}>
+                                  <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">
+                                    {i===0?'Obecne hasło':i===1?'Nowe hasło':'Potwierdź nowe hasło'}
+                                  </label>
+                                  <input type="password" value={(pwForm as any)[field]} onChange={e=>setPwForm(p=>({...p,[field]:e.target.value}))}
+                                    className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`} placeholder="••••••••"/>
+                                </div>
+                              ))}
+                              <button type="submit" disabled={pwLoading||!pwForm.current||!pwForm.next}
+                                className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 text-white font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2">
+                                {pwLoading?<Loader2 size={14} className="animate-spin"/>:null}Zmień hasło
+                              </button>
+                            </form>
+                          );
+                        })()}
                       </div>
-                      <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">{t('account.customStatus')}</label>
-                        <div className="relative">
-                          <input value={editProf?.custom_status||''} onChange={e=>setEditProf((p:any)=>({...p,custom_status:e.target.value}))} placeholder={t('account.customStatus.ph')} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm pr-10`}/>
-                          {editProf?.custom_status&&(
-                            <button type="button" onClick={()=>setEditProf((p:any)=>({...p,custom_status:''}))}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-300 transition-colors">
-                              <X size={14}/>
-                            </button>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-zinc-700 mt-1">{t('account.customStatus.hint')}</p>
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">{t('account.bio')}</label>
-                        <textarea value={editProf?.bio||''} onChange={e=>setEditProf((p:any)=>({...p,bio:e.target.value}))} rows={3} placeholder={t('account.bio.ph')} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm resize-none`}/>
-                      </div>
-                      <button onClick={()=>handleSaveProfile({ closeProfileModal: false })}
-                        className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">
-                        {t('account.saveChanges')}
-                      </button>
+
                     </motion.div>
                   )}
 
