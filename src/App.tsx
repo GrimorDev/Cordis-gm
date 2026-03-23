@@ -9329,83 +9329,6 @@ export default function App() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-                {/* Voice connection details panel */}
-                <AnimatePresence>
-                  {voiceDetailsOpen&&(
-                    <motion.div initial={{opacity:0,height:0}} animate={{opacity:1,height:'auto'}} exit={{opacity:0,height:0}}
-                      className="overflow-hidden border-b border-white/[0.05]">
-                      <div className="p-4 flex flex-col gap-3">
-                        {/* Tabs */}
-                        <div className="flex rounded-xl overflow-hidden border border-white/[0.07] text-xs font-semibold">
-                          {(['conn','privacy'] as const).map((tab,i)=>(
-                            <button key={tab} onClick={()=>setVoiceDetailsTab(tab)}
-                              className={`flex-1 py-1.5 transition-all ${voiceDetailsTab===tab?'bg-white/[0.09] text-white':'text-zinc-500 hover:text-zinc-300'} ${i===0?'':'border-l border-white/[0.07]'}`}>
-                              {tab==='conn'?'Połączenie':'Prywatność'}
-                            </button>
-                          ))}
-                        </div>
-
-                        {voiceDetailsTab==='conn'&&(
-                          <div className="flex flex-col gap-3">
-                            <VoiceRttGraph history={voiceRttHistory}/>
-                            {/* Time axis labels */}
-                            {voiceRttHistory.length>=2&&(
-                              <div className="flex justify-between -mt-2 px-0.5">
-                                <span className="text-[9px] text-zinc-600">{new Date(voiceRttHistory[0].t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>
-                                <span className="text-[9px] text-zinc-600">{new Date(voiceRttHistory[voiceRttHistory.length-1].t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>
-                              </div>
-                            )}
-                            {/* Stats row */}
-                            <div className="grid grid-cols-3 gap-2">
-                              {[
-                                {label:'Średni ping',   val:`${Math.round(voiceStats.avgRtt)} ms`,  cls:rttColor(voiceStats.avgRtt)},
-                                {label:'Ostatni ping',  val:`${Math.round(voiceStats.lastRtt)} ms`, cls:rttColor(voiceStats.lastRtt)},
-                                {label:'Utrata pakietów', val:`${voiceStats.pktLoss.toFixed(1)}%`,  cls:voiceStats.pktLoss>10?'text-rose-400':voiceStats.pktLoss>2?'text-amber-400':'text-emerald-400'},
-                              ].map(s=>(
-                                <div key={s.label} className="bg-white/[0.03] border border-white/[0.05] rounded-xl p-2 text-center">
-                                  <p className="text-[9px] text-zinc-500 mb-1 leading-tight">{s.label}</p>
-                                  <p className={`text-sm font-bold ${s.cls}`}>{s.val}</p>
-                                </div>
-                              ))}
-                            </div>
-                            <p className="text-[9px] text-zinc-600 leading-relaxed">
-                              Przy wyniku 250 ms i powyżej możesz zauważyć opóźnienia w dźwięku. Jeżeli współczynnik utraty pakietów wynosi powyżej 10%, możesz brzmieć jak robot. Jeśli problem się utrzyma, rozłącz się i spróbuj ponownie.
-                            </p>
-                            <div className="flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"/>
-                              <span className="text-[10px] text-emerald-400 font-medium">Zabezpieczone szyfrowaniem end-to-end</span>
-                            </div>
-                          </div>
-                        )}
-
-                        {voiceDetailsTab==='privacy'&&(
-                          <div className="flex flex-col gap-3">
-                            <div className="flex items-center gap-1.5">
-                              <Lock size={11} className="text-emerald-400 shrink-0"/>
-                              <span className="text-xs text-emerald-400 font-semibold">Zabezpieczone szyfrowaniem end-to-end</span>
-                            </div>
-                            <p className="text-[10px] text-zinc-500 leading-relaxed">
-                              Tylko Ty i Twoi znajomi uczestniczący w tym połączeniu mogą się słyszeć. Nikt inny nie ma dostępu do Waszej rozmowy!
-                            </p>
-                            <div>
-                              <p className="text-[9px] text-zinc-500 uppercase tracking-widest font-bold mb-2">Kod prywatności połączenia głosowego</p>
-                              <div className="grid grid-cols-3 gap-1.5">
-                                {voicePrivacyCode.split(' ').map((code,i)=>(
-                                  <div key={i} className="bg-zinc-900/80 border border-white/[0.06] rounded-lg px-2 py-2 text-center font-mono text-sm text-zinc-200 font-bold tracking-widest">
-                                    {code}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                            <p className="text-[9px] text-zinc-600 leading-relaxed">
-                              Nowy kod jest generowany, gdy ktoś dołącza do tego połączenia lub je opuszcza.
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
                 <div className="p-5 flex items-center justify-center gap-3">
                   <button onClick={toggleMute} title={activeCall.isMuted?'Włącz mikrofon':'Wycisz mikrofon'}
                     className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${activeCall.isMuted?'bg-rose-500 hover:bg-rose-400 text-white':gb}`}>
@@ -9432,11 +9355,6 @@ export default function App() {
                   }} title="Ustawienia urządzeń"
                     className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${devicesOpen?'bg-zinc-700 text-white':gb}`}>
                     <Settings size={18}/>
-                  </button>
-                  {/* Connection details toggle — color reflects quality */}
-                  <button onClick={()=>setVoiceDetailsOpen(v=>!v)} title="Szczegóły połączenia"
-                    className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all relative ${voiceDetailsOpen?'bg-zinc-700 text-white':gb}`}>
-                    <Activity size={18} className={voiceStats.lastRtt>0?(voiceStats.lastRtt>250?'text-rose-400':voiceStats.lastRtt>100?'text-amber-400':'text-emerald-400'):'text-zinc-400'}/>
                   </button>
                   <button onClick={hangupCall} title="Rozłącz"
                     className="w-12 h-12 rounded-2xl bg-rose-500 hover:bg-rose-400 flex items-center justify-center text-white transition-colors">
