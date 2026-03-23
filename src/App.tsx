@@ -5093,6 +5093,7 @@ export default function App() {
   const [userNotes, setUserNotes]               = useState<Map<string, string>>(new Map());
   const userNoteDebounceRef                      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statusPickerRef                        = useRef<HTMLDivElement>(null);
+  const voiceBarRef                            = useRef<HTMLDivElement>(null);
   const notifBellRef                           = useRef<HTMLDivElement>(null);
 
   // App Settings
@@ -5249,7 +5250,13 @@ export default function App() {
         const stats = await pc.getStats().catch(() => null);
         if (!stats) return;
         stats.forEach((r: any) => {
-          if (r.type === 'candidate-pair' && r.nominated && r.currentRoundTripTime != null) {
+          // Primary RTT source (Chrome 91+): remote-inbound-rtp.roundTripTime
+          if (r.type === 'remote-inbound-rtp' && typeof r.roundTripTime === 'number' && r.roundTripTime > 0) {
+            sumRtt += r.roundTripTime * 1000;
+            cntRtt++;
+          }
+          // Fallback: nominated ICE candidate-pair
+          if (r.type === 'candidate-pair' && (r.nominated || r.state === 'succeeded') && typeof r.currentRoundTripTime === 'number' && r.currentRoundTripTime > 0) {
             sumRtt += r.currentRoundTripTime * 1000;
             cntRtt++;
           }
@@ -6510,6 +6517,18 @@ export default function App() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [statusPickerOpen]);
+
+  // ── Close voice details popover on outside click ─────────────────
+  useEffect(() => {
+    if (!voiceDetailsOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (voiceBarRef.current && !voiceBarRef.current.contains(e.target as Node)) {
+        setVoiceDetailsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [voiceDetailsOpen]);
 
   // ── Close notification panel on outside click ────────────────────
   useEffect(() => {
@@ -8666,6 +8685,110 @@ export default function App() {
           </>}
 
           {activeView==='friends'&&<div className="p-3.5 border-b border-white/[0.05]"><h2 className="text-sm font-bold text-white">Znajomi</h2></div>}
+
+          {/* ── VOICE STATUS BAR — Discord-style, above user bar ──────── */}
+          {activeCall&&(
+            <div className="shrink-0 relative border-t border-white/[0.05]" ref={voiceBarRef}>
+              {/* Quality popover — pops upward above this bar */}
+              <AnimatePresence>
+                {voiceDetailsOpen&&(
+                  <motion.div initial={{opacity:0,y:8,scale:0.97}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:8,scale:0.97}}
+                    transition={{duration:0.15,ease:[0.16,1,0.3,1]}}
+                    className="absolute bottom-full left-2 right-2 mb-1 bg-[#0d0d1a] border border-white/[0.12] rounded-2xl shadow-2xl shadow-black/80 z-50 p-3 flex flex-col gap-2.5">
+                    {/* Tabs */}
+                    <div className="flex rounded-xl overflow-hidden border border-white/[0.07] text-xs font-semibold">
+                      {(['conn','privacy'] as const).map((tab,i)=>(
+                        <button key={tab} onClick={()=>setVoiceDetailsTab(tab)}
+                          className={`flex-1 py-1.5 transition-all ${voiceDetailsTab===tab?'bg-white/[0.09] text-white':'text-zinc-500 hover:text-zinc-300'} ${i>0?'border-l border-white/[0.07]':''}`}>
+                          {tab==='conn'?'Połączenie':'Prywatność'}
+                        </button>
+                      ))}
+                    </div>
+
+                    {voiceDetailsTab==='conn'&&(
+                      <>
+                        <VoiceRttGraph history={voiceRttHistory}/>
+                        {voiceRttHistory.length>=2&&(
+                          <div className="flex justify-between -mt-1 px-0.5">
+                            <span className="text-[9px] text-zinc-600">{new Date(voiceRttHistory[0].t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>
+                            <span className="text-[9px] text-zinc-600">{new Date(voiceRttHistory[voiceRttHistory.length-1].t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>
+                          </div>
+                        )}
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {[
+                            {label:'Średni ping',      val:`${Math.round(voiceStats.avgRtt)} ms`,  cls:rttColor(voiceStats.avgRtt)},
+                            {label:'Ostatni ping',     val:`${Math.round(voiceStats.lastRtt)} ms`, cls:rttColor(voiceStats.lastRtt)},
+                            {label:'Utrata pakietów',  val:`${voiceStats.pktLoss.toFixed(1)}%`,    cls:voiceStats.pktLoss>10?'text-rose-400':voiceStats.pktLoss>2?'text-amber-400':'text-emerald-400'},
+                          ].map(s=>(
+                            <div key={s.label} className="bg-white/[0.03] border border-white/[0.05] rounded-xl p-1.5 text-center">
+                              <p className="text-[8px] text-zinc-500 mb-0.5 leading-tight">{s.label}</p>
+                              <p className={`text-xs font-bold ${s.cls}`}>{s.val}</p>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-[9px] text-zinc-600 leading-relaxed">Przy wyniku 250 ms i powyżej możesz zauważyć opóźnienia w dźwięku. Jeżeli współczynnik utraty pakietów wynosi powyżej 10%, możesz brzmieć jak robot.</p>
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"/>
+                          <span className="text-[10px] text-emerald-400 font-medium">Zabezpieczone szyfrowaniem end-to-end</span>
+                        </div>
+                      </>
+                    )}
+
+                    {voiceDetailsTab==='privacy'&&(
+                      <>
+                        <div className="flex items-center gap-1.5">
+                          <Lock size={10} className="text-emerald-400 shrink-0"/>
+                          <span className="text-[11px] text-emerald-400 font-semibold">Zabezpieczone szyfrowaniem end-to-end</span>
+                        </div>
+                        <p className="text-[10px] text-zinc-500 leading-relaxed">Tylko Ty i Twoi znajomi uczestniczący w tym połączeniu mogą się słyszeć.</p>
+                        <div>
+                          <p className="text-[9px] text-zinc-500 uppercase tracking-widest font-bold mb-1.5">Kod prywatności połączenia</p>
+                          <div className="grid grid-cols-3 gap-1">
+                            {voicePrivacyCode.split(' ').map((code,i)=>(
+                              <div key={i} className="bg-zinc-900/80 border border-white/[0.06] rounded-lg px-1.5 py-1.5 text-center font-mono text-xs text-zinc-200 font-bold tracking-widest">
+                                {code}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <p className="text-[9px] text-zinc-600">Nowy kod gdy ktoś dołącza lub opuszcza połączenie.</p>
+                      </>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Voice status bar row */}
+              <div className="px-3 py-2 flex items-center gap-2">
+                {/* Quality dot */}
+                <div className={`w-2 h-2 rounded-full shrink-0 transition-colors ${
+                  voiceStats.lastRtt === 0 ? 'bg-emerald-500' :
+                  voiceStats.lastRtt > 250 ? 'bg-rose-500 animate-pulse' :
+                  voiceStats.lastRtt > 100 ? 'bg-amber-500' : 'bg-emerald-500'
+                }`}/>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold text-emerald-400 leading-tight truncate">Nawiązano połączenie</p>
+                  <p className="text-[10px] text-zinc-500 truncate">
+                    {activeCall.type==='voice_channel' ? activeCall.channelName : activeCall.username}
+                  </p>
+                </div>
+                {/* Signal quality — opens popover */}
+                <button onClick={()=>setVoiceDetailsOpen(v=>!v)} title="Szczegóły połączenia"
+                  className={`w-6 h-6 flex items-center justify-center rounded-md transition-all ${voiceDetailsOpen?'bg-white/[0.09]':' hover:bg-white/[0.07]'}`}>
+                  <Activity size={13} className={
+                    voiceStats.lastRtt===0 ? 'text-emerald-400' :
+                    voiceStats.lastRtt>250 ? 'text-rose-400' :
+                    voiceStats.lastRtt>100 ? 'text-amber-400' : 'text-emerald-400'
+                  }/>
+                </button>
+                {/* Quick disconnect */}
+                <button onClick={hangupCall} title="Rozłącz się"
+                  className="w-6 h-6 flex items-center justify-center rounded-md text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all">
+                  <PhoneOff size={12}/>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* USER BAR — bottom of sidebar */}
           <div className="shrink-0 px-3 py-3 border-t border-white/[0.05] relative" ref={statusPickerRef}>
