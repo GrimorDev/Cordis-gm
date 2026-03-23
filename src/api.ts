@@ -354,6 +354,8 @@ export const auth = {
     req<{ user: UserProfile; token: string }>('POST', '/auth/2fa-verify', d),
   logout: () => req<void>('POST', '/auth/logout'),
   me: () => req<UserProfile>('GET', '/auth/me'),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    req<{ ok: boolean }>('PUT', '/auth/change-password', { currentPassword, newPassword }),
 };
 
 // ── Upload helper ──────────────────────────────────────────────────────────

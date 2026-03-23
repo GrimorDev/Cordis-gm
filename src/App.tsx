@@ -2841,6 +2841,41 @@ function ServerSettingsPage({
   );
 }
 
+// ─── Password Change Section ──────────────────────────────────────────────────
+function PasswordChangeSection({ gi, addToast }: { gi: string; addToast: (m:string,t?:any)=>void }) {
+  const [pwForm, setPwForm] = React.useState({current:'',next:'',confirm:''});
+  const [pwLoading, setPwLoading] = React.useState(false);
+  const handlePwChange = async(e:React.FormEvent)=>{
+    e.preventDefault();
+    if(pwForm.next!==pwForm.confirm){addToast('Hasła nie pasują do siebie','error');return;}
+    if(pwForm.next.length<8){addToast('Nowe hasło musi mieć min. 8 znaków','error');return;}
+    setPwLoading(true);
+    try{
+      await auth.changePassword(pwForm.current, pwForm.next);
+      addToast('Hasło zmienione pomyślnie','success');
+      setPwForm({current:'',next:'',confirm:''});
+    }catch(err:any){addToast(err?.message||'Błąd zmiany hasła','error');}
+    finally{setPwLoading(false);}
+  };
+  return(
+    <form onSubmit={handlePwChange} className="flex flex-col gap-3">
+      {(['current','next','confirm'] as const).map((field,i)=>(
+        <div key={field}>
+          <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">
+            {i===0?'Obecne hasło':i===1?'Nowe hasło':'Potwierdź nowe hasło'}
+          </label>
+          <input type="password" value={pwForm[field]} onChange={e=>setPwForm(p=>({...p,[field]:e.target.value}))}
+            className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`} placeholder="••••••••"/>
+        </div>
+      ))}
+      <button type="submit" disabled={pwLoading||!pwForm.current||!pwForm.next}
+        className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 text-white font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2">
+        {pwLoading?<Loader2 size={14} className="animate-spin"/>:null}Zmień hasło
+      </button>
+    </form>
+  );
+}
+
 // ─── Storage Tab ─────────────────────────────────────────────────────────────
 function StorageTab({ addToast }: { addToast: (m:string,t?:any)=>void }) {
   const [stats, setStats]       = React.useState<import('./api').AdminStorageStats | null>(null);
@@ -12941,39 +12976,7 @@ export default function App() {
                       {/* ── SEKCJA: Hasło & bezpieczeństwo ────────────── */}
                       <div id="s-password" className="scroll-mt-4 pb-4">
                         <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 pb-1.5 border-b border-white/[0.06]">Hasło i bezpieczeństwo</p>
-                        {(()=>{
-                          const [pwForm, setPwForm] = React.useState({current:'',next:'',confirm:''});
-                          const [pwLoading, setPwLoading] = React.useState(false);
-                          const handlePwChange = async(e:React.FormEvent)=>{
-                            e.preventDefault();
-                            if(pwForm.next!==pwForm.confirm){addToast('Hasła nie pasują do siebie','error');return;}
-                            if(pwForm.next.length<8){addToast('Nowe hasło musi mieć min. 8 znaków','error');return;}
-                            setPwLoading(true);
-                            try{
-                              await (await import('./api')).req('PUT','/auth/change-password',{currentPassword:pwForm.current,newPassword:pwForm.next});
-                              addToast('Hasło zmienione pomyślnie','success');
-                              setPwForm({current:'',next:'',confirm:''});
-                            }catch(err:any){addToast(err?.message||'Błąd zmiany hasła','error');}
-                            finally{setPwLoading(false);}
-                          };
-                          return(
-                            <form onSubmit={handlePwChange} className="flex flex-col gap-3">
-                              {['current','next','confirm'].map((field,i)=>(
-                                <div key={field}>
-                                  <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">
-                                    {i===0?'Obecne hasło':i===1?'Nowe hasło':'Potwierdź nowe hasło'}
-                                  </label>
-                                  <input type="password" value={(pwForm as any)[field]} onChange={e=>setPwForm(p=>({...p,[field]:e.target.value}))}
-                                    className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`} placeholder="••••••••"/>
-                                </div>
-                              ))}
-                              <button type="submit" disabled={pwLoading||!pwForm.current||!pwForm.next}
-                                className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 text-white font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2">
-                                {pwLoading?<Loader2 size={14} className="animate-spin"/>:null}Zmień hasło
-                              </button>
-                            </form>
-                          );
-                        })()}
+                        <PasswordChangeSection gi={gi} addToast={addToast}/>
                       </div>
 
                     </motion.div>
