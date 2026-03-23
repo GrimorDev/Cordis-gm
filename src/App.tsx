@@ -12831,7 +12831,7 @@ export default function App() {
                       {id:'account',     label:t('settings.account'),    icon:<Users size={14}/>,
                         sections:[{id:'s-profil',label:'Profil'},{id:'s-info',label:'Informacje'},{id:'s-password',label:'Hasło & bezpieczeństwo'}]},
                       {id:'appearance',  label:t('settings.appearance'), icon:<Image size={14}/>,
-                        sections:[{id:'s-chat',label:'Czat'},{id:'s-accessibility',label:'Dostępność'}]},
+                        sections:[{id:'s-chat',label:'Czat'},{id:'s-accessibility',label:'Profil i efekty'}]},
                       {id:'theme',       label:'Motyw',                  icon:<Palette size={14}/>, sections:[]},
                       {id:'connections', label:'Połączone konta',        icon:<Link2 size={14}/>, sections:[]},
                     ]},
@@ -12985,8 +12985,11 @@ export default function App() {
                   {/* ─── WYGLĄD ─── */}
                   {appSettTab==='appearance'&&(
                     <motion.div key="appearance" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
-                      className="flex flex-col gap-5">
-                      <h3 className="text-sm font-bold text-white">{t('appearance.title')}</h3>
+                      className="flex flex-col gap-6">
+
+                      {/* ── SEKCJA: Czat ─────────────────────────────────── */}
+                      <div id="s-chat" className="scroll-mt-4 flex flex-col gap-5">
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pb-1.5 border-b border-white/[0.06]">Personalizacja wyglądu</p>
 
                       {/* Accent color */}
                       <div>
@@ -13109,6 +13112,11 @@ export default function App() {
                           </button>
                         </div>
                       </div>
+                      </div>{/* end s-chat */}
+
+                      {/* ── SEKCJA: Dostępność / Profil ───────────────────── */}
+                      <div id="s-accessibility" className="scroll-mt-4 flex flex-col gap-5">
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pb-1.5 border-b border-white/[0.06]">Profil i efekty</p>
 
                       {/* ── Server tag selection ── */}
                       <div>
@@ -13191,49 +13199,59 @@ export default function App() {
                           ))}
                         </div>
                       </div>
+                      </div>{/* end s-accessibility */}
                     </motion.div>
                   )}
 
                   {/* ─── URZĄDZENIA ─── */}
                   {appSettTab==='devices'&&(
                     <motion.div key="devices" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
-                      className="flex flex-col gap-5">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-bold text-white">{t('devices.title')}</h3>
-                        <button onClick={()=>getMediaDevices().then(setDevices).catch(()=>{})}
-                          className={`text-xs ${gb} px-3 py-1.5 rounded-lg flex items-center gap-1.5`}>
-                          <Loader2 size={11}/> {t('devices.check')}
-                        </button>
-                      </div>
-                      {devices.length===0&&(
-                        <div className={`${gi} rounded-2xl p-4 border flex items-center gap-3`}>
-                          <AlertCircle size={16} className="text-amber-400 shrink-0"/>
-                          <div>
-                            <p className="text-sm text-zinc-300 font-medium">{t('devices.noAccess')}</p>
-                            <p className="text-xs text-zinc-500 mt-0.5">{t('devices.noAccess.desc')}</p>
-                          </div>
+                      className="flex flex-col gap-6">
+
+                      {/* ── SEKCJA: Wejście ───────────────────────────────── */}
+                      <div id="s-input" className="scroll-mt-4 flex flex-col gap-4">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pb-1.5 border-b border-white/[0.06] flex-1">{t('devices.title')} — Wejście</p>
+                          <button onClick={()=>getMediaDevices().then(setDevices).catch(()=>{})}
+                            className={`text-xs ${gb} px-3 py-1.5 rounded-lg flex items-center gap-1.5 ml-3`}>
+                            <Loader2 size={11}/> {t('devices.check')}
+                          </button>
                         </div>
-                      )}
-                      <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('devices.mic')} ({devices.filter(d=>d.kind==='audioinput').length})</label>
-                        <select value={selMic} onChange={e=>setSelMic(e.target.value)} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}>
-                          <option value="">Default</option>
-                          {devices.filter(d=>d.kind==='audioinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`${t('devices.mic')} ${d.deviceId.slice(0,8)}`}</option>)}
-                        </select>
+                        {devices.length===0&&(
+                          <div className={`${gi} rounded-2xl p-4 border flex items-center gap-3`}>
+                            <AlertCircle size={16} className="text-amber-400 shrink-0"/>
+                            <div>
+                              <p className="text-sm text-zinc-300 font-medium">{t('devices.noAccess')}</p>
+                              <p className="text-xs text-zinc-500 mt-0.5">{t('devices.noAccess.desc')}</p>
+                            </div>
+                          </div>
+                        )}
+                        <div>
+                          <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('devices.mic')} ({devices.filter(d=>d.kind==='audioinput').length})</label>
+                          <select value={selMic} onChange={e=>setSelMic(e.target.value)} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}>
+                            <option value="">Default</option>
+                            {devices.filter(d=>d.kind==='audioinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`${t('devices.mic')} ${d.deviceId.slice(0,8)}`}</option>)}
+                          </select>
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('devices.speakers')} ({devices.filter(d=>d.kind==='audiooutput').length})</label>
-                        <select value={selSpeaker} onChange={e=>{setSelSpeaker(e.target.value);setOutputDevice(e.target.value).catch(()=>{});}} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}>
-                          <option value="">Default</option>
-                          {devices.filter(d=>d.kind==='audiooutput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`${t('devices.speakers')} ${d.deviceId.slice(0,8)}`}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('devices.camera')} ({devices.filter(d=>d.kind==='videoinput').length})</label>
-                        <select value={selCamera} onChange={e=>setSelCamera(e.target.value)} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}>
-                          <option value="">Default</option>
-                          {devices.filter(d=>d.kind==='videoinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`${t('devices.camera')} ${d.deviceId.slice(0,8)}`}</option>)}
-                        </select>
+
+                      {/* ── SEKCJA: Wyjście ───────────────────────────────── */}
+                      <div id="s-output" className="scroll-mt-4 flex flex-col gap-4">
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pb-1.5 border-b border-white/[0.06]">Wyjście</p>
+                        <div>
+                          <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('devices.speakers')} ({devices.filter(d=>d.kind==='audiooutput').length})</label>
+                          <select value={selSpeaker} onChange={e=>{setSelSpeaker(e.target.value);setOutputDevice(e.target.value).catch(()=>{});}} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}>
+                            <option value="">Default</option>
+                            {devices.filter(d=>d.kind==='audiooutput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`${t('devices.speakers')} ${d.deviceId.slice(0,8)}`}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('devices.camera')} ({devices.filter(d=>d.kind==='videoinput').length})</label>
+                          <select value={selCamera} onChange={e=>setSelCamera(e.target.value)} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}>
+                            <option value="">Default</option>
+                            {devices.filter(d=>d.kind==='videoinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`${t('devices.camera')} ${d.deviceId.slice(0,8)}`}</option>)}
+                          </select>
+                        </div>
                       </div>
                     </motion.div>
                   )}
@@ -13241,13 +13259,38 @@ export default function App() {
                   {/* ─── PRYWATNOŚĆ ─── */}
                   {appSettTab==='privacy'&&(
                     <motion.div key="privacy" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
-                      className="flex flex-col gap-5">
-                      <h3 className="text-sm font-bold text-white">{t('privacy.title')}</h3>
+                      className="flex flex-col gap-6">
+
+                      {/* ── SEKCJA: Status ────────────────────────────────── */}
+                      <div id="s-status" className="scroll-mt-4 flex flex-col gap-3">
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pb-1.5 border-b border-white/[0.06]">Widoczność statusu</p>
                       {([
                         {key:'privacy_status_visible',    label:t('privacy.statusVisible.label'),   desc:t('privacy.statusVisible.desc')},
                         {key:'privacy_typing_visible',    label:t('privacy.typing.label'),          desc:t('privacy.typing.desc')},
                         {key:'privacy_read_receipts',     label:t('privacy.readReceipts.label'),    desc:t('privacy.readReceipts.desc')},
                         {key:'privacy_friend_requests',   label:t('privacy.friendRequests.label'),  desc:t('privacy.friendRequests.desc')},
+                      ] as const).map(opt=>{
+                        const on = getPrivacy(opt.key);
+                        return (
+                          <div key={opt.key} className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-3.5 hover:border-white/[0.09] transition-colors">
+                            <div className="flex-1 min-w-0 mr-4">
+                              <p className="text-sm font-medium text-white">{opt.label}</p>
+                              <p className="text-xs text-zinc-600 mt-0.5">{opt.desc}</p>
+                            </div>
+                            <button onClick={()=>togglePrivacy(opt.key)}
+                              className={`w-11 h-6 rounded-full transition-all shrink-0 relative ${on?'bg-indigo-500':'bg-zinc-700'}`}>
+                              <span className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200"
+                                style={{left: on ? 'calc(100% - 1.375rem)' : '0.125rem'}}/>
+                            </button>
+                          </div>
+                        );
+                      })}
+                      </div>
+
+                      {/* ── SEKCJA: Wiadomości ────────────────────────────── */}
+                      <div id="s-messages" className="scroll-mt-4 flex flex-col gap-3">
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pb-1.5 border-b border-white/[0.06]">Wiadomości i bezpieczeństwo</p>
+                      {([
                         {key:'privacy_dm_from_strangers', label:t('privacy.dmFromStrangers.label'), desc:t('privacy.dmFromStrangers.desc')},
                       ] as const).map(opt=>{
                         const on = getPrivacy(opt.key);
@@ -13391,6 +13434,7 @@ export default function App() {
                           {t('privacy.deleteAccount')}
                         </button>
                       </div>
+                      </div>{/* end s-messages */}
                     </motion.div>
                   )}
 
