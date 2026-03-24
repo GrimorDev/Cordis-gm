@@ -5068,7 +5068,7 @@ export default function App() {
 
   const [chEditOpen, setChEditOpen]           = useState(false);
   const [editingCh, setEditingCh]             = useState<ChannelData|null>(null);
-  const [chForm, setChForm]                   = useState({ name:'', description:'', is_private:false, role_ids:[] as string[], slowmode_seconds:0 });
+  const [chForm, setChForm]                   = useState({ name:'', description:'', is_private:false, role_ids:[] as string[], slowmode_seconds:0, background_url:'', background_gradient:'' });
 
   // ── Server header dropdown ───────────────────────────────────────
   const [srvDropOpen, setSrvDropOpen]         = useState(false);
@@ -7404,23 +7404,25 @@ export default function App() {
   const handleAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
-    // Multiple images — store as attachFiles array
+    // Multiple files — all images → image grid (up to 12)
     const allImages = files.every(f => f.type.startsWith('image/'));
     if (files.length > 1 && allImages) {
-      for (const f of files) {
+      const selected = files.slice(0, 12);
+      for (const f of selected) {
         if (f.size > 50*1024*1024) { setShowPowerModal(true); e.target.value = ''; return; }
       }
-      setAttachFiles(files.slice(0, 4)); // max 4 images in grid
+      setAttachFiles(selected);
       setAttachFile(null); setAttachPreview(null);
       e.target.value = ''; return;
     }
+    // Single file (or mixed types → take first)
     const f = files[0];
     if (f.type && !ALLOWED_MIME_PREFIXES.some(p => f.type.startsWith(p))) {
       addToast(`Nieobsługiwany typ pliku: ${f.type}`, 'error');
       e.target.value = ''; return;
     }
     if (f.size > 50*1024*1024) { setShowPowerModal(true); e.target.value = ''; return; }
-    setAttachFiles([]); // clear multi
+    setAttachFiles([]);
     setAttachFile(f);
     if (f.type.startsWith('image/')) setAttachPreview(URL.createObjectURL(f));
     else setAttachPreview(null);
@@ -7633,13 +7635,13 @@ export default function App() {
   };
   const openChEdit = (ch: ChannelData) => {
     setEditingCh(ch);
-    setChForm({ name: ch.name, description: ch.description||'', is_private: ch.is_private||false, role_ids: ch.allowed_roles?.map(r => r.role_id)||[], slowmode_seconds: ch.slowmode_seconds||0 });
+    setChForm({ name: ch.name, description: ch.description||'', is_private: ch.is_private||false, role_ids: ch.allowed_roles?.map(r => r.role_id)||[], slowmode_seconds: ch.slowmode_seconds||0, background_url: (ch as any).background_url||'', background_gradient: (ch as any).background_gradient||'' });
     setChEditOpen(true);
   };
   const handleSaveCh = async () => {
     if (!editingCh) return;
     try {
-      await channelsApi.update(editingCh.id, { name: chForm.name, description: chForm.description, is_private: chForm.is_private, role_ids: chForm.is_private ? chForm.role_ids : [], slowmode_seconds: chForm.slowmode_seconds } as any);
+      await channelsApi.update(editingCh.id, { name: chForm.name, description: chForm.description, is_private: chForm.is_private, role_ids: chForm.is_private ? chForm.role_ids : [], slowmode_seconds: chForm.slowmode_seconds, background_url: chForm.background_url || null, background_gradient: chForm.background_gradient || null } as any);
       setChEditOpen(false); setEditingCh(null);
       const s = await serversApi.get(activeServer); setServerFull(s);
     } catch (err) { console.error(err); }
@@ -10142,7 +10144,7 @@ export default function App() {
                     const next = !bookmarksOpen;
                     setBookmarksOpen(next);
                     if (next) {
-                      fetch('/api/bookmarks', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
+                      fetch('/api/bookmarks', { headers: { Authorization: `Bearer ${getToken()}` } })
                         .then(r => r.ok ? r.json() : [])
                         .then(data => {
                           setBookmarks(data);
@@ -10857,13 +10859,15 @@ export default function App() {
                                     try {
                                       const urls: string[] = JSON.parse(url);
                                       const count = urls.length;
+                                      const cols = count <= 2 ? 2 : count <= 4 ? 2 : 3;
+                                      const h = count <= 2 ? 160 : count <= 4 ? 130 : 100;
                                       return (
-                                        <div className={`grid gap-1 ${count === 1 ? '' : count === 2 ? 'grid-cols-2' : count === 3 ? 'grid-cols-2' : 'grid-cols-2'}`}
-                                          style={{maxWidth: count === 1 ? '280px' : '320px'}}>
+                                        <div className={`grid gap-1 grid-cols-${cols}`}
+                                          style={{maxWidth: cols === 2 ? '300px' : '360px'}}>
                                           {urls.map((u, idx) => (
                                             <img key={idx} src={staticUrl(u)} alt="" onClick={()=>setLightboxSrc(staticUrl(u))}
                                               className={`rounded-xl object-cover cursor-zoom-in hover:opacity-90 transition-opacity shadow-lg w-full ${count===3&&idx===2?'col-span-2':''}`}
-                                              style={{height: count===1 ? '200px' : '140px'}}
+                                              style={{height: `${h}px`}}
                                               onError={e=>{(e.currentTarget as HTMLImageElement).style.display='none';}}/>
                                           ))}
                                         </div>
@@ -10909,7 +10913,7 @@ export default function App() {
                           {(msg as any).thread_count > 0 && !((msg as any).thread_root_id) && (
                             <button onClick={async()=>{
                               setThreadRootId(msg.id);
-                              const token = localStorage.getItem('cordyn_token');
+                              const token = getToken();
                               const r = await fetch(`/api/messages/${msg.id}/thread`,{headers:{Authorization:`Bearer ${token}`}});
                               if(r.ok) setThreadMessages(await r.json());
                             }}
@@ -10938,12 +10942,12 @@ export default function App() {
                                   const key = isDmMsg ? 'dm_message_id' : 'message_id';
                                   const isBookmarked = bookmarkedIds.has(msg.id);
                                   if (isBookmarked) {
-                                    await fetch('/api/bookmarks',{method:'DELETE',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('cordyn_token')}`},body:JSON.stringify({[key]:msg.id})});
+                                    await fetch('/api/bookmarks',{method:'DELETE',headers:{'Content-Type':'application/json','Authorization':`Bearer ${getToken()}`},body:JSON.stringify({[key]:msg.id})});
                                     setBookmarkedIds(p=>{const n=new Set(p);n.delete(msg.id);return n;});
                                     setBookmarks(p=>p.filter(b=>b.message?.id!==msg.id));
                                     addToast('Usunięto z zakładek','info');
                                   } else {
-                                    const r=await fetch('/api/bookmarks',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('cordyn_token')}`},body:JSON.stringify({[key]:msg.id})});
+                                    const r=await fetch('/api/bookmarks',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${getToken()}`},body:JSON.stringify({[key]:msg.id})});
                                     if(r.ok){setBookmarkedIds(p=>new Set([...p,msg.id]));addToast('Dodano do zakładek','success');}
                                   }
                                 }}
@@ -10955,7 +10959,7 @@ export default function App() {
                               {activeView!=='dms' && !msg.thread_root_id && (
                                 <button onClick={async()=>{
                                   setThreadRootId(msg.id);
-                                  const token = localStorage.getItem('cordyn_token');
+                                  const token = getToken();
                                   const r = await fetch(`/api/messages/${msg.id}/thread`,{headers:{Authorization:`Bearer ${token}`}});
                                   if(r.ok) setThreadMessages(await r.json());
                                 }}
@@ -11115,7 +11119,7 @@ export default function App() {
                         ))}
                         <button onClick={()=>setAttachFiles([])} className="ml-1 text-zinc-600 hover:text-rose-400 self-start mt-1"><X size={12}/></button>
                       </div>
-                      <p className="text-[10px] text-zinc-600 mt-1">{attachFiles.length} zdjęcia w siatce</p>
+                      <p className="text-[10px] text-zinc-600 mt-1">{attachFiles.length} {attachFiles.length === 1 ? 'zdjęcie' : attachFiles.length < 5 ? 'zdjęcia' : 'zdjęć'} w siatce</p>
                     </motion.div>
                   )}
                   {attachFile&&!attachPreview&&(
@@ -13202,6 +13206,38 @@ export default function App() {
                       <option value="21600">6 godzin</option>
                     </select>
                     {chForm.slowmode_seconds>0&&<p className="text-[11px] text-zinc-600 mt-1">Użytkownicy mogą wysyłać wiadomość co {chForm.slowmode_seconds<60?`${chForm.slowmode_seconds}s`:chForm.slowmode_seconds<3600?`${chForm.slowmode_seconds/60} min`:`${chForm.slowmode_seconds/3600} godz`}</p>}
+                  </div>
+                )}
+                {editingCh?.type==='text'&&(
+                  <div className="flex flex-col gap-3">
+                    <div>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block flex items-center gap-1.5"><ImageIcon size={10}/> Tło kanału (URL zdjęcia)</label>
+                      <input value={chForm.background_url} onChange={e=>setChForm(p=>({...p,background_url:e.target.value}))}
+                        placeholder="https://example.com/image.jpg" className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Gradient tła (CSS)</label>
+                      <input value={chForm.background_gradient} onChange={e=>setChForm(p=>({...p,background_gradient:e.target.value}))}
+                        placeholder="linear-gradient(135deg, #1a1a2e, #16213e)" className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm font-mono`}/>
+                      <p className="text-[10px] text-zinc-700 mt-1">Możesz użyć samego gradientu lub kombinacji z URL zdjęcia</p>
+                    </div>
+                    {(chForm.background_url || chForm.background_gradient) && (
+                      <div className="h-16 rounded-xl border border-white/[0.06] flex items-center justify-center text-xs text-zinc-600"
+                        style={{
+                          backgroundImage: chForm.background_url
+                            ? (chForm.background_gradient ? `${chForm.background_gradient}, url(${chForm.background_url})` : `url(${chForm.background_url})`)
+                            : chForm.background_gradient || undefined,
+                          backgroundSize: 'cover', backgroundPosition: 'center'
+                        }}>
+                        Podgląd tła
+                      </div>
+                    )}
+                    {(chForm.background_url || chForm.background_gradient) && (
+                      <button onClick={()=>setChForm(p=>({...p,background_url:'',background_gradient:''}))}
+                        className="text-xs text-zinc-600 hover:text-rose-400 transition-colors text-left">
+                        Usuń tło
+                      </button>
+                    )}
                   </div>
                 )}
                 <button onClick={handleSaveCh} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">Zapisz</button>
@@ -15514,7 +15550,7 @@ export default function App() {
                     <button onClick={async()=>{
                         const bmsApi = (await import('./api')).default;
                         const key = bm.type==='channel' ? 'message_id' : 'dm_message_id';
-                        await fetch('/api/bookmarks', {method:'DELETE',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('cordyn_token')}`},body:JSON.stringify({[key]:bm.message?.id})});
+                        await fetch('/api/bookmarks', {method:'DELETE',headers:{'Content-Type':'application/json','Authorization':`Bearer ${getToken()}`},body:JSON.stringify({[key]:bm.message?.id})});
                         setBookmarks(p=>p.filter(b=>b.id!==bm.id));
                         setBookmarkedIds(p=>{const n=new Set(p);n.delete(bm.message?.id);return n;});
                       }}
@@ -15569,7 +15605,7 @@ export default function App() {
                 if (!threadInput.trim() || threadSending) return;
                 setThreadSending(true);
                 try {
-                  const token = localStorage.getItem('cordyn_token');
+                  const token = getToken();
                   const r = await fetch(`/api/messages/${threadRootId}/thread`, {
                     method:'POST',
                     headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},
