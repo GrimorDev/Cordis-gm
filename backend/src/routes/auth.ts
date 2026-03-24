@@ -2,13 +2,14 @@ import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { query } from '../db/pool';
 import { redis, KEYS, setUserStatus } from '../redis/client';
 import { config } from '../config';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
-import { generateCode, sendVerificationEmail } from '../services/email';
+import { generateCode, sendVerificationEmail, sendPasswordResetEmail } from '../services/email';
 import { verifyTotpCode, verifyBackupCode } from '../services/totp';
 
 const router = Router();
@@ -294,6 +295,92 @@ router.post('/logout', authMiddleware, async (req: AuthRequest, res: Response) =
   } catch (err) {
     return res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// POST /api/auth/forgot-password
+router.post('/forgot-password',
+  [body('email').isEmail().normalizeEmail()],
+  async (req: Request, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: 'Podaj prawidłowy adres email' });
+    const { email } = req.body;
+    try {
+      const { rows } = await query('SELECT id FROM users WHERE email=$1', [email]);
+      // Always return success to not leak whether email exists
+      if (!rows[0]) return res.json({ ok: true });
+      const userId = rows[0].id;
+      const rawToken = crypto.randomBytes(32).toString('hex');
+      const hash = await bcrypt.hash(rawToken, 10);
+      await query(
+        `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+         VALUES ($1, $2, NOW() + INTERVAL '1 hour')`,
+        [userId, hash]
+      );
+      const FRONTEND_URL = (process.env.FRONTEND_URL || (process.env.CORS_ORIGIN || 'http://localhost:3000').split(',')[0]).trim();
+      const resetUrl = `${FRONTEND_URL}/reset-password?token=${rawToken}&uid=${userId}`;
+      await sendPasswordResetEmail(email, resetUrl);
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error('forgot-password error:', err);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+// POST /api/auth/reset-password
+router.post('/reset-password',
+  [body('token').notEmpty(), body('userId').notEmpty(), body('newPassword').isLength({ min: 8 })],
+  async (req: Request, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: 'Nieprawidłowe dane' });
+    const { token, userId, newPassword } = req.body;
+    try {
+      const { rows } = await query(
+        `SELECT id, token_hash FROM password_reset_tokens
+         WHERE user_id=$1 AND used=FALSE AND expires_at > NOW()
+         ORDER BY created_at DESC LIMIT 1`,
+        [userId]
+      );
+      if (!rows[0]) return res.status(400).json({ error: 'Token wygasł lub jest nieprawidłowy' });
+      const valid = await bcrypt.compare(token, rows[0].token_hash);
+      if (!valid) return res.status(400).json({ error: 'Token wygasł lub jest nieprawidłowy' });
+      const hash = await bcrypt.hash(newPassword, 12);
+      await query('UPDATE users SET password_hash=$1 WHERE id=$2', [hash, userId]);
+      await query('UPDATE password_reset_tokens SET used=TRUE WHERE id=$1', [rows[0].id]);
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error('reset-password error:', err);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+// GET /api/auth/sessions
+router.get('/sessions', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { rows } = await query(
+      `SELECT id, ip_address, user_agent, created_at, last_seen_at
+       FROM user_sessions WHERE user_id=$1 ORDER BY last_seen_at DESC`,
+      [req.user!.id]
+    );
+    return res.json(rows);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// DELETE /api/auth/sessions/:id
+router.delete('/sessions/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    await query('DELETE FROM user_sessions WHERE id=$1 AND user_id=$2', [req.params.id, req.user!.id]);
+    return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// DELETE /api/auth/sessions — revoke all sessions
+router.delete('/sessions', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    await query('DELETE FROM user_sessions WHERE user_id=$1', [req.user!.id]);
+    return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
 // GET /api/auth/me

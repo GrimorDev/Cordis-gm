@@ -125,3 +125,22 @@ export function playStreamJoin() {
   tone(659, 0.1, 0.16, 'sine', 0.08);
   tone(784, 0.18, 0.14, 'sine', 0.16);
 }
+
+/** Message sent — soft pop/whoosh */
+export function playMessageSent() {
+  tone(900, 0.06, 0.08, 'sine', 0);
+  tone(1100, 0.08, 0.06, 'sine', 0.04);
+}
+
+/** Mention alert — distinct triple-ping */
+export function playMentionAlert() {
+  tone(880, 0.09, 0.18, 'sine', 0);
+  tone(1100, 0.09, 0.16, 'sine', 0.11);
+  tone(1320, 0.12, 0.14, 'sine', 0.22);
+}
+
+/** Message received (DM or channel) — subtle pop */
+export function playMessageReceived() {
+  tone(660, 0.07, 0.1, 'sine', 0);
+  tone(820, 0.08, 0.08, 'sine', 0.07);
+}

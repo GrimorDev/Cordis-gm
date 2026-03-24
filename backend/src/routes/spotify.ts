@@ -1,7 +1,9 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import { query } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
+import { redis } from '../redis/client';
 import {
   startSpotifyJam, endSpotifyJam, joinSpotifyJam, leaveSpotifyJam,
   getSpotifyJamMembers, getMyJamHostId,
@@ -86,7 +88,9 @@ function fmtTrack(t: any, isPlaying?: boolean, progressMs?: number) {
 // (Called via Ajax with Authorization header, then frontend redirects to the URL)
 router.get('/connect', authMiddleware, async (req: AuthRequest, res: Response) => {
   if (!CLIENT_ID) return res.status(503).json({ error: 'Spotify not configured' });
-  const state = `${req.user!.id}:${Math.random().toString(36).slice(2)}`;
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const state = `${req.user!.id}:${nonce}`;
+  await redis.setex(`oauth:state:spotify:${nonce}`, 600, req.user!.id);
   const params = new URLSearchParams({
     response_type: 'code',
     client_id:     CLIENT_ID,
@@ -103,8 +107,11 @@ router.get('/callback', async (req: Request, res: Response) => {
   if (error || !code || !state) {
     return res.redirect(`${FRONTEND_URL}?spotify=error`);
   }
-  const userId = state.split(':')[0];
-  if (!userId) return res.redirect(`${FRONTEND_URL}?spotify=error`);
+  const [userId, nonce] = state.split(':');
+  if (!userId || !nonce) return res.redirect(`${FRONTEND_URL}?spotify=error`);
+  const storedUid = await redis.get(`oauth:state:spotify:${nonce}`);
+  if (!storedUid || storedUid !== userId) return res.redirect(`${FRONTEND_URL}?spotify=error`);
+  await redis.del(`oauth:state:spotify:${nonce}`);
 
   try {
     const body = new URLSearchParams({

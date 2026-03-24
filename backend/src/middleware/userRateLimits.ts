@@ -40,3 +40,12 @@ export const inviteCreateLimiter = rateLimit({
   keyGenerator: byUserId as any,
   store: store('rl:invite:'),
 });
+
+// 30 user searches per minute — prevents enumeration/scraping
+export const searchLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: 'Zbyt wiele wyszukiwań, spróbuj za chwilę' },
+  keyGenerator: byUserId as any,
+  store: store('rl:search:'),
+});

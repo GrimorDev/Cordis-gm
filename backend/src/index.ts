@@ -37,6 +37,7 @@ import pushRoutes    from './routes/push';
 import automationsRoutes from './routes/automations';
 import botsRoutes from './routes/bots';
 import filesRoutes from './routes/files';
+import bookmarksRoutes from './routes/bookmarks';
 import { musicStates } from './routes/bots';
 
 const app = express();
@@ -133,6 +134,7 @@ app.use('/api/polls',   pollsRoutes);
 app.use('/api/push',    pushRoutes);
 app.use('/api/servers/:serverId/automations', automationsRoutes);
 app.use('/api/servers/:serverId/bots', botsRoutes);
+app.use('/api/bookmarks', bookmarksRoutes);
 
 // ── Music audio stream proxy ──────────────────────────────────────────────────
 // Proxies the YouTube CDN audio URL through our server to bypass browser CORS restrictions.

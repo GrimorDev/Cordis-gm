@@ -141,3 +141,35 @@ export async function sendVerificationEmail(to: string, code: string): Promise<v
     html,
   });
 }
+
+export async function sendPasswordResetEmail(to: string, resetUrl: string): Promise<void> {
+  const html = `<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #09090b; padding: 32px 16px; }
+    .wrap { max-width: 480px; margin: 0 auto; }
+    .card { background: #18181b; border-radius: 16px; padding: 32px; }
+    h1 { color: #fff; font-size: 22px; margin-bottom: 12px; }
+    p { color: #a1a1aa; font-size: 15px; line-height: 1.6; margin-bottom: 16px; }
+    a.btn { display: inline-block; background: #7c3aed; color: #fff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 600; font-size: 15px; }
+    .note { color: #71717a; font-size: 12px; margin-top: 24px; }
+  </style>
+</head>
+<body>
+  <div class="wrap"><div class="card">
+    <h1>Reset hasła — Cordyn</h1>
+    <p>Otrzymaliśmy prośbę o reset hasła dla Twojego konta. Kliknij przycisk poniżej, aby ustawić nowe hasło.</p>
+    <a class="btn" href="${resetUrl}">Ustaw nowe hasło</a>
+    <p class="note">Link wygasa po 1 godzinie. Jeśli nie prosiłeś(-aś) o reset hasła, zignoruj tę wiadomość.</p>
+  </div></div>
+</body>
+</html>`;
+  await transporter.sendMail({
+    from: '"Cordyn" <no-reply@cordyn.pl>',
+    to,
+    subject: 'Reset hasła — Cordyn',
+    html,
+  });
+}

@@ -623,6 +623,52 @@ CREATE TABLE IF NOT EXISTS dm_message_edits (
   edited_at  TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_dm_message_edits ON dm_message_edits(message_id, edited_at DESC);
+
+-- ── Password reset tokens ──────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL,
+  used       BOOLEAN DEFAULT FALSE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_pwd_reset_user ON password_reset_tokens(user_id, created_at DESC);
+
+-- ── User sessions ──────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS user_sessions (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  ip_address   VARCHAR(64),
+  user_agent   TEXT,
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  last_seen_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id, last_seen_at DESC);
+
+-- ── Message bookmarks ──────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS message_bookmarks (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message_id    UUID REFERENCES messages(id) ON DELETE CASCADE,
+  dm_message_id UUID REFERENCES dm_messages(id) ON DELETE CASCADE,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT bookmarks_one_msg CHECK (
+    (message_id IS NOT NULL)::int + (dm_message_id IS NOT NULL)::int = 1
+  ),
+  CONSTRAINT bookmarks_unique UNIQUE (user_id, message_id),
+  CONSTRAINT bookmarks_unique_dm UNIQUE (user_id, dm_message_id)
+);
+CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON message_bookmarks(user_id, created_at DESC);
+
+-- ── Channel background ─────────────────────────────────────────────────────
+DO $$ BEGIN ALTER TABLE channels ADD COLUMN background_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE channels ADD COLUMN background_gradient TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- ── Threads ────────────────────────────────────────────────────────────────
+DO $$ BEGIN ALTER TABLE messages ADD COLUMN thread_root_id UUID REFERENCES messages(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE messages ADD COLUMN thread_count INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_root_id) WHERE thread_root_id IS NOT NULL;
 `;
 
 const SEED_SQL = `

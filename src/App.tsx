@@ -21,6 +21,7 @@ import {
   Star, Flame, Trophy, Rocket, Gem, Swords, Heart,
   FileAudio, FileVideo, FileCode2, FileArchive, FileImage, File, ChevronUp,
   HardDrive, PieChart, Trash, History,
+  Bookmark, BookmarkCheck, Timer, Square, ImageIcon,
   type LucideIcon
 } from 'lucide-react';
 import {
@@ -56,7 +57,7 @@ import {
 import {
   playDmNotification, startRing, stopRing,
   startIncomingRing, stopIncomingRing,
-  playVoiceJoin, playVoiceLeave,
+  playVoiceJoin, playVoiceLeave, playMessageSent, playMentionAlert, playMessageReceived,
   playCallAccepted, playCallEnded,
   playStreamJoin,
 } from './sounds';
@@ -4818,6 +4819,28 @@ export default function App() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showGifPicker,   setShowGifPicker]   = useState(false);
   const [plusMenuOpen,    setPlusMenuOpen]    = useState(false);
+  // ── Voice message recording ───────────────────────────────────────────────
+  const [voiceRecording,  setVoiceRecording]  = useState(false);
+  const [voiceRecSecs,    setVoiceRecSecs]    = useState(0);
+  const mediaRecorderRef  = useRef<MediaRecorder|null>(null);
+  const voiceChunksRef    = useRef<Blob[]>([]);
+  const voiceRecTimerRef  = useRef<ReturnType<typeof setInterval>|null>(null);
+  // ── BRB timer ─────────────────────────────────────────────────────────────
+  const [brbModalOpen,    setBrbModalOpen]    = useState(false);
+  const [brbMins,         setBrbMins]         = useState(15);
+  const [brbUntil,        setBrbUntil]        = useState<number|null>(null);
+  // ── Flying reactions ──────────────────────────────────────────────────────
+  const [flyingEmojis, setFlyingEmojis] = useState<{id:number;emoji:string;x:number;y:number}[]>([]);
+  const flyIdRef = useRef(0);
+  // ── Bookmarks ─────────────────────────────────────────────────────────────
+  const [bookmarks,       setBookmarks]       = useState<any[]>([]);
+  const [bookmarksOpen,   setBookmarksOpen]   = useState(false);
+  const [bookmarkedIds,   setBookmarkedIds]   = useState<Set<string>>(new Set());
+  // ── Thread panel ──────────────────────────────────────────────────────────
+  const [threadRootId,    setThreadRootId]    = useState<string|null>(null);
+  const [threadMessages,  setThreadMessages]  = useState<any[]>([]);
+  const [threadInput,     setThreadInput]     = useState('');
+  const [threadSending,   setThreadSending]   = useState(false);
   const [searchQuery, setSearchQuery]         = useState('');
   const searchInputRef                        = useRef<HTMLInputElement>(null);
   const settContentRef                        = useRef<HTMLDivElement>(null);
@@ -4834,6 +4857,7 @@ export default function App() {
   const [editingMsgContent, setEditingMsgContent] = useState('');
   const [attachFile, setAttachFile]           = useState<File|null>(null);
   const [attachPreview, setAttachPreview]     = useState<string|null>(null);
+  const [attachFiles, setAttachFiles]         = useState<File[]>([]); // multiple images
   const [isDraggingOver, setIsDraggingOver]   = useState(false);
 
   // Lightbox for image previews
@@ -5679,8 +5703,17 @@ export default function App() {
         if (!isOwnMsg) playNotifSound();
       } else {
         setChannelMsgs(p => [...p, msg as MessageFull]);
-        // Sound also for current channel messages from others (when tab is in background)
-        if (!isOwnMsg && document.hidden) playNotifSound();
+        if (!isOwnMsg) {
+          // Mention alert sound
+          const myUsername = currentUserRef.current?.username;
+          if (myUsername && new RegExp(`!${myUsername}(?:[^a-zA-Z0-9_]|$)`,'i').test(msg.content || '')) {
+            playMentionAlert();
+          } else if (document.hidden) {
+            playNotifSound();
+          } else {
+            playMessageReceived();
+          }
+        }
       }
     });
     sock.on('new_dm', (msg: DmMessageFull) => {
@@ -6962,6 +6995,7 @@ export default function App() {
 
   // Derived appearance values
   const msgFontCls = fontSize === 'small' ? 'text-xs' : fontSize === 'large' ? 'text-base' : 'text-sm';
+  const isJumboEmoji = (text: string) => /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}){1,5}\s*$/u.test(text?.trim() ?? '');
 
   // Mention autocomplete
   const mentionSuggestions = mentionQuery !== null
@@ -7108,6 +7142,24 @@ export default function App() {
   };
 
   // ── Status ────────────────────────────────────────────────────────
+  // ── BRB timer tick ────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!brbUntil) return;
+    const tick = setInterval(() => {
+      const minsLeft = Math.ceil((brbUntil - Date.now()) / 60000);
+      if (minsLeft <= 0) {
+        setBrbUntil(null);
+        changeStatus('online');
+        users.updateMe({ custom_status: '' }).catch(() => {});
+        clearInterval(tick);
+      } else {
+        users.updateMe({ custom_status: `Wróci za ${minsLeft} min` }).catch(() => {});
+      }
+    }, 60_000);
+    return () => clearInterval(tick);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brbUntil]);
+
   const changeStatus = async (s: 'online'|'idle'|'dnd'|'offline', auto = false) => {
     try {
       await users.updateStatus(s);
@@ -7207,7 +7259,17 @@ export default function App() {
   }, [msgInput]);
 
   // ── Send message ────────────────────────────────────────────────
-  const toggleReaction = async (msgId: string, emoji: string) => {
+  const spawnFlyEmoji = (emoji: string, x: number, y: number) => {
+    const id = flyIdRef.current++;
+    setFlyingEmojis(p => [...p, {id, emoji, x, y}]);
+    setTimeout(() => setFlyingEmojis(p => p.filter(e => e.id !== id)), 900);
+  };
+
+  const toggleReaction = async (msgId: string, emoji: string, evt?: React.MouseEvent) => {
+    if (evt) {
+      const r = (evt.currentTarget as HTMLElement).getBoundingClientRect();
+      spawnFlyEmoji(emoji, r.left + r.width/2, r.top);
+    }
     const msg = channelMsgs.find(m => m.id === msgId);
     if (!msg) return;
     const existing = msg.reactions?.find(r => r.emoji === emoji);
@@ -7250,10 +7312,21 @@ export default function App() {
         return;
       }
     }
-    if ((!content && !attachFile) || sending) return;
+    if ((!content && !attachFile && !attachFiles.length) || sending) return;
     setSending(true); setSendError('');
     let attachUrl: string | undefined;
-    if (attachFile) {
+    if (attachFiles.length > 1) {
+      // Multiple images → upload all, encode as JSON array
+      try {
+        const urls = await Promise.all(attachFiles.map(f => uploadFile(f, 'attachments')));
+        attachUrl = JSON.stringify(urls);
+      } catch (err: any) {
+        const isTooLarge = err?.status === 413;
+        if (isTooLarge) { setShowPowerModal(true); setSending(false); return; }
+        setSendError(`Błąd uploadu: ${err?.message || 'Nieznany błąd'}`);
+        setSending(false); return;
+      }
+    } else if (attachFile) {
       try { attachUrl = await uploadFile(attachFile, 'attachments'); }
       catch (err: any) {
         const msg = (err?.message || 'Błąd przesyłania pliku') as string;
@@ -7272,13 +7345,14 @@ export default function App() {
     }
     const finalContent = content;
     const opts = { reply_to_id: replyTo?.id, attachment_url: attachUrl };
-    setMsgInput(''); setAttachFile(null); setAttachPreview(null); setReplyTo(null);
+    setMsgInput(''); setAttachFile(null); setAttachPreview(null); setAttachFiles([]); setReplyTo(null);
     // Clear draft for current conversation
     const curKey = prevConvKeyRef.current;
     if (curKey) { delete msgDraftsRef.current[curKey]; setDraftKeys(s=>{const n=new Set(s);n.delete(curKey);return n;}); }
     try {
       if (activeView === 'dms' && activeDmUserId) await dmsApi.send(activeDmUserId, finalContent, opts);
       else if (activeChannel) await messagesApi.send(activeChannel, finalContent, opts);
+      playMessageSent();
     } catch (err: any) {
       // 429 = slowmode – extract remaining seconds from error
       if ((err as any)?.status === 429) {
@@ -7291,8 +7365,62 @@ export default function App() {
     finally { setSending(false); }
   };
 
+  // ── Voice message recording ────────────────────────────────────────────────
+  const startVoiceRecord = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/ogg' });
+      voiceChunksRef.current = [];
+      mr.ondataavailable = e => { if (e.data.size > 0) voiceChunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(voiceChunksRef.current, { type: mr.mimeType });
+        if (blob.size < 500) return; // too short
+        const ext = mr.mimeType.includes('webm') ? 'webm' : 'ogg';
+        const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: mr.mimeType });
+        setAttachFile(file); setAttachPreview(null);
+      };
+      mr.start(100);
+      mediaRecorderRef.current = mr;
+      setVoiceRecording(true); setVoiceRecSecs(0);
+      voiceRecTimerRef.current = setInterval(() => setVoiceRecSecs(s => s + 1), 1000);
+    } catch { addToast('Brak dostępu do mikrofonu', 'error'); }
+  };
+  const stopVoiceRecord = () => {
+    mediaRecorderRef.current?.stop();
+    mediaRecorderRef.current = null;
+    setVoiceRecording(false);
+    if (voiceRecTimerRef.current) { clearInterval(voiceRecTimerRef.current); voiceRecTimerRef.current = null; }
+  };
+  const cancelVoiceRecord = () => {
+    voiceChunksRef.current = [];
+    mediaRecorderRef.current?.stop();
+    mediaRecorderRef.current = null;
+    setVoiceRecording(false);
+    if (voiceRecTimerRef.current) { clearInterval(voiceRecTimerRef.current); voiceRecTimerRef.current = null; }
+  };
+
+  const ALLOWED_MIME_PREFIXES = ['image/','video/','audio/','application/pdf','text/','application/zip','application/x-zip','application/json','application/msword','application/vnd.'];
   const handleAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]; if (!f) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    // Multiple images — store as attachFiles array
+    const allImages = files.every(f => f.type.startsWith('image/'));
+    if (files.length > 1 && allImages) {
+      for (const f of files) {
+        if (f.size > 50*1024*1024) { setShowPowerModal(true); e.target.value = ''; return; }
+      }
+      setAttachFiles(files.slice(0, 4)); // max 4 images in grid
+      setAttachFile(null); setAttachPreview(null);
+      e.target.value = ''; return;
+    }
+    const f = files[0];
+    if (f.type && !ALLOWED_MIME_PREFIXES.some(p => f.type.startsWith(p))) {
+      addToast(`Nieobsługiwany typ pliku: ${f.type}`, 'error');
+      e.target.value = ''; return;
+    }
+    if (f.size > 50*1024*1024) { setShowPowerModal(true); e.target.value = ''; return; }
+    setAttachFiles([]); // clear multi
     setAttachFile(f);
     if (f.type.startsWith('image/')) setAttachPreview(URL.createObjectURL(f));
     else setAttachPreview(null);
@@ -8919,17 +9047,29 @@ export default function App() {
                   {STATUS_OPTIONS.map(opt=>{
                     const isCurrent = (currentUser?.status||'online')===opt.value && !activeCall;
                     return (
-                      <button key={opt.value} onClick={()=>{ changeStatus(opt.value); setStatusPickerOpen(false); }}
+                      <button key={opt.value} onClick={()=>{
+                        if (opt.value === 'idle') { setStatusPickerOpen(false); setBrbModalOpen(true); return; }
+                        changeStatus(opt.value); setStatusPickerOpen(false);
+                      }}
                         className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition-colors text-left group ${isCurrent?'bg-white/[0.06]':'hover:bg-white/[0.05]'}`}>
                         <div className={`w-2.5 h-2.5 rounded-full ${opt.color} shrink-0`}/>
                         <div className="flex-1 min-w-0">
                           <p className="text-[12px] font-semibold text-zinc-200 leading-tight">{t(`status.${opt.value}`)}</p>
-                          <p className="text-[10px] text-zinc-600">{t(`status.${opt.value}.desc`)}</p>
+                          <p className="text-[10px] text-zinc-600">{opt.value==='idle'?'Ustaw timer "Zaraz wracam"':t(`status.${opt.value}.desc`)}</p>
                         </div>
                         {isCurrent&&<Check size={12} className="text-indigo-400 shrink-0"/>}
                       </button>
                     );
                   })}
+                  {/* BRB active indicator */}
+                  {brbUntil && brbUntil > Date.now() && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 mt-1">
+                      <Timer size={11} className="text-amber-400 shrink-0"/>
+                      <span className="text-[11px] text-amber-300 flex-1">Wracam za {Math.ceil((brbUntil - Date.now())/60000)} min</span>
+                      <button onClick={()=>{ setBrbUntil(null); changeStatus('online'); users.updateMe({custom_status:''}).catch(()=>{}); setStatusPickerOpen(false); }}
+                        className="text-zinc-600 hover:text-rose-400"><X size={10}/></button>
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -9998,6 +10138,22 @@ export default function App() {
                       </button>
                     </>
                   )}
+                  <button onClick={()=>{
+                    const next = !bookmarksOpen;
+                    setBookmarksOpen(next);
+                    if (next) {
+                      fetch('/api/bookmarks', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
+                        .then(r => r.ok ? r.json() : [])
+                        .then(data => {
+                          setBookmarks(data);
+                          setBookmarkedIds(new Set(data.map((b: any) => b.message?.id).filter(Boolean)));
+                        }).catch(()=>{});
+                    }
+                  }}
+                    title="Zakładki"
+                    className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-150 active:scale-95 ${bookmarksOpen?'text-amber-400 bg-amber-500/15':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07]'}`}>
+                    <Bookmark size={14}/>
+                  </button>
                   <div className="relative">
                     <button onClick={()=>setShowDmMenu(v=>!v)} className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-150 active:scale-95 ${showDmMenu?'text-white bg-white/[0.1]':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07]'}`}>
                       <MoreHorizontal size={15}/>
@@ -10324,6 +10480,16 @@ export default function App() {
                 )}
               {/* Messages */}
               <div ref={msgScrollRef} className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-5 custom-scrollbar flex flex-col"
+                style={activeCh?.background_url ? {
+                  backgroundImage: activeCh.background_gradient
+                    ? `${activeCh.background_gradient}, url(${activeCh.background_url})`
+                    : `url(${activeCh.background_url})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  backgroundAttachment: 'local',
+                } : activeCh?.background_gradient ? {
+                  background: activeCh.background_gradient,
+                } : undefined}
                 onScroll={e => {
                   const el = e.currentTarget;
                   if (el.scrollHeight - el.scrollTop - el.clientHeight < 100) setHasNewMsgs(false);
@@ -10453,12 +10619,12 @@ export default function App() {
                               : <div className="av-frozen shrink-0 self-end mb-0.5" style={{'--av-url':`url("${avatarSrc}")`} as React.CSSProperties}>
                                   <img src={avatarSrc} alt=""
                                     onClick={isAuto?undefined:(e)=>showHoverCard(msg.sender_id, e as unknown as React.MouseEvent)}
-                                    className={`w-9 h-9 rounded-xl object-cover ${isAuto?'cursor-default':'cursor-pointer hover:opacity-80 hover:scale-105'} transition-all av-eff-${(msg as any).sender_avatar_effect||'none'}`}/>
+                                    className={`w-8 h-8 md:w-9 md:h-9 rounded-xl object-cover ${isAuto?'cursor-default':'cursor-pointer hover:opacity-80 hover:scale-105'} transition-all av-eff-${(msg as any).sender_avatar_effect||'none'}`}/>
                                 </div>
                           )}
 
                           {/* Content column */}
-                          <div className={`flex flex-col max-w-[72%] ${isOwn?'items-end':'items-start'} min-w-0`}>
+                          <div className={`flex flex-col max-w-[85%] md:max-w-[72%] ${isOwn?'items-end':'items-start'} min-w-0`}>
 
                             {/* Meta (name + time) */}
                             {!isGrouped && (
@@ -10653,6 +10819,12 @@ export default function App() {
                                 );
                               }
                               if (!c) return null;
+                              // Jumbo emoji (sticker) — no bubble wrapper
+                              if (isJumboEmoji(c)) return (
+                                <div className="py-1 select-none" title={c}>
+                                  <span className="text-5xl leading-tight">{c}</span>
+                                </div>
+                              );
                               return (
                                 <div className={`relative px-4 py-2.5 rounded-2xl max-w-full ${isOwn
                                   ? 'bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-lg shadow-indigo-500/20 bubble-tail-right'
@@ -10678,13 +10850,34 @@ export default function App() {
                             {/* Attachment — hidden when message deleted */}
                             {msg.attachment_url && !(msg as any).deleted && msg.content !== '__deleted__' && (
                               <div className="mt-1.5 max-w-sm">
-                                {getFileRenderType(msg.attachment_url) === 'image' ? (
-                                  <img src={staticUrl(msg.attachment_url)} alt="attachment" className="rounded-2xl max-h-64 object-contain cursor-zoom-in hover:opacity-90 transition-opacity shadow-lg"
-                                    onClick={()=>setLightboxSrc(staticUrl(msg.attachment_url!))}
-                                    onError={e=>{const t=e.currentTarget;t.onerror=null;t.style.display='none';const p=document.createElement('div');p.className='flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.04] text-zinc-500 text-xs';p.innerHTML='<span>🖼️ Obraz niedostępny</span>';t.parentElement?.appendChild(p);}}/>
-                                ) : (
-                                  <AttachmentRenderer url={msg.attachment_url} staticUrl={staticUrl} addToast={addToast}/>
-                                )}
+                                {(() => {
+                                  const url = msg.attachment_url!;
+                                  // JSON array — image grid
+                                  if (url.startsWith('[')) {
+                                    try {
+                                      const urls: string[] = JSON.parse(url);
+                                      const count = urls.length;
+                                      return (
+                                        <div className={`grid gap-1 ${count === 1 ? '' : count === 2 ? 'grid-cols-2' : count === 3 ? 'grid-cols-2' : 'grid-cols-2'}`}
+                                          style={{maxWidth: count === 1 ? '280px' : '320px'}}>
+                                          {urls.map((u, idx) => (
+                                            <img key={idx} src={staticUrl(u)} alt="" onClick={()=>setLightboxSrc(staticUrl(u))}
+                                              className={`rounded-xl object-cover cursor-zoom-in hover:opacity-90 transition-opacity shadow-lg w-full ${count===3&&idx===2?'col-span-2':''}`}
+                                              style={{height: count===1 ? '200px' : '140px'}}
+                                              onError={e=>{(e.currentTarget as HTMLImageElement).style.display='none';}}/>
+                                          ))}
+                                        </div>
+                                      );
+                                    } catch {}
+                                  }
+                                  return getFileRenderType(url) === 'image' ? (
+                                    <img src={staticUrl(url)} alt="attachment" className="rounded-2xl max-h-64 object-contain cursor-zoom-in hover:opacity-90 transition-opacity shadow-lg"
+                                      onClick={()=>setLightboxSrc(staticUrl(url))}
+                                      onError={e=>{const t=e.currentTarget;t.onerror=null;t.style.display='none';const p=document.createElement('div');p.className='flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.04] text-zinc-500 text-xs';p.innerHTML='<span>🖼️ Obraz niedostępny</span>';t.parentElement?.appendChild(p);}}/>
+                                  ) : (
+                                    <AttachmentRenderer url={url} staticUrl={staticUrl} addToast={addToast}/>
+                                  );
+                                })()}
                               </div>
                             )}
 
@@ -10696,7 +10889,7 @@ export default function App() {
                                 <div className="flex flex-wrap gap-1.5 mt-1.5">
                                   {rxns.map(r => (
                                     <button key={r.emoji}
-                                      onMouseDown={e=>{e.preventDefault();toggleReaction(msg.id,r.emoji);}}
+                                      onMouseDown={e=>{e.preventDefault();toggleReaction(msg.id,r.emoji,e);}}
                                       className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-lg text-xs font-medium border transition-all hover:scale-105 active:scale-95 select-none ${
                                         r.mine
                                           ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-200'
@@ -10712,6 +10905,19 @@ export default function App() {
                           </div>
                           </>); })()}
 
+                          {/* Thread replies count */}
+                          {(msg as any).thread_count > 0 && !((msg as any).thread_root_id) && (
+                            <button onClick={async()=>{
+                              setThreadRootId(msg.id);
+                              const token = localStorage.getItem('cordyn_token');
+                              const r = await fetch(`/api/messages/${msg.id}/thread`,{headers:{Authorization:`Bearer ${token}`}});
+                              if(r.ok) setThreadMessages(await r.json());
+                            }}
+                              className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-indigo-400 hover:text-indigo-300 hover:underline transition-colors">
+                              <MessageSquare size={11}/>{(msg as any).thread_count} {(msg as any).thread_count === 1 ? 'odpowiedź' : 'odpowiedzi'} w wątku
+                            </button>
+                          )}
+
                           {/* ── Discord-style floating action bar ───────────── */}
                           {editingMsgId !== msg.id && !((msg as any).deleted || msg.content === '__deleted__') && (
                           <div className="absolute top-1 right-2 z-40 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all duration-150">
@@ -10719,12 +10925,43 @@ export default function App() {
                               {/* Quick reactions — servers only */}
                               {activeView==='servers' && <>
                                 {['👍','❤️','😂','🔥'].map(em => (
-                                  <button key={em} onMouseDown={e=>{e.preventDefault();toggleReaction(msg.id,em);}}
+                                  <button key={em} onMouseDown={e=>{e.preventDefault();toggleReaction(msg.id,em,e);}}
                                     className="w-8 h-8 flex items-center justify-center text-sm hover:bg-white/[0.08] rounded-lg transition-all hover:scale-110 active:scale-95"
                                     title={em}>{em}</button>
                                 ))}
                                 <div className="w-px h-5 bg-white/[0.1] mx-0.5 shrink-0"/>
                               </>}
+                              {/* Bookmark */}
+                              <button onMouseDown={e=>{e.preventDefault();}}
+                                onClick={async()=>{
+                                  const isDmMsg = activeView==='dms';
+                                  const key = isDmMsg ? 'dm_message_id' : 'message_id';
+                                  const isBookmarked = bookmarkedIds.has(msg.id);
+                                  if (isBookmarked) {
+                                    await fetch('/api/bookmarks',{method:'DELETE',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('cordyn_token')}`},body:JSON.stringify({[key]:msg.id})});
+                                    setBookmarkedIds(p=>{const n=new Set(p);n.delete(msg.id);return n;});
+                                    setBookmarks(p=>p.filter(b=>b.message?.id!==msg.id));
+                                    addToast('Usunięto z zakładek','info');
+                                  } else {
+                                    const r=await fetch('/api/bookmarks',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('cordyn_token')}`},body:JSON.stringify({[key]:msg.id})});
+                                    if(r.ok){setBookmarkedIds(p=>new Set([...p,msg.id]));addToast('Dodano do zakładek','success');}
+                                  }
+                                }}
+                                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${bookmarkedIds.has(msg.id)?'text-amber-400 hover:bg-amber-500/10':'text-zinc-500 hover:text-amber-400 hover:bg-white/[0.08]'}`}
+                                title={bookmarkedIds.has(msg.id)?'Usuń zakładkę':'Dodaj zakładkę'}>
+                                {bookmarkedIds.has(msg.id)?<BookmarkCheck size={13}/>:<Bookmark size={13}/>}
+                              </button>
+                              {/* Thread */}
+                              {activeView!=='dms' && !msg.thread_root_id && (
+                                <button onClick={async()=>{
+                                  setThreadRootId(msg.id);
+                                  const token = localStorage.getItem('cordyn_token');
+                                  const r = await fetch(`/api/messages/${msg.id}/thread`,{headers:{Authorization:`Bearer ${token}`}});
+                                  if(r.ok) setThreadMessages(await r.json());
+                                }}
+                                  className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${threadRootId===msg.id?'text-indigo-400 bg-indigo-500/10':'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.08]'}`}
+                                  title="Wątek"><MessageSquare size={13}/></button>
+                              )}
                               {/* Reply */}
                               <button onClick={()=>setReplyTo(msg)}
                                 className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.08] rounded-lg transition-colors"
@@ -10751,6 +10988,18 @@ export default function App() {
                                     <button onClick={()=>{try{navigator.clipboard.writeText(msg.content);}catch{}addToast('Skopiowano tekst','success');setMsgMenuId(null);}}
                                       className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors">
                                       <Copy size={13}/> Kopiuj tekst
+                                    </button>
+                                    <button onClick={()=>{
+                                      const base = window.location.origin;
+                                      const link = activeView==='servers'
+                                        ? `${base}/channels/${activeServer}/${activeChannel}?msg=${msg.id}`
+                                        : `${base}/dm/${activeDm?.id}?msg=${msg.id}`;
+                                      try{navigator.clipboard.writeText(link);}catch{}
+                                      addToast('Skopiowano link do wiadomości','success');
+                                      setMsgMenuId(null);
+                                    }}
+                                      className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors">
+                                      <Link2 size={13}/> Kopiuj link
                                     </button>
                                     {activeView==='servers'&&canPinMessages&&activeCh?.type==='text'&&(
                                       <button onClick={()=>{handlePinMessage(msg.id,!(msg as MessageFull).pinned);setMsgMenuId(null);}}
@@ -10856,14 +11105,43 @@ export default function App() {
                       <button onClick={()=>{setAttachFile(null);setAttachPreview(null);}} className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 rounded-full flex items-center justify-center"><X size={9} className="text-white"/></button>
                     </motion.div>
                   )}
+                  {attachFiles.length > 1 && (
+                    <motion.div initial={{opacity:0,height:0}} animate={{opacity:1,height:'auto'}} exit={{opacity:0,height:0}} className="overflow-hidden mb-2">
+                      <div className="flex gap-1.5 flex-wrap">
+                        {attachFiles.map((f, i) => (
+                          <div key={i} className="relative">
+                            <img src={URL.createObjectURL(f)} alt="" className="h-16 w-16 rounded-lg object-cover"/>
+                          </div>
+                        ))}
+                        <button onClick={()=>setAttachFiles([])} className="ml-1 text-zinc-600 hover:text-rose-400 self-start mt-1"><X size={12}/></button>
+                      </div>
+                      <p className="text-[10px] text-zinc-600 mt-1">{attachFiles.length} zdjęcia w siatce</p>
+                    </motion.div>
+                  )}
                   {attachFile&&!attachPreview&&(
                     <motion.div initial={{opacity:0,height:0}} animate={{opacity:1,height:'auto'}} exit={{opacity:0,height:0}} className="overflow-hidden mb-2">
-                      <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-900 border border-white/[0.08] text-xs text-zinc-300 max-w-xs">
-                        {getFileIcon(getFileRenderType(attachFile.name), 13)}
-                        <span className="truncate flex-1">{attachFile.name}</span>
-                        <span className="text-zinc-600 shrink-0">{attachFile.size > 1024*1024 ? (attachFile.size/1024/1024).toFixed(1)+'MB' : Math.round(attachFile.size/1024)+'KB'}</span>
-                        <button onClick={()=>setAttachFile(null)} className="ml-1 text-zinc-600 hover:text-rose-400 shrink-0"><X size={9}/></button>
-                      </div>
+                      {attachFile.type.startsWith('audio/') ? (
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-900 border border-white/[0.08] max-w-xs">
+                          <FileAudio size={13} className="text-emerald-400 shrink-0"/>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-zinc-300 truncate">{attachFile.name}</p>
+                            <audio controls src={URL.createObjectURL(attachFile)} className="w-full h-7 mt-1 rounded" style={{maxWidth:'220px'}}/>
+                          </div>
+                          <button onClick={()=>setAttachFile(null)} className="ml-1 text-zinc-600 hover:text-rose-400 shrink-0"><X size={9}/></button>
+                        </div>
+                      ) : attachFile.type.startsWith('video/') ? (
+                        <div className="relative inline-block">
+                          <video src={URL.createObjectURL(attachFile)} className="max-h-28 rounded-xl" controls muted/>
+                          <button onClick={()=>setAttachFile(null)} className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 rounded-full flex items-center justify-center"><X size={9} className="text-white"/></button>
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-900 border border-white/[0.08] text-xs text-zinc-300 max-w-xs">
+                          {getFileIcon(getFileRenderType(attachFile.name), 13)}
+                          <span className="truncate flex-1">{attachFile.name}</span>
+                          <span className="text-zinc-600 shrink-0">{attachFile.size > 1024*1024 ? (attachFile.size/1024/1024).toFixed(1)+'MB' : Math.round(attachFile.size/1024)+'KB'}</span>
+                          <button onClick={()=>setAttachFile(null)} className="ml-1 text-zinc-600 hover:text-rose-400 shrink-0"><X size={9}/></button>
+                        </div>
+                      )}
                     </motion.div>
                   )}
                   {sendError&&(
@@ -10976,7 +11254,7 @@ export default function App() {
                         )}
                       </AnimatePresence>
                       <div className={`flex items-center gap-3 bg-white/[0.06] border border-white/[0.08] rounded-2xl px-4 py-3.5 hover:border-white/[0.12] focus-within:border-indigo-500/40 focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] transition-all duration-200 ${slowmodeLeft > 0 && activeView === 'servers' ? 'opacity-40 pointer-events-none' : ''}`}>
-                        <input type="file" ref={attachRef} onChange={handleAttach} accept="*/*" className="hidden"/>
+                        <input type="file" ref={attachRef} onChange={handleAttach} accept="*/*" multiple className="hidden"/>
                         {/* Plus menu — Discord-style */}
                         <div className="relative shrink-0">
                           <button type="button"
@@ -11130,7 +11408,22 @@ export default function App() {
                           </button>
                           {showEmojiPicker && <EmojiPicker onSelect={insertEmoji} onClose={() => setShowEmojiPicker(false)} serverEmojis={activeView==='servers'&&activeServer ? (serverEmojis.get(activeServer)||[]) : []}/>}
                         </div>
-                        <button type="submit" disabled={(!msgInput.trim()&&!attachFile)||sending}
+                        {/* Voice message button */}
+                        {!msgInput.trim() && !attachFile && !voiceRecording && (
+                          <button type="button" onMouseDown={e=>{e.preventDefault();startVoiceRecord();}}
+                            title="Nagraj wiadomość głosową"
+                            className="w-8 h-8 rounded-xl flex items-center justify-center text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all shrink-0 active:scale-90">
+                            <Mic size={15}/>
+                          </button>
+                        )}
+                        {voiceRecording && (
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-xs font-mono text-rose-400 animate-pulse">{Math.floor(voiceRecSecs/60)}:{String(voiceRecSecs%60).padStart(2,'0')}</span>
+                            <button type="button" onClick={cancelVoiceRecord} title="Anuluj" className="w-7 h-7 rounded-xl flex items-center justify-center text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all"><X size={13}/></button>
+                            <button type="button" onClick={stopVoiceRecord} title="Zatrzymaj i wyślij" className="w-8 h-8 rounded-xl flex items-center justify-center bg-rose-500 hover:bg-rose-400 text-white transition-all active:scale-90"><Square size={11} className="fill-white"/></button>
+                          </div>
+                        )}
+                        <button type="submit" disabled={(!msgInput.trim()&&!attachFile)||sending||voiceRecording}
                           className="w-8 h-8 rounded-xl bg-indigo-500 hover:bg-indigo-400 disabled:opacity-25 disabled:cursor-not-allowed flex items-center justify-center text-white transition-all duration-150 active:scale-90 shrink-0 shadow-lg shadow-indigo-500/25">
                           {sending?<Loader2 size={14} className="animate-spin"/>:<Send size={14}/>}
                         </button>
@@ -15134,6 +15427,173 @@ export default function App() {
           onDone={cropPending.onDone}
         />
       )}
+
+      {/* ── Flying emoji reactions overlay ───────────────────────────────── */}
+      {ReactDOM.createPortal(
+        <>
+          {flyingEmojis.map(fe => (
+            <div key={fe.id} style={{position:'fixed',left:fe.x,top:fe.y,pointerEvents:'none',zIndex:9999,transform:'translate(-50%,-100%)',animation:'flyEmoji 0.9s ease-out forwards',fontSize:'1.6rem',lineHeight:1}}>
+              {fe.emoji}
+            </div>
+          ))}
+        </>,
+        document.body
+      )}
+
+      {/* ── BRB Timer Modal ──────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {brbModalOpen && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4"
+            onClick={()=>setBrbModalOpen(false)}>
+            <motion.div initial={{scale:0.9,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.9,opacity:0}}
+              transition={{type:'spring',stiffness:400,damping:30}}
+              onClick={e=>e.stopPropagation()}
+              className="bg-[#0f0f1a] border border-white/[0.1] rounded-3xl p-6 w-80 shadow-2xl">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/15 flex items-center justify-center">
+                  <Timer size={18} className="text-amber-400"/>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Zaraz wracam</h3>
+                  <p className="text-xs text-zinc-500">Ustaw kiedy wrócisz</p>
+                </div>
+                <button onClick={()=>setBrbModalOpen(false)} className="ml-auto text-zinc-600 hover:text-white"><X size={16}/></button>
+              </div>
+              <div className="grid grid-cols-4 gap-2 mb-5">
+                {[5,10,15,30,60,90,120,180].map(m=>(
+                  <button key={m} onClick={()=>setBrbMins(m)}
+                    className={`py-2 rounded-xl text-sm font-semibold transition-all ${brbMins===m?'bg-amber-500 text-white':'bg-white/[0.06] text-zinc-400 hover:bg-white/[0.1] hover:text-white'}`}>
+                    {m<60?`${m}m`:`${m/60}h`}
+                  </button>
+                ))}
+              </div>
+              <button onClick={async()=>{
+                  const until = Date.now() + brbMins * 60_000;
+                  setBrbUntil(until); setBrbModalOpen(false);
+                  await changeStatus('idle');
+                  await users.updateMe({ custom_status: `Wróci za ${brbMins} min` }).catch(()=>{});
+                }}
+                className="w-full py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-white font-bold text-sm transition-all active:scale-95">
+                Ustaw „Zaraz wracam" na {brbMins < 60 ? `${brbMins} min` : `${brbMins/60}h`}
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Bookmarks Panel ──────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {bookmarksOpen && (
+          <motion.div initial={{opacity:0,x:20}} animate={{opacity:1,x:0}} exit={{opacity:0,x:20}}
+            transition={{type:'spring',stiffness:380,damping:32}}
+            className="fixed right-4 top-16 bottom-16 w-80 bg-[#0f0f1a] border border-white/[0.1] rounded-2xl shadow-2xl z-[150] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-white/[0.07] shrink-0">
+              <div className="flex items-center gap-2">
+                <Bookmark size={15} className="text-indigo-400"/>
+                <h3 className="text-sm font-bold text-white">Zakładki</h3>
+                {bookmarks.length > 0 && <span className="text-xs text-zinc-600">{bookmarks.length}</span>}
+              </div>
+              <button onClick={()=>setBookmarksOpen(false)} className="text-zinc-600 hover:text-white"><X size={15}/></button>
+            </div>
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-3 flex flex-col gap-2">
+              {bookmarks.length === 0 ? (
+                <div className="flex flex-col items-center justify-center flex-1 gap-3 py-12">
+                  <Bookmark size={32} className="text-zinc-700"/>
+                  <p className="text-sm text-zinc-600 text-center">Brak zakładek.<br/>Kliknij 🔖 przy wiadomości żeby dodać.</p>
+                </div>
+              ) : bookmarks.map((bm: any) => (
+                <div key={bm.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 flex flex-col gap-1.5 hover:border-white/[0.1] transition-colors group">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <img src={bm.message?.sender_avatar ? staticUrl(bm.message.sender_avatar) : `https://api.dicebear.com/7.x/initials/svg?seed=${bm.message?.sender_username}&backgroundColor=6366f1`} className="w-5 h-5 rounded-full object-cover" alt=""/>
+                    <span className="text-[11px] font-semibold text-zinc-400">{bm.message?.sender_username}</span>
+                    <span className="text-[10px] text-zinc-700 ml-auto">{bm.message?.created_at ? new Date(bm.message.created_at).toLocaleDateString('pl') : ''}</span>
+                  </div>
+                  <p className="text-xs text-zinc-300 leading-relaxed line-clamp-3">{bm.message?.content || '📎 Załącznik'}</p>
+                  <div className="flex items-center gap-1.5 pt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={async()=>{
+                        const bmsApi = (await import('./api')).default;
+                        const key = bm.type==='channel' ? 'message_id' : 'dm_message_id';
+                        await fetch('/api/bookmarks', {method:'DELETE',headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('cordyn_token')}`},body:JSON.stringify({[key]:bm.message?.id})});
+                        setBookmarks(p=>p.filter(b=>b.id!==bm.id));
+                        setBookmarkedIds(p=>{const n=new Set(p);n.delete(bm.message?.id);return n;});
+                      }}
+                      className="ml-auto text-[10px] text-zinc-600 hover:text-rose-400 transition-colors flex items-center gap-1">
+                      <Trash2 size={10}/> Usuń
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Thread Panel ──────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {threadRootId && (
+          <motion.div initial={{opacity:0,x:30}} animate={{opacity:1,x:0}} exit={{opacity:0,x:30}}
+            transition={{type:'spring',stiffness:380,damping:32}}
+            className="fixed right-4 top-16 bottom-16 w-80 bg-[#0f0f1a] border border-white/[0.1] rounded-2xl shadow-2xl z-[150] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-white/[0.07] shrink-0">
+              <div className="flex items-center gap-2">
+                <MessageSquare size={15} className="text-indigo-400"/>
+                <h3 className="text-sm font-bold text-white">Wątek</h3>
+                <span className="text-xs text-zinc-600">{threadMessages.length} odpowiedzi</span>
+              </div>
+              <button onClick={()=>setThreadRootId(null)} className="text-zinc-600 hover:text-white"><X size={15}/></button>
+            </div>
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-3 flex flex-col gap-2">
+              {threadMessages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center flex-1 gap-3 py-12">
+                  <MessageSquare size={32} className="text-zinc-700"/>
+                  <p className="text-sm text-zinc-600 text-center">Brak odpowiedzi.<br/>Zacznij wątek poniżej.</p>
+                </div>
+              ) : threadMessages.map((m: any) => (
+                <div key={m.id} className="flex gap-2.5 py-1.5 hover:bg-white/[0.02] rounded-xl px-2 transition-colors">
+                  <img src={m.sender_avatar ? staticUrl(m.sender_avatar) : `https://api.dicebear.com/7.x/initials/svg?seed=${m.sender_username}&backgroundColor=6366f1`}
+                    className="w-7 h-7 rounded-full object-cover shrink-0 mt-0.5" alt=""/>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-2 mb-0.5">
+                      <span className="text-xs font-semibold text-white">{m.sender_username}</span>
+                      <span className="text-[10px] text-zinc-600">{new Date(m.created_at).toLocaleTimeString('pl-PL', {hour:'2-digit',minute:'2-digit'})}</span>
+                    </div>
+                    <p className="text-xs text-zinc-300 leading-relaxed break-words">{m.content}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="p-3 border-t border-white/[0.06] shrink-0">
+              <form onSubmit={async e=>{
+                e.preventDefault();
+                if (!threadInput.trim() || threadSending) return;
+                setThreadSending(true);
+                try {
+                  const token = localStorage.getItem('cordyn_token');
+                  const r = await fetch(`/api/messages/${threadRootId}/thread`, {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},
+                    body: JSON.stringify({content: threadInput.trim()})
+                  });
+                  if (r.ok) {
+                    setThreadInput('');
+                    const r2 = await fetch(`/api/messages/${threadRootId}/thread`, {headers:{Authorization:`Bearer ${token}`}});
+                    if (r2.ok) setThreadMessages(await r2.json());
+                  }
+                } finally { setThreadSending(false); }
+              }} className="flex gap-2">
+                <input value={threadInput} onChange={e=>setThreadInput(e.target.value)}
+                  placeholder="Odpowiedz w wątku…"
+                  className="flex-1 bg-white/[0.06] border border-white/[0.1] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500/50 min-w-0"/>
+                <button type="submit" disabled={!threadInput.trim()||threadSending}
+                  className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 transition-colors text-white shrink-0">
+                  <Send size={14}/>
+                </button>
+              </form>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

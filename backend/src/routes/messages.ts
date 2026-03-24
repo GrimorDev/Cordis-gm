@@ -554,4 +554,48 @@ router.get('/channel/:channelId/pinned', authMiddleware, async (req: AuthRequest
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// GET /api/messages/:id/thread — fetch thread replies
+router.get('/:id/thread', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    // Find channel_id for this message (to check access)
+    const { rows: [root] } = await query(
+      'SELECT channel_id, content, created_at, sender_id FROM messages WHERE id=$1 AND thread_root_id IS NULL',
+      [req.params.id]
+    );
+    if (!root) return res.status(404).json({ error: 'Message not found' });
+    const access = await resolveChannelAccess(root.channel_id, req.user!.id);
+    if (!access) return res.status(403).json({ error: 'No access' });
+    const { rows } = await query(
+      MSG_JOIN('$1', '$2') + ' AND m.thread_root_id = $3 ORDER BY m.created_at ASC LIMIT 200',
+      [access.serverId, root.channel_id, req.params.id]
+    );
+    return res.json(rows);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// POST /api/messages/:id/thread — post a thread reply
+router.post('/:id/thread', authMiddleware, msgLimiter, async (req: AuthRequest, res: Response) => {
+  const { content, attachment_url } = req.body;
+  if (!content?.trim() && !attachment_url) return res.status(400).json({ error: 'Empty message' });
+  try {
+    const { rows: [root] } = await query(
+      'SELECT channel_id FROM messages WHERE id=$1 AND thread_root_id IS NULL',
+      [req.params.id]
+    );
+    if (!root) return res.status(404).json({ error: 'Root message not found' });
+    const access = await resolveChannelAccess(root.channel_id, req.user!.id);
+    if (!access) return res.status(403).json({ error: 'No access' });
+    const { rows: [msg] } = await query(
+      `INSERT INTO messages (channel_id, sender_id, content, attachment_url, thread_root_id)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [root.channel_id, req.user!.id, content?.trim() || '', attachment_url || null, req.params.id]
+    );
+    await query('UPDATE messages SET thread_count = thread_count + 1 WHERE id=$1', [req.params.id]);
+    // Emit socket event for real-time
+    const io = req.app.get('io');
+    if (io) io.to(`channel:${root.channel_id}`).emit('thread_reply', { thread_root_id: req.params.id, message_id: msg.id });
+    return res.status(201).json({ id: msg.id });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
 export default router;

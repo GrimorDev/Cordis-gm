@@ -14,6 +14,7 @@ import {
   generateTotpSecret, generateQrCode, verifyTotpCode,
   generateBackupCodes, hashBackupCodes, verifyBackupCode,
 } from '../services/totp';
+import { searchLimiter } from '../middleware/userRateLimits';
 
 const router = Router();
 
@@ -84,7 +85,7 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
 });
 
 // GET /api/users/search/query?q=
-router.get('/search/query', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/search/query', authMiddleware, searchLimiter, async (req: AuthRequest, res: Response) => {
   const q = String(req.query.q || '').trim();
   if (q.length < 2) return res.json([]);
   try {
