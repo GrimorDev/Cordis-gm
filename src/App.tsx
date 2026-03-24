@@ -10398,10 +10398,17 @@ export default function App() {
                 onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget as Node))setIsDraggingOver(false);}}
                 onDrop={e=>{
                   e.preventDefault(); setIsDraggingOver(false);
-                  const file = e.dataTransfer.files[0];
-                  if (!file) return;
-                  // Size check: 50MB max
+                  const files = Array.from(e.dataTransfer.files);
+                  if (!files.length) return;
+                  const allImages = files.every(f => f.type.startsWith('image/'));
+                  if (files.length > 1 && allImages) {
+                    const selected = files.slice(0, 12);
+                    for (const f of selected) { if (f.size > 50*1024*1024) { setShowPowerModal(true); return; } }
+                    setAttachFiles(selected); setAttachFile(null); setAttachPreview(null); return;
+                  }
+                  const file = files[0];
                   if (file.size > 50 * 1024 * 1024) { setShowPowerModal(true); return; }
+                  setAttachFiles([]);
                   setAttachFile(file);
                   if (file.type.startsWith('image/')) setAttachPreview(URL.createObjectURL(file));
                   else setAttachPreview(null);
@@ -13211,31 +13218,48 @@ export default function App() {
                 {editingCh?.type==='text'&&(
                   <div className="flex flex-col gap-3">
                     <div>
-                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block flex items-center gap-1.5"><ImageIcon size={10}/> Tło kanału (URL zdjęcia)</label>
-                      <input value={chForm.background_url} onChange={e=>setChForm(p=>({...p,background_url:e.target.value}))}
-                        placeholder="https://example.com/image.jpg" className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Tło kanału</label>
+                      <div className="flex gap-2">
+                        {/* Upload image */}
+                        <label className="flex-1 flex items-center gap-2 cursor-pointer px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:border-indigo-500/40 hover:bg-white/[0.07] transition-all text-sm text-zinc-400 hover:text-zinc-200">
+                          <ImageIcon size={14} className="shrink-0 text-indigo-400"/>
+                          <span className="truncate">{chForm.background_url ? 'Zmień zdjęcie' : 'Wgraj zdjęcie'}</span>
+                          <input type="file" accept="image/*" className="hidden" onChange={async e=>{
+                            const f = e.target.files?.[0]; if (!f) return;
+                            try {
+                              const url = await uploadFile(f, 'attachments');
+                              setChForm(p=>({...p, background_url: url}));
+                            } catch { addToast('Błąd wgrywania zdjęcia', 'error'); }
+                            e.target.value='';
+                          }}/>
+                        </label>
+                        {chForm.background_url && (
+                          <button type="button" onClick={()=>setChForm(p=>({...p,background_url:''}))}
+                            className="px-3 py-2.5 rounded-xl text-xs text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 border border-white/[0.06] transition-all shrink-0">
+                            <X size={13}/>
+                          </button>
+                        )}
+                      </div>
+                      {chForm.background_url && (
+                        <div className="mt-2 h-14 rounded-xl overflow-hidden border border-white/[0.06]">
+                          <img src={staticUrl(chForm.background_url)} alt="" className="w-full h-full object-cover"/>
+                        </div>
+                      )}
                     </div>
                     <div>
-                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Gradient tła (CSS)</label>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Gradient CSS (opcjonalnie)</label>
                       <input value={chForm.background_gradient} onChange={e=>setChForm(p=>({...p,background_gradient:e.target.value}))}
-                        placeholder="linear-gradient(135deg, #1a1a2e, #16213e)" className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm font-mono`}/>
-                      <p className="text-[10px] text-zinc-700 mt-1">Możesz użyć samego gradientu lub kombinacji z URL zdjęcia</p>
+                        placeholder="linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)" className={`w-full ${gi} rounded-xl px-4 py-2.5 text-xs font-mono`}/>
+                      <p className="text-[10px] text-zinc-700 mt-1">Możesz użyć samego gradientu lub w połączeniu ze zdjęciem</p>
                     </div>
-                    {(chForm.background_url || chForm.background_gradient) && (
-                      <div className="h-16 rounded-xl border border-white/[0.06] flex items-center justify-center text-xs text-zinc-600"
-                        style={{
-                          backgroundImage: chForm.background_url
-                            ? (chForm.background_gradient ? `${chForm.background_gradient}, url(${chForm.background_url})` : `url(${chForm.background_url})`)
-                            : chForm.background_gradient || undefined,
-                          backgroundSize: 'cover', backgroundPosition: 'center'
-                        }}>
-                        Podgląd tła
-                      </div>
+                    {chForm.background_gradient && (
+                      <div className="h-12 rounded-xl border border-white/[0.06]"
+                        style={{background: chForm.background_gradient}}/>
                     )}
                     {(chForm.background_url || chForm.background_gradient) && (
-                      <button onClick={()=>setChForm(p=>({...p,background_url:'',background_gradient:''}))}
-                        className="text-xs text-zinc-600 hover:text-rose-400 transition-colors text-left">
-                        Usuń tło
+                      <button type="button" onClick={()=>setChForm(p=>({...p,background_url:'',background_gradient:''}))}
+                        className="text-[11px] text-zinc-600 hover:text-rose-400 transition-colors text-left">
+                        Usuń wszystkie tła
                       </button>
                     )}
                   </div>
@@ -15541,15 +15565,14 @@ export default function App() {
               ) : bookmarks.map((bm: any) => (
                 <div key={bm.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 flex flex-col gap-1.5 hover:border-white/[0.1] transition-colors group">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <img src={bm.message?.sender_avatar ? staticUrl(bm.message.sender_avatar) : `https://api.dicebear.com/7.x/initials/svg?seed=${bm.message?.sender_username}&backgroundColor=6366f1`} className="w-5 h-5 rounded-full object-cover" alt=""/>
-                    <span className="text-[11px] font-semibold text-zinc-400">{bm.message?.sender_username}</span>
+                    <img src={bm.message?.author?.avatar_url ? staticUrl(bm.message.author.avatar_url) : `https://api.dicebear.com/7.x/initials/svg?seed=${bm.message?.author?.username}&backgroundColor=6366f1`} className="w-5 h-5 rounded-full object-cover" alt=""/>
+                    <span className="text-[11px] font-semibold text-zinc-400">{bm.message?.author?.username}</span>
                     <span className="text-[10px] text-zinc-700 ml-auto">{bm.message?.created_at ? new Date(bm.message.created_at).toLocaleDateString('pl') : ''}</span>
                   </div>
                   <p className="text-xs text-zinc-300 leading-relaxed line-clamp-3">{bm.message?.content || '📎 Załącznik'}</p>
                   <div className="flex items-center gap-1.5 pt-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={async()=>{
-                        const bmsApi = (await import('./api')).default;
-                        const key = bm.type==='channel' ? 'message_id' : 'dm_message_id';
+                        const key = bm.message_id ? 'message_id' : 'dm_message_id';
                         await fetch('/api/bookmarks', {method:'DELETE',headers:{'Content-Type':'application/json','Authorization':`Bearer ${getToken()}`},body:JSON.stringify({[key]:bm.message?.id})});
                         setBookmarks(p=>p.filter(b=>b.id!==bm.id));
                         setBookmarkedIds(p=>{const n=new Set(p);n.delete(bm.message?.id);return n;});

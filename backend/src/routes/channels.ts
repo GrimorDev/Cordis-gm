@@ -94,6 +94,7 @@ router.get('/server/:serverId', authMiddleware, async (req: AuthRequest, res: Re
     // Falls back to 30-day window if user has never marked the channel as read.
     const { rows: channels } = await query(
       `SELECT c.id, c.category_id, c.name, c.type, c.description, c.is_private, c.position,
+              c.slowmode_seconds, c.background_url, c.background_gradient,
               CASE WHEN c.type IN ('text','announcement')
                 THEN COALESCE((
                   SELECT COUNT(*)::int FROM messages m
