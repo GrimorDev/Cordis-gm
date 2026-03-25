@@ -213,7 +213,8 @@ router.get('/user/:userId', async (req: Request, res: Response) => {
       `SELECT spotify_access_token, spotify_display_name, spotify_show_on_profile
        FROM users WHERE id=$1`, [req.params.userId]
     );
-    if (!rows[0]?.spotify_access_token || !rows[0]?.spotify_show_on_profile) {
+    // treat NULL as true (default: show on profile); only hide when explicitly false
+    if (!rows[0]?.spotify_access_token || rows[0]?.spotify_show_on_profile === false) {
       return res.json({ connected: false, show_on_profile: false, current_playing: null, top_tracks: [] });
     }
 
@@ -268,11 +269,15 @@ router.put('/settings', authMiddleware, async (req: AuthRequest, res: Response) 
 // DELETE /api/spotify/disconnect — remove Spotify (auth)
 router.delete('/disconnect', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    const userId = req.user!.id;
+    // Clear any active JAM session from Redis
+    try { await endSpotifyJam(userId); } catch {}
     await query(
       `UPDATE users SET spotify_access_token=NULL, spotify_refresh_token=NULL,
-       spotify_token_expires=NULL, spotify_user_id=NULL, spotify_display_name=NULL
+       spotify_token_expires=NULL, spotify_user_id=NULL, spotify_display_name=NULL,
+       spotify_show_on_profile=NULL
        WHERE id=$1`,
-      [req.user!.id]
+      [userId]
     );
     return res.json({ ok: true });
   } catch {
