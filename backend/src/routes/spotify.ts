@@ -208,6 +208,9 @@ router.get('/top-tracks', authMiddleware, async (req: AuthRequest, res: Response
 
 // GET /api/spotify/user/:userId — public profile data (if show_on_profile=true)
 router.get('/user/:userId', async (req: Request, res: Response) => {
+  // Disable caching — track changes in real time
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
   try {
     const { rows } = await query(
       `SELECT spotify_access_token, spotify_display_name, spotify_show_on_profile
@@ -380,6 +383,8 @@ router.get('/jam/active', authMiddleware, async (req: AuthRequest, res: Response
 
 // GET /api/spotify/jam/:hostId — get public JAM info (auth) — used to show invite details
 router.get('/jam/:hostId', authMiddleware, async (req: AuthRequest, res: Response) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
   const { hostId } = req.params;
   const members = await getSpotifyJamMembers(hostId);
   if (members === null) return res.json({ active: false, jam_id: null, host: null, members: [] });
