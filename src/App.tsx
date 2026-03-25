@@ -7794,7 +7794,8 @@ export default function App() {
     setProfileLoading(false);
     // Load friend's JAM status if not own profile
     if (userId !== currentUser?.id) {
-      spotifyApi.jamInfo(userId).then(j => setProfileViewedJam(j)).catch(() => {});
+      // Only set JAM if actually active (jam_id present) — prevent { active:false } from showing as active
+      spotifyApi.jamInfo(userId).then(j => setProfileViewedJam(j?.jam_id ? j : null)).catch(() => {});
     }
     // If own profile — also load connection statuses
     if (userId === currentUser?.id) {
