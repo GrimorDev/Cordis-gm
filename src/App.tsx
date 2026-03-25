@@ -5799,6 +5799,11 @@ export default function App() {
       setDmConvs(p => p.map(d => d.other_user_id === reader_id ? { ...d, other_last_read_at: read_at } : d));
     });
     sock.on('user_status', ({ user_id, status }) => {
+      // Update own status in currentUser (e.g. on reconnect restoring preferred_status)
+      if (currentUserRef.current?.id && user_id === currentUserRef.current.id) {
+        myStatusRef.current = status as 'online'|'idle'|'dnd'|'offline';
+        setCurrentUser(p => p ? { ...p, status } : p);
+      }
       setFriends(p => p.map(f => f.id === user_id ? { ...f, status } : f));
       setDmConvs(p => p.map(d => d.other_user_id === user_id ? { ...d, other_status: status } : d));
       setMembers(p => p.map(m => m.id === user_id ? { ...m, status } : m));
@@ -9203,12 +9208,6 @@ export default function App() {
                 </button>
                 <button title="Ustawienia aplikacji" onClick={()=>{setAppSettTab('account');setAppSettOpen(true);}}
                   className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all"><Settings size={13}/></button>
-                <button title={streamerMode ? 'Wyłącz tryb streamera (aktywny)' : 'Tryb streamera'}
-                  onClick={() => setStreamerMode(p => !p)}
-                  className={`w-7 h-7 flex items-center justify-center rounded-md transition-all ${
-                    streamerMode ? 'text-red-400 bg-red-500/10 hover:bg-red-500/20' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07]'}`}>
-                  {streamerMode ? <EyeOff size={13}/> : <Eye size={13}/>}
-                </button>
               </div>
             </div>
           </div>
