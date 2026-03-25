@@ -102,6 +102,7 @@ router.get('/connect', authMiddleware, async (req: AuthRequest, res: Response) =
     scope:         SCOPES,
     redirect_uri:  REDIRECT_URI,
     state,
+    show_dialog:   'true', // Force consent screen so user always grants all scopes
   });
   return res.json({ url: `https://accounts.spotify.com/authorize?${params}` });
 });
