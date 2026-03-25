@@ -4815,6 +4815,14 @@ export default function App() {
   const [members, setMembers]                 = useState<ServerMember[]>([]);
   const [roles, setRoles]                     = useState<ServerRole[]>([]);
   const [collapsedVcats, setCollapsedVcats]   = useState<Set<string>>(new Set());
+  const [collapsedRightSections, setCollapsedRightSections] = useState<Set<string>>(()=>{
+    try { const s=localStorage.getItem('cordyn_right_collapsed'); return new Set(s?JSON.parse(s):[]); } catch { return new Set(); }
+  });
+  const toggleRightSection = (key: string) => setCollapsedRightSections(p=>{
+    const n=new Set(p); n.has(key)?n.delete(key):n.add(key);
+    try { localStorage.setItem('cordyn_right_collapsed', JSON.stringify([...n])); } catch {}
+    return n;
+  });
 
   const [msgInput, setMsgInput]               = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -11515,14 +11523,15 @@ export default function App() {
               <motion.div initial={{opacity:0,y:-8}} animate={{opacity:1,y:0}} className="p-4 border-b border-white/[0.07]">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
+                  <button onClick={()=>toggleRightSection('live')} className="flex items-center gap-1.5 group">
                     <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"/>
                     <span className="text-[12px] font-bold text-white">Live: {displayCh.name}</span>
-                  </div>
+                    <ChevronRight size={10} className={`transition-transform text-zinc-600 group-hover:text-zinc-400 ${collapsedRightSections.has('live')?'':'rotate-90'}`}/>
+                  </button>
                   {activeCall&&<span className="text-xs font-mono text-emerald-400 font-semibold">{fmtDur(callDuration)}</span>}
                 </div>
                 {/* Participant thumbnails */}
-                {displayUsers.length>0&&(
+                {!collapsedRightSections.has('live')&&displayUsers.length>0&&(
                   <div className="grid grid-cols-2 gap-1.5 mb-3">
                     {displayUsers.slice(0,3).map(u=>{
                       const isSpeaking=speakingUsers.has(u.id);
@@ -11544,11 +11553,11 @@ export default function App() {
                   </div>
                 )}
                 {/* Join button */}
-                <button onClick={()=>liveCh&&joinVoiceCh(liveCh)}
+                {!collapsedRightSections.has('live')&&<button onClick={()=>liveCh&&joinVoiceCh(liveCh)}
                   className="w-full flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 border border-white/[0.08] text-white text-sm font-semibold py-2.5 rounded-xl transition-all">
                   <Volume2 size={14} className="text-zinc-300"/>
                   Dołącz
-                </button>
+                </button>}
               </motion.div>
             );
           })()}
@@ -11627,8 +11636,11 @@ export default function App() {
           {/* ─ ACTIVITY FEED ─ */}
           {activeView==='servers'&&canViewServerActivity&&(
             <div className="px-4 py-4 border-b border-white/[0.07] shrink-0">
-              <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3">{t('activity.title')}</h3>
-              {serverActivity.length>0 ? (
+              <button onClick={()=>toggleRightSection('activity')} className="flex items-center gap-1 w-full text-left mb-3 group">
+                <ChevronRight size={9} className={`transition-transform text-zinc-600 group-hover:text-zinc-400 shrink-0 ${collapsedRightSections.has('activity')?'':'rotate-90'}`}/>
+                <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest group-hover:text-zinc-400 transition-colors">{t('activity.title')}</h3>
+              </button>
+              {!collapsedRightSections.has('activity')&&serverActivity.length>0 ? (
                 <>
                   <div className="flex flex-col gap-1.5">
                     {serverActivity.slice(0,4).map(a=>{
@@ -11656,9 +11668,9 @@ export default function App() {
                     </button>
                   )}
                 </>
-              ) : (
+              ) : !collapsedRightSections.has('activity') ? (
                 <p className="text-xs text-zinc-700 italic">Brak aktywności na serwerze</p>
-              )}
+              ) : null}
             </div>
           )}
 
@@ -11666,86 +11678,91 @@ export default function App() {
           {activeView==='servers'&&members.length>0&&(()=>{
             const online  = members.filter(m=>m.status==='online'||m.status==='idle'||m.status==='dnd');
             const offline = members.filter(m=>m.status==='offline'||!m.status);
+
+            // Group online by primary role
+            const roleGroupMap = new Map<string,{role:{id:string;name:string;color:string};list:typeof online}>();
+            const noRoleOnline: typeof online = [];
+            for (const m of online) {
+              const r = m.roles?.[0];
+              if (r) {
+                if (!roleGroupMap.has(r.name)) roleGroupMap.set(r.name,{role:r,list:[]});
+                roleGroupMap.get(r.name)!.list.push(m);
+              } else { noRoleOnline.push(m); }
+            }
+
+            const renderMemberRow = (m: any, opacity?: boolean) => {
+              const isNew = !opacity && m.joined_at && (Date.now()-new Date(m.joined_at).getTime()<172800000);
+              const isOwner = m.id === serverFull?.owner_id;
+              const mActivity = userActivities.get(m.id);
+              const mTwitch = userTwitchActivities.get(m.id);
+              const mSteam = userSteamActivities.get(m.id);
+              return (
+                <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={e=>opacity?showHoverCard(m.id,e):showHoverCard(m.id,e)}>
+                  <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava(m)}")`} as React.CSSProperties}>
+                    {isNew&&<div className="absolute inset-0 rounded-xl ring-2 ring-emerald-400/60 ring-offset-1 ring-offset-[#1e1e30] pointer-events-none animate-pulse z-10"/>}
+                    <img src={ava(m)} className={`w-10 h-10 rounded-xl object-cover ${opacity?'opacity-35':''} av-eff-${m.avatar_effect||'none'} av-sc`} alt=""/>
+                    <StatusBadge status={opacity?'offline':m.status} size={10} className={`absolute -bottom-0.5 -right-0.5 ${opacity?'opacity-50':''}`}/>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <p className={`text-[13px] font-${opacity?'medium':'semibold'} truncate ${opacity?'group-hover:opacity-70':'group-hover:opacity-90'} transition-colors leading-tight`}
+                        style={{ color: opacity ? (m.roles?.[0]?.color?`${m.roles[0].color}80`:'#52525b') : (m.roles?.[0]?.color||'#d4d4d8') }}>
+                        {maskName(m.username)}
+                      </p>
+                      {isOwner&&<Crown size={11} className={`${opacity?'text-amber-400/50':'text-amber-400'} shrink-0`}/>}
+                      {m.is_bot&&<span className={`text-[9px] font-bold px-1 py-0.5 rounded border ${opacity?'border-violet-500/20 text-violet-500/60 bg-violet-500/5 opacity-50':'border-violet-500/40 text-violet-400 bg-violet-500/10'} leading-none select-none shrink-0`}>APP</span>}
+                      {(m as any).active_tag&&<span className={opacity?'opacity-50':''}><TagBadge tag={(m as any).active_tag} color={(m as any).active_tag_server_id?(serverTagColorMap[(m as any).active_tag_server_id]??null):null} icon={(m as any).active_tag_server_id?(serverTagIconMap[(m as any).active_tag_server_id]??null):null} serverInfo={(m as any).active_tag_server_id?(serverList.find(s=>s.id===(m as any).active_tag_server_id)??null):null}/></span>}
+                      {m.badges?.map((b:any)=>{const BIcon=getBadgeIcon(b.name);return <BIcon key={b.id} size={11} style={{color:opacity?b.color+'80':b.color}} title={b.label} className={`shrink-0 ${opacity?'opacity-50':''}`}/>;  })}
+                    </div>
+                    {!opacity ? (mActivity?(
+                      <p className="text-[11px] text-[#1DB954] truncate leading-tight flex items-center gap-1"><SpotifyIcon size={10} className="shrink-0"/> {mActivity.artists}</p>
+                    ):mTwitch?(
+                      <p className="text-[11px] text-purple-400 truncate leading-tight flex items-center gap-1"><TwitchIcon size={10} className="shrink-0"/> Streamuje: {mTwitch.game_name}</p>
+                    ):mSteam?(()=>{const mSteamStart=steamGameStartRef.current.get(m.id);return(
+                      <p className="text-[11px] text-zinc-400 truncate leading-tight flex items-center gap-1"><Gamepad2 size={10} className="shrink-0 text-emerald-400"/> <span className="text-emerald-400 font-semibold shrink-0">Gra teraz:</span> {mSteam.name}{mSteamStart?<span className="text-zinc-600 shrink-0">· {fmtGameDur(mSteamStart)}</span>:null}</p>
+                    );})():(()=>{const sl=statusLabel(m.status);return sl?<p className={`text-[11px] truncate leading-tight ${sl.cls}`}>{sl.text}</p>:m.role_name?<p className="text-[11px] text-zinc-600 truncate leading-tight">{m.role_name}</p>:null;})())
+                    : m.role_name?<p className="text-[11px] text-zinc-700 truncate leading-tight">{m.role_name}</p>:null}
+                  </div>
+                </div>
+              );
+            };
+
+            const SectionHeader = ({skey,label,count,color}:{skey:string;label:string;count:number;color?:string}) => (
+              <button onClick={()=>toggleRightSection(skey)} className="flex items-center gap-1 w-full text-left mb-2 px-1 group">
+                <ChevronRight size={9} className={`transition-transform shrink-0 text-zinc-600 group-hover:text-zinc-400 ${collapsedRightSections.has(skey)?'':'rotate-90'}`}/>
+                <span className="text-[11px] font-bold uppercase tracking-widest group-hover:opacity-80 transition-opacity" style={{color:color||'#71717a'}}>
+                  {label} — {count}
+                </span>
+              </button>
+            );
+
             return (
               <div className="px-3 py-4 flex-1 overflow-y-auto custom-scrollbar">
-                {online.length>0&&(
-                  <div className="mb-5">
-                    <h3 className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mb-2 px-1">
-                      {t('members.online')} — {online.length}
-                    </h3>
-                    <div className="flex flex-col gap-0.5">
-                      {online.map(m=>{
-                        const isNew = m.joined_at && (Date.now()-new Date(m.joined_at).getTime()<172800000);
-                        const isOwner = m.id === serverFull?.owner_id;
-                        const mActivity = userActivities.get(m.id);
-                        const mTwitch = userTwitchActivities.get(m.id);
-                        const mSteam = userSteamActivities.get(m.id);
-                        return (
-                        <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={e=>showHoverCard(m.id, e)}>
-                          <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava(m)}")`} as React.CSSProperties}>
-                            {isNew&&<div className="absolute inset-0 rounded-xl ring-2 ring-emerald-400/60 ring-offset-1 ring-offset-[#1e1e30] pointer-events-none animate-pulse z-10"/>}
-                            <img src={ava(m)} className={`w-10 h-10 rounded-xl object-cover av-eff-${m.avatar_effect||'none'} av-sc`} alt=""/>
-                            <StatusBadge status={m.status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1 flex-wrap">
-                              <p className="text-[13px] font-semibold truncate group-hover:opacity-90 transition-colors leading-tight"
-                                style={{ color: m.roles?.[0]?.color || '#d4d4d8' }}>
-                                {maskName(m.username)}
-                              </p>
-                              {isOwner&&<Crown size={11} className="text-amber-400 shrink-0"/>}
-                              {m.is_bot && <span className="text-[9px] font-bold px-1 py-0.5 rounded border border-violet-500/40 text-violet-400 bg-violet-500/10 leading-none select-none shrink-0">APP</span>}
-                              {(m as any).active_tag && <TagBadge tag={(m as any).active_tag} color={(m as any).active_tag_server_id ? (serverTagColorMap[(m as any).active_tag_server_id] ?? null) : null} icon={(m as any).active_tag_server_id ? (serverTagIconMap[(m as any).active_tag_server_id] ?? null) : null} serverInfo={(m as any).active_tag_server_id ? (serverList.find(s=>s.id===(m as any).active_tag_server_id) ?? null) : null}/>}
-                              {m.badges?.map(b=>{const BIcon=getBadgeIcon(b.name);return <BIcon key={b.id} size={11} style={{color:b.color}} title={b.label} className="shrink-0"/>;  })}
-                            </div>
-                            {mActivity ? (
-                              <p className="text-[11px] text-[#1DB954] truncate leading-tight flex items-center gap-1"><SpotifyIcon size={10} className="shrink-0"/> {mActivity.artists}</p>
-                            ) : mTwitch ? (
-                              <p className="text-[11px] text-purple-400 truncate leading-tight flex items-center gap-1"><TwitchIcon size={10} className="shrink-0"/> Streamuje: {mTwitch.game_name}</p>
-                            ) : mSteam ? (()=>{const mSteamStart=steamGameStartRef.current.get(m.id);return(
-                              <p className="text-[11px] text-zinc-400 truncate leading-tight flex items-center gap-1"><Gamepad2 size={10} className="shrink-0 text-emerald-400"/> <span className="text-emerald-400 font-semibold shrink-0">Gra teraz:</span> {mSteam.name}{mSteamStart?<span className="text-zinc-600 shrink-0">· {fmtGameDur(mSteamStart)}</span>:null}</p>
-                            );})() : (()=>{const sl=statusLabel(m.status); return sl
-                              ? <p className={`text-[11px] truncate leading-tight ${sl.cls}`}>{sl.text}</p>
-                              : m.role_name ? <p className="text-[11px] text-zinc-600 truncate leading-tight">{m.role_name}</p> : null;
-                            })()}
-                          </div>
-                        </div>
-                        );
-                      })}
-                    </div>
+                {/* Role groups — only roles that have online members */}
+                {[...roleGroupMap.entries()].map(([roleName,{role,list}])=>(
+                  <div key={roleName} className="mb-4">
+                    <SectionHeader skey={`role:${roleName}`} label={roleName} count={list.length} color={role.color}/>
+                    {!collapsedRightSections.has(`role:${roleName}`)&&(
+                      <div className="flex flex-col gap-0.5">{list.map(m=>renderMemberRow(m,false))}</div>
+                    )}
+                  </div>
+                ))}
+                {/* Online — members without any role */}
+                {noRoleOnline.length>0&&(
+                  <div className="mb-4">
+                    <SectionHeader skey="online" label={t('members.online')} count={noRoleOnline.length}/>
+                    {!collapsedRightSections.has('online')&&(
+                      <div className="flex flex-col gap-0.5">{noRoleOnline.map(m=>renderMemberRow(m,false))}</div>
+                    )}
                   </div>
                 )}
+                {/* Offline */}
                 {offline.length>0&&(
-                  <div>
-                    <h3 className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest mb-2 px-1">
-                      {t('members.offline')} — {offline.length}
-                    </h3>
-                    <div className="flex flex-col gap-0.5">
-                      {offline.map(m=>{
-                        const isOwner = m.id === serverFull?.owner_id;
-                        return (
-                        <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={e=>showHoverCard(m.id,e)}>
-                          <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava(m)}")`} as React.CSSProperties}>
-                            <img src={ava(m)} className={`w-10 h-10 rounded-xl object-cover opacity-35 av-eff-${m.avatar_effect||'none'} av-sc`} alt=""/>
-                            <StatusBadge status="offline" size={10} className="absolute -bottom-0.5 -right-0.5 opacity-50"/>
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1 flex-wrap">
-                              <p className="text-[13px] font-medium truncate group-hover:opacity-70 transition-colors leading-tight"
-                                style={{ color: m.roles?.[0]?.color ? `${m.roles[0].color}80` : '#52525b' }}>
-                                {maskName(m.username)}
-                              </p>
-                              {isOwner&&<Crown size={11} className="text-amber-400/50 shrink-0"/>}
-                              {m.is_bot && <span className="text-[9px] font-bold px-1 py-0.5 rounded border border-violet-500/20 text-violet-500/60 bg-violet-500/5 leading-none select-none shrink-0 opacity-50">APP</span>}
-                              {(m as any).active_tag && <span className="opacity-50"><TagBadge tag={(m as any).active_tag} color={(m as any).active_tag_server_id ? (serverTagColorMap[(m as any).active_tag_server_id] ?? null) : null} icon={(m as any).active_tag_server_id ? (serverTagIconMap[(m as any).active_tag_server_id] ?? null) : null} serverInfo={(m as any).active_tag_server_id ? (serverList.find(s=>s.id===(m as any).active_tag_server_id) ?? null) : null}/></span>}
-                              {m.badges?.map(b=>{const BIcon=getBadgeIcon(b.name);return <BIcon key={b.id} size={11} style={{color:b.color+'80'}} title={b.label} className="shrink-0 opacity-50"/>;  })}
-                            </div>
-                            {m.role_name&&<p className="text-[11px] text-zinc-700 truncate leading-tight">{m.role_name}</p>}
-                          </div>
-                        </div>
-                        );
-                      })}
-                    </div>
+                  <div className="mb-4">
+                    <SectionHeader skey="offline" label={t('members.offline')} count={offline.length} color="#52525b"/>
+                    {!collapsedRightSections.has('offline')&&(
+                      <div className="flex flex-col gap-0.5">{offline.map(m=>renderMemberRow(m,true))}</div>
+                    )}
                   </div>
                 )}
                 {/* ── BOTY section — installed bots shown as virtual members ── */}
