@@ -106,8 +106,9 @@ const PERMISSIONS = [
   { id: 'attach_files',     label: 'Wysyłaj pliki',           desc: 'Wysyłaj zdjęcia i załączniki (domyślnie wszyscy)' },
   { id: 'manage_messages',  label: 'Zarządzaj wiadomościami', desc: 'Usuwa wiadomości innych, pisze na kanałach ogłoszeń' },
   { id: 'mention_everyone', label: 'Użyj @everyone',          desc: 'Pinguje wszystkich użytkowników na serwerze' },
-  { id: 'pin_messages',     label: 'Przypinaj wiadomości',    desc: 'Przypinaj i odpinaj wiadomości na kanałach' },
-  { id: 'read_messages',    label: 'Czytaj wiadomości',       desc: 'Dostęp do czytania wiadomości (domyślnie wszyscy)' },
+  { id: 'pin_messages',          label: 'Przypinaj wiadomości',       desc: 'Przypinaj i odpinaj wiadomości na kanałach' },
+  { id: 'read_messages',         label: 'Czytaj wiadomości',          desc: 'Dostęp do czytania wiadomości (domyślnie wszyscy)' },
+  { id: 'view_server_activity',  label: 'Aktywność serwera',          desc: 'Widzi panel Live i historię aktywności serwera (domyślnie tylko admin)' },
 ];
 const ROLE_COLORS = ['#5865f2','#eb459e','#ed4245','#faa61a','#57f287','#1abc9c','#3498db','#9b59b6'];
 const AVATAR_EFFECTS = [
@@ -7401,7 +7402,7 @@ export default function App() {
   // ── Voice message recording ────────────────────────────────────────────────
   const startVoiceRecord = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       const mr = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/ogg' });
       voiceChunksRef.current = [];
       mr.ondataavailable = e => { if (e.data.size > 0) voiceChunksRef.current.push(e.data); };
@@ -7919,15 +7920,15 @@ export default function App() {
       }
       localStreamRef.current = null;
 
-      // Acquire raw mic — echoCancellation/autoGain always on; noiseSuppression off
-      // because our AudioWorklet handles noise (they'd conflict if both active).
+      // Acquire raw mic — all three WebRTC filters ON as baseline (echo/gain/noise).
+      // AudioWorklet gate runs on top for deeper noise removal — they complement, not conflict.
       const audioConstraints: MediaTrackConstraints = {
         ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
-        echoCancellation: true,      // hardware echo cancel — always useful
-        autoGainControl:  true,      // normalize mic level
-        noiseSuppression: !useNoise, // browser's basic filter tylko gdy nasz gate jest wyłączony
-        sampleRate: 48000,           // 48 kHz — standard Opus/WebRTC, najlepsza jakość głosu
-        channelCount: 1,             // mono — wystarczy dla głosu, mniejsze opóźnienie
+        echoCancellation: true,  // hardware echo cancel — eliminates speaker feedback
+        autoGainControl:  true,  // normalize mic level automatically
+        noiseSuppression: true,  // browser baseline NS always on; AudioWorklet adds deeper layer
+        sampleRate: 48000,       // 48 kHz — standard Opus/WebRTC, najlepsza jakość głosu
+        channelCount: 1,         // mono — wystarczy dla głosu, mniejsze opóźnienie
       };
       const rawStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
 
@@ -8167,6 +8168,7 @@ export default function App() {
   const canManageChannels      = hasAdminPerm || myPerms.includes('manage_channels');
   const canManageRoles         = hasAdminPerm || myPerms.includes('manage_roles');
   const canKickMembers         = hasAdminPerm || myPerms.includes('kick_members');
+  const canViewServerActivity  = hasAdminPerm || myPerms.includes('view_server_activity') || serverFull?.owner_id === currentUser?.id;
   const canManageServer        = hasAdminPerm || myPerms.includes('manage_server');
   const canManageMessages      = hasAdminPerm || myPerms.includes('manage_messages');
   const canSendMessages        = activeView === 'dms' || hasAdminPerm || myPerms.length === 0 || myPerms.includes('send_messages');
@@ -11498,7 +11500,7 @@ export default function App() {
         )}
         <aside className={`hidden xl:flex shrink-0 flex-col gap-0 glass-panel rounded-2xl overflow-y-auto custom-scrollbar transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${showCallPanel && activeCall && !rightPanelOpen ? 'w-0 opacity-0 overflow-hidden p-0' : 'w-64 opacity-100'}`}>
           {/* ─ LIVE VOICE BLOCK ─ */}
-          {activeView==='servers'&&(()=>{
+          {activeView==='servers'&&canViewServerActivity&&(()=>{
             // find first voice channel on current server with users
             const allVoiceChs = serverFull?.categories.flatMap(c=>c.channels.filter(ch=>ch.type==='voice'))||[];
             const liveCh = allVoiceChs.find(ch=>(voiceUsers[ch.id]||[]).length>0);
@@ -11623,7 +11625,7 @@ export default function App() {
           })()}
 
           {/* ─ ACTIVITY FEED ─ */}
-          {activeView==='servers'&&(
+          {activeView==='servers'&&canViewServerActivity&&(
             <div className="px-4 py-4 border-b border-white/[0.07] shrink-0">
               <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3">{t('activity.title')}</h3>
               {serverActivity.length>0 ? (
