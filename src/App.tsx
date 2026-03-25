@@ -7203,6 +7203,39 @@ export default function App() {
       if (!localStorage.getItem(key)) { setShowWelcome(true); localStorage.setItem(key, '1'); }
     }
   };
+  // ── OAuth helper: open in system browser (Tauri) or navigate (web) ──
+  const openOAuth = async (url: string, service: 'spotify' | 'twitch' | 'steam') => {
+    if (isTauri) {
+      try {
+        const { open } = await import('@tauri-apps/plugin-shell');
+        await open(url);
+      } catch {
+        window.open(url, '_blank');
+      }
+      addToast('Autoryzuj w przeglądarce — aplikacja automatycznie wykryje połączenie', 'info');
+      // Poll for connection (up to 90s)
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          if (service === 'spotify') {
+            const s = await spotifyApi.status();
+            if (s.connected) { clearInterval(poll); setOwnSpotify(s); addToast('Spotify połączono! 🎵', 'success'); return; }
+          } else if (service === 'twitch') {
+            const s = await twitchApi.status();
+            if (s.connected) { clearInterval(poll); setOwnTwitch(s); addToast('Twitch połączono! 🎮', 'success'); return; }
+          } else {
+            const s = await steamApi.status();
+            if (s.connected) { clearInterval(poll); setOwnSteam(s); addToast('Steam połączono! 🎮', 'success'); return; }
+          }
+        } catch {}
+        if (attempts >= 45) clearInterval(poll);
+      }, 2000);
+    } else {
+      window.location.href = url;
+    }
+  };
+
   const handleLogout = async () => {
     try { await auth.logout(); } catch {}
     clearToken(); disconnectSocket(); setIsAuthenticated(false); setCurrentUser(null);
@@ -9717,14 +9750,14 @@ export default function App() {
               gameSearching={gameSearching}
               setGameSearching={setGameSearching}
               gameSearchRef={gameSearchRef}
-              onSpotifyConnect={async()=>{ try { const r = await spotifyApi.connect(); window.location.href = r.url; } catch(e:any){ addToast(e.message||'Błąd Spotify','error'); } }}
-              onSpotifyDisconnect={async()=>{ await spotifyApi.disconnect(); setOwnSpotify(null); addToast('Spotify odłączono','info'); }}
+              onSpotifyConnect={async()=>{ try { const r = await spotifyApi.connect(); await openOAuth(r.url, 'spotify'); } catch(e:any){ addToast(e.message||'Błąd Spotify','error'); } }}
+              onSpotifyDisconnect={async()=>{ try { await spotifyApi.disconnect(); setOwnSpotify(null); addToast('Spotify odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Spotify','error'); } }}
               onSpotifyToggle={async(v)=>{ await spotifyApi.setSettings({show_on_profile:v}); setOwnSpotify(p=>p?{...p,show_on_profile:v}:p); lastEmittedTrack.current=undefined; if(!v&&currentUser?.id){const sock=getSocket();if(sock)(sock as any).emit('spotify_update',{track:null});setUserActivities(p=>{const n=new Map(p);n.set(currentUser.id,null);return n;});} }}
-              onTwitchConnect={async()=>{ try { const r = await twitchApi.connect(); window.location.href = r.url; } catch(e:any){ addToast(e.message||'Błąd Twitch','error'); } }}
-              onTwitchDisconnect={async()=>{ await twitchApi.disconnect(); setOwnTwitch(null); addToast('Twitch odłączono','info'); }}
+              onTwitchConnect={async()=>{ try { const r = await twitchApi.connect(); await openOAuth(r.url, 'twitch'); } catch(e:any){ addToast(e.message||'Błąd Twitch','error'); } }}
+              onTwitchDisconnect={async()=>{ try { await twitchApi.disconnect(); setOwnTwitch(null); addToast('Twitch odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Twitch','error'); } }}
               onTwitchToggle={async(v)=>{ await twitchApi.setSettings({show_on_profile:v}); setOwnTwitch(p=>p?{...p,show_on_profile:v}:p); lastEmittedStream.current=undefined; if(!v&&currentUser?.id){const sock=getSocket();if(sock)(sock as any).emit('twitch_update',{stream:null});setUserTwitchActivities(p=>{const n=new Map(p);n.set(currentUser.id,null);return n;});} }}
-              onSteamConnect={async()=>{ try { const r = await steamApi.connect(); window.location.href = r.url; } catch(e:any){ addToast(e.message||'Błąd Steam','error'); } }}
-              onSteamDisconnect={async()=>{ await steamApi.disconnect(); setOwnSteam(null); addToast('Steam odłączono','info'); }}
+              onSteamConnect={async()=>{ try { const r = await steamApi.connect(); await openOAuth(r.url, 'steam'); } catch(e:any){ addToast(e.message||'Błąd Steam','error'); } }}
+              onSteamDisconnect={async()=>{ try { await steamApi.disconnect(); setOwnSteam(null); addToast('Steam odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Steam','error'); } }}
               onSteamToggle={async(v)=>{ await steamApi.setSettings({show_on_profile:v}); setOwnSteam(p=>p?{...p,show_on_profile:v}:p); lastEmittedGame.current=undefined; if(!v&&currentUser?.id){const sock=getSocket();if(sock)(sock as any).emit('steam_update',{game:null});setUserSteamActivities(p=>{const n=new Map(p);n.set(currentUser.id,null);return n;});} }}
               friends={friends}
               blockedUsers={blockedUsers}
@@ -14255,8 +14288,8 @@ export default function App() {
                               : <p className="text-xs text-zinc-500">Nie połączono</p>}
                           </div>
                           {ownSpotify?.connected
-                            ? <button onClick={async()=>{ await spotifyApi.disconnect(); setOwnSpotify(null); addToast('Spotify odłączono','info'); }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
-                            : <button onClick={async()=>{ try { const r = await spotifyApi.connect(); window.location.href = r.url; } catch(e:any){ addToast(e.message||'Błąd Spotify','error'); } }} className="text-xs text-[#1DB954] flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-[#1DB954]/30 hover:bg-[#1DB954]/10">Połącz</button>}
+                            ? <button onClick={async()=>{ try { await spotifyApi.disconnect(); setOwnSpotify(null); addToast('Spotify odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Spotify','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
+                            : <button onClick={async()=>{ try { const r = await spotifyApi.connect(); await openOAuth(r.url, 'spotify'); } catch(e:any){ addToast(e.message||'Błąd Spotify','error'); } }} className="text-xs text-[#1DB954] flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-[#1DB954]/30 hover:bg-[#1DB954]/10">Połącz</button>}
                         </div>
                         {ownSpotify?.connected && (
                           <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
@@ -14285,8 +14318,8 @@ export default function App() {
                               : <p className="text-xs text-zinc-500">Nie połączono</p>}
                           </div>
                           {ownTwitch?.connected
-                            ? <button onClick={async()=>{ await twitchApi.disconnect(); setOwnTwitch(null); addToast('Twitch odłączono','info'); }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
-                            : <button onClick={async()=>{ try { const r = await twitchApi.connect(); window.location.href = r.url; } catch(e:any){ addToast(e.message||'Błąd Twitch','error'); } }} className="text-xs text-purple-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-purple-500/30 hover:bg-purple-500/10">Połącz</button>}
+                            ? <button onClick={async()=>{ try { await twitchApi.disconnect(); setOwnTwitch(null); addToast('Twitch odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Twitch','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
+                            : <button onClick={async()=>{ try { const r = await twitchApi.connect(); await openOAuth(r.url, 'twitch'); } catch(e:any){ addToast(e.message||'Błąd Twitch','error'); } }} className="text-xs text-purple-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-purple-500/30 hover:bg-purple-500/10">Połącz</button>}
                         </div>
                         {ownTwitch?.connected && (
                           <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
@@ -14315,8 +14348,8 @@ export default function App() {
                               : <p className="text-xs text-zinc-500">Nie połączono</p>}
                           </div>
                           {ownSteam?.connected
-                            ? <button onClick={async()=>{ await steamApi.disconnect(); setOwnSteam(null); addToast('Steam odłączono','info'); }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
-                            : <button onClick={async()=>{ try { const r = await steamApi.connect(); window.location.href = r.url; } catch(e:any){ addToast(e.message||'Błąd Steam','error'); } }} className="text-xs text-blue-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-blue-500/30 hover:bg-blue-500/10">Połącz</button>}
+                            ? <button onClick={async()=>{ try { await steamApi.disconnect(); setOwnSteam(null); addToast('Steam odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Steam','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
+                            : <button onClick={async()=>{ try { const r = await steamApi.connect(); await openOAuth(r.url, 'steam'); } catch(e:any){ addToast(e.message||'Błąd Steam','error'); } }} className="text-xs text-blue-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-blue-500/30 hover:bg-blue-500/10">Połącz</button>}
                         </div>
                         {ownSteam?.connected && (
                           <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
