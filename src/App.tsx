@@ -11434,7 +11434,7 @@ export default function App() {
                             <button type="button" onClick={stopVoiceRecord} title="Zatrzymaj i wyślij" className="w-8 h-8 rounded-xl flex items-center justify-center bg-rose-500 hover:bg-rose-400 text-white transition-all active:scale-90"><Square size={11} className="fill-white"/></button>
                           </div>
                         )}
-                        <button type="submit" disabled={(!msgInput.trim()&&!attachFile)||sending||voiceRecording}
+                        <button type="submit" disabled={(!msgInput.trim()&&!attachFile&&!attachFiles.length)||sending||voiceRecording}
                           className="w-8 h-8 rounded-xl bg-indigo-500 hover:bg-indigo-400 disabled:opacity-25 disabled:cursor-not-allowed flex items-center justify-center text-white transition-all duration-150 active:scale-90 shrink-0 shadow-lg shadow-indigo-500/25">
                           {sending?<Loader2 size={14} className="animate-spin"/>:<Send size={14}/>}
                         </button>

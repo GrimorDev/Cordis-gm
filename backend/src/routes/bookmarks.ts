@@ -27,7 +27,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
          END as message
        FROM message_bookmarks b
        LEFT JOIN messages m ON m.id = b.message_id
-       LEFT JOIN users mu ON mu.id = m.user_id
+       LEFT JOIN users mu ON mu.id = m.sender_id
        LEFT JOIN dm_messages dm ON dm.id = b.dm_message_id
        LEFT JOIN users dmu ON dmu.id = dm.sender_id
        WHERE b.user_id = $1

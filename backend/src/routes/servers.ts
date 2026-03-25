@@ -180,7 +180,8 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
       [req.params.id]
     );
     const { rows: channels } = await query(
-      `SELECT id, category_id, name, type, description, is_private, position FROM channels
+      `SELECT id, category_id, name, type, description, is_private, position,
+              slowmode_seconds, background_url, background_gradient FROM channels
        WHERE server_id = $1 ORDER BY position`,
       [req.params.id]
     );
