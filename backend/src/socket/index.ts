@@ -109,9 +109,16 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
 
     // Restore preferred_status from DB (dnd/offline/idle/online) — never force online
     // preferred_status is set by the user manually and survives disconnects
-    const { rows: [storedUser] } = await query('SELECT preferred_status FROM users WHERE id=$1', [user.id]);
-    const connectStatus = (storedUser?.preferred_status && storedUser.preferred_status !== 'online')
-      ? storedUser.preferred_status
+    // If status_until is set and has already passed → reset to online (expired timer)
+    const { rows: [storedUser] } = await query('SELECT preferred_status, status_until FROM users WHERE id=$1', [user.id]);
+    const isExpired = storedUser?.status_until && new Date(storedUser.status_until) <= new Date();
+    if (isExpired) {
+      // Timer expired while user was offline — reset to normal online mode
+      await query('UPDATE users SET preferred_status=$1, status_until=NULL WHERE id=$2', ['online', user.id]);
+    }
+    const effectivePref = isExpired ? 'online' : (storedUser?.preferred_status || 'online');
+    const connectStatus = (effectivePref && effectivePref !== 'online')
+      ? effectivePref
       : 'online';
     await setUserStatus(user.id, connectStatus);
     await query('UPDATE users SET status = $1 WHERE id = $2', [connectStatus, user.id]);

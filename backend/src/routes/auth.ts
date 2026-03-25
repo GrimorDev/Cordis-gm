@@ -142,6 +142,7 @@ router.post(
     try {
       const { rows } = await query(
         `SELECT id, username, email, password_hash, avatar_url, banner_url, banner_color, bio, custom_status, status,
+                preferred_status, status_until,
                 accent_color, compact_messages,
                 privacy_status_visible, privacy_typing_visible, privacy_read_receipts, privacy_friend_requests
          FROM users WHERE username = $1 OR email = $1`,
@@ -209,6 +210,7 @@ router.post(
 
       const { rows } = await query(
         `SELECT id, username, email, password_hash, avatar_url, banner_url, banner_color, bio, custom_status, status,
+                preferred_status, status_until,
                 accent_color, compact_messages, totp_secret, totp_backup_codes,
                 privacy_status_visible, privacy_typing_visible, privacy_read_receipts, privacy_friend_requests
          FROM users WHERE id = $1`,

@@ -669,6 +669,9 @@ DO $$ BEGIN ALTER TABLE channels ADD COLUMN background_gradient TEXT; EXCEPTION 
 DO $$ BEGIN ALTER TABLE messages ADD COLUMN thread_root_id UUID REFERENCES messages(id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE messages ADD COLUMN thread_count INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_root_id) WHERE thread_root_id IS NOT NULL;
+
+-- ── Status expiry (optional duration for dnd/idle/offline) ────────────────
+DO $$ BEGIN ALTER TABLE users ADD COLUMN status_until TIMESTAMPTZ DEFAULT NULL; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 `;
 
 const SEED_SQL = `

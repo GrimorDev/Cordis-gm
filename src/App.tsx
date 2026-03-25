@@ -4834,10 +4834,11 @@ export default function App() {
   const mediaRecorderRef  = useRef<MediaRecorder|null>(null);
   const voiceChunksRef    = useRef<Blob[]>([]);
   const voiceRecTimerRef  = useRef<ReturnType<typeof setInterval>|null>(null);
-  // ── BRB timer ─────────────────────────────────────────────────────────────
-  const [brbModalOpen,    setBrbModalOpen]    = useState(false);
-  const [brbMins,         setBrbMins]         = useState(15);
-  const [brbUntil,        setBrbUntil]        = useState<number|null>(null);
+  // ── Status timer (universal expiry for dnd/idle/offline) ─────────────────
+  const [statusUntil,       setStatusUntil]       = useState<number|null>(()=>{
+    try { const v=localStorage.getItem('cordis_status_until'); return v?parseInt(v,10):null; } catch { return null; }
+  });
+  const [durationMenuStatus, setDurationMenuStatus] = useState<string|null>(null); // which status has submenu open
   // ── Flying reactions ──────────────────────────────────────────────────────
   const [flyingEmojis, setFlyingEmojis] = useState<{id:number;emoji:string;x:number;y:number}[]>([]);
   const flyIdRef = useRef(0);
@@ -7151,31 +7152,39 @@ export default function App() {
   };
 
   // ── Status ────────────────────────────────────────────────────────
-  // ── BRB timer tick ────────────────────────────────────────────────────────
+  // ── Status expiry timer tick ───────────────────────────────────────────────
   useEffect(() => {
-    if (!brbUntil) return;
-    const tick = setInterval(() => {
-      const minsLeft = Math.ceil((brbUntil - Date.now()) / 60000);
-      if (minsLeft <= 0) {
-        setBrbUntil(null);
+    if (!statusUntil || !isAuthenticated) return;
+    const check = () => {
+      if (Date.now() >= statusUntil) {
+        setStatusUntil(null);
+        try { localStorage.removeItem('cordis_status_until'); } catch {}
         changeStatus('online');
-        users.updateMe({ custom_status: '' }).catch(() => {});
-        clearInterval(tick);
-      } else {
-        users.updateMe({ custom_status: `Wróci za ${minsLeft} min` }).catch(() => {});
       }
-    }, 60_000);
+    };
+    check(); // immediate check on mount/change
+    const tick = setInterval(check, 15_000);
     return () => clearInterval(tick);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [brbUntil]);
+  }, [statusUntil, isAuthenticated]);
 
-  const changeStatus = async (s: 'online'|'idle'|'dnd'|'offline', auto = false) => {
+  const changeStatus = async (s: 'online'|'idle'|'dnd'|'offline', auto = false, durationMs?: number) => {
     try {
-      await users.updateStatus(s);
+      await users.updateStatus(s, durationMs);
       myStatusRef.current = s;
       autoIdledRef.current = auto;
-      // Persist manual status choice so it survives app restarts
-      if (!auto) localStorage.setItem('cordis_preferred_status', s);
+      if (!auto) {
+        localStorage.setItem('cordis_preferred_status', s);
+        // Save expiry time locally so we can show countdown and expire client-side
+        if (durationMs && s !== 'online') {
+          const until = Date.now() + durationMs;
+          setStatusUntil(until);
+          try { localStorage.setItem('cordis_status_until', String(until)); } catch {}
+        } else {
+          setStatusUntil(null);
+          try { localStorage.removeItem('cordis_status_until'); } catch {}
+        }
+      }
       setCurrentUser(p => p ? {...p, status: s} : p);
     } catch { /* silent */ }
   };
@@ -9092,27 +9101,57 @@ export default function App() {
 
                   {STATUS_OPTIONS.map(opt=>{
                     const isCurrent = (currentUser?.status||'online')===opt.value && !activeCall;
+                    const hasDuration = opt.value !== 'online';
+                    const durations = [
+                      { label: 'Na 15 minut', ms: 15*60_000 },
+                      { label: 'Na 1 godzinę', ms: 60*60_000 },
+                      { label: 'Na 8 godzin',  ms: 8*60*60_000 },
+                      { label: 'Na 24 godziny', ms: 24*60*60_000 },
+                      { label: 'Na 3 dni',      ms: 3*24*60*60_000 },
+                    ];
                     return (
-                      <button key={opt.value} onClick={()=>{
-                        if (opt.value === 'idle') { setStatusPickerOpen(false); setBrbModalOpen(true); return; }
-                        changeStatus(opt.value); setStatusPickerOpen(false);
-                      }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition-colors text-left group ${isCurrent?'bg-white/[0.06]':'hover:bg-white/[0.05]'}`}>
-                        <div className={`w-2.5 h-2.5 rounded-full ${opt.color} shrink-0`}/>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-semibold text-zinc-200 leading-tight">{t(`status.${opt.value}`)}</p>
-                          <p className="text-[10px] text-zinc-600">{opt.value==='idle'?'Ustaw timer "Zaraz wracam"':t(`status.${opt.value}.desc`)}</p>
+                      <div key={opt.value} className="relative">
+                        <div className={`flex items-center rounded-xl transition-colors ${isCurrent?'bg-white/[0.06]':'hover:bg-white/[0.05]'}`}>
+                          {/* Main click area — sets status forever */}
+                          <button className="flex items-center gap-2.5 px-3 py-2 flex-1 text-left"
+                            onClick={()=>{ changeStatus(opt.value); setDurationMenuStatus(null); setStatusPickerOpen(false); }}>
+                            <div className={`w-2.5 h-2.5 rounded-full ${opt.color} shrink-0`}/>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[12px] font-semibold text-zinc-200 leading-tight">{t(`status.${opt.value}`)}</p>
+                              <p className="text-[10px] text-zinc-600">{t(`status.${opt.value}.desc`)}</p>
+                            </div>
+                            {isCurrent&&<Check size={12} className="text-indigo-400 shrink-0"/>}
+                          </button>
+                          {/* Duration arrow — only for non-online statuses */}
+                          {hasDuration&&(
+                            <button onClick={e=>{e.stopPropagation(); setDurationMenuStatus(p=>p===opt.value?null:opt.value);}}
+                              className="px-2 py-2 text-zinc-600 hover:text-zinc-300 transition-colors shrink-0">
+                              <ChevronRight size={12} className={`transition-transform ${durationMenuStatus===opt.value?'rotate-90':''}`}/>
+                            </button>
+                          )}
                         </div>
-                        {isCurrent&&<Check size={12} className="text-indigo-400 shrink-0"/>}
-                      </button>
+                        {/* Duration submenu */}
+                        {hasDuration&&durationMenuStatus===opt.value&&(
+                          <div className="ml-2 mb-1 mt-0.5 border-l border-white/[0.07] pl-2">
+                            {durations.map(d=>(
+                              <button key={d.ms} onClick={()=>{ changeStatus(opt.value, false, d.ms); setDurationMenuStatus(null); setStatusPickerOpen(false); }}
+                                className="w-full text-left px-2 py-1.5 rounded-lg text-[11px] text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors">
+                                {d.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
-                  {/* BRB active indicator */}
-                  {brbUntil && brbUntil > Date.now() && (
+                  {/* Active timer indicator */}
+                  {statusUntil && statusUntil > Date.now() && (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 mt-1">
                       <Timer size={11} className="text-amber-400 shrink-0"/>
-                      <span className="text-[11px] text-amber-300 flex-1">Wracam za {Math.ceil((brbUntil - Date.now())/60000)} min</span>
-                      <button onClick={()=>{ setBrbUntil(null); changeStatus('online'); users.updateMe({custom_status:''}).catch(()=>{}); setStatusPickerOpen(false); }}
+                      <span className="text-[11px] text-amber-300 flex-1">
+                        {(()=>{const ms=statusUntil-Date.now(); const h=Math.floor(ms/3600000); const m=Math.ceil((ms%3600000)/60000); return h>0?`Wygasa za ${h}h ${m}m`:`Wygasa za ${m} min`;})()}
+                      </span>
+                      <button onClick={()=>{ setStatusUntil(null); localStorage.removeItem('cordis_status_until'); changeStatus('online'); setStatusPickerOpen(false); }}
                         className="text-zinc-600 hover:text-rose-400"><X size={10}/></button>
                     </div>
                   )}
@@ -10184,22 +10223,6 @@ export default function App() {
                       </button>
                     </>
                   )}
-                  <button onClick={()=>{
-                    const next = !bookmarksOpen;
-                    setBookmarksOpen(next);
-                    if (next) {
-                      fetch('/api/bookmarks', { headers: { Authorization: `Bearer ${getToken()}` } })
-                        .then(r => r.ok ? r.json() : [])
-                        .then(data => {
-                          setBookmarks(data);
-                          setBookmarkedIds(new Set(data.map((b: any) => b.message?.id).filter(Boolean)));
-                        }).catch(()=>{});
-                    }
-                  }}
-                    title="Zakładki"
-                    className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-150 active:scale-95 ${bookmarksOpen?'text-amber-400 bg-amber-500/15':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07]'}`}>
-                    <Bookmark size={14}/>
-                  </button>
                   <div className="relative">
                     <button onClick={()=>setShowDmMenu(v=>!v)} className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-150 active:scale-95 ${showDmMenu?'text-white bg-white/[0.1]':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07]'}`}>
                       <MoreHorizontal size={15}/>
@@ -10986,26 +11009,6 @@ export default function App() {
                                 ))}
                                 <div className="w-px h-5 bg-white/[0.1] mx-0.5 shrink-0"/>
                               </>}
-                              {/* Bookmark */}
-                              <button onMouseDown={e=>{e.preventDefault();}}
-                                onClick={async()=>{
-                                  const isDmMsg = activeView==='dms';
-                                  const key = isDmMsg ? 'dm_message_id' : 'message_id';
-                                  const isBookmarked = bookmarkedIds.has(msg.id);
-                                  if (isBookmarked) {
-                                    await fetch('/api/bookmarks',{method:'DELETE',headers:{'Content-Type':'application/json','Authorization':`Bearer ${getToken()}`},body:JSON.stringify({[key]:msg.id})});
-                                    setBookmarkedIds(p=>{const n=new Set(p);n.delete(msg.id);return n;});
-                                    setBookmarks(p=>p.filter(b=>b.message?.id!==msg.id));
-                                    addToast('Usunięto z zakładek','info');
-                                  } else {
-                                    const r=await fetch('/api/bookmarks',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${getToken()}`},body:JSON.stringify({[key]:msg.id})});
-                                    if(r.ok){setBookmarkedIds(p=>new Set([...p,msg.id]));addToast('Dodano do zakładek','success');}
-                                  }
-                                }}
-                                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${bookmarkedIds.has(msg.id)?'text-amber-400 hover:bg-amber-500/10':'text-zinc-500 hover:text-amber-400 hover:bg-white/[0.08]'}`}
-                                title={bookmarkedIds.has(msg.id)?'Usuń zakładkę':'Dodaj zakładkę'}>
-                                {bookmarkedIds.has(msg.id)?<BookmarkCheck size={13}/>:<Bookmark size={13}/>}
-                              </button>
                               {/* Thread */}
                               {activeView!=='dms' && !msg.thread_root_id && (
                                 <button onClick={async()=>{
@@ -15553,93 +15556,9 @@ export default function App() {
         document.body
       )}
 
-      {/* ── BRB Timer Modal ──────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {brbModalOpen && (
-          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4"
-            onClick={()=>setBrbModalOpen(false)}>
-            <motion.div initial={{scale:0.9,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.9,opacity:0}}
-              transition={{type:'spring',stiffness:400,damping:30}}
-              onClick={e=>e.stopPropagation()}
-              className="bg-[#0f0f1a] border border-white/[0.1] rounded-3xl p-6 w-80 shadow-2xl">
-              <div className="flex items-center gap-3 mb-5">
-                <div className="w-10 h-10 rounded-2xl bg-amber-500/15 flex items-center justify-center">
-                  <Timer size={18} className="text-amber-400"/>
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">Zaraz wracam</h3>
-                  <p className="text-xs text-zinc-500">Ustaw kiedy wrócisz</p>
-                </div>
-                <button onClick={()=>setBrbModalOpen(false)} className="ml-auto text-zinc-600 hover:text-white"><X size={16}/></button>
-              </div>
-              <div className="grid grid-cols-4 gap-2 mb-5">
-                {[5,10,15,30,60,90,120,180].map(m=>(
-                  <button key={m} onClick={()=>setBrbMins(m)}
-                    className={`py-2 rounded-xl text-sm font-semibold transition-all ${brbMins===m?'bg-amber-500 text-white':'bg-white/[0.06] text-zinc-400 hover:bg-white/[0.1] hover:text-white'}`}>
-                    {m<60?`${m}m`:`${m/60}h`}
-                  </button>
-                ))}
-              </div>
-              <button onClick={async()=>{
-                  const until = Date.now() + brbMins * 60_000;
-                  setBrbUntil(until); setBrbModalOpen(false);
-                  await changeStatus('idle');
-                  await users.updateMe({ custom_status: `Wróci za ${brbMins} min` }).catch(()=>{});
-                }}
-                className="w-full py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-white font-bold text-sm transition-all active:scale-95">
-                Ustaw „Zaraz wracam" na {brbMins < 60 ? `${brbMins} min` : `${brbMins/60}h`}
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* BRB Timer Modal removed — duration is now handled via status picker submenu */}
 
-      {/* ── Bookmarks Panel ──────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {bookmarksOpen && (
-          <motion.div initial={{opacity:0,x:20}} animate={{opacity:1,x:0}} exit={{opacity:0,x:20}}
-            transition={{type:'spring',stiffness:380,damping:32}}
-            className="fixed right-4 top-16 bottom-16 w-80 bg-[#0f0f1a] border border-white/[0.1] rounded-2xl shadow-2xl z-[150] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3.5 border-b border-white/[0.07] shrink-0">
-              <div className="flex items-center gap-2">
-                <Bookmark size={15} className="text-indigo-400"/>
-                <h3 className="text-sm font-bold text-white">Zakładki</h3>
-                {bookmarks.length > 0 && <span className="text-xs text-zinc-600">{bookmarks.length}</span>}
-              </div>
-              <button onClick={()=>setBookmarksOpen(false)} className="text-zinc-600 hover:text-white"><X size={15}/></button>
-            </div>
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-3 flex flex-col gap-2">
-              {bookmarks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center flex-1 gap-3 py-12">
-                  <Bookmark size={32} className="text-zinc-700"/>
-                  <p className="text-sm text-zinc-600 text-center">Brak zakładek.<br/>Kliknij 🔖 przy wiadomości żeby dodać.</p>
-                </div>
-              ) : bookmarks.map((bm: any) => (
-                <div key={bm.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 flex flex-col gap-1.5 hover:border-white/[0.1] transition-colors group">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <img src={bm.message?.author?.avatar_url ? staticUrl(bm.message.author.avatar_url) : `https://api.dicebear.com/7.x/initials/svg?seed=${bm.message?.author?.username}&backgroundColor=6366f1`} className="w-5 h-5 rounded-full object-cover" alt=""/>
-                    <span className="text-[11px] font-semibold text-zinc-400">{bm.message?.author?.username}</span>
-                    <span className="text-[10px] text-zinc-700 ml-auto">{bm.message?.created_at ? new Date(bm.message.created_at).toLocaleDateString('pl') : ''}</span>
-                  </div>
-                  <p className="text-xs text-zinc-300 leading-relaxed line-clamp-3">{bm.message?.content || '📎 Załącznik'}</p>
-                  <div className="flex items-center gap-1.5 pt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={async()=>{
-                        const key = bm.message_id ? 'message_id' : 'dm_message_id';
-                        await fetch('/api/bookmarks', {method:'DELETE',headers:{'Content-Type':'application/json','Authorization':`Bearer ${getToken()}`},body:JSON.stringify({[key]:bm.message?.id})});
-                        setBookmarks(p=>p.filter(b=>b.id!==bm.id));
-                        setBookmarkedIds(p=>{const n=new Set(p);n.delete(bm.message?.id);return n;});
-                      }}
-                      className="ml-auto text-[10px] text-zinc-600 hover:text-rose-400 transition-colors flex items-center gap-1">
-                      <Trash2 size={10}/> Usuń
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Bookmarks panel removed */}
 
       {/* ── Thread Panel ──────────────────────────────────────────────────── */}
       <AnimatePresence>

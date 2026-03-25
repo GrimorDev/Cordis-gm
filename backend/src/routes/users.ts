@@ -179,11 +179,18 @@ router.put('/me', authMiddleware,
 
 // PUT /api/users/me/status
 router.put('/me/status', authMiddleware, async (req: AuthRequest, res: Response) => {
-  const { status } = req.body;
+  const { status, duration_ms } = req.body;
   if (!['online','idle','dnd','offline'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
   try {
+    // status_until: null = permanent; number = expires after duration_ms ms
+    const statusUntil = (duration_ms && duration_ms > 0 && status !== 'online')
+      ? new Date(Date.now() + duration_ms).toISOString()
+      : null;
     // Save both current status and preferred_status so restarts remember the choice
-    await query('UPDATE users SET status=$1, preferred_status=$1 WHERE id=$2', [status, req.user!.id]);
+    await query(
+      'UPDATE users SET status=$1, preferred_status=$1, status_until=$2 WHERE id=$3',
+      [status, statusUntil, req.user!.id]
+    );
     // Broadcast real-time status change to all servers the user belongs to
     const io = req.app.get('io');
     if (io) {
@@ -197,7 +204,7 @@ router.put('/me/status', authMiddleware, async (req: AuthRequest, res: Response)
       // Also push to friends listening on their own user room
       io.to(`user:${req.user!.id}`).emit('user_status', payload);
     }
-    return res.json({ status });
+    return res.json({ status, status_until: statusUntil });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 

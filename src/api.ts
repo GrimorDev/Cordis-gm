@@ -377,7 +377,7 @@ export const users = {
     'privacy_status_visible' | 'privacy_typing_visible' | 'privacy_read_receipts' |
     'privacy_friend_requests' | 'privacy_dm_from_strangers' | 'avatar_effect' | 'theme_id'
   >>) => req<UserProfile>('PUT', '/users/me', d),
-  updateStatus: (s: string) => req<{ status: string }>('PUT', '/users/me/status', { status: s }),
+  updateStatus: (s: string, durationMs?: number) => req<{ status: string; status_until: string | null }>('PUT', '/users/me/status', { status: s, ...(durationMs ? { duration_ms: durationMs } : {}) }),
   uploadAvatar: async (file: File): Promise<{ avatar_url: string }> => {
     const fd = new FormData(); fd.append('avatar', file);
     return req<{ avatar_url: string }>('POST', '/users/me/avatar', fd, true);
