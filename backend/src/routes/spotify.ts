@@ -57,12 +57,17 @@ async function getValidAccessToken(userId: string): Promise<string | null> {
     if (!r.ok) return null;
     const data: any = await r.json();
     const newExpiry = new Date(Date.now() + data.expires_in * 1000);
-    await query(
-      `UPDATE users SET spotify_access_token=$1, spotify_token_expires=$2 ${data.refresh_token ? ', spotify_refresh_token=$4' : ''} WHERE id=${data.refresh_token ? '$5' : '$3'}`,
-      data.refresh_token
-        ? [data.access_token, newExpiry, data.refresh_token, userId]
-        : [data.access_token, newExpiry, userId]
-    );
+    if (data.refresh_token) {
+      await query(
+        `UPDATE users SET spotify_access_token=$1, spotify_token_expires=$2, spotify_refresh_token=$3 WHERE id=$4`,
+        [data.access_token, newExpiry, data.refresh_token, userId]
+      );
+    } else {
+      await query(
+        `UPDATE users SET spotify_access_token=$1, spotify_token_expires=$2 WHERE id=$3`,
+        [data.access_token, newExpiry, userId]
+      );
+    }
     return data.access_token;
   } catch {
     return null;
