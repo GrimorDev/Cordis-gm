@@ -377,7 +377,7 @@ router.get('/jam/active', authMiddleware, async (req: AuthRequest, res: Response
 router.get('/jam/:hostId', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { hostId } = req.params;
   const members = await getSpotifyJamMembers(hostId);
-  if (members === null) return res.status(404).json({ error: 'JAM not found' });
+  if (members === null) return res.json({ active: false, jam_id: null, host: null, members: [] });
   const { rows: [host] } = await query('SELECT id, username, avatar_url FROM users WHERE id=$1', [hostId]);
   // Get member info
   const memberInfoRows = members.length > 0
