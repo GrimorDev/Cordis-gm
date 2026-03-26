@@ -14,6 +14,7 @@ import { pool } from './db/pool';
 import { runMigrations } from './db/migrate';
 import { redis } from './redis/client';
 import { initSocket } from './socket';
+import { startSpotifyPoller } from './services/spotifyPoller';
 
 // Routes
 import authRoutes from './routes/auth';
@@ -210,6 +211,9 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 // ── Socket.IO ────────────────────────────────────────────────────────
 const io = initSocket(httpServer);
 app.set('io', io);
+
+// ── Server-side Spotify polling ──────────────────────────────────────
+startSpotifyPoller(io);
 
 // ── Start ─────────────────────────────────────────────────────────────
 async function waitForPostgres(maxAttempts = 15, delayMs = 3000) {

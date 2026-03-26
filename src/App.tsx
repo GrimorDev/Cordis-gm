@@ -4302,7 +4302,7 @@ function ProfilePage({
                   <div className="flex flex-col gap-3">
                     {steamToShow?.current_game && (
                       <div className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.06] rounded-xl p-2.5">
-                        <img src={steamToShow.current_game.header_image} alt={steamToShow.current_game.name} className="w-16 h-9 rounded-lg object-cover shrink-0"/>
+                        <img src={steamToShow.current_game.header_image} alt={steamToShow.current_game.name} className="w-16 h-9 rounded-lg object-cover shrink-0" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}/>
                         <div className="min-w-0">
                           <p className="text-xs text-zinc-500 font-semibold uppercase tracking-widest mb-0.5 flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block"/>
@@ -4326,7 +4326,7 @@ function ProfilePage({
                     </div>
                     {steamToShow.current_game && (
                       <div className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.06] rounded-xl p-2.5">
-                        <img src={steamToShow.current_game.header_image} alt={steamToShow.current_game.name} className="w-16 h-9 rounded-lg object-cover shrink-0"/>
+                        <img src={steamToShow.current_game.header_image} alt={steamToShow.current_game.name} className="w-16 h-9 rounded-lg object-cover shrink-0" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}/>
                         <div className="min-w-0">
                           <p className="text-xs text-zinc-500 font-semibold uppercase tracking-widest mb-0.5 flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block"/>
@@ -4724,7 +4724,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
           {/* Steam game */}
           {!twitchActivity && steamActivity && (
             <div className="flex items-center gap-2.5 bg-white/[0.04] border border-white/[0.06] rounded-xl px-2.5 py-2 mb-3">
-              <img src={steamActivity.header_image} alt={steamActivity.name} className="w-12 h-7 rounded object-cover shrink-0"/>
+              <img src={steamActivity.header_image} alt={steamActivity.name} className="w-12 h-7 rounded object-cover shrink-0" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}/>
               <div className="min-w-0">
                 <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block"/>
