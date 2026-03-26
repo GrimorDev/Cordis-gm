@@ -7,7 +7,7 @@ import { config } from '../config';
 import {
   setUserStatus, joinVoiceChannel, leaveVoiceChannel,
   getSpotifyJamMembers, getVoiceDj, getMyVoiceDjChannel,
-  endSpotifyJam, clearVoiceDj,
+  endSpotifyJam, clearVoiceDj, getVoiceMembers,
 } from '../redis/client';
 import { query } from '../db/pool';
 import { JwtPayload, ServerToClientEvents, ClientToServerEvents } from '../types';
@@ -186,6 +186,31 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
 
     // ── Voice channels ───────────────────────────────────────────────
     socket.on('voice_join', async (channelId) => {
+      // ── User-limit check ──────────────────────────────────────────────
+      const { rows: [chInfo] } = await query(
+        `SELECT server_id, name, user_limit FROM channels WHERE id = $1`, [channelId]
+      );
+      if (chInfo?.user_limit > 0) {
+        // Check if admin/owner (bypasses limit)
+        const { rows: [memberRow] } = await query(
+          `SELECT sm.role_name,
+                  (SELECT COUNT(*) FROM member_roles mr
+                   INNER JOIN server_roles sr ON sr.id = mr.role_id
+                   WHERE mr.server_id = $1 AND mr.user_id = $2
+                     AND ('administrator' = ANY(sr.permissions))) AS is_admin
+           FROM server_members sm WHERE sm.server_id=$1 AND sm.user_id=$2`,
+          [chInfo.server_id, user.id]
+        );
+        const isAdmin = memberRow && (['Owner','Admin'].includes(memberRow.role_name) || parseInt(memberRow.is_admin) > 0);
+        if (!isAdmin) {
+          const currentMembers = await getVoiceMembers(channelId);
+          if (currentMembers.length >= chInfo.user_limit) {
+            socket.emit('voice_join_rejected', { channel_id: channelId, reason: 'limit', limit: chInfo.user_limit });
+            return;
+          }
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────
       await joinVoiceChannel(channelId, user.id);
       socket.join(`voice:${channelId}`);
       (socket.data as SocketData & { voiceChannelId?: string }).voiceChannelId = channelId;

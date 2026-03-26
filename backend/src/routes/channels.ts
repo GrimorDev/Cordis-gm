@@ -94,6 +94,7 @@ router.get('/server/:serverId', authMiddleware, async (req: AuthRequest, res: Re
     // Falls back to 30-day window if user has never marked the channel as read.
     const { rows: channels } = await query(
       `SELECT c.id, c.category_id, c.name, c.type, c.description, c.is_private, c.position,
+              c.user_limit, c.bitrate,
               CASE WHEN c.type IN ('text','announcement')
                 THEN COALESCE((
                   SELECT COUNT(*)::int FROM messages m
@@ -153,15 +154,17 @@ router.post('/', authMiddleware,
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    const { server_id, name, type, category_id, description, is_private, role_ids } = req.body;
+    const { server_id, name, type, category_id, description, is_private, role_ids, user_limit, bitrate } = req.body;
     if (!(await hasServerPermission(server_id, req.user!.id, 'manage_channels'))) {
       return res.status(403).json({ error: 'Not authorized' });
     }
     try {
+      const safeLimit   = Math.max(0, Math.min(99, parseInt(user_limit) || 0));
+      const safeBitrate = Math.max(8, Math.min(96, parseInt(bitrate) || 64));
       const { rows: [channel] } = await query(
-        `INSERT INTO channels (server_id, category_id, name, type, description, is_private)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-        [server_id, category_id || null, name, type, description || null, !!is_private]
+        `INSERT INTO channels (server_id, category_id, name, type, description, is_private, user_limit, bitrate)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [server_id, category_id || null, name, type, description || null, !!is_private, safeLimit, safeBitrate]
       );
       if (is_private && Array.isArray(role_ids) && role_ids.length > 0) {
         for (const rid of role_ids) {
@@ -197,7 +200,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    const { name, description, is_private, role_ids, slowmode_seconds } = req.body;
+    const { name, description, is_private, role_ids, slowmode_seconds, user_limit, bitrate } = req.body;
     const client = await getClient();
     try {
       await client.query('BEGIN');
@@ -206,11 +209,15 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
            name             = COALESCE($1, name),
            description      = COALESCE($2, description),
            is_private       = COALESCE($3, is_private),
-           slowmode_seconds = COALESCE($4, slowmode_seconds)
-         WHERE id = $5 RETURNING *`,
+           slowmode_seconds = COALESCE($4, slowmode_seconds),
+           user_limit       = COALESCE($5, user_limit),
+           bitrate          = COALESCE($6, bitrate)
+         WHERE id = $7 RETURNING *`,
         [name || null, description !== undefined ? description : null,
          is_private !== undefined ? is_private : null,
          slowmode_seconds !== undefined ? Math.max(0, Math.min(21600, parseInt(slowmode_seconds) || 0)) : null,
+         user_limit !== undefined ? Math.max(0, Math.min(99, parseInt(user_limit) || 0)) : null,
+         bitrate !== undefined ? Math.max(8, Math.min(96, parseInt(bitrate) || 64)) : null,
          req.params.id]
       );
       if (Array.isArray(role_ids)) {

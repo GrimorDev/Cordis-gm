@@ -77,15 +77,20 @@ CREATE INDEX IF NOT EXISTS idx_categories_server ON channel_categories(server_id
 
 -- ── Channels ──────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS channels (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    server_id   UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
-    category_id UUID REFERENCES channel_categories(id) ON DELETE SET NULL,
-    name        VARCHAR(100) NOT NULL,
-    type        VARCHAR(15)  NOT NULL CHECK (type IN ('text', 'voice', 'forum', 'announcement')),
-    description TEXT,
-    position    INTEGER DEFAULT 0,
-    created_at  TIMESTAMPTZ DEFAULT NOW()
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    server_id        UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    category_id      UUID REFERENCES channel_categories(id) ON DELETE SET NULL,
+    name             VARCHAR(100) NOT NULL,
+    type             VARCHAR(15)  NOT NULL CHECK (type IN ('text', 'voice', 'forum', 'announcement')),
+    description      TEXT,
+    position         INTEGER DEFAULT 0,
+    user_limit       INTEGER DEFAULT 0,   -- 0 = unlimited; >0 = max users (admins bypass)
+    bitrate          INTEGER DEFAULT 64,  -- kbps for voice channels (8–96)
+    created_at       TIMESTAMPTZ DEFAULT NOW()
 );
+-- Migrations for existing databases
+ALTER TABLE channels ADD COLUMN IF NOT EXISTS user_limit INTEGER DEFAULT 0;
+ALTER TABLE channels ADD COLUMN IF NOT EXISTS bitrate    INTEGER DEFAULT 64;
 
 CREATE INDEX IF NOT EXISTS idx_channels_server   ON channels(server_id);
 CREATE INDEX IF NOT EXISTS idx_channels_category ON channels(category_id);

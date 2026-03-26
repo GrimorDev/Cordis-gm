@@ -102,6 +102,8 @@ export interface ChannelData {
   id: string; server_id: string; category_id: string | null;
   name: string; type: 'text' | 'voice' | 'forum' | 'announcement'; description?: string | null;
   is_private?: boolean; position: number; slowmode_seconds?: number;
+  user_limit?: number;  // 0 = unlimited, >0 = max voice users (admin bypasses)
+  bitrate?: number;     // kbps for voice (8–96)
   allowed_roles?: { role_id: string; role_name: string; color: string }[];
 }
 export interface ForumPost {

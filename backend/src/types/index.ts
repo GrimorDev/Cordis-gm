@@ -132,6 +132,12 @@ export interface ServerToClientEvents {
   friend_twitch_update: (data: { user_id: string; stream: { title: string; game_name: string; viewer_count: number; login: string } | null }) => void;
   friend_steam_update: (data: { user_id: string; game: { name: string; gameid: string; header_image: string } | null }) => void;
   error: (data: { message: string }) => void;
+  voice_join_rejected: (data: { channel_id: string; reason: string; limit: number }) => void;
+  member_role_changed: (data: { server_id: string; user_id: string; role_name: string; roles: any[] }) => void;
+  roles_updated: (data: { server_id: string; roles: any[] }) => void;
+  permissions_updated: (data: { server_id: string }) => void;
+  banned_from_server: (data: { server_id: string }) => void;
+  reaction_update: (data: any) => void;
 }
 
 export interface ClientToServerEvents {
@@ -155,6 +161,7 @@ export interface ClientToServerEvents {
   spotify_update: (data: { track: { name: string; artists: string; album_cover: string | null; external_url: string | null } | null }) => void;
   twitch_update: (data: { stream: { title: string; game_name: string; viewer_count: number; login: string } | null }) => void;
   steam_update: (data: { game: { name: string; gameid: string; header_image: string } | null }) => void;
+  join_server_room: (server_id: string) => void;
 }
 
 export interface MessageWithSender extends Message {
