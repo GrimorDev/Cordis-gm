@@ -5919,6 +5919,7 @@ export default function App() {
       const sid = String(from);
       setSharingUserIds(s => { const n = new Set(s); n.delete(sid); return n; });
       remoteScreenStreamsRef.current.delete(sid);
+      muteRemoteScreenStream(sid, true); // ensure audio stops when stream ends
       setScreenShareTick(t => t + 1);
       setWatchingStreamId(p => p === sid ? null : p);
       setStreamWatchers(p => { const n = {...p}; delete n[sid]; return n; });
@@ -6848,15 +6849,16 @@ export default function App() {
               setScreenShareTick(t => t + 1);
             }
           };
-          // Attach screen-share audio element (audio separate from video so volume is controllable)
+          // Attach screen-share audio — MUTED by default until user clicks "Dołącz do oglądania"
           if (stream.getAudioTracks().length > 0) {
             attachRemoteScreenAudio(remoteUserId, stream);
-            // Restore saved stream volume preference
+            muteRemoteScreenStream(remoteUserId, true); // silent until joined
+            // Restore saved stream volume preference (applied on join, not now)
             try {
               const saved = localStorage.getItem(`cordyn_streamvol_${remoteUserId}`);
               if (saved !== null) {
                 const vol = parseInt(saved, 10);
-                if (!isNaN(vol)) { setStreamVols(p => ({ ...p, [remoteUserId]: vol })); setRemoteScreenVolume(remoteUserId, vol); }
+                if (!isNaN(vol)) setStreamVols(p => ({ ...p, [remoteUserId]: vol }));
               }
             } catch {}
           }
@@ -8172,22 +8174,23 @@ export default function App() {
       emitScreenStop();
     } else {
       try {
-        // Try with system audio first; Tauri/WebView2 doesn't support it — retry without
+        // Try with system audio; if browser rejects audio (NotSupportedError/TypeError) retry video-only
         let stream: MediaStream;
         try {
           stream = await navigator.mediaDevices.getDisplayMedia({
             video: { frameRate: { ideal: 60, max: 60 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-            audio: { echoCancellation: false, noiseSuppression: false, sampleRate: 48000 },
+            audio: true, // let browser show system audio checkbox; no extra constraints that can fail
           });
         } catch (audioErr: any) {
-          // Desktop WebView (Tauri/WebView2) doesn't support system audio capture
-          if (isTauri || audioErr?.name === 'NotSupportedError' || audioErr?.name === 'TypeError') {
+          const name = audioErr?.name ?? '';
+          if (name === 'NotSupportedError' || name === 'TypeError' || name === 'OverconstrainedError') {
+            // System audio not supported (some OS/browser/WebView combos) — fallback to video only
             stream = await navigator.mediaDevices.getDisplayMedia({
               video: { frameRate: { ideal: 60, max: 60 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
               audio: false,
             });
-            if (isTauri) addToast('Dźwięk systemu niedostępny w aplikacji desktop', 'info');
-          } else throw audioErr;
+            addToast('Udostępnianie dźwięku systemu niedostępne na tej platformie', 'info');
+          } else throw audioErr; // real error (user cancelled, no permission etc.)
         }
         // Hint: 'detail' = optimise for text/UI sharpness (vs 'motion' for video)
         stream.getVideoTracks().forEach(t => { (t as any).contentHint = 'detail'; });
@@ -9472,6 +9475,8 @@ export default function App() {
                   const watchers = streamWatchers[watchingStreamId] ?? [];
                   const wExpanded = watchersExpanded[watchingStreamId] ?? false;
                   const stopWatching = () => {
+                    // Mute stream audio again when leaving watch
+                    muteRemoteScreenStream(watchingStreamId, true);
                     setWatchingStreamId(null);
                     if (activeCall.channelId) getSocket().emit('stream_watch_stop' as any, { channel_id: activeCall.channelId, streamer_id: watchingStreamId });
                   };
@@ -9614,6 +9619,12 @@ export default function App() {
                                       </div>
                                       <button onClick={() => {
                                         setWatchingStreamId(streamId);
+                                        // Unmute stream audio now that user explicitly joined
+                                        const savedVol = streamVols[streamId] ?? 100;
+                                        if (!(streamMutedByMe[streamId] ?? false)) {
+                                          muteRemoteScreenStream(streamId, false);
+                                          setRemoteScreenVolume(streamId, savedVol);
+                                        }
                                         if (activeCall.channelId) getSocket().emit('stream_watch_start' as any, { channel_id: activeCall.channelId, streamer_id: streamId });
                                         playStreamJoin();
                                       }}
