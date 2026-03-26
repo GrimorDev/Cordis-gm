@@ -160,6 +160,35 @@ export function watchSpeaking(
   };
 }
 
+// ─── DeepFilterNet3 AI Noise Suppression ─────────────────────────────────────
+/**
+ * Wraps a raw microphone stream with DeepFilterNet3 AI noise suppression.
+ * Loads WASM + model from CDN on first call (~1–2 s). Falls back to null
+ * on any failure so the caller can fall back to the classic noise gate.
+ */
+export async function applyDeepFilter(rawStream: MediaStream): Promise<NoisePipeline | null> {
+  try {
+    const { DeepFilterNet3Core } = await import('deepfilternet3-noise-filter');
+    const ctx  = new AudioContext({ sampleRate: 48000 });
+    const core = new DeepFilterNet3Core({ sampleRate: 48000, noiseReductionLevel: 70 });
+    await core.initialize();                              // fetch WASM + model from CDN
+    const worklet = await core.createAudioWorkletNode(ctx);
+    const source  = ctx.createMediaStreamSource(rawStream);
+    const dest    = ctx.createMediaStreamDestination();
+    source.connect(worklet);
+    worklet.connect(dest);
+    return {
+      processedStream: dest.stream,
+      cleanup: () => { rawStream.getTracks().forEach(t => t.stop()); core.destroy(); ctx.close().catch(() => {}); },
+      setEnabled:   (v) => core.setNoiseSuppressionEnabled(v),
+      setThreshold: (v) => core.setSuppressionLevel(Math.round(v * 100)), // 0-1 → 0-100
+    };
+  } catch (e) {
+    console.warn('[Cordis] DeepFilterNet3 unavailable, will use noise gate:', e);
+    return null;
+  }
+}
+
 // ─── Noise Gate AudioWorklet Pipeline ────────────────────────────────────────
 export interface NoisePipeline {
   /** Processed stream to send to peer connections (noise-gated audio). */

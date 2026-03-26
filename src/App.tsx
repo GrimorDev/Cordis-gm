@@ -64,7 +64,7 @@ import {
 import {
   makePeerConnection, attachRemoteAudio, attachRemoteScreenAudio, detachRemoteAudio,
   muteAllRemote, setRemoteVolume, setRemoteScreenVolume, muteRemoteUser, muteRemoteScreenStream,
-  setOutputDevice, watchSpeaking, getMediaDevices, applyNoiseGate, type NoisePipeline,
+  setOutputDevice, watchSpeaking, getMediaDevices, applyNoiseGate, applyDeepFilter, type NoisePipeline,
 } from './webrtc';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -7962,15 +7962,14 @@ export default function App() {
         speakStopRef.current.set('self', stop);
       }
 
-      // Apply noise gate AudioWorklet if enabled
+      // AI noise suppression (DeepFilterNet3) → fallback to classic noise gate
       let sendStream = rawStream;
       if (useNoise) {
-        const pipeline = await applyNoiseGate(rawStream);
+        const pipeline = await applyDeepFilter(rawStream) ?? await applyNoiseGate(rawStream);
         if (pipeline) {
           noisePipelineRef.current = pipeline;
           sendStream = pipeline.processedStream;
         }
-        // If applyNoiseGate returns null (unsupported), sendStream stays rawStream
       }
 
       localStreamRef.current = sendStream;
