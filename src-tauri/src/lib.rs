@@ -40,10 +40,26 @@ fn window_quit(app: tauri::AppHandle) {
 // AudioCaptureClient wraps a raw COM pointer (IUnknown / NonNull<c_void>) which
 // Rust conservatively marks !Send.  We initialise MTA above, so cross-thread
 // access is safe per COM rules — we just have to assert it ourselves.
+//
+// IMPORTANT: Rust 2021 closures use "precise field capture" — if you write
+// `wrapper.0` inside a closure the compiler captures the *field* (type
+// AudioCaptureClient: !Send), not the wrapper.  We therefore implement Deref /
+// DerefMut so callers use `(*wrapper).method()` or implicit auto-deref, which
+// counts as a *deref projection* (not a field projection) and causes the whole
+// SendWrap<T> to be captured instead.
 #[cfg(windows)]
 struct SendWrap<T>(T);
 #[cfg(windows)]
 unsafe impl<T> Send for SendWrap<T> {}
+#[cfg(windows)]
+impl<T> std::ops::Deref for SendWrap<T> {
+    type Target = T;
+    fn deref(&self) -> &T { &self.0 }
+}
+#[cfg(windows)]
+impl<T> std::ops::DerefMut for SendWrap<T> {
+    fn deref_mut(&mut self) -> &mut T { &mut self.0 }
+}
 
 #[cfg(windows)]
 #[tauri::command]
@@ -90,7 +106,9 @@ fn start_audio_loopback(
 
     let flag = stop_flag.clone();
     std::thread::spawn(move || {
-        let capture_client = capture_client.0;
+        // Access via Deref (deref projection), NOT .0 (field projection).
+        // Rust 2021 would capture .0 as AudioCaptureClient (!Send) with field
+        // projection; deref projection captures the whole SendWrap<T> (Send).
         while flag.load(Ordering::Relaxed) {
             match capture_client.get_next_nbr_frames() {
                 Ok(Some(n)) if n > 0 => {
