@@ -30,26 +30,33 @@ function makeAudioEl(): HTMLAudioElement {
 }
 
 export function attachRemoteAudio(userId: string, stream: MediaStream) {
+  // Close stale AudioContext from previous connection so we don't leak or double-play
+  const stale = gainNodes.get(userId);
+  if (stale) { stale.ctx.close().catch(() => {}); gainNodes.delete(userId); }
+
   let el = remoteAudios.get(userId);
-  if (!el) {
-    el = makeAudioEl();
-    remoteAudios.set(userId, el);
-    // Twórz GainNode od razu — aby volume 0–200% działało zanim użytkownik ruszy suwakiem.
-    // AudioContext musi być wznowiony po pierwszym zdarzeniu play (polityka autoplay).
-    try {
-      const ctx = new AudioContext({ sampleRate: 48000 });
-      const src = ctx.createMediaElementSource(el);
-      const gainNode = ctx.createGain();
-      gainNode.gain.value = 1;
-      src.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      gainNodes.set(userId, { ctx, gain: gainNode });
-      el.addEventListener('play', () => ctx.resume().catch(() => {}));
-    } catch {
-      // AudioContext niedostępny — głośność ograniczona do 100% przez el.volume
-    }
+  if (!el) { el = makeAudioEl(); remoteAudios.set(userId, el); }
+
+  // Route: rawStream → GainNode → processedStream → <audio> element
+  // Using createMediaStreamSource (not createMediaElementSource) avoids the
+  // "already connected" InvalidStateError and works regardless of autoplay policy.
+  try {
+    const ctx      = new AudioContext();           // system default sample rate
+    const src      = ctx.createMediaStreamSource(stream);
+    const gainNode = ctx.createGain();
+    const dest     = ctx.createMediaStreamDestination();
+    gainNode.gain.value = 1.0;
+    src.connect(gainNode);
+    gainNode.connect(dest);
+    el.srcObject = dest.stream;                   // element plays processed stream
+    gainNodes.set(userId, { ctx, gain: gainNode });
+    // Resume on user interaction (autoplay policy) + immediately
+    ctx.resume().catch(() => {});
+    el.addEventListener('play', () => ctx.resume().catch(() => {}), { once: true });
+  } catch {
+    // Fallback: raw stream, volume capped at 100% via el.volume
+    el.srcObject = stream;
   }
-  el.srcObject = stream;
 }
 
 /** Separate element for screen-share audio so it doesn't overwrite mic audio. */

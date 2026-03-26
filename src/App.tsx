@@ -6103,8 +6103,16 @@ export default function App() {
       if (server_id !== activeServerRef.current) return;
       setMembers(prev => prev.map(m => m.id === user_id ? { ...m, role_name, roles } : m));
     });
-    sock.on('voice_join_rejected' as any, ({ limit }: any) => {
-      addToast(`Kanał głosowy jest pełny (limit: ${limit} użytkowników)`, 'error');
+    sock.on('voice_join_rejected' as any, ({ limit, channel_id }: any) => {
+      addToast(`Kanał głosowy jest pełny (limit: ${limit})`, 'error');
+      // Clean up if we somehow got past the frontend pre-check (race condition)
+      if (activeCallRef.current?.channelId === channel_id) {
+        leaveVoiceChannel(channel_id);
+        peerConnsRef.current.forEach((pc, uid) => { pc.close(); detachRemoteAudio(uid); });
+        peerConnsRef.current.clear();
+        setActiveCall(null);
+        setShowCallPanel(false);
+      }
     });
     sock.on('banned_from_server' as any, ({ server_id }: any) => {
       // Remove server from list and navigate away
@@ -8011,6 +8019,15 @@ export default function App() {
 
   const joinVoiceCh = async (ch: ChannelData) => {
     if (activeCall?.channelId === ch.id) return; // Already on this channel — don't rejoin (would break mic)
+    // Pre-check user limit using local voiceUsers state (instant feedback — no half-connected state)
+    const limit = ch.user_limit ?? 0;
+    if (limit > 0 && !isAdmin) {
+      const currentCount = (voiceUsers[ch.id] || []).length;
+      if (currentCount >= limit) {
+        addToast(`Kanał głosowy jest pełny (${currentCount}/${limit})`, 'error');
+        return;
+      }
+    }
     // Close settings / admin panel so the call panel is visible
     setSrvSettOpen(false);
     if (activeViewRef.current === 'admin') setActiveView('servers');
@@ -8155,14 +8172,23 @@ export default function App() {
       emitScreenStop();
     } else {
       try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            frameRate: { ideal: 60, max: 60 },
-            width:     { ideal: 1920 },
-            height:    { ideal: 1080 },
-          },
-          audio: { echoCancellation: false, noiseSuppression: false, sampleRate: 48000 },
-        });
+        // Try with system audio first; Tauri/WebView2 doesn't support it — retry without
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getDisplayMedia({
+            video: { frameRate: { ideal: 60, max: 60 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+            audio: { echoCancellation: false, noiseSuppression: false, sampleRate: 48000 },
+          });
+        } catch (audioErr: any) {
+          // Desktop WebView (Tauri/WebView2) doesn't support system audio capture
+          if (isTauri || audioErr?.name === 'NotSupportedError' || audioErr?.name === 'TypeError') {
+            stream = await navigator.mediaDevices.getDisplayMedia({
+              video: { frameRate: { ideal: 60, max: 60 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+              audio: false,
+            });
+            if (isTauri) addToast('Dźwięk systemu niedostępny w aplikacji desktop', 'info');
+          } else throw audioErr;
+        }
         // Hint: 'detail' = optimise for text/UI sharpness (vs 'motion' for video)
         stream.getVideoTracks().forEach(t => { (t as any).contentHint = 'detail'; });
         screenStreamRef.current = stream;
@@ -13261,9 +13287,9 @@ export default function App() {
           <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
             className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={()=>setChEditOpen(false)}>
             <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
-              onClick={e=>e.stopPropagation()} className={`${gm} rounded-3xl p-7 w-full max-w-md`}>
-              <div className="flex items-center justify-between mb-5"><h2 className="text-lg font-bold text-white">Edytuj kanał</h2><button onClick={()=>setChEditOpen(false)} className="text-zinc-600 hover:text-white"><X size={17}/></button></div>
-              <div className="flex flex-col gap-4">
+              onClick={e=>e.stopPropagation()} className={`${gm} rounded-3xl p-7 w-full max-w-md max-h-[90vh] flex flex-col`}>
+              <div className="flex items-center justify-between mb-5 shrink-0"><h2 className="text-lg font-bold text-white">Edytuj kanał</h2><button onClick={()=>setChEditOpen(false)} className="text-zinc-600 hover:text-white"><X size={17}/></button></div>
+              <div className="flex flex-col gap-4 overflow-y-auto pr-1">
                 <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Nazwa</label>
                   <input value={chForm.name} onChange={e=>setChForm(p=>({...p,name:e.target.value}))} className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/></div>
                 <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Opis</label>
