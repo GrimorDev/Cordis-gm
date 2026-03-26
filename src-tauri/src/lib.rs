@@ -37,6 +37,14 @@ fn window_quit(app: tauri::AppHandle) {
 
 // ── WASAPI loopback capture (Windows only) ───────────────────────────────────
 
+// AudioCaptureClient wraps a raw COM pointer (IUnknown / NonNull<c_void>) which
+// Rust conservatively marks !Send.  We initialise MTA above, so cross-thread
+// access is safe per COM rules — we just have to assert it ourselves.
+#[cfg(windows)]
+struct SendWrap<T>(T);
+#[cfg(windows)]
+unsafe impl<T> Send for SendWrap<T> {}
+
 #[cfg(windows)]
 #[tauri::command]
 fn start_audio_loopback(
@@ -76,8 +84,13 @@ fn start_audio_loopback(
         *guard = Some(stop_flag.clone());
     }
 
+    // Wrap in SendWrap so the COM pointer can cross the thread boundary (MTA is
+    // multi-thread safe, Rust just can't prove it automatically).
+    let capture_client = SendWrap(capture_client);
+
     let flag = stop_flag.clone();
     std::thread::spawn(move || {
+        let capture_client = capture_client.0;
         while flag.load(Ordering::Relaxed) {
             match capture_client.get_next_nbr_frames() {
                 Ok(Some(n)) if n > 0 => {
