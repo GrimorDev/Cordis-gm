@@ -1,7 +1,7 @@
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager,
+    Emitter, Manager,
 };
 
 // ── WASAPI loopback state ────────────────────────────────────────────────────
@@ -82,7 +82,7 @@ fn start_audio_loopback(
             match capture_client.get_next_nbr_frames() {
                 Ok(Some(n)) if n > 0 => {
                     let mut buffer = vec![0u8; n as usize * block_align];
-                    if capture_client.read_from_device(n, &mut buffer).is_ok() {
+                    if capture_client.read_from_device(n as usize, &mut buffer).is_ok() {
                         // Interpret raw bytes as f32 samples (already PCM f32 in mix format)
                         let raw_bytes: &[u8] = &buffer;
                         let b64 = base64::engine::general_purpose::STANDARD.encode(raw_bytes);
