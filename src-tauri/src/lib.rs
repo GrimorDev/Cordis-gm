@@ -4,6 +4,9 @@ use tauri::{
     Manager,
 };
 
+// ── WASAPI loopback state ────────────────────────────────────────────────────
+struct LoopbackState(std::sync::Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>>);
+
 /// Minimize the calling window.
 #[tauri::command]
 fn window_minimize(window: tauri::Window) {
@@ -32,9 +35,92 @@ fn window_quit(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+// ── WASAPI loopback capture (Windows only) ───────────────────────────────────
+
+#[cfg(windows)]
+#[tauri::command]
+fn start_audio_loopback(
+    app: tauri::AppHandle,
+    state: tauri::State<LoopbackState>,
+) -> Result<serde_json::Value, String> {
+    use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+    use base64::Engine as _;
+
+    wasapi::initialize_mta().map_err(|e| e.to_string())?;
+
+    let device = wasapi::get_default_device(&wasapi::Direction::Render)
+        .map_err(|e| e.to_string())?;
+    let audio_client = device.get_iaudioclient().map_err(|e| e.to_string())?;
+    let mix_format = audio_client.get_mixformat().map_err(|e| e.to_string())?;
+
+    let sr = mix_format.get_samplespersec();
+    let ch = mix_format.get_nchannels();
+    let block_align = mix_format.get_blockalign() as usize;
+
+    audio_client
+        .initialize_client(
+            &mix_format,
+            0,
+            &wasapi::Direction::Capture,
+            &wasapi::ShareMode::Shared,
+            true,
+        )
+        .map_err(|e| e.to_string())?;
+
+    let capture_client = audio_client.get_audiocaptureclient().map_err(|e| e.to_string())?;
+    audio_client.start_stream().map_err(|e| e.to_string())?;
+
+    let stop_flag = Arc::new(AtomicBool::new(true));
+    {
+        let mut guard = state.0.lock().unwrap();
+        *guard = Some(stop_flag.clone());
+    }
+
+    let flag = stop_flag.clone();
+    std::thread::spawn(move || {
+        while flag.load(Ordering::Relaxed) {
+            match capture_client.get_next_nbr_frames() {
+                Ok(Some(n)) if n > 0 => {
+                    let mut buffer = vec![0u8; n as usize * block_align];
+                    if capture_client.read_from_device(n, &mut buffer).is_ok() {
+                        // Interpret raw bytes as f32 samples (already PCM f32 in mix format)
+                        let raw_bytes: &[u8] = &buffer;
+                        let b64 = base64::engine::general_purpose::STANDARD.encode(raw_bytes);
+                        let _ = app.emit("audio_loopback_chunk", b64);
+                    }
+                }
+                _ => {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+            }
+        }
+    });
+
+    Ok(serde_json::json!({ "sample_rate": sr, "channels": ch }))
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn start_audio_loopback(
+    _app: tauri::AppHandle,
+    _state: tauri::State<LoopbackState>,
+) -> Result<serde_json::Value, String> {
+    Err("Only on Windows".to_string())
+}
+
+#[tauri::command]
+fn stop_audio_loopback(state: tauri::State<LoopbackState>) {
+    use std::sync::atomic::Ordering;
+    let guard = state.0.lock().unwrap();
+    if let Some(flag) = guard.as_ref() {
+        flag.store(false, Ordering::Relaxed);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(LoopbackState(std::sync::Mutex::new(None)))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_shell::init())
@@ -114,6 +200,8 @@ pub fn run() {
             window_maximize,
             window_close,
             window_quit,
+            start_audio_loopback,
+            stop_audio_loopback,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

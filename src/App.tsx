@@ -8170,6 +8170,9 @@ export default function App() {
     if (activeCall?.isScreenSharing) {
       screenStreamRef.current?.getTracks().forEach(t => t.stop());
       screenStreamRef.current = null;
+      if (isTauri) {
+        import('./audioLoopback').then(m => m.stopLoopbackCapture()).catch(() => {});
+      }
       setActiveCall(p => p ? {...p, isScreenSharing: false} : p);
       emitScreenStop();
     } else {
@@ -8194,6 +8197,20 @@ export default function App() {
         }
         // Hint: 'detail' = optimise for text/UI sharpness (vs 'motion' for video)
         stream.getVideoTracks().forEach(t => { (t as any).contentHint = 'detail'; });
+        // On Tauri desktop: if no audio track (WebView2 can't capture system audio),
+        // try WASAPI loopback capture via Rust plugin
+        if (isTauri && stream.getAudioTracks().length === 0) {
+          try {
+            const { startLoopbackCapture } = await import('./audioLoopback');
+            const loopbackTrack = await startLoopbackCapture();
+            if (loopbackTrack) {
+              (stream as any).addTrack(loopbackTrack);
+              addToast('🎵 Dźwięk systemu: WASAPI loopback aktywny', 'success');
+            }
+          } catch (e) {
+            console.warn('[Loopback] Not available:', e);
+          }
+        }
         screenStreamRef.current = stream;
         // Add ALL tracks (video + audio) to every peer connection BEFORE renegotiating
         stream.getTracks().forEach(t => {
@@ -8216,8 +8233,11 @@ export default function App() {
         stream.getVideoTracks().forEach(t => {
           t.onended = () => {
             screenStreamRef.current = null;
-            setActiveCall(p => p ? {...p, isScreenSharing: false} : p);
+            if (isTauri) {
+              import('./audioLoopback').then(m => m.stopLoopbackCapture()).catch(() => {});
+            }
             emitScreenStop();
+            setActiveCall(p => p ? {...p, isScreenSharing: false} : p);
           };
         });
         setActiveCall(p => p ? {...p, isScreenSharing: true} : p);
