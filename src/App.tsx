@@ -5076,7 +5076,7 @@ export default function App() {
 
   const [chEditOpen, setChEditOpen]           = useState(false);
   const [editingCh, setEditingCh]             = useState<ChannelData|null>(null);
-  const [chForm, setChForm]                   = useState({ name:'', description:'', is_private:false, role_ids:[] as string[], slowmode_seconds:0, background_url:'', background_gradient:'' });
+  const [chForm, setChForm]                   = useState({ name:'', description:'', is_private:false, role_ids:[] as string[], slowmode_seconds:0, background_url:'', background_gradient:'', user_limit:0, bitrate:64 });
 
   // ── Server header dropdown ───────────────────────────────────────
   const [srvDropOpen, setSrvDropOpen]         = useState(false);
@@ -6097,6 +6097,13 @@ export default function App() {
       if (server_id !== activeServerRef.current) return;
       // My roles changed — refetch server to get updated my_permissions
       serversApi.get(server_id).then(setServerFull).catch(console.error);
+    });
+    sock.on('member_role_changed' as any, ({ server_id, user_id, role_name, roles }: any) => {
+      if (server_id !== activeServerRef.current) return;
+      setMembers(prev => prev.map(m => m.id === user_id ? { ...m, role_name, roles } : m));
+    });
+    sock.on('voice_join_rejected' as any, ({ limit }: any) => {
+      addToast(`Kanał głosowy jest pełny (limit: ${limit} użytkowników)`, 'error');
     });
     sock.on('banned_from_server' as any, ({ server_id }: any) => {
       // Remove server from list and navigate away
@@ -7691,13 +7698,13 @@ export default function App() {
   };
   const openChEdit = (ch: ChannelData) => {
     setEditingCh(ch);
-    setChForm({ name: ch.name, description: ch.description||'', is_private: ch.is_private||false, role_ids: ch.allowed_roles?.map(r => r.role_id)||[], slowmode_seconds: ch.slowmode_seconds||0, background_url: (ch as any).background_url||'', background_gradient: (ch as any).background_gradient||'' });
+    setChForm({ name: ch.name, description: ch.description||'', is_private: ch.is_private||false, role_ids: ch.allowed_roles?.map(r => r.role_id)||[], slowmode_seconds: ch.slowmode_seconds||0, background_url: (ch as any).background_url||'', background_gradient: (ch as any).background_gradient||'', user_limit: ch.user_limit||0, bitrate: ch.bitrate||64 });
     setChEditOpen(true);
   };
   const handleSaveCh = async () => {
     if (!editingCh) return;
     try {
-      await channelsApi.update(editingCh.id, { name: chForm.name, description: chForm.description, is_private: chForm.is_private, role_ids: chForm.is_private ? chForm.role_ids : [], slowmode_seconds: chForm.slowmode_seconds, background_url: chForm.background_url || null, background_gradient: chForm.background_gradient || null } as any);
+      await channelsApi.update(editingCh.id, { name: chForm.name, description: chForm.description, is_private: chForm.is_private, role_ids: chForm.is_private ? chForm.role_ids : [], slowmode_seconds: chForm.slowmode_seconds, background_url: chForm.background_url || null, background_gradient: chForm.background_gradient || null, user_limit: chForm.user_limit, bitrate: chForm.bitrate } as any);
       setChEditOpen(false); setEditingCh(null);
       const s = await serversApi.get(activeServer); setServerFull(s);
     } catch (err) { console.error(err); }
@@ -8137,15 +8144,28 @@ export default function App() {
       emitScreenStop();
     } else {
       try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: { frameRate: { ideal: 30, max: 60 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+          audio: { echoCancellation: false, noiseSuppression: false, sampleRate: 48000 },
+        });
+        // Hint browser this is a screen capture (reduces dropped frames)
+        stream.getVideoTracks().forEach(t => { (t as any).contentHint = 'detail'; });
         screenStreamRef.current = stream;
         // Add ALL tracks (video + audio) to every peer connection BEFORE renegotiating
         stream.getTracks().forEach(t => {
           peerConnsRef.current.forEach((pc) => { pc.addTrack(t, stream); });
         });
-        // Renegotiate once per peer (after all tracks are added)
+        // Renegotiate once per peer + set encoding bitrate for video
         peerConnsRef.current.forEach(async (pc, peerId) => {
           try {
+            // Set max bitrate for video senders (screen share quality)
+            pc.getSenders().filter(s => s.track?.kind === 'video').forEach(sender => {
+              const params = sender.getParameters();
+              if (!params.encodings?.length) params.encodings = [{}];
+              params.encodings[0].maxBitrate = 3_000_000; // 3 Mbps for screen share
+              params.encodings[0].maxFramerate = 30;
+              sender.setParameters(params).catch(() => {});
+            });
             if (pc.signalingState === 'stable') {
               const offer = await pc.createOffer();
               await pc.setLocalDescription(offer);
@@ -8890,6 +8910,11 @@ export default function App() {
                                 <div className="flex items-center gap-2 min-w-0">
                                   <Volume2 size={13} className={`shrink-0 ${isActiveVoice?'text-emerald-400':hasUsers?'text-zinc-400':'text-zinc-600'}`}/>
                                   <span className="text-sm font-medium truncate">{ch.name}</span>
+                                  {(ch.user_limit??0)>0&&(
+                                    <span className={`text-[10px] font-mono tabular-nums shrink-0 px-1 py-0.5 rounded-md ${chVoiceUsers.length>=(ch.user_limit??0)?'text-red-400 bg-red-500/10':'text-zinc-500 bg-white/[0.04]'}`}>
+                                      {chVoiceUsers.length}/{ch.user_limit}
+                                    </span>
+                                  )}
                                 </div>
                                 {/* Stacked avatars for voice users */}
                                 {hasUsers&&(
@@ -13326,6 +13351,29 @@ export default function App() {
                     )}
                   </div>
                 )}
+                {editingCh?.type==='voice'&&(<>
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest">Limit użytkowników</label>
+                      <span className="text-xs text-zinc-400 font-semibold">{chForm.user_limit===0?'∞':chForm.user_limit}</span>
+                    </div>
+                    <input type="range" min={0} max={99} value={chForm.user_limit}
+                      onChange={e=>setChForm(p=>({...p,user_limit:parseInt(e.target.value)}))}
+                      className="w-full accent-indigo-500"/>
+                    <p className="text-[11px] text-zinc-600 mt-1">{chForm.user_limit===0?'Brak limitu – każdy może wejść.':'Admin może dołączyć ponad limit.'}</p>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest">Prędkość strumieniowania</label>
+                      <span className="text-xs text-zinc-400 font-semibold">{chForm.bitrate} kbps</span>
+                    </div>
+                    <input type="range" min={8} max={96} step={8} value={chForm.bitrate}
+                      onChange={e=>setChForm(p=>({...p,bitrate:parseInt(e.target.value)}))}
+                      className="w-full accent-indigo-500"/>
+                    <div className="flex justify-between text-[10px] text-zinc-700 mt-0.5"><span>8 kbps</span><span>64 kbps</span><span>96 kbps</span></div>
+                    {chForm.bitrate>64&&<p className="text-[11px] text-amber-500/80 mt-1">⚠ Powyżej 64 kbps może wpłynąć na słabe łącza.</p>}
+                  </div>
+                </>)}
                 <button onClick={handleSaveCh} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">Zapisz</button>
               </div>
             </motion.div>

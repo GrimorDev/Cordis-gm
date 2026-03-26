@@ -431,6 +431,26 @@ router.put('/:id/members/:userId/roles', authMiddleware, async (req: AuthRequest
       // Notify the affected user their permissions may have changed
       const io = req.app.get('io');
       if (io) io.to(`user:${req.params.userId}`).emit('permissions_updated', { server_id: req.params.id });
+      // Broadcast updated member info to everyone in the server (realtime role display)
+      if (io) {
+        const { rows: [updatedMember] } = await query(
+          `SELECT u.id, u.username, u.avatar_url, u.status, sm.role_name,
+                  (SELECT json_agg(json_build_object('id', sr.id, 'name', sr.name, 'color', sr.color))
+                   FROM member_roles mr2 INNER JOIN server_roles sr ON sr.id = mr2.role_id
+                   WHERE mr2.server_id = sm.server_id AND mr2.user_id = u.id) AS roles
+           FROM users u INNER JOIN server_members sm ON sm.user_id = u.id
+           WHERE sm.server_id=$1 AND u.id=$2`,
+          [req.params.id, req.params.userId]
+        );
+        if (updatedMember) {
+          io.to(`server:${req.params.id}`).emit('member_role_changed', {
+            server_id: req.params.id,
+            user_id:   req.params.userId,
+            role_name: updatedMember.role_name,
+            roles:     updatedMember.roles || [],
+          });
+        }
+      }
       // Run role_assigned automations for each new role
       const assignedRoles = Array.isArray(role_ids) ? role_ids : [];
       for (const roleId of assignedRoles) {
