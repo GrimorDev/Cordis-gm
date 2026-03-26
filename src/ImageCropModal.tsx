@@ -91,9 +91,9 @@ export default function ImageCropModal({
     if (!croppedArea) return;
     setSaving(true);
     try {
-      const mime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+      const mime = file.type === 'image/png' ? 'image/png' : file.type === 'image/gif' ? 'image/gif' : 'image/jpeg';
       const blob = await getCroppedBlob(src, croppedArea, rotation, mime);
-      const ext  = mime === 'image/png' ? '.png' : '.jpg';
+      const ext  = mime === 'image/png' ? '.png' : mime === 'image/gif' ? '.gif' : '.jpg';
       const name = file.name.replace(/\.[^.]+$/, '') + '_crop' + ext;
       onDone(new File([blob], name, { type: mime }));
     } catch (e) {

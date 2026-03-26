@@ -5033,8 +5033,6 @@ export default function App() {
     onDone: (f: File) => void;
   } | null>(null);
   const openCrop = (file: File, aspect: number, cropShape: CropShape, title: string, onDone: (f: File) => void) => {
-    // GIF-y pomijają kadrowanie — canvas zniszczyłby animację
-    if (file.type === 'image/gif') { onDone(file); return; }
     setCropPending({ file, aspect, cropShape, title, onDone });
   };
 
@@ -5901,6 +5899,7 @@ export default function App() {
     sock.on('friend_accepted', ({ user: u }: { user: { id: string; username: string } }) => {
       friendsApi.list().then(setFriends).catch(console.error);
       friendsApi.requests().then(setFriendReqs).catch(console.error);
+      dmsApi.conversations().then(setDmConvs).catch(console.error);
       autoToast(`${u.username} zaakceptował(a) Twoje zaproszenie! 🎉`, 'success');
     });
     // WebRTC signaling
@@ -7559,6 +7558,7 @@ export default function App() {
       const s = await serversApi.join(joinCode.trim());
       setServerList(p => [...p, s]); setActiveServer(s.id); setActiveView('servers');
       setCreateSrvOpen(false); setJoinCode('');
+      getSocket()?.emit('join_server_room' as any, s.id);
     } catch (err: any) { addToast(err?.message || 'Nieprawidłowe zaproszenie', 'error'); }
   };
   const handleLeaveServer = async (serverId: string) => {
@@ -9738,20 +9738,25 @@ export default function App() {
                   <div className="w-full">
                     <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 text-left">{t('friends.dmSection')}</h3>
                     <div className="flex flex-col gap-1">
-                      {[...friends].sort((a,b)=>{const o=(s:string)=>['online','idle','dnd'].includes(s)?0:1;return o(a.status)-o(b.status);}).map(f=>(
-                        <button key={f.id} onClick={()=>openDm(f.id)}
-                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.06] transition-all group text-left w-full">
-                          <div className="relative shrink-0">
+                      {[...friends].sort((a,b)=>{const o=(s:string)=>['online','idle','dnd'].includes(s)?0:1;return o(a.status)-o(b.status);}).map(f=>{
+                        const fAct=userActivities.get(f.id); const fTw=userTwitchActivities.get(f.id); const fSt=userSteamActivities.get(f.id);
+                        return (
+                        <div key={f.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.06] transition-all group">
+                          <div className="relative shrink-0 cursor-pointer" onClick={e=>{e.stopPropagation();showHoverCard(f.id,e)}}>
                             <img src={ava(f)} className="w-9 h-9 rounded-xl object-cover av-sc-xs" alt=""/>
                             <StatusBadge status={f.status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
                           </div>
-                          <div className="flex-1 min-w-0">
+                          <button onClick={()=>openDm(f.id)} className="flex-1 min-w-0 text-left">
                             <p className="text-sm font-semibold text-zinc-300 group-hover:text-white transition-colors truncate">{maskName(f.username)}</p>
-                            {f.custom_status&&<p className="text-xs text-zinc-600 truncate">{f.custom_status}</p>}
-                          </div>
-                          <MessageCircle size={14} className="text-zinc-700 group-hover:text-indigo-400 transition-colors shrink-0"/>
-                        </button>
-                      ))}
+                            {fAct ? <p className="text-[11px] text-[#1DB954] truncate leading-tight flex items-center gap-1"><SpotifyIcon size={9} className="shrink-0"/> {fAct.artists}</p>
+                            : fTw ? <p className="text-[11px] text-purple-400 truncate leading-tight flex items-center gap-1"><TwitchIcon size={9} className="shrink-0"/> {fTw.game_name}</p>
+                            : fSt ? <p className="text-[11px] text-emerald-400 truncate leading-tight flex items-center gap-1"><Gamepad2 size={9} className="shrink-0"/> {fSt.name}</p>
+                            : f.custom_status ? <p className="text-xs text-zinc-600 truncate">{f.custom_status}</p> : null}
+                          </button>
+                          <MessageCircle size={14} className="text-zinc-700 group-hover:text-indigo-400 transition-colors shrink-0 cursor-pointer" onClick={()=>openDm(f.id)}/>
+                        </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : (
@@ -10613,7 +10618,11 @@ export default function App() {
                       <>
                         <img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className="w-20 h-20 rounded-2xl mx-auto mb-4 border-4 border-zinc-950 object-cover shadow-2xl" alt=""/>
                         <h1 className="text-2xl font-bold text-white mb-1">{maskName(activeDm.other_username)}</h1>
-                        <p className="text-sm text-zinc-500">Początek Twojej rozmowy z <span className="text-zinc-400 font-medium">{maskName(activeDm.other_username)}</span>.</p>
+                        {friends.some(f=>f.id===activeDm.other_user_id) && messages.length===0 ? (
+                          <p className="text-sm text-zinc-400"><span className="font-medium text-white">{maskName(activeDm.other_username)}</span> jest Twoim znajomym! Zacznij rozmowę.</p>
+                        ) : (
+                          <p className="text-sm text-zinc-500">Początek Twojej rozmowy z <span className="text-zinc-400 font-medium">{maskName(activeDm.other_username)}</span>.</p>
+                        )}
                       </>
                     ) : (
                       <>
@@ -10805,6 +10814,7 @@ export default function App() {
                                         try {
                                           const s = await serversApi.join(code);
                                           setServerList(p=>[...p,s]); setActiveServer(s.id); setActiveView('servers');
+                                          getSocket()?.emit('join_server_room' as any, s.id);
                                           addToast(`Dołączono do serwera ${srvName}!`,'success');
                                         } catch(err:any){ addToast(err?.message||'Nie udało się dołączyć','error'); }
                                       }} className="w-full py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 active:scale-95 text-sm font-bold text-white transition-all shadow-lg shadow-indigo-500/25">
@@ -11773,10 +11783,8 @@ export default function App() {
                   if (!botDefs.length) return null;
                   return (
                     <div className="mt-4">
-                      <h3 className="text-[11px] font-bold uppercase tracking-widest mb-2 px-1 text-violet-500/70">
-                        Boty — {botDefs.length}
-                      </h3>
-                      <div className="flex flex-col gap-0.5">
+                      <SectionHeader skey="bots" label="Boty" count={botDefs.length} color="#8b5cf6"/>
+                      {!collapsedRightSections.has('bots')&&<div className="flex flex-col gap-0.5">
                         {botDefs.map(({inst, def})=>{
                           const musicState = musicBotState[inst.channel_id||''];
                           return (
@@ -11804,7 +11812,7 @@ export default function App() {
                           </div>
                           );
                         })}
-                      </div>
+                      </div>}
                     </div>
                   );
                 })()}
@@ -15355,6 +15363,7 @@ export default function App() {
                       setServerList(p => [...p, s]);
                       setActiveServer(s.id);
                       setActiveView('servers');
+                      getSocket()?.emit('join_server_room' as any, s.id);
                       window.history.replaceState({}, '', '/');
                       addToast(`Dołączono do ${s.name}!`, 'success');
                     } catch (e: any) {

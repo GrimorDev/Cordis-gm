@@ -1,8 +1,30 @@
 import { Router, Response } from 'express';
-import { query } from '../db/pool';
+import { query, getClient } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
 import { friendReqLimiter } from '../middleware/userRateLimits';
 import { AuthRequest } from '../types';
+
+async function ensureDmConversation(userId1: string, userId2: string): Promise<void> {
+  const { rows } = await query(
+    `SELECT dp1.conversation_id FROM dm_participants dp1
+     INNER JOIN dm_participants dp2 ON dp2.conversation_id=dp1.conversation_id AND dp2.user_id=$2
+     WHERE dp1.user_id=$1 LIMIT 1`,
+    [userId1, userId2]
+  );
+  if (rows[0]) return; // already exists
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+    const { rows: [conv] } = await client.query('INSERT INTO dm_conversations DEFAULT VALUES RETURNING id');
+    await client.query(
+      'INSERT INTO dm_participants (conversation_id, user_id) VALUES ($1,$2),($1,$3)',
+      [conv.id, userId1, userId2]
+    );
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+  } finally { client.release(); }
+}
 
 const router = Router();
 
@@ -111,10 +133,18 @@ router.put('/request/:id', authMiddleware, async (req: AuthRequest, res: Respons
         [req_.requester_id]
       );
 
+      // Auto-create DM conversation between both users
+      await ensureDmConversation(req.user!.id, req_.requester_id);
+
       const io = req.app.get('io');
       if (io) {
+        // Notify requester
         io.to(`user:${req_.requester_id}`).emit('friend_accepted', {
           user: { id: req.user!.id, username: req.user!.username },
+        });
+        // Also notify addressee (themselves) so their DM list refreshes
+        io.to(`user:${req.user!.id}`).emit('friend_accepted', {
+          user: { id: req_.requester_id, username: user.username },
         });
       }
       return res.json({ message: 'Friend request accepted', user });

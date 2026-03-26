@@ -170,6 +170,16 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
       if (typeof cb === 'function') cb();
     });
 
+    // ── Server room join (called after user joins a new server) ─────
+    socket.on('join_server_room', async (serverId: string) => {
+      // Verify membership before joining room
+      const { rows } = await query(
+        `SELECT 1 FROM server_members WHERE server_id=$1 AND user_id=$2 LIMIT 1`,
+        [serverId, user.id]
+      );
+      if (rows[0]) socket.join(`server:${serverId}`);
+    });
+
     // ── Channel events ──────────────────────────────────────────────
     socket.on('join_channel', (channelId) => {
       socket.join(`channel:${channelId}`);
