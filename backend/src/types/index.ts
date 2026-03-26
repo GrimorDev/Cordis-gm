@@ -138,6 +138,7 @@ export interface ClientToServerEvents {
   authenticate: (token: string) => void;
   join_channel: (channel_id: string) => void;
   leave_channel: (channel_id: string) => void;
+  join_server_room: (server_id: string) => void;
   typing_start: (channel_id: string) => void;
   typing_stop: (channel_id: string) => void;
   voice_join: (channel_id: string) => void;
