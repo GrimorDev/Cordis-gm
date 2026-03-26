@@ -74,7 +74,7 @@ fn start_audio_loopback(
 
     let device = wasapi::get_default_device(&wasapi::Direction::Render)
         .map_err(|e| e.to_string())?;
-    let audio_client = device.get_iaudioclient().map_err(|e| e.to_string())?;
+    let mut audio_client = device.get_iaudioclient().map_err(|e| e.to_string())?;
     let mix_format = audio_client.get_mixformat().map_err(|e| e.to_string())?;
 
     let sr = mix_format.get_samplespersec();
