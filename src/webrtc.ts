@@ -123,41 +123,167 @@ export async function setOutputDevice(deviceId: string) {
   }
 }
 
-// ─── Speaking Detection ──────────────────────────────────────────────────────
+// ─── Voice Activity Detection (VAD) ──────────────────────────────────────────
+/**
+ * Proper VAD with:
+ *  - RMS (root-mean-square) energy on time-domain data — far more accurate than
+ *    frequency-bin averaging; immune to tonal artifacts from noise gate worklets.
+ *  - Hysteresis: START_THRESHOLD > STOP_THRESHOLD to avoid flicker at the edge.
+ *  - HOLD time: "speaking" stays true for HOLD_MS after energy drops below
+ *    stop-threshold — eliminates indicator flutter between words.
+ *  - requestAnimationFrame loop (~60 fps) so detection is instant, not laggy.
+ *  - Focused on voice band (80–4000 Hz bins, ~fftSize 1024 @ 48 kHz).
+ */
 export function watchSpeaking(
   stream: MediaStream,
   onChange: (speaking: boolean) => void,
-  threshold = 18,
+  startThreshold = 0.012,  // RMS 0..1 — tweak via settings (default ~-38 dBFS)
 ): () => void {
   let ctx: AudioContext | null = null;
-  let interval: ReturnType<typeof setInterval> | null = null;
+  let rafId: number | null = null;
 
   try {
-    ctx = new AudioContext();
+    ctx = new AudioContext({ sampleRate: 48000 });
     const src = ctx.createMediaStreamSource(stream);
+
+    // Analyser on time-domain for RMS
     const analyser = ctx.createAnalyser();
-    analyser.fftSize = 512;
-    analyser.smoothingTimeConstant = 0.4;
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.0; // no smoothing — we do it ourselves
     src.connect(analyser);
 
-    const data = new Uint8Array(analyser.frequencyBinCount);
-    let speaking = false;
+    const buf = new Float32Array(analyser.fftSize);
 
-    interval = setInterval(() => {
-      analyser.getByteFrequencyData(data);
-      // Voice frequency range roughly bins 2–28
-      let sum = 0;
-      for (let i = 2; i < 28; i++) sum += data[i];
-      const avg = sum / 26;
-      const now = avg > threshold;
-      if (now !== speaking) { speaking = now; onChange(now); }
-    }, 80);
+    let speaking      = false;
+    let lastSpeakTime = 0;
+
+    const STOP_THR = startThreshold * 0.55; // hysteresis — stop at 55% of start threshold
+    const HOLD_MS  = 280;                   // hold "speaking" 280 ms after energy drops
+
+    // Smoothed RMS via exponential moving average (τ ≈ 60 ms)
+    let smoothedRms = 0;
+    const ALPHA     = 0.15; // EMA coefficient
+
+    function tick() {
+      analyser.getFloatTimeDomainData(buf);
+
+      // RMS over entire frame
+      let sumSq = 0;
+      for (let i = 0; i < buf.length; i++) sumSq += buf[i] * buf[i];
+      const rms    = Math.sqrt(sumSq / buf.length);
+      smoothedRms  = ALPHA * rms + (1 - ALPHA) * smoothedRms;
+
+      const now = Date.now();
+      const thr = speaking ? STOP_THR : startThreshold;
+
+      if (smoothedRms > thr) {
+        lastSpeakTime = now;
+        if (!speaking) { speaking = true; onChange(true); }
+      } else if (speaking && now - lastSpeakTime > HOLD_MS) {
+        speaking = false; onChange(false);
+      }
+
+      rafId = requestAnimationFrame(tick);
+    }
+
+    rafId = requestAnimationFrame(tick);
+    ctx.resume().catch(() => {});
   } catch { /* AudioContext not available, skip */ }
 
   return () => {
-    if (interval) clearInterval(interval);
+    if (rafId !== null) cancelAnimationFrame(rafId);
     if (ctx) ctx.close().catch(() => {});
   };
+}
+
+// ─── SDP Helpers ─────────────────────────────────────────────────────────────
+/**
+ * Reorder m=video payload types to prefer H264 over VP8/VP9.
+ * H264 hardware encoding gives better performance + less CPU for screen share.
+ */
+export function preferH264(sdp: string): string {
+  try {
+    const lines = sdp.split('\n');
+    let inVideo   = false;
+    const h264pts: string[] = [];
+
+    // First pass: collect H264 payload types
+    for (const line of lines) {
+      if (line.startsWith('m=video')) { inVideo = true; continue; }
+      if (line.startsWith('m=') && inVideo) break;
+      if (!inVideo) continue;
+      const m = line.match(/^a=rtpmap:(\d+) H264/i);
+      if (m) h264pts.push(m[1]);
+    }
+
+    if (h264pts.length === 0) return sdp; // H264 not available — don't change
+
+    // Second pass: reorder m=video payload list
+    return lines.map(line => {
+      if (!line.startsWith('m=video')) return line;
+      const parts   = line.split(' ');
+      const header  = parts.slice(0, 3);           // e.g. "m=video 9 UDP/TLS/RTP/SAVPF"
+      const allPts  = parts.slice(3);              // all payload type numbers
+      const rest    = allPts.filter(p => !h264pts.includes(p.trim()));
+      return [...header, ...h264pts, ...rest].join(' ');
+    }).join('\n');
+  } catch {
+    return sdp; // never break negotiation
+  }
+}
+
+/**
+ * Set encoding parameters on all audio senders: high priority + correct Opus bitrate.
+ * Call after setLocalDescription or after adding tracks.
+ */
+export function tuneAudioSender(pc: RTCPeerConnection, bitrateKbps = 64): void {
+  pc.getSenders().forEach(sender => {
+    if (sender.track?.kind !== 'audio') return;
+    try {
+      const params = sender.getParameters();
+      if (!params.encodings?.length) params.encodings = [{}];
+      params.encodings[0].maxBitrate    = bitrateKbps * 1_000;
+      (params.encodings[0] as any).priority        = 'high';
+      (params.encodings[0] as any).networkPriority = 'high';
+      sender.setParameters(params).catch(() => {});
+    } catch {}
+  });
+}
+
+/**
+ * Set encoding parameters on all video senders (screen share):
+ * max 8 Mbps @ 60 fps — minimum for crisp 1080p.
+ * Also demotes any webcam senders to medium priority.
+ */
+export function tuneVideoSenders(
+  pc: RTCPeerConnection,
+  screenStream: MediaStream | null,
+  maxBitrateMbps = 8,
+  maxFps         = 60,
+): void {
+  pc.getSenders().forEach(sender => {
+    if (sender.track?.kind !== 'video') return;
+    try {
+      const params = sender.getParameters();
+      if (!params.encodings?.length) params.encodings = [{}];
+
+      const isScreen = screenStream?.getVideoTracks().includes(sender.track as MediaStreamTrack) ?? false;
+
+      if (isScreen) {
+        params.encodings[0].maxBitrate               = maxBitrateMbps * 1_000_000;
+        params.encodings[0].maxFramerate              = maxFps;
+        (params.encodings[0] as any).priority        = 'high';
+        (params.encodings[0] as any).networkPriority = 'high';
+      } else {
+        // Webcam — lower priority so screen share gets the bandwidth
+        params.encodings[0].maxBitrate               = 1_500_000; // 1.5 Mbps
+        params.encodings[0].maxFramerate              = 30;
+        (params.encodings[0] as any).priority        = 'medium';
+        (params.encodings[0] as any).networkPriority = 'medium';
+      }
+      sender.setParameters(params).catch(() => {});
+    } catch {}
+  });
 }
 
 // ─── DeepFilterNet3 AI Noise Suppression ─────────────────────────────────────

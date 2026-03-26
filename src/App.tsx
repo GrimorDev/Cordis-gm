@@ -65,6 +65,7 @@ import {
   makePeerConnection, attachRemoteAudio, attachRemoteScreenAudio, detachRemoteAudio,
   muteAllRemote, setRemoteVolume, setRemoteScreenVolume, muteRemoteUser, muteRemoteScreenStream,
   setOutputDevice, watchSpeaking, getMediaDevices, applyNoiseGate, applyDeepFilter, type NoisePipeline,
+  preferH264, tuneAudioSender, tuneVideoSenders,
 } from './webrtc';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -6759,7 +6760,7 @@ export default function App() {
       const isOtherInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') && !isMsgInput;
       if (isOtherInput) return;
       // Musimy być w widoku czatu (serwer lub DM)
-      if (!activeChannelRef.current && !activeDmUserIdRef.current) return;
+      if (!activeChannel && !activeDmUserIdRef.current) return;
 
       const items = Array.from(e.clipboardData?.items ?? []) as DataTransferItem[];
       // 1) Obrazki i screenshoty — priorytet po type
@@ -6892,11 +6893,21 @@ export default function App() {
     if (screenStreamRef.current)
       screenStreamRef.current.getTracks().forEach(t => pc.addTrack(t, screenStreamRef.current!));
     if (isInitiator) {
-      const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+      const rawOffer = await pc.createOffer();
+      const tunedSdp = preferH264(rawOffer.sdp ?? '');
+      const offer    = { ...rawOffer, sdp: tunedSdp };
+      await pc.setLocalDescription(offer);
+      tuneAudioSender(pc, (activeCh as any)?.bitrate ?? 64);
+      tuneVideoSenders(pc, screenStreamRef.current);
       getSocket().emit('webrtc_offer', { to: remoteUserId, sdp: offer });
     } else if (sdpOffer) {
       await pc.setRemoteDescription(new RTCSessionDescription(sdpOffer));
-      const answer = await pc.createAnswer(); await pc.setLocalDescription(answer);
+      const rawAnswer = await pc.createAnswer();
+      const tunedSdp  = preferH264(rawAnswer.sdp ?? '');
+      const answer     = { ...rawAnswer, sdp: tunedSdp };
+      await pc.setLocalDescription(answer);
+      tuneAudioSender(pc, (activeCh as any)?.bitrate ?? 64);
+      tuneVideoSenders(pc, screenStreamRef.current);
       getSocket().emit('webrtc_answer', { to: remoteUserId, sdp: answer });
     }
     return pc;
@@ -8145,29 +8156,28 @@ export default function App() {
     } else {
       try {
         const stream = await navigator.mediaDevices.getDisplayMedia({
-          video: { frameRate: { ideal: 30, max: 60 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+          video: {
+            frameRate: { ideal: 60, max: 60 },
+            width:     { ideal: 1920 },
+            height:    { ideal: 1080 },
+          },
           audio: { echoCancellation: false, noiseSuppression: false, sampleRate: 48000 },
         });
-        // Hint browser this is a screen capture (reduces dropped frames)
+        // Hint: 'detail' = optimise for text/UI sharpness (vs 'motion' for video)
         stream.getVideoTracks().forEach(t => { (t as any).contentHint = 'detail'; });
         screenStreamRef.current = stream;
         // Add ALL tracks (video + audio) to every peer connection BEFORE renegotiating
         stream.getTracks().forEach(t => {
           peerConnsRef.current.forEach((pc) => { pc.addTrack(t, stream); });
         });
-        // Renegotiate once per peer + set encoding bitrate for video
+        // Renegotiate once per peer: prefer H264 + set 8 Mbps / 60 fps on video senders
         peerConnsRef.current.forEach(async (pc, peerId) => {
           try {
-            // Set max bitrate for video senders (screen share quality)
-            pc.getSenders().filter(s => s.track?.kind === 'video').forEach(sender => {
-              const params = sender.getParameters();
-              if (!params.encodings?.length) params.encodings = [{}];
-              params.encodings[0].maxBitrate = 3_000_000; // 3 Mbps for screen share
-              params.encodings[0].maxFramerate = 30;
-              sender.setParameters(params).catch(() => {});
-            });
+            tuneVideoSenders(pc, stream);   // 8 Mbps, 60 fps, high priority
             if (pc.signalingState === 'stable') {
-              const offer = await pc.createOffer();
+              const rawOffer = await pc.createOffer();
+              const tunedSdp = preferH264(rawOffer.sdp ?? '');
+              const offer    = { ...rawOffer, sdp: tunedSdp };
               await pc.setLocalDescription(offer);
               getSocket().emit('webrtc_offer', { to: peerId, sdp: offer });
             }
