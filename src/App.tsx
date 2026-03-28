@@ -5192,6 +5192,7 @@ export default function App() {
   const [srvContextMenu, setSrvContextMenu]   = useState<{ x: number; y: number; srv: ServerData } | null>(null);
   const [deleteSrvConfirm, setDeleteSrvConfirm] = useState<{ id: string; name: string } | null>(null);
   const [dmCtxMenu, setDmCtxMenu] = useState<{ x: number; y: number; dm: typeof dmConvs[0] } | null>(null);
+  const [groupCtxMenu, setGroupCtxMenu] = useState<{ x: number; y: number; gc: GroupDmConversation } | null>(null);
 
   const [srvSettOpen, setSrvSettOpen]         = useState(false);
   const [srvSettTab, setSrvSettTab]           = useState<'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots'|'tag'|'events'|'onboarding'|'discovery'>('overview');
@@ -6679,12 +6680,31 @@ export default function App() {
     // ── Group DM socket handlers ───────────────────────────────────
     sock.on('new_group_dm', (msg: any) => {
       const gid = msg.group_id;
-      if (gid === activeGroupDm) {
-        setGroupMessages(p => ({ ...p, [gid]: [...(p[gid] || []), msg] }));
-      }
+      // Always update regardless of active group; dedup by message id
+      setGroupMessages(p => {
+        const existing = p[gid] || [];
+        if (existing.some((m:any) => m.id === msg.id)) return p;
+        return { ...p, [gid]: [...existing, msg] };
+      });
+      // Bump group to top of list
+      setGroupConvs(p => {
+        const gc = p.find(c => c.id === gid);
+        if (!gc) return p;
+        return [gc, ...p.filter(c => c.id !== gid)];
+      });
     });
     sock.on('group_dm_created', (conv: GroupDmConversation) => {
       setGroupConvs(p => p.some(c => c.id === conv.id) ? p : [conv, ...p]);
+    });
+    sock.on('group_dm_deleted', ({ id }: { id: string }) => {
+      setGroupConvs(p => p.filter(c => c.id !== id));
+      setGroupMessages(p => { const n = {...p}; delete n[id]; return n; });
+      setActiveGroupDm(prev => prev === id ? null : prev);
+    });
+    sock.on('group_dm_left', ({ id }: { id: string }) => {
+      setGroupConvs(p => p.filter(c => c.id !== id));
+      setGroupMessages(p => { const n = {...p}; delete n[id]; return n; });
+      setActiveGroupDm(prev => prev === id ? null : prev);
     });
 
     loadServers(); loadDms(); loadGroupConvs();
@@ -9401,20 +9421,24 @@ export default function App() {
               {groupConvs.map(gc => {
                 const isActive = activeGroupDm===gc.id;
                 return (
-                  <button key={gc.id} onClick={async()=>{
-                    setActiveGroupDm(gc.id);
-                    if (!groupMessages[gc.id]) {
-                      const msgs = await groupDmApi.messages(gc.id).catch(()=>[]);
-                      setGroupMessages(p=>({...p,[gc.id]:msgs}));
-                    }
-                  }}
+                  <button key={gc.id}
+                    onClick={async()=>{
+                      setActiveGroupDm(gc.id);
+                      if (!groupMessages[gc.id]) {
+                        const msgs = await groupDmApi.messages(gc.id).catch(()=>[]);
+                        setGroupMessages(p=>({...p,[gc.id]:msgs}));
+                      }
+                    }}
+                    onContextMenu={e=>{ e.preventDefault(); setGroupCtxMenu({ x: e.clientX, y: Math.min(e.clientY, window.innerHeight - 160), gc }); }}
                     className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/15 text-white border border-indigo-500/25':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
-                    <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 flex items-center justify-center shrink-0">
-                      <Users size={14} className="text-indigo-400"/>
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 flex items-center justify-center shrink-0 overflow-hidden">
+                      {gc.icon_url
+                        ? <img src={gc.icon_url} className="w-full h-full object-cover" alt=""/>
+                        : <Users size={14} className="text-indigo-400"/>}
                     </div>
                     <div className="flex-1 truncate text-left min-w-0">
                       <p className="text-[13px] font-semibold truncate text-zinc-300">{gc.name || 'Grupa'}</p>
-                      <p className="text-[11px] text-zinc-600 truncate">{gc.participants.length} osób</p>
+                      <p className="text-[11px] text-zinc-600 truncate">{gc.participants?.length ?? 0} osób</p>
                     </div>
                   </button>
                 );
@@ -12803,6 +12827,65 @@ export default function App() {
           </>
         )}
       </AnimatePresence>
+
+      {/* Group DM context menu */}
+      {groupCtxMenu && (() => {
+        const { gc } = groupCtxMenu;
+        const isCreator = gc.creator_id === currentUser?.id;
+        const close = () => setGroupCtxMenu(null);
+        return (
+          <>
+            <div className="fixed inset-0 z-[90]" onClick={close}/>
+            <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:0.95}}
+              style={{position:'fixed',left:groupCtxMenu.x,top:groupCtxMenu.y,backdropFilter:'blur(24px)'}}
+              className="z-[91] bg-[#0e0e1c] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 py-1.5 min-w-[180px] overflow-hidden">
+              <div className="px-3 py-2 border-b border-white/[0.06] mb-1">
+                <p className="text-xs font-semibold text-zinc-300 truncate">{gc.name || 'Grupa'}</p>
+                <p className="text-[10px] text-zinc-600">{gc.participants?.length ?? 0} osób</p>
+              </div>
+              <button onClick={async()=>{
+                close();
+                setActiveGroupDm(gc.id);
+                if (!groupMessages[gc.id]) {
+                  const msgs = await groupDmApi.messages(gc.id).catch(()=>[]);
+                  setGroupMessages(p=>({...p,[gc.id]:msgs}));
+                }
+              }} className="w-full text-left px-3 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] flex items-center gap-2.5 transition-colors">
+                <MessageCircle size={13} className="text-zinc-500"/>Otwórz
+              </button>
+              {isCreator ? (
+                <button onClick={async()=>{
+                  close();
+                  if (!confirm(`Usunąć grupę "${gc.name||'Grupa'}" dla wszystkich?`)) return;
+                  try {
+                    await groupDmApi.leave(gc.id);
+                    setGroupConvs(p=>p.filter(c=>c.id!==gc.id));
+                    setGroupMessages(p=>{const n={...p};delete n[gc.id];return n;});
+                    if (activeGroupDm===gc.id) setActiveGroupDm(null);
+                    addToast('Grupa usunięta','success');
+                  } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                }} className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2.5 transition-colors">
+                  <Trash2 size={13}/>Usuń grupę
+                </button>
+              ) : (
+                <button onClick={async()=>{
+                  close();
+                  if (!confirm(`Opuścić grupę "${gc.name||'Grupa'}"?`)) return;
+                  try {
+                    await groupDmApi.leave(gc.id);
+                    setGroupConvs(p=>p.filter(c=>c.id!==gc.id));
+                    setGroupMessages(p=>{const n={...p};delete n[gc.id];return n;});
+                    if (activeGroupDm===gc.id) setActiveGroupDm(null);
+                    addToast('Opuszczono grupę','success');
+                  } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                }} className="w-full text-left px-3 py-2 text-sm text-orange-400 hover:bg-orange-500/10 flex items-center gap-2.5 transition-colors">
+                  <LogOut size={13}/>Opuść grupę
+                </button>
+              )}
+            </motion.div>
+          </>
+        );
+      })()}
 
       {/* DM list context menu */}
       {dmCtxMenu&&(()=>{

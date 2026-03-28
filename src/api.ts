@@ -807,6 +807,7 @@ export const groupDmApi = {
     req<DmMessageFull[]>('GET', `/dms/group/${id}/messages${before ? `?before=${before}` : ''}`),
   send:     (id: string, content: string, attachments?: string[]) =>
     req<DmMessageFull>('POST', `/dms/group/${id}/messages`, { content, attachments }),
+  leave:    (id: string) => req<{success:boolean}>('DELETE', `/dms/group/${id}`),
 };
 
 // ── Server Events ─────────────────────────────────────────────────────────────

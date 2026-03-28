@@ -475,15 +475,19 @@ router.post('/group/:id/messages', authMiddleware, async (req: AuthRequest, res)
     const conv = await query(`SELECT * FROM dm_conversations WHERE id = $1 AND is_group = true`, [req.params.id]);
     if (!conv.rows.length) return res.status(404).json({ error: 'Not found' });
 
-    const msgRes = await query(
-      `INSERT INTO dm_messages (conversation_id, sender_id, content)
-       VALUES ($1, $2, $3) RETURNING *, $4::text AS group_id`,
-      [req.params.id, myId, content.trim(), req.params.id]
+    // Insert message and immediately join with sender info
+    const { rows: [fullMsg] } = await query(
+      `WITH ins AS (
+         INSERT INTO dm_messages (conversation_id, sender_id, content)
+         VALUES ($1, $2, $3) RETURNING *
+       )
+       SELECT ins.*, u.username AS sender_username, u.avatar_url AS sender_avatar,
+              $1::text AS group_id
+       FROM ins JOIN users u ON u.id = ins.sender_id`,
+      [req.params.id, myId, content.trim()]
     );
-    const msg = msgRes.rows[0];
 
-    // Notify all group participants via their user rooms
-    // (nobody joins group: rooms — we use user: rooms which are always active)
+    // Notify all group participants EXCEPT sender (sender adds locally)
     const io = req.app.get('io');
     if (io) {
       const parts = await query(
@@ -491,13 +495,52 @@ router.post('/group/:id/messages', authMiddleware, async (req: AuthRequest, res)
         [req.params.id]
       );
       for (const p of parts.rows) {
-        io.to(`user:${p.user_id}`).emit('new_group_dm', msg);
+        if (p.user_id !== myId) {
+          io.to(`user:${p.user_id}`).emit('new_group_dm', fullMsg);
+        }
       }
     }
 
-    return res.status(201).json(msg);
+    return res.status(201).json(fullMsg);
   } catch (err) {
     console.error('[group-dm] message error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/dms/group/:id — leave (member) or delete (creator)
+router.delete('/group/:id', authMiddleware, async (req: AuthRequest, res) => {
+  const myId = req.user!.id;
+  const groupId = req.params.id;
+  try {
+    const { rows: [conv] } = await query(
+      `SELECT creator_id FROM dm_conversations WHERE id=$1 AND is_group=true`, [groupId]
+    );
+    if (!conv) return res.status(404).json({ error: 'Not found' });
+
+    const io = req.app.get('io');
+    const { rows: parts } = await query(
+      `SELECT user_id FROM dm_participants WHERE conversation_id=$1`, [groupId]
+    );
+
+    if (conv.creator_id === myId) {
+      // Creator: delete entire group
+      await query(`DELETE FROM dm_conversations WHERE id=$1`, [groupId]);
+      if (io) {
+        for (const p of parts) {
+          io.to(`user:${p.user_id}`).emit('group_dm_deleted', { id: groupId });
+        }
+      }
+    } else {
+      // Member: just leave
+      await query(`DELETE FROM dm_participants WHERE conversation_id=$1 AND user_id=$2`, [groupId, myId]);
+      if (io) {
+        io.to(`user:${myId}`).emit('group_dm_left', { id: groupId });
+      }
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[group-dm] delete error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
