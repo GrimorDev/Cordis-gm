@@ -898,4 +898,98 @@ router.delete('/:id/tag', authMiddleware, async (req: AuthRequest, res: Response
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// ── Server Discovery ──────────────────────────────────────────────────────────
+// GET /api/servers/discover/list
+router.get('/discover/list', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const q = (req.query.q as string || '').toLowerCase();
+  try {
+    const { rows } = await query(
+      `SELECT s.id, s.name, s.description, s.discovery_description, s.icon_url, s.is_official,
+              COUNT(sm.user_id)::int AS member_count
+       FROM servers s
+       LEFT JOIN server_members sm ON sm.server_id = s.id
+       WHERE s.is_public = true
+         ${q ? `AND (LOWER(s.name) LIKE '%' || $1 || '%' OR LOWER(s.description) LIKE '%' || $1 || '%')` : ''}
+       GROUP BY s.id
+       ORDER BY member_count DESC
+       LIMIT 50`,
+      q ? [q] : []
+    );
+    return res.json(rows);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// PATCH /api/servers/:id/discovery
+router.patch('/:id/discovery', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!(await isAuthorized(req.params.id, req.user!.id, 'manage_server'))) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    const { is_public, discovery_description } = req.body;
+    await query(
+      `UPDATE servers SET is_public = COALESCE($1, is_public), discovery_description = COALESCE($2, discovery_description) WHERE id = $3`,
+      [is_public, discovery_description, req.params.id]
+    );
+    return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ── Server Onboarding ─────────────────────────────────────────────────────────
+// GET /api/servers/:id/onboarding
+router.get('/:id/onboarding', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id;
+  try {
+    const ob = await query(`SELECT * FROM server_onboarding WHERE server_id = $1`, [req.params.id]);
+    const comp = await query(
+      `SELECT 1 FROM server_onboarding_completions WHERE server_id = $1 AND user_id = $2`,
+      [req.params.id, userId]
+    );
+    const data = ob.rows[0] || { server_id: req.params.id, enabled: false, rules_text: null, welcome_text: null, assign_role_id: null };
+    return res.json({ ...data, completed: comp.rows.length > 0 });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// PUT /api/servers/:id/onboarding
+router.put('/:id/onboarding', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!(await isAuthorized(req.params.id, req.user!.id, 'manage_server'))) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    const { enabled, rules_text, welcome_text, assign_role_id } = req.body;
+    await query(
+      `INSERT INTO server_onboarding (server_id, enabled, rules_text, welcome_text, assign_role_id)
+       VALUES ($1, COALESCE($2, false), $3, $4, $5)
+       ON CONFLICT (server_id) DO UPDATE SET
+         enabled = COALESCE($2, server_onboarding.enabled),
+         rules_text = COALESCE($3, server_onboarding.rules_text),
+         welcome_text = COALESCE($4, server_onboarding.welcome_text),
+         assign_role_id = COALESCE($5, server_onboarding.assign_role_id),
+         updated_at = NOW()`,
+      [req.params.id, enabled, rules_text, welcome_text, assign_role_id]
+    );
+    return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// POST /api/servers/:id/onboarding/complete
+router.post('/:id/onboarding/complete', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id;
+  const serverId = req.params.id;
+  try {
+    await query(
+      `INSERT INTO server_onboarding_completions (server_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [serverId, userId]
+    );
+    // Optionally assign role
+    const ob = await query(`SELECT assign_role_id FROM server_onboarding WHERE server_id = $1`, [serverId]);
+    if (ob.rows[0]?.assign_role_id) {
+      await query(
+        `INSERT INTO server_member_roles (server_id, user_id, role_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+        [serverId, userId, ob.rows[0].assign_role_id]
+      ).catch(() => {});
+    }
+    return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
 export default router;

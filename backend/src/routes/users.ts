@@ -456,4 +456,51 @@ router.put('/me/active-tag', authMiddleware, async (req: AuthRequest, res: Respo
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// ── Mutual Servers ──────────────────────────────────────────────────────────
+// GET /api/users/:id/mutual-servers
+router.get('/:id/mutual-servers', authMiddleware, async (req: AuthRequest, res) => {
+  const viewerId  = req.user!.id;
+  const targetId  = req.params.id;
+  try {
+    const { rows } = await query(
+      `SELECT s.id, s.name, s.icon_url, s.description, s.is_official
+       FROM servers s
+       JOIN server_members a ON a.server_id = s.id AND a.user_id = $1
+       JOIN server_members b ON b.server_id = s.id AND b.user_id = $2`,
+      [viewerId, targetId]
+    );
+    return res.json(rows);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ── Channel Notification Prefs ──────────────────────────────────────────────
+// GET /api/users/me/channel-prefs
+router.get('/me/channel-prefs', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT channel_id, notifications, muted FROM user_channel_prefs WHERE user_id = $1`,
+      [req.user!.id]
+    );
+    return res.json(rows);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// PUT /api/users/me/channel-prefs/:channelId
+router.put('/me/channel-prefs/:channelId', authMiddleware, async (req: AuthRequest, res) => {
+  const { channelId } = req.params;
+  const { notifications, muted } = req.body;
+  try {
+    const { rows } = await query(
+      `INSERT INTO user_channel_prefs (user_id, channel_id, notifications, muted)
+       VALUES ($1, $2, COALESCE($3, 'default'), COALESCE($4, false))
+       ON CONFLICT (user_id, channel_id) DO UPDATE SET
+         notifications = COALESCE($3, user_channel_prefs.notifications),
+         muted = COALESCE($4, user_channel_prefs.muted)
+       RETURNING *`,
+      [req.user!.id, channelId, notifications, muted]
+    );
+    return res.json(rows[0]);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
 export default router;

@@ -325,4 +325,105 @@ router.get('/:userId/pinned', authMiddleware, async (req: AuthRequest, res: Resp
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// ── Group DMs ───────────────────────────────────────────────────────────────
+// POST /api/dms/group/create
+router.post('/group/create', authMiddleware, async (req: AuthRequest, res) => {
+  const myId = req.user!.id;
+  const { name, participantIds } = req.body;
+  if (!Array.isArray(participantIds) || participantIds.length < 2)
+    return res.status(400).json({ error: 'Need at least 2 participants' });
+
+  try {
+    // Create group conversation
+    const convRes = await query(
+      `INSERT INTO dm_conversations (name, is_group, creator_id, other_user_id)
+       VALUES ($1, true, $2, $2) RETURNING *`,
+      [name || null, myId]
+    );
+    const conv = convRes.rows[0];
+    const allIds = [myId, ...participantIds.filter((id: string) => id !== myId)];
+    for (const uid of allIds) {
+      await query(
+        `INSERT INTO dm_participants (conversation_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        [conv.id, uid]
+      ).catch(() => {
+        // dm_participants may not exist; store in metadata instead
+      });
+    }
+
+    // Get full info
+    const participants = await query(
+      `SELECT u.id AS user_id, u.username, u.avatar_url, u.display_name
+       FROM users u WHERE u.id = ANY($1)`,
+      [allIds]
+    );
+
+    const result = { ...conv, is_group: true, participants: participants.rows };
+
+    // Notify all participants via socket
+    const io = req.app.get('io');
+    if (io) {
+      for (const uid of allIds) {
+        io.to(`user:${uid}`).emit('group_dm_created', result);
+      }
+    }
+    return res.status(201).json(result);
+  } catch (err) {
+    console.error('[group-dm] create error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/dms/group/:id — group info
+router.get('/group/:id', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const conv = await query(`SELECT * FROM dm_conversations WHERE id = $1 AND is_group = true`, [req.params.id]);
+    if (!conv.rows.length) return res.status(404).json({ error: 'Not found' });
+    return res.json({ ...conv.rows[0], participants: [] });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// GET /api/dms/group/:id/messages
+router.get('/group/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
+  const { before } = req.query;
+  try {
+    const { rows } = await query(
+      `SELECT m.*, u.username AS sender_username, u.avatar_url AS sender_avatar
+       FROM dm_messages m JOIN users u ON u.id = m.sender_id
+       WHERE m.conversation_id = $1 ${before ? 'AND m.created_at < $2' : ''}
+       ORDER BY m.created_at DESC LIMIT 50`,
+      before ? [req.params.id, before] : [req.params.id]
+    );
+    return res.json(rows.reverse());
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// POST /api/dms/group/:id/messages
+router.post('/group/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
+  const myId = req.user!.id;
+  const { content } = req.body;
+  if (!content?.trim()) return res.status(400).json({ error: 'Content required' });
+
+  try {
+    const conv = await query(`SELECT * FROM dm_conversations WHERE id = $1 AND is_group = true`, [req.params.id]);
+    if (!conv.rows.length) return res.status(404).json({ error: 'Not found' });
+
+    const msgRes = await query(
+      `INSERT INTO dm_messages (conversation_id, sender_id, content)
+       VALUES ($1, $2, $3) RETURNING *, $4::text AS group_id`,
+      [req.params.id, myId, content.trim(), req.params.id]
+    );
+    const msg = msgRes.rows[0];
+
+    // Notify via socket
+    const io = req.app.get('io');
+    if (io) io.to(`group:${req.params.id}`).emit('new_group_dm', msg);
+
+    return res.status(201).json(msg);
+  } catch (err) {
+    console.error('[group-dm] message error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

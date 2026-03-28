@@ -22,6 +22,7 @@ import {
   FileAudio, FileVideo, FileCode2, FileArchive, FileImage, File, ChevronUp,
   HardDrive, PieChart, Trash, History,
   Bookmark, BookmarkCheck, Timer, Square, ImageIcon,
+  Keyboard, Radio, Compass, CalendarPlus, Mic2,
   type LucideIcon
 } from 'lucide-react';
 import {
@@ -40,6 +41,9 @@ import {
   STATIC_BASE, API_BASE,
   botsApi, AVAILABLE_BOTS,
   type BotDefinition, type InstalledBot, type MusicBotState,
+  channelPrefsApi, mutualServersApi, groupDmApi, eventsApi, discoverApi, onboardingApi,
+  type ChannelPref, type MutualServer, type GroupDmConversation, type ServerEvent,
+  type DiscoverServer, type ServerOnboarding,
 } from './api';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -66,6 +70,7 @@ import {
   muteAllRemote, setRemoteVolume, setRemoteScreenVolume, muteRemoteUser, muteRemoteScreenStream,
   setOutputDevice, watchSpeaking, getMediaDevices, applyNoiseGate, applyDeepFilter, type NoisePipeline,
   preferH264, tuneAudioSender, tuneVideoSenders,
+  onDeepFilterStatus, type DeepFilterStatus,
 } from './webrtc';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -3842,9 +3847,10 @@ function ProfilePage({
   onSteamConnect, onSteamDisconnect, onSteamToggle,
   friends, blockedUsers, addToast,
   myJam, jamLoading, onJamStart, onJamStop, onJamJoin, onJamLeave, viewedUserJam,
-  steamGameStartedAt, liveSpotifyTrack,
+  steamGameStartedAt, liveSpotifyTrack, mutualServers,
 }: {
   viewUserId: string; profileData: UserProfile|null; games: FavoriteGame[];
+  mutualServers?: MutualServer[];
   spotify: SpotifyData|null; ownSpotify: SpotifyData|null;
   twitch: TwitchData|null; ownTwitch: TwitchData|null;
   steam: SteamData|null; ownSteam: SteamData|null;
@@ -4179,6 +4185,29 @@ function ProfilePage({
                   </div>
                 )}
               </div>
+
+              {/* Mutual Servers section (only for other users) */}
+              {!isOwn && (mutualServers ?? []).length > 0 && (
+                <div>
+                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2 mb-3">
+                    <Server size={13} className="text-zinc-600"/>Wspólne serwery
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {(mutualServers ?? []).map(s => (
+                      <div key={s.id} className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2 text-xs text-zinc-300">
+                        {s.icon_url ? (
+                          <img src={s.icon_url} alt={s.name} className="w-5 h-5 rounded-full object-cover"/>
+                        ) : (
+                          <div className="w-5 h-5 rounded-full bg-indigo-500/30 flex items-center justify-center text-[9px] font-bold text-indigo-300">
+                            {s.name[0]}
+                          </div>
+                        )}
+                        {s.name}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Spotify section */}
               {((isOwn && ownSpotify?.connected) || (spotifyToShow?.connected && spotifyToShow?.show_on_profile)) && (
@@ -4972,7 +5001,7 @@ export default function App() {
   const [dmCtxMenu, setDmCtxMenu] = useState<{ x: number; y: number; dm: typeof dmConvs[0] } | null>(null);
 
   const [srvSettOpen, setSrvSettOpen]         = useState(false);
-  const [srvSettTab, setSrvSettTab]           = useState<'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots'|'tag'>('overview');
+  const [srvSettTab, setSrvSettTab]           = useState<'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots'|'tag'|'events'|'onboarding'|'discovery'>('overview');
   const [botChannelId, setBotChannelId]       = useState<string|null>(null);
   const [botChLoading, setBotChLoading]       = useState(false);
   // ── Server tag state ─────────────────────────────────────────────
@@ -5288,6 +5317,48 @@ export default function App() {
   // Server activity log
   const [serverActivity, setServerActivity]   = useState<{id:string;type:string;icon:string;text:string;time:string}[]>([]);
 
+  // ── Feature: Keyboard Shortcuts Modal ───────────────────────────
+  const [showShortcuts, setShowShortcuts]     = useState(false);
+
+  // ── Feature: Quick Switcher (Ctrl+K) ────────────────────────────
+  const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
+  const [quickQ, setQuickQ]                   = useState('');
+  const quickInputRef                          = useRef<HTMLInputElement>(null);
+
+  // ── Feature: Channel Prefs (DB-backed) ──────────────────────────
+  const [channelPrefs, setChannelPrefs]       = useState<Map<string, ChannelPref>>(new Map());
+
+  // ── Feature: Mutual Servers ──────────────────────────────────────
+  const [mutualServers, setMutualServers]     = useState<MutualServer[]>([]);
+
+  // ── Feature: Group DMs ───────────────────────────────────────────
+  const [groupConvs, setGroupConvs]           = useState<GroupDmConversation[]>([]);
+  const [showGroupDmModal, setShowGroupDmModal] = useState(false);
+  const [groupDmName, setGroupDmName]         = useState('');
+  const [groupDmMemberIds, setGroupDmMemberIds] = useState<string[]>([]);
+  const [groupDmSearchQ, setGroupDmSearchQ]   = useState('');
+  const [activeGroupDm, setActiveGroupDm]     = useState<string|null>(null);
+  const [groupMessages, setGroupMessages]     = useState<Record<string, any[]>>({});
+
+  // ── Feature: Server Events ───────────────────────────────────────
+  const [serverEvents, setServerEvents]       = useState<ServerEvent[]>([]);
+  const [showEventsModal, setShowEventsModal] = useState(false);
+  const [newEvent, setNewEvent]               = useState({ title: '', description: '', starts_at: '', channel_id: '' });
+  const [eventsLoading, setEventsLoading]     = useState(false);
+
+  // ── Feature: Server Discovery ────────────────────────────────────
+  const [showDiscovery, setShowDiscovery]     = useState(false);
+  const [discoveryQ, setDiscoveryQ]           = useState('');
+  const [discoveryList, setDiscoveryList]     = useState<DiscoverServer[]>([]);
+  const [discoveryLoading, setDiscoveryLoading] = useState(false);
+
+  // ── Feature: Server Onboarding ───────────────────────────────────
+  const [onboardingData, setOnboardingData]   = useState<ServerOnboarding|null>(null);
+  const [showOnboarding, setShowOnboarding]   = useState(false);
+
+  // ── Feature: DeepFilter status badge ────────────────────────────
+  const [deepFilterStatus, setDeepFilterStatus] = useState<DeepFilterStatus>('idle');
+
   // ── Multi-tab voice prevention (BroadcastChannel) ───────────────
   // IMPORTANT: we store a single instance in voiceBcRef and send FROM THE SAME INSTANCE.
   // BroadcastChannel does NOT deliver a message back to the same instance that sent it,
@@ -5597,9 +5668,65 @@ export default function App() {
       twitchApi.status().then(setOwnTwitch).catch(() => {});
       steamApi.status().then(setOwnSteam).catch(() => {});
       spotifyApi.jamActive().then(setMyJam).catch(() => {});
+      // Load channel notification prefs from DB
+      channelPrefsApi.list().then(prefs => {
+        setChannelPrefs(new Map(prefs.map(p => [p.channel_id, p])));
+      }).catch(() => {});
     })
       .catch(() => clearToken()).finally(() => setAuthLoading(false));
   }, []);
+
+  // ── DeepFilter status subscription ──────────────────────────────
+  useEffect(() => onDeepFilterStatus(setDeepFilterStatus), []);
+
+  // ── Keyboard shortcuts: ? → shortcuts modal, Ctrl+K → quick switcher ──
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable;
+      if (e.key === '?' && !inInput && !e.ctrlKey && !e.metaKey) {
+        setShowShortcuts(v => !v);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setQuickSwitcherOpen(v => !v);
+        return;
+      }
+      if (e.key === 'Escape') {
+        setShowShortcuts(false);
+        setQuickSwitcherOpen(false);
+        setShowDiscovery(false);
+        setShowGroupDmModal(false);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // Focus quick switcher input when it opens
+  useEffect(() => {
+    if (quickSwitcherOpen) {
+      setQuickQ('');
+      setTimeout(() => quickInputRef.current?.focus(), 50);
+    }
+  }, [quickSwitcherOpen]);
+
+  // ── Load server events when active server changes ──────────────
+  useEffect(() => {
+    if (!activeServer) { setServerEvents([]); return; }
+    eventsApi.list(activeServer).then(setServerEvents).catch(() => {});
+  }, [activeServer]);
+
+  // ── Load onboarding when joining a server ──────────────────────
+  useEffect(() => {
+    if (!activeServer || !currentUser) return;
+    onboardingApi.get(activeServer).then(ob => {
+      if (ob.enabled && !ob.completed) setShowOnboarding(true);
+      setOnboardingData(ob);
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeServer]);
 
   // ── Auto-update check (Tauri only) ──────────────────────────────
   const [updateAvailable, setUpdateAvailable] = useState<{version:string;body:string|null}|null>(null);
@@ -6343,6 +6470,29 @@ export default function App() {
       setTypingUsers({});
     });
     sock.on('connect_error', () => setIsConnected(false));
+
+    // ── Server Events socket handlers ──────────────────────────────
+    sock.on('server_event_created', (ev: ServerEvent) => {
+      if (ev.server_id === activeServerRef.current)
+        setServerEvents(p => [...p, ev]);
+    });
+    sock.on('server_event_updated', (ev: ServerEvent) => {
+      setServerEvents(p => p.map(e => e.id === ev.id ? ev : e));
+    });
+    sock.on('server_event_deleted', ({ id }: { id: string }) => {
+      setServerEvents(p => p.filter(e => e.id !== id));
+    });
+
+    // ── Group DM socket handlers ───────────────────────────────────
+    sock.on('new_group_dm', (msg: any) => {
+      const gid = msg.group_id;
+      if (gid === activeGroupDm) {
+        setGroupMessages(p => ({ ...p, [gid]: [...(p[gid] || []), msg] }));
+      }
+    });
+    sock.on('group_dm_created', (conv: GroupDmConversation) => {
+      setGroupConvs(p => p.some(c => c.id === conv.id) ? p : [conv, ...p]);
+    });
 
     loadServers(); loadDms();
     return () => { sock.removeAllListeners(); disconnectSocket(); };
@@ -7861,6 +8011,12 @@ export default function App() {
         setUserNotes(p => new Map(p).set(userId, r.content || ''));
       }).catch(() => {});
     }
+    // Load mutual servers for other users
+    if (userId !== currentUser?.id) {
+      mutualServersApi.get(userId).then(setMutualServers).catch(() => {});
+    } else {
+      setMutualServers([]);
+    }
   };
   const closeProfilePage = () => { setProfileViewId(null); setProfilePageData(null); };
   const openProfile = (u: any) => { if (u?.id) openProfilePage(u.id); };
@@ -8727,7 +8883,9 @@ export default function App() {
                 <span className="text-sm font-bold text-white flex w-full h-full items-center justify-center bg-zinc-800">{s.name.charAt(0)}</span>
               </button>
             ))}
-            <button onClick={() => setCreateSrvOpen(true)} className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-xl ${gb}`}><Plus size={16}/></button>
+            <button onClick={() => setCreateSrvOpen(true)} className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-xl ${gb}`} title="Utwórz serwer"><Plus size={16}/></button>
+            <button onClick={()=>{ setDiscoveryLoading(true); discoverApi.list('').then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false)); setShowDiscovery(true); }}
+              className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-xl ${gb}`} title="Odkryj serwery"><Compass size={16}/></button>
           </div>
 
           {/* servers */}
@@ -8781,6 +8939,12 @@ export default function App() {
                         {t('server.settings')}
                       </button>
                     </>}
+                    <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
+                    <button onClick={()=>{ setSrvDropOpen(false); setShowEventsModal(true); }}
+                      className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-indigo-500/10 hover:text-indigo-300 transition-colors text-left">
+                      <CalendarDays size={14} className="text-indigo-400 shrink-0"/>
+                      Eventy serwera
+                    </button>
                     <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
                     <button onClick={()=>{setSrvDropOpen(false);setAppsTab('browse');setAppsModalOpen(true);}}
                       className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-violet-500/10 hover:text-violet-300 transition-colors text-left">
@@ -9025,8 +9189,36 @@ export default function App() {
 
           {/* dms */}
           {activeView==='dms'&&<>
-            <div className="px-4 py-4 border-b border-white/[0.06]"><h2 className="text-sm font-bold text-white">{t('nav.dmsTitle')}</h2></div>
+            <div className="px-4 py-4 border-b border-white/[0.06] flex items-center justify-between">
+              <h2 className="text-sm font-bold text-white">{t('nav.dmsTitle')}</h2>
+              <button onClick={()=>setShowGroupDmModal(true)} title="Nowa grupowa wiadomość"
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-indigo-300 hover:bg-indigo-500/10 transition-all">
+                <Users size={13}/>
+              </button>
+            </div>
             <div className="flex-1 overflow-y-auto p-2.5 custom-scrollbar flex flex-col gap-0.5">
+              {/* Group DM conversations */}
+              {groupConvs.map(gc => {
+                const isActive = activeGroupDm===gc.id;
+                return (
+                  <button key={gc.id} onClick={async()=>{
+                    setActiveGroupDm(gc.id);
+                    if (!groupMessages[gc.id]) {
+                      const msgs = await groupDmApi.messages(gc.id).catch(()=>[]);
+                      setGroupMessages(p=>({...p,[gc.id]:msgs}));
+                    }
+                  }}
+                    className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/15 text-white border border-indigo-500/25':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 flex items-center justify-center shrink-0">
+                      <Users size={14} className="text-indigo-400"/>
+                    </div>
+                    <div className="flex-1 truncate text-left min-w-0">
+                      <p className="text-[13px] font-semibold truncate text-zinc-300">{gc.name || 'Grupa'}</p>
+                      <p className="text-[11px] text-zinc-600 truncate">{gc.participants.length} osób</p>
+                    </div>
+                  </button>
+                );
+              })}
               {dmConvs.map(dm => {
                 const unread = unreadDms[dm.other_user_id] || 0;
                 const isActive = activeDmUserId===dm.other_user_id;
@@ -9289,6 +9481,8 @@ export default function App() {
                       : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07]'}`}>
                   {(isMicMuted||(activeCall?.isMuted??false))?<MicOff size={13}/>:<Mic size={13}/>}
                 </button>
+                <button title="Skróty klawiszowe (?)" onClick={()=>setShowShortcuts(true)}
+                  className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all"><Keyboard size={12}/></button>
                 <button title="Ustawienia aplikacji" onClick={()=>{setAppSettTab('account');setAppSettOpen(true);}}
                   className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all"><Settings size={13}/></button>
               </div>
@@ -9742,6 +9936,18 @@ export default function App() {
                     </motion.div>
                   )}
                 </AnimatePresence>
+                {/* DeepFilter status badge */}
+                {deepFilterStatus !== 'idle' && (
+                  <div className={`mx-4 mb-1 px-3 py-1.5 rounded-xl text-xs flex items-center gap-2 ${
+                    deepFilterStatus==='active' ? 'bg-emerald-500/15 border border-emerald-500/25 text-emerald-300' :
+                    deepFilterStatus==='loading' ? 'bg-indigo-500/15 border border-indigo-500/25 text-indigo-300 animate-pulse' :
+                    'bg-rose-500/15 border border-rose-500/25 text-rose-300'
+                  }`}>
+                    <Radio size={11}/>
+                    {deepFilterStatus==='active' ? 'AI Noise Suppression aktywny' :
+                     deepFilterStatus==='loading' ? 'Ładowanie AI...' : 'AI Noise Suppression niedostępny'}
+                  </div>
+                )}
                 <div className="p-5 flex items-center justify-center gap-3">
                   <button onClick={toggleMute} title={activeCall.isMuted?'Włącz mikrofon':'Wycisz mikrofon'}
                     className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${activeCall.isMuted?'bg-rose-500 hover:bg-rose-400 text-white':gb}`}>
@@ -9815,6 +10021,39 @@ export default function App() {
                   <h2 className="text-lg font-bold text-white">{serverFull.name}</h2>
                   <p className="text-sm text-zinc-500">Wybierz kanał tekstowy z listy po lewej stronie.</p></>
               }
+            </div>
+          ) : activeView==='dms' && activeGroupDm ? (
+            /* ── Group DM chat view ── */
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="h-14 border-b border-white/[0.06] flex items-center px-5 shrink-0 glass-dark gap-3">
+                <button onClick={()=>setActiveGroupDm(null)} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all"><ArrowLeft size={14}/></button>
+                <Users size={15} className="text-indigo-400 shrink-0"/>
+                <h1 className="text-sm font-bold text-white truncate">{groupConvs.find(g=>g.id===activeGroupDm)?.name||'Grupa'}</h1>
+                <span className="text-xs text-zinc-600 ml-auto">{groupConvs.find(g=>g.id===activeGroupDm)?.participants.length} osób</span>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 custom-scrollbar flex flex-col gap-2">
+                {(groupMessages[activeGroupDm]||[]).map((msg:any,i:number)=>(
+                  <div key={msg.id||i} className={`flex gap-2.5 ${msg.sender_id===currentUser?.id?'flex-row-reverse':''}`}>
+                    <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} className="w-7 h-7 rounded-xl object-cover shrink-0 self-start mt-0.5" alt=""/>
+                    <div className={`max-w-[70%] px-3 py-2 rounded-2xl text-sm ${msg.sender_id===currentUser?.id?'bg-indigo-600/80 text-white':'bg-white/[0.08] text-zinc-200'}`}>
+                      {msg.content}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="p-4 border-t border-white/[0.06]">
+                <form onSubmit={async e=>{
+                  e.preventDefault();
+                  const inp = (e.currentTarget.querySelector('input') as HTMLInputElement);
+                  if (!inp.value.trim()) return;
+                  const msg = await groupDmApi.send(activeGroupDm!, inp.value.trim());
+                  setGroupMessages(p=>({...p,[activeGroupDm!]:[...(p[activeGroupDm!]||[]),msg]}));
+                  inp.value='';
+                }} className="flex gap-2">
+                  <input placeholder="Wyślij wiadomość..." className={`${gi} flex-1 px-3 py-2 text-sm`}/>
+                  <button type="submit" className="w-9 h-9 rounded-xl bg-indigo-600 hover:bg-indigo-500 flex items-center justify-center text-white transition-colors"><Send size={13}/></button>
+                </form>
+              </div>
             </div>
           ) : activeView==='dms' && !activeDmUserId ? (
             <div className="flex-1 flex flex-col items-center justify-center p-8">
@@ -9951,6 +10190,7 @@ export default function App() {
                 } catch(e:any){ addToast(e.message||'Błąd','error'); }
                 finally { setJamLoading(false); }
               }}
+              mutualServers={mutualServers}
             />
           ) : activeView==='friends' ? (
             <div className="flex-1 flex flex-col overflow-hidden">
@@ -13088,13 +13328,18 @@ export default function App() {
                   canBanMembers && 'bans',
                   canCreateInvites && 'invites',
                   canManageServer && 'tag',
-                ].filter(Boolean) as ('overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots'|'tag')[]).map(stab=>(
+                  canManageServer && 'events',
+                  canManageServer && 'onboarding',
+                  canManageServer && 'discovery',
+                ].filter(Boolean) as ('overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots'|'tag'|'events'|'onboarding'|'discovery')[]).map(stab=>(
                   <button key={stab} onClick={()=>{
                     setSrvSettTab(stab);
                     if (stab==='bans' && activeServer) serversApi.bans.list(activeServer).then(setBanList).catch(console.error);
+                    if (stab==='onboarding' && activeServer) onboardingApi.get(activeServer).then(setOnboardingData).catch(()=>{});
+                    if (stab==='events' && activeServer) eventsApi.list(activeServer).then(setServerEvents).catch(()=>{});
                   }}
                     className={`px-4 py-3 text-sm font-semibold transition-all border-b-2 -mb-px shrink-0 ${srvSettTab===stab?'border-indigo-500 text-white':'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
-                    {stab === 'tag' ? 'Tag' : t(`serverSettings.${stab}`)}
+                    {stab==='tag'?'Tag':stab==='events'?'Eventy':stab==='onboarding'?'Onboarding':stab==='discovery'?'Odkrywalność':t(`serverSettings.${stab}`)}
                   </button>
                 ))}
               </div>
@@ -13226,6 +13471,126 @@ export default function App() {
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+                {srvSettTab==='events'&&(
+                  <div className="flex flex-col gap-4">
+                    <p className="text-xs text-zinc-500">Zarządzaj eventami serwera. Utwórz, edytuj lub usuń zaplanowane wydarzenia.</p>
+                    <div className="flex flex-col gap-2.5 bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
+                      <p className="text-xs font-semibold text-zinc-400 uppercase tracking-widest">Nowy event</p>
+                      <input value={newEvent.title} onChange={e=>setNewEvent(p=>({...p,title:e.target.value}))}
+                        placeholder="Tytuł*" className={`${gi} px-3 py-2 text-sm w-full`}/>
+                      <input value={newEvent.description} onChange={e=>setNewEvent(p=>({...p,description:e.target.value}))}
+                        placeholder="Opis" className={`${gi} px-3 py-2 text-sm w-full`}/>
+                      <input type="datetime-local" value={newEvent.starts_at} onChange={e=>setNewEvent(p=>({...p,starts_at:e.target.value}))}
+                        className={`${gi} px-3 py-2 text-sm w-full`}/>
+                      <button disabled={!newEvent.title.trim()||!newEvent.starts_at||eventsLoading}
+                        onClick={async()=>{
+                          try {
+                            setEventsLoading(true);
+                            await eventsApi.create(activeServer!, { title:newEvent.title, description:newEvent.description, starts_at:newEvent.starts_at });
+                            const evs = await eventsApi.list(activeServer!);
+                            setServerEvents(evs);
+                            setNewEvent({title:'',description:'',starts_at:'',channel_id:''});
+                            addToast('Event utworzony!','success');
+                          } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                          finally { setEventsLoading(false); }
+                        }}
+                        className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 text-white font-semibold py-2 rounded-xl transition-colors text-sm">
+                        {eventsLoading?<Loader2 size={13} className="animate-spin mx-auto"/>:'Utwórz'}
+                      </button>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {serverEvents.map(ev=>(
+                        <div key={ev.id} className="flex items-center justify-between gap-3 p-3 bg-white/[0.03] border border-white/[0.05] rounded-xl">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-white truncate">{ev.title}</p>
+                            <p className="text-xs text-zinc-600">{new Date(ev.starts_at).toLocaleString('pl-PL',{dateStyle:'medium',timeStyle:'short'})}</p>
+                          </div>
+                          <button onClick={async()=>{
+                            try { await eventsApi.delete(activeServer!,ev.id); setServerEvents(p=>p.filter(e=>e.id!==ev.id)); addToast('Usunięto event','info'); }
+                            catch(e:any){ addToast(e.message||'Błąd','error'); }
+                          }} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all">
+                            <Trash2 size={12}/>
+                          </button>
+                        </div>
+                      ))}
+                      {serverEvents.length===0&&<p className="text-xs text-zinc-600 text-center py-4">Brak eventów</p>}
+                    </div>
+                  </div>
+                )}
+                {srvSettTab==='onboarding'&&(
+                  <div className="flex flex-col gap-4">
+                    <p className="text-xs text-zinc-500">Skonfiguruj powitanie dla nowych członków serwera. Możesz ustawić regulamin i automatyczne przypisanie roli.</p>
+                    {onboardingData ? (
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-zinc-300">Włącz onboarding</span>
+                          <button onClick={async()=>{
+                            const next = !onboardingData.enabled;
+                            await onboardingApi.update(activeServer!,{enabled:next}).catch(()=>{});
+                            setOnboardingData(p=>p?{...p,enabled:next}:p);
+                          }} className={`relative w-10 h-5 rounded-full transition-colors ${onboardingData.enabled?'bg-indigo-500':'bg-zinc-700'}`}>
+                            <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${onboardingData.enabled?'translate-x-5':'translate-x-0.5'}`}/>
+                          </button>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Tekst powitalny</label>
+                          <input defaultValue={onboardingData.welcome_text||''} id="ob-welcome"
+                            className={`${gi} px-3 py-2 text-sm w-full`} placeholder="Witaj na serwerze!"/>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Regulamin (tekst zasad)</label>
+                          <textarea defaultValue={onboardingData.rules_text||''} id="ob-rules" rows={5}
+                            className={`${gi} px-3 py-2 text-sm w-full resize-none`} placeholder="Wpisz zasady serwera..."/>
+                        </div>
+                        <button onClick={async()=>{
+                          const welcome = (document.getElementById('ob-welcome') as HTMLInputElement)?.value;
+                          const rules   = (document.getElementById('ob-rules') as HTMLTextAreaElement)?.value;
+                          try {
+                            await onboardingApi.update(activeServer!,{welcome_text:welcome, rules_text:rules, enabled:onboardingData.enabled});
+                            setOnboardingData(p=>p?{...p,welcome_text:welcome,rules_text:rules}:p);
+                            addToast('Onboarding zapisany!','success');
+                          } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                        }} className="bg-indigo-500 hover:bg-indigo-400 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm">Zapisz</button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center py-8"><Loader2 size={20} className="animate-spin text-zinc-600"/></div>
+                    )}
+                  </div>
+                )}
+                {srvSettTab==='discovery'&&(
+                  <div className="flex flex-col gap-4">
+                    <p className="text-xs text-zinc-500">Zdecyduj, czy Twój serwer ma być widoczny w publicznej liście serwerów.</p>
+                    <div className="flex items-center justify-between p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
+                      <div>
+                        <p className="text-sm font-semibold text-white">Publiczny serwer</p>
+                        <p className="text-xs text-zinc-500 mt-0.5">Każdy może znaleźć ten serwer przez wyszukiwarkę</p>
+                      </div>
+                      <button onClick={async()=>{
+                        const next = !serverFull?.is_public;
+                        try {
+                          await discoverApi.setDiscovery(activeServer!,{is_public:next});
+                          setServerFull((p:any)=>p?{...p,is_public:next}:p);
+                          addToast(`Serwer jest teraz ${next?'publiczny':'prywatny'}!`,'success');
+                        } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                      }} className={`relative w-10 h-5 rounded-full transition-colors ${(serverFull as any)?.is_public?'bg-indigo-500':'bg-zinc-700'}`}>
+                        <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${(serverFull as any)?.is_public?'translate-x-5':'translate-x-0.5'}`}/>
+                      </button>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Opis w katalogu</label>
+                      <textarea defaultValue={(serverFull as any)?.discovery_description||''} id="disc-desc" rows={3}
+                        className={`${gi} px-3 py-2 text-sm w-full resize-none`} placeholder="Opisz swój serwer dla nowych użytkowników..."/>
+                      <button onClick={async()=>{
+                        const desc = (document.getElementById('disc-desc') as HTMLTextAreaElement)?.value;
+                        try {
+                          await discoverApi.setDiscovery(activeServer!,{is_public:!!(serverFull as any)?.is_public, discovery_description:desc});
+                          setServerFull((p:any)=>p?{...p,discovery_description:desc}:p);
+                          addToast('Opis zapisany!','success');
+                        } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                      }} className="mt-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">Zapisz</button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -15744,6 +16109,340 @@ export default function App() {
                 </button>
               </form>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Keyboard Shortcuts Modal ────────────────────────────── */}
+      <AnimatePresence>
+        {showShortcuts && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={()=>setShowShortcuts(false)}>
+            <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
+              className={`${gm} p-6 w-full max-w-md`}
+              onClick={e=>e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-base font-bold text-white flex items-center gap-2"><Keyboard size={16} className="text-indigo-400"/>Skróty klawiszowe</h2>
+                <button onClick={()=>setShowShortcuts(false)} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all"><X size={14}/></button>
+              </div>
+              <div className="flex flex-col gap-1.5 text-sm">
+                {[
+                  ['?', 'Otwórz/zamknij skróty'],
+                  ['Ctrl + K', 'Szybkie przełączanie (Quick Switcher)'],
+                  ['Escape', 'Zamknij modal / panel'],
+                  ['Alt + ↑ / ↓', 'Nawigacja między kanałami'],
+                  ['Ctrl + /', 'Szybka pomoc'],
+                ].map(([key, desc]) => (
+                  <div key={key} className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+                    <span className="text-zinc-400">{desc}</span>
+                    <kbd className="px-2 py-1 bg-white/[0.08] border border-white/[0.12] rounded-lg text-xs font-mono text-zinc-300">{key}</kbd>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Quick Switcher (Ctrl+K) ─────────────────────────────── */}
+      <AnimatePresence>
+        {quickSwitcherOpen && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-start justify-center pt-[15vh] p-4"
+            onClick={()=>setQuickSwitcherOpen(false)}>
+            <motion.div initial={{scale:0.96,opacity:0,y:-8}} animate={{scale:1,opacity:1,y:0}} exit={{scale:0.96,opacity:0,y:-8}}
+              className={`${gm} p-3 w-full max-w-xl`}
+              onClick={e=>e.stopPropagation()}>
+              <div className="flex items-center gap-3 px-2 mb-3">
+                <Search size={15} className="text-zinc-500 shrink-0"/>
+                <input ref={quickInputRef} value={quickQ} onChange={e=>setQuickQ(e.target.value)}
+                  placeholder="Szukaj kanałów, serwerów, użytkowników..."
+                  className="flex-1 bg-transparent outline-none text-white placeholder-zinc-600 text-sm"/>
+                <kbd className="px-2 py-1 bg-white/[0.06] border border-white/[0.08] rounded-lg text-[10px] font-mono text-zinc-600">ESC</kbd>
+              </div>
+              {(() => {
+                const q = quickQ.toLowerCase().trim();
+                const serverMatches = serverList.filter(s => s.name.toLowerCase().includes(q || 'a') || !q);
+                const channelMatches = serverFull?.channels?.filter(c => c.name.toLowerCase().includes(q)) ?? [];
+                const friendMatches = friends.filter(f =>
+                  (f.username?.toLowerCase().includes(q) || f.display_name?.toLowerCase().includes(q)) && q
+                );
+                const hasResults = serverMatches.length + channelMatches.length + friendMatches.length > 0;
+                if (!hasResults && !q) return (
+                  <p className="text-xs text-zinc-600 text-center py-4">Zacznij pisać, aby wyszukać...</p>
+                );
+                return (
+                  <div className="flex flex-col gap-1 max-h-72 overflow-y-auto custom-scrollbar">
+                    {channelMatches.slice(0,5).map(c => (
+                      <button key={c.id} onClick={()=>{ setActiveChannel(c.id); setQuickSwitcherOpen(false); }}
+                        className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/[0.06] text-left transition-all">
+                        <Hash size={14} className="text-zinc-600 shrink-0"/>
+                        <span className="text-sm text-zinc-300">{c.name}</span>
+                        <span className="text-xs text-zinc-600 ml-auto">Kanał</span>
+                      </button>
+                    ))}
+                    {serverMatches.slice(0,5).map(s => (
+                      <button key={s.id} onClick={()=>{ setActiveServer(s.id); setQuickSwitcherOpen(false); }}
+                        className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/[0.06] text-left transition-all">
+                        {s.icon_url ? (
+                          <img src={s.icon_url} alt={s.name} className="w-5 h-5 rounded-full object-cover shrink-0"/>
+                        ) : (
+                          <div className="w-5 h-5 rounded-full bg-indigo-500/30 flex items-center justify-center text-[9px] font-bold text-indigo-300 shrink-0">{s.name[0]}</div>
+                        )}
+                        <span className="text-sm text-zinc-300">{s.name}</span>
+                        <span className="text-xs text-zinc-600 ml-auto">Serwer</span>
+                      </button>
+                    ))}
+                    {friendMatches.slice(0,5).map(f => (
+                      <button key={f.id} onClick={()=>{ openDm(f.id); setQuickSwitcherOpen(false); }}
+                        className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/[0.06] text-left transition-all">
+                        <img src={ava(f)} alt={f.username} className="w-5 h-5 rounded-full object-cover shrink-0"/>
+                        <span className="text-sm text-zinc-300">{f.display_name||f.username}</span>
+                        <span className="text-xs text-zinc-600 ml-auto">Wiadomość</span>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Server Discovery Modal ──────────────────────────────── */}
+      <AnimatePresence>
+        {showDiscovery && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={()=>setShowDiscovery(false)}>
+            <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
+              className={`${gm} p-6 w-full max-w-2xl max-h-[80vh] flex flex-col`}
+              onClick={e=>e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-bold text-white flex items-center gap-2"><Compass size={16} className="text-indigo-400"/>Odkryj serwery</h2>
+                <button onClick={()=>setShowDiscovery(false)} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all"><X size={14}/></button>
+              </div>
+              <div className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 mb-4">
+                <Search size={13} className="text-zinc-600 shrink-0"/>
+                <input value={discoveryQ} onChange={e=>setDiscoveryQ(e.target.value)}
+                  onKeyDown={e=>{ if(e.key==='Enter'){ setDiscoveryLoading(true); discoverApi.list(discoveryQ).then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false)); } }}
+                  placeholder="Szukaj publicznych serwerów..."
+                  className="flex-1 bg-transparent outline-none text-sm text-white placeholder-zinc-600"/>
+                <button onClick={()=>{ setDiscoveryLoading(true); discoverApi.list(discoveryQ).then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false)); }}
+                  className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">Szukaj</button>
+              </div>
+              {discoveryLoading ? (
+                <div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-zinc-600"/></div>
+              ) : discoveryList.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center gap-2 text-zinc-600">
+                  <Compass size={32} className="opacity-30"/>
+                  <p className="text-sm">{discoveryQ ? 'Brak wyników' : 'Wpisz frazę i naciśnij Enter'}</p>
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-3">
+                  {discoveryList.map(s => (
+                    <div key={s.id} className="flex items-center gap-4 p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl hover:border-white/[0.1] transition-all">
+                      {s.icon_url ? (
+                        <img src={s.icon_url} alt={s.name} className="w-12 h-12 rounded-2xl object-cover shrink-0"/>
+                      ) : (
+                        <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 flex items-center justify-center text-xl font-bold text-indigo-300 shrink-0">{s.name[0]}</div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-white text-sm">{s.name}</p>
+                        <p className="text-xs text-zinc-500 truncate mt-0.5">{s.discovery_description || s.description || 'Brak opisu'}</p>
+                        <p className="text-xs text-zinc-600 mt-1">{s.member_count} członków</p>
+                      </div>
+                      {!serverList.find(sv=>sv.id===s.id) && (
+                        <button onClick={async()=>{
+                          try { await serversApi.join(s.id); await loadServers(); setShowDiscovery(false); addToast(`Dołączono do ${s.name}!`,'success'); }
+                          catch(e:any){ addToast(e.message||'Błąd','error'); }
+                        }} className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white transition-colors shrink-0">
+                          Dołącz
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Server Onboarding Modal ─────────────────────────────── */}
+      <AnimatePresence>
+        {showOnboarding && onboardingData && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
+              className={`${gm} p-6 w-full max-w-md`}>
+              <h2 className="text-base font-bold text-white mb-2 flex items-center gap-2">
+                <PartyPopper size={16} className="text-indigo-400"/>
+                {onboardingData.welcome_text || 'Witaj na serwerze!'}
+              </h2>
+              {onboardingData.rules_text && (
+                <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl p-4 mb-4 text-sm text-zinc-300 whitespace-pre-wrap max-h-60 overflow-y-auto custom-scrollbar">
+                  {onboardingData.rules_text}
+                </div>
+              )}
+              <p className="text-xs text-zinc-500 mb-5">Klikając przycisk poniżej potwierdzasz, że przeczytałeś/aś i akceptujesz powyższe zasady.</p>
+              <button onClick={async()=>{
+                try {
+                  await onboardingApi.complete(activeServer!);
+                  setShowOnboarding(false);
+                  setOnboardingData(p=>p?{...p,completed:true}:p);
+                  addToast('Reguły zaakceptowane!','success');
+                } catch(e:any){ addToast(e.message||'Błąd','error'); }
+              }} className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">
+                Akceptuję zasady i dołączam
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Group DM Create Modal ───────────────────────────────── */}
+      <AnimatePresence>
+        {showGroupDmModal && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={()=>setShowGroupDmModal(false)}>
+            <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
+              className={`${gm} p-6 w-full max-w-sm`}
+              onClick={e=>e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-bold text-white flex items-center gap-2"><Users size={15} className="text-indigo-400"/>Nowa grupowa wiadomość</h2>
+                <button onClick={()=>setShowGroupDmModal(false)} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all"><X size={14}/></button>
+              </div>
+              <div className="flex flex-col gap-3">
+                <input value={groupDmName} onChange={e=>setGroupDmName(e.target.value)}
+                  placeholder="Nazwa grupy (opcjonalnie)"
+                  className={`${gi} px-3 py-2.5 text-sm w-full`}/>
+                <div>
+                  <p className="text-xs text-zinc-500 mb-2">Dodaj znajomych ({groupDmMemberIds.length} wybranych)</p>
+                  <input value={groupDmSearchQ} onChange={e=>setGroupDmSearchQ(e.target.value)}
+                    placeholder="Szukaj znajomych..."
+                    className={`${gi} px-3 py-2 text-sm w-full mb-2`}/>
+                  <div className="flex flex-col gap-1 max-h-40 overflow-y-auto custom-scrollbar">
+                    {friends.filter(f =>
+                      !groupDmSearchQ || f.username?.toLowerCase().includes(groupDmSearchQ.toLowerCase()) || f.display_name?.toLowerCase().includes(groupDmSearchQ.toLowerCase())
+                    ).map(f => {
+                      const sel = groupDmMemberIds.includes(f.id);
+                      return (
+                        <button key={f.id} onClick={()=> setGroupDmMemberIds(p=>sel?p.filter(id=>id!==f.id):[...p,f.id])}
+                          className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-all ${sel?'bg-indigo-500/20 border border-indigo-500/30':'hover:bg-white/[0.05] border border-transparent'}`}>
+                          <img src={ava(f)} alt={f.username} className="w-7 h-7 rounded-full object-cover shrink-0"/>
+                          <span className="text-sm text-zinc-300">{f.display_name||f.username}</span>
+                          {sel && <Check size={12} className="ml-auto text-indigo-400"/>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <button disabled={groupDmMemberIds.length < 2}
+                  onClick={async()=>{
+                    try {
+                      const conv = await groupDmApi.create(groupDmName, groupDmMemberIds);
+                      setGroupConvs(p=>[conv,...p]);
+                      setActiveGroupDm(conv.id);
+                      setShowGroupDmModal(false);
+                      setGroupDmName(''); setGroupDmMemberIds([]); setGroupDmSearchQ('');
+                      setActiveView('dms');
+                      addToast('Grupa utworzona!','success');
+                    } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors">
+                  Utwórz grupę
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Server Events Modal ─────────────────────────────────── */}
+      <AnimatePresence>
+        {showEventsModal && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={()=>setShowEventsModal(false)}>
+            <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
+              className={`${gm} p-6 w-full max-w-lg max-h-[80vh] flex flex-col`}
+              onClick={e=>e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-bold text-white flex items-center gap-2"><CalendarDays size={16} className="text-indigo-400"/>Eventy serwera</h2>
+                <div className="flex items-center gap-2">
+                  {serverFull?.roles && (() => {
+                    const myMember = serverFull.members?.find((m: any)=>m.user_id===currentUser?.id);
+                    const myRoleIds = myMember?.role_ids || [];
+                    const isAdmin = myMember?.is_owner || serverFull.roles.some((r:any)=>myRoleIds.includes(r.id)&&r.permissions?.includes('administrator'));
+                    if (!isAdmin) return null;
+                    return (
+                      <button onClick={async()=>{
+                        if (!newEvent.title.trim()||!newEvent.starts_at) return addToast('Wypełnij tytuł i datę','error');
+                        try {
+                          setEventsLoading(true);
+                          await eventsApi.create(activeServer!, { title:newEvent.title, description:newEvent.description, starts_at:newEvent.starts_at, channel_id:newEvent.channel_id||undefined });
+                          setNewEvent({title:'',description:'',starts_at:'',channel_id:''});
+                          const evs = await eventsApi.list(activeServer!);
+                          setServerEvents(evs);
+                          addToast('Event utworzony!','success');
+                        } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                        finally { setEventsLoading(false); }
+                      }} className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white transition-colors flex items-center gap-1.5">
+                        <CalendarPlus size={11}/>Nowy event
+                      </button>
+                    );
+                  })()}
+                  <button onClick={()=>setShowEventsModal(false)} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all"><X size={14}/></button>
+                </div>
+              </div>
+              {/* New event form */}
+              {serverFull?.roles && (() => {
+                const myMember = serverFull.members?.find((m: any)=>m.user_id===currentUser?.id);
+                const myRoleIds = myMember?.role_ids || [];
+                const isAdmin = myMember?.is_owner || serverFull.roles.some((r:any)=>myRoleIds.includes(r.id)&&r.permissions?.includes('administrator'));
+                if (!isAdmin) return null;
+                return (
+                  <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 mb-4 flex flex-col gap-2.5">
+                    <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-1">Utwórz nowy event</p>
+                    <input value={newEvent.title} onChange={e=>setNewEvent(p=>({...p,title:e.target.value}))}
+                      placeholder="Tytuł eventu*" className={`${gi} px-3 py-2 text-sm w-full`}/>
+                    <input value={newEvent.description} onChange={e=>setNewEvent(p=>({...p,description:e.target.value}))}
+                      placeholder="Opis (opcjonalnie)" className={`${gi} px-3 py-2 text-sm w-full`}/>
+                    <input type="datetime-local" value={newEvent.starts_at} onChange={e=>setNewEvent(p=>({...p,starts_at:e.target.value}))}
+                      className={`${gi} px-3 py-2 text-sm w-full`}/>
+                  </div>
+                );
+              })()}
+              {/* Events list */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-3">
+                {serverEvents.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center gap-2 text-zinc-600 py-8">
+                    <CalendarDays size={28} className="opacity-30"/>
+                    <p className="text-sm">Brak zaplanowanych eventów</p>
+                  </div>
+                ) : serverEvents.map(ev => (
+                  <div key={ev.id} className="p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-white text-sm">{ev.title}</p>
+                        {ev.description && <p className="text-xs text-zinc-500 mt-0.5">{ev.description}</p>}
+                        <p className="text-xs text-zinc-600 mt-1.5 flex items-center gap-1">
+                          <Clock size={10}/>
+                          {new Date(ev.starts_at).toLocaleString('pl-PL', {dateStyle:'medium',timeStyle:'short'})}
+                          {ev.channel_name && <><Hash size={10}/>{ev.channel_name}</>}
+                        </p>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-1 rounded-lg shrink-0 ${ev.status==='active'?'bg-emerald-500/20 text-emerald-300':ev.status==='ended'?'bg-zinc-700 text-zinc-400':ev.status==='cancelled'?'bg-rose-500/20 text-rose-300':'bg-indigo-500/20 text-indigo-300'}`}>
+                        {ev.status==='scheduled'?'Zaplanowany':ev.status==='active'?'Aktywny':ev.status==='ended'?'Zakończony':'Anulowany'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

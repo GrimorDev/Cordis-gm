@@ -1,10 +1,44 @@
 // ─── WebRTC Utilities for Cordis ─────────────────────────────────────────────
 
-export const ICE_SERVERS: RTCIceServer[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
-];
+// ─── TURN server support ──────────────────────────────────────────────────────
+function buildIceServers(): RTCIceServer[] {
+  const servers: RTCIceServer[] = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+  ];
+  const turnUrl  = (import.meta.env.VITE_TURN_URL  as string | undefined) || '';
+  const turnUser = (import.meta.env.VITE_TURN_USERNAME   as string | undefined) || '';
+  const turnCred = (import.meta.env.VITE_TURN_CREDENTIAL as string | undefined) || '';
+  if (turnUrl) {
+    servers.push({
+      urls: [
+        turnUrl.replace(/^turns?:/, 'turn:'),
+        turnUrl.replace(/^turns?:/, 'turns:'),
+      ],
+      username:   turnUser,
+      credential: turnCred,
+    });
+  }
+  return servers;
+}
+
+export const ICE_SERVERS = buildIceServers();
+
+// ─── DeepFilter status observable ────────────────────────────────────────────
+export type DeepFilterStatus = 'idle' | 'loading' | 'active' | 'failed';
+let _deepFilterStatus: DeepFilterStatus = 'idle';
+const _dfListeners = new Set<(s: DeepFilterStatus) => void>();
+function setDFStatus(s: DeepFilterStatus) {
+  _deepFilterStatus = s;
+  _dfListeners.forEach(fn => fn(s));
+}
+export function getDeepFilterStatus(): DeepFilterStatus { return _deepFilterStatus; }
+/** Subscribe to DeepFilter status changes. Returns an unsubscribe function. */
+export function onDeepFilterStatus(fn: (s: DeepFilterStatus) => void): () => void {
+  _dfListeners.add(fn);
+  return () => _dfListeners.delete(fn);
+}
 
 // ─── Peer Connection ─────────────────────────────────────────────────────────
 export function makePeerConnection(
@@ -300,6 +334,7 @@ export function tuneVideoSenders(
  * on any failure so the caller can fall back to the classic noise gate.
  */
 export async function applyDeepFilter(rawStream: MediaStream): Promise<NoisePipeline | null> {
+  setDFStatus('loading');
   try {
     const { DeepFilterNet3Core } = await import('deepfilternet3-noise-filter');
     const ctx  = new AudioContext({ sampleRate: 48000 });
@@ -310,14 +345,21 @@ export async function applyDeepFilter(rawStream: MediaStream): Promise<NoisePipe
     const dest    = ctx.createMediaStreamDestination();
     source.connect(worklet);
     worklet.connect(dest);
+    setDFStatus('active');
     return {
       processedStream: dest.stream,
-      cleanup: () => { rawStream.getTracks().forEach(t => t.stop()); core.destroy(); ctx.close().catch(() => {}); },
+      cleanup: () => {
+        rawStream.getTracks().forEach(t => t.stop());
+        core.destroy();
+        ctx.close().catch(() => {});
+        setDFStatus('idle');
+      },
       setEnabled:   (v) => core.setNoiseSuppressionEnabled(v),
       setThreshold: (v) => core.setSuppressionLevel(Math.round(v * 100)), // 0-1 → 0-100
     };
   } catch (e) {
     console.warn('[Cordis] DeepFilterNet3 unavailable, will use noise gate:', e);
+    setDFStatus('failed');
     return null;
   }
 }

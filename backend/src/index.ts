@@ -36,6 +36,7 @@ import notesRoutes   from './routes/notes';
 import pollsRoutes   from './routes/polls';
 import pushRoutes    from './routes/push';
 import automationsRoutes from './routes/automations';
+import eventsRoutes from './routes/events';
 import botsRoutes from './routes/bots';
 import filesRoutes from './routes/files';
 import bookmarksRoutes from './routes/bookmarks';
@@ -134,6 +135,7 @@ app.use('/api/users/notes', notesRoutes);
 app.use('/api/polls',   pollsRoutes);
 app.use('/api/push',    pushRoutes);
 app.use('/api/servers/:serverId/automations', automationsRoutes);
+app.use('/api/servers/:serverId/events', eventsRoutes);
 app.use('/api/servers/:serverId/bots', botsRoutes);
 app.use('/api/bookmarks', bookmarksRoutes);
 

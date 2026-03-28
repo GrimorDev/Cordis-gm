@@ -766,3 +766,85 @@ export const dmPinApi = {
   pin:    (messageId: string) => req<{ pinned: boolean }>('PUT', `/dms/messages/${messageId}/pin`),
   pinned: (userId: string)    => req<DmMessageFull[]>('GET', `/dms/${userId}/pinned`),
 };
+
+// ── Channel Notification Prefs (DB-backed) ───────────────────────────────────
+export interface ChannelPref {
+  channel_id: string;
+  notifications: 'default' | 'all' | 'mentions' | 'nothing';
+  muted: boolean;
+}
+export const channelPrefsApi = {
+  list: () => req<ChannelPref[]>('GET', '/users/me/channel-prefs'),
+  set:  (channelId: string, prefs: Partial<Omit<ChannelPref, 'channel_id'>>) =>
+    req<ChannelPref>('PUT', `/users/me/channel-prefs/${channelId}`, prefs),
+};
+
+// ── Mutual Servers ────────────────────────────────────────────────────────────
+export interface MutualServer {
+  id: string; name: string; icon_url: string | null;
+  description: string | null; is_official: boolean;
+}
+export const mutualServersApi = {
+  get: (userId: string) => req<MutualServer[]>('GET', `/users/${userId}/mutual-servers`),
+};
+
+// ── Group DMs ─────────────────────────────────────────────────────────────────
+export interface GroupDmParticipant {
+  user_id: string; username: string; avatar_url: string | null; display_name: string | null;
+}
+export interface GroupDmConversation {
+  id: string; name: string | null; icon_url: string | null;
+  is_group: true; creator_id: string; created_at: string;
+  participants: GroupDmParticipant[];
+}
+export const groupDmApi = {
+  create:   (name: string, participantIds: string[]) =>
+    req<GroupDmConversation>('POST', '/dms/group/create', { name, participantIds }),
+  info:     (id: string) => req<GroupDmConversation>('GET', `/dms/group/${id}`),
+  messages: (id: string, before?: string) =>
+    req<DmMessageFull[]>('GET', `/dms/group/${id}/messages${before ? `?before=${before}` : ''}`),
+  send:     (id: string, content: string, attachments?: string[]) =>
+    req<DmMessageFull>('POST', `/dms/group/${id}/messages`, { content, attachments }),
+};
+
+// ── Server Events ─────────────────────────────────────────────────────────────
+export interface ServerEvent {
+  id: string; server_id: string; channel_id: string | null;
+  creator_id: string; title: string; description: string | null;
+  image_url: string | null; starts_at: string; ends_at: string | null;
+  status: 'scheduled' | 'active' | 'ended' | 'cancelled'; created_at: string;
+  creator_username?: string; channel_name?: string;
+}
+export const eventsApi = {
+  list:   (serverId: string) => req<ServerEvent[]>('GET', `/servers/${serverId}/events`),
+  create: (serverId: string, d: { title: string; description?: string; starts_at: string; ends_at?: string; channel_id?: string }) =>
+    req<ServerEvent>('POST', `/servers/${serverId}/events`, d),
+  update: (serverId: string, id: string, d: Partial<{ title: string; description: string; starts_at: string; ends_at: string; channel_id: string; status: string }>) =>
+    req<ServerEvent>('PUT', `/servers/${serverId}/events/${id}`, d),
+  delete: (serverId: string, id: string) =>
+    req<{ ok: boolean }>('DELETE', `/servers/${serverId}/events/${id}`),
+};
+
+// ── Server Discovery ──────────────────────────────────────────────────────────
+export interface DiscoverServer {
+  id: string; name: string; description: string | null;
+  discovery_description: string | null; icon_url: string | null;
+  member_count: number; is_official: boolean;
+}
+export const discoverApi = {
+  list: (q?: string) => req<DiscoverServer[]>('GET', `/servers/discover/list${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+  setDiscovery: (serverId: string, d: { is_public: boolean; discovery_description?: string }) =>
+    req<{ ok: boolean }>('PATCH', `/servers/${serverId}/discovery`, d),
+};
+
+// ── Server Onboarding ─────────────────────────────────────────────────────────
+export interface ServerOnboarding {
+  server_id: string; enabled: boolean; rules_text: string | null;
+  welcome_text: string | null; assign_role_id: string | null; completed: boolean;
+}
+export const onboardingApi = {
+  get:      (serverId: string) => req<ServerOnboarding>('GET', `/servers/${serverId}/onboarding`),
+  update:   (serverId: string, d: Partial<Omit<ServerOnboarding, 'server_id' | 'completed'>>) =>
+    req<{ ok: boolean }>('PUT', `/servers/${serverId}/onboarding`, d),
+  complete: (serverId: string) => req<{ ok: boolean }>('POST', `/servers/${serverId}/onboarding/complete`),
+};

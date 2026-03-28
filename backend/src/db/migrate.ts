@@ -676,6 +676,56 @@ DO $$ BEGIN ALTER TABLE users ADD COLUMN status_until TIMESTAMPTZ DEFAULT NULL; 
 -- ── Voice channel settings ──────────────────────────────────────────────────
 DO $$ BEGIN ALTER TABLE channels ADD COLUMN user_limit INTEGER DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE channels ADD COLUMN bitrate    INTEGER DEFAULT 64; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- ── Channel notification prefs (DB-backed) ───────────────────────────────────
+CREATE TABLE IF NOT EXISTS user_channel_prefs (
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    notifications VARCHAR(20) DEFAULT 'default' CHECK (notifications IN ('default','all','mentions','nothing')),
+    muted      BOOLEAN DEFAULT FALSE,
+    PRIMARY KEY (user_id, channel_id)
+);
+
+-- ── Group DMs ─────────────────────────────────────────────────────────────────
+DO $$ BEGIN ALTER TABLE dm_conversations ADD COLUMN name       VARCHAR(100); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE dm_conversations ADD COLUMN is_group   BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE dm_conversations ADD COLUMN icon_url   TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE dm_conversations ADD COLUMN creator_id UUID REFERENCES users(id) ON DELETE SET NULL; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- ── Server Events ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS server_events (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    server_id   UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    channel_id  UUID REFERENCES channels(id) ON DELETE SET NULL,
+    creator_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title       VARCHAR(200) NOT NULL,
+    description TEXT,
+    image_url   TEXT,
+    starts_at   TIMESTAMPTZ NOT NULL,
+    ends_at     TIMESTAMPTZ,
+    status      VARCHAR(20) DEFAULT 'scheduled' CHECK (status IN ('scheduled','active','ended','cancelled')),
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ── Server Discovery ──────────────────────────────────────────────────────────
+DO $$ BEGIN ALTER TABLE servers ADD COLUMN is_public            BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE servers ADD COLUMN discovery_description TEXT;  EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- ── Server Onboarding ─────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS server_onboarding (
+    server_id    UUID PRIMARY KEY REFERENCES servers(id) ON DELETE CASCADE,
+    enabled      BOOLEAN DEFAULT FALSE,
+    rules_text   TEXT,
+    welcome_text TEXT,
+    assign_role_id UUID REFERENCES server_roles(id) ON DELETE SET NULL,
+    updated_at   TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS server_onboarding_completions (
+    server_id    UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    completed_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (server_id, user_id)
+);
 `;
 
 const SEED_SQL = `
