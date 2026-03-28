@@ -825,6 +825,238 @@ img.av-eff-super-aura { transition: box-shadow 0.3s; }
   animation: super-aura-ccw 0.7s linear infinite;
 }
 
+/* ── Crazy Eyes ──────────────────────────────────────────────────── */
+@property --ce-lx { syntax: '<percentage>'; inherits: false; initial-value: 45%; }
+@property --ce-ly { syntax: '<percentage>'; inherits: false; initial-value: 45%; }
+@property --ce-rx { syntax: '<percentage>'; inherits: false; initial-value: 45%; }
+@property --ce-ry { syntax: '<percentage>'; inherits: false; initial-value: 45%; }
+
+@keyframes ce-left {
+  0%,100% { --ce-lx:45%; --ce-ly:45%; }
+  15%     { --ce-lx:78%; --ce-ly:28%; }
+  30%     { --ce-lx:78%; --ce-ly:78%; }
+  45%     { --ce-lx:22%; --ce-ly:78%; }
+  60%     { --ce-lx:62%; --ce-ly:58%; }
+  75%     { --ce-lx:18%; --ce-ly:68%; }
+  90%     { --ce-lx:72%; --ce-ly:18%; }
+}
+@keyframes ce-right {
+  0%,100% { --ce-rx:45%; --ce-ry:45%; }
+  15%     { --ce-rx:18%; --ce-ry:72%; }
+  30%     { --ce-rx:72%; --ce-ry:22%; }
+  45%     { --ce-rx:62%; --ce-ry:62%; }
+  60%     { --ce-rx:28%; --ce-ry:78%; }
+  75%     { --ce-rx:80%; --ce-ry:28%; }
+  90%     { --ce-rx:22%; --ce-ry:22%; }
+}
+
+.av-frozen:has(img.av-eff-crazy-eyes)::before {
+  content: '';
+  position: absolute;
+  top: 28%; left: 14%;
+  width: 25%; height: 25%;
+  background:
+    radial-gradient(circle 33% at var(--ce-lx) var(--ce-ly), #111 100%, transparent 100%),
+    white;
+  border-radius: 50%;
+  box-shadow: inset 0 1px 4px rgba(0,0,0,0.5), 0 1px 5px rgba(0,0,0,0.5);
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 20;
+  pointer-events: none;
+}
+.av-frozen:hover:has(img.av-eff-crazy-eyes)::before {
+  opacity: 1;
+  animation: ce-left 3s ease-in-out infinite;
+}
+.av-frozen:has(img.av-eff-crazy-eyes)::after {
+  content: '';
+  position: absolute;
+  top: 28%; right: 14%;
+  width: 25%; height: 25%;
+  background:
+    radial-gradient(circle 33% at var(--ce-rx) var(--ce-ry), #111 100%, transparent 100%),
+    white;
+  border-radius: 50%;
+  box-shadow: inset 0 1px 4px rgba(0,0,0,0.5), 0 1px 5px rgba(0,0,0,0.5);
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 20;
+  pointer-events: none;
+}
+.av-frozen:hover:has(img.av-eff-crazy-eyes)::after {
+  opacity: 1;
+  animation: ce-right 3s ease-in-out infinite 0.1s;
+}
+img.av-eff-crazy-eyes { transition: filter 0.3s; }
+.av-frozen:hover img.av-eff-crazy-eyes { filter: saturate(1.2) brightness(1.05); }
+
+.av-active:has(img.av-eff-crazy-eyes)::before { opacity:1; animation: ce-left 3s ease-in-out infinite; }
+.av-active:has(img.av-eff-crazy-eyes)::after  { opacity:1; animation: ce-right 3s ease-in-out infinite 0.1s; }
+.av-active img.av-eff-crazy-eyes { filter: saturate(1.2) brightness(1.05); }
+
+/* ── Hacker Smile ────────────────────────────────────────────────── */
+@keyframes hacker-flicker {
+  0%,100% { opacity:1; transform:scale(1); }
+  5%  { opacity:0.5; transform:scale(1.02) translate(2px,-2px); }
+  10% { opacity:1;   transform:scale(1); }
+  15% { opacity:0.8; transform:scale(0.98) translate(-2px,2px); }
+  20% { opacity:1;   transform:scale(1); }
+  50% { opacity:1; }
+  52% { opacity:0.2; }
+  54% { opacity:1; }
+}
+
+img.av-eff-hacker-smile { transition: filter 0.3s; }
+.av-frozen:hover img.av-eff-hacker-smile {
+  filter: brightness(0.45) contrast(1.3) grayscale(0.8);
+}
+.av-frozen:has(img.av-eff-hacker-smile)::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cline x1='30' y1='35' x2='45' y2='45' stroke='%234ade80' stroke-width='4' stroke-linecap='round'/%3E%3Cline x1='45' y1='35' x2='30' y2='45' stroke='%234ade80' stroke-width='4' stroke-linecap='round'/%3E%3Cline x1='70' y1='35' x2='55' y2='45' stroke='%234ade80' stroke-width='4' stroke-linecap='round'/%3E%3Cline x1='55' y1='35' x2='70' y2='45' stroke='%234ade80' stroke-width='4' stroke-linecap='round'/%3E%3Cpath d='M 20 60 Q 50 85 80 60' fill='none' stroke='%234ade80' stroke-width='4' stroke-linecap='round'/%3E%3Cline x1='30' y1='63' x2='30' y2='73' stroke='%234ade80' stroke-width='3' stroke-linecap='round'/%3E%3Cline x1='50' y1='68' x2='50' y2='78' stroke='%234ade80' stroke-width='3' stroke-linecap='round'/%3E%3Cline x1='70' y1='63' x2='70' y2='73' stroke='%234ade80' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-size: 90%;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 0 8px #4ade80);
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  z-index: 25;
+}
+.av-frozen:hover:has(img.av-eff-hacker-smile)::before {
+  opacity: 1;
+  animation: hacker-flicker 4s infinite;
+}
+.av-active img.av-eff-hacker-smile { filter: brightness(0.45) contrast(1.3) grayscale(0.8); }
+.av-active:has(img.av-eff-hacker-smile)::before { opacity:1; animation: hacker-flicker 4s infinite; }
+
+/* ── Angelic Wings ───────────────────────────────────────────────── */
+@keyframes wing-flap-l {
+  0%,100% { transform: perspective(200px) rotateY(0deg) rotateZ(-10deg); }
+  50%     { transform: perspective(200px) rotateY(50deg) rotateZ(0deg); }
+}
+@keyframes wing-flap-r {
+  0%,100% { transform: perspective(200px) rotateY(0deg) rotateZ(10deg); }
+  50%     { transform: perspective(200px) rotateY(-50deg) rotateZ(0deg); }
+}
+
+.av-frozen:has(img.av-eff-angelic-wings) { overflow: visible; }
+
+.av-frozen:has(img.av-eff-angelic-wings)::before {
+  content: '';
+  position: absolute;
+  top: 0; right: 100%;
+  width: 65%; height: 100%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M90,50 Q60,20 10,10 Q30,40 20,60 Q50,60 90,50 Z' fill='white' fill-opacity='0.9'/%3E%3Cpath d='M80,60 Q50,30 15,25 Q35,50 25,70 Q55,70 80,60 Z' fill='white' fill-opacity='0.6'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: right center;
+  transform-origin: right center;
+  filter: drop-shadow(0 0 8px rgba(255,255,255,0.7));
+  opacity: 0;
+  transition: opacity 0.5s;
+  pointer-events: none;
+  z-index: 5;
+}
+.av-frozen:hover:has(img.av-eff-angelic-wings)::before {
+  opacity: 1;
+  animation: wing-flap-l 1.5s ease-in-out infinite;
+}
+.av-frozen:has(img.av-eff-angelic-wings)::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 100%;
+  width: 65%; height: 100%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10,50 Q40,20 90,10 Q70,40 80,60 Q50,60 10,50 Z' fill='white' fill-opacity='0.9'/%3E%3Cpath d='M20,60 Q50,30 85,25 Q65,50 75,70 Q45,70 20,60 Z' fill='white' fill-opacity='0.6'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: left center;
+  transform-origin: left center;
+  filter: drop-shadow(0 0 8px rgba(255,255,255,0.7));
+  opacity: 0;
+  transition: opacity 0.5s;
+  pointer-events: none;
+  z-index: 5;
+}
+.av-frozen:hover:has(img.av-eff-angelic-wings)::after {
+  opacity: 1;
+  animation: wing-flap-r 1.5s ease-in-out infinite;
+}
+img.av-eff-angelic-wings { transition: box-shadow 0.5s; }
+.av-frozen:hover img.av-eff-angelic-wings {
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.5), 0 0 18px rgba(255,255,255,0.35);
+}
+
+.av-active:has(img.av-eff-angelic-wings) { overflow: visible; }
+.av-active:has(img.av-eff-angelic-wings)::before { opacity:1; animation: wing-flap-l 1.5s ease-in-out infinite; }
+.av-active:has(img.av-eff-angelic-wings)::after  { opacity:1; animation: wing-flap-r 1.5s ease-in-out infinite; }
+.av-active img.av-eff-angelic-wings { box-shadow: 0 0 0 2px rgba(255,255,255,0.5), 0 0 18px rgba(255,255,255,0.35); }
+
+/* ── Arcade Coin ─────────────────────────────────────────────────── */
+@keyframes coin-spin-3d     { to { transform: translateX(-50%) rotateY(360deg); } }
+@keyframes arcade-ring-spin { to { transform: rotate(360deg); } }
+
+.av-frozen:has(img.av-eff-arcade-coin) { overflow: visible; }
+
+/* Spinning coin above avatar */
+.av-frozen:has(img.av-eff-arcade-coin)::before {
+  content: '$';
+  position: absolute;
+  top: -30px; left: 50%;
+  transform: translateX(-50%);
+  width: 24px; height: 24px;
+  background: radial-gradient(circle at 40% 35%, #fef08a, #facc15);
+  border: 2px solid #ca8a04;
+  border-radius: 50%;
+  line-height: 20px; text-align: center;
+  font-weight: 900; font-size: 11px; color: #78350f;
+  box-shadow: 0 0 10px rgba(250,204,21,0.8);
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 30;
+  pointer-events: none;
+}
+.av-frozen:hover:has(img.av-eff-arcade-coin)::before {
+  opacity: 1;
+  animation: coin-spin-3d 1.5s linear infinite;
+}
+/* Spinning dashed ring */
+.av-frozen:has(img.av-eff-arcade-coin)::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 3px dashed #facc15;
+  box-shadow: 0 0 8px rgba(250,204,21,0.4);
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 20;
+  pointer-events: none;
+}
+.av-frozen:hover:has(img.av-eff-arcade-coin)::after {
+  opacity: 1;
+  animation: arcade-ring-spin 10s linear infinite;
+}
+img.av-eff-arcade-coin { transition: filter 0.3s; }
+.av-frozen:hover img.av-eff-arcade-coin { filter: brightness(1.08) saturate(1.1); }
+
+.av-active:has(img.av-eff-arcade-coin) { overflow: visible; }
+.av-active:has(img.av-eff-arcade-coin)::before { opacity:1; animation: coin-spin-3d 1.5s linear infinite; }
+.av-active:has(img.av-eff-arcade-coin)::after  { opacity:1; animation: arcade-ring-spin 10s linear infinite; }
+.av-active img.av-eff-arcade-coin { filter: brightness(1.08) saturate(1.1); }
+
+/* ── Profile Card Enter Animation ───────────────────────────────── */
+@keyframes profile-card-enter {
+  from { opacity: 0; transform: translateY(-8px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+.profile-card-enter {
+  animation: profile-card-enter 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
 /* ── Theme system ── */
 :root {
   --app-bg: #07070f;

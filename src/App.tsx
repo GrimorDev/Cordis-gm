@@ -136,9 +136,13 @@ const AVATAR_EFFECTS = [
   { key: 'sakura',       label: 'Sakura',      desc: 'Różowe płatki wiśni opadające wokół avatara' },
   { key: 'demon',        label: 'Demon',       desc: 'Czerwone rogi demona pojawiające się na hover' },
   { key: 'neon-cat',     label: 'Neon Cat',    desc: 'Neonowe uszka kota z falującą animacją' },
-  { key: 'magic-aura',   label: 'Magic Aura',  desc: 'Dwa obracające się magiczne kręgi w kolorze bursztynu' },
-  { key: 'level-up',     label: 'Level Up',    desc: 'Świetlny filar i napis LEVEL UP! przy najechaniu' },
-  { key: 'super-aura',   label: 'Super Aura',  desc: 'Pulsująca złota aura z wirującymi zębatymi pierścieniami' },
+  { key: 'magic-aura',    label: 'Magic Aura',    desc: 'Dwa obracające się magiczne kręgi w kolorze bursztynu' },
+  { key: 'level-up',      label: 'Level Up',      desc: 'Świetlny filar i napis LEVEL UP! przy najechaniu' },
+  { key: 'super-aura',    label: 'Super Aura',    desc: 'Pulsująca złota aura z wirującymi zębatymi pierścieniami' },
+  { key: 'crazy-eyes',    label: 'Crazy Eyes',    desc: 'Szalone oczy z ruchomymi źrenicami pojawiające się na hover' },
+  { key: 'hacker-smile',  label: 'Hacker Smile',  desc: 'Neonowa zielona maska hackera z migoczącym efektem glitch' },
+  { key: 'angelic-wings', label: 'Angelic Wings', desc: 'Białe skrzydła anioła machające po obu stronach avatara' },
+  { key: 'arcade-coin',   label: 'Arcade Coin',   desc: 'Kręcąca się moneta i pikselowa obwódka INSERT COIN' },
 ];
 
 const GRADIENTS = [
@@ -4857,7 +4861,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
       style={{ left, top, width: cardW }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}>
-      <div className="bg-[#18182a] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden">
+      <div className="bg-[#18182a] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden profile-card-enter">
         {/* Banner */}
         <div className="h-16 relative" style={u?.banner_url
           ? { backgroundImage: `url(${staticUrl(u.banner_url)})`, backgroundSize: 'cover', backgroundPosition: 'center' }
