@@ -1003,10 +1003,10 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
             <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:.5 }}
               className="flex flex-wrap items-center justify-center gap-8 sm:gap-12">
               {[
-                { val:'100%', label:'Open Source', color:'text-indigo-400' },
-                { val:'E2E', label:'Szyfrowanie', color:'text-violet-400' },
-                { val:'∞', label:'Wiadomości', color:'text-emerald-400' },
+                { val:'Głos', label:'i wideo HD', color:'text-indigo-400' },
                 { val:'2FA', label:'Bezpieczeństwo', color:'text-amber-400' },
+                { val:'∞', label:'Wiadomości', color:'text-emerald-400' },
+                { val:'Boty', label:'i automatyzacje', color:'text-violet-400' },
               ].map(s => (
                 <div key={s.label} className="text-center">
                   <p className={`text-2xl font-black ${s.color}`}>{s.val}</p>
@@ -1213,17 +1213,43 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { name:'Google Authenticator', color:'bg-blue-500/15 border-blue-500/25', icon:'🔵' },
-                      { name:'Authy', color:'bg-red-500/15 border-red-500/25', icon:'🔴' },
-                      { name:'Microsoft Authenticator', color:'bg-cyan-500/15 border-cyan-500/25', icon:'🔷' },
-                      { name:'1Password', color:'bg-indigo-500/15 border-indigo-500/25', icon:'🔑' },
-                    ].map(app => (
-                      <div key={app.name} className={`flex items-center gap-2.5 p-3 rounded-2xl border ${app.color}`}>
-                        <span className="text-lg">{app.icon}</span>
-                        <span className="text-xs font-medium text-zinc-300 leading-tight">{app.name}</span>
-                      </div>
-                    ))}
+                    {/* Google Authenticator */}
+                    <div className="flex items-center gap-2.5 p-3 rounded-2xl border bg-white/[0.04] border-white/[0.08]">
+                      <svg viewBox="0 0 24 24" className="w-7 h-7 shrink-0" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="12" cy="12" r="12" fill="#fff"/>
+                        <path d="M21.8 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.5c-.2 1.2-.9 2.2-2 2.9v2.4h3.2c1.9-1.7 3-4.3 3-7.1z" fill="#4285F4"/>
+                        <path d="M12 22c2.7 0 5-0.9 6.7-2.4l-3.2-2.5c-.9.6-2 1-3.5 1-2.7 0-5-1.8-5.8-4.3H2.9v2.5C4.6 19.9 8.1 22 12 22z" fill="#34A853"/>
+                        <path d="M6.2 13.8c-.2-.6-.3-1.2-.3-1.8s.1-1.2.3-1.8V7.7H2.9A10 10 0 0 0 2 12c0 1.6.4 3.1 1 4.4l3.2-2.6z" fill="#FBBC05"/>
+                        <path d="M12 6.9c1.5 0 2.9.5 3.9 1.5L18.7 5.6C17 4 14.7 3 12 3 8.1 3 4.6 5.1 2.9 8.3l3.3 2.5C7 8.7 9.3 6.9 12 6.9z" fill="#EA4335"/>
+                      </svg>
+                      <span className="text-xs font-medium text-zinc-300 leading-tight">Google Authenticator</span>
+                    </div>
+                    {/* Authy */}
+                    <div className="flex items-center gap-2.5 p-3 rounded-2xl border bg-[#EC1C24]/10 border-[#EC1C24]/25">
+                      <svg viewBox="0 0 40 40" className="w-7 h-7 shrink-0" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="20" cy="20" r="19" fill="#EC1C24"/>
+                        <text x="20" y="27" textAnchor="middle" fontSize="18" fontWeight="900" fill="white" fontFamily="Arial,sans-serif">A</text>
+                      </svg>
+                      <span className="text-xs font-medium text-zinc-300 leading-tight">Authy</span>
+                    </div>
+                    {/* Microsoft Authenticator */}
+                    <div className="flex items-center gap-2.5 p-3 rounded-2xl border bg-[#0078D4]/10 border-[#0078D4]/25">
+                      <svg viewBox="0 0 24 24" className="w-7 h-7 shrink-0" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="1" y="1" width="10" height="10" fill="#F25022"/>
+                        <rect x="13" y="1" width="10" height="10" fill="#7FBA00"/>
+                        <rect x="1" y="13" width="10" height="10" fill="#00A4EF"/>
+                        <rect x="13" y="13" width="10" height="10" fill="#FFB900"/>
+                      </svg>
+                      <span className="text-xs font-medium text-zinc-300 leading-tight">Microsoft Authenticator</span>
+                    </div>
+                    {/* 1Password */}
+                    <div className="flex items-center gap-2.5 p-3 rounded-2xl border bg-[#1A8CFF]/10 border-[#1A8CFF]/25">
+                      <svg viewBox="0 0 40 40" className="w-7 h-7 shrink-0" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="40" height="40" rx="9" fill="#1A8CFF"/>
+                        <text x="20" y="28" textAnchor="middle" fontSize="22" fontWeight="900" fill="white" fontFamily="Arial">1</text>
+                      </svg>
+                      <span className="text-xs font-medium text-zinc-300 leading-tight">1Password</span>
+                    </div>
                   </div>
                   <p className="text-xs text-zinc-600 mt-4 text-center">
                     Kompatybilny z każdą aplikacją TOTP (RFC 6238)
@@ -2947,7 +2973,7 @@ function ServerSettingsPage({
 
           {/* ── Events tab ─────────────────────────────────────────── */}
           {tab === 'events' && (
-            <div className="flex flex-col gap-4 max-w-xl">
+            <div className="flex flex-col gap-4 max-w-2xl mx-auto">
               <div>
                 <h3 className="text-sm font-bold text-white mb-0.5">Eventy serwera</h3>
                 <p className="text-xs text-zinc-500">Twórz i zarządzaj zaplanowanymi wydarzeniami dla członków serwera.</p>
@@ -3018,7 +3044,7 @@ function ServerSettingsPage({
 
           {/* ── Onboarding tab ──────────────────────────────────────── */}
           {tab === 'onboarding' && (
-            <div className="flex flex-col gap-4 max-w-xl">
+            <div className="flex flex-col gap-4 max-w-2xl mx-auto">
               <div>
                 <h3 className="text-sm font-bold text-white mb-0.5">Onboarding nowych członków</h3>
                 <p className="text-xs text-zinc-500">Skonfiguruj ekran powitalny dla nowych osób dołączających do serwera. Możesz ustawić regulamin i automatyczne role.</p>
@@ -3036,8 +3062,8 @@ function ServerSettingsPage({
                       const next = !onboardingData.enabled;
                       await onboardingApi.update(serverFull.id,{enabled:next}).catch(()=>{});
                       setOnboardingData?.({...onboardingData, enabled:next});
-                    }} className={`relative w-11 h-6 rounded-full transition-colors ${onboardingData.enabled?'bg-indigo-500':'bg-zinc-700'}`}>
-                      <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${onboardingData.enabled?'translate-x-6':'translate-x-1'}`}/>
+                    }} className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${onboardingData.enabled?'bg-indigo-500':'bg-zinc-700'}`}>
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${onboardingData.enabled?'translate-x-5':'translate-x-0'}`}/>
                     </button>
                   </div>
                   <div>
@@ -3081,7 +3107,7 @@ function ServerSettingsPage({
 
           {/* ── Discovery tab ───────────────────────────────────────── */}
           {tab === 'discovery' && (
-            <div className="flex flex-col gap-4 max-w-xl">
+            <div className="flex flex-col gap-4 max-w-2xl mx-auto">
               <div>
                 <h3 className="text-sm font-bold text-white mb-0.5">Publiczne wyszukiwanie</h3>
                 <p className="text-xs text-zinc-500">Zdecyduj, czy Twój serwer ma być widoczny w katalogu publicznych serwerów. Domyślnie każdy serwer jest prywatny.</p>
@@ -3098,8 +3124,8 @@ function ServerSettingsPage({
                     setIsPublicLocal(next);
                     addToast?.(`Serwer jest teraz ${next?'publiczny':'prywatny'}!`,'success');
                   } catch(e:any){ addToast?.(e.message||'Błąd','error'); }
-                }} className={`relative w-11 h-6 rounded-full transition-colors ${isPublicLocal?'bg-indigo-500':'bg-zinc-700'}`}>
-                  <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform shadow ${isPublicLocal?'translate-x-6':'translate-x-1'}`}/>
+                }} className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${isPublicLocal?'bg-indigo-500':'bg-zinc-700'}`}>
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${isPublicLocal?'translate-x-5':'translate-x-0'}`}/>
                 </button>
               </div>
               <div>
