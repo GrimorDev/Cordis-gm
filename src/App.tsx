@@ -155,6 +155,9 @@ const CARD_EFFECTS = [
   { key: 'fire',      label: '🔥 Ogień',     desc: 'Płomienie wyrastające z dołu karty' },
   { key: 'hologram',  label: '💠 Hologram',  desc: 'Holograficzne linie skanowania' },
   { key: 'rainbow',   label: '🌈 Tęcza',     desc: 'Tęczowe fale kolorów przelewające się przez kartę' },
+  { key: 'aurora',    label: '🌌 Aurora',    desc: 'Zorza polarna — falujące kurtyny zieleni i fioletu' },
+  { key: 'smoke',     label: '💨 Dym',       desc: 'Mroczne kłęby dymu snujące się przez kartę' },
+  { key: 'ink',       label: '🖋️ Atrament',  desc: 'Psychodeliczne plamy atramentu rozlewające się po karcie' },
 ] as const;
 // Efekty oparte o Lottie (lokalne JSON z public/lottie/)
 const LOTTIE_EFFECTS = new Set(['confetti','sparkles','sakura','snow','bubbles']);
@@ -4859,6 +4862,53 @@ function CardEffectOverlay({ effect }: { effect: string | null | undefined }) {
     return (
       <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
         <div className="card-fx-rainbow absolute inset-0" />
+      </div>
+    );
+  }
+
+  // CSS-based: AURORA
+  if (effect === 'aurora') {
+    return (
+      <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
+        <div className="card-fx-aurora-stars absolute inset-0" />
+        <div className="card-fx-aurora-a absolute inset-x-0 top-0 h-3/4" />
+        <div className="card-fx-aurora-b absolute inset-x-0 top-0 h-2/3" />
+        <div className="card-fx-aurora-c absolute inset-x-0 top-0 h-4/5" />
+      </div>
+    );
+  }
+
+  // CSS-based: SMOKE
+  if (effect === 'smoke') {
+    const blobs = Array.from({ length: 9 }, (_, i) => ({
+      left: `${(i * 17 + 5) % 85}%`,
+      bottom: `${(i % 3) * 8}%`,
+      width:  `${50 + (i % 4) * 18}px`,
+      height: `${50 + (i % 4) * 18}px`,
+      '--dur': `${3.5 + (i % 5) * 0.6}s`,
+      '--sx':  `${((i % 3) - 1) * 18}px`,
+      '--sw':  `${((i % 2) * 2 - 1) * 10}px`,
+      animationDelay: `${-(i * 0.45 % 4)}s`,
+    } as React.CSSProperties));
+    return (
+      <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/20 via-transparent to-transparent" />
+        {blobs.map((s, i) => <div key={i} className="card-fx-smoke absolute" style={s} />)}
+      </div>
+    );
+  }
+
+  // CSS-based: INK
+  if (effect === 'ink') {
+    const blobs = [
+      { top: '15%', left: '10%', width: '70%',  height: '55%', background: 'radial-gradient(ellipse, rgba(79,70,229,0.55) 0%, rgba(124,58,237,0.3) 45%, transparent 70%)', '--dur': '6s', animationDelay: '0s' },
+      { top: '35%', left: '30%', width: '60%',  height: '50%', background: 'radial-gradient(ellipse, rgba(168,85,247,0.45) 0%, rgba(217,70,239,0.25) 45%, transparent 70%)', '--dur': '8s', animationDelay: '-2.5s' },
+      { top: '5%',  left: '25%', width: '50%',  height: '45%', background: 'radial-gradient(ellipse, rgba(30,27,75,0.5) 0%, rgba(79,70,229,0.2) 50%, transparent 70%)', '--dur': '7s', animationDelay: '-4s' },
+      { top: '40%', left: '5%',  width: '45%',  height: '40%', background: 'radial-gradient(ellipse, rgba(192,38,211,0.4) 0%, rgba(124,58,237,0.2) 50%, transparent 70%)', '--dur': '9s', animationDelay: '-1s' },
+    ] as React.CSSProperties[];
+    return (
+      <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
+        {blobs.map((s, i) => <div key={i} className="card-fx-ink absolute" style={s} />)}
       </div>
     );
   }
