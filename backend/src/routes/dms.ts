@@ -39,8 +39,10 @@ async function getOrCreateConversation(userId1: string, userId2: string): Promis
 router.get('/conversations', authMiddleware, async (req: AuthRequest, res: Response) => {
   const userId = req.user!.id;
 
-  // Core query fragment — reused for both the filtered and fallback variant.
-  const buildSQL = (filterGroups: boolean) => `
+  // Two filter strategies tried in order:
+  // 1) is_group column (requires migration) — cleanest
+  // 2) participant count ≤ 2 (schema-agnostic) — safe fallback if column missing
+  const buildSQL = (groupFilter: 'is_group_col' | 'participant_count') => `
     SELECT * FROM (
       SELECT DISTINCT ON (u.id)
              dc.id, dc.created_at,
@@ -61,21 +63,23 @@ router.get('/conversations', authMiddleware, async (req: AuthRequest, res: Respo
       ) dp2 ON true
       INNER JOIN users u ON u.id=dp2.user_id
       LEFT JOIN server_tags st ON st.server_id = u.active_tag_server_id
-      ${filterGroups ? 'WHERE (dc.is_group IS NOT TRUE)' : ''}
+      WHERE ${groupFilter === 'is_group_col'
+        ? '(dc.is_group IS NOT TRUE)'
+        : '(SELECT COUNT(*) FROM dm_participants WHERE conversation_id=dc.id) <= 2'}
       ORDER BY u.id, (SELECT created_at FROM dm_messages WHERE conversation_id=dc.id ORDER BY created_at DESC LIMIT 1) DESC NULLS LAST
     ) sub
     ORDER BY last_message_at DESC NULLS LAST`;
 
   try {
-    // First attempt: with group-DM filter (requires is_group column from migration)
-    const { rows } = await query(buildSQL(true), [userId]);
+    // Strategy 1: is_group column (requires migration)
+    const { rows } = await query(buildSQL('is_group_col'), [userId]);
     return res.json(rows);
   } catch (err: any) {
     if (err?.code === '42703') {
-      // 42703 = undefined_column — is_group column doesn't exist yet (migration pending).
-      // Fall back to the unfiltered query so DMs still work normally.
+      // 42703 = undefined_column — is_group column doesn't exist yet.
+      // Strategy 2: filter by participant count (≤2 = 1-on-1 DM, safe without migration)
       try {
-        const { rows } = await query(buildSQL(false), [userId]);
+        const { rows } = await query(buildSQL('participant_count'), [userId]);
         return res.json(rows);
       } catch { return res.status(500).json({ error: 'Internal server error' }); }
     }

@@ -39,9 +39,9 @@ router.post('/', authMiddleware,
     const userId = req.user!.id;
 
     try {
-    // Check member
+    // Check member — note: server_members has no is_owner; ownership lives in servers.owner_id
     const member = await query(
-      `SELECT sm.is_owner FROM server_members sm WHERE sm.server_id = $1 AND sm.user_id = $2`,
+      `SELECT 1 FROM server_members sm WHERE sm.server_id = $1 AND sm.user_id = $2`,
       [serverId, userId]
     );
     if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
@@ -107,12 +107,14 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res) => {
     if (!existing.rows.length) return res.status(404).json({ error: 'Event not found' });
 
     // Allow creator or server admin to delete
-    const member = await query(
-      `SELECT sm.is_owner FROM server_members sm WHERE sm.server_id = $1 AND sm.user_id = $2`,
+    const memberCheck = await query(
+      `SELECT s.owner_id FROM server_members sm
+       JOIN servers s ON s.id = sm.server_id
+       WHERE sm.server_id = $1 AND sm.user_id = $2`,
       [serverId, userId]
     );
-    if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
-    const isAdmin = member.rows[0].is_owner || existing.rows[0].creator_id === userId;
+    if (!memberCheck.rows.length) return res.status(403).json({ error: 'Not a member' });
+    const isAdmin = memberCheck.rows[0].owner_id === userId || existing.rows[0].creator_id === userId;
     if (!isAdmin) return res.status(403).json({ error: 'Forbidden' });
 
     await query(`DELETE FROM server_events WHERE id = $1`, [id]);

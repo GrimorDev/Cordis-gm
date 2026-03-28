@@ -29,7 +29,15 @@ self.addEventListener('fetch', (event) => {
   if (request.url.includes('/api/') || request.url.includes('/socket.io/')) return;
   if (request.url.includes('r2.cloudflarestorage.com')) return; // R2 signed URLs — pomiń SW
   if (request.url.includes('.r2.dev')) return; // R2 public dev URLs — pomiń SW
-  if (request.url.includes('cdn.mezon.ai')) return; // DeepFilter CDN — brak CORS, pomiń SW (proxy przez /df-cdn/)
+  // DeepFilter CDN — przechwytuj i przepuść przez nginx proxy /df-cdn/ (bez CORS)
+  if (request.url.includes('cdn.mezon.ai')) {
+    const proxied = request.url.replace(
+      'https://cdn.mezon.ai/AI/models/datas/noise_suppression/deepfilternet3/',
+      '/df-cdn/'
+    );
+    event.respondWith(fetch(proxied));
+    return;
+  }
 
   event.respondWith(
     caches.match(request).then((cached) => {
