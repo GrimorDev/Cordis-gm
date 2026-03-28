@@ -118,7 +118,7 @@ router.put('/me', authMiddleware,
     body('privacy_read_receipts').optional().isBoolean(),
     body('privacy_friend_requests').optional().isBoolean(),
     body('privacy_dm_from_strangers').optional().isBoolean(),
-    body('avatar_effect').optional().isIn(['none','glow','pulse','rainbow','neon','vortex-cw','portal','quantum','glitch','scan','katana','liquid-morph','radar-sweep','vhs','toxic-slime','sakura','demon','neon-cat']),
+    body('avatar_effect').optional().isIn(['none','glow','pulse','rainbow','neon','vortex-cw','portal','quantum','glitch','scan','katana','liquid-morph','radar-sweep','vhs','toxic-slime','sakura','demon','neon-cat','magic-aura','level-up','super-aura']),
     body('theme_id').optional().isIn(['default','midnight','amoled','forest','sakura','sunset']),
   ],
   async (req: AuthRequest, res: Response) => {
