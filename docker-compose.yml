@@ -29,7 +29,7 @@ services:
         VITE_API_URL: /api
         VITE_SOCKET_URL: ""
         VITE_VAPID_PUBLIC_KEY: "BLW91bYO5prQrQtHpsE_6dJQVi3jQvGmD5MJbj8oRQ6aesobJm4GLzBTq_DyEfsFoi5yLJeGenO-27FoOe8w06I"
-    image: cordis-frontend:latest
+    # NOTE: no 'image:' tag — Portainer builds locally from Dockerfile (not from registry)
     container_name: cordis-frontend
     restart: unless-stopped
     ports:
@@ -52,7 +52,7 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    image: cordis-backend:latest
+    # NOTE: no 'image:' tag — Portainer builds locally from Dockerfile (not from registry)
     container_name: cordis-backend
     restart: unless-stopped
     environment:
