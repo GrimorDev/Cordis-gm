@@ -726,6 +726,9 @@ CREATE TABLE IF NOT EXISTS server_onboarding_completions (
     completed_at TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (server_id, user_id)
 );
+
+-- ── Profile card effect ────────────────────────────────────────────────────────
+DO $$ BEGIN ALTER TABLE users ADD COLUMN card_effect VARCHAR(30) DEFAULT 'none'; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 `;
 
 const SEED_SQL = `
