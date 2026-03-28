@@ -2357,8 +2357,8 @@ function AutomationsTab({ serverId, gi, roles, channels }: {
 
 interface ServerSettingsPageProps {
   serverFull: ServerFull;
-  tab: 'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots'|'tag';
-  setTab: (t: 'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots'|'tag') => void;
+  tab: 'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots'|'tag'|'events'|'onboarding'|'discovery';
+  setTab: (t: 'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots'|'tag'|'events'|'onboarding'|'discovery') => void;
   roles: ServerRole[];
   members: ServerMember[];
   banList: ServerBan[]; setBanList: (v: ServerBan[]) => void;
@@ -2409,6 +2409,16 @@ interface ServerSettingsPageProps {
   activeTagServerId?: string|null;
   onSetActiveTag?: (serverId: string|null) => void;
   currentUserId?: string;
+  // Events
+  serverEvents?: ServerEvent[];
+  setServerEvents?: (v: ServerEvent[]) => void;
+  eventsLoading?: boolean;
+  setEventsLoading?: (v: boolean) => void;
+  newEvent?: { title: string; description: string; starts_at: string; channel_id: string };
+  setNewEvent?: (v: any) => void;
+  // Onboarding
+  onboardingData?: ServerOnboarding | null;
+  setOnboardingData?: (v: any) => void;
 }
 function ServerSettingsPage({
   serverFull, tab, setTab, roles, members, banList, setBanList,
@@ -2424,6 +2434,8 @@ function ServerSettingsPage({
   onSaveTag, onDeleteTag,
   tagInput, setTagInput, tagColor, setTagColor, tagIcon, setTagIcon, tagSaving,
   activeTagServerId, onSetActiveTag, currentUserId,
+  serverEvents = [], setServerEvents, eventsLoading = false, setEventsLoading, newEvent, setNewEvent,
+  onboardingData, setOnboardingData,
 }: ServerSettingsPageProps) {
   const [memberQ, setMemberQ] = React.useState('');
   const filteredMembers = memberQ.trim()
@@ -2439,6 +2451,9 @@ function ServerSettingsPage({
     canManageServer && { id: 'automations' as const, label: tl('serverSettings.automations'), icon: <Zap size={14}/> },
     canManageServer && { id: 'bots' as const, label: 'Boty', icon: <Bot size={14}/> },
     canManageServer && { id: 'tag' as const, label: 'Tag serwera', icon: <Hash size={14}/> },
+    canManageServer && { id: 'events' as const, label: 'Eventy', icon: <CalendarPlus size={14}/> },
+    canManageServer && { id: 'onboarding' as const, label: 'Onboarding', icon: <UserPlus size={14}/> },
+    canManageServer && { id: 'discovery' as const, label: 'Odkrywalność', icon: <Compass size={14}/> },
   ].filter(Boolean) as { id: typeof tab; label: string; icon: React.ReactNode }[];
 
   return (
@@ -2465,6 +2480,8 @@ function ServerSettingsPage({
             <button key={t.id} onClick={() => {
               setTab(t.id);
               if (t.id === 'bans') serversApi.bans.list(serverFull.id).then(setBanList).catch(console.error);
+              if (t.id === 'events' && setServerEvents) eventsApi.list(serverFull.id).then(setServerEvents).catch(console.error);
+              if (t.id === 'onboarding' && setOnboardingData) onboardingApi.get(serverFull.id).then(setOnboardingData).catch(console.error);
             }}
               className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium transition-all text-left
                 ${tab === t.id ? 'bg-indigo-500/15 text-indigo-300' : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.05]'}`}>
@@ -2923,6 +2940,181 @@ function ServerSettingsPage({
                   <AlertTriangle size={12} className="shrink-0 mt-0.5"/>
                   Komendy wysłane z innych kanałów będą odrzucane z informacją skierowaną do użytkownika.
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Events tab ─────────────────────────────────────────── */}
+          {tab === 'events' && (
+            <div className="flex flex-col gap-4 max-w-xl">
+              <div>
+                <h3 className="text-sm font-bold text-white mb-0.5">Eventy serwera</h3>
+                <p className="text-xs text-zinc-500">Twórz i zarządzaj zaplanowanymi wydarzeniami dla członków serwera.</p>
+              </div>
+              <div className="flex flex-col gap-3 bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
+                <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">Nowy event</p>
+                <input value={newEvent?.title ?? ''} onChange={e=>setNewEvent?.({...newEvent!, title:e.target.value})}
+                  placeholder="Tytuł eventu*" className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50"/>
+                <input value={newEvent?.description ?? ''} onChange={e=>setNewEvent?.({...newEvent!, description:e.target.value})}
+                  placeholder="Opis (opcjonalnie)" className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50"/>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1 block">Data i godzina*</label>
+                    <input type="datetime-local" value={newEvent?.starts_at ?? ''} onChange={e=>setNewEvent?.({...newEvent!, starts_at:e.target.value})}
+                      className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-indigo-500/50"/>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1 block">Kanał (opcjonalnie)</label>
+                    <select value={newEvent?.channel_id ?? ''} onChange={e=>setNewEvent?.({...newEvent!, channel_id:e.target.value})}
+                      className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-indigo-500/50">
+                      <option value="">– brak –</option>
+                      {(channels||[]).filter(c=>c.type==='voice'||c.type==='text').map(c=>(
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <button disabled={!newEvent?.title?.trim() || !newEvent?.starts_at || eventsLoading}
+                  onClick={async()=>{
+                    if (!setEventsLoading || !setServerEvents || !setNewEvent) return;
+                    setEventsLoading(true);
+                    try {
+                      await eventsApi.create(serverFull.id, { title:newEvent!.title, description:newEvent!.description, starts_at:newEvent!.starts_at, channel_id:newEvent!.channel_id||undefined });
+                      const evs = await eventsApi.list(serverFull.id);
+                      setServerEvents(evs);
+                      setNewEvent({title:'',description:'',starts_at:'',channel_id:''});
+                      addToast?.('Event utworzony!','success');
+                    } catch(e:any){ addToast?.(e.message||'Błąd','error'); }
+                    finally { setEventsLoading(false); }
+                  }}
+                  className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-2">
+                  {eventsLoading ? <Loader2 size={13} className="animate-spin"/> : <><CalendarPlus size={13}/>Utwórz event</>}
+                </button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {serverEvents.length === 0 && <p className="text-xs text-zinc-600 text-center py-4">Brak eventów. Utwórz pierwszy!</p>}
+                {serverEvents.map(ev=>(
+                  <div key={ev.id} className="flex items-center gap-3 p-3.5 bg-white/[0.03] border border-white/[0.05] rounded-xl hover:border-white/[0.09] transition-all">
+                    <div className="w-10 h-10 rounded-xl bg-violet-500/15 flex items-center justify-center shrink-0">
+                      <CalendarPlus size={14} className="text-violet-400"/>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-white truncate">{ev.title}</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">{new Date(ev.starts_at).toLocaleString('pl-PL',{dateStyle:'medium',timeStyle:'short'})}</p>
+                      {ev.description && <p className="text-xs text-zinc-600 truncate mt-0.5">{ev.description}</p>}
+                    </div>
+                    <button onClick={async()=>{
+                      try { await eventsApi.delete(serverFull.id,ev.id); setServerEvents?.(serverEvents.filter(e=>e.id!==ev.id)); addToast?.('Usunięto event','info'); }
+                      catch(e:any){ addToast?.(e.message||'Błąd','error'); }
+                    }} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all shrink-0">
+                      <Trash2 size={12}/>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Onboarding tab ──────────────────────────────────────── */}
+          {tab === 'onboarding' && (
+            <div className="flex flex-col gap-4 max-w-xl">
+              <div>
+                <h3 className="text-sm font-bold text-white mb-0.5">Onboarding nowych członków</h3>
+                <p className="text-xs text-zinc-500">Skonfiguruj ekran powitalny dla nowych osób dołączających do serwera. Możesz ustawić regulamin i automatyczne role.</p>
+              </div>
+              {onboardingData === undefined || onboardingData === null ? (
+                <div className="flex items-center justify-center py-8"><Loader2 size={20} className="animate-spin text-zinc-600"/></div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
+                    <div>
+                      <p className="text-sm font-semibold text-white">Włącz onboarding</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">Nowi członkowie zobaczą ekran powitalny z regulaminem</p>
+                    </div>
+                    <button onClick={async()=>{
+                      const next = !onboardingData.enabled;
+                      await onboardingApi.update(serverFull.id,{enabled:next}).catch(()=>{});
+                      setOnboardingData?.({...onboardingData, enabled:next});
+                    }} className={`relative w-11 h-6 rounded-full transition-colors ${onboardingData.enabled?'bg-indigo-500':'bg-zinc-700'}`}>
+                      <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${onboardingData.enabled?'translate-x-6':'translate-x-1'}`}/>
+                    </button>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Tekst powitalny</label>
+                    <input defaultValue={onboardingData.welcome_text||''} id="ob-welcome-ssp"
+                      className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50"
+                      placeholder="Witaj na serwerze! Zapoznaj się z regulaminem..."/>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Regulamin / zasady serwera</label>
+                    <textarea defaultValue={onboardingData.rules_text||''} id="ob-rules-ssp" rows={6}
+                      className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 resize-none"
+                      placeholder="§1. Zachowuj szacunek wobec innych.&#10;§2. Zakaz spamu.&#10;§3. ..."/>
+                  </div>
+                  {roles && roles.length > 0 && (
+                    <div>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Automatyczna rola po akceptacji regulaminu</label>
+                      <select defaultValue={onboardingData.assign_role_id||''} id="ob-role-ssp"
+                        className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-indigo-500/50">
+                        <option value="">– brak –</option>
+                        {roles.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  <button onClick={async()=>{
+                    const welcome = (document.getElementById('ob-welcome-ssp') as HTMLInputElement)?.value;
+                    const rules   = (document.getElementById('ob-rules-ssp') as HTMLTextAreaElement)?.value;
+                    const roleId  = (document.getElementById('ob-role-ssp') as HTMLSelectElement)?.value || null;
+                    try {
+                      await onboardingApi.update(serverFull.id,{welcome_text:welcome,rules_text:rules,enabled:onboardingData.enabled,assign_role_id:roleId});
+                      setOnboardingData?.({...onboardingData,welcome_text:welcome,rules_text:rules,assign_role_id:roleId});
+                      addToast?.('Onboarding zapisany!','success');
+                    } catch(e:any){ addToast?.(e.message||'Błąd','error'); }
+                  }} className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">
+                    Zapisz onboarding
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Discovery tab ───────────────────────────────────────── */}
+          {tab === 'discovery' && (
+            <div className="flex flex-col gap-4 max-w-xl">
+              <div>
+                <h3 className="text-sm font-bold text-white mb-0.5">Publiczne wyszukiwanie</h3>
+                <p className="text-xs text-zinc-500">Zdecyduj, czy Twój serwer ma być widoczny w katalogu publicznych serwerów. Domyślnie każdy serwer jest prywatny.</p>
+              </div>
+              <div className="flex items-center justify-between p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
+                <div>
+                  <p className="text-sm font-semibold text-white">Serwer publiczny</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">Pojawi się w wyszukiwarce — każdy może dołączyć</p>
+                </div>
+                <button onClick={async()=>{
+                  const next = !(serverFull as any).is_public;
+                  try {
+                    await discoverApi.setDiscovery(serverFull.id,{is_public:next});
+                    (serverFull as any).is_public = next; // local mutation for immediate feedback
+                    addToast?.(`Serwer jest teraz ${next?'publiczny':'prywatny'}!`,'success');
+                  } catch(e:any){ addToast?.(e.message||'Błąd','error'); }
+                }} className={`relative w-11 h-6 rounded-full transition-colors ${(serverFull as any).is_public?'bg-indigo-500':'bg-zinc-700'}`}>
+                  <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${(serverFull as any).is_public?'translate-x-6':'translate-x-1'}`}/>
+                </button>
+              </div>
+              <div>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Opis w katalogu serwerów</label>
+                <textarea defaultValue={(serverFull as any).discovery_description||''} id="disc-desc-ssp" rows={4}
+                  className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 resize-none"
+                  placeholder="Opisz swój serwer dla przyszłych członków..."/>
+                <button onClick={async()=>{
+                  const desc = (document.getElementById('disc-desc-ssp') as HTMLTextAreaElement)?.value;
+                  try {
+                    await discoverApi.setDiscovery(serverFull.id,{is_public:!!(serverFull as any).is_public, discovery_description:desc});
+                    addToast?.('Opis zapisany!','success');
+                  } catch(e:any){ addToast?.(e.message||'Błąd','error'); }
+                }} className="mt-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">
+                  Zapisz opis
+                </button>
               </div>
             </div>
           )}
@@ -10431,6 +10623,14 @@ export default function App() {
                   addToast(serverId ? 'Tag aktywowany!' : 'Tag zdjęty', 'success');
                 } catch { addToast('Błąd zmiany tagu', 'error'); }
               }}
+              serverEvents={serverEvents}
+              setServerEvents={setServerEvents}
+              eventsLoading={eventsLoading}
+              setEventsLoading={setEventsLoading}
+              newEvent={newEvent}
+              setNewEvent={setNewEvent}
+              onboardingData={onboardingData}
+              setOnboardingData={setOnboardingData}
             />
           ) : activeView==='admin' ? (
             <AdminPanel
@@ -16261,7 +16461,7 @@ export default function App() {
                       </div>
                       {!serverList.find(sv=>sv.id===s.id) && (
                         <button onClick={async()=>{
-                          try { await serversApi.join(s.id); await loadServers(); setShowDiscovery(false); addToast(`Dołączono do ${s.name}!`,'success'); }
+                          try { await serversApi.joinPublic(s.id); await loadServers(); setShowDiscovery(false); addToast(`Dołączono do ${s.name}!`,'success'); }
                           catch(e:any){ addToast(e.message||'Błąd','error'); }
                         }} className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white transition-colors shrink-0">
                           Dołącz

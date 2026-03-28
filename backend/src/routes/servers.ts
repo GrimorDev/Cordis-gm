@@ -992,4 +992,33 @@ router.post('/:id/onboarding/complete', authMiddleware, async (req: AuthRequest,
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// POST /api/servers/:id/join-public — join a public server without invite code
+router.post('/:id/join-public', authMiddleware, joinLimiter, async (req: AuthRequest, res: Response) => {
+  const serverId = req.params.id;
+  const userId = req.user!.id;
+  try {
+    const { rows: [srv] } = await query(`SELECT * FROM servers WHERE id = $1 AND is_public = true`, [serverId]);
+    if (!srv) return res.status(404).json({ error: 'Public server not found' });
+    const { rowCount: isBanned } = await query(`SELECT 1 FROM server_bans WHERE server_id=$1 AND user_id=$2`, [serverId, userId]);
+    if (isBanned) return res.status(403).json({ error: 'Masz ban na tym serwerze' });
+    const existing = await query(`SELECT 1 FROM server_members WHERE server_id=$1 AND user_id=$2`, [serverId, userId]);
+    if (existing.rowCount) return res.status(409).json({ error: 'Already a member' });
+    await query(`INSERT INTO server_members (server_id, user_id, role_name) VALUES ($1, $2, 'Member')`, [serverId, userId]);
+    const { rows: [memberRole] } = await query(
+      `SELECT id FROM server_roles WHERE server_id=$1 AND is_default=TRUE AND name='Member' LIMIT 1`, [serverId]
+    );
+    if (memberRole) {
+      await query(`INSERT INTO member_roles (server_id, user_id, role_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [serverId, userId, memberRole.id]).catch(() => {});
+    }
+    const { rows: [u] } = await query(`SELECT id, username, avatar_url, status FROM users WHERE id=$1`, [userId]);
+    const io = req.app.get('io');
+    if (io) {
+      const sockets = await io.in(`user:${userId}`).fetchSockets();
+      for (const s of sockets) s.join(`server:${serverId}`);
+      io.to(`server:${serverId}`).emit('member_joined', { server_id: serverId, user: { ...u, role_name: 'Member', roles: [] } });
+    }
+    return res.json(srv);
+  } catch (err) { console.error('[join-public]', err); return res.status(500).json({ error: 'Internal server error' }); }
+});
+
 export default router;

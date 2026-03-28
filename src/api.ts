@@ -436,6 +436,7 @@ export const serversApi = {
   inviteInfo: (code: string) =>
     req<{ code: string; server_id: string; server_name: string; icon_url: string | null; creator_username: string; creator_avatar: string | null }>('GET', `/servers/invite/${code}/info`),
   join: (code: string) => req<ServerData>('POST', `/servers/join/${code}`),
+  joinPublic: (serverId: string) => req<ServerData>('POST', `/servers/${serverId}/join-public`),
   activity: (id: string) => req<{id:string;type:string;icon:string;text:string;time:string}[]>('GET', `/servers/${id}/activity`),
   bans: {
     list: (serverId: string) => req<ServerBan[]>('GET', `/servers/${serverId}/bans`),
