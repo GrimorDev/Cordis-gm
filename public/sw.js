@@ -1,5 +1,5 @@
 // Cordis Service Worker — PWA offline support & push notifications
-const CACHE_NAME = 'cordis-v1';
+const CACHE_NAME = 'cordis-v3';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
