@@ -799,6 +799,7 @@ export interface GroupDmConversation {
   participants: GroupDmParticipant[];
 }
 export const groupDmApi = {
+  list:     () => req<GroupDmConversation[]>('GET', '/dms/groups'),
   create:   (name: string, participantIds: string[]) =>
     req<GroupDmConversation>('POST', '/dms/group/create', { name, participantIds }),
   info:     (id: string) => req<GroupDmConversation>('GET', `/dms/group/${id}`),

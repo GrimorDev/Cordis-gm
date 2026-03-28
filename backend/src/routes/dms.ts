@@ -360,6 +360,37 @@ router.get('/:userId/pinned', authMiddleware, async (req: AuthRequest, res: Resp
 });
 
 // ── Group DMs ───────────────────────────────────────────────────────────────
+// GET /api/dms/groups — list all group conversations for current user
+router.get('/groups', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id;
+  try {
+    const { rows } = await query(
+      `SELECT dc.id, dc.name, dc.icon_url, dc.created_at, dc.creator_id,
+              true AS is_group,
+              (SELECT created_at FROM dm_messages WHERE conversation_id=dc.id ORDER BY created_at DESC LIMIT 1) as last_message_at,
+              COALESCE(
+                json_agg(
+                  json_build_object('user_id', u.id, 'username', u.username, 'avatar_url', u.avatar_url)
+                  ORDER BY u.username
+                ) FILTER (WHERE u.id IS NOT NULL),
+                '[]'::json
+              ) AS participants
+       FROM dm_conversations dc
+       INNER JOIN dm_participants dp_me ON dp_me.conversation_id = dc.id AND dp_me.user_id = $1
+       INNER JOIN dm_participants dp_all ON dp_all.conversation_id = dc.id
+       INNER JOIN users u ON u.id = dp_all.user_id
+       WHERE dc.is_group = true
+       GROUP BY dc.id
+       ORDER BY last_message_at DESC NULLS LAST, dc.created_at DESC`,
+      [userId]
+    );
+    return res.json(rows);
+  } catch (err) {
+    console.error('[groups] list error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // POST /api/dms/group/create
 router.post('/group/create', authMiddleware, async (req: AuthRequest, res) => {
   const myId = req.user!.id;
