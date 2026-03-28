@@ -336,8 +336,8 @@ router.post('/group/create', authMiddleware, async (req: AuthRequest, res) => {
   try {
     // Create group conversation
     const convRes = await query(
-      `INSERT INTO dm_conversations (name, is_group, creator_id, other_user_id)
-       VALUES ($1, true, $2, $2) RETURNING *`,
+      `INSERT INTO dm_conversations (name, is_group, creator_id)
+       VALUES ($1, true, $2) RETURNING *`,
       [name || null, myId]
     );
     const conv = convRes.rows[0];

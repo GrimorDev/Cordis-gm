@@ -38,14 +38,13 @@ router.post('/', authMiddleware,
     const { title, description, starts_at, ends_at, channel_id } = req.body;
     const userId = req.user!.id;
 
+    try {
     // Check member
     const member = await query(
       `SELECT sm.is_owner FROM server_members sm WHERE sm.server_id = $1 AND sm.user_id = $2`,
       [serverId, userId]
     );
     if (!member.rows.length) return res.status(403).json({ error: 'Not a member' });
-
-    try {
       const result = await query(
         `INSERT INTO server_events (server_id, creator_id, title, description, starts_at, ends_at, channel_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7)

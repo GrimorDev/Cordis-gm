@@ -8714,6 +8714,12 @@ export default function App() {
             className="hidden md:flex items-center justify-center w-9 h-full text-zinc-600 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all duration-200 border-r border-white/[0.05] shrink-0">
             <Plus size={15}/>
           </button>
+          {/* Compass — discover public servers */}
+          <button onClick={()=>{ setDiscoveryLoading(true); discoverApi.list('').then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false)); setShowDiscovery(true); }}
+            title="Odkryj serwery"
+            className="hidden md:flex items-center justify-center w-9 h-full text-zinc-600 hover:text-violet-400 hover:bg-violet-500/10 transition-all duration-200 border-r border-white/[0.05] shrink-0">
+            <Compass size={15}/>
+          </button>
         </div>
         {/* Center col — Cordyn, always truly centered in the nav */}
         <div className="flex items-center justify-center pointer-events-none select-none px-4">
@@ -16237,7 +16243,7 @@ export default function App() {
               ) : discoveryList.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center gap-2 text-zinc-600">
                   <Compass size={32} className="opacity-30"/>
-                  <p className="text-sm">{discoveryQ ? 'Brak wyników' : 'Wpisz frazę i naciśnij Enter'}</p>
+                  <p className="text-sm">{discoveryQ ? `Brak wyników dla "${discoveryQ}"` : 'Brak publicznych serwerów'}</p>
                 </div>
               ) : (
                 <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-3">
