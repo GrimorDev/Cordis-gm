@@ -2438,6 +2438,7 @@ function ServerSettingsPage({
   onboardingData, setOnboardingData,
 }: ServerSettingsPageProps) {
   const [memberQ, setMemberQ] = React.useState('');
+  const [isPublicLocal, setIsPublicLocal] = React.useState(!!(serverFull as any).is_public);
   const filteredMembers = memberQ.trim()
     ? members.filter(m => m.username.toLowerCase().includes(memberQ.toLowerCase()))
     : members;
@@ -3091,14 +3092,14 @@ function ServerSettingsPage({
                   <p className="text-xs text-zinc-500 mt-0.5">Pojawi się w wyszukiwarce — każdy może dołączyć</p>
                 </div>
                 <button onClick={async()=>{
-                  const next = !(serverFull as any).is_public;
+                  const next = !isPublicLocal;
                   try {
                     await discoverApi.setDiscovery(serverFull.id,{is_public:next});
-                    (serverFull as any).is_public = next; // local mutation for immediate feedback
+                    setIsPublicLocal(next);
                     addToast?.(`Serwer jest teraz ${next?'publiczny':'prywatny'}!`,'success');
                   } catch(e:any){ addToast?.(e.message||'Błąd','error'); }
-                }} className={`relative w-11 h-6 rounded-full transition-colors ${(serverFull as any).is_public?'bg-indigo-500':'bg-zinc-700'}`}>
-                  <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${(serverFull as any).is_public?'translate-x-6':'translate-x-1'}`}/>
+                }} className={`relative w-11 h-6 rounded-full transition-colors ${isPublicLocal?'bg-indigo-500':'bg-zinc-700'}`}>
+                  <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform shadow ${isPublicLocal?'translate-x-6':'translate-x-1'}`}/>
                 </button>
               </div>
               <div>
@@ -3109,7 +3110,7 @@ function ServerSettingsPage({
                 <button onClick={async()=>{
                   const desc = (document.getElementById('disc-desc-ssp') as HTMLTextAreaElement)?.value;
                   try {
-                    await discoverApi.setDiscovery(serverFull.id,{is_public:!!(serverFull as any).is_public, discovery_description:desc});
+                    await discoverApi.setDiscovery(serverFull.id,{is_public:isPublicLocal, discovery_description:desc});
                     addToast?.('Opis zapisany!','success');
                   } catch(e:any){ addToast?.(e.message||'Błąd','error'); }
                 }} className="mt-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">

@@ -36,20 +36,32 @@ async function getOrCreateConversation(userId1: string, userId2: string): Promis
 // GET /api/dms/conversations
 router.get('/conversations', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    // DISTINCT ON (u.id) deduplicates in case multiple conversations exist for the same user pair.
+    // WHERE dc.is_group IS NOT TRUE excludes group DMs from the 1-on-1 DM list.
     const { rows } = await query(
-      `SELECT dc.id, dc.created_at,
-              u.id as other_user_id, u.username as other_username,
-              u.avatar_url as other_avatar, u.status as other_status,
-              u.avatar_effect as other_avatar_effect, u.custom_status as other_custom_status,
-              st.tag as other_tag, st.color as other_tag_color, st.icon as other_tag_icon, u.active_tag_server_id as other_tag_server_id,
-              CASE WHEN u.privacy_read_receipts = FALSE THEN NULL ELSE dp2.last_read_at END as other_last_read_at,
-              (SELECT content FROM dm_messages WHERE conversation_id=dc.id ORDER BY created_at DESC LIMIT 1) as last_message,
-              (SELECT created_at FROM dm_messages WHERE conversation_id=dc.id ORDER BY created_at DESC LIMIT 1) as last_message_at
-       FROM dm_conversations dc
-       INNER JOIN dm_participants dp  ON dp.conversation_id=dc.id  AND dp.user_id=$1
-       INNER JOIN dm_participants dp2 ON dp2.conversation_id=dc.id AND dp2.user_id!=$1
-       INNER JOIN users u ON u.id=dp2.user_id
-       LEFT JOIN server_tags st ON st.server_id = u.active_tag_server_id
+      `SELECT * FROM (
+         SELECT DISTINCT ON (u.id)
+                dc.id, dc.created_at,
+                u.id as other_user_id, u.username as other_username,
+                u.avatar_url as other_avatar, u.status as other_status,
+                u.avatar_effect as other_avatar_effect, u.custom_status as other_custom_status,
+                st.tag as other_tag, st.color as other_tag_color, st.icon as other_tag_icon, u.active_tag_server_id as other_tag_server_id,
+                CASE WHEN u.privacy_read_receipts = FALSE THEN NULL ELSE dp2.last_read_at END as other_last_read_at,
+                (SELECT content FROM dm_messages WHERE conversation_id=dc.id ORDER BY created_at DESC LIMIT 1) as last_message,
+                (SELECT created_at FROM dm_messages WHERE conversation_id=dc.id ORDER BY created_at DESC LIMIT 1) as last_message_at
+         FROM dm_conversations dc
+         INNER JOIN dm_participants dp  ON dp.conversation_id=dc.id  AND dp.user_id=$1
+         INNER JOIN LATERAL (
+           SELECT dp2.user_id, dp2.last_read_at
+           FROM dm_participants dp2
+           WHERE dp2.conversation_id=dc.id AND dp2.user_id!=$1
+           LIMIT 1
+         ) dp2 ON true
+         INNER JOIN users u ON u.id=dp2.user_id
+         LEFT JOIN server_tags st ON st.server_id = u.active_tag_server_id
+         WHERE (dc.is_group IS NOT TRUE)
+         ORDER BY u.id, (SELECT created_at FROM dm_messages WHERE conversation_id=dc.id ORDER BY created_at DESC LIMIT 1) DESC NULLS LAST
+       ) sub
        ORDER BY last_message_at DESC NULLS LAST`,
       [req.user!.id]
     );
@@ -334,13 +346,15 @@ router.post('/group/create', authMiddleware, async (req: AuthRequest, res) => {
     return res.status(400).json({ error: 'Need at least 2 participants' });
 
   try {
-    // Create group conversation
-    const convRes = await query(
-      `INSERT INTO dm_conversations (name, is_group, creator_id)
-       VALUES ($1, true, $2) RETURNING *`,
-      [name || null, myId]
-    );
+    // Step 1: Create base conversation row (works on any schema version)
+    const convRes = await query('INSERT INTO dm_conversations DEFAULT VALUES RETURNING *');
     const conv = convRes.rows[0];
+
+    // Step 2: Try to set group DM fields (columns added in migration — may not exist on older deployments)
+    await query(
+      `UPDATE dm_conversations SET name=$1, is_group=true, creator_id=$2 WHERE id=$3`,
+      [name || null, myId, conv.id]
+    ).catch(() => { /* columns not yet migrated — conv still usable */ });
     const allIds = [myId, ...participantIds.filter((id: string) => id !== myId)];
     for (const uid of allIds) {
       await query(
