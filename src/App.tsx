@@ -1,5 +1,4 @@
 ﻿import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
-import Lottie from 'lottie-react';
 import ReactDOM from 'react-dom';
 import { TitleBar, isTauri } from './TitleBar';
 import ImageCropModal, { type CropShape } from './ImageCropModal';
@@ -147,20 +146,15 @@ const AVATAR_EFFECTS = [
 ];
 const CARD_EFFECTS = [
   { key: 'none',      label: 'Brak',         desc: 'Brak efektu na karcie' },
-  { key: 'confetti',  label: '🎊 Konfetti',  desc: 'Kolorowe konfetti opadające przez kartę' },
-  { key: 'sparkles',  label: '✨ Iskierki',  desc: 'Magiczne złote iskierki pojawiające się na karcie' },
-  { key: 'sakura',    label: '🌸 Sakura',    desc: 'Różowe płatki wiśni opadające przez kartę' },
-  { key: 'snow',      label: '❄️ Śnieg',     desc: 'Delikatnie spadające płatki śniegu' },
-  { key: 'bubbles',   label: '🫧 Bąbelki',   desc: 'Przezroczyste bąbelki unoszące się w górę' },
   { key: 'fire',      label: '🔥 Ogień',     desc: 'Płomienie wyrastające z dołu karty' },
   { key: 'hologram',  label: '💠 Hologram',  desc: 'Holograficzne linie skanowania' },
   { key: 'rainbow',   label: '🌈 Tęcza',     desc: 'Tęczowe fale kolorów przelewające się przez kartę' },
   { key: 'aurora',    label: '🌌 Aurora',    desc: 'Zorza polarna — falujące kurtyny zieleni i fioletu' },
   { key: 'smoke',     label: '💨 Dym',       desc: 'Mroczne kłęby dymu snujące się przez kartę' },
   { key: 'ink',       label: '🖋️ Atrament',  desc: 'Psychodeliczne plamy atramentu rozlewające się po karcie' },
+  { key: 'atomic',    label: '☢️ Atomowy',   desc: 'Wybuch atomowy — błysk, fala uderzeniowa, grzyb' },
+  { key: 'teleport',  label: '⚡ Teleport',  desc: 'Elektryczne łuki i błysk — karta materializuje się z energii' },
 ] as const;
-// Efekty oparte o Lottie (lokalne JSON z public/lottie/)
-const LOTTIE_EFFECTS = new Set(['confetti','sparkles','sakura','snow','bubbles']);
 
 const GRADIENTS = [
   'from-indigo-600 via-purple-600 to-pink-600',
@@ -4790,43 +4784,8 @@ function SpotifyDisplay({ spotify }: { spotify: SpotifyData }) {
 }
 
 // ─── CardEffectOverlay ────────────────────────────────────────────────────────
-// Cache dla załadowanych Lottie JSON (per efekt, globalnie)
-const lottieCache: Record<string, object | null> = {};
-
-function LottieCardEffect({ effect }: { effect: string }) {
-  const [data, setData] = useState<object | null>(lottieCache[effect] ?? null);
-  useEffect(() => {
-    if (lottieCache[effect]) { setData(lottieCache[effect]); return; }
-    fetch(`/lottie/${effect}.json`)
-      .then(r => r.json())
-      .then(d => { lottieCache[effect] = d; setData(d); })
-      .catch(() => { lottieCache[effect] = null; });
-  }, [effect]);
-  if (!data) return null;
-  return (
-    <Lottie
-      animationData={data}
-      loop={true}
-      autoplay={true}
-      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
-      rendererSettings={{ preserveAspectRatio: 'xMidYMid slice' }}
-    />
-  );
-}
-
 function CardEffectOverlay({ effect }: { effect: string | null | undefined }) {
   if (!effect || effect === 'none') return null;
-
-  // Lottie-based effects (płynna animacja motion-design)
-  if (LOTTIE_EFFECTS.has(effect)) {
-    return (
-      <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
-        <LottieCardEffect effect={effect} />
-        {effect === 'sakura' && <div className="absolute inset-0 bg-gradient-to-b from-pink-500/5 to-transparent" />}
-        {effect === 'snow'   && <div className="absolute inset-0 bg-gradient-to-b from-sky-400/5 to-transparent" />}
-      </div>
-    );
-  }
 
   // CSS-based: FIRE
   if (effect === 'fire') {
@@ -4909,6 +4868,45 @@ function CardEffectOverlay({ effect }: { effect: string | null | undefined }) {
     return (
       <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
         {blobs.map((s, i) => <div key={i} className="card-fx-ink absolute" style={s} />)}
+      </div>
+    );
+  }
+
+  // CSS-based: ATOMIC — jednorazowy wjazd (błysk → fala → grzyb) + idle glow
+  if (effect === 'atomic') {
+    return (
+      <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
+        {/* Błysk */}
+        <div className="card-fx-atomic-flash absolute inset-0" />
+        {/* Dwie fale uderzeniowe */}
+        <div className="card-fx-atomic-ring  absolute" />
+        <div className="card-fx-atomic-ring2 absolute" />
+        {/* Trzon grzyba */}
+        <div className="card-fx-atomic-stem absolute" />
+        {/* Czapa grzyba */}
+        <div className="card-fx-atomic-cap  absolute" />
+        {/* Idle: pomarańczowa poświata */}
+        <div className="card-fx-atomic-glow absolute inset-0" />
+      </div>
+    );
+  }
+
+  // CSS-based: TELEPORT — jednorazowy wjazd (łuki → błysk) + idle shimmer
+  if (effect === 'teleport') {
+    const arcs: React.CSSProperties[] = [
+      { top: '6%',  left: '12%',  width: '2px', height: '26%', transform: 'rotate(14deg)',  animationDelay: '0.02s' },
+      { top: '8%',  right: '10%', width: '2px', height: '22%', transform: 'rotate(-21deg)', animationDelay: '0.07s' },
+      { top: '37%', left: '5%',   width: '2px', height: '30%', transform: 'rotate(7deg)',   animationDelay: '0.04s' },
+      { top: '40%', right: '6%',  width: '2px', height: '28%', transform: 'rotate(-14deg)', animationDelay: '0.1s'  },
+      { top: '66%', left: '17%',  width: '2px', height: '20%', transform: 'rotate(26deg)',  animationDelay: '0.01s' },
+      { top: '63%', right: '13%', width: '2px', height: '19%', transform: 'rotate(-24deg)', animationDelay: '0.08s' },
+    ];
+    return (
+      <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
+        <div className="card-fx-teleport-flash absolute inset-0" />
+        {arcs.map((s, i) => <div key={i} className="card-fx-teleport-arc absolute" style={s} />)}
+        <div className="card-fx-teleport-scan absolute inset-0" />
+        <div className="card-fx-teleport-glow absolute inset-0" />
       </div>
     );
   }
