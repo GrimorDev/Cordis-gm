@@ -14,6 +14,7 @@ async function getOrCreateConversation(userId1: string, userId2: string): Promis
     `SELECT dp1.conversation_id FROM dm_participants dp1
      INNER JOIN dm_participants dp2 ON dp2.conversation_id = dp1.conversation_id AND dp2.user_id = $2
      WHERE dp1.user_id = $1
+       AND (SELECT COUNT(*) FROM dm_participants WHERE conversation_id = dp1.conversation_id) = 2
      ORDER BY (SELECT MAX(created_at) FROM dm_messages WHERE conversation_id=dp1.conversation_id) DESC NULLS LAST
      LIMIT 1`,
     [userId1, userId2]
@@ -97,6 +98,7 @@ router.get('/:userId/messages', authMiddleware, async (req: AuthRequest, res: Re
       `SELECT dp1.conversation_id FROM dm_participants dp1
        INNER JOIN dm_participants dp2 ON dp2.conversation_id=dp1.conversation_id AND dp2.user_id=$2
        WHERE dp1.user_id=$1
+         AND (SELECT COUNT(*) FROM dm_participants WHERE conversation_id = dp1.conversation_id) = 2
        ORDER BY (SELECT MAX(created_at) FROM dm_messages WHERE conversation_id=dp1.conversation_id) DESC NULLS LAST
        LIMIT 1`,
       [req.user!.id, req.params.userId]
@@ -449,9 +451,18 @@ router.post('/group/:id/messages', authMiddleware, async (req: AuthRequest, res)
     );
     const msg = msgRes.rows[0];
 
-    // Notify via socket
+    // Notify all group participants via their user rooms
+    // (nobody joins group: rooms — we use user: rooms which are always active)
     const io = req.app.get('io');
-    if (io) io.to(`group:${req.params.id}`).emit('new_group_dm', msg);
+    if (io) {
+      const parts = await query(
+        `SELECT user_id FROM dm_participants WHERE conversation_id = $1`,
+        [req.params.id]
+      );
+      for (const p of parts.rows) {
+        io.to(`user:${p.user_id}`).emit('new_group_dm', msg);
+      }
+    }
 
     return res.status(201).json(msg);
   } catch (err) {

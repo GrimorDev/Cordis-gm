@@ -16551,7 +16551,8 @@ export default function App() {
                   onClick={async()=>{
                     try {
                       const conv = await groupDmApi.create(groupDmName, groupDmMemberIds);
-                      setGroupConvs(p=>[conv,...p]);
+                      // Dedup — socket 'group_dm_created' may fire before HTTP response
+                      setGroupConvs(p => p.some(c => c.id === conv.id) ? p : [conv, ...p]);
                       setActiveGroupDm(conv.id);
                       setShowGroupDmModal(false);
                       setGroupDmName(''); setGroupDmMemberIds([]); setGroupDmSearchQ('');
