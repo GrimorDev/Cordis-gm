@@ -4773,12 +4773,13 @@ function SpotifyDisplay({ spotify }: { spotify: SpotifyData }) {
 }
 
 // ─── HoverCard ────────────────────────────────────────────────────────────────
-function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfile, cache, activity, twitchActivity, steamActivity, steamGameStartedAt, realtimeStatus, onMouseEnter, onMouseLeave, maskName, fmtDate, serverTagColorMap, serverTagIconMap, serverList }: {
+function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfile, cache, activity, twitchActivity, steamActivity, steamGameStartedAt, realtimeStatus, onMouseEnter, onMouseLeave, maskName, fmtDate, serverTagColorMap, serverTagIconMap, serverList, profileCardAnim }: {
   userId: string; x: number; y: number;
   currentUserId: string | undefined;
   onOpenDm: (id: string) => void;
   onCall: (id: string, un: string, av: string|null, t: 'voice'|'video') => void;
   onOpenProfile: (id: string) => void;
+  profileCardAnim?: boolean;
   cache: React.MutableRefObject<Map<string, {profile:UserProfile|null;games:FavoriteGame[];spotify:SpotifyData|null;loadedAt:number}>>;
   activity: {name:string;artists:string;album_cover:string|null;external_url:string|null;duration_ms?:number|null;progress_ms?:number|null}|null|undefined;
   realtimeStatus?: string;
@@ -4861,7 +4862,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
       style={{ left, top, width: cardW }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}>
-      <div className="bg-[#18182a] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden profile-card-enter">
+      <div className={`bg-[#18182a] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden${profileCardAnim !== false ? ' profile-card-enter' : ''}`}>
         {/* Banner */}
         <div className="h-16 relative" style={u?.banner_url
           ? { backgroundImage: `url(${staticUrl(u.banner_url)})`, backgroundSize: 'cover', backgroundPosition: 'center' }
@@ -5164,6 +5165,10 @@ export default function App() {
   const hoverCardTimer                        = useRef<ReturnType<typeof setTimeout>|null>(null);
   const hoverCardHideTimer                    = useRef<ReturnType<typeof setTimeout>|null>(null);
   const hoverCardCache                        = useRef<Map<string,{profile:UserProfile|null;games:FavoriteGame[];spotify:SpotifyData|null;loadedAt:number}>>(new Map());
+  // Profile card entrance animation (local pref)
+  const [profileCardAnim, setProfileCardAnim] = useState(() => localStorage.getItem('cordyn_profile_card_anim') !== '0');
+  // Window focus tracking for desktop push notifications
+  const isWindowFocused                       = useRef(true);
   // Stream mode — hides usernames/server names; auto-enables when Twitch is live
   const [isStreamMode, setIsStreamMode]       = useState(false);
   const [streamRevealedConvs, setStreamRevealedConvs] = useState<Set<string>>(new Set());
@@ -5403,6 +5408,7 @@ export default function App() {
   const activeDmUserIdRef   = useRef(activeDmUserId);
   const activeViewRef       = useRef(activeView);
   const activeServerRef     = useRef(activeServer);
+  const serverFullRef       = useRef(serverFull);
   const callDurationRef     = useRef(0);
   const voiceHandlerRef     = useRef<Record<string, (...a: any[]) => void>>({});
   const voiceBcRef          = useRef<BroadcastChannel|null>(null); // shared BroadcastChannel for multi-tab voice
@@ -6007,6 +6013,15 @@ export default function App() {
     ).catch(() => {});
   }, [currentUser?.id]);
 
+  // ── Desktop push: request notification permission on login (Tauri only) ──
+  useEffect(() => {
+    if (!isTauri || !isAuthenticated) return;
+    import('@tauri-apps/plugin-notification').then(async ({ isPermissionGranted, requestPermission }) => {
+      const granted = await isPermissionGranted();
+      if (!granted) await requestPermission();
+    }).catch(() => {});
+  }, [isAuthenticated]);
+
   // ── Autostart: odczytaj stan przy starcie ────────────────────────────
   useEffect(() => {
     if (!isTauri) return;
@@ -6061,7 +6076,18 @@ export default function App() {
         // Message in a channel we're not viewing — increment unread count
         setUnreadChs(p => ({ ...p, [chId]: (p[chId] || 0) + 1 }));
         // Play notification sound for messages from others
-        if (!isOwnMsg) playNotifSound();
+        if (!isOwnMsg) {
+          playNotifSound();
+          // Desktop push notification when window is not focused (Tauri)
+          if (isTauri && !isWindowFocused.current) {
+            import('@tauri-apps/plugin-notification').then(async ({ isPermissionGranted, sendNotification }) => {
+              if (!await isPermissionGranted()) return;
+              const chName = serverFullRef.current?.categories.flatMap(c => c.channels).find(c => c.id === chId)?.name;
+              const body = msg.content ? (msg.content.length > 80 ? msg.content.slice(0, 80) + '…' : msg.content) : '📎 Załącznik';
+              sendNotification({ title: chName ? `#${chName}` : 'Cordyn', body: `${msg.sender_username || '?'}: ${body}` });
+            }).catch(() => {});
+          }
+        }
       } else {
         setChannelMsgs(p => [...p, msg as MessageFull]);
         if (!isOwnMsg) {
@@ -6123,6 +6149,16 @@ export default function App() {
         );
         setUnreadDms(p => ({ ...p, [msg.sender_id]: (p[msg.sender_id] || 0) + 1 }));
         playDmNotification();
+        // Desktop push notification when window is not focused (Tauri)
+        if (isTauri && !isWindowFocused.current) {
+          import('@tauri-apps/plugin-notification').then(async ({ isPermissionGranted, sendNotification }) => {
+            if (!await isPermissionGranted()) return;
+            sendNotification({
+              title: msg.sender_username || 'Wiadomość prywatna',
+              body: preview || 'Nowa wiadomość',
+            });
+          }).catch(() => {});
+        }
       }
     });
     sock.on('message_deleted', ({ id }: any) =>
@@ -6900,6 +6936,15 @@ export default function App() {
   useEffect(() => { activeViewRef.current     = activeView;     }, [activeView]);
   useEffect(() => { activeServerRef.current   = activeServer;   }, [activeServer]);
   useEffect(() => { callDurationRef.current   = callDuration;   }, [callDuration]);
+  useEffect(() => { serverFullRef.current     = serverFull;     }, [serverFull]);
+  // Track window focus for desktop push notifications
+  useEffect(() => {
+    const onFocus = () => { isWindowFocused.current = true; };
+    const onBlur  = () => { isWindowFocused.current = false; };
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('blur',  onBlur);
+    return () => { window.removeEventListener('focus', onFocus); window.removeEventListener('blur', onBlur); };
+  }, []);
   // Sync myStatusRef when currentUser.status changes (e.g. on login)
   useEffect(() => { if (currentUser?.status) myStatusRef.current = currentUser.status; }, [currentUser?.status]);
 
@@ -14827,6 +14872,22 @@ export default function App() {
                           ))}
                         </div>
                       </div>
+
+                      {/* Profile card animation toggle */}
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1 block font-bold">Karta profilu</label>
+                        <div className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-3 hover:border-white/[0.09] transition-colors">
+                          <div className="flex-1 min-w-0 mr-4">
+                            <p className="text-sm font-medium text-white">Animacja wejścia karty profilu</p>
+                            <p className="text-xs text-zinc-600 mt-0.5">Płynne wjechanie karty przy kliknięciu na avatar</p>
+                          </div>
+                          <button onClick={() => { const v = !profileCardAnim; setProfileCardAnim(v); localStorage.setItem('cordyn_profile_card_anim', v ? '1' : '0'); }}
+                            className={`w-11 h-6 rounded-full transition-all shrink-0 relative ${profileCardAnim ? 'bg-indigo-500' : 'bg-zinc-700'}`}>
+                            <span className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200"
+                              style={{left: profileCardAnim ? 'calc(100% - 1.375rem)' : '0.125rem'}}/>
+                          </button>
+                        </div>
+                      </div>
                       </div>{/* end s-accessibility */}
                     </motion.div>
                   )}
@@ -15290,6 +15351,41 @@ export default function App() {
                           <button onClick={()=>toggleAutostart(!autostartEnabled)}
                             className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${autostartEnabled?'bg-indigo-500':'bg-zinc-700'}`}>
                             <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${autostartEnabled?'translate-x-5':'translate-x-0'}`}/>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Powiadomienia systemowe */}
+                      <div className="flex flex-col gap-3">
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pb-1.5 border-b border-white/[0.06]">Powiadomienia systemowe</p>
+                        <div className="p-4 bg-white/[0.02] border border-white/[0.07] rounded-2xl flex flex-col gap-3">
+                          <div className="flex items-start gap-3">
+                            <div className="mt-0.5 w-8 h-8 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0">
+                              <Bell size={15} className="text-amber-400"/>
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-semibold text-white">Powiadomienia Windows</p>
+                              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
+                                Gdy Cordyn jest zminimalizowany lub w tle, nowe wiadomości i DM-y pojawią się jako powiadomienia Windows.
+                                Kliknij przycisk aby zezwolić na powiadomienia — pojawi się systemowy dialog.
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              import('@tauri-apps/plugin-notification').then(async ({ isPermissionGranted, requestPermission }) => {
+                                const granted = await isPermissionGranted();
+                                if (granted) { addToast('Powiadomienia już są włączone!', 'success'); }
+                                else {
+                                  const perm = await requestPermission();
+                                  if (perm === 'granted') addToast('Powiadomienia włączone!', 'success');
+                                  else addToast('Powiadomienia odrzucone przez system', 'error');
+                                }
+                              }).catch(() => addToast('Błąd przy żądaniu uprawnień', 'error'));
+                            }}
+                            className="self-start flex items-center gap-2 px-4 py-2 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-sm font-semibold rounded-xl transition-all">
+                            <Bell size={14}/>
+                            Włącz powiadomienia
                           </button>
                         </div>
                       </div>
@@ -16338,6 +16434,7 @@ export default function App() {
           serverTagColorMap={serverTagColorMap}
           serverTagIconMap={serverTagIconMap}
           serverList={serverList}
+          profileCardAnim={profileCardAnim}
         />
       </>)}
 
