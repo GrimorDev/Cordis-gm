@@ -15974,7 +15974,7 @@ export default function App() {
             className={`fixed top-20 right-6 z-[160] ${gm} p-5 min-w-[17rem] shadow-2xl border-indigo-500/25`}>
             <div className="flex items-center gap-3 mb-4">
               <div className="relative shrink-0">
-                <img src={incomingCall.from.avatar_url||`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(incomingCall.from.username)}&size=40`} className="w-11 h-11 rounded-2xl object-cover shadow-lg" alt=""/>
+                <img src={ava({ avatar_url: incomingCall.from.avatar_url, username: incomingCall.from.username })} className="w-11 h-11 rounded-2xl object-cover shadow-lg" alt="" onError={e=>{(e.currentTarget as HTMLImageElement).src=`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(incomingCall.from.username)}&size=40`;(e.currentTarget as HTMLImageElement).onerror=null;}}/>
                 <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/40">
                   {incomingCall.type==='video'?<Video size={10} className="text-white"/>:<Phone size={10} className="text-white"/>}
                 </div>

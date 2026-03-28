@@ -383,7 +383,7 @@ router.post('/group/create', authMiddleware, async (req: AuthRequest, res) => {
 
     // Get full info
     const participants = await query(
-      `SELECT u.id AS user_id, u.username, u.avatar_url, u.display_name
+      `SELECT u.id AS user_id, u.username, u.avatar_url
        FROM users u WHERE u.id = ANY($1)`,
       [allIds]
     );
