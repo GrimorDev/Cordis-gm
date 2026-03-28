@@ -29,6 +29,7 @@ self.addEventListener('fetch', (event) => {
   if (request.url.includes('/api/') || request.url.includes('/socket.io/')) return;
   if (request.url.includes('r2.cloudflarestorage.com')) return; // R2 signed URLs — pomiń SW
   if (request.url.includes('.r2.dev')) return; // R2 public dev URLs — pomiń SW
+  if (request.url.includes('cdn.mezon.ai')) return; // DeepFilter CDN — brak CORS, pomiń SW (proxy przez /df-cdn/)
 
   event.respondWith(
     caches.match(request).then((cached) => {

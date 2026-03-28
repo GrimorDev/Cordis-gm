@@ -338,7 +338,8 @@ export async function applyDeepFilter(rawStream: MediaStream): Promise<NoisePipe
   try {
     const { DeepFilterNet3Core } = await import('deepfilternet3-noise-filter');
     const ctx  = new AudioContext({ sampleRate: 48000 });
-    const core = new DeepFilterNet3Core({ sampleRate: 48000, noiseReductionLevel: 70 });
+    // Use nginx proxy (/df-cdn/) instead of cdn.mezon.ai directly — avoids CORS block.
+    const core = new DeepFilterNet3Core({ sampleRate: 48000, noiseReductionLevel: 70, cdnUrl: '/df-cdn' });
     await core.initialize();                              // fetch WASM + model from CDN
     const worklet = await core.createAudioWorkletNode(ctx);
     const source  = ctx.createMediaStreamSource(rawStream);
