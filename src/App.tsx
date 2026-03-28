@@ -404,8 +404,8 @@ const LANDING_FEATURES = [
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
       </svg>
     ),
-    title: 'Wiadomości w czasie rzeczywistym',
-    desc: 'Tekst, obrazy, GIF-y i reakcje — wszystko natychmiastowe dzięki Socket.IO.',
+    title: 'Wiadomości i czat',
+    desc: 'Pisz do znajomych, wysyłaj zdjęcia, GIF-y i reaguj emotikonami. Wiadomości pojawiają się błyskawicznie.',
     grad: 'from-indigo-400 to-blue-400',
     glow: 'shadow-indigo-500/20',
     border: 'border-indigo-500/20',
@@ -417,8 +417,8 @@ const LANDING_FEATURES = [
         <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
       </svg>
     ),
-    title: 'Kanały głosowe i wideo',
-    desc: 'Dołącz do rozmów z jednym kliknięciem. WebRTC P2P bez opóźnień.',
+    title: 'Głos i wideo HD',
+    desc: 'Rozmawiaj i wideorozmawiaj ze znajomymi jednym kliknięciem. Bez lagów, bez instalowania dodatkowego oprogramowania.',
     grad: 'from-violet-400 to-purple-400',
     glow: 'shadow-violet-500/20',
     border: 'border-violet-500/20',
@@ -431,7 +431,7 @@ const LANDING_FEATURES = [
       </svg>
     ),
     title: 'Serwery i społeczności',
-    desc: 'Twórz serwery, zarządzaj rolami i kanałami. Pełna kontrola nad uprawnieniami.',
+    desc: 'Stwórz własny serwer dla znajomych lub całej społeczności. Kanały tematyczne, role i zarządzanie — wszystko w Twoich rękach.',
     grad: 'from-emerald-400 to-teal-400',
     glow: 'shadow-emerald-500/20',
     border: 'border-emerald-500/20',
@@ -443,8 +443,8 @@ const LANDING_FEATURES = [
         <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
       </svg>
     ),
-    title: 'Zaproszenia i znajomi',
-    desc: 'Zapraszaj znajomych linkiem. Listy znajomych, wnioski i bezpośrednie wiadomości.',
+    title: 'Znajomi i prywatne grupy',
+    desc: 'Dodawaj znajomych, pisz prywatnie lub zakładaj grupowe rozmowy. Zapraszaj innych prostym linkiem.',
     grad: 'from-pink-400 to-rose-400',
     glow: 'shadow-pink-500/20',
     border: 'border-pink-500/20',
@@ -456,8 +456,8 @@ const LANDING_FEATURES = [
         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
       </svg>
     ),
-    title: 'Bezpieczeństwo i 2FA',
-    desc: 'JWT, szyfrowanie haseł bcrypt, weryfikacja e-mail i dwuetapowe logowanie TOTP.',
+    title: 'Bezpieczne konto',
+    desc: 'Dwuetapowe logowanie i weryfikacja e-mail chronią Twoje konto. Możesz logować się bez obaw.',
     grad: 'from-amber-400 to-orange-400',
     glow: 'shadow-amber-500/20',
     border: 'border-amber-500/20',
@@ -469,8 +469,8 @@ const LANDING_FEATURES = [
         <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
       </svg>
     ),
-    title: 'Integracje zewnętrzne',
-    desc: 'Spotify JAM, Voice DJ, Twitch i Steam — rozbudowane połączenia z Twoimi platformami.',
+    title: 'Twoje ulubione serwisy',
+    desc: 'Słuchaj Spotify ze znajomymi, pokaż co grasz na Steamie lub streamujesz na Twitchu — wszystko widoczne na profilu.',
     grad: 'from-cyan-400 to-sky-400',
     glow: 'shadow-cyan-500/20',
     border: 'border-cyan-500/20',
@@ -654,7 +654,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
 
             {/* Logo + branding */}
             <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-              <img src="/cordyn_logo.png" alt="Cordyn"
+              <img src="/cordyn.png" alt="Cordyn"
                 style={{ width: 72, height: 72, margin: '0 auto 14px', borderRadius: 18, display: 'block' }} />
               <h1 style={{ color: '#f1f5f9', fontSize: 22, fontWeight: 800, margin: '0 0 6px', letterSpacing: '-0.5px' }}>Cordyn</h1>
               <p style={{ color: '#64748b', fontSize: 12, margin: 0 }}>Platforma dla twórców i społeczności</p>
@@ -861,7 +861,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
             {/* Logo */}
             <div className="flex items-center gap-3 shrink-0">
               <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center">
-                <img src="/cordyn_logo.png" alt="Cordyn" className="w-full h-full object-contain"/>
+                <img src="/cordyn.png" alt="Cordyn" className="w-full h-full object-contain"/>
               </div>
               <span className="text-lg font-bold tracking-tight">Cordyn</span>
             </div>
@@ -960,23 +960,22 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
             <motion.div initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} transition={{ duration:.5 }}
               className="inline-flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/25 rounded-full px-5 py-2 mb-8">
               <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"/>
-              <span className="text-sm text-indigo-300 font-medium">Platforma dla twórców i społeczności</span>
+              <span className="text-sm text-indigo-300 font-medium">Komunikacja dla każdego</span>
             </motion.div>
 
             {/* Headline */}
             <motion.h1 initial={{ opacity:0, y:24 }} animate={{ opacity:1, y:0 }} transition={{ duration:.6, delay:.1 }}
               className="text-5xl sm:text-6xl lg:text-7xl font-black leading-[1.05] tracking-tight mb-6">
-              Twoja przestrzeń.{' '}
+              Rozmawiaj. Graj.{' '}
               <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-                Twoje zasady.
+                Buduj społeczność.
               </span>
             </motion.h1>
 
             {/* Subtext */}
             <motion.p initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} transition={{ duration:.5, delay:.2 }}
               className="text-lg sm:text-xl text-zinc-400 max-w-2xl mx-auto leading-relaxed mb-10">
-              Komunikuj się, buduj społeczności i łącz ze znajomymi w czasie rzeczywistym.
-              Głos, wideo, Spotify JAM i wiele więcej — wszystko w jednym miejscu.
+              Cordyn to miejsce, gdzie możesz pisać ze znajomymi, rozmawiać głosowo, zakładać serwery i dzielić się tym, co robisz — bezpłatnie i bez reklam.
             </motion.p>
 
             {/* CTA buttons */}
@@ -1178,19 +1177,18 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   <span className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Bezpieczeństwo</span>
                 </div>
                 <h2 className="text-3xl sm:text-4xl font-black mb-5">
-                  Twoje dane są bezpieczne
+                  Twoje konto jest bezpieczne
                 </h2>
                 <p className="text-zinc-400 leading-relaxed mb-8">
-                  Cordyn kładzie bezpieczeństwo na pierwszym miejscu. Hasła szyfrowane przez bcrypt,
-                  tokeny JWT z odświeżaniem, weryfikacja e-mail i dwuetapowe logowanie chronią Twoje konto.
+                  Bezpieczeństwo to u nas priorytet. Każde konto jest chronione wieloma warstwami zabezpieczeń — możesz korzystać z Cordyna bez obaw.
                 </p>
                 <div className="flex flex-col gap-3">
                   {[
-                    { icon:'🔐', text:'Dwuetapowe logowanie (TOTP + kody zapasowe)' },
-                    { icon:'🔒', text:'Hasła szyfrowane bcrypt (12 rund)' },
-                    { icon:'✉️', text:'Weryfikacja adresu e-mail przy rejestracji' },
-                    { icon:'🛡️', text:'JWT access + refresh tokens z blacklistą' },
-                    { icon:'⚡', text:'Rate limiting i ochrona przed spamem' },
+                    { icon:'🔐', text:'Dwuetapowe logowanie — dodatkowa ochrona przy każdym logowaniu' },
+                    { icon:'✉️', text:'Weryfikacja e-mail — tylko prawdziwe konta mają dostęp' },
+                    { icon:'🛡️', text:'Automatyczne wylogowanie przy podejrzanej aktywności' },
+                    { icon:'🔒', text:'Bezpieczne hasła wymagane przy zakładaniu konta' },
+                    { icon:'⚡', text:'Ochrona przed spamem i nieautoryzowanym dostępem' },
                   ].map(item => (
                     <div key={item.text} className="flex items-center gap-3">
                       <span className="text-xl shrink-0">{item.icon}</span>
@@ -1271,7 +1269,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   className="absolute inset-0 bg-indigo-500/30 blur-3xl rounded-full"/>
                 <div className="relative rounded-3xl border border-indigo-500/25 bg-indigo-500/8 p-10 sm:p-14">
                   <div className="w-16 h-16 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center mx-auto mb-6 overflow-hidden">
-                    <img src="/cordyn_logo.png" alt="Cordyn" className="w-12 h-12 object-contain"/>
+                    <img src="/cordyn.png" alt="Cordyn" className="w-12 h-12 object-contain"/>
                   </div>
                   <h2 className="text-3xl sm:text-4xl font-black mb-4">
                     Gotowy na start?
@@ -1306,7 +1304,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-7 h-7 rounded-lg overflow-hidden">
-                <img src="/cordyn_logo.png" alt="Cordyn" className="w-full h-full object-contain"/>
+                <img src="/cordyn.png" alt="Cordyn" className="w-full h-full object-contain"/>
               </div>
               <span className="text-sm font-bold text-zinc-400">Cordyn</span>
             </div>
@@ -1343,7 +1341,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
               {/* Mobile logo */}
               <div className="flex items-center gap-2 mb-6">
                 <div className="w-7 h-7 rounded-lg overflow-hidden">
-                  <img src="/cordyn_logo.png" alt="Cordyn" className="w-full h-full object-contain"/>
+                  <img src="/cordyn.png" alt="Cordyn" className="w-full h-full object-contain"/>
                 </div>
                 <span className="text-base font-bold text-white">Cordyn</span>
               </div>
@@ -12783,7 +12781,7 @@ export default function App() {
                     <div className="relative">
                       <div className="absolute inset-0 blur-2xl scale-150"
                         style={{background:'radial-gradient(circle,rgba(139,92,246,0.6) 0%,transparent 70%)'}}/>
-                      <img src="/cordyn_logo.png" alt="Cordyn Power"
+                      <img src="/cordyn.png" alt="Cordyn Power"
                         className="relative w-28 h-28 object-contain drop-shadow-[0_0_30px_rgba(139,92,246,0.8)]"/>
                     </div>
                   </motion.div>
@@ -15370,7 +15368,7 @@ export default function App() {
                       className="flex flex-col gap-6">
                       <h3 className="text-sm font-bold text-white">O aplikacji</h3>
                       <div className="flex flex-col items-center gap-4 py-6">
-                        <img src="/cordyn_logo.png" alt="Cordyn" className="w-20 h-20 rounded-2xl shadow-lg"/>
+                        <img src="/cordyn.png" alt="Cordyn" className="w-20 h-20 rounded-2xl shadow-lg"/>
                         <div className="text-center">
                           <div className="text-xl font-bold text-white">Cordyn</div>
                           <div className="text-xs text-zinc-400 mt-1">Platforma dla twórców</div>
