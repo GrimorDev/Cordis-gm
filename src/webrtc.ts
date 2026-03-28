@@ -337,9 +337,13 @@ export async function applyDeepFilter(rawStream: MediaStream): Promise<NoisePipe
   setDFStatus('loading');
   try {
     const { DeepFilterNet3Core } = await import('deepfilternet3-noise-filter');
+    const { STATIC_BASE } = await import('./api');
     const ctx  = new AudioContext({ sampleRate: 48000 });
     // Use nginx proxy (/df-cdn/) instead of cdn.mezon.ai directly — avoids CORS block.
-    const core = new DeepFilterNet3Core({ sampleRate: 48000, noiseReductionLevel: 70, cdnUrl: '/df-cdn' });
+    // STATIC_BASE: '' on web same-origin, 'https://cordyn.pl' in Tauri (where /df-cdn is nginx proxy)
+    // nginx adds Access-Control-Allow-Origin:* so Tauri cross-origin fetch works too.
+    const dfCdnUrl = `${STATIC_BASE}/df-cdn`;
+    const core = new DeepFilterNet3Core({ sampleRate: 48000, noiseReductionLevel: 70, cdnUrl: dfCdnUrl });
     await core.initialize();                              // fetch WASM + model from CDN
     const worklet = await core.createAudioWorkletNode(ctx);
     const source  = ctx.createMediaStreamSource(rawStream);
