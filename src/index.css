@@ -1,5 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
+@import "./MagicCircle.css";
+@import "./LevelUp.css";
 
 @theme {
   --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
@@ -669,6 +671,57 @@ img.av-eff-neon-cat { transition:box-shadow 0.3s; }
   box-shadow:0 0 0 2px #d946ef, 0 0 12px rgba(217,70,239,0.7);
 }
 
+/* ── Super Aura ─────────────────────────────────────────────────── */
+.av-frozen:has(img.av-eff-super-aura) { isolation: isolate; }
+
+img.av-eff-super-aura { transition: box-shadow 0.3s; }
+.av-frozen:hover img.av-eff-super-aura {
+  box-shadow: 0 0 20px 8px rgba(250,204,21,0.4);
+}
+
+/* Inner jagged hexagon ring */
+.av-frozen:has(img.av-eff-super-aura)::before {
+  content: '';
+  position: absolute;
+  inset: -15px;
+  border-radius: 50%;
+  border: 4px solid #fde047;
+  clip-path: polygon(50% 0%, 100% 20%, 100% 80%, 50% 100%, 0% 80%, 0% 20%);
+  mix-blend-mode: overlay;
+  filter: blur(2px);
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+  transition: opacity 0.3s;
+}
+.av-frozen:hover:has(img.av-eff-super-aura)::before {
+  opacity: 1;
+  animation: super-aura-cw 0.5s linear infinite;
+}
+
+/* Outer jagged octagon ring */
+.av-frozen:has(img.av-eff-super-aura)::after {
+  content: '';
+  position: absolute;
+  inset: -25px;
+  border-radius: 50%;
+  border: 2px solid #fef9c3;
+  clip-path: polygon(50% 0%, 80% 10%, 100% 50%, 80% 90%, 50% 100%, 20% 90%, 0% 50%, 20% 10%);
+  mix-blend-mode: overlay;
+  filter: blur(1px);
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+  transition: opacity 0.3s;
+}
+.av-frozen:hover:has(img.av-eff-super-aura)::after {
+  opacity: 1;
+  animation: super-aura-ccw 0.7s linear infinite;
+}
+
+@keyframes super-aura-cw  { to { rotate:  360deg; } }
+@keyframes super-aura-ccw { to { rotate: -360deg; } }
+
 /* Lightbox overlay */
 .lightbox-bg {
   position: fixed; inset: 0; z-index: 9000;
@@ -759,6 +812,17 @@ img.av-eff-neon-cat { transition:box-shadow 0.3s; }
 }
 .av-active img.av-eff-neon-cat {
   box-shadow:0 0 0 2px #d946ef, 0 0 12px rgba(217,70,239,0.7);
+}
+.av-active:has(img.av-eff-super-aura) img.av-eff-super-aura {
+  box-shadow: 0 0 20px 8px rgba(250,204,21,0.4);
+}
+.av-active:has(img.av-eff-super-aura)::before {
+  opacity: 1;
+  animation: super-aura-cw 0.5s linear infinite;
+}
+.av-active:has(img.av-eff-super-aura)::after {
+  opacity: 1;
+  animation: super-aura-ccw 0.7s linear infinite;
 }
 
 /* ── Theme system ── */

@@ -136,6 +136,9 @@ const AVATAR_EFFECTS = [
   { key: 'sakura',       label: 'Sakura',      desc: 'Różowe płatki wiśni opadające wokół avatara' },
   { key: 'demon',        label: 'Demon',       desc: 'Czerwone rogi demona pojawiające się na hover' },
   { key: 'neon-cat',     label: 'Neon Cat',    desc: 'Neonowe uszka kota z falującą animacją' },
+  { key: 'magic-aura',   label: 'Magic Aura',  desc: 'Dwa obracające się magiczne kręgi w kolorze bursztynu' },
+  { key: 'level-up',     label: 'Level Up',    desc: 'Świetlny filar i napis LEVEL UP! przy najechaniu' },
+  { key: 'super-aura',   label: 'Super Aura',  desc: 'Pulsująca złota aura z wirującymi zębatymi pierścieniami' },
 ];
 
 const GRADIENTS = [

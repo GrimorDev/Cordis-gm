@@ -1,0 +1,75 @@
+/* ── Magic Aura avatar effect ───────────────────────────────────── */
+.magic-circle-bg {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='50' cy='50' r='48' fill='none' stroke='%23fbbf24' stroke-width='1'/%3E%3Ccircle cx='50' cy='50' r='40' fill='none' stroke='%23fbbf24' stroke-width='0.5' stroke-dasharray='4 4'/%3E%3Cpolygon points='50,2 98,75 2,75' fill='none' stroke='%23fbbf24' stroke-width='1'/%3E%3Cpolygon points='50,98 98,25 2,25' fill='none' stroke='%23fbbf24' stroke-width='1'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 0 5px rgba(251,191,36,0.8));
+}
+
+.av-frozen:has(img.av-eff-magic-aura) { isolation: isolate; }
+
+.av-frozen:has(img.av-eff-magic-aura)::before {
+  content: '';
+  position: absolute;
+  inset: -25px;
+  border-radius: 50%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='50' cy='50' r='48' fill='none' stroke='%23fbbf24' stroke-width='1'/%3E%3Ccircle cx='50' cy='50' r='40' fill='none' stroke='%23fbbf24' stroke-width='0.5' stroke-dasharray='4 4'/%3E%3Cpolygon points='50,2 98,75 2,75' fill='none' stroke='%23fbbf24' stroke-width='1'/%3E%3Cpolygon points='50,98 98,25 2,25' fill='none' stroke='%23fbbf24' stroke-width='1'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 0 5px rgba(251,191,36,0.8));
+  opacity: 0;
+  transition: opacity 0.5s;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.av-frozen:has(img.av-eff-magic-aura)::after {
+  content: '';
+  position: absolute;
+  inset: -15px;
+  border-radius: 50%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='50' cy='50' r='48' fill='none' stroke='%23fbbf24' stroke-width='1'/%3E%3Ccircle cx='50' cy='50' r='40' fill='none' stroke='%23fbbf24' stroke-width='0.5' stroke-dasharray='4 4'/%3E%3Cpolygon points='50,2 98,75 2,75' fill='none' stroke='%23fbbf24' stroke-width='1'/%3E%3Cpolygon points='50,98 98,25 2,25' fill='none' stroke='%23fbbf24' stroke-width='1'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 0 5px rgba(251,191,36,0.8));
+  opacity: 0;
+  transition: opacity 0.5s;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.av-frozen:hover:has(img.av-eff-magic-aura)::before {
+  opacity: 1;
+  animation: magic-aura-cw 8s linear infinite;
+}
+.av-frozen:hover:has(img.av-eff-magic-aura)::after {
+  opacity: 1;
+  animation: magic-aura-ccw 5s linear infinite;
+}
+
+img.av-eff-magic-aura {
+  border: 2px solid rgba(251,191,36,0.5);
+  transition: border-color 0.5s;
+}
+.av-frozen:hover img.av-eff-magic-aura {
+  border-color: rgba(251,191,36,0.9);
+}
+
+@keyframes magic-aura-cw  { to { rotate:  360deg; } }
+@keyframes magic-aura-ccw { to { rotate: -360deg; } }
+
+/* av-active autoplay */
+.av-active:has(img.av-eff-magic-aura)::before {
+  opacity: 1;
+  animation: magic-aura-cw 8s linear infinite;
+}
+.av-active:has(img.av-eff-magic-aura)::after {
+  opacity: 1;
+  animation: magic-aura-ccw 5s linear infinite;
+}
+.av-active img.av-eff-magic-aura {
+  border-color: rgba(251,191,36,0.9);
+}
