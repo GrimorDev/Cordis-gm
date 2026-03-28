@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS users (
     show_link_previews      BOOLEAN      DEFAULT TRUE,
     privacy_dm_from_strangers BOOLEAN    DEFAULT TRUE,
     avatar_effect           VARCHAR(20)  DEFAULT 'none',
+    card_effect             VARCHAR(30)  DEFAULT 'none',
     created_at    TIMESTAMPTZ  DEFAULT NOW(),
     updated_at    TIMESTAMPTZ  DEFAULT NOW()
 );
@@ -350,3 +351,4 @@ ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS pinned        BOOLEAN      DEFA
 ALTER TABLE server_tags ADD COLUMN IF NOT EXISTS color         VARCHAR(32);
 ALTER TABLE server_tags ADD COLUMN IF NOT EXISTS icon          VARCHAR(32);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_status VARCHAR(20) DEFAULT 'online';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS card_effect VARCHAR(30) DEFAULT 'none';

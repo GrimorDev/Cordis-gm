@@ -1057,6 +1057,100 @@ img.av-eff-arcade-coin { transition: filter 0.3s; }
   animation: profile-card-enter 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
+/* ── Card Effects ─────────────────────────────────────────────── */
+@keyframes card-slide {
+  from { opacity:0; transform: translateY(-10px) scale(0.97); }
+  to   { opacity:1; transform: none; }
+}
+.card-eff-slide { animation: card-slide 0.25s cubic-bezier(0.34,1.56,0.64,1) both; }
+
+@keyframes card-bounce {
+  0%   { opacity:0; transform: scale(0.72); }
+  55%  { opacity:1; transform: scale(1.05); }
+  75%  { transform: scale(0.97); }
+  90%  { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+.card-eff-bounce { animation: card-bounce 0.55s cubic-bezier(0.22,1,0.36,1) both; }
+
+@keyframes card-flip {
+  0%   { opacity:0; transform: perspective(700px) rotateY(-90deg) scale(0.9); }
+  100% { opacity:1; transform: perspective(700px) rotateY(0deg) scale(1); }
+}
+.card-eff-flip { animation: card-flip 0.42s cubic-bezier(0.25,0.46,0.45,0.94) both; }
+
+@keyframes card-neon-in {
+  from { opacity:0; transform: translateY(-12px); }
+  to   { opacity:1; transform: none; }
+}
+.card-eff-neon {
+  animation: card-neon-in 0.35s ease-out both;
+  box-shadow: 0 0 18px rgba(139,92,246,0.55), 0 0 45px rgba(139,92,246,0.2), 0 8px 32px rgba(0,0,0,0.6) !important;
+  border-color: rgba(139,92,246,0.55) !important;
+}
+
+@keyframes card-glitch {
+  0%   { opacity:0; transform: translateX(-10px) skewX(-10deg); filter: saturate(0) brightness(2); }
+  20%  { opacity:1; transform: translateX(5px) skewX(5deg);  filter: saturate(3) hue-rotate(180deg); }
+  40%  { transform: translateX(-2px) skewX(-2deg); filter: saturate(0.5); }
+  65%  { transform: translateX(1px); filter: saturate(2) hue-rotate(60deg); }
+  100% { transform: none; filter: none; }
+}
+.card-eff-glitch { animation: card-glitch 0.42s ease-out both; }
+
+@keyframes card-galaxy-in {
+  0%   { opacity:0; transform: rotate(-10deg) scale(0.82); }
+  65%  { opacity:1; transform: rotate(2deg) scale(1.04); }
+  100% { transform: none; }
+}
+.card-eff-galaxy {
+  animation: card-galaxy-in 0.55s cubic-bezier(0.34,1.56,0.64,1) both;
+  border-color: transparent !important;
+  background-image: linear-gradient(#18182a,#18182a), linear-gradient(135deg,#7c3aed,#ec4899,#3b82f6,#7c3aed) !important;
+  background-origin: border-box !important;
+  background-clip: padding-box,border-box !important;
+  border-width: 2px !important;
+}
+
+@keyframes card-fire {
+  0%   { opacity:0; transform: translateY(22px) scale(0.94); filter: brightness(1.5) saturate(2); }
+  60%  { opacity:1; transform: translateY(-3px) scale(1.01); filter: brightness(1.1); }
+  100% { transform: none; filter: none; }
+}
+.card-eff-fire {
+  animation: card-fire 0.45s ease-out both;
+  box-shadow: 0 0 30px rgba(251,146,60,0.35), 0 0 60px rgba(239,68,68,0.12), 0 8px 32px rgba(0,0,0,0.6) !important;
+  border-color: rgba(251,146,60,0.35) !important;
+}
+
+@keyframes card-holo-in {
+  0%   { opacity:0; transform: scaleY(0.08) perspective(500px) rotateX(30deg); filter: brightness(3) blur(8px); }
+  55%  { opacity:1; transform: scaleY(1.03) perspective(500px) rotateX(-3deg); filter: brightness(1.2); }
+  100% { transform: none; filter: none; }
+}
+.card-eff-hologram {
+  animation: card-holo-in 0.5s ease-out both;
+  box-shadow: 0 0 22px rgba(34,211,238,0.4), 0 0 55px rgba(34,211,238,0.12), 0 8px 32px rgba(0,0,0,0.6) !important;
+  border-color: rgba(34,211,238,0.4) !important;
+  position: relative;
+}
+.card-eff-hologram::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  border-radius: inherit;
+  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(34,211,238,0.04) 3px, rgba(34,211,238,0.04) 4px);
+}
+
+@keyframes card-zoom-in {
+  0%   { opacity:0; transform: scale(0.48); }
+  65%  { opacity:1; transform: scale(1.07); }
+  100% { transform: scale(1); }
+}
+.card-eff-zoom { animation: card-zoom-in 0.42s cubic-bezier(0.34,1.56,0.64,1) both; }
+
 /* ── Theme system ── */
 :root {
   --app-bg: #07070f;

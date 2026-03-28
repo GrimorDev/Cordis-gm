@@ -144,6 +144,18 @@ const AVATAR_EFFECTS = [
   { key: 'angelic-wings', label: 'Angelic Wings', desc: 'Białe skrzydła anioła machające po obu stronach avatara' },
   { key: 'arcade-coin',   label: 'Arcade Coin',   desc: 'Kręcąca się moneta i pikselowa obwódka INSERT COIN' },
 ];
+const CARD_EFFECTS = [
+  { key: 'none',     label: 'Brak',      desc: 'Karta pojawia się bez animacji' },
+  { key: 'slide',    label: 'Slide',     desc: 'Delikatne wjechanie z góry' },
+  { key: 'bounce',   label: 'Bounce',    desc: 'Sprężysty skok' },
+  { key: 'flip',     label: 'Flip 3D',   desc: 'Obrót 3D po osi Y' },
+  { key: 'zoom',     label: 'Zoom',      desc: 'Powiększenie z centrum' },
+  { key: 'neon',     label: 'Neon',      desc: 'Fioletowa poświata' },
+  { key: 'glitch',   label: 'Glitch',    desc: 'Efekt usterki cyfrowej' },
+  { key: 'galaxy',   label: 'Galaxy',    desc: 'Tęczowe obramowanie' },
+  { key: 'fire',     label: 'Fire',      desc: 'Pomarańczowy ogień' },
+  { key: 'hologram', label: 'Hologram',  desc: 'Cyjanowa holografika' },
+] as const;
 
 const GRADIENTS = [
   'from-indigo-600 via-purple-600 to-pink-600',
@@ -4862,7 +4874,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
       style={{ left, top, width: cardW }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}>
-      <div className={`bg-[#18182a] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden${profileCardAnim !== false ? ' profile-card-enter' : ''}`}>
+      <div className={`bg-[#18182a] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden${profileCardAnim !== false ? ` card-eff-${u?.card_effect || 'slide'}` : ''}`}>
         {/* Banner */}
         <div className="h-16 relative" style={u?.banner_url
           ? { backgroundImage: `url(${staticUrl(u.banner_url)})`, backgroundSize: 'cover', backgroundPosition: 'center' }
@@ -5449,6 +5461,7 @@ export default function App() {
   const [accentColor, setAccentColor]           = useState<string>('indigo');
   const [selectedTheme, setSelectedTheme]       = useState<ThemeId>('default');
   const [avatarEffect, setAvatarEffect]         = useState<string>('none');
+  const [cardEffect, setCardEffect]             = useState<string>('none');
   const [compactMessages, setCompactMessages]   = useState<boolean>(false);
   const [fontSize, setFontSize]                 = useState<'small'|'normal'|'large'>('normal');
   const [alwaysShowTimestamps, setAlwaysShowTimestamps] = useState<boolean>(false);
@@ -7597,6 +7610,11 @@ export default function App() {
     if (upd) { setCurrentUser(upd); setEditProf({...upd}); setAvatarEffect(effect); addToast('Efekt avatara zmieniony', 'success'); }
     else addToast('Błąd zapisu', 'error');
   };
+  const saveCardEffect = async (effect: string) => {
+    const upd = await users.updateMe({ card_effect: effect } as any).catch(() => null);
+    if (upd) { setCurrentUser(upd); setEditProf({...upd}); setCardEffect(effect); addToast('Efekt karty zmieniony', 'success'); }
+    else addToast('Błąd zapisu', 'error');
+  };
   const saveCompactMessages = async (compact: boolean) => {
     const upd = await users.updateMe({ compact_messages: compact }).catch(() => null);
     if (upd) { setCurrentUser(upd); setEditProf({...upd}); setCompactMessages(compact); addToast('Układ wiadomości zmieniony', 'success'); }
@@ -7675,6 +7693,7 @@ export default function App() {
   const applyUserPrefs = (u: UserProfile) => {
     setAccentColor(u.accent_color || 'indigo');
     setAvatarEffect(u.avatar_effect || 'none');
+    setCardEffect(u.card_effect || 'none');
     setCompactMessages(u.compact_messages ?? false);
     setNoiseCancel(u.voice_noise_cancel !== false); // default true
     setFontSize((u.font_size as 'small'|'normal'|'large') || 'normal');
@@ -14873,19 +14892,32 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* Profile card animation toggle */}
+                      {/* Card effect picker */}
                       <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1 block font-bold">Karta profilu</label>
-                        <div className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-3 hover:border-white/[0.09] transition-colors">
-                          <div className="flex-1 min-w-0 mr-4">
-                            <p className="text-sm font-medium text-white">Animacja wejścia karty profilu</p>
-                            <p className="text-xs text-zinc-600 mt-0.5">Płynne wjechanie karty przy kliknięciu na avatar</p>
-                          </div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Efekt karty profilu</label>
+                        <p className="text-xs text-zinc-500 mb-3 leading-relaxed">Animacja którą widzą inni gdy otwierają Twoją kartę profilu.</p>
+                        {/* Live preview toggle */}
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="text-xs text-zinc-400">Podgląd animacji (twoje ustawienie)</p>
                           <button onClick={() => { const v = !profileCardAnim; setProfileCardAnim(v); localStorage.setItem('cordyn_profile_card_anim', v ? '1' : '0'); }}
                             className={`w-11 h-6 rounded-full transition-all shrink-0 relative ${profileCardAnim ? 'bg-indigo-500' : 'bg-zinc-700'}`}>
                             <span className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200"
                               style={{left: profileCardAnim ? 'calc(100% - 1.375rem)' : '0.125rem'}}/>
                           </button>
+                        </div>
+                        {/* Effect grid */}
+                        <div className="grid grid-cols-5 gap-2">
+                          {CARD_EFFECTS.map(ef=>(
+                            <button key={ef.key} onClick={()=>saveCardEffect(ef.key)}
+                              title={ef.label}
+                              className={`relative flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${cardEffect===ef.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+                              <div className={`w-9 h-9 rounded-xl bg-[#0f0f1a] border border-white/10 flex items-center justify-center text-[9px] font-bold text-zinc-400 overflow-hidden`}>
+                                <span className="text-[8px] leading-tight text-center px-0.5 break-all">{ef.label}</span>
+                              </div>
+                              <span className="text-[9px] text-zinc-400 font-medium leading-tight text-center">{ef.label}</span>
+                              {cardEffect===ef.key&&<span className="absolute top-1 right-1 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={7} className="text-white"/></span>}
+                            </button>
+                          ))}
                         </div>
                       </div>
                       </div>{/* end s-accessibility */}

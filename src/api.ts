@@ -76,6 +76,7 @@ export interface UserProfile {
   privacy_friend_requests?: boolean | null;
   privacy_dm_from_strangers?: boolean | null;
   avatar_effect?: string | null;
+  card_effect?: string | null;
   active_tag_server_id?: string | null;
   active_tag?: string | null;
   theme_id?: string | null;
