@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
+import Lottie from 'lottie-react';
 import ReactDOM from 'react-dom';
 import { TitleBar, isTauri } from './TitleBar';
 import ImageCropModal, { type CropShape } from './ImageCropModal';
@@ -146,16 +147,17 @@ const AVATAR_EFFECTS = [
 ];
 const CARD_EFFECTS = [
   { key: 'none',      label: 'Brak',         desc: 'Brak efektu na karcie' },
-  { key: 'stars',     label: '✨ Gwiazdy',   desc: 'Migające gwiazdy rozrzucone po karcie' },
+  { key: 'confetti',  label: '🎊 Konfetti',  desc: 'Kolorowe konfetti opadające przez kartę' },
+  { key: 'sparkles',  label: '✨ Iskierki',  desc: 'Magiczne złote iskierki pojawiające się na karcie' },
+  { key: 'sakura',    label: '🌸 Sakura',    desc: 'Różowe płatki wiśni opadające przez kartę' },
   { key: 'snow',      label: '❄️ Śnieg',     desc: 'Delikatnie spadające płatki śniegu' },
-  { key: 'sakura',    label: '🌸 Sakura',    desc: 'Różowe płatki wiśni unoszące się w dół' },
   { key: 'bubbles',   label: '🫧 Bąbelki',   desc: 'Przezroczyste bąbelki unoszące się w górę' },
-  { key: 'fire',      label: '🔥 Ogień',     desc: 'Płomienie unoszące się z dołu karty' },
+  { key: 'fire',      label: '🔥 Ogień',     desc: 'Płomienie wyrastające z dołu karty' },
   { key: 'hologram',  label: '💠 Hologram',  desc: 'Holograficzne linie skanowania' },
-  { key: 'matrix',    label: '💚 Matrix',    desc: 'Zielony deszcz cyfr' },
-  { key: 'lightning', label: '⚡ Burza',     desc: 'Elektryczne błyskawice' },
-  { key: 'rainbow',   label: '🌈 Tęcza',     desc: 'Tęczowe fale kolorów' },
+  { key: 'rainbow',   label: '🌈 Tęcza',     desc: 'Tęczowe fale kolorów przelewające się przez kartę' },
 ] as const;
+// Efekty oparte o Lottie (lokalne JSON z public/lottie/)
+const LOTTIE_EFFECTS = new Set(['confetti','sparkles','sakura','snow','bubbles']);
 
 const GRADIENTS = [
   'from-indigo-600 via-purple-600 to-pink-600',
@@ -4785,16 +4787,52 @@ function SpotifyDisplay({ spotify }: { spotify: SpotifyData }) {
 }
 
 // ─── CardEffectOverlay ────────────────────────────────────────────────────────
+// Cache dla załadowanych Lottie JSON (per efekt, globalnie)
+const lottieCache: Record<string, object | null> = {};
+
+function LottieCardEffect({ effect }: { effect: string }) {
+  const [data, setData] = useState<object | null>(lottieCache[effect] ?? null);
+  useEffect(() => {
+    if (lottieCache[effect]) { setData(lottieCache[effect]); return; }
+    fetch(`/lottie/${effect}.json`)
+      .then(r => r.json())
+      .then(d => { lottieCache[effect] = d; setData(d); })
+      .catch(() => { lottieCache[effect] = null; });
+  }, [effect]);
+  if (!data) return null;
+  return (
+    <Lottie
+      animationData={data}
+      loop={true}
+      autoplay={true}
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+      rendererSettings={{ preserveAspectRatio: 'xMidYMid slice' }}
+    />
+  );
+}
+
 function CardEffectOverlay({ effect }: { effect: string | null | undefined }) {
   if (!effect || effect === 'none') return null;
 
-  const genItems = (count: number, fn: (i: number) => React.CSSProperties & { key?: never }) =>
-    Array.from({ length: count }, (_, i) => fn(i));
+  // Lottie-based effects (płynna animacja motion-design)
+  if (LOTTIE_EFFECTS.has(effect)) {
+    return (
+      <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
+        <LottieCardEffect effect={effect} />
+        {effect === 'sakura' && <div className="absolute inset-0 bg-gradient-to-b from-pink-500/5 to-transparent" />}
+        {effect === 'snow'   && <div className="absolute inset-0 bg-gradient-to-b from-sky-400/5 to-transparent" />}
+      </div>
+    );
+  }
 
+  // CSS-based: FIRE
   if (effect === 'fire') {
-    const items = genItems(14, i => ({
-      left: `${(i * 13 + 3) % 96}%`, bottom: `0`, width: `${8 + i % 6}px`, height: `${14 + i % 10}px`,
-      animationDelay: `${(i * 0.22) % 1.8}s`, animationDuration: `${1.4 + (i % 5) * 0.2}s`,
+    const items = Array.from({ length: 14 }, (_, i) => ({
+      left: `${(i * 13 + 3) % 96}%`, bottom: `0`,
+      width: `${8 + i % 6}px`, height: `${14 + i % 10}px`,
+      // Ujemne opóźnienie = animacja startuje w losowym punkcie cyklu
+      animationDelay: `${-((i * 0.22 + 0.1) % 1.8)}s`,
+      animationDuration: `${1.4 + (i % 5) * 0.2}s`,
     }));
     return (
       <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
@@ -4804,121 +4842,19 @@ function CardEffectOverlay({ effect }: { effect: string | null | undefined }) {
     );
   }
 
-  if (effect === 'stars') {
-    const items = genItems(22, i => ({
-      left: `${(i * 17 + 7) % 96}%`, top: `${(i * 23 + 11) % 90}%`,
-      width: `${2 + i % 3}px`, height: `${2 + i % 3}px`,
-      animationDelay: `${(i * 0.35) % 3.2}s`,
-    }));
-    return (
-      <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
-        {items.map((s, i) => <div key={i} className="card-fx-star absolute rounded-full bg-white" style={s} />)}
-      </div>
-    );
-  }
-
-  if (effect === 'snow') {
-    const items = genItems(16, i => ({
-      left: `${(i * 13 + 5) % 94}%`, top: `-8px`,
-      width: `${3 + i % 3}px`, height: `${3 + i % 3}px`,
-      animationDelay: `${(i * 0.55) % 4.5}s`, animationDuration: `${3.5 + (i % 6) * 0.4}s`,
-    }));
-    return (
-      <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
-        {items.map((s, i) => <div key={i} className="card-fx-snow absolute bg-white rounded-full opacity-80" style={s} />)}
-      </div>
-    );
-  }
-
-  if (effect === 'sakura') {
-    const items = genItems(12, i => ({
-      left: `${(i * 19 + 3) % 90}%`, top: `-12px`,
-      animationDelay: `${(i * 0.7) % 5}s`, animationDuration: `${4 + (i % 5) * 0.5}s`,
-    }));
-    return (
-      <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
-        {items.map((s, i) => (
-          <div key={i} className="card-fx-sakura absolute" style={s}>
-            <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-              <ellipse cx="5" cy="4" rx="5" ry="3" fill="rgba(255,182,193,0.85)"/>
-              <ellipse cx="5" cy="4" rx="3" ry="1.5" fill="rgba(255,218,225,0.6)"/>
-            </svg>
-          </div>
-        ))}
-        <div className="absolute inset-0 bg-gradient-to-b from-pink-500/4 to-transparent" />
-      </div>
-    );
-  }
-
-  if (effect === 'bubbles') {
-    const items = genItems(11, i => ({
-      left: `${(i * 17 + 8) % 88}%`, bottom: `0`,
-      width: `${10 + i % 10}px`, height: `${10 + i % 10}px`,
-      animationDelay: `${(i * 0.8) % 5}s`, animationDuration: `${3.5 + (i % 5) * 0.6}s`,
-    }));
-    return (
-      <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
-        {items.map((s, i) => <div key={i} className="card-fx-bubble absolute rounded-full" style={s} />)}
-      </div>
-    );
-  }
-
-  if (effect === 'matrix') {
-    const CHARS = ['0','1','A','B','C','E','F','8','9','D'];
-    const cols = genItems(10, i => ({
-      left: `${i * 10 + 1}%`,
-      animationDelay: `${i * 0.35}s`, animationDuration: `${2 + (i % 4) * 0.4}s`,
-    }));
-    return (
-      <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
-        {cols.map((s, ci) => (
-          <div key={ci} className="card-fx-matrix-col absolute top-0 flex flex-col gap-0.5" style={s}>
-            {Array.from({ length: 10 }, (_, ri) => (
-              <span key={ri} className="text-[7px] font-mono leading-tight text-green-400" style={{ opacity: 1 - ri * 0.08 }}>
-                {CHARS[(ci * 3 + ri) % CHARS.length]}
-              </span>
-            ))}
-          </div>
-        ))}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#18182a]/60" />
-      </div>
-    );
-  }
-
-  if (effect === 'lightning') {
-    return (
-      <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
-        <div className="card-fx-lightning-bg absolute inset-0" />
-        <svg className="card-fx-lightning-svg absolute inset-0 w-full h-full" viewBox="0 0 280 340" preserveAspectRatio="xMidYMid slice">
-          <polyline points="140,5 108,90 148,90 92,175" stroke="url(#bolt1)" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-          <polyline points="210,15 185,75 215,75 168,148" stroke="url(#bolt2)" strokeWidth="1.8" fill="none" strokeLinecap="round"/>
-          <polyline points="60,30 42,88 68,88 30,155" stroke="url(#bolt2)" strokeWidth="1.5" fill="none" strokeLinecap="round" opacity="0.7"/>
-          <defs>
-            <linearGradient id="bolt1" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#a78bfa"/>
-              <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.3"/>
-            </linearGradient>
-            <linearGradient id="bolt2" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#818cf8"/>
-              <stop offset="100%" stopColor="#a78bfa" stopOpacity="0.2"/>
-            </linearGradient>
-          </defs>
-        </svg>
-        <div className="absolute inset-0 bg-gradient-to-b from-violet-500/5 to-transparent" />
-      </div>
-    );
-  }
-
+  // CSS-based: HOLOGRAM
   if (effect === 'hologram') {
     return (
       <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
         <div className="card-fx-holo-scan absolute inset-0" />
         <div className="card-fx-holo-glow absolute inset-0" />
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-cyan-400/60 to-transparent card-fx-holo-line" />
+        <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-cyan-900/10 to-transparent" />
       </div>
     );
   }
 
+  // CSS-based: RAINBOW
   if (effect === 'rainbow') {
     return (
       <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
