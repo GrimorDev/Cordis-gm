@@ -5991,9 +5991,9 @@ export default function App() {
   // Noise gate sensitivity: 0 = lowest (catches more), 100 = highest (blocks most background)
   // Maps to worklet threshold: 0→0.006, 50→0.03, 100→0.09
   const [noiseGateSens, setNoiseGateSens] = useState<number>(() => {
-    const s = localStorage.getItem('cordyn_ng_sens'); return s ? Math.max(0,Math.min(100,parseInt(s)||60)) : 60;
+    const s = localStorage.getItem('cordyn_ng_sens'); return s ? Math.max(0,Math.min(100,parseInt(s)||50)) : 50;
   });
-  const ngSensToThreshold = (v: number) => 0.006 + (v / 100) * 0.084; // 0→0.006, 100→0.09
+  const ngSensToThreshold = (v: number) => 0.005 + (v / 100) * 0.055; // 0→0.005, 100→0.060
   // Active noise gate pipeline (AudioWorklet + AudioContext); cleanup on re-acquire or leave
   const noisePipelineRef = useRef<NoisePipeline | null>(null);
 
@@ -10788,8 +10788,8 @@ export default function App() {
                         {noiseCancel && (
                           <div className="sm:col-span-3 px-0.5 pt-2">
                             <div className="flex items-center justify-between mb-1.5">
-                              <span className="text-[11px] font-semibold text-white">Czułość bramy szumów</span>
-                              <span className="text-[10px] text-zinc-400">{noiseGateSens < 30 ? 'niska — łapie więcej' : noiseGateSens > 70 ? 'wysoka — blokuje tło' : 'średnia'}</span>
+                              <span className="text-[11px] font-semibold text-white">Próg bramki szumów</span>
+                              <span className="text-[10px] text-zinc-400">{noiseGateSens < 25 ? 'luźny — prawie wszystko przechodzi' : noiseGateSens > 75 ? 'agresywny — tylko głośny głos' : 'zrównoważony'}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-[9px] text-zinc-500 w-10 text-right shrink-0">mało</span>
@@ -10806,7 +10806,7 @@ export default function App() {
                               />
                               <span className="text-[9px] text-zinc-500 w-10 shrink-0">dużo</span>
                             </div>
-                            <p className="text-[9px] text-zinc-600 mt-1">Przesuń w prawo jeśli słychać oddech, klawiaturę lub szumy w tle</p>
+                            <p className="text-[9px] text-zinc-600 mt-1">Bramka ignoruje krótkie dźwięki (klawiatura, stuki w biurko) — reaguje tylko na trwały głos</p>
                           </div>
                         )}
                       </div>
