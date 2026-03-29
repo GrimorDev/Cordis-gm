@@ -826,74 +826,93 @@ img.av-eff-super-aura { transition: box-shadow 0.3s; }
 }
 
 /* ── Crazy Eyes ──────────────────────────────────────────────────── */
-@property --ce-lx { syntax: '<percentage>'; inherits: false; initial-value: 45%; }
-@property --ce-ly { syntax: '<percentage>'; inherits: false; initial-value: 45%; }
-@property --ce-rx { syntax: '<percentage>'; inherits: false; initial-value: 45%; }
-@property --ce-ry { syntax: '<percentage>'; inherits: false; initial-value: 45%; }
+@property --ce-lx { syntax: '<percentage>'; inherits: false; initial-value: 50%; }
+@property --ce-ly { syntax: '<percentage>'; inherits: false; initial-value: 50%; }
+@property --ce-rx { syntax: '<percentage>'; inherits: false; initial-value: 50%; }
+@property --ce-ry { syntax: '<percentage>'; inherits: false; initial-value: 50%; }
 
+/* Left eye pupil darts around wildly */
 @keyframes ce-left {
-  0%,100% { --ce-lx:45%; --ce-ly:45%; }
-  15%     { --ce-lx:78%; --ce-ly:28%; }
-  30%     { --ce-lx:78%; --ce-ly:78%; }
-  45%     { --ce-lx:22%; --ce-ly:78%; }
-  60%     { --ce-lx:62%; --ce-ly:58%; }
-  75%     { --ce-lx:18%; --ce-ly:68%; }
-  90%     { --ce-lx:72%; --ce-ly:18%; }
+  0%       { --ce-lx:50%; --ce-ly:50%; }
+  8%       { --ce-lx:82%; --ce-ly:25%; }
+  18%      { --ce-lx:18%; --ce-ly:80%; }
+  26%      { --ce-lx:75%; --ce-ly:75%; }
+  36%      { --ce-lx:20%; --ce-ly:20%; }
+  44%      { --ce-lx:80%; --ce-ly:50%; }
+  54%      { --ce-lx:15%; --ce-ly:60%; }
+  62%      { --ce-lx:70%; --ce-ly:15%; }
+  72%      { --ce-lx:30%; --ce-ly:85%; }
+  82%      { --ce-lx:85%; --ce-ly:35%; }
+  92%      { --ce-lx:25%; --ce-ly:25%; }
+  100%     { --ce-lx:50%; --ce-ly:50%; }
 }
+/* Right eye — opposite phase so eyes look independent */
 @keyframes ce-right {
-  0%,100% { --ce-rx:45%; --ce-ry:45%; }
-  15%     { --ce-rx:18%; --ce-ry:72%; }
-  30%     { --ce-rx:72%; --ce-ry:22%; }
-  45%     { --ce-rx:62%; --ce-ry:62%; }
-  60%     { --ce-rx:28%; --ce-ry:78%; }
-  75%     { --ce-rx:80%; --ce-ry:28%; }
-  90%     { --ce-rx:22%; --ce-ry:22%; }
+  0%       { --ce-rx:50%; --ce-ry:50%; }
+  8%       { --ce-rx:20%; --ce-ry:75%; }
+  18%      { --ce-rx:80%; --ce-ry:20%; }
+  26%      { --ce-rx:25%; --ce-ry:25%; }
+  36%      { --ce-rx:80%; --ce-ry:80%; }
+  44%      { --ce-rx:15%; --ce-ry:50%; }
+  54%      { --ce-rx:85%; --ce-ry:40%; }
+  62%      { --ce-rx:30%; --ce-ry:85%; }
+  72%      { --ce-rx:75%; --ce-ry:15%; }
+  82%      { --ce-rx:20%; --ce-ry:65%; }
+  92%      { --ce-rx:80%; --ce-ry:80%; }
+  100%     { --ce-rx:50%; --ce-ry:50%; }
 }
 
-.av-frozen:has(img.av-eff-crazy-eyes)::before {
-  content: '';
-  position: absolute;
-  top: 28%; left: 14%;
-  width: 25%; height: 25%;
-  background:
-    radial-gradient(circle 33% at var(--ce-lx) var(--ce-ly), #111 100%, transparent 100%),
-    white;
-  border-radius: 50%;
-  box-shadow: inset 0 1px 4px rgba(0,0,0,0.5), 0 1px 5px rgba(0,0,0,0.5);
-  opacity: 0;
-  transition: opacity 0.3s;
-  z-index: 20;
-  pointer-events: none;
-}
-.av-frozen:hover:has(img.av-eff-crazy-eyes)::before {
-  opacity: 1;
-  animation: ce-left 3s ease-in-out infinite;
-}
+/* clip so pupils can't escape the eye whites */
+.av-frozen:has(img.av-eff-crazy-eyes) { overflow: hidden; }
+
+.av-frozen:has(img.av-eff-crazy-eyes)::before,
 .av-frozen:has(img.av-eff-crazy-eyes)::after {
   content: '';
   position: absolute;
-  top: 28%; right: 14%;
-  width: 25%; height: 25%;
-  background:
-    radial-gradient(circle 33% at var(--ce-rx) var(--ce-ry), #111 100%, transparent 100%),
-    white;
+  width: 28%; height: 28%;
   border-radius: 50%;
-  box-shadow: inset 0 1px 4px rgba(0,0,0,0.5), 0 1px 5px rgba(0,0,0,0.5);
+  box-shadow: inset 0 1px 4px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.6);
   opacity: 0;
-  transition: opacity 0.3s;
+  transition: opacity 0.25s;
   z-index: 20;
   pointer-events: none;
+  top: 26%;
+}
+.av-frozen:has(img.av-eff-crazy-eyes)::before {
+  left: 12%;
+  background:
+    radial-gradient(circle 34% at var(--ce-lx) var(--ce-ly), #111 100%, transparent 0),
+    white;
+}
+.av-frozen:has(img.av-eff-crazy-eyes)::after {
+  right: 12%;
+  background:
+    radial-gradient(circle 34% at var(--ce-rx) var(--ce-ry), #111 100%, transparent 0),
+    white;
+}
+
+/* on hover: show eyes + animate pupils */
+.av-frozen:hover:has(img.av-eff-crazy-eyes)::before {
+  opacity: 1;
+  animation: ce-left 1.8s ease-in-out infinite;
 }
 .av-frozen:hover:has(img.av-eff-crazy-eyes)::after {
   opacity: 1;
-  animation: ce-right 3s ease-in-out infinite 0.1s;
+  animation: ce-right 1.8s ease-in-out infinite 0.15s;
 }
 img.av-eff-crazy-eyes { transition: filter 0.3s; }
-.av-frozen:hover img.av-eff-crazy-eyes { filter: saturate(1.2) brightness(1.05); }
+.av-frozen:hover img.av-eff-crazy-eyes { filter: saturate(1.3) brightness(1.08); }
 
-.av-active:has(img.av-eff-crazy-eyes)::before { opacity:1; animation: ce-left 3s ease-in-out infinite; }
-.av-active:has(img.av-eff-crazy-eyes)::after  { opacity:1; animation: ce-right 3s ease-in-out infinite 0.1s; }
-.av-active img.av-eff-crazy-eyes { filter: saturate(1.2) brightness(1.05); }
+/* av-active = settings preview — always show */
+.av-active:has(img.av-eff-crazy-eyes)::before {
+  opacity: 1;
+  animation: ce-left 1.8s ease-in-out infinite;
+}
+.av-active:has(img.av-eff-crazy-eyes)::after {
+  opacity: 1;
+  animation: ce-right 1.8s ease-in-out infinite 0.15s;
+}
+.av-active img.av-eff-crazy-eyes { filter: saturate(1.3) brightness(1.08); }
 
 /* ── Hacker Smile ────────────────────────────────────────────────── */
 @keyframes hacker-flicker {
@@ -1058,15 +1077,6 @@ img.av-eff-arcade-coin { transition: filter 0.3s; }
 }
 
 /* METEOR — wlatuje z góry-prawej jak meteoryt */
-@keyframes profile-card-enter-meteor {
-  0%   { opacity: 0; transform: translateX(45px) translateY(-35px) scale(0.88) rotate(3deg); }
-  65%  { opacity: 1; transform: translateX(-4px) translateY(3px) scale(1.02) rotate(-0.5deg); }
-  100% { opacity: 1; transform: translateX(0) translateY(0) scale(1) rotate(0deg); }
-}
-.profile-card-enter-meteor {
-  animation: profile-card-enter-meteor 0.22s cubic-bezier(0.15, 0.85, 0.3, 1) forwards;
-}
-
 /* LAVA — wyłania się od dołu z ciepłym blaskiem */
 @keyframes profile-card-enter-lava {
   0%   { opacity: 0; transform: translateY(28px) scale(0.92); filter: brightness(2.2) saturate(1.8) hue-rotate(-15deg); }
