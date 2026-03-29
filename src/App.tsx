@@ -5544,6 +5544,9 @@ export default function App() {
   const mediaRecorderRef  = useRef<MediaRecorder|null>(null);
   const voiceChunksRef    = useRef<Blob[]>([]);
   const voiceRecTimerRef  = useRef<ReturnType<typeof setInterval>|null>(null);
+  const voiceRecSecsRef   = useRef(0); // snapshot of duration when stop fires
+  // Dedicated voice preview state (file + pre-created objectURL + duration)
+  const [voicePreview, setVoicePreview] = useState<{file:File;url:string;duration:number}|null>(null);
   // ── Status timer (universal expiry for dnd/idle/offline) ─────────────────
   const [statusUntil,       setStatusUntil]       = useState<number|null>(()=>{
     try { const v=localStorage.getItem('cordis_status_until'); return v?parseInt(v,10):null; } catch { return null; }
@@ -8323,7 +8326,7 @@ export default function App() {
         return;
       }
     }
-    if ((!content && !attachFile && !attachFiles.length) || sending) return;
+    if ((!content && !attachFile && !attachFiles.length) || sending || voiceRecording) return;
     setSending(true); setSendError('');
     let attachUrl: string | undefined;
     if (attachFiles.length > 1) {
@@ -8357,6 +8360,7 @@ export default function App() {
     const finalContent = content;
     const opts = { reply_to_id: replyTo?.id, attachment_url: attachUrl };
     setMsgInput(''); setAttachFile(null); setAttachPreview(null); setAttachFiles([]); setReplyTo(null);
+    if (voicePreview) { URL.revokeObjectURL(voicePreview.url); setVoicePreview(null); }
     // Clear draft for current conversation
     const curKey = prevConvKeyRef.current;
     if (curKey) { delete msgDraftsRef.current[curKey]; setDraftKeys(s=>{const n=new Set(s);n.delete(curKey);return n;}); }
@@ -8379,36 +8383,62 @@ export default function App() {
   // ── Voice message recording ────────────────────────────────────────────────
   const startVoiceRecord = async () => {
     try {
+      // clear any old preview first
+      if (voicePreview) { URL.revokeObjectURL(voicePreview.url); setVoicePreview(null); }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-      const mr = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/ogg' });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
+                     : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg';
+      const mr = new MediaRecorder(stream, { mimeType });
       voiceChunksRef.current = [];
+      voiceRecSecsRef.current = 0;
       mr.ondataavailable = e => { if (e.data.size > 0) voiceChunksRef.current.push(e.data); };
-      mr.onstop = async () => {
+      mr.onstop = () => {
         stream.getTracks().forEach(t => t.stop());
         const blob = new Blob(voiceChunksRef.current, { type: mr.mimeType });
-        if (blob.size < 500) return; // too short
+        if (blob.size < 100) return; // too short / cancelled
         const ext = mr.mimeType.includes('webm') ? 'webm' : 'ogg';
         const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: mr.mimeType });
-        setAttachFile(file); setAttachPreview(null);
+        const url  = URL.createObjectURL(blob);
+        const duration = voiceRecSecsRef.current;
+        setVoicePreview({ file, url, duration });
       };
       mr.start(100);
       mediaRecorderRef.current = mr;
-      setVoiceRecording(true); setVoiceRecSecs(0);
-      voiceRecTimerRef.current = setInterval(() => setVoiceRecSecs(s => s + 1), 1000);
+      setVoiceRecording(true); setVoiceRecSecs(0); voiceRecSecsRef.current = 0;
+      voiceRecTimerRef.current = setInterval(() => {
+        voiceRecSecsRef.current += 1;
+        setVoiceRecSecs(s => s + 1);
+      }, 1000);
     } catch { addToast('Brak dostępu do mikrofonu', 'error'); }
   };
   const stopVoiceRecord = () => {
+    // snapshot duration before clearing
     mediaRecorderRef.current?.stop();
     mediaRecorderRef.current = null;
     setVoiceRecording(false);
     if (voiceRecTimerRef.current) { clearInterval(voiceRecTimerRef.current); voiceRecTimerRef.current = null; }
   };
   const cancelVoiceRecord = () => {
-    voiceChunksRef.current = [];
+    voiceChunksRef.current = []; // clear chunks so onstop produces empty blob → skipped
     mediaRecorderRef.current?.stop();
     mediaRecorderRef.current = null;
     setVoiceRecording(false);
     if (voiceRecTimerRef.current) { clearInterval(voiceRecTimerRef.current); voiceRecTimerRef.current = null; }
+    if (voicePreview) { URL.revokeObjectURL(voicePreview.url); setVoicePreview(null); }
+  };
+  const discardVoicePreview = () => {
+    if (voicePreview) { URL.revokeObjectURL(voicePreview.url); setVoicePreview(null); }
+  };
+  const sendVoicePreview = () => {
+    if (!voicePreview) return;
+    setAttachFile(voicePreview.file);
+    setAttachPreview(null);
+    setVoicePreview(null);
+    // submit on next tick after state update
+    setTimeout(() => {
+      const form = msgInputRef.current?.closest('form');
+      form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    }, 0);
   };
 
   const ALLOWED_MIME_PREFIXES = ['image/','video/','audio/','application/pdf','text/','application/zip','application/x-zip','application/json','application/msword','application/vnd.'];
@@ -12293,6 +12323,41 @@ export default function App() {
                       <button onClick={()=>setReplyTo(null)} className="text-zinc-600 hover:text-white ml-2 shrink-0"><X size={11}/></button>
                     </motion.div>
                   )}
+                  {/* ── Voice message preview ── */}
+                  {voicePreview&&(
+                    <motion.div key="voice-preview" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:8}}
+                      className="mb-2 rounded-2xl border border-rose-500/25 bg-rose-500/[0.07] px-4 py-3 overflow-hidden">
+                      <div className="flex items-center gap-2 mb-2.5">
+                        <div className="w-7 h-7 rounded-full bg-rose-500/20 flex items-center justify-center shrink-0">
+                          <Mic size={13} className="text-rose-400"/>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-rose-300 leading-tight">Wiadomość głosowa</p>
+                          <p className="text-[10px] text-rose-400/70 leading-tight">
+                            {Math.floor(voicePreview.duration/60)}:{String(voicePreview.duration%60).padStart(2,'0')} · Posłuchaj przed wysłaniem
+                          </p>
+                        </div>
+                        <button onClick={discardVoicePreview} title="Usuń nagranie"
+                          className="w-6 h-6 rounded-lg flex items-center justify-center text-zinc-500 hover:text-rose-400 hover:bg-rose-500/15 transition-all shrink-0">
+                          <Trash2 size={12}/>
+                        </button>
+                      </div>
+                      <audio controls src={voicePreview.url}
+                        className="w-full rounded-xl"
+                        style={{height:'36px', accentColor:'#f43f5e'}}
+                        onError={()=>addToast('Błąd odtwarzania nagrania','error')}/>
+                      <div className="flex justify-end gap-2 mt-2.5">
+                        <button onClick={discardVoicePreview}
+                          className="px-3 py-1.5 rounded-xl text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/[0.06] border border-white/[0.06] transition-all">
+                          Usuń
+                        </button>
+                        <button onClick={sendVoicePreview} disabled={sending}
+                          className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-rose-500 hover:bg-rose-400 disabled:opacity-50 text-white flex items-center gap-1.5 transition-all active:scale-95">
+                          <Send size={11}/> Wyślij
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
                   {attachPreview&&(
                     <motion.div initial={{opacity:0,height:0}} animate={{opacity:1,height:'auto'}} exit={{opacity:0,height:0}} className="relative inline-block mb-2 overflow-hidden">
                       <img src={attachPreview} alt="" className="h-16 rounded-lg object-cover"/>
@@ -12603,7 +12668,7 @@ export default function App() {
                           {showEmojiPicker && <EmojiPicker onSelect={insertEmoji} onClose={() => setShowEmojiPicker(false)} serverEmojis={activeView==='servers'&&activeServer ? (serverEmojis.get(activeServer)||[]) : []}/>}
                         </div>
                         {/* Voice message button */}
-                        {!msgInput.trim() && !attachFile && !voiceRecording && (
+                        {!msgInput.trim() && !attachFile && !voiceRecording && !voicePreview && (
                           <button type="button" onMouseDown={e=>{e.preventDefault();startVoiceRecord();}}
                             title="Nagraj wiadomość głosową"
                             className="w-8 h-8 rounded-xl flex items-center justify-center text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all shrink-0 active:scale-90">
@@ -12612,12 +12677,21 @@ export default function App() {
                         )}
                         {voiceRecording && (
                           <div className="flex items-center gap-1.5 shrink-0">
-                            <span className="text-xs font-mono text-rose-400 animate-pulse">{Math.floor(voiceRecSecs/60)}:{String(voiceRecSecs%60).padStart(2,'0')}</span>
-                            <button type="button" onClick={cancelVoiceRecord} title="Anuluj" className="w-7 h-7 rounded-xl flex items-center justify-center text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all"><X size={13}/></button>
-                            <button type="button" onClick={stopVoiceRecord} title="Zatrzymaj i wyślij" className="w-8 h-8 rounded-xl flex items-center justify-center bg-rose-500 hover:bg-rose-400 text-white transition-all active:scale-90"><Square size={11} className="fill-white"/></button>
+                            <span className="flex items-center gap-1 text-xs font-mono text-rose-400">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse inline-block"/>
+                              {Math.floor(voiceRecSecs/60)}:{String(voiceRecSecs%60).padStart(2,'0')}
+                            </span>
+                            <button type="button" onClick={cancelVoiceRecord} title="Anuluj nagranie"
+                              className="w-7 h-7 rounded-xl flex items-center justify-center text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all">
+                              <X size={13}/>
+                            </button>
+                            <button type="button" onClick={stopVoiceRecord} title="Zatrzymaj — podgląd i wyślij"
+                              className="w-8 h-8 rounded-xl flex items-center justify-center bg-rose-500 hover:bg-rose-400 text-white transition-all active:scale-90">
+                              <Square size={11} className="fill-white"/>
+                            </button>
                           </div>
                         )}
-                        <button type="submit" disabled={(!msgInput.trim()&&!attachFile&&!attachFiles.length)||sending||voiceRecording}
+                        <button type="submit" disabled={(!msgInput.trim()&&!attachFile&&!attachFiles.length)||sending||voiceRecording||!!voicePreview}
                           className="w-8 h-8 rounded-xl bg-indigo-500 hover:bg-indigo-400 disabled:opacity-25 disabled:cursor-not-allowed flex items-center justify-center text-white transition-all duration-150 active:scale-90 shrink-0 shadow-lg shadow-indigo-500/25">
                           {sending?<Loader2 size={14} className="animate-spin"/>:<Send size={14}/>}
                         </button>
