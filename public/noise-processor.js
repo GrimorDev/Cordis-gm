@@ -1,133 +1,116 @@
 /**
- * Cordis Noise Processor — AudioWorkletProcessor
- * Adaptive noise gate with dynamic noise floor tracking.
- * Processes 128-sample frames at the AudioContext sample rate (48 kHz).
+ * Cordis Noise Processor v3 — Dual-Envelope Transient-Rejecting Gate
  *
- * Technique:
- *  1. Track noise floor: slow-running minimum of the signal envelope (3 s window).
- *  2. Gate threshold = max(MIN_THRESHOLD, noiseFloor × FLOOR_MULTIPLIER).
- *     Adapts to the room: quieter room → lower gate → captures soft speech.
- *  3. Soft-knee gate: full pass above threshold, quadratic fade below 30 % of it.
- *  4. Smooth gain (15 ms) + HOLD time to eliminate click artefacts and choppy speech.
+ * Core idea: TWO envelope followers with different attack times:
+ *   envFast (3 ms)  — tracks all peaks including brief transients
+ *   envSlow (80 ms) — tracks SUSTAINED sounds only
  *
- * Parameters (AudioWorkletNode.parameters):
- *  • enabled   [0|1]  — bypass when 0            (default 1)
- *  • threshold [0-1]  — minimum gate floor (lin.) (default 0.03 ≈ −30 dBFS)
+ * Gate decision uses envSlow exclusively:
+ *   → keyboard clicks (5-20 ms) barely build envSlow → gate stays closed
+ *   → desk thumps, mouse taps (10-50 ms) same → gate stays closed
+ *   → voice (sustained 100 ms+) builds envSlow → gate opens
  *
- * Tuning (v2 — aggressive defaults to block breathing/typing):
- *  - MIN_THRESHOLD raised to 0.012 (~−38 dBFS): breathing/distant sounds blocked
- *  - FLOOR_MULT raised to 6.0: gate opens only well above ambient noise
- *  - default threshold 0.03 (~−30 dBFS): speech passes, keyboard/breathing blocked
- *  - Release extended to 500 ms: prevents choppy voice between words
- *  - HOLD_FRAMES: gate stays open 180 ms after signal drops — smooth voice tail
+ * No adaptive noise floor in v3 — the slow envelope inherently
+ * rejects brief transients so a fixed threshold works reliably.
+ *
+ * Parameters:
+ *   enabled   [0|1]  default 1  — bypass when 0
+ *   threshold [0-1]  default 0.02 (~−34 dBFS) — how loud sustained sound needs to be
  */
-const MIN_THRESHOLD   = 0.012;  // absolute minimum gate floor (~−38 dBFS) — was 0.003
-const FLOOR_MULT      = 6.0;    // gate opens at 6× noise floor — was 3.5
-const KNEE_LO         = 0.3;    // soft-knee low edge  (fraction of threshold)
-const KNEE_HI         = 1.0;    // soft-knee high edge (fraction of threshold)
+const MIN_THRESHOLD = 0.008;  // ~−42 dBFS absolute floor
+
+const KNEE_LO = 0.30;   // soft-knee low edge  (fraction of threshold)
+const KNEE_HI = 1.00;   // soft-knee high edge
 
 class CordisNoiseProcessor extends AudioWorkletProcessor {
   static get parameterDescriptors() {
     return [
       { name: 'enabled',   defaultValue: 1,    minValue: 0, maxValue: 1 },
-      { name: 'threshold', defaultValue: 0.03, minValue: 0, maxValue: 1 },  // was 0.006
+      { name: 'threshold', defaultValue: 0.02, minValue: 0, maxValue: 1 },
     ];
   }
 
   constructor() {
     super();
-    this._env       = 0;
-    this._gain      = 1;
-    this._noiseFloor = 0;
-    this._holdFrames = 0;  // hold counter — gate stays open for HOLD_FRAMES after drop
+    this._envFast     = 0;
+    this._envSlow     = 0;
+    this._gain        = 0;
+    this._holdSamples = 0;
 
-    this._attackC  = 0;
-    this._releaseC = 0;
-    this._gainC    = 0;
-    this._floorC   = 0;
-    this._maxHold  = 0;
-    this._ready    = false;
+    // coefficients — computed lazily on first process() call
+    this._aFast   = 0;   // fast attack  3 ms
+    this._aSlow   = 0;   // slow attack 80 ms
+    this._relC    = 0;   // release     600 ms
+    this._gainC   = 0;   // gain smooth  15 ms
+    this._maxHold = 0;   // hold        300 ms in samples
+    this._ready   = false;
   }
 
   _init() {
-    const sr = sampleRate;
-    this._attackC  = 1 - Math.exp(-1 / (sr * 0.003));  // 3 ms attack
-    this._releaseC = 1 - Math.exp(-1 / (sr * 0.500));  // 500 ms release (was 250 ms)
-    this._gainC    = 1 - Math.exp(-1 / (sr * 0.015));  // 15 ms gain smooth
-    this._floorC   = 1 - Math.exp(-1 / (sr * 3.0));    // 3 s noise floor decay (was 2 s)
-    // Hold = 180 ms expressed in 128-sample frames
-    this._maxHold  = Math.round(sr * 0.18 / 128);
-    this._ready    = true;
+    const sr = sampleRate; // global in AudioWorkletProcessor scope
+    this._aFast   = 1 - Math.exp(-1 / (sr * 0.003));  // 3 ms
+    this._aSlow   = 1 - Math.exp(-1 / (sr * 0.080));  // 80 ms  ← key: ignores transients
+    this._relC    = 1 - Math.exp(-1 / (sr * 0.600));  // 600 ms release
+    this._gainC   = 1 - Math.exp(-1 / (sr * 0.015));  // 15 ms gain smooth
+    this._maxHold = Math.round(sr * 0.300);             // 300 ms hold in samples
+    this._ready   = true;
   }
 
   process(inputs, outputs, parameters) {
     const inp = inputs[0]?.[0];
     const out = outputs[0]?.[0];
     if (!inp || !out) return true;
-
     if (!this._ready) this._init();
 
-    const enabled   = (parameters.enabled[0]   ?? 1)    > 0.5;
-    const minThresh = (parameters.threshold[0]  ?? 0.03);
+    const enabled   = (parameters.enabled[0]  ?? 1)    > 0.5;
+    const minThresh = (parameters.threshold[0] ?? 0.02);
+    const threshold = Math.max(MIN_THRESHOLD, minThresh);
+    const loEdge    = threshold * KNEE_LO;
+    const hiEdge    = threshold * KNEE_HI;
 
-    const aC = this._attackC;
-    const rC = this._releaseC;
+    const aF = this._aFast;
+    const aS = this._aSlow;
+    const rC = this._relC;
     const gC = this._gainC;
-    const fC = this._floorC;
-
-    // Compute frame RMS to decide hold at frame level (faster than per-sample)
-    let sumSq = 0;
-    for (let i = 0; i < inp.length; i++) sumSq += inp[i] * inp[i];
-    const frameRms = Math.sqrt(sumSq / inp.length);
-
-    // Update noise floor at frame level (cheaper, still accurate)
-    if (frameRms < this._noiseFloor || this._noiseFloor < 1e-8) {
-      this._noiseFloor = frameRms * 0.1 + this._noiseFloor * 0.9;
-    } else {
-      this._noiseFloor += fC * (frameRms - this._noiseFloor);
-    }
-
-    const threshold = Math.max(minThresh, MIN_THRESHOLD, this._noiseFloor * FLOOR_MULT);
 
     for (let i = 0; i < inp.length; i++) {
       const sample = inp[i];
 
-      if (!enabled) {
-        out[i] = sample;
-        continue;
-      }
+      if (!enabled) { out[i] = sample; continue; }
 
       const abs = Math.abs(sample);
 
-      // ── Envelope follower ────────────────────────────────────────────
-      if (abs > this._env) {
-        this._env += aC * (abs - this._env);
-      } else {
-        this._env += rC * (abs - this._env);
-      }
+      // ── Fast envelope: tracks everything (used for reference only) ──
+      this._envFast = abs > this._envFast
+        ? this._envFast + aF * (abs - this._envFast)
+        : this._envFast + rC * (abs - this._envFast);
 
-      // ── Soft-knee gate with hold ─────────────────────────────────────
-      const loEdge = threshold * KNEE_LO;
-      const hiEdge = threshold * KNEE_HI;
+      // ── Slow envelope: tracks SUSTAINED content only ─────────────────
+      // A 10 ms keyboard click at amplitude 0.5 builds envSlow to only ~0.04
+      // A 150 ms speech vowel at amplitude 0.1 builds envSlow to ~0.09
+      this._envSlow = abs > this._envSlow
+        ? this._envSlow + aS * (abs - this._envSlow)
+        : this._envSlow + rC * (abs - this._envSlow);
+
+      // ── Gate decision (envSlow only — transient-immune) ───────────────
       let targetGain;
-
-      if (this._env >= hiEdge) {
-        // Signal above threshold — open gate and reset hold counter
-        this._holdFrames = this._maxHold;
+      if (this._envSlow >= hiEdge) {
+        // Sustained signal above threshold — open gate + reset hold
+        this._holdSamples = this._maxHold;
         targetGain = 1;
-      } else if (this._holdFrames > 0) {
-        // In hold period — keep gate fully open even though signal dropped
-        this._holdFrames--;
+      } else if (this._holdSamples > 0) {
+        // Hold: gate stays open after signal drops (smooth voice tail, no clipping)
+        this._holdSamples--;
         targetGain = 1;
-      } else if (this._env <= loEdge) {
+      } else if (this._envSlow <= loEdge) {
         targetGain = 0;
       } else {
-        // Soft knee: quadratic fade 0→1 over [loEdge, hiEdge]
-        const t = (this._env - loEdge) / (hiEdge - loEdge);
+        // Soft knee: quadratic fade between loEdge and hiEdge
+        const t = (this._envSlow - loEdge) / (hiEdge - loEdge);
         targetGain = t * t;
       }
 
-      // ── Smooth gain ──────────────────────────────────────────────────
+      // ── Smooth gain to avoid click artefacts ─────────────────────────
       this._gain += gC * (targetGain - this._gain);
       out[i] = sample * this._gain;
     }
