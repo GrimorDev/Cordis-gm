@@ -25,17 +25,25 @@
       (function () {
         if (localStorage.getItem('cordis_just_updated')) {
           localStorage.removeItem('cordis_just_updated');
-          if ('caches' in window) {
-            caches.keys().then(function (names) {
-              names.forEach(function (n) { caches.delete(n); });
+          // Unregister service workers so they don't serve stale files
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              regs.forEach(function(r) { r.unregister(); });
             });
           }
-          // Navigate to cache-busted URL so webview fetches fresh assets
-          var clean = location.href.split('?')[0];
-          location.replace(clean + '?_r=' + Date.now());
-        } else if (location.search.indexOf('_r=') !== -1) {
-          // Already on fresh URL — strip the cache-buster param silently
-          history.replaceState(null, '', location.pathname);
+          // Clear all caches, then force a hard reload — no cache-bust URL
+          // (URL query params break Tauri local file serving)
+          if ('caches' in window) {
+            caches.keys().then(function (names) {
+              return Promise.all(names.map(function (n) { return caches.delete(n); }));
+            }).then(function () {
+              location.reload(true);
+            }).catch(function () {
+              location.reload(true);
+            });
+          } else {
+            location.reload(true);
+          }
         }
       })();
     </script>

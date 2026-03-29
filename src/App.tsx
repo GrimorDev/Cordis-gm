@@ -156,7 +156,6 @@ const CARD_EFFECTS = [
   { key: 'matrix',    label: '💻 Matrix',    desc: 'Zielony deszcz kodu jak w Matriksie' },
   { key: 'vortex',    label: '🌀 Wir',       desc: 'Kolorowe cząsteczki spiralnie wciągane do centrum' },
   { key: 'glitch',    label: '📺 Glitch',    desc: 'Cyfrowe zniekształcenia i artefakty ekranu' },
-  { key: 'meteor',    label: '☄️ Meteor',    desc: 'Spadające meteory z ognistymi ogonami (specjalne wejście karty)' },
   { key: 'lava',      label: '🌋 Lawa',      desc: 'Bulgocząca lawa — świecące blobby (specjalne wejście karty)' },
   { key: 'ice',       label: '🧊 Lód',       desc: 'Kryształy lodu opadające z góry (specjalne wejście karty)' },
 ] as const;
@@ -4838,12 +4837,11 @@ function SpotifyDisplay({ spotify }: { spotify: SpotifyData }) {
 }
 
 // ─── CardEffectCanvas — canvas-based particle effects ─────────────────────────
-const CANVAS_EFFECTS = new Set(['fire','smoke','teleport','matrix','vortex','glitch','meteor','lava','ice']);
+const CANVAS_EFFECTS = new Set(['fire','smoke','teleport','matrix','vortex','glitch','lava','ice']);
 // Efekty z własną animacją wejścia karty profilu
 const CUSTOM_ENTER: Record<string,string> = {
-  meteor: 'profile-card-enter-meteor',
-  lava:   'profile-card-enter-lava',
-  ice:    'profile-card-enter-ice',
+  lava: 'profile-card-enter-lava',
+  ice:  'profile-card-enter-ice',
 };
 
 function CardEffectCanvas({ effect }: { effect: string }) {
@@ -5075,44 +5073,6 @@ function CardEffectCanvas({ effect }: { effect: string }) {
     }
 
     /* METEOR */
-    function drawMeteor() {
-      type M = { x:number;y:number;vx:number;vy:number;life:number;maxLife:number;sz:number;trail:{x:number;y:number}[] };
-      const meteors: M[] = [];
-      function tick() {
-        ctx.clearRect(0,0,w,h);
-        if (frame%28===0) {
-          const a=Math.PI*.63+(Math.random()-.5)*.28, spd=7+Math.random()*7;
-          meteors.push({x:w*.15+Math.random()*w*.9,y:-8,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,
-            life:0,maxLife:28+Math.random()*24,sz:1.5+Math.random()*2.5,trail:[]});
-        }
-        ctx.save(); ctx.globalCompositeOperation='lighter';
-        for (let i=meteors.length-1;i>=0;i--) {
-          const m=meteors[i];
-          m.trail.push({x:m.x,y:m.y});
-          if(m.trail.length>16) m.trail.shift();
-          m.x+=m.vx; m.y+=m.vy; m.life++;
-          if(m.life>=m.maxLife||m.y>h+20){meteors.splice(i,1);continue;}
-          const headA=(1-m.life/m.maxLife)*.95;
-          m.trail.forEach((pt,ti)=>{
-            const tf=ti/m.trail.length,ta=tf*headA*.6;
-            const g=ctx.createRadialGradient(pt.x,pt.y,0,pt.x,pt.y,m.sz*tf+1);
-            g.addColorStop(0,`rgba(255,235,160,${ta})`);
-            g.addColorStop(.6,`rgba(255,130,30,${ta*.4})`);
-            g.addColorStop(1,'rgba(200,60,0,0)');
-            ctx.fillStyle=g; ctx.beginPath(); ctx.arc(pt.x,pt.y,m.sz*tf+1,0,Math.PI*2); ctx.fill();
-          });
-          const hg=ctx.createRadialGradient(m.x,m.y,0,m.x,m.y,m.sz*2.5);
-          hg.addColorStop(0,`rgba(255,255,220,${headA})`);
-          hg.addColorStop(.35,`rgba(255,200,80,${headA*.65})`);
-          hg.addColorStop(1,'rgba(255,80,0,0)');
-          ctx.fillStyle=hg; ctx.beginPath(); ctx.arc(m.x,m.y,m.sz*2.5,0,Math.PI*2); ctx.fill();
-        }
-        ctx.restore();
-        frame++; raf=requestAnimationFrame(tick);
-      }
-      tick();
-    }
-
     /* LAVA */
     function drawLava() {
       type Blob = { x:number;y:number;vx:number;vy:number;r:number;hue:number;phase:number };
@@ -5179,7 +5139,6 @@ function CardEffectCanvas({ effect }: { effect: string }) {
     else if (effect==='matrix')   drawMatrix();
     else if (effect==='vortex')   drawVortex();
     else if (effect==='glitch')   drawGlitch();
-    else if (effect==='meteor')   drawMeteor();
     else if (effect==='lava')     drawLava();
     else if (effect==='ice')      drawIce();
 
@@ -6550,8 +6509,20 @@ export default function App() {
       if (update?.available) {
         await update.downloadAndInstall();
         // Mark that the app was just updated so the new instance does a hard
-        // refresh of the webview cache on startup (clears stale JS/CSS assets).
+        // reload after clearing all stale webview/SW caches on startup.
         localStorage.setItem('cordis_just_updated', '1');
+        // Pre-clear caches and unregister SW now, before relaunch, so the
+        // new instance starts completely fresh (no stale assets → no black screen).
+        try {
+          if ('serviceWorker' in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(regs.map(r => r.unregister()));
+          }
+          if ('caches' in window) {
+            const names = await caches.keys();
+            await Promise.all(names.map(n => caches.delete(n)));
+          }
+        } catch { /* ignore cleanup errors — relaunch will still force reload */ }
         await relaunch();
       }
     } catch (e) {
