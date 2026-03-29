@@ -63,51 +63,27 @@ function makeAudioEl(): HTMLAudioElement {
   return el;
 }
 
+/**
+ * Attach a remote WebRTC audio stream to a hidden <audio> element for playback.
+ *
+ * Design: direct srcObject only — NO AudioContext chain.
+ * Previous versions routed through AudioContext (GainNode → dest.stream) but:
+ * - AudioContext created outside a user-gesture starts SUSPENDED → dest.stream silent
+ * - ctx.resume() may fail or be delayed → prolonged silence / no audio at all
+ * Conclusion: native srcObject = stream is 100% reliable for WebRTC playback.
+ * Volume > 100% (GainNode feature) is sacrificed for guaranteed functionality.
+ */
 export function attachRemoteAudio(userId: string, stream: MediaStream) {
-  // Close stale AudioContext from previous connection so we don't leak or double-play
-  const stale = gainNodes.get(userId);
-  if (stale) { stale.ctx.close().catch(() => {}); gainNodes.delete(userId); }
-
   let el = remoteAudios.get(userId);
   if (!el) { el = makeAudioEl(); remoteAudios.set(userId, el); }
-
-  // Route: rawStream → GainNode → processedStream → <audio> element
-  // Using createMediaStreamSource (not createMediaElementSource) avoids the
-  // "already connected" InvalidStateError and works regardless of autoplay policy.
-  // ── Step 1: immediate playback via direct srcObject ───────────────────────
-  // Set raw stream FIRST so audio plays right away — no AudioContext dependency.
-  // Without this, dest.stream is silent while AudioContext is suspended and the
-  // user hears nothing until ctx.resume() resolves (which may require a gesture).
   el.srcObject = stream;
-  el.play().catch(() => {});
-
-  // ── Step 2: async — set up GainNode chain for volume > 100% support ────────
-  // Only switch el.srcObject to dest.stream AFTER AudioContext is confirmed running.
-  try {
-    const ctx      = new AudioContext();           // system default sample rate
-    const src      = ctx.createMediaStreamSource(stream);
-    const gainNode = ctx.createGain();
-    const dest     = ctx.createMediaStreamDestination();
-    gainNode.gain.value = 1.0;
-    src.connect(gainNode);
-    gainNode.connect(dest);
-    gainNodes.set(userId, { ctx, gain: gainNode });
-    ctx.resume().then(() => {
-      // Switch to processed stream only once AudioContext is running
-      const liveEl = remoteAudios.get(userId);
-      if (liveEl && liveEl.srcObject === stream) {
-        liveEl.srcObject = dest.stream;
-        liveEl.play().catch(() => {});
-      }
-    }).catch(() => {
-      // ctx.resume() failed — keep playing direct stream; clean up unused GainNode
-      gainNodes.delete(userId);
-      ctx.close().catch(() => {});
-    });
-    el.addEventListener('play', () => ctx.resume().catch(() => {}), { once: true });
-  } catch {
-    // AudioContext not available — volume capped at 100% via el.volume fallback
-  }
+  // Explicit play() — autoplay attribute alone is not always honoured by the browser.
+  el.play().catch(err => {
+    console.warn('[Cordis] attachRemoteAudio play() blocked:', err.name, '— will retry on next user interaction');
+    // Retry on next user gesture (e.g. click anywhere)
+    const retry = () => { el!.play().catch(() => {}); document.removeEventListener('click', retry); };
+    document.addEventListener('click', retry, { once: true });
+  });
 }
 
 /** Separate element for screen-share audio so it doesn't overwrite mic audio. */
@@ -123,29 +99,12 @@ export function detachRemoteAudio(userId: string) {
   if (el) { el.srcObject = null; el.remove(); remoteAudios.delete(userId); }
   const sel = remoteScreenAudios.get(userId);
   if (sel) { sel.srcObject = null; sel.remove(); remoteScreenAudios.delete(userId); }
-  // Clean up GainNode to prevent memory leaks and stale AudioContext connections
-  const gn = gainNodes.get(userId);
-  if (gn) { gn.ctx.close().catch(() => {}); gainNodes.delete(userId); }
 }
 
-// GainNode map for per-user volume boost above 100%
-const gainNodes = new Map<string, { ctx: AudioContext; gain: GainNode }>();
-
 export function setRemoteVolume(userId: string, volumePct: number) {
-  // volumePct: 0–200 (100 = normal, 200 = double gain przez GainNode)
-  const gain = Math.max(0, volumePct / 100);
+  // volumePct: 0–100 → el.volume 0.0–1.0
   const el = remoteAudios.get(userId);
-  if (!el) return;
-
-  const gn = gainNodes.get(userId);
-  if (gn) {
-    // GainNode obsługuje cały zakres 0.0–2.0 (el.volume zostaje na 1.0)
-    gn.gain.gain.value = gain;
-    gn.ctx.resume().catch(() => {}); // upewnij się że context nie jest suspended
-  } else {
-    // Fallback (np. przeglądarka bez WebAudio) — natywne el.volume, max 100%
-    el.volume = Math.min(1, gain);
-  }
+  if (el) el.volume = Math.max(0, Math.min(1, volumePct / 100));
 }
 
 /** Set volume for a user's screen-share audio (0–100%). */
@@ -364,7 +323,8 @@ export async function applyDeepFilter(rawStream: MediaStream): Promise<NoisePipe
     // STATIC_BASE: '' on web same-origin, 'https://cordyn.pl' in Tauri (where /df-cdn is nginx proxy)
     // nginx adds Access-Control-Allow-Origin:* so Tauri cross-origin fetch works too.
     const dfCdnUrl = `${STATIC_BASE}/df-cdn`;
-    const core = new DeepFilterNet3Core({ sampleRate: 48000, noiseReductionLevel: 70, cdnUrl: dfCdnUrl });
+    // cdnUrl is cast via `as any` — property not in published typedefs of v1.2.1
+    const core = new DeepFilterNet3Core({ sampleRate: 48000, noiseReductionLevel: 70, cdnUrl: dfCdnUrl } as any);
     await core.initialize();                              // fetch WASM + model from CDN
     const worklet = await core.createAudioWorkletNode(ctx);
     const source  = ctx.createMediaStreamSource(rawStream);

@@ -7743,7 +7743,12 @@ export default function App() {
     const pc = makePeerConnection(
       (c) => getSocket().emit('webrtc_ice', { to: remoteUserId, candidate: c }),
       (e) => {
-        const stream = e.streams[0]; if (!stream) return;
+        const stream = e.streams[0];
+        console.log(`[Cordis WebRTC] ontrack from ${remoteUserId}: kind=${e.track.kind} streams=${e.streams.length} stream=${stream?.id}`);
+        if (!stream) {
+          console.warn(`[Cordis WebRTC] ontrack: e.streams[0] is empty for ${remoteUserId} — audio will NOT play`);
+          return;
+        }
         if (e.track.kind === 'video') {
           // Remote video track (camera or screen share)
           remoteScreenStreamsRef.current.set(remoteUserId, stream);
@@ -7810,12 +7815,25 @@ export default function App() {
       },
     );
     peerConnsRef.current.set(remoteUserId, pc);
-    // ICE failure recovery: if connection drops, initiator triggers automatic ICE restart.
-    // This handles temporary network blips without requiring a manual rejoin.
+    // ICE + connection state monitoring — critical for diagnosing voice call failures
     pc.oniceconnectionstatechange = () => {
-      if (pc.iceConnectionState === 'failed' && isInitiator) {
-        console.warn('[Cordis] ICE failed with', remoteUserId, '— restarting ICE');
-        pc.restartIce();
+      const s = pc.iceConnectionState;
+      console.log(`[Cordis WebRTC] ICE state (${remoteUserId}):`, s);
+      if (s === 'failed') {
+        if (isInitiator) {
+          console.warn('[Cordis WebRTC] ICE failed — restarting ICE for', remoteUserId);
+          pc.restartIce();
+        }
+      }
+      if (s === 'disconnected') {
+        console.warn('[Cordis WebRTC] ICE disconnected from', remoteUserId, '— may recover');
+      }
+    };
+    pc.onconnectionstatechange = () => {
+      const s = pc.connectionState;
+      console.log(`[Cordis WebRTC] connection state (${remoteUserId}):`, s);
+      if (s === 'failed') {
+        addToast(`Problem z połączeniem głosowym — sprawdź konsolę przeglądarki (F12)`, 'error');
       }
     };
     if (localStreamRef.current)
@@ -8962,15 +8980,12 @@ export default function App() {
         speakStopRef.current.set('self', stop);
       }
 
-      // AI noise suppression (DeepFilterNet3) → fallback to classic noise gate
-      // DeepFilter uses WASM fetched from cdn.mezon.ai — on web, the library bypasses our
-      // nginx /df-cdn/ proxy and fetches directly, getting blocked by CORS. Skip it on web.
-      const _inTauri = !!(window.__TAURI__ || (window as any).__TAURI_INTERNALS__);
+      // Noise suppression: classic noise-gate AudioWorklet only.
+      // DeepFilter (AI) disabled — library bypasses nginx proxy and fetches cdn.mezon.ai
+      // directly on both web and Tauri, causing CORS failures and confusing UI messages.
       let sendStream = rawStream;
       if (useNoise) {
-        const pipeline = _inTauri
-          ? (await applyDeepFilter(rawStream) ?? await applyNoiseGate(rawStream))
-          : await applyNoiseGate(rawStream);
+        const pipeline = await applyNoiseGate(rawStream);
         if (pipeline) {
           noisePipelineRef.current = pipeline;
           sendStream = pipeline.processedStream;
