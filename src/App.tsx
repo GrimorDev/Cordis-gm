@@ -152,8 +152,10 @@ const CARD_EFFECTS = [
   { key: 'aurora',    label: '🌌 Aurora',    desc: 'Zorza polarna — falujące kurtyny zieleni i fioletu' },
   { key: 'smoke',     label: '💨 Dym',       desc: 'Mroczne kłęby dymu snujące się przez kartę' },
   { key: 'ink',       label: '🖋️ Atrament',  desc: 'Psychodeliczne plamy atramentu rozlewające się po karcie' },
-  { key: 'atomic',    label: '☢️ Atomowy',   desc: 'Wybuch atomowy — błysk, fala uderzeniowa, grzyb' },
   { key: 'teleport',  label: '⚡ Teleport',  desc: 'Elektryczne łuki i błysk — karta materializuje się z energii' },
+  { key: 'matrix',    label: '💻 Matrix',    desc: 'Zielony deszcz kodu jak w Matriksie' },
+  { key: 'vortex',    label: '🌀 Wir',       desc: 'Kolorowe cząsteczki spiralnie wciągane do centrum' },
+  { key: 'glitch',    label: '📺 Glitch',    desc: 'Cyfrowe zniekształcenia i artefakty ekranu' },
 ] as const;
 
 const GRADIENTS = [
@@ -4784,7 +4786,7 @@ function SpotifyDisplay({ spotify }: { spotify: SpotifyData }) {
 }
 
 // ─── CardEffectCanvas — canvas-based particle effects ─────────────────────────
-const CANVAS_EFFECTS = new Set(['fire','smoke','atomic','teleport']);
+const CANVAS_EFFECTS = new Set(['fire','smoke','teleport','matrix','vortex','glitch']);
 
 function CardEffectCanvas({ effect }: { effect: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -4852,68 +4854,109 @@ function CardEffectCanvas({ effect }: { effect: string }) {
       frame++; raf = requestAnimationFrame(drawSmoke);
     }
 
-    /* ATOMIC */
-    let atomicIdle = false;
-    function drawAtomic() {
-      const el = (performance.now()-t0)/1000;
-      ctx.clearRect(0,0,w,h);
-
-      if (!atomicIdle) {
-        // Błysk
-        if (el < .45) {
-          ctx.save(); ctx.globalAlpha = Math.sin(el/.45*Math.PI)*.9;
-          const fg = ctx.createRadialGradient(w/2,h*.82,0, w/2,h*.82,w*.95);
-          fg.addColorStop(0,'rgba(255,255,220,1)'); fg.addColorStop(.25,'rgba(255,190,55,.9)');
-          fg.addColorStop(.6,'rgba(220,60,0,.5)');  fg.addColorStop(1,'rgba(0,0,0,0)');
-          ctx.fillStyle=fg; ctx.fillRect(0,0,w,h); ctx.restore();
-        }
-        // Fale uderzeniowe
-        for (const [delay,r,g,b] of [[.08,255,160,50],[.22,255,90,15]] as [number,number,number,number][]) {
-          const st = el-delay;
-          if (st>0 && st<.75) {
-            const rt=st/.75, radius=rt*w*1.15;
-            ctx.save();
-            ctx.globalAlpha=(1-rt)*.75;
-            ctx.strokeStyle=`rgba(${r},${g},${b},.9)`;
-            ctx.lineWidth=3+rt*2; ctx.shadowColor=`rgba(${r},${g},${b},1)`; ctx.shadowBlur=18;
-            ctx.beginPath(); ctx.arc(w/2,h*.78,radius,0,Math.PI*2); ctx.stroke();
-            ctx.restore();
+    /* MATRIX */
+    function drawMatrix() {
+      const cs = 13;
+      const cols = Math.floor(w / cs);
+      const chars = '0123456789ABCDEFアイウエオカキクケコサシスセソタチツテトナニヌネノ'.split('');
+      type Col = { y: number; trail: {ch:string;age:number}[]; spd: number };
+      const columns: Col[] = Array.from({length:cols}, (_,i) => ({
+        y: Math.random() * -(h * 1.5),
+        trail: [],
+        spd: 0.25 + Math.random() * 0.45,
+      }));
+      function tick() {
+        ctx.clearRect(0,0,w,h);
+        ctx.font = `bold ${cs-1}px 'Courier New',monospace`;
+        for (let ci = 0; ci < columns.length; ci++) {
+          const col = columns[ci];
+          col.y += col.spd;
+          col.trail.push({ ch: chars[Math.floor(Math.random()*chars.length)], age: 0 });
+          if (col.trail.length > 22) col.trail.shift();
+          const x = ci * cs + 2;
+          col.trail.forEach((item, ti) => {
+            item.age++;
+            const isHead = ti === col.trail.length - 1;
+            const frac = ti / col.trail.length;
+            const alpha = isHead ? 0.98 : frac * 0.75;
+            const green = isHead ? 255 : Math.round(160 * frac + 40);
+            const r = isHead ? 180 : 0, b = isHead ? 180 : 0;
+            ctx.fillStyle = `rgba(${r},${green},${b},${alpha})`;
+            const cy2 = col.y * cs - (col.trail.length - ti) * cs;
+            if (cy2 > -cs && cy2 < h + cs) ctx.fillText(item.ch, x, cy2);
+          });
+          if (col.y * cs - col.trail.length * cs > h) {
+            col.y = -(5 + Math.random() * 10); col.trail = []; col.spd = 0.25 + Math.random() * 0.5;
           }
         }
-        // Iskry
-        if (el>.12 && el<.65 && frame%2===0) {
-          const ang=Math.random()*Math.PI*2, spd=2.5+Math.random()*7;
-          ps.push({ x:w/2, y:h*.75, vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd-2.5,
-            life:0, maxLife:30+Math.random()*40, size:1.5+Math.random()*3.5, hue:25+Math.random()*45 });
-        }
-        if (el>1.3) atomicIdle=true;
-      } else {
-        // Idle glow
-        ctx.save();
-        const ig = ctx.createRadialGradient(w/2,h,0, w/2,h,w*.75);
-        ig.addColorStop(0,'rgba(255,110,15,.2)'); ig.addColorStop(.5,'rgba(200,50,0,.08)'); ig.addColorStop(1,'rgba(0,0,0,0)');
-        ctx.fillStyle=ig; ctx.fillRect(0,0,w,h); ctx.restore();
-        // Żarzące się iskry
-        if (frame%4===0)
-          ps.push({ x:w*.25+Math.random()*w*.5, y:h, vx:(Math.random()-.5)*.9, vy:-(0.7+Math.random()*2.2),
-            life:0, maxLife:55+Math.random()*65, size:1+Math.random()*2.5, hue:18+Math.random()*55 });
+        frame++; raf = requestAnimationFrame(tick);
       }
+      tick();
+    }
 
-      // Rysuj cząsteczki (iskry)
-      ctx.save(); ctx.globalCompositeOperation='lighter';
-      for (let i=ps.length-1;i>=0;i--) {
-        const p=ps[i]; p.x+=p.vx; p.y+=p.vy;
-        p.vx+=(Math.random()-.5)*.18; p.vy*=.962; p.life++;
-        if(p.life>=p.maxLife){ps.splice(i,1);continue;}
-        const t=p.life/p.maxLife, a=Math.sin(t*Math.PI)*.95;
-        const pg=ctx.createRadialGradient(p.x,p.y,0, p.x,p.y,p.size);
-        pg.addColorStop(0,`hsla(${p.hue??30},100%,92%,${a})`);
-        pg.addColorStop(.5,`hsla(${p.hue??30},100%,58%,${a*.55})`);
-        pg.addColorStop(1,'hsla(20,100%,35%,0)');
-        ctx.fillStyle=pg; ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill();
+    /* VORTEX */
+    function drawVortex() {
+      type VP = { angle:number; radius:number; spd:number; life:number; maxLife:number; size:number; hue:number };
+      const vps: VP[] = [];
+      const cx = w/2, cy = h/2;
+      function tick() {
+        ctx.clearRect(0,0,w,h);
+        if (frame % 3 === 0)
+          vps.push({ angle: Math.random()*Math.PI*2, radius: Math.min(w,h)*.48+Math.random()*15,
+            spd: 0.032+Math.random()*.038, life:0, maxLife:55+Math.random()*65,
+            size: 1.5+Math.random()*3, hue: Math.random()*360 });
+        ctx.save(); ctx.globalCompositeOperation='lighter';
+        for (let i=vps.length-1;i>=0;i--) {
+          const p=vps[i];
+          p.angle += p.spd; p.radius *= .974; p.life++;
+          if (p.life>=p.maxLife || p.radius<4) { vps.splice(i,1); continue; }
+          const t=p.life/p.maxLife, a=Math.sin(t*Math.PI)*.9;
+          const px=cx+Math.cos(p.angle)*p.radius, py=cy+Math.sin(p.angle)*p.radius;
+          const hue=(p.hue+frame*.4)%360;
+          const g=ctx.createRadialGradient(px,py,0,px,py,p.size*2.2);
+          g.addColorStop(0,`hsla(${hue},100%,92%,${a})`);
+          g.addColorStop(.5,`hsla(${hue},100%,60%,${a*.5})`);
+          g.addColorStop(1,`hsla(${hue},80%,40%,0)`);
+          ctx.fillStyle=g; ctx.beginPath(); ctx.arc(px,py,p.size*2,0,Math.PI*2); ctx.fill();
+        }
+        ctx.restore();
+        frame++; raf=requestAnimationFrame(tick);
       }
-      ctx.restore();
-      frame++; raf=requestAnimationFrame(drawAtomic);
+      tick();
+    }
+
+    /* GLITCH */
+    function drawGlitch() {
+      let timer=0, active=false, dur=0;
+      function tick() {
+        ctx.clearRect(0,0,w,h);
+        timer++;
+        if (!active && timer > 90+Math.random()*80) { active=true; dur=8+Math.floor(Math.random()*18); timer=0; }
+        if (active) {
+          dur--;
+          if (dur<=0) active=false;
+          const strips = 3+Math.floor(Math.random()*6);
+          for (let i=0;i<strips;i++) {
+            const sy=Math.random()*h, sh=1+Math.random()*9, ox=(Math.random()-.5)*40;
+            ctx.fillStyle=`rgba(0,255,220,${.1+Math.random()*.28})`; ctx.fillRect(ox,sy,w,sh);
+            ctx.fillStyle=`rgba(255,0,180,${.08+Math.random()*.22})`; ctx.fillRect(-ox,sy+3,w,sh*.7);
+            if (Math.random()>.55) {
+              ctx.fillStyle=`rgba(255,255,255,${.06+Math.random()*.15})`; ctx.fillRect(0,sy-1,w,2);
+            }
+          }
+          // Noise pixels
+          for (let i=0;i<60;i++) {
+            const hue=Math.random()>.5?175:300;
+            ctx.fillStyle=`hsla(${hue},100%,75%,${.35+Math.random()*.55})`;
+            ctx.fillRect(Math.random()*w, Math.random()*h, 2, 1);
+          }
+        }
+        // Stałe subtelne scanlines
+        ctx.fillStyle='rgba(0,255,200,0.012)';
+        for (let y=0;y<h;y+=4) ctx.fillRect(0,y,w,1);
+        frame++; raf=requestAnimationFrame(tick);
+      }
+      tick();
     }
 
     /* TELEPORT */
@@ -4973,10 +5016,12 @@ function CardEffectCanvas({ effect }: { effect: string }) {
       frame++; raf=requestAnimationFrame(drawTeleport);
     }
 
-    if (effect==='fire')     drawFire();
+    if      (effect==='fire')     drawFire();
     else if (effect==='smoke')    drawSmoke();
-    else if (effect==='atomic')   drawAtomic();
     else if (effect==='teleport') drawTeleport();
+    else if (effect==='matrix')   drawMatrix();
+    else if (effect==='vortex')   drawVortex();
+    else if (effect==='glitch')   drawGlitch();
 
     return () => cancelAnimationFrame(raf);
   }, [effect]);
