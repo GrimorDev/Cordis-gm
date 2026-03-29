@@ -393,7 +393,7 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
               u.accent_color, u.compact_messages, u.voice_noise_cancel,
               u.font_size, u.show_timestamps, u.show_chat_avatars, u.message_animations, u.show_link_previews,
               u.privacy_status_visible, u.privacy_typing_visible, u.privacy_read_receipts,
-              u.privacy_friend_requests, u.privacy_dm_from_strangers, u.avatar_effect, u.card_effect, u.is_admin,
+              u.privacy_friend_requests, u.privacy_dm_from_strangers, u.avatar_effect, u.card_effect, u.card_color, u.card_font, u.is_admin,
               u.active_tag_server_id, st.tag as active_tag, u.theme_id,
               u.created_at,
               COALESCE(
