@@ -7810,6 +7810,14 @@ export default function App() {
       },
     );
     peerConnsRef.current.set(remoteUserId, pc);
+    // ICE failure recovery: if connection drops, initiator triggers automatic ICE restart.
+    // This handles temporary network blips without requiring a manual rejoin.
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === 'failed' && isInitiator) {
+        console.warn('[Cordis] ICE failed with', remoteUserId, '— restarting ICE');
+        pc.restartIce();
+      }
+    };
     if (localStreamRef.current)
       localStreamRef.current.getTracks().forEach(t => pc.addTrack(t, localStreamRef.current!));
     if (screenStreamRef.current)

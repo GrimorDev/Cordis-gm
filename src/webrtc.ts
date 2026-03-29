@@ -84,12 +84,16 @@ export function attachRemoteAudio(userId: string, stream: MediaStream) {
     gainNode.connect(dest);
     el.srcObject = dest.stream;                   // element plays processed stream
     gainNodes.set(userId, { ctx, gain: gainNode });
-    // Resume on user interaction (autoplay policy) + immediately
-    ctx.resume().catch(() => {});
+    // Resume AudioContext (autoplay policy) then explicitly kick el.play().
+    // CRITICAL: dest.stream outputs silence while AudioContext is suspended;
+    // el.play() must be called explicitly — autoplay attribute is not always honoured.
+    const doPlay = () => el.play().catch(() => {});
+    ctx.resume().then(doPlay).catch(doPlay);
     el.addEventListener('play', () => ctx.resume().catch(() => {}), { once: true });
   } catch {
     // Fallback: raw stream, volume capped at 100% via el.volume
     el.srcObject = stream;
+    el.play().catch(() => {});
   }
 }
 
@@ -98,6 +102,7 @@ export function attachRemoteScreenAudio(userId: string, stream: MediaStream) {
   let el = remoteScreenAudios.get(userId);
   if (!el) { el = makeAudioEl(); remoteScreenAudios.set(userId, el); }
   el.srcObject = stream;
+  el.play().catch(() => {});
 }
 
 export function detachRemoteAudio(userId: string) {
@@ -339,6 +344,9 @@ export async function applyDeepFilter(rawStream: MediaStream): Promise<NoisePipe
     const { DeepFilterNet3Core } = await import('deepfilternet3-noise-filter');
     const { STATIC_BASE } = await import('./api');
     const ctx  = new AudioContext({ sampleRate: 48000 });
+    // CRITICAL: AudioContext may start suspended if created after async await chain.
+    // Must resume before building the pipeline — otherwise dest.stream outputs silence.
+    await ctx.resume();
     // Use nginx proxy (/df-cdn/) instead of cdn.mezon.ai directly — avoids CORS block.
     // STATIC_BASE: '' on web same-origin, 'https://cordyn.pl' in Tauri (where /df-cdn is nginx proxy)
     // nginx adds Access-Control-Allow-Origin:* so Tauri cross-origin fetch works too.
@@ -389,6 +397,9 @@ export async function applyNoiseGate(rawStream: MediaStream): Promise<NoisePipel
     const ctx = new AudioContext({ sampleRate: 48000 });
     // Load the worklet processor from the public folder
     await ctx.audioWorklet.addModule('/noise-processor.js');
+    // CRITICAL: AudioContext may start suspended if created after async await chain.
+    // Must resume before building the pipeline — otherwise dest.stream outputs silence.
+    await ctx.resume();
 
     const source  = ctx.createMediaStreamSource(rawStream);
     const worklet = new AudioWorkletNode(ctx, 'cordis-noise-processor');
