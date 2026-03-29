@@ -20,39 +20,63 @@
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=Raleway:wght@400;600;700&family=Josefin+Sans:wght@400;600;700&family=Exo+2:wght@400;600;700&family=Ubuntu:wght@400;500;700&family=Press+Start+2P&family=Orbitron:wght@400;600;700&family=Bebas+Neue&family=Cinzel:wght@400;600;700&family=Playfair+Display:wght@400;600;700&family=Caveat:wght@400;600&family=Dancing+Script:wght@400;600;700&family=Pacifico&family=Righteous&display=swap" rel="stylesheet" />
   </head>
   <body>
-    <!-- Hard-reload after auto-update: clears stale webview/SW cache BEFORE React loads -->
+    <!-- ── Tauri auto-update: clean stale SW + cache, then navigate fresh ── -->
     <script>
       (function () {
-        if (localStorage.getItem('cordis_just_updated')) {
-          localStorage.removeItem('cordis_just_updated');
-          // Unregister service workers so they don't serve stale files
-          if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(function(regs) {
-              regs.forEach(function(r) { r.unregister(); });
-            });
-          }
-          // Clear all caches, then force a hard reload — no cache-bust URL
-          // (URL query params break Tauri local file serving)
+        // Detect Tauri context — __TAURI__ / __TAURI_INTERNALS__ are injected by the runtime
+        var inTauri = !!(window.__TAURI__ || window.__TAURI_INTERNALS__);
+
+        // Helper: unregister all SWs, then navigate fresh.
+        // Key insight: location.reload() does NOT bypass Service Workers in
+        // Chromium/WebKit — only a full navigation after unregister() does.
+        // Cache clearing is fire-and-forget (we only wait for SW to be removed
+        // before navigating, which is very fast ~10-50 ms).
+        function cleanAndGo() {
+          // Fire-and-forget cache clearing (non-blocking)
           if ('caches' in window) {
             caches.keys().then(function (names) {
-              return Promise.all(names.map(function (n) { return caches.delete(n); }));
-            }).then(function () {
-              location.reload(true);
-            }).catch(function () {
-              location.reload(true);
+              names.forEach(function (n) { caches.delete(n); });
             });
-          } else {
-            location.reload(true);
           }
+          // Wait only for SW unregistration, then navigate
+          var swDone = 'serviceWorker' in navigator
+            ? navigator.serviceWorker.getRegistrations().then(function (regs) {
+                return Promise.all(regs.map(function (r) { return r.unregister(); }));
+              })
+            : Promise.resolve();
+          swDone.then(function () {
+            // Full navigation (not reload) — after unregister(), SW won't intercept it
+            window.location.replace(window.location.pathname);
+          }).catch(function () {
+            window.location.replace(window.location.pathname);
+          });
+        }
+
+        // ── 1. After Tauri update: cordis_just_updated flag is set before relaunch ──
+        if (localStorage.getItem('cordis_just_updated')) {
+          localStorage.removeItem('cordis_just_updated');
+          cleanAndGo();
+          // Note: main.tsx may briefly load below but will be interrupted by the
+          // window.location.replace() navigation that fires as soon as SW is gone
+        }
+
+        // ── 2. In Tauri: always unregister any leftover SW from previous builds ──
+        //    Tauri files are embedded in the binary — SW caching only causes harm.
+        if (inTauri && 'serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            regs.forEach(function (r) { r.unregister(); });
+          });
         }
       })();
     </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(() => {});
+      // Register SW only on the WEB (not in Tauri desktop app)
+      var inTauri = !!(window.__TAURI__ || window.__TAURI_INTERNALS__);
+      if (!inTauri && 'serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/sw.js').catch(function () {});
         });
       }
     </script>
