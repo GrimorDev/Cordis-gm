@@ -8963,9 +8963,14 @@ export default function App() {
       }
 
       // AI noise suppression (DeepFilterNet3) → fallback to classic noise gate
+      // DeepFilter uses WASM fetched from cdn.mezon.ai — on web, the library bypasses our
+      // nginx /df-cdn/ proxy and fetches directly, getting blocked by CORS. Skip it on web.
+      const _inTauri = !!(window.__TAURI__ || (window as any).__TAURI_INTERNALS__);
       let sendStream = rawStream;
       if (useNoise) {
-        const pipeline = await applyDeepFilter(rawStream) ?? await applyNoiseGate(rawStream);
+        const pipeline = _inTauri
+          ? (await applyDeepFilter(rawStream) ?? await applyNoiseGate(rawStream))
+          : await applyNoiseGate(rawStream);
         if (pipeline) {
           noisePipelineRef.current = pipeline;
           sendStream = pipeline.processedStream;

@@ -74,6 +74,15 @@ export function attachRemoteAudio(userId: string, stream: MediaStream) {
   // Route: rawStream → GainNode → processedStream → <audio> element
   // Using createMediaStreamSource (not createMediaElementSource) avoids the
   // "already connected" InvalidStateError and works regardless of autoplay policy.
+  // ── Step 1: immediate playback via direct srcObject ───────────────────────
+  // Set raw stream FIRST so audio plays right away — no AudioContext dependency.
+  // Without this, dest.stream is silent while AudioContext is suspended and the
+  // user hears nothing until ctx.resume() resolves (which may require a gesture).
+  el.srcObject = stream;
+  el.play().catch(() => {});
+
+  // ── Step 2: async — set up GainNode chain for volume > 100% support ────────
+  // Only switch el.srcObject to dest.stream AFTER AudioContext is confirmed running.
   try {
     const ctx      = new AudioContext();           // system default sample rate
     const src      = ctx.createMediaStreamSource(stream);
@@ -82,18 +91,22 @@ export function attachRemoteAudio(userId: string, stream: MediaStream) {
     gainNode.gain.value = 1.0;
     src.connect(gainNode);
     gainNode.connect(dest);
-    el.srcObject = dest.stream;                   // element plays processed stream
     gainNodes.set(userId, { ctx, gain: gainNode });
-    // Resume AudioContext (autoplay policy) then explicitly kick el.play().
-    // CRITICAL: dest.stream outputs silence while AudioContext is suspended;
-    // el.play() must be called explicitly — autoplay attribute is not always honoured.
-    const doPlay = () => el.play().catch(() => {});
-    ctx.resume().then(doPlay).catch(doPlay);
+    ctx.resume().then(() => {
+      // Switch to processed stream only once AudioContext is running
+      const liveEl = remoteAudios.get(userId);
+      if (liveEl && liveEl.srcObject === stream) {
+        liveEl.srcObject = dest.stream;
+        liveEl.play().catch(() => {});
+      }
+    }).catch(() => {
+      // ctx.resume() failed — keep playing direct stream; clean up unused GainNode
+      gainNodes.delete(userId);
+      ctx.close().catch(() => {});
+    });
     el.addEventListener('play', () => ctx.resume().catch(() => {}), { once: true });
   } catch {
-    // Fallback: raw stream, volume capped at 100% via el.volume
-    el.srcObject = stream;
-    el.play().catch(() => {});
+    // AudioContext not available — volume capped at 100% via el.volume fallback
   }
 }
 
