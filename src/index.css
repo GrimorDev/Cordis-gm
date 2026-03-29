@@ -1048,13 +1048,43 @@ img.av-eff-arcade-coin { transition: filter 0.3s; }
 .av-active:has(img.av-eff-arcade-coin)::after  { opacity:1; animation: arcade-ring-spin 10s linear infinite; }
 .av-active img.av-eff-arcade-coin { filter: brightness(1.08) saturate(1.1); }
 
-/* ── Profile Card Enter Animation ───────────────────────────────── */
+/* ── Profile Card Enter Animations ──────────────────────────────── */
 @keyframes profile-card-enter {
   from { opacity: 0; transform: translateY(-8px) scale(0.96); }
   to   { opacity: 1; transform: translateY(0)    scale(1); }
 }
 .profile-card-enter {
   animation: profile-card-enter 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* METEOR — wlatuje z góry-prawej jak meteoryt */
+@keyframes profile-card-enter-meteor {
+  0%   { opacity: 0; transform: translateX(45px) translateY(-35px) scale(0.88) rotate(3deg); }
+  65%  { opacity: 1; transform: translateX(-4px) translateY(3px) scale(1.02) rotate(-0.5deg); }
+  100% { opacity: 1; transform: translateX(0) translateY(0) scale(1) rotate(0deg); }
+}
+.profile-card-enter-meteor {
+  animation: profile-card-enter-meteor 0.22s cubic-bezier(0.15, 0.85, 0.3, 1) forwards;
+}
+
+/* LAVA — wyłania się od dołu z ciepłym blaskiem */
+@keyframes profile-card-enter-lava {
+  0%   { opacity: 0; transform: translateY(28px) scale(0.92); filter: brightness(2.2) saturate(1.8) hue-rotate(-15deg); }
+  55%  { filter: brightness(1.25) saturate(1.2) hue-rotate(-5deg); }
+  100% { opacity: 1; transform: translateY(0)    scale(1);    filter: brightness(1) saturate(1) hue-rotate(0deg); }
+}
+.profile-card-enter-lava {
+  animation: profile-card-enter-lava 0.38s cubic-bezier(0.2, 0.9, 0.35, 1) forwards;
+}
+
+/* ICE — zamarza w miejscu z zimnym błyskiem */
+@keyframes profile-card-enter-ice {
+  0%   { opacity: 0; transform: scale(0.86); filter: brightness(3) saturate(0) hue-rotate(200deg); }
+  35%  { opacity: 1; filter: brightness(1.6) saturate(0.25) hue-rotate(185deg); }
+  100% { opacity: 1; transform: scale(1);    filter: brightness(1) saturate(1) hue-rotate(0deg); }
+}
+.profile-card-enter-ice {
+  animation: profile-card-enter-ice 0.3s ease-out forwards;
 }
 
 /* ── Card Effect Overlays ──────────────────────────────────────── */

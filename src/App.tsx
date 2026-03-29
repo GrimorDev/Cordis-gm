@@ -156,6 +156,9 @@ const CARD_EFFECTS = [
   { key: 'matrix',    label: '💻 Matrix',    desc: 'Zielony deszcz kodu jak w Matriksie' },
   { key: 'vortex',    label: '🌀 Wir',       desc: 'Kolorowe cząsteczki spiralnie wciągane do centrum' },
   { key: 'glitch',    label: '📺 Glitch',    desc: 'Cyfrowe zniekształcenia i artefakty ekranu' },
+  { key: 'meteor',    label: '☄️ Meteor',    desc: 'Spadające meteory z ognistymi ogonami (specjalne wejście karty)' },
+  { key: 'lava',      label: '🌋 Lawa',      desc: 'Bulgocząca lawa — świecące blobby (specjalne wejście karty)' },
+  { key: 'ice',       label: '🧊 Lód',       desc: 'Kryształy lodu opadające z góry (specjalne wejście karty)' },
 ] as const;
 
 const GRADIENTS = [
@@ -4786,7 +4789,13 @@ function SpotifyDisplay({ spotify }: { spotify: SpotifyData }) {
 }
 
 // ─── CardEffectCanvas — canvas-based particle effects ─────────────────────────
-const CANVAS_EFFECTS = new Set(['fire','smoke','teleport','matrix','vortex','glitch']);
+const CANVAS_EFFECTS = new Set(['fire','smoke','teleport','matrix','vortex','glitch','meteor','lava','ice']);
+// Efekty z własną animacją wejścia karty profilu
+const CUSTOM_ENTER: Record<string,string> = {
+  meteor: 'profile-card-enter-meteor',
+  lava:   'profile-card-enter-lava',
+  ice:    'profile-card-enter-ice',
+};
 
 function CardEffectCanvas({ effect }: { effect: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -5016,12 +5025,114 @@ function CardEffectCanvas({ effect }: { effect: string }) {
       frame++; raf=requestAnimationFrame(drawTeleport);
     }
 
+    /* METEOR */
+    function drawMeteor() {
+      type M = { x:number;y:number;vx:number;vy:number;life:number;maxLife:number;sz:number;trail:{x:number;y:number}[] };
+      const meteors: M[] = [];
+      function tick() {
+        ctx.clearRect(0,0,w,h);
+        if (frame%28===0) {
+          const a=Math.PI*.63+(Math.random()-.5)*.28, spd=7+Math.random()*7;
+          meteors.push({x:w*.15+Math.random()*w*.9,y:-8,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,
+            life:0,maxLife:28+Math.random()*24,sz:1.5+Math.random()*2.5,trail:[]});
+        }
+        ctx.save(); ctx.globalCompositeOperation='lighter';
+        for (let i=meteors.length-1;i>=0;i--) {
+          const m=meteors[i];
+          m.trail.push({x:m.x,y:m.y});
+          if(m.trail.length>16) m.trail.shift();
+          m.x+=m.vx; m.y+=m.vy; m.life++;
+          if(m.life>=m.maxLife||m.y>h+20){meteors.splice(i,1);continue;}
+          const headA=(1-m.life/m.maxLife)*.95;
+          m.trail.forEach((pt,ti)=>{
+            const tf=ti/m.trail.length,ta=tf*headA*.6;
+            const g=ctx.createRadialGradient(pt.x,pt.y,0,pt.x,pt.y,m.sz*tf+1);
+            g.addColorStop(0,`rgba(255,235,160,${ta})`);
+            g.addColorStop(.6,`rgba(255,130,30,${ta*.4})`);
+            g.addColorStop(1,'rgba(200,60,0,0)');
+            ctx.fillStyle=g; ctx.beginPath(); ctx.arc(pt.x,pt.y,m.sz*tf+1,0,Math.PI*2); ctx.fill();
+          });
+          const hg=ctx.createRadialGradient(m.x,m.y,0,m.x,m.y,m.sz*2.5);
+          hg.addColorStop(0,`rgba(255,255,220,${headA})`);
+          hg.addColorStop(.35,`rgba(255,200,80,${headA*.65})`);
+          hg.addColorStop(1,'rgba(255,80,0,0)');
+          ctx.fillStyle=hg; ctx.beginPath(); ctx.arc(m.x,m.y,m.sz*2.5,0,Math.PI*2); ctx.fill();
+        }
+        ctx.restore();
+        frame++; raf=requestAnimationFrame(tick);
+      }
+      tick();
+    }
+
+    /* LAVA */
+    function drawLava() {
+      type Blob = { x:number;y:number;vx:number;vy:number;r:number;hue:number;phase:number };
+      const blobs: Blob[] = Array.from({length:8},()=>({
+        x:Math.random()*w,y:Math.random()*h,
+        vx:(Math.random()-.5)*.55,vy:(Math.random()-.5)*.55,
+        r:26+Math.random()*44,hue:8+Math.random()*28,phase:Math.random()*Math.PI*2,
+      }));
+      function tick() {
+        ctx.clearRect(0,0,w,h);
+        ctx.save(); ctx.filter='blur(10px)'; ctx.globalCompositeOperation='lighter';
+        blobs.forEach(b=>{
+          b.x+=b.vx; b.y+=b.vy; b.phase+=0.018;
+          if(b.x<b.r||b.x>w-b.r) b.vx*=-1;
+          if(b.y<b.r||b.y>h-b.r) b.vy*=-1;
+          const r=b.r*(1+Math.sin(b.phase)*.18);
+          const g=ctx.createRadialGradient(b.x,b.y,0,b.x,b.y,r);
+          g.addColorStop(0,`hsla(${b.hue},100%,72%,.58)`);
+          g.addColorStop(.5,`hsla(${b.hue+12},100%,50%,.32)`);
+          g.addColorStop(1,`hsla(${b.hue+22},100%,28%,0)`);
+          ctx.fillStyle=g; ctx.beginPath(); ctx.arc(b.x,b.y,r,0,Math.PI*2); ctx.fill();
+        });
+        ctx.restore();
+        frame++; raf=requestAnimationFrame(tick);
+      }
+      tick();
+    }
+
+    /* ICE */
+    function drawIce() {
+      type IcePt={x:number;y:number;vx:number;vy:number;life:number;maxLife:number;sz:number;angle:number};
+      const ips: IcePt[]=[];
+      function tick() {
+        ctx.clearRect(0,0,w,h);
+        if(frame%4===0)
+          ips.push({x:Math.random()*w,y:-5,vx:(Math.random()-.5)*.7,vy:.45+Math.random()*1.1,
+            life:0,maxLife:70+Math.random()*80,sz:3+Math.random()*6,angle:Math.random()*Math.PI});
+        ctx.save(); ctx.globalCompositeOperation='lighter';
+        for(let i=ips.length-1;i>=0;i--){
+          const p=ips[i]; p.x+=p.vx; p.y+=p.vy; p.angle+=0.015; p.life++;
+          if(p.life>=p.maxLife||p.y>h+10){ips.splice(i,1);continue;}
+          const a=Math.sin(p.life/p.maxLife*Math.PI)*.82;
+          ctx.save();
+          ctx.translate(p.x,p.y); ctx.rotate(p.angle);
+          ctx.strokeStyle=`rgba(180,235,255,${a})`;
+          ctx.shadowColor=`rgba(100,210,255,${a})`; ctx.shadowBlur=6; ctx.lineWidth=1;
+          for(let k=0;k<6;k++){
+            ctx.rotate(Math.PI/3);
+            ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,p.sz); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0,p.sz*.55); ctx.lineTo(p.sz*.32,p.sz*.3); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0,p.sz*.55); ctx.lineTo(-p.sz*.32,p.sz*.3); ctx.stroke();
+          }
+          ctx.restore();
+        }
+        ctx.restore();
+        frame++; raf=requestAnimationFrame(tick);
+      }
+      tick();
+    }
+
     if      (effect==='fire')     drawFire();
     else if (effect==='smoke')    drawSmoke();
     else if (effect==='teleport') drawTeleport();
     else if (effect==='matrix')   drawMatrix();
     else if (effect==='vortex')   drawVortex();
     else if (effect==='glitch')   drawGlitch();
+    else if (effect==='meteor')   drawMeteor();
+    else if (effect==='lava')     drawLava();
+    else if (effect==='ice')      drawIce();
 
     return () => cancelAnimationFrame(raf);
   }, [effect]);
@@ -5183,7 +5294,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
       style={{ left, top, width: cardW }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}>
-      <div className={`relative bg-[#18182a] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden${profileCardAnim !== false ? ' profile-card-enter' : ''}`}>
+      <div className={`relative bg-[#18182a] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden${profileCardAnim !== false ? ` ${CUSTOM_ENTER[u?.card_effect??''] ?? 'profile-card-enter'}` : ''}`}>
         <CardEffectOverlay effect={u?.card_effect} />
         {/* Banner */}
         <div className="h-16 relative" style={u?.banner_url
