@@ -4783,23 +4783,216 @@ function SpotifyDisplay({ spotify }: { spotify: SpotifyData }) {
   );
 }
 
+// ─── CardEffectCanvas — canvas-based particle effects ─────────────────────────
+const CANVAS_EFFECTS = new Set(['fire','smoke','atomic','teleport']);
+
+function CardEffectCanvas({ effect }: { effect: string }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const cv = ref.current; if (!cv) return;
+    const ctx = cv.getContext('2d'); if (!ctx) return;
+    const w = cv.width  = cv.offsetWidth;
+    const h = cv.height = cv.offsetHeight;
+    type P = { x:number;y:number;vx:number;vy:number;life:number;maxLife:number;size:number;hue?:number };
+    const ps: P[] = [];
+    let raf = 0, frame = 0;
+    const t0 = performance.now();
+
+    /* FIRE */
+    function drawFire() {
+      if (frame % 2 === 0)
+        for (let i = 0; i < 5; i++)
+          ps.push({ x: w*.05+Math.random()*w*.9, y: h,
+            vx: (Math.random()-.5)*1.6, vy: -(2+Math.random()*4.5),
+            life: 0, maxLife: 40+Math.random()*55, size: 7+Math.random()*14 });
+      ctx.clearRect(0,0,w,h);
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = ps.length-1; i >= 0; i--) {
+        const p = ps[i];
+        p.x += p.vx; p.y += p.vy;
+        p.vx += (Math.random()-.5)*.3; p.vy *= .983; p.life++;
+        if (p.life >= p.maxLife) { ps.splice(i,1); continue; }
+        const t = p.life/p.maxLife;
+        const a = Math.sin(t*Math.PI)*.85;
+        const sz = p.size*(1-t*.6);
+        const lo = Math.round(255*Math.max(0, 1-t*1.7));
+        const g = ctx.createRadialGradient(p.x,p.y,0, p.x,p.y,sz);
+        g.addColorStop(0, `rgba(255,${Math.min(255,lo+130)},${Math.round(lo*.25)},${a})`);
+        g.addColorStop(.5,`rgba(255,${Math.max(0,lo)},0,${a*.45})`);
+        g.addColorStop(1, 'rgba(160,15,0,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x,p.y,sz,0,Math.PI*2); ctx.fill();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      frame++; raf = requestAnimationFrame(drawFire);
+    }
+
+    /* SMOKE */
+    function drawSmoke() {
+      if (frame % 5 === 0)
+        for (let i = 0; i < 2; i++)
+          ps.push({ x: w*.1+Math.random()*w*.8, y: h*.5+Math.random()*h*.5,
+            vx: (Math.random()-.5)*1.6, vy: -(0.35+Math.random()*1.1),
+            life: 0, maxLife: 100+Math.random()*90, size: 22+Math.random()*35 });
+      ctx.clearRect(0,0,w,h);
+      for (let i = ps.length-1; i >= 0; i--) {
+        const p = ps[i];
+        p.x += p.vx; p.y += p.vy;
+        p.vx += (Math.random()-.5)*.35; p.life++;
+        if (p.life >= p.maxLife) { ps.splice(i,1); continue; }
+        const t = p.life/p.maxLife;
+        const a = Math.sin(t*Math.PI)*.32;
+        const sz = p.size*(1+t*.9);
+        const lum = 90+Math.round(50*t);
+        const g = ctx.createRadialGradient(p.x,p.y,0, p.x,p.y,sz);
+        g.addColorStop(0, `rgba(${lum},${lum+8},${lum+18},${a})`);
+        g.addColorStop(.55,`rgba(${lum-25},${lum-15},${lum-5},${a*.45})`);
+        g.addColorStop(1, 'rgba(40,50,70,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x,p.y,sz,0,Math.PI*2); ctx.fill();
+      }
+      frame++; raf = requestAnimationFrame(drawSmoke);
+    }
+
+    /* ATOMIC */
+    let atomicIdle = false;
+    function drawAtomic() {
+      const el = (performance.now()-t0)/1000;
+      ctx.clearRect(0,0,w,h);
+
+      if (!atomicIdle) {
+        // Błysk
+        if (el < .45) {
+          ctx.save(); ctx.globalAlpha = Math.sin(el/.45*Math.PI)*.9;
+          const fg = ctx.createRadialGradient(w/2,h*.82,0, w/2,h*.82,w*.95);
+          fg.addColorStop(0,'rgba(255,255,220,1)'); fg.addColorStop(.25,'rgba(255,190,55,.9)');
+          fg.addColorStop(.6,'rgba(220,60,0,.5)');  fg.addColorStop(1,'rgba(0,0,0,0)');
+          ctx.fillStyle=fg; ctx.fillRect(0,0,w,h); ctx.restore();
+        }
+        // Fale uderzeniowe
+        for (const [delay,r,g,b] of [[.08,255,160,50],[.22,255,90,15]] as [number,number,number,number][]) {
+          const st = el-delay;
+          if (st>0 && st<.75) {
+            const rt=st/.75, radius=rt*w*1.15;
+            ctx.save();
+            ctx.globalAlpha=(1-rt)*.75;
+            ctx.strokeStyle=`rgba(${r},${g},${b},.9)`;
+            ctx.lineWidth=3+rt*2; ctx.shadowColor=`rgba(${r},${g},${b},1)`; ctx.shadowBlur=18;
+            ctx.beginPath(); ctx.arc(w/2,h*.78,radius,0,Math.PI*2); ctx.stroke();
+            ctx.restore();
+          }
+        }
+        // Iskry
+        if (el>.12 && el<.65 && frame%2===0) {
+          const ang=Math.random()*Math.PI*2, spd=2.5+Math.random()*7;
+          ps.push({ x:w/2, y:h*.75, vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd-2.5,
+            life:0, maxLife:30+Math.random()*40, size:1.5+Math.random()*3.5, hue:25+Math.random()*45 });
+        }
+        if (el>1.3) atomicIdle=true;
+      } else {
+        // Idle glow
+        ctx.save();
+        const ig = ctx.createRadialGradient(w/2,h,0, w/2,h,w*.75);
+        ig.addColorStop(0,'rgba(255,110,15,.2)'); ig.addColorStop(.5,'rgba(200,50,0,.08)'); ig.addColorStop(1,'rgba(0,0,0,0)');
+        ctx.fillStyle=ig; ctx.fillRect(0,0,w,h); ctx.restore();
+        // Żarzące się iskry
+        if (frame%4===0)
+          ps.push({ x:w*.25+Math.random()*w*.5, y:h, vx:(Math.random()-.5)*.9, vy:-(0.7+Math.random()*2.2),
+            life:0, maxLife:55+Math.random()*65, size:1+Math.random()*2.5, hue:18+Math.random()*55 });
+      }
+
+      // Rysuj cząsteczki (iskry)
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      for (let i=ps.length-1;i>=0;i--) {
+        const p=ps[i]; p.x+=p.vx; p.y+=p.vy;
+        p.vx+=(Math.random()-.5)*.18; p.vy*=.962; p.life++;
+        if(p.life>=p.maxLife){ps.splice(i,1);continue;}
+        const t=p.life/p.maxLife, a=Math.sin(t*Math.PI)*.95;
+        const pg=ctx.createRadialGradient(p.x,p.y,0, p.x,p.y,p.size);
+        pg.addColorStop(0,`hsla(${p.hue??30},100%,92%,${a})`);
+        pg.addColorStop(.5,`hsla(${p.hue??30},100%,58%,${a*.55})`);
+        pg.addColorStop(1,'hsla(20,100%,35%,0)');
+        ctx.fillStyle=pg; ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill();
+      }
+      ctx.restore();
+      frame++; raf=requestAnimationFrame(drawAtomic);
+    }
+
+    /* TELEPORT */
+    let teleIdle = false;
+    function drawTeleport() {
+      const el = (performance.now()-t0)/1000;
+      ctx.clearRect(0,0,w,h);
+
+      if (!teleIdle) {
+        // Zbiegające cząsteczki
+        if (el<.6 && frame%1===0) {
+          const side=Math.floor(Math.random()*4);
+          let sx=0,sy=0;
+          if(side===0){sx=Math.random()*w;sy=-5;}
+          else if(side===1){sx=w+5;sy=Math.random()*h;}
+          else if(side===2){sx=Math.random()*w;sy=h+5;}
+          else{sx=-5;sy=Math.random()*h;}
+          const dx=w/2-sx, dy=h*.45-sy, dist=Math.hypot(dx,dy);
+          const spd=3+Math.random()*6;
+          ps.push({x:sx,y:sy,vx:(dx/dist)*spd,vy:(dy/dist)*spd,
+            life:0,maxLife:Math.round(dist/spd)+3,size:1+Math.random()*2.5,hue:188+Math.random()*45});
+        }
+        // Błysk
+        if (el>.3 && el<.72) {
+          const ft=(el-.3)/.42;
+          ctx.save(); ctx.globalAlpha=Math.sin(ft*Math.PI)*.88;
+          const fg=ctx.createRadialGradient(w/2,h*.45,0, w/2,h*.45,w*.85);
+          fg.addColorStop(0,'rgba(225,248,255,1)'); fg.addColorStop(.3,'rgba(56,189,248,.85)');
+          fg.addColorStop(1,'rgba(14,165,233,0)');
+          ctx.fillStyle=fg; ctx.fillRect(0,0,w,h); ctx.restore();
+        }
+        if(el>1.1) teleIdle=true;
+      } else {
+        // Idle glow
+        ctx.save();
+        const ig=ctx.createRadialGradient(w/2,h/2,0, w/2,h/2,w*.55);
+        ig.addColorStop(0,'rgba(56,189,248,.07)'); ig.addColorStop(1,'rgba(0,0,0,0)');
+        ctx.fillStyle=ig; ctx.fillRect(0,0,w,h); ctx.restore();
+        // Elektryczne iskry
+        if(frame%10===0)
+          ps.push({x:Math.random()*w,y:Math.random()*h,vx:(Math.random()-.5)*2.2,vy:(Math.random()-.5)*2.2,
+            life:0,maxLife:18+Math.random()*18,size:.8+Math.random()*1.8,hue:192+Math.random()*35});
+      }
+
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      for (let i=ps.length-1;i>=0;i--) {
+        const p=ps[i]; p.x+=p.vx; p.y+=p.vy; p.life++;
+        if(p.life>=p.maxLife){ps.splice(i,1);continue;}
+        const t=p.life/p.maxLife, a=Math.sin(t*Math.PI)*.95;
+        const pg=ctx.createRadialGradient(p.x,p.y,0, p.x,p.y,p.size*2);
+        pg.addColorStop(0,`hsla(${p.hue??195},100%,90%,${a})`);
+        pg.addColorStop(.5,`hsla(${p.hue??195},100%,58%,${a*.5})`);
+        pg.addColorStop(1,'rgba(0,80,200,0)');
+        ctx.fillStyle=pg; ctx.beginPath(); ctx.arc(p.x,p.y,p.size*1.8,0,Math.PI*2); ctx.fill();
+      }
+      ctx.restore();
+      frame++; raf=requestAnimationFrame(drawTeleport);
+    }
+
+    if (effect==='fire')     drawFire();
+    else if (effect==='smoke')    drawSmoke();
+    else if (effect==='atomic')   drawAtomic();
+    else if (effect==='teleport') drawTeleport();
+
+    return () => cancelAnimationFrame(raf);
+  }, [effect]);
+
+  return <canvas ref={ref} style={{ position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none' }} />;
+}
+
 // ─── CardEffectOverlay ────────────────────────────────────────────────────────
 function CardEffectOverlay({ effect }: { effect: string | null | undefined }) {
   if (!effect || effect === 'none') return null;
 
-  // CSS-based: FIRE
-  if (effect === 'fire') {
-    const items = Array.from({ length: 14 }, (_, i) => ({
-      left: `${(i * 13 + 3) % 96}%`, bottom: `0`,
-      width: `${8 + i % 6}px`, height: `${14 + i % 10}px`,
-      // Ujemne opóźnienie = animacja startuje w losowym punkcie cyklu
-      animationDelay: `${-((i * 0.22 + 0.1) % 1.8)}s`,
-      animationDuration: `${1.4 + (i % 5) * 0.2}s`,
-    }));
+  // Canvas-based: FIRE, SMOKE, ATOMIC, TELEPORT
+  if (CANVAS_EFFECTS.has(effect)) {
     return (
       <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
-        {items.map((s, i) => <div key={i} className="card-fx-fire absolute" style={s} />)}
-        <div className="absolute bottom-0 inset-x-0 h-24 bg-gradient-to-t from-orange-600/20 via-red-500/8 to-transparent" />
+        <CardEffectCanvas effect={effect} />
       </div>
     );
   }
@@ -4837,26 +5030,6 @@ function CardEffectOverlay({ effect }: { effect: string | null | undefined }) {
     );
   }
 
-  // CSS-based: SMOKE
-  if (effect === 'smoke') {
-    const blobs = Array.from({ length: 9 }, (_, i) => ({
-      left: `${(i * 17 + 5) % 85}%`,
-      bottom: `${(i % 3) * 8}%`,
-      width:  `${50 + (i % 4) * 18}px`,
-      height: `${50 + (i % 4) * 18}px`,
-      '--dur': `${3.5 + (i % 5) * 0.6}s`,
-      '--sx':  `${((i % 3) - 1) * 18}px`,
-      '--sw':  `${((i % 2) * 2 - 1) * 10}px`,
-      animationDelay: `${-(i * 0.45 % 4)}s`,
-    } as React.CSSProperties));
-    return (
-      <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/20 via-transparent to-transparent" />
-        {blobs.map((s, i) => <div key={i} className="card-fx-smoke absolute" style={s} />)}
-      </div>
-    );
-  }
-
   // CSS-based: INK
   if (effect === 'ink') {
     const blobs = [
@@ -4868,45 +5041,6 @@ function CardEffectOverlay({ effect }: { effect: string | null | undefined }) {
     return (
       <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
         {blobs.map((s, i) => <div key={i} className="card-fx-ink absolute" style={s} />)}
-      </div>
-    );
-  }
-
-  // CSS-based: ATOMIC — jednorazowy wjazd (błysk → fala → grzyb) + idle glow
-  if (effect === 'atomic') {
-    return (
-      <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
-        {/* Błysk */}
-        <div className="card-fx-atomic-flash absolute inset-0" />
-        {/* Dwie fale uderzeniowe */}
-        <div className="card-fx-atomic-ring  absolute" />
-        <div className="card-fx-atomic-ring2 absolute" />
-        {/* Trzon grzyba */}
-        <div className="card-fx-atomic-stem absolute" />
-        {/* Czapa grzyba */}
-        <div className="card-fx-atomic-cap  absolute" />
-        {/* Idle: pomarańczowa poświata */}
-        <div className="card-fx-atomic-glow absolute inset-0" />
-      </div>
-    );
-  }
-
-  // CSS-based: TELEPORT — jednorazowy wjazd (łuki → błysk) + idle shimmer
-  if (effect === 'teleport') {
-    const arcs: React.CSSProperties[] = [
-      { top: '6%',  left: '12%',  width: '2px', height: '26%', transform: 'rotate(14deg)',  animationDelay: '0.02s' },
-      { top: '8%',  right: '10%', width: '2px', height: '22%', transform: 'rotate(-21deg)', animationDelay: '0.07s' },
-      { top: '37%', left: '5%',   width: '2px', height: '30%', transform: 'rotate(7deg)',   animationDelay: '0.04s' },
-      { top: '40%', right: '6%',  width: '2px', height: '28%', transform: 'rotate(-14deg)', animationDelay: '0.1s'  },
-      { top: '66%', left: '17%',  width: '2px', height: '20%', transform: 'rotate(26deg)',  animationDelay: '0.01s' },
-      { top: '63%', right: '13%', width: '2px', height: '19%', transform: 'rotate(-24deg)', animationDelay: '0.08s' },
-    ];
-    return (
-      <div className="absolute inset-0 pointer-events-none z-[2] overflow-hidden rounded-2xl">
-        <div className="card-fx-teleport-flash absolute inset-0" />
-        {arcs.map((s, i) => <div key={i} className="card-fx-teleport-arc absolute" style={s} />)}
-        <div className="card-fx-teleport-scan absolute inset-0" />
-        <div className="card-fx-teleport-glow absolute inset-0" />
       </div>
     );
   }
