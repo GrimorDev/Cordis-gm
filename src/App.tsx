@@ -5988,6 +5988,12 @@ export default function App() {
 
   // Noise cancellation setting (loaded from DB, toggled in devices panel)
   const [noiseCancel, setNoiseCancel] = useState<boolean>(true);
+  // Noise gate sensitivity: 0 = lowest (catches more), 100 = highest (blocks most background)
+  // Maps to worklet threshold: 0→0.006, 50→0.03, 100→0.09
+  const [noiseGateSens, setNoiseGateSens] = useState<number>(() => {
+    const s = localStorage.getItem('cordyn_ng_sens'); return s ? Math.max(0,Math.min(100,parseInt(s)||60)) : 60;
+  });
+  const ngSensToThreshold = (v: number) => 0.006 + (v / 100) * 0.084; // 0→0.006, 100→0.09
   // Active noise gate pipeline (AudioWorklet + AudioContext); cleanup on re-acquire or leave
   const noisePipelineRef = useRef<NoisePipeline | null>(null);
 
@@ -8988,6 +8994,8 @@ export default function App() {
         const pipeline = await applyNoiseGate(rawStream);
         if (pipeline) {
           noisePipelineRef.current = pipeline;
+          // Apply saved sensitivity (user-controlled threshold slider)
+          pipeline.setThreshold(ngSensToThreshold(noiseGateSens));
           sendStream = pipeline.processedStream;
         }
       }
@@ -10768,9 +10776,7 @@ export default function App() {
                             onClick={async () => {
                               const next = !noiseCancel;
                               setNoiseCancel(next);
-                              // Re-acquire mic with new constraints (real-time effect)
                               if (localStreamRef.current) await acquireMic(selMic || undefined, next);
-                              // Save to DB
                               users.updateMe({ voice_noise_cancel: next }).catch(() => {});
                             }}
                             className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${noiseCancel ? 'bg-indigo-500' : 'bg-zinc-700'}`}
@@ -10778,22 +10784,36 @@ export default function App() {
                             <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${noiseCancel ? 'translate-x-5' : 'translate-x-0'}`}/>
                           </button>
                         </div>
+                        {/* Noise gate sensitivity slider — only visible when noise cancel is ON */}
+                        {noiseCancel && (
+                          <div className="sm:col-span-3 px-0.5 pt-2">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-[11px] font-semibold text-white">Czułość bramy szumów</span>
+                              <span className="text-[10px] text-zinc-400">{noiseGateSens < 30 ? 'niska — łapie więcej' : noiseGateSens > 70 ? 'wysoka — blokuje tło' : 'średnia'}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] text-zinc-500 w-10 text-right shrink-0">mało</span>
+                              <input
+                                type="range" min={0} max={100} step={5} value={noiseGateSens}
+                                onChange={e => {
+                                  const v = parseInt(e.target.value);
+                                  setNoiseGateSens(v);
+                                  localStorage.setItem('cordyn_ng_sens', String(v));
+                                  // Apply live — no mic re-acquire needed
+                                  noisePipelineRef.current?.setThreshold(ngSensToThreshold(v));
+                                }}
+                                className="flex-1 accent-indigo-500 h-1.5 cursor-pointer"
+                              />
+                              <span className="text-[9px] text-zinc-500 w-10 shrink-0">dużo</span>
+                            </div>
+                            <p className="text-[9px] text-zinc-600 mt-1">Przesuń w prawo jeśli słychać oddech, klawiaturę lub szumy w tle</p>
+                          </div>
+                        )}
                       </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
-                {/* DeepFilter status badge */}
-                {deepFilterStatus !== 'idle' && (
-                  <div className={`mx-4 mb-1 px-3 py-1.5 rounded-xl text-xs flex items-center gap-2 ${
-                    deepFilterStatus==='active' ? 'bg-emerald-500/15 border border-emerald-500/25 text-emerald-300' :
-                    deepFilterStatus==='loading' ? 'bg-indigo-500/15 border border-indigo-500/25 text-indigo-300 animate-pulse' :
-                    'bg-rose-500/15 border border-rose-500/25 text-rose-300'
-                  }`}>
-                    <Radio size={11}/>
-                    {deepFilterStatus==='active' ? 'AI Noise Suppression aktywny' :
-                     deepFilterStatus==='loading' ? 'Ładowanie AI...' : 'AI Noise Suppression niedostępny'}
-                  </div>
-                )}
+                {/* DeepFilter status badge — hidden (AI disabled, using noise gate only) */}
                 <div className="p-5 flex items-center justify-center gap-3">
                   <button onClick={toggleMute} title={activeCall.isMuted?'Włącz mikrofon':'Wycisz mikrofon'}
                     className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${activeCall.isMuted?'bg-rose-500 hover:bg-rose-400 text-white':gb}`}>
