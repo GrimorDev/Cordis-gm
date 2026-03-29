@@ -161,6 +161,34 @@ const CARD_EFFECTS = [
   { key: 'ice',       label: '🧊 Lód',       desc: 'Kryształy lodu opadające z góry (specjalne wejście karty)' },
 ] as const;
 
+const CARD_COLORS = [
+  { key: 'default',  label: 'Domyślny', hex: '#18182a', dark: true,  bannerGrad: 'linear-gradient(135deg,#2e2e48,#1a1a2e)' },
+  { key: 'slate',    label: 'Grafit',   hex: '#0f172a', dark: true,  bannerGrad: 'linear-gradient(135deg,#1e293b,#0f172a)' },
+  { key: 'crimson',  label: 'Karmazyn', hex: '#1a0810', dark: true,  bannerGrad: 'linear-gradient(135deg,#3b0a1e,#1a0810)' },
+  { key: 'forest',   label: 'Las',      hex: '#081a0c', dark: true,  bannerGrad: 'linear-gradient(135deg,#14532d,#081a0c)' },
+  { key: 'ocean',    label: 'Ocean',    hex: '#071428', dark: true,  bannerGrad: 'linear-gradient(135deg,#0c2a4a,#071428)' },
+  { key: 'rose',     label: 'Róż',      hex: '#fce7f3', dark: false, bannerGrad: 'linear-gradient(135deg,#fbcfe8,#f9a8d4)' },
+  { key: 'white',    label: 'Biały',    hex: '#f8fafc', dark: false, bannerGrad: 'linear-gradient(135deg,#e2e8f0,#cbd5e1)' },
+  { key: 'sky',      label: 'Błękit',   hex: '#e0f2fe', dark: false, bannerGrad: 'linear-gradient(135deg,#bae6fd,#7dd3fc)' },
+  { key: 'lavender', label: 'Lawenda',  hex: '#ede9fe', dark: false, bannerGrad: 'linear-gradient(135deg,#ddd6fe,#c4b5fd)' },
+  { key: 'cream',    label: 'Krem',     hex: '#fef9ef', dark: false, bannerGrad: 'linear-gradient(135deg,#fef3c7,#fde68a)' },
+] as const;
+type CardColorKey = typeof CARD_COLORS[number]['key'];
+
+const CARD_FONTS = [
+  { key: 'default',  label: 'Domyślny',  css: "system-ui,-apple-system,sans-serif" },
+  { key: 'mono',     label: 'Mono',      css: "'Courier New',Courier,monospace" },
+  { key: 'serif',    label: 'Szeryfowy', css: "Georgia,'Times New Roman',serif" },
+  { key: 'nunito',   label: 'Nunito',    css: "'Nunito',sans-serif" },
+  { key: 'pixel',    label: 'Pixel',     css: "'Press Start 2P',cursive" },
+  { key: 'caveat',   label: 'Pismo',     css: "'Caveat',cursive" },
+  { key: 'playfair', label: 'Elegancki', css: "'Playfair Display',serif" },
+  { key: 'bebas',    label: 'Bebas',     css: "'Bebas Neue',cursive" },
+  { key: 'orbitron', label: 'Orbitron',  css: "'Orbitron',sans-serif" },
+  { key: 'comic',    label: 'Comic',     css: "'Comic Sans MS','Comic Sans',cursive" },
+] as const;
+type CardFontKey = typeof CARD_FONTS[number]['key'];
+
 const GRADIENTS = [
   'from-indigo-600 via-purple-600 to-pink-600',
   'from-rose-500 via-red-500 to-orange-500',
@@ -5294,18 +5322,30 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
       style={{ left, top, width: cardW }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}>
-      <div className={`relative bg-[#18182a] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden${profileCardAnim !== false ? ` ${CUSTOM_ENTER[u?.card_effect??''] ?? 'profile-card-enter'}` : ''}`}>
+      {(() => {
+        const ccKey = ((u as any)?.card_color || 'default') as CardColorKey;
+        const cfKey = ((u as any)?.card_font  || 'default') as CardFontKey;
+        const ccDef = CARD_COLORS.find(c => c.key === ccKey) ?? CARD_COLORS[0];
+        const cfDef = CARD_FONTS.find(f => f.key === cfKey)  ?? CARD_FONTS[0];
+        const cardBg = ccDef.hex;
+        const isLight = !ccDef.dark;
+        const bannerBg = u?.banner_url
+          ? { backgroundImage: `url(${staticUrl(u.banner_url)})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+          : { background: ccDef.bannerGrad };
+        return (
+      <div className={`relative border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden${isLight ? ' card-light-mode' : ''}${profileCardAnim !== false ? ` ${CUSTOM_ENTER[u?.card_effect??''] ?? 'profile-card-enter'}` : ''}`}
+        style={{ backgroundColor: cardBg, fontFamily: cfDef.css }}>
         <CardEffectOverlay effect={u?.card_effect} />
         {/* Banner */}
-        <div className="h-16 relative" style={u?.banner_url
-          ? { backgroundImage: `url(${staticUrl(u.banner_url)})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-          : { background: 'linear-gradient(135deg, #2e2e48 0%, #1a1a2e 100%)' }}>
+        <div className="h-16 relative" style={bannerBg}>
           {/* Avatar */}
           <div className="absolute -bottom-6 left-4">
             <div className="relative av-frozen av-active" style={{'--av-url':`url("${staticUrl(u?.avatar_url)||`https://api.dicebear.com/9.x/identicon/svg?seed=${u?.username||userId}`}")`} as React.CSSProperties}>
               <img src={staticUrl(u?.avatar_url)||`https://api.dicebear.com/9.x/identicon/svg?seed=${u?.username||userId}`}
-                className={`w-14 h-14 rounded-2xl object-cover border-4 border-[#18182a] av-eff-${u?.avatar_effect||'none'} av-sc`} alt=""/>
-              <span className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-[#18182a] ${sc(effectiveStatus)}`}/>
+                className={`w-14 h-14 rounded-2xl object-cover border-4 av-eff-${u?.avatar_effect||'none'} av-sc`}
+                style={{ borderColor: cardBg }} alt=""/>
+              <span className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 ${sc(effectiveStatus)}`}
+                style={{ borderColor: cardBg }}/>
             </div>
           </div>
         </div>
@@ -5452,6 +5492,8 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
           </button>
         </div>
       </div>
+        );
+      })()}
     </div>
   );
 }
@@ -5883,6 +5925,8 @@ export default function App() {
   const [selectedTheme, setSelectedTheme]       = useState<ThemeId>('default');
   const [avatarEffect, setAvatarEffect]         = useState<string>('none');
   const [cardEffect, setCardEffect]             = useState<string>('none');
+  const [cardColor, setCardColor]               = useState<CardColorKey>('default');
+  const [cardFont, setCardFont]                 = useState<CardFontKey>('default');
   const [compactMessages, setCompactMessages]   = useState<boolean>(false);
   const [fontSize, setFontSize]                 = useState<'small'|'normal'|'large'>('normal');
   const [alwaysShowTimestamps, setAlwaysShowTimestamps] = useState<boolean>(false);
@@ -8036,6 +8080,16 @@ export default function App() {
     if (upd) { setCurrentUser(upd); setEditProf({...upd}); setCardEffect(effect); addToast('Efekt karty zmieniony', 'success'); }
     else addToast('Błąd zapisu', 'error');
   };
+  const saveCardColor = async (color: CardColorKey) => {
+    const upd = await users.updateMe({ card_color: color } as any).catch(() => null);
+    if (upd) { setCurrentUser(upd); setEditProf({...upd}); setCardColor(color); addToast('Kolor karty zmieniony', 'success'); }
+    else addToast('Błąd zapisu', 'error');
+  };
+  const saveCardFont = async (font: CardFontKey) => {
+    const upd = await users.updateMe({ card_font: font } as any).catch(() => null);
+    if (upd) { setCurrentUser(upd); setEditProf({...upd}); setCardFont(font); addToast('Czcionka karty zmieniona', 'success'); }
+    else addToast('Błąd zapisu', 'error');
+  };
   const saveCompactMessages = async (compact: boolean) => {
     const upd = await users.updateMe({ compact_messages: compact }).catch(() => null);
     if (upd) { setCurrentUser(upd); setEditProf({...upd}); setCompactMessages(compact); addToast('Układ wiadomości zmieniony', 'success'); }
@@ -8115,6 +8169,8 @@ export default function App() {
     setAccentColor(u.accent_color || 'indigo');
     setAvatarEffect(u.avatar_effect || 'none');
     setCardEffect(u.card_effect || 'none');
+    setCardColor(((u as any).card_color || 'default') as CardColorKey);
+    setCardFont(((u as any).card_font || 'default') as CardFontKey);
     setCompactMessages(u.compact_messages ?? false);
     setNoiseCancel(u.voice_noise_cancel !== false); // default true
     setFontSize((u.font_size as 'small'|'normal'|'large') || 'normal');
@@ -15341,6 +15397,44 @@ export default function App() {
                           ))}
                         </div>
                       </div>
+
+                      {/* Card color picker */}
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Kolor tła karty profilu</label>
+                        <p className="text-xs text-zinc-500 mb-3 leading-relaxed">Kolor karty który widzą inni użytkownicy na Twoim profilu.</p>
+                        <div className="grid grid-cols-5 gap-2">
+                          {CARD_COLORS.map(cc=>(
+                            <button key={cc.key} onClick={()=>saveCardColor(cc.key as CardColorKey)}
+                              title={cc.label}
+                              className={`relative flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${cardColor===cc.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+                              <div className="w-9 h-9 rounded-xl border border-white/15 shrink-0"
+                                style={{ background: cc.bannerGrad }}/>
+                              <span className="text-[9px] text-zinc-400 font-medium leading-tight text-center">{cc.label}</span>
+                              {cardColor===cc.key&&<span className="absolute top-1 right-1 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={7} className="text-white"/></span>}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Card font picker */}
+                      <div>
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Czcionka karty profilu</label>
+                        <p className="text-xs text-zinc-500 mb-3 leading-relaxed">Czcionka tekstu na Twojej karcie profilu widoczna dla innych.</p>
+                        <div className="grid grid-cols-5 gap-2">
+                          {CARD_FONTS.map(cf=>(
+                            <button key={cf.key} onClick={()=>saveCardFont(cf.key as CardFontKey)}
+                              title={cf.label}
+                              className={`relative flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${cardFont===cf.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+                              <div className="w-9 h-9 rounded-xl bg-[#0f0f1a] border border-white/10 flex items-center justify-center overflow-hidden">
+                                <span className="text-[11px] text-white font-bold" style={{ fontFamily: cf.css }}>Aa</span>
+                              </div>
+                              <span className="text-[9px] text-zinc-400 font-medium leading-tight text-center">{cf.label}</span>
+                              {cardFont===cf.key&&<span className="absolute top-1 right-1 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={7} className="text-white"/></span>}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
                       </div>{/* end s-accessibility */}
                     </motion.div>
                   )}

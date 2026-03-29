@@ -1087,6 +1087,23 @@ img.av-eff-arcade-coin { transition: filter 0.3s; }
   animation: profile-card-enter-ice 0.3s ease-out forwards;
 }
 
+/* ── Light-mode card overrides ──────────────────────────────────── */
+.card-light-mode p,
+.card-light-mode span:not(.av-sc):not([class*="status"]):not([class*="bg-"]),
+.card-light-mode div > p,
+.card-light-mode .text-white { color: #1e293b !important; }
+.card-light-mode .text-zinc-400,
+.card-light-mode .text-zinc-500,
+.card-light-mode .text-zinc-600 { color: #475569 !important; }
+.card-light-mode .border-white\/\[0\.1\],
+.card-light-mode .border-white\/\[0\.06\] { border-color: rgba(0,0,0,0.1) !important; }
+.card-light-mode .bg-white\/\[0\.04\],
+.card-light-mode .bg-white\/\[0\.05\],
+.card-light-mode .bg-white\/\[0\.06\] { background-color: rgba(0,0,0,0.06) !important; }
+.card-light-mode .border-white\/\[0\.08\] { border-color: rgba(0,0,0,0.08) !important; }
+.card-light-mode button { color: #334155 !important; }
+.card-light-mode button:hover { background-color: rgba(0,0,0,0.08) !important; }
+
 /* ── Card Effect Overlays ──────────────────────────────────────── */
 /* fire, smoke, atomic, teleport → canvas (CardEffectCanvas) */
 

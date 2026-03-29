@@ -59,7 +59,7 @@ const bannerUpload = makeUpload('banners');
 router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { rows } = await query(
-      `SELECT u.id, u.username, u.avatar_url, u.banner_url, u.banner_color, u.bio, u.custom_status, u.avatar_effect, u.card_effect,
+      `SELECT u.id, u.username, u.avatar_url, u.banner_url, u.banner_color, u.bio, u.custom_status, u.avatar_effect, u.card_effect, u.card_color, u.card_font,
               CASE WHEN u.privacy_status_visible=FALSE AND u.id!=$2 THEN 'offline' ELSE u.status END as status,
               u.accent_color, u.compact_messages,
               u.privacy_status_visible, u.privacy_typing_visible, u.privacy_read_receipts, u.privacy_friend_requests,
@@ -120,6 +120,8 @@ router.put('/me', authMiddleware,
     body('privacy_dm_from_strangers').optional().isBoolean(),
     body('avatar_effect').optional().isIn(['none','glow','pulse','rainbow','neon','vortex-cw','portal','quantum','glitch','scan','katana','liquid-morph','radar-sweep','vhs','toxic-slime','sakura','demon','neon-cat','magic-aura','level-up','super-aura','crazy-eyes','hacker-smile','angelic-wings','arcade-coin']),
     body('card_effect').optional().isIn(['none','fire','hologram','rainbow','aurora','smoke','ink','teleport','matrix','vortex','glitch','meteor','lava','ice']),
+    body('card_color').optional().isIn(['default','slate','crimson','forest','ocean','rose','white','sky','lavender','cream']),
+    body('card_font').optional().isIn(['default','mono','serif','nunito','pixel','caveat','playfair','bebas','orbitron','comic']),
     body('theme_id').optional().isIn(['default','midnight','amoled','forest','sakura','sunset']),
   ],
   async (req: AuthRequest, res: Response) => {
@@ -130,7 +132,7 @@ router.put('/me', authMiddleware,
       accent_color, compact_messages, voice_noise_cancel,
       font_size, show_timestamps, show_chat_avatars, message_animations, show_link_previews,
       privacy_status_visible, privacy_typing_visible, privacy_read_receipts, privacy_friend_requests,
-      privacy_dm_from_strangers, avatar_effect, card_effect, theme_id,
+      privacy_dm_from_strangers, avatar_effect, card_effect, card_color, card_font, theme_id,
     } = req.body;
     const updates: string[] = [];
     const values: any[] = [];
@@ -155,6 +157,8 @@ router.put('/me', authMiddleware,
     if (privacy_dm_from_strangers !== undefined) { updates.push(`privacy_dm_from_strangers=$${idx++}`); values.push(privacy_dm_from_strangers); }
     if (avatar_effect             !== undefined) { updates.push(`avatar_effect=$${idx++}`);             values.push(avatar_effect); }
     if (card_effect               !== undefined) { updates.push(`card_effect=$${idx++}`);               values.push(card_effect); }
+    if (card_color                !== undefined) { updates.push(`card_color=$${idx++}`);                values.push(card_color); }
+    if (card_font                 !== undefined) { updates.push(`card_font=$${idx++}`);                 values.push(card_font); }
     if (theme_id                  !== undefined) { updates.push(`theme_id=$${idx++}`);                  values.push(theme_id); }
     if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update' });
     updates.push(`updated_at=NOW()`);
@@ -170,7 +174,7 @@ router.put('/me', authMiddleware,
                    accent_color,compact_messages,voice_noise_cancel,
                    font_size,show_timestamps,show_chat_avatars,message_animations,show_link_previews,
                    privacy_status_visible,privacy_typing_visible,privacy_read_receipts,
-                   privacy_friend_requests,privacy_dm_from_strangers,avatar_effect,card_effect,theme_id`,
+                   privacy_friend_requests,privacy_dm_from_strangers,avatar_effect,card_effect,card_color,card_font,theme_id`,
         values
       );
       await broadcastUserUpdate(req, { id: rows[0].id, username: rows[0].username, avatar_url: rows[0].avatar_url, banner_url: rows[0].banner_url, banner_color: rows[0].banner_color, bio: rows[0].bio, custom_status: rows[0].custom_status, privacy_read_receipts: rows[0].privacy_read_receipts, avatar_effect: rows[0].avatar_effect });
