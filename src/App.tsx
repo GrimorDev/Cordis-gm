@@ -162,30 +162,51 @@ const CARD_EFFECTS = [
 ] as const;
 
 const CARD_COLORS = [
-  { key: 'default',  label: 'Domyślny', hex: '#18182a', dark: true,  bannerGrad: 'linear-gradient(135deg,#2e2e48,#1a1a2e)' },
-  { key: 'slate',    label: 'Grafit',   hex: '#0f172a', dark: true,  bannerGrad: 'linear-gradient(135deg,#1e293b,#0f172a)' },
-  { key: 'crimson',  label: 'Karmazyn', hex: '#1a0810', dark: true,  bannerGrad: 'linear-gradient(135deg,#3b0a1e,#1a0810)' },
-  { key: 'forest',   label: 'Las',      hex: '#081a0c', dark: true,  bannerGrad: 'linear-gradient(135deg,#14532d,#081a0c)' },
-  { key: 'ocean',    label: 'Ocean',    hex: '#071428', dark: true,  bannerGrad: 'linear-gradient(135deg,#0c2a4a,#071428)' },
-  { key: 'rose',     label: 'Róż',      hex: '#fce7f3', dark: false, bannerGrad: 'linear-gradient(135deg,#fbcfe8,#f9a8d4)' },
-  { key: 'white',    label: 'Biały',    hex: '#f8fafc', dark: false, bannerGrad: 'linear-gradient(135deg,#e2e8f0,#cbd5e1)' },
-  { key: 'sky',      label: 'Błękit',   hex: '#e0f2fe', dark: false, bannerGrad: 'linear-gradient(135deg,#bae6fd,#7dd3fc)' },
-  { key: 'lavender', label: 'Lawenda',  hex: '#ede9fe', dark: false, bannerGrad: 'linear-gradient(135deg,#ddd6fe,#c4b5fd)' },
-  { key: 'cream',    label: 'Krem',     hex: '#fef9ef', dark: false, bannerGrad: 'linear-gradient(135deg,#fef3c7,#fde68a)' },
+  // Dark cards
+  { key: 'default',  label: 'Domyślny',  hex: '#18182a', dark: true,  bannerGrad: 'linear-gradient(135deg,#2e2e48,#1a1a2e)' },
+  { key: 'slate',    label: 'Grafit',    hex: '#0f172a', dark: true,  bannerGrad: 'linear-gradient(135deg,#1e293b,#0f172a)' },
+  { key: 'midnight', label: 'Midnight',  hex: '#04040f', dark: true,  bannerGrad: 'linear-gradient(135deg,#0a0a2e,#04040f)' },
+  { key: 'crimson',  label: 'Karmazyn',  hex: '#1a0810', dark: true,  bannerGrad: 'linear-gradient(135deg,#3b0a1e,#1a0810)' },
+  { key: 'forest',   label: 'Las',       hex: '#081a0c', dark: true,  bannerGrad: 'linear-gradient(135deg,#14532d,#081a0c)' },
+  { key: 'ocean',    label: 'Ocean',     hex: '#071428', dark: true,  bannerGrad: 'linear-gradient(135deg,#0c2a4a,#071428)' },
+  { key: 'neon',     label: 'Neon',      hex: '#020b14', dark: true,  bannerGrad: 'linear-gradient(135deg,#003366,#001a44)' },
+  { key: 'copper',   label: 'Miedź',     hex: '#1a0e04', dark: true,  bannerGrad: 'linear-gradient(135deg,#7c2d12,#431407)' },
+  { key: 'violet',   label: 'Fiolet',    hex: '#120820', dark: true,  bannerGrad: 'linear-gradient(135deg,#4c1d95,#2e1065)' },
+  { key: 'teal',     label: 'Turkus',    hex: '#031a18', dark: true,  bannerGrad: 'linear-gradient(135deg,#134e4a,#042f2e)' },
+  { key: 'charcoal', label: 'Węgiel',    hex: '#111111', dark: true,  bannerGrad: 'linear-gradient(135deg,#27272a,#18181b)' },
+  { key: 'olive',    label: 'Oliwkowy',  hex: '#111a04', dark: true,  bannerGrad: 'linear-gradient(135deg,#365314,#1a2e05)' },
+  // Light cards
+  { key: 'rose',     label: 'Róż',       hex: '#fce7f3', dark: false, bannerGrad: 'linear-gradient(135deg,#fbcfe8,#f9a8d4)' },
+  { key: 'white',    label: 'Biały',     hex: '#f8fafc', dark: false, bannerGrad: 'linear-gradient(135deg,#e2e8f0,#cbd5e1)' },
+  { key: 'sky',      label: 'Błękit',    hex: '#e0f2fe', dark: false, bannerGrad: 'linear-gradient(135deg,#bae6fd,#7dd3fc)' },
+  { key: 'lavender', label: 'Lawenda',   hex: '#ede9fe', dark: false, bannerGrad: 'linear-gradient(135deg,#ddd6fe,#c4b5fd)' },
+  { key: 'cream',    label: 'Krem',      hex: '#fef9ef', dark: false, bannerGrad: 'linear-gradient(135deg,#fef3c7,#fde68a)' },
+  { key: 'coral',    label: 'Koral',     hex: '#fff1ee', dark: false, bannerGrad: 'linear-gradient(135deg,#fed7aa,#fdba74)' },
+  { key: 'mint',     label: 'Mięta',     hex: '#ecfdf5', dark: false, bannerGrad: 'linear-gradient(135deg,#a7f3d0,#6ee7b7)' },
+  { key: 'sand',     label: 'Piasek',    hex: '#fdf4e3', dark: false, bannerGrad: 'linear-gradient(135deg,#e9d5a1,#d4b896)' },
 ] as const;
 type CardColorKey = typeof CARD_COLORS[number]['key'];
 
+// size = base font-size applied to the card to visually normalize across typefaces
 const CARD_FONTS = [
-  { key: 'default',  label: 'Domyślny',  css: "system-ui,-apple-system,sans-serif" },
-  { key: 'mono',     label: 'Mono',      css: "'Courier New',Courier,monospace" },
-  { key: 'serif',    label: 'Szeryfowy', css: "Georgia,'Times New Roman',serif" },
-  { key: 'nunito',   label: 'Nunito',    css: "'Nunito',sans-serif" },
-  { key: 'pixel',    label: 'Pixel',     css: "'Press Start 2P',cursive" },
-  { key: 'caveat',   label: 'Pismo',     css: "'Caveat',cursive" },
-  { key: 'playfair', label: 'Elegancki', css: "'Playfair Display',serif" },
-  { key: 'bebas',    label: 'Bebas',     css: "'Bebas Neue',cursive" },
-  { key: 'orbitron', label: 'Orbitron',  css: "'Orbitron',sans-serif" },
-  { key: 'comic',    label: 'Comic',     css: "'Comic Sans MS','Comic Sans',cursive" },
+  { key: 'default',   label: 'Domyślny',   css: "system-ui,-apple-system,sans-serif",    size: '14px' },
+  { key: 'mono',      label: 'Mono',       css: "'Courier New',Courier,monospace",        size: '13px' },
+  { key: 'serif',     label: 'Szeryfowy',  css: "Georgia,'Times New Roman',serif",        size: '14px' },
+  { key: 'nunito',    label: 'Nunito',     css: "'Nunito',sans-serif",                    size: '14px' },
+  { key: 'raleway',   label: 'Raleway',    css: "'Raleway',sans-serif",                   size: '14px' },
+  { key: 'josefin',   label: 'Josefin',    css: "'Josefin Sans',sans-serif",              size: '13px' },
+  { key: 'exo',       label: 'Exo',        css: "'Exo 2',sans-serif",                     size: '13px' },
+  { key: 'ubuntu',    label: 'Ubuntu',     css: "'Ubuntu',sans-serif",                    size: '14px' },
+  { key: 'pixel',     label: 'Pixel',      css: "'Press Start 2P',cursive",               size: '8px'  },
+  { key: 'orbitron',  label: 'Orbitron',   css: "'Orbitron',sans-serif",                  size: '11px' },
+  { key: 'bebas',     label: 'Bebas',      css: "'Bebas Neue',cursive",                   size: '18px' },
+  { key: 'cinzel',    label: 'Cinzel',     css: "'Cinzel',serif",                         size: '12px' },
+  { key: 'playfair',  label: 'Elegancki',  css: "'Playfair Display',serif",               size: '13px' },
+  { key: 'caveat',    label: 'Pismo',      css: "'Caveat',cursive",                       size: '17px' },
+  { key: 'dancing',   label: 'Dancing',    css: "'Dancing Script',cursive",               size: '16px' },
+  { key: 'pacifico',  label: 'Pacifico',   css: "'Pacifico',cursive",                     size: '13px' },
+  { key: 'righteous', label: 'Righteous',  css: "'Righteous',cursive",                    size: '14px' },
+  { key: 'comic',     label: 'Comic',      css: "'Comic Sans MS','Comic Sans',cursive",   size: '13px' },
 ] as const;
 type CardFontKey = typeof CARD_FONTS[number]['key'];
 
@@ -5334,7 +5355,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
           : { background: ccDef.bannerGrad };
         return (
       <div className={`relative border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden${isLight ? ' card-light-mode' : ''}${profileCardAnim !== false ? ` ${CUSTOM_ENTER[u?.card_effect??''] ?? 'profile-card-enter'}` : ''}`}
-        style={{ backgroundColor: cardBg, fontFamily: cfDef.css }}>
+        style={{ backgroundColor: cardBg, fontFamily: cfDef.css, fontSize: cfDef.size }}>
         <CardEffectOverlay effect={u?.card_effect} />
         {/* Banner */}
         <div className="h-16 relative" style={bannerBg}>
@@ -15000,7 +15021,7 @@ export default function App() {
                       {id:'account',     label:t('settings.account'),    icon:<Users size={14}/>,
                         sections:[{id:'s-profil',label:'Profil'},{id:'s-info',label:'Informacje'},{id:'s-password',label:'Hasło & bezpieczeństwo'}]},
                       {id:'appearance',  label:t('settings.appearance'), icon:<Image size={14}/>,
-                        sections:[{id:'s-chat',label:'Czat'},{id:'s-accessibility',label:'Profil i efekty'}]},
+                        sections:[{id:'s-chat',label:'Czat'},{id:'s-accessibility',label:'Profil i efekty'},{id:'s-card-effect',label:'Efekt karty'}]},
                       {id:'theme',       label:'Motyw',                  icon:<Palette size={14}/>, sections:[]},
                       {id:'connections', label:'Połączone konta',        icon:<Link2 size={14}/>, sections:[]},
                     ]},
@@ -15370,7 +15391,7 @@ export default function App() {
                       </div>
 
                       {/* Card effect picker */}
-                      <div>
+                      <div id="s-card-effect" className="scroll-mt-4">
                         <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Efekt karty profilu</label>
                         <p className="text-xs text-zinc-500 mb-3 leading-relaxed">Animacja którą widzą inni gdy otwierają Twoją kartę profilu.</p>
                         {/* Live preview toggle */}
@@ -15398,19 +15419,61 @@ export default function App() {
                         </div>
                       </div>
 
+                      {/* ─── Live card preview ─────────────────────────────── */}
+                      {(() => {
+                        const pvCcDef = CARD_COLORS.find(c => c.key === cardColor) ?? CARD_COLORS[0];
+                        const pvCfDef = CARD_FONTS.find(f => f.key === cardFont)   ?? CARD_FONTS[0];
+                        const pvBg    = pvCcDef.hex;
+                        const pvLight = !pvCcDef.dark;
+                        const pvBanner = pvCcDef.bannerGrad;
+                        const pvText  = pvLight ? '#1e293b' : '#ffffff';
+                        const pvSub   = pvLight ? '#475569' : '#94a3b8';
+                        const pvBorder= pvLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.08)';
+                        const pvEffLabel = CARD_EFFECTS.find(e=>e.key===cardEffect)?.label ?? 'Brak';
+                        return (
+                          <div>
+                            <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Podgląd karty profilu</label>
+                            <div className="flex justify-center mb-1">
+                              <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-black/60"
+                                style={{ width: 220, backgroundColor: pvBg, fontFamily: pvCfDef.css, fontSize: pvCfDef.size, border: `1px solid ${pvBorder}` }}>
+                                {/* Banner */}
+                                <div className="h-12 relative" style={{ background: pvBanner }}>
+                                  <div className="absolute -bottom-5 left-3">
+                                    <img src={currentUser ? ava(currentUser) : ''}
+                                      className="w-10 h-10 rounded-xl object-cover border-[3px]"
+                                      style={{ borderColor: pvBg }} alt=""/>
+                                  </div>
+                                </div>
+                                {/* Content */}
+                                <div className="pt-7 px-3 pb-3">
+                                  <p className="text-sm font-bold leading-tight" style={{ color: pvText }}>{currentUser?.username ?? 'Użytkownik'}</p>
+                                  <p className="text-[10px] mt-0.5" style={{ color: pvSub }}>online</p>
+                                  {currentUser?.bio && <p className="text-[10px] mt-2 leading-relaxed opacity-70 line-clamp-2" style={{ color: pvSub }}>{currentUser.bio}</p>}
+                                  <div className="mt-2 pt-2 flex items-center gap-1.5" style={{ borderTop: `1px solid ${pvBorder}` }}>
+                                    <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: pvSub }}>Efekt:</span>
+                                    <span className="text-[9px]" style={{ color: pvText }}>{pvEffLabel}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <p className="text-[10px] text-zinc-600 text-center mb-4">Tak będzie wyglądać Twoja karta dla innych</p>
+                          </div>
+                        );
+                      })()}
+
                       {/* Card color picker */}
                       <div>
                         <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Kolor tła karty profilu</label>
                         <p className="text-xs text-zinc-500 mb-3 leading-relaxed">Kolor karty który widzą inni użytkownicy na Twoim profilu.</p>
-                        <div className="grid grid-cols-5 gap-2">
+                        <div className="grid grid-cols-6 gap-2">
                           {CARD_COLORS.map(cc=>(
                             <button key={cc.key} onClick={()=>saveCardColor(cc.key as CardColorKey)}
                               title={cc.label}
-                              className={`relative flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${cardColor===cc.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
-                              <div className="w-9 h-9 rounded-xl border border-white/15 shrink-0"
+                              className={`relative flex flex-col items-center gap-1 p-1.5 rounded-xl border transition-all ${cardColor===cc.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+                              <div className="w-8 h-8 rounded-lg border border-white/10 shrink-0"
                                 style={{ background: cc.bannerGrad }}/>
-                              <span className="text-[9px] text-zinc-400 font-medium leading-tight text-center">{cc.label}</span>
-                              {cardColor===cc.key&&<span className="absolute top-1 right-1 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={7} className="text-white"/></span>}
+                              <span className="text-[8px] text-zinc-400 font-medium leading-tight text-center truncate w-full">{cc.label}</span>
+                              {cardColor===cc.key&&<span className="absolute top-0.5 right-0.5 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={6} className="text-white"/></span>}
                             </button>
                           ))}
                         </div>
@@ -15420,16 +15483,17 @@ export default function App() {
                       <div>
                         <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Czcionka karty profilu</label>
                         <p className="text-xs text-zinc-500 mb-3 leading-relaxed">Czcionka tekstu na Twojej karcie profilu widoczna dla innych.</p>
-                        <div className="grid grid-cols-5 gap-2">
+                        <div className="grid grid-cols-6 gap-2">
                           {CARD_FONTS.map(cf=>(
                             <button key={cf.key} onClick={()=>saveCardFont(cf.key as CardFontKey)}
                               title={cf.label}
-                              className={`relative flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${cardFont===cf.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
-                              <div className="w-9 h-9 rounded-xl bg-[#0f0f1a] border border-white/10 flex items-center justify-center overflow-hidden">
-                                <span className="text-[11px] text-white font-bold" style={{ fontFamily: cf.css }}>Aa</span>
+                              className={`relative flex flex-col items-center gap-1 p-1.5 rounded-xl border transition-all ${cardFont===cf.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+                              <div className="w-8 h-8 rounded-lg bg-[#0f0f1a] border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+                                {/* fixed 12px so all fonts appear at same visual reference size */}
+                                <span style={{ fontFamily: cf.css, fontSize: '12px', color: '#fff', lineHeight: 1 }}>Aa</span>
                               </div>
-                              <span className="text-[9px] text-zinc-400 font-medium leading-tight text-center">{cf.label}</span>
-                              {cardFont===cf.key&&<span className="absolute top-1 right-1 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={7} className="text-white"/></span>}
+                              <span className="text-[8px] text-zinc-400 font-medium leading-tight text-center truncate w-full">{cf.label}</span>
+                              {cardFont===cf.key&&<span className="absolute top-0.5 right-0.5 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={6} className="text-white"/></span>}
                             </button>
                           ))}
                         </div>
