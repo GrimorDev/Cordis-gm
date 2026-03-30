@@ -138,6 +138,12 @@ export interface ServerToClientEvents {
   permissions_updated: (data: { server_id: string }) => void;
   banned_from_server: (data: { server_id: string }) => void;
   reaction_update: (data: any) => void;
+  // Group calls
+  group_call_invite: (data: any) => void;
+  group_call_state: (data: any) => void;
+  group_call_participant_joined: (data: any) => void;
+  group_call_participant_left: (data: any) => void;
+  group_call_ended: (data: { group_id: string }) => void;
 }
 
 export interface ClientToServerEvents {
@@ -163,6 +169,11 @@ export interface ClientToServerEvents {
   twitch_update: (data: { stream: { title: string; game_name: string; viewer_count: number; login: string } | null }) => void;
   steam_update: (data: { game: { name: string; gameid: string; header_image: string } | null }) => void;
   client_ping: (data: Record<string, never>, cb: () => void) => void;
+  // Group calls
+  group_call_start: (data: { group_id: string }) => void;
+  group_call_join: (data: { group_id: string }) => void;
+  group_call_leave: (data: { group_id: string }) => void;
+  group_call_dismiss: (data: { group_id: string }) => void;
 }
 
 export interface MessageWithSender extends Message {
