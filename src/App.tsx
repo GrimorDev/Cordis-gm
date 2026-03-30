@@ -6050,6 +6050,7 @@ export default function App() {
   // Group invite (in settings modal)
   const [groupInviteQ, setGroupInviteQ]       = useState('');
   const [groupInviting, setGroupInviting]     = useState<string|null>(null); // userId being invited
+  const [groupCallMinimized, setGroupCallMinimized] = useState(false);
 
   // Group call state
   type GroupCallInfo = { group_id: string; participants: string[]; pending: string[]; caller?: { id: string; username: string; avatar_url: string|null } };
@@ -11921,70 +11922,104 @@ export default function App() {
                   </div>
                 )}
 
-                {/* ── Active Group Call full-panel overlay (voice channel style) ── */}
+                {/* ── Active Group Call panel (voice-channel style, supports minimize) ── */}
                 {activeView==='dms' && activeGroupDm && activeGroupCall?.group_id === activeGroupDm && (() => {
                   const gc = groupConvs.find(g => g.id === activeGroupDm);
                   const allMembers = gc?.participants || [];
                   const callParts = activeGroupCall.participants || [];
                   const callPending = activeGroupCall.pending || [];
-                  const leaveCall = () => { leaveGroupCall(activeGroupDm!); cleanupWebRTC(); setActiveGroupCall(null); setGroupCallState(null); stopRing(); playCallEnded(); };
+                  const leaveCall = () => { leaveGroupCall(activeGroupDm!); cleanupWebRTC(); setActiveGroupCall(null); setGroupCallState(null); setGroupCallMinimized(false); stopRing(); playCallEnded(); };
                   return (
-                    <div className="absolute inset-0 z-20 flex flex-col bg-[#0d0d14]">
-                      {/* Participants grid */}
-                      <div className="flex-1 flex flex-wrap items-center justify-center gap-6 p-8 overflow-y-auto">
-                        {allMembers.map((m: any) => {
-                          const uid = m.user_id;
-                          const isActive = callParts.includes(uid);
-                          const isPending = callPending.includes(uid);
-                          const isMe = uid === currentUser?.id;
-                          const isSpeaking = speakingUsers.has(uid) && !(isMe ? (activeCall?.isMuted ?? false) : (voiceUserStates[uid]?.muted ?? false));
-                          const isMutedUser = isMe ? (activeCall?.isMuted ?? false) : (voiceUserStates[uid]?.muted ?? false);
-                          if (!isActive && !isPending) return null;
-                          return (
-                            <div key={uid} className="flex flex-col items-center gap-2.5">
-                              <div className={`relative p-1 rounded-2xl border-2 transition-all duration-150 ${
-                                isPending ? 'border-zinc-700/50' :
-                                isSpeaking ? 'border-emerald-500 shadow-[0_0_16px_3px_rgba(16,185,129,0.4)]' :
-                                isMutedUser ? 'border-rose-500/40' : 'border-white/10'
-                              }`}>
-                                <img src={ava({ avatar_url: m.avatar_url, username: m.username })}
-                                  className={`w-24 h-24 rounded-xl object-cover ${isPending ? 'opacity-40 grayscale' : ''}`} alt=""/>
-                                {/* Mic status badge */}
-                                <div className={`absolute bottom-1 right-1 w-6 h-6 rounded-full flex items-center justify-center border-2 border-[#0d0d14] ${
-                                  isPending ? 'bg-zinc-700' : isMutedUser ? 'bg-rose-500' : isSpeaking ? 'bg-emerald-500' : 'bg-zinc-700'
-                                }`}>
-                                  {isPending
-                                    ? <div className="flex gap-0.5">{[0,1,2].map(i=><span key={i} className="w-1 h-1 bg-zinc-400 rounded-full animate-bounce" style={{animationDelay:`${i*0.15}s`}}/>)}</div>
-                                    : isMutedUser ? <MicOff size={10} className="text-white"/> : <Mic size={10} className="text-white"/>
-                                  }
+                    <>
+                      {/* Mini banner shown when call is minimized */}
+                      {groupCallMinimized && (
+                        <div className="absolute top-0 left-0 right-0 z-20 flex items-center gap-3 px-4 py-2 bg-emerald-900/60 border-b border-emerald-500/20 backdrop-blur-sm">
+                          <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse shrink-0"/>
+                          <span className="text-xs font-semibold text-emerald-300 flex-1">Rozmowa grupowa w toku</span>
+                          {/* Participant avatars mini-row */}
+                          <div className="flex -space-x-1.5 mr-2">
+                            {allMembers.filter((m:any) => callParts.includes(m.user_id)).slice(0,5).map((m:any) => (
+                              <img key={m.user_id} src={ava({avatar_url:m.avatar_url,username:m.username})}
+                                className="w-5 h-5 rounded-full border border-emerald-900 object-cover" alt=""/>
+                            ))}
+                          </div>
+                          <button onClick={()=>setGroupCallMinimized(false)}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600/60 hover:bg-emerald-600 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 shrink-0">
+                            <Maximize2 size={11}/> Rozwiń
+                          </button>
+                          <button onClick={toggleMute} title={activeCall?.isMuted ? 'Włącz mikrofon' : 'Wycisz'}
+                            className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors shrink-0 ${activeCall?.isMuted ? 'bg-rose-500 text-white' : 'bg-white/[0.08] text-zinc-300 hover:text-white'}`}>
+                            {activeCall?.isMuted ? <MicOff size={11}/> : <Mic size={11}/>}
+                          </button>
+                          <button onClick={leaveCall}
+                            className="w-6 h-6 rounded-lg bg-rose-500 hover:bg-rose-400 flex items-center justify-center text-white transition-colors shrink-0">
+                            <PhoneOff size={11}/>
+                          </button>
+                        </div>
+                      )}
+                      {/* Full-panel (hidden when minimized) */}
+                      {!groupCallMinimized && (
+                        <div className="absolute inset-0 z-20 flex flex-col bg-[#0d0d14]">
+                          {/* Participants grid */}
+                          <div className="flex-1 flex flex-wrap items-center justify-center gap-6 p-8 overflow-y-auto">
+                            {allMembers.map((m: any) => {
+                              const uid = m.user_id;
+                              const isActive = callParts.includes(uid);
+                              const isPending = callPending.includes(uid);
+                              const isMe = uid === currentUser?.id;
+                              const isSpeaking = speakingUsers.has(uid) && !(isMe ? (activeCall?.isMuted ?? false) : (voiceUserStates[uid]?.muted ?? false));
+                              const isMutedUser = isMe ? (activeCall?.isMuted ?? false) : (voiceUserStates[uid]?.muted ?? false);
+                              if (!isActive && !isPending) return null;
+                              return (
+                                <div key={uid} className="flex flex-col items-center gap-2.5">
+                                  <div className={`relative p-1 rounded-2xl border-2 transition-all duration-150 ${
+                                    isPending ? 'border-zinc-700/50' :
+                                    isSpeaking ? 'border-emerald-500 shadow-[0_0_16px_3px_rgba(16,185,129,0.4)]' :
+                                    isMutedUser ? 'border-rose-500/40' : 'border-white/10'
+                                  }`}>
+                                    <img src={ava({ avatar_url: m.avatar_url, username: m.username })}
+                                      className={`w-24 h-24 rounded-xl object-cover ${isPending ? 'opacity-40 grayscale' : ''}`} alt=""/>
+                                    <div className={`absolute bottom-1 right-1 w-6 h-6 rounded-full flex items-center justify-center border-2 border-[#0d0d14] ${
+                                      isPending ? 'bg-zinc-700' : isMutedUser ? 'bg-rose-500' : isSpeaking ? 'bg-emerald-500' : 'bg-zinc-700'
+                                    }`}>
+                                      {isPending
+                                        ? <div className="flex gap-0.5">{[0,1,2].map(i=><span key={i} className="w-1 h-1 bg-zinc-400 rounded-full animate-bounce" style={{animationDelay:`${i*0.15}s`}}/>)}</div>
+                                        : isMutedUser ? <MicOff size={10} className="text-white"/> : <Mic size={10} className="text-white"/>
+                                      }
+                                    </div>
+                                  </div>
+                                  <p className={`text-sm font-semibold ${
+                                    isPending ? 'text-zinc-600' : isSpeaking ? 'text-emerald-400' : isMutedUser ? 'text-rose-400' : 'text-white'
+                                  }`}>
+                                    {m.username}{isMe && <span className="text-zinc-600 font-normal text-xs"> (Ty)</span>}
+                                  </p>
+                                  {isPending && <span className="text-[11px] text-zinc-700 -mt-1">dzwoni…</span>}
                                 </div>
-                              </div>
-                              <p className={`text-sm font-semibold ${
-                                isPending ? 'text-zinc-600' : isSpeaking ? 'text-emerald-400' : isMutedUser ? 'text-rose-400' : 'text-white'
+                              );
+                            })}
+                          </div>
+                          {/* Controls bar */}
+                          <div className="shrink-0 h-20 border-t border-white/[0.06] bg-black/30 flex items-center justify-center gap-4 px-6">
+                            <button onClick={()=>setGroupCallMinimized(true)} title="Minimalizuj — wróć do czatu"
+                              className="w-12 h-12 rounded-2xl bg-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.14] flex items-center justify-center transition-all active:scale-90">
+                              <Minimize2 size={18}/>
+                            </button>
+                            <button onClick={toggleMute} title={activeCall?.isMuted ? 'Włącz mikrofon' : 'Wycisz'}
+                              className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all active:scale-90 ${
+                                activeCall?.isMuted
+                                  ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30 hover:bg-rose-400'
+                                  : 'bg-white/[0.08] text-zinc-300 hover:bg-white/[0.14] hover:text-white'
                               }`}>
-                                {m.username}{isMe && <span className="text-zinc-600 font-normal text-xs"> (Ty)</span>}
-                              </p>
-                              {isPending && <span className="text-[11px] text-zinc-700 -mt-1">dzwoni…</span>}
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {/* Controls bar */}
-                      <div className="shrink-0 h-20 border-t border-white/[0.06] bg-black/30 flex items-center justify-center gap-4 px-6">
-                        <button onClick={toggleMute} title={activeCall?.isMuted ? 'Włącz mikrofon' : 'Wycisz'}
-                          className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all active:scale-90 ${
-                            activeCall?.isMuted
-                              ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30 hover:bg-rose-400'
-                              : 'bg-white/[0.08] text-zinc-300 hover:bg-white/[0.14] hover:text-white'
-                          }`}>
-                          {activeCall?.isMuted ? <MicOff size={18}/> : <Mic size={18}/>}
-                        </button>
-                        <button onClick={leaveCall} title="Rozłącz"
-                          className="w-14 h-12 rounded-2xl bg-rose-500 hover:bg-rose-400 active:scale-90 flex items-center justify-center text-white transition-all shadow-lg shadow-rose-500/30 gap-1.5 px-4">
-                          <PhoneOff size={18}/>
-                        </button>
-                      </div>
-                    </div>
+                              {activeCall?.isMuted ? <MicOff size={18}/> : <Mic size={18}/>}
+                            </button>
+                            <button onClick={leaveCall} title="Rozłącz"
+                              className="w-14 h-12 rounded-2xl bg-rose-500 hover:bg-rose-400 active:scale-90 flex items-center justify-center text-white transition-all shadow-lg shadow-rose-500/30">
+                              <PhoneOff size={18}/>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   );
                 })()}
                 {/* New messages indicator — shown when user scrolled up and new message arrived */}
