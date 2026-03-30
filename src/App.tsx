@@ -11920,6 +11920,73 @@ export default function App() {
                     <p className="text-xs text-zinc-400 mt-1">Obrazy, audio, wideo, kod, archiwa i więcej</p>
                   </div>
                 )}
+
+                {/* ── Active Group Call full-panel overlay (voice channel style) ── */}
+                {activeView==='dms' && activeGroupDm && activeGroupCall?.group_id === activeGroupDm && (() => {
+                  const gc = groupConvs.find(g => g.id === activeGroupDm);
+                  const allMembers = gc?.participants || [];
+                  const callParts = activeGroupCall.participants || [];
+                  const callPending = activeGroupCall.pending || [];
+                  const leaveCall = () => { leaveGroupCall(activeGroupDm!); cleanupWebRTC(); setActiveGroupCall(null); setGroupCallState(null); stopRing(); playCallEnded(); };
+                  return (
+                    <div className="absolute inset-0 z-20 flex flex-col bg-[#0d0d14]">
+                      {/* Participants grid */}
+                      <div className="flex-1 flex flex-wrap items-center justify-center gap-6 p-8 overflow-y-auto">
+                        {allMembers.map((m: any) => {
+                          const uid = m.user_id;
+                          const isActive = callParts.includes(uid);
+                          const isPending = callPending.includes(uid);
+                          const isMe = uid === currentUser?.id;
+                          const isSpeaking = speakingUsers.has(uid) && !(isMe ? (activeCall?.isMuted ?? false) : (voiceUserStates[uid]?.muted ?? false));
+                          const isMutedUser = isMe ? (activeCall?.isMuted ?? false) : (voiceUserStates[uid]?.muted ?? false);
+                          if (!isActive && !isPending) return null;
+                          return (
+                            <div key={uid} className="flex flex-col items-center gap-2.5">
+                              <div className={`relative p-1 rounded-2xl border-2 transition-all duration-150 ${
+                                isPending ? 'border-zinc-700/50' :
+                                isSpeaking ? 'border-emerald-500 shadow-[0_0_16px_3px_rgba(16,185,129,0.4)]' :
+                                isMutedUser ? 'border-rose-500/40' : 'border-white/10'
+                              }`}>
+                                <img src={ava({ avatar_url: m.avatar_url, username: m.username })}
+                                  className={`w-24 h-24 rounded-xl object-cover ${isPending ? 'opacity-40 grayscale' : ''}`} alt=""/>
+                                {/* Mic status badge */}
+                                <div className={`absolute bottom-1 right-1 w-6 h-6 rounded-full flex items-center justify-center border-2 border-[#0d0d14] ${
+                                  isPending ? 'bg-zinc-700' : isMutedUser ? 'bg-rose-500' : isSpeaking ? 'bg-emerald-500' : 'bg-zinc-700'
+                                }`}>
+                                  {isPending
+                                    ? <div className="flex gap-0.5">{[0,1,2].map(i=><span key={i} className="w-1 h-1 bg-zinc-400 rounded-full animate-bounce" style={{animationDelay:`${i*0.15}s`}}/>)}</div>
+                                    : isMutedUser ? <MicOff size={10} className="text-white"/> : <Mic size={10} className="text-white"/>
+                                  }
+                                </div>
+                              </div>
+                              <p className={`text-sm font-semibold ${
+                                isPending ? 'text-zinc-600' : isSpeaking ? 'text-emerald-400' : isMutedUser ? 'text-rose-400' : 'text-white'
+                              }`}>
+                                {m.username}{isMe && <span className="text-zinc-600 font-normal text-xs"> (Ty)</span>}
+                              </p>
+                              {isPending && <span className="text-[11px] text-zinc-700 -mt-1">dzwoni…</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {/* Controls bar */}
+                      <div className="shrink-0 h-20 border-t border-white/[0.06] bg-black/30 flex items-center justify-center gap-4 px-6">
+                        <button onClick={toggleMute} title={activeCall?.isMuted ? 'Włącz mikrofon' : 'Wycisz'}
+                          className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all active:scale-90 ${
+                            activeCall?.isMuted
+                              ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30 hover:bg-rose-400'
+                              : 'bg-white/[0.08] text-zinc-300 hover:bg-white/[0.14] hover:text-white'
+                          }`}>
+                          {activeCall?.isMuted ? <MicOff size={18}/> : <Mic size={18}/>}
+                        </button>
+                        <button onClick={leaveCall} title="Rozłącz"
+                          className="w-14 h-12 rounded-2xl bg-rose-500 hover:bg-rose-400 active:scale-90 flex items-center justify-center text-white transition-all shadow-lg shadow-rose-500/30 gap-1.5 px-4">
+                          <PhoneOff size={18}/>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
                 {/* New messages indicator — shown when user scrolled up and new message arrived */}
                 {hasNewMsgs && (
                   <button
@@ -11976,65 +12043,6 @@ export default function App() {
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
                   className="mt-auto flex flex-col gap-1">
-                  {/* ── Active Group Call Panel ── */}
-                  {activeView==='dms' && activeGroupDm && activeGroupCall?.group_id === activeGroupDm && (() => {
-                    const gc = groupConvs.find(g => g.id === activeGroupDm);
-                    const allMembers = gc?.participants || [];
-                    const callParts = activeGroupCall.participants || [];
-                    const callPending = activeGroupCall.pending || [];
-                    return (
-                      <div className="mx-4 mb-4 mt-2 rounded-2xl bg-[#141420] border border-white/[0.08] overflow-hidden">
-                        <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06]">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"/>
-                            <span className="text-xs font-semibold text-emerald-400">Rozmowa aktywna</span>
-                          </div>
-                          <button onClick={()=>{ leaveGroupCall(activeGroupDm!); cleanupWebRTC(); setActiveGroupCall(null); setGroupCallState(null); stopRing(); playCallEnded(); }}
-                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-semibold transition-colors">
-                            <PhoneOff size={11}/> Rozłącz
-                          </button>
-                        </div>
-                        <div className="flex flex-wrap gap-3 px-4 py-3">
-                          {allMembers.map((m: any) => {
-                            const uid = m.user_id;
-                            const isActive = callParts.includes(uid);
-                            const isPending = callPending.includes(uid);
-                            const isMe = uid === currentUser?.id;
-                            if (!isActive && !isPending) return null;
-                            return (
-                              <div key={uid} className="flex flex-col items-center gap-1.5">
-                                <div className="relative">
-                                  <img src={ava({ avatar_url: m.avatar_url, username: m.username })}
-                                    className={`w-12 h-12 rounded-xl object-cover ${isActive ? 'ring-2 ring-emerald-400/60' : 'opacity-50 grayscale'}`} alt=""/>
-                                  {isPending && (
-                                    <div className="absolute bottom-0 left-0 right-0 flex justify-center gap-0.5 pb-1">
-                                      {[0,1,2].map(i => (
-                                        <span key={i} className="w-1 h-1 bg-zinc-400 rounded-full animate-bounce" style={{animationDelay:`${i*0.15}s`}}/>
-                                      ))}
-                                    </div>
-                                  )}
-                                  {isActive && (
-                                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center border-2 border-[#141420]">
-                                      <Mic size={7} className="text-white"/>
-                                    </div>
-                                  )}
-                                </div>
-                                <span className="text-[10px] text-zinc-400 truncate max-w-[50px]">{isMe ? 'Ty' : m.username}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                        <div className="flex items-center gap-2 px-4 pb-3">
-                          <button onClick={toggleMute}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeCall?.isMuted ? 'bg-rose-500/20 text-rose-400' : 'bg-white/[0.06] text-zinc-400 hover:text-white'}`}>
-                            {activeCall?.isMuted ? <MicOff size={11}/> : <Mic size={11}/>}
-                            {activeCall?.isMuted ? 'Wyłączony' : 'Mikrofon'}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
                   {/* ── Group DM messages ── */}
                   {activeView==='dms' && activeGroupDm && (() => {
                     const msgs = groupMessages[activeGroupDm] || [];
