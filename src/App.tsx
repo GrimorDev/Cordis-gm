@@ -10125,7 +10125,7 @@ export default function App() {
                     className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/15 text-white border border-indigo-500/25':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
                     <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 flex items-center justify-center shrink-0 overflow-hidden">
                       {gc.icon_url
-                        ? <img src={gc.icon_url} className="w-full h-full object-cover" alt=""/>
+                        ? <img src={staticUrl(gc.icon_url)} className="w-full h-full object-cover" alt=""/>
                         : <Users size={14} className="text-indigo-400"/>}
                     </div>
                     <div className="flex-1 truncate text-left min-w-0">
@@ -11451,7 +11451,7 @@ export default function App() {
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {activeView==='dms'&&activeGroupDm&&<>
+                  {activeView==='dms'&&activeGroupDm&&groupConvs.find(g=>g.id===activeGroupDm)?.creator_id===currentUser?.id&&<>
                     <button onClick={()=>{ const gc=groupConvs.find(g=>g.id===activeGroupDm); setGroupEditName(gc?.name||''); setGroupEditIconFile(null); setGroupEditIconPreview(gc?.icon_url?staticUrl(gc.icon_url):null); setGroupSettingsOpen(true); }}
                       className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all duration-150 active:scale-95" title="Ustawienia grupy"><Settings size={15}/></button>
                     <div className="w-px h-4 bg-white/[0.06] mx-1"/>
@@ -12878,6 +12878,7 @@ export default function App() {
                   {parts.map((p: GroupDmParticipant) => {
                     const uid = p.user_id;
                     const isMe = uid === currentUser?.id;
+                    const isOwner = uid === gc?.creator_id;
                     const status = isMe
                       ? (currentUser?.status || 'offline')
                       : (friends.find(f => f.id === uid)?.status
@@ -12890,9 +12891,10 @@ export default function App() {
                           <img src={ava({avatar_url: p.avatar_url, username: p.username})} className="w-8 h-8 rounded-xl object-cover" alt=""/>
                           <StatusBadge status={status} size={9} className="absolute -bottom-0.5 -right-0.5"/>
                         </div>
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 flex items-center gap-1.5">
                           <p className="text-[13px] font-semibold text-zinc-300 group-hover:text-white transition-colors truncate">{maskName(p.username)}</p>
-                          {isMe && <p className="text-[10px] text-indigo-400 leading-tight">Ty</p>}
+                          {isOwner && <Crown size={11} className="text-amber-400 shrink-0" title="Właściciel grupy"/>}
+                          {isMe && !isOwner && <span className="text-[10px] text-indigo-400 shrink-0">Ty</span>}
                         </div>
                       </div>
                     );
