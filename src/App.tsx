@@ -12863,6 +12863,44 @@ export default function App() {
           </button>
         )}
         <aside className={`hidden xl:flex shrink-0 flex-col gap-0 glass-panel rounded-2xl overflow-y-auto custom-scrollbar transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${showCallPanel && activeCall && !rightPanelOpen ? 'w-0 opacity-0 overflow-hidden p-0' : 'w-64 opacity-100'}`}>
+          {/* ─ GROUP DM MEMBERS ─ */}
+          {activeView==='dms' && activeGroupDm && (() => {
+            const gc = groupConvs.find(g => g.id === activeGroupDm);
+            const parts = gc?.participants || [];
+            if (!parts.length) return null;
+            return (
+              <div className="p-4 border-b border-white/[0.07]">
+                <div className="flex items-center gap-2 mb-3">
+                  <Users size={12} className="text-zinc-500"/>
+                  <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Członkowie — {parts.length}</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  {parts.map((p: GroupDmParticipant) => {
+                    const uid = p.user_id;
+                    const isMe = uid === currentUser?.id;
+                    const status = isMe
+                      ? (currentUser?.status || 'offline')
+                      : (friends.find(f => f.id === uid)?.status
+                         || dmConvs.find(d => d.other_user_id === uid)?.other_status
+                         || 'offline');
+                    return (
+                      <div key={uid} className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl hover:bg-white/[0.04] transition-all group cursor-pointer"
+                        onClick={e => showHoverCard(uid, e)}>
+                        <div className="relative shrink-0">
+                          <img src={ava({avatar_url: p.avatar_url, username: p.username})} className="w-8 h-8 rounded-xl object-cover" alt=""/>
+                          <StatusBadge status={status} size={9} className="absolute -bottom-0.5 -right-0.5"/>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-semibold text-zinc-300 group-hover:text-white transition-colors truncate">{maskName(p.username)}</p>
+                          {isMe && <p className="text-[10px] text-indigo-400 leading-tight">Ty</p>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
           {/* ─ LIVE VOICE BLOCK ─ */}
           {activeView==='servers'&&canViewServerActivity&&(()=>{
             // find first voice channel on current server with users
