@@ -5864,6 +5864,7 @@ export default function App() {
   const currentUserRef      = useRef(currentUser);
   const activeCallRef       = useRef(activeCall);
   const activeDmUserIdRef   = useRef(activeDmUserId);
+  const activeGroupDmRef    = useRef<string|null>(null);
   const activeViewRef       = useRef(activeView);
   const activeServerRef     = useRef(activeServer);
   const serverFullRef       = useRef(serverFull);
@@ -5872,6 +5873,8 @@ export default function App() {
   const voiceBcRef          = useRef<BroadcastChannel|null>(null); // shared BroadcastChannel for multi-tab voice
   // DM unread counts (keyed by other_user_id)
   const [unreadDms, setUnreadDms]             = useState<Record<string, number>>({});
+  // Group DM unread counts (keyed by group id)
+  const [unreadGroupDms, setUnreadGroupDms]   = useState<Record<string, number>>({});
   // Channel unread counts (keyed by channel_id)
   const [unreadChs, setUnreadChs]             = useState<Record<string, number>>({});
   // DM partner full profile (for BIO panel)
@@ -6807,6 +6810,15 @@ export default function App() {
     sock.on('call_invite', ({ from, type, conversation_id }: any) => {
       setIncomingCall({ from, type, conversation_id });
       startIncomingRing();
+      if (isTauri && !isWindowFocused.current) {
+        import('@tauri-apps/plugin-notification').then(async ({ isPermissionGranted, sendNotification }) => {
+          if (!await isPermissionGranted()) return;
+          sendNotification({
+            title: type === 'video' ? 'Połączenie wideo' : 'Połączenie głosowe',
+            body: `${from.username} dzwoni…`,
+          });
+        }).catch(() => {});
+      }
     });
     const autoToast = (msg: string, type: Toast['type'], onClick?: ()=>void, avatar?: string|null, senderName?: string) => {
       const id = Math.random().toString(36).slice(2);
@@ -7238,6 +7250,32 @@ export default function App() {
         if (!gc) return p;
         return [gc, ...p.filter(c => c.id !== gid)];
       });
+      // Toast + unread + notification for messages from others when not actively viewing
+      const myId = currentUserRef.current?.id;
+      const isViewing = activeViewRef.current === 'dms' && activeGroupDmRef.current === gid;
+      if (msg.sender_id !== myId && !isViewing) {
+        const preview = msg.content
+          ? (msg.content.length > 55 ? msg.content.slice(0, 55) + '…' : msg.content)
+          : msg.attachment_url ? '📎 Załącznik' : '';
+        autoToast(
+          preview,
+          'info',
+          () => { setActiveGroupDm(gid); setActiveView('dms'); },
+          msg.sender_avatar ? staticUrl(msg.sender_avatar) : null,
+          msg.sender_username
+        );
+        setUnreadGroupDms(p => ({ ...p, [gid]: (p[gid] || 0) + 1 }));
+        playDmNotification();
+        if (isTauri && !isWindowFocused.current) {
+          import('@tauri-apps/plugin-notification').then(async ({ isPermissionGranted, sendNotification }) => {
+            if (!await isPermissionGranted()) return;
+            sendNotification({
+              title: msg.sender_username || 'Wiadomość grupowa',
+              body: preview || 'Nowa wiadomość w grupie',
+            });
+          }).catch(() => {});
+        }
+      }
     });
     sock.on('group_dm_created', (conv: GroupDmConversation) => {
       setGroupConvs(p => p.some(c => c.id === conv.id) ? p : [conv, ...p]);
@@ -7412,17 +7450,24 @@ export default function App() {
   useEffect(() => { currentUserRef.current    = currentUser;    }, [currentUser]);
   useEffect(() => { activeCallRef.current     = activeCall;     }, [activeCall]);
   useEffect(() => { activeDmUserIdRef.current = activeDmUserId; }, [activeDmUserId]);
+  useEffect(() => { activeGroupDmRef.current  = activeGroupDm;  }, [activeGroupDm]);
   useEffect(() => { activeViewRef.current     = activeView;     }, [activeView]);
   useEffect(() => { activeServerRef.current   = activeServer;   }, [activeServer]);
   useEffect(() => { callDurationRef.current   = callDuration;   }, [callDuration]);
   useEffect(() => { serverFullRef.current     = serverFull;     }, [serverFull]);
   // Track window focus for desktop push notifications
   useEffect(() => {
-    const onFocus = () => { isWindowFocused.current = true; };
-    const onBlur  = () => { isWindowFocused.current = false; };
+    const onFocus     = () => { isWindowFocused.current = true; };
+    const onBlur      = () => { isWindowFocused.current = false; };
+    const onVisChange = () => { isWindowFocused.current = !document.hidden; };
     window.addEventListener('focus', onFocus);
     window.addEventListener('blur',  onBlur);
-    return () => { window.removeEventListener('focus', onFocus); window.removeEventListener('blur', onBlur); };
+    document.addEventListener('visibilitychange', onVisChange);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('blur',  onBlur);
+      document.removeEventListener('visibilitychange', onVisChange);
+    };
   }, []);
   // Sync myStatusRef when currentUser.status changes (e.g. on login)
   useEffect(() => { if (currentUser?.status) myStatusRef.current = currentUser.status; }, [currentUser?.status]);
@@ -10050,10 +10095,13 @@ export default function App() {
               {/* Group DM conversations */}
               {groupConvs.map(gc => {
                 const isActive = activeGroupDm===gc.id;
+                const unreadGc = unreadGroupDms[gc.id] || 0;
                 return (
                   <button key={gc.id}
                     onClick={async()=>{
                       setActiveGroupDm(gc.id);
+                      setActiveDmUserId('');
+                      setUnreadGroupDms(p => ({ ...p, [gc.id]: 0 }));
                       if (!groupMessages[gc.id]) {
                         const msgs = await groupDmApi.messages(gc.id).catch(()=>[]);
                         setGroupMessages(p=>({...p,[gc.id]:msgs}));
@@ -10067,9 +10115,14 @@ export default function App() {
                         : <Users size={14} className="text-indigo-400"/>}
                     </div>
                     <div className="flex-1 truncate text-left min-w-0">
-                      <p className="text-[13px] font-semibold truncate text-zinc-300">{gc.name || 'Grupa'}</p>
+                      <p className={`text-[13px] font-semibold truncate ${isActive?'text-indigo-200':unreadGc>0?'text-white':'text-zinc-300'}`}>{gc.name || 'Grupa'}</p>
                       <p className="text-[11px] text-zinc-600 truncate">{gc.participants?.length ?? 0} osób</p>
                     </div>
+                    {unreadGc > 0 && (
+                      <span className="shrink-0 min-w-[18px] h-[18px] bg-rose-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1 leading-none shadow-[0_0_8px_rgba(239,68,68,0.5)]">
+                        {unreadGc > 99 ? '99+' : unreadGc}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -10077,7 +10130,7 @@ export default function App() {
                 const unread = unreadDms[dm.other_user_id] || 0;
                 const isActive = activeDmUserId===dm.other_user_id;
                 return (
-                  <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); setProfileViewId(null); }}
+                  <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setActiveGroupDm(null); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); setProfileViewId(null); }}
                     onContextMenu={e => { e.preventDefault(); const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setDmCtxMenu({ x: e.clientX, y: Math.min(e.clientY, window.innerHeight - 300), dm }); }}
                     className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/15 text-white border border-indigo-500/25':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
                     <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava({avatar_url:dm.other_avatar,username:dm.other_username})}")`} as React.CSSProperties}
