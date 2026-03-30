@@ -81,3 +81,17 @@ export function rejectCall(toUserId: string) {
 export function endCall(toUserId: string) {
   getSocket().emit('call_end', { to_user_id: toUserId });
 }
+
+// ── Group calls ───────────────────────────────────────────────────
+export function startGroupCall(groupId: string) {
+  getSocket().emit('group_call_start', { group_id: groupId });
+}
+export function joinGroupCall(groupId: string) {
+  getSocket().emit('group_call_join', { group_id: groupId });
+}
+export function leaveGroupCall(groupId: string) {
+  getSocket().emit('group_call_leave', { group_id: groupId });
+}
+export function dismissGroupCall(groupId: string) {
+  getSocket().emit('group_call_dismiss', { group_id: groupId });
+}

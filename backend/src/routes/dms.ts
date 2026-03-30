@@ -425,7 +425,9 @@ router.post('/group/create', authMiddleware, async (req: AuthRequest, res) => {
       [allIds]
     );
 
-    const result = { ...conv, is_group: true, participants: participants.rows };
+    // Re-query to get the updated row (with name/icon set by UPDATE above)
+    const freshConv = await query('SELECT * FROM dm_conversations WHERE id=$1', [conv.id]);
+    const result = { ...(freshConv.rows[0] || conv), is_group: true, participants: participants.rows };
 
     // Notify all participants via socket
     const io = req.app.get('io');
@@ -468,8 +470,8 @@ router.get('/group/:id/messages', authMiddleware, async (req: AuthRequest, res) 
 // POST /api/dms/group/:id/messages
 router.post('/group/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
   const myId = req.user!.id;
-  const { content, attachment_url, reply_to_id } = req.body;
-  if (!content?.trim() && !attachment_url) return res.status(400).json({ error: 'Content or attachment required' });
+  const { content } = req.body;
+  if (!content?.trim()) return res.status(400).json({ error: 'Content required' });
 
   try {
     const conv = await query(`SELECT * FROM dm_conversations WHERE id = $1 AND is_group = true`, [req.params.id]);
@@ -478,13 +480,13 @@ router.post('/group/:id/messages', authMiddleware, async (req: AuthRequest, res)
     // Insert message and immediately join with sender info
     const { rows: [fullMsg] } = await query(
       `WITH ins AS (
-         INSERT INTO dm_messages (conversation_id, sender_id, content, attachment_url, reply_to_id)
-         VALUES ($1, $2, $3, $4, $5) RETURNING *
+         INSERT INTO dm_messages (conversation_id, sender_id, content)
+         VALUES ($1, $2, $3) RETURNING *
        )
        SELECT ins.*, u.username AS sender_username, u.avatar_url AS sender_avatar,
               $1::text AS group_id
        FROM ins JOIN users u ON u.id = ins.sender_id`,
-      [req.params.id, myId, (content || '').trim(), attachment_url || null, reply_to_id || null]
+      [req.params.id, myId, content.trim()]
     );
 
     // Notify all group participants EXCEPT sender (sender adds locally)
@@ -532,36 +534,10 @@ router.delete('/group/:id', authMiddleware, async (req: AuthRequest, res) => {
         }
       }
     } else {
-      // Member: leave — get username first, then remove
-      const { rows: [leaver] } = await query(
-        `SELECT u.username FROM users u WHERE u.id=$1`, [myId]
-      );
+      // Member: just leave
       await query(`DELETE FROM dm_participants WHERE conversation_id=$1 AND user_id=$2`, [groupId, myId]);
-
-      // Insert system message into group chat
-      const { rows: [sysMsg] } = await query(
-        `WITH ins AS (
-           INSERT INTO dm_messages (conversation_id, sender_id, content, is_system)
-           VALUES ($1, $2, $3, true) RETURNING *
-         )
-         SELECT ins.*, u.username AS sender_username, u.avatar_url AS sender_avatar,
-                $1::text AS group_id
-         FROM ins JOIN users u ON u.id = ins.sender_id`,
-        [groupId, myId, `${leaver?.username || 'Użytkownik'} opuścił/a grupę`]
-      );
-
       if (io) {
-        // Notify leaver — remove from their list
         io.to(`user:${myId}`).emit('group_dm_left', { id: groupId });
-        // Notify remaining participants — update member list + system message
-        const remaining = parts.filter((p: { user_id: string }) => p.user_id !== myId);
-        for (const p of remaining) {
-          io.to(`user:${p.user_id}`).emit('group_dm_member_left', {
-            group_id: groupId,
-            user_id: myId,
-            system_message: sysMsg,
-          });
-        }
       }
     }
     return res.json({ success: true });
@@ -571,36 +547,52 @@ router.delete('/group/:id', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
-// PATCH /api/dms/group/:id — update name / icon (creator only)
-router.patch('/group/:id', authMiddleware, async (req: AuthRequest, res) => {
+// POST /api/dms/group/:id/invite — add a new member (creator only)
+router.post('/group/:id/invite', authMiddleware, async (req: AuthRequest, res) => {
   const myId = req.user!.id;
   const groupId = req.params.id;
-  const { name, icon_url } = req.body;
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: 'userId required' });
   try {
-    const conv = await query(
+    const { rows: [conv] } = await query(
       `SELECT creator_id FROM dm_conversations WHERE id=$1 AND is_group=true`, [groupId]
     );
-    if (!conv.rows.length) return res.status(404).json({ error: 'Not found' });
-    if (conv.rows[0].creator_id !== myId) return res.status(403).json({ error: 'Only creator can edit group' });
+    if (!conv) return res.status(404).json({ error: 'Not found' });
+    if (conv.creator_id !== myId) return res.status(403).json({ error: 'Only creator can invite' });
 
-    const fields: string[] = [];
-    const vals: any[] = [];
-    if (name !== undefined) { fields.push(`name=$${fields.length + 1}`); vals.push(name.trim() || null); }
-    if (icon_url !== undefined) { fields.push(`icon_url=$${fields.length + 1}`); vals.push(icon_url || null); }
-    if (!fields.length) return res.status(400).json({ error: 'Nothing to update' });
-    vals.push(groupId);
-    await query(`UPDATE dm_conversations SET ${fields.join(',')} WHERE id=$${vals.length}`, vals);
+    await query(
+      `INSERT INTO dm_participants (conversation_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+      [groupId, userId]
+    );
 
-    // Notify participants
+    // Get fresh group + full participant list
+    const [groupInfo, participants] = await Promise.all([
+      query(`SELECT * FROM dm_conversations WHERE id=$1`, [groupId]),
+      query(
+        `SELECT u.id AS user_id, u.username, u.avatar_url
+         FROM dm_participants dp JOIN users u ON u.id=dp.user_id
+         WHERE dp.conversation_id=$1`, [groupId]
+      )
+    ]);
+    const fullGroup = { ...groupInfo.rows[0], participants: participants.rows };
+
     const io = req.app.get('io');
     if (io) {
-      const parts = await query(`SELECT user_id FROM dm_participants WHERE conversation_id=$1`, [groupId]);
-      const updated = { id: groupId, name: name?.trim() || null, icon_url: icon_url || null };
-      for (const p of parts.rows) io.to(`user:${p.user_id}`).emit('group_dm_updated', updated);
+      // Tell new member — they'll add the group to their list
+      io.to(`user:${userId}`).emit('group_dm_created', fullGroup);
+      // Tell existing members the participant list changed
+      for (const p of participants.rows) {
+        if (p.user_id !== userId) {
+          io.to(`user:${p.user_id}`).emit('group_dm_member_added', {
+            group_id: groupId,
+            user: participants.rows.find((u: any) => u.user_id === userId),
+          });
+        }
+      }
     }
     return res.json({ ok: true });
   } catch (err) {
-    console.error('[group-dm] update error:', err);
+    console.error('[group-dm] invite error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

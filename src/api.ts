@@ -811,6 +811,7 @@ export const groupDmApi = {
   update:   (id: string, patch: { name?: string; icon_url?: string }) =>
     req<{ok:boolean}>('PATCH', `/dms/group/${id}`, patch),
   leave:    (id: string) => req<{success:boolean}>('DELETE', `/dms/group/${id}`),
+  invite:   (id: string, userId: string) => req<{ok:boolean}>('POST', `/dms/group/${id}/invite`, { userId }),
 };
 
 // ── Server Events ─────────────────────────────────────────────────────────────
