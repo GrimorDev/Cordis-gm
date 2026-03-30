@@ -7298,6 +7298,21 @@ export default function App() {
       setGroupMessages(p => { const n = {...p}; delete n[id]; return n; });
       setActiveGroupDm(prev => prev === id ? null : prev);
     });
+    sock.on('group_dm_member_left', ({ group_id, user_id, system_message }: { group_id: string; user_id: string; system_message: any }) => {
+      // Remove participant from the group's participant list
+      setGroupConvs(p => p.map(c => c.id === group_id
+        ? { ...c, participants: c.participants.filter(part => part.user_id !== user_id) }
+        : c
+      ));
+      // Append system message to chat
+      if (system_message) {
+        setGroupMessages(p => {
+          const existing = p[group_id] || [];
+          if (existing.some((m: any) => m.id === system_message.id)) return p;
+          return { ...p, [group_id]: [...existing, system_message] };
+        });
+      }
+    });
 
     loadServers(); loadDms(); loadGroupConvs();
     return () => { sock.removeAllListeners(); disconnectSocket(); };
@@ -11878,8 +11893,21 @@ export default function App() {
                           </div>
                         )}
                         {msgs.map((msg: any, i: number) => {
+                          // System message (e.g. "X opuścił/a grupę")
+                          if (msg.is_system) {
+                            return (
+                              <div key={msg.id || i} className="flex items-center gap-3 my-2 px-2">
+                                <div className="flex-1 h-px bg-white/[0.05]"/>
+                                <span className="text-[11px] text-zinc-600 shrink-0 flex items-center gap-1.5">
+                                  <LogOut size={10} className="text-zinc-700"/>
+                                  {msg.content}
+                                </span>
+                                <div className="flex-1 h-px bg-white/[0.05]"/>
+                              </div>
+                            );
+                          }
                           const prev = msgs[i-1];
-                          const sameAuthor = prev?.sender_id === msg.sender_id;
+                          const sameAuthor = !prev?.is_system && prev?.sender_id === msg.sender_id;
                           const isMe = msg.sender_id === currentUser?.id;
                           return (
                             <div key={msg.id || i} className={`flex gap-2.5 ${isMe ? 'flex-row-reverse' : ''} ${sameAuthor ? 'mt-0.5' : 'mt-3'}`}>
