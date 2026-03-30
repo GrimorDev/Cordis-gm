@@ -468,8 +468,8 @@ router.get('/group/:id/messages', authMiddleware, async (req: AuthRequest, res) 
 // POST /api/dms/group/:id/messages
 router.post('/group/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
   const myId = req.user!.id;
-  const { content } = req.body;
-  if (!content?.trim()) return res.status(400).json({ error: 'Content required' });
+  const { content, attachment_url, reply_to_id } = req.body;
+  if (!content?.trim() && !attachment_url) return res.status(400).json({ error: 'Content or attachment required' });
 
   try {
     const conv = await query(`SELECT * FROM dm_conversations WHERE id = $1 AND is_group = true`, [req.params.id]);
@@ -478,13 +478,13 @@ router.post('/group/:id/messages', authMiddleware, async (req: AuthRequest, res)
     // Insert message and immediately join with sender info
     const { rows: [fullMsg] } = await query(
       `WITH ins AS (
-         INSERT INTO dm_messages (conversation_id, sender_id, content)
-         VALUES ($1, $2, $3) RETURNING *
+         INSERT INTO dm_messages (conversation_id, sender_id, content, attachment_url, reply_to_id)
+         VALUES ($1, $2, $3, $4, $5) RETURNING *
        )
        SELECT ins.*, u.username AS sender_username, u.avatar_url AS sender_avatar,
               $1::text AS group_id
        FROM ins JOIN users u ON u.id = ins.sender_id`,
-      [req.params.id, myId, content.trim()]
+      [req.params.id, myId, (content || '').trim(), attachment_url || null, reply_to_id || null]
     );
 
     // Notify all group participants EXCEPT sender (sender adds locally)
@@ -541,6 +541,40 @@ router.delete('/group/:id', authMiddleware, async (req: AuthRequest, res) => {
     return res.json({ success: true });
   } catch (err) {
     console.error('[group-dm] delete error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PATCH /api/dms/group/:id — update name / icon (creator only)
+router.patch('/group/:id', authMiddleware, async (req: AuthRequest, res) => {
+  const myId = req.user!.id;
+  const groupId = req.params.id;
+  const { name, icon_url } = req.body;
+  try {
+    const conv = await query(
+      `SELECT creator_id FROM dm_conversations WHERE id=$1 AND is_group=true`, [groupId]
+    );
+    if (!conv.rows.length) return res.status(404).json({ error: 'Not found' });
+    if (conv.rows[0].creator_id !== myId) return res.status(403).json({ error: 'Only creator can edit group' });
+
+    const fields: string[] = [];
+    const vals: any[] = [];
+    if (name !== undefined) { fields.push(`name=$${fields.length + 1}`); vals.push(name.trim() || null); }
+    if (icon_url !== undefined) { fields.push(`icon_url=$${fields.length + 1}`); vals.push(icon_url || null); }
+    if (!fields.length) return res.status(400).json({ error: 'Nothing to update' });
+    vals.push(groupId);
+    await query(`UPDATE dm_conversations SET ${fields.join(',')} WHERE id=$${vals.length}`, vals);
+
+    // Notify participants
+    const io = req.app.get('io');
+    if (io) {
+      const parts = await query(`SELECT user_id FROM dm_participants WHERE conversation_id=$1`, [groupId]);
+      const updated = { id: groupId, name: name?.trim() || null, icon_url: icon_url || null };
+      for (const p of parts.rows) io.to(`user:${p.user_id}`).emit('group_dm_updated', updated);
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[group-dm] update error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
