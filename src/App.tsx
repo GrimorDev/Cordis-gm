@@ -6040,6 +6040,11 @@ export default function App() {
   const [groupDmSearchQ, setGroupDmSearchQ]   = useState('');
   const [activeGroupDm, setActiveGroupDm]     = useState<string|null>(null);
   const [groupMessages, setGroupMessages]     = useState<Record<string, any[]>>({});
+  const [groupSettingsOpen, setGroupSettingsOpen] = useState(false);
+  const [groupEditName, setGroupEditName]     = useState('');
+  const [groupEditIconFile, setGroupEditIconFile] = useState<File|null>(null);
+  const [groupEditIconPreview, setGroupEditIconPreview] = useState<string|null>(null);
+  const [groupEditSaving, setGroupEditSaving] = useState(false);
 
   // ── Feature: Server Events ───────────────────────────────────────
   const [serverEvents, setServerEvents]       = useState<ServerEvent[]>([]);
@@ -7280,6 +7285,9 @@ export default function App() {
     sock.on('group_dm_created', (conv: GroupDmConversation) => {
       setGroupConvs(p => p.some(c => c.id === conv.id) ? p : [conv, ...p]);
     });
+    sock.on('group_dm_updated', ({ id, name, icon_url }: { id: string; name: string | null; icon_url: string | null }) => {
+      setGroupConvs(p => p.map(c => c.id === id ? { ...c, ...(name !== undefined ? { name } : {}), ...(icon_url !== undefined ? { icon_url } : {}) } : c));
+    });
     sock.on('group_dm_deleted', ({ id }: { id: string }) => {
       setGroupConvs(p => p.filter(c => c.id !== id));
       setGroupMessages(p => { const n = {...p}; delete n[id]; return n; });
@@ -8315,7 +8323,10 @@ export default function App() {
     if (sending) return;
     setSending(true);
     try {
-      if (activeView === 'dms' && activeDmUserId) await dmsApi.send(activeDmUserId, gifUrl, {});
+      if (activeView === 'dms' && activeGroupDm) {
+        const sentMsg = await groupDmApi.send(activeGroupDm, gifUrl);
+        setGroupMessages(p => ({ ...p, [activeGroupDm]: [...(p[activeGroupDm] || []), sentMsg] }));
+      } else if (activeView === 'dms' && activeDmUserId) await dmsApi.send(activeDmUserId, gifUrl, {});
       else if (activeChannel) await messagesApi.send(activeChannel, gifUrl, {});
     } catch (err: any) {
       addToast(err?.message || 'Nie udało się wysłać GIF-a', 'error');
@@ -8442,7 +8453,10 @@ export default function App() {
     const curKey = prevConvKeyRef.current;
     if (curKey) { delete msgDraftsRef.current[curKey]; setDraftKeys(s=>{const n=new Set(s);n.delete(curKey);return n;}); }
     try {
-      if (activeView === 'dms' && activeDmUserId) await dmsApi.send(activeDmUserId, finalContent, opts);
+      if (activeView === 'dms' && activeGroupDm) {
+        const sentMsg = await groupDmApi.send(activeGroupDm, finalContent, { attachment_url: opts.attachment_url, reply_to_id: opts.reply_to_id });
+        setGroupMessages(p => ({ ...p, [activeGroupDm]: [...(p[activeGroupDm] || []), sentMsg] }));
+      } else if (activeView === 'dms' && activeDmUserId) await dmsApi.send(activeDmUserId, finalContent, opts);
       else if (activeChannel) await messagesApi.send(activeChannel, finalContent, opts);
       playMessageSent();
     } catch (err: any) {
@@ -10941,40 +10955,7 @@ export default function App() {
                   <p className="text-sm text-zinc-500">Wybierz kanał tekstowy z listy po lewej stronie.</p></>
               }
             </div>
-          ) : activeView==='dms' && activeGroupDm ? (
-            /* ── Group DM chat view ── */
-            <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="h-14 border-b border-white/[0.06] flex items-center px-5 shrink-0 glass-dark gap-3">
-                <button onClick={()=>setActiveGroupDm(null)} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all"><ArrowLeft size={14}/></button>
-                <Users size={15} className="text-indigo-400 shrink-0"/>
-                <h1 className="text-sm font-bold text-white truncate">{groupConvs.find(g=>g.id===activeGroupDm)?.name||'Grupa'}</h1>
-                <span className="text-xs text-zinc-600 ml-auto">{groupConvs.find(g=>g.id===activeGroupDm)?.participants.length} osób</span>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4 custom-scrollbar flex flex-col gap-2">
-                {(groupMessages[activeGroupDm]||[]).map((msg:any,i:number)=>(
-                  <div key={msg.id||i} className={`flex gap-2.5 ${msg.sender_id===currentUser?.id?'flex-row-reverse':''}`}>
-                    <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} className="w-7 h-7 rounded-xl object-cover shrink-0 self-start mt-0.5" alt=""/>
-                    <div className={`max-w-[70%] px-3 py-2 rounded-2xl text-sm ${msg.sender_id===currentUser?.id?'bg-indigo-600/80 text-white':'bg-white/[0.08] text-zinc-200'}`}>
-                      {msg.content}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="p-4 border-t border-white/[0.06]">
-                <form onSubmit={async e=>{
-                  e.preventDefault();
-                  const inp = (e.currentTarget.querySelector('input') as HTMLInputElement);
-                  if (!inp.value.trim()) return;
-                  const msg = await groupDmApi.send(activeGroupDm!, inp.value.trim());
-                  setGroupMessages(p=>({...p,[activeGroupDm!]:[...(p[activeGroupDm!]||[]),msg]}));
-                  inp.value='';
-                }} className="flex gap-2">
-                  <input placeholder="Wyślij wiadomość..." className={`${gi} flex-1 px-3 py-2 text-sm`}/>
-                  <button type="submit" className="w-9 h-9 rounded-xl bg-indigo-600 hover:bg-indigo-500 flex items-center justify-center text-white transition-colors"><Send size={13}/></button>
-                </form>
-              </div>
-            </div>
-          ) : activeView==='dms' && !activeDmUserId ? (
+          ) : activeView==='dms' && !activeDmUserId && !activeGroupDm ? (
             <div className="flex-1 flex flex-col items-center justify-center p-8">
               <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4}}
                 className="w-full max-w-sm flex flex-col items-center text-center">
@@ -11431,7 +11412,20 @@ export default function App() {
               {/* Chat header */}
               <header className="h-14 border-b border-white/[0.06] flex items-center justify-between px-5 glass-dark border-b border-white/[0.05] z-10 shrink-0 gap-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  {activeView==='dms' ? (activeDm ? (
+                  {activeView==='dms' ? (activeGroupDm ? (() => {
+                    const gc = groupConvs.find(g=>g.id===activeGroupDm);
+                    return (
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-2xl bg-indigo-500/20 flex items-center justify-center shrink-0 overflow-hidden">
+                          {gc?.icon_url ? <img src={staticUrl(gc.icon_url)} className="w-full h-full object-cover" alt=""/> : <Users size={14} className="text-indigo-400"/>}
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-white text-sm leading-tight">{gc?.name || 'Grupa'}</h3>
+                          <p className="text-xs text-zinc-500 leading-tight">{gc?.participants?.length ?? 0} osób</p>
+                        </div>
+                      </div>
+                    );
+                  })() : activeDm ? (
                     <div className="flex items-center gap-3">
                       <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})}")`} as React.CSSProperties}>
                         <img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className={`w-8 h-8 rounded-2xl object-cover shadow-sm av-eff-${(activeDm as any).other_avatar_effect||'none'}`} alt=""/>
@@ -11457,6 +11451,11 @@ export default function App() {
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
+                  {activeView==='dms'&&activeGroupDm&&<>
+                    <button onClick={()=>{ const gc=groupConvs.find(g=>g.id===activeGroupDm); setGroupEditName(gc?.name||''); setGroupEditIconFile(null); setGroupEditIconPreview(gc?.icon_url?staticUrl(gc.icon_url):null); setGroupSettingsOpen(true); }}
+                      className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all duration-150 active:scale-95" title="Ustawienia grupy"><Settings size={15}/></button>
+                    <div className="w-px h-4 bg-white/[0.06] mx-1"/>
+                  </>}
                   {activeView==='dms'&&activeDm&&<>
                     <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'voice',activeDm.other_avatar)} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all duration-150 active:scale-95"><Phone size={15}/></button>
                     <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'video',activeDm.other_avatar)} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-sky-400 hover:bg-sky-500/10 transition-all duration-150 active:scale-95"><Video size={15}/></button>
@@ -11860,10 +11859,53 @@ export default function App() {
                 {/* mode="sync" (default) so new content mounts immediately — mode="wait" kept
                     new DOM out until old exit animation finished, breaking scrollHeight */}
                 <AnimatePresence initial={false}>
-                <motion.div key={`${activeServer}-${activeChannel}-${activeDmUserId}`}
+                <motion.div key={`${activeServer}-${activeChannel}-${activeDmUserId}-${activeGroupDm}`}
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
                   className="mt-auto flex flex-col gap-1">
+                  {/* ── Group DM messages ── */}
+                  {activeView==='dms' && activeGroupDm && (() => {
+                    const msgs = groupMessages[activeGroupDm] || [];
+                    return (
+                      <>
+                        {msgs.length === 0 && !msgsLoading && (
+                          <div className="text-center py-8 mb-3">
+                            <div className="w-20 h-20 rounded-2xl bg-indigo-500/20 flex items-center justify-center mx-auto mb-4 border-4 border-zinc-950 shadow-2xl">
+                              <Users size={32} className="text-indigo-400"/>
+                            </div>
+                            <h1 className="text-2xl font-bold text-white mb-1">{groupConvs.find(g=>g.id===activeGroupDm)?.name || 'Grupa'}</h1>
+                            <p className="text-sm text-zinc-500">Początek grupowej rozmowy.</p>
+                          </div>
+                        )}
+                        {msgs.map((msg: any, i: number) => {
+                          const prev = msgs[i-1];
+                          const sameAuthor = prev?.sender_id === msg.sender_id;
+                          const isMe = msg.sender_id === currentUser?.id;
+                          return (
+                            <div key={msg.id || i} className={`flex gap-2.5 ${isMe ? 'flex-row-reverse' : ''} ${sameAuthor ? 'mt-0.5' : 'mt-3'}`}>
+                              {!sameAuthor
+                                ? <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} className="w-8 h-8 rounded-xl object-cover shrink-0 self-start mt-0.5" alt=""/>
+                                : <div className="w-8 shrink-0"/>}
+                              <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[70%]`}>
+                                {!sameAuthor && !isMe && <p className="text-[11px] font-semibold text-zinc-400 mb-1 px-1">{msg.sender_username}</p>}
+                                {msg.attachment_url && (() => {
+                                  const isImg = /\.(png|jpg|jpeg|gif|webp|svg)(\?|$)/i.test(msg.attachment_url) || msg.attachment_url.startsWith('data:image');
+                                  return isImg
+                                    ? <img src={staticUrl(msg.attachment_url)} className="max-w-xs max-h-64 rounded-2xl object-cover mb-1 cursor-pointer" onClick={()=>setLightboxSrc(staticUrl(msg.attachment_url))} alt=""/>
+                                    : <a href={staticUrl(msg.attachment_url)} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.06] border border-white/[0.08] text-xs text-indigo-300 hover:text-indigo-200 mb-1"><Paperclip size={11}/> Załącznik</a>;
+                                })()}
+                                {msg.content && (
+                                  <div className={`px-3 py-2 rounded-2xl text-sm msg-md ${isMe ? 'bg-indigo-600/80 text-white' : 'bg-white/[0.08] text-zinc-200'}`}
+                                    dangerouslySetInnerHTML={{__html: renderMsgHTML(msg.content)}}/>
+                                )}
+                                <span className="text-[10px] text-zinc-700 mt-0.5 px-1">{new Date(msg.created_at).toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'})}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    );
+                  })()}
                   {searchQuery.trim()&&(
                     <div className="flex items-center gap-2 px-3 py-2 mb-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-300">
                       <Search size={12} className="shrink-0"/>
@@ -11871,7 +11913,7 @@ export default function App() {
                       <button onClick={()=>setSearchQuery('')} className="ml-auto text-indigo-400 hover:text-white transition-colors"><X size={12}/></button>
                     </div>
                   )}
-                  {!msgsLoading&&!searchQuery.trim()&&<div className="text-center py-8 mb-3">
+                  {!activeGroupDm && !msgsLoading&&!searchQuery.trim()&&<div className="text-center py-8 mb-3">
                     {activeView==='dms'&&activeDm ? (
                       <>
                         <img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className="w-20 h-20 rounded-2xl mx-auto mb-4 border-4 border-zinc-950 object-cover shadow-2xl" alt=""/>
@@ -11893,7 +11935,7 @@ export default function App() {
                     )}
                   </div>}
 
-                  {(messages as (MessageFull|DmMessageFull)[]).map((msg, idx) => {
+                  {!activeGroupDm && (messages as (MessageFull|DmMessageFull)[]).map((msg, idx) => {
                     const isOwn = currentUser?.id === msg.sender_id;
                     // Date separator
                     const msgDate = new Date(msg.created_at).toDateString();
@@ -17472,6 +17514,74 @@ export default function App() {
                 } catch(e:any){ addToast(e.message||'Błąd','error'); }
               }} className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">
                 Akceptuję zasady i dołączam
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Group DM Settings Modal ─────────────────────────────── */}
+      <AnimatePresence>
+        {groupSettingsOpen && activeGroupDm && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={()=>setGroupSettingsOpen(false)}>
+            <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
+              onClick={e=>e.stopPropagation()}
+              className="bg-[#141420] border border-white/[0.1] rounded-2xl p-6 w-full max-w-sm shadow-2xl flex flex-col gap-5">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-bold text-white">Ustawienia grupy</h2>
+                <button onClick={()=>setGroupSettingsOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all"><X size={14}/></button>
+              </div>
+              {/* Icon upload */}
+              <div className="flex flex-col items-center gap-3">
+                <label className="cursor-pointer group relative">
+                  <div className="w-20 h-20 rounded-2xl bg-indigo-500/20 flex items-center justify-center overflow-hidden border-2 border-dashed border-indigo-500/30 group-hover:border-indigo-500/60 transition-all">
+                    {groupEditIconPreview
+                      ? <img src={groupEditIconPreview} className="w-full h-full object-cover" alt=""/>
+                      : <Users size={28} className="text-indigo-400"/>}
+                  </div>
+                  <div className="absolute inset-0 rounded-2xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Image size={18} className="text-white"/>
+                  </div>
+                  <input type="file" accept="image/*" className="hidden" onChange={e=>{
+                    const f = e.target.files?.[0]; if(!f) return;
+                    setGroupEditIconFile(f);
+                    setGroupEditIconPreview(URL.createObjectURL(f));
+                  }}/>
+                </label>
+                <p className="text-xs text-zinc-500">Kliknij, aby zmienić zdjęcie grupy</p>
+              </div>
+              {/* Name */}
+              <div>
+                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2">Nazwa grupy</label>
+                <input value={groupEditName} onChange={e=>setGroupEditName(e.target.value)}
+                  placeholder="Wpisz nazwę grupy..."
+                  className="w-full bg-white/[0.06] border border-white/[0.1] rounded-xl px-3 py-2.5 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 transition-all"/>
+              </div>
+              <button disabled={groupEditSaving} onClick={async()=>{
+                setGroupEditSaving(true);
+                try {
+                  let icon_url: string | undefined;
+                  if (groupEditIconFile) {
+                    icon_url = await uploadFile(groupEditIconFile, 'avatars');
+                  }
+                  await groupDmApi.update(activeGroupDm, {
+                    name: groupEditName,
+                    ...(icon_url !== undefined ? { icon_url } : {}),
+                  });
+                  setGroupConvs(p => p.map(g => g.id === activeGroupDm
+                    ? { ...g, name: groupEditName, ...(icon_url !== undefined ? { icon_url } : {}) }
+                    : g));
+                  addToast('Ustawienia grupy zapisane', 'success');
+                  setGroupSettingsOpen(false);
+                } catch (err: any) {
+                  addToast(err?.message || 'Błąd zapisu', 'error');
+                } finally { setGroupEditSaving(false); }
+              }}
+                className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-sm transition-colors flex items-center justify-center gap-2">
+                {groupEditSaving && <Loader2 size={14} className="animate-spin"/>}
+                Zapisz
               </button>
             </motion.div>
           </motion.div>
