@@ -532,10 +532,36 @@ router.delete('/group/:id', authMiddleware, async (req: AuthRequest, res) => {
         }
       }
     } else {
-      // Member: just leave
+      // Member: leave — get username first, then remove
+      const { rows: [leaver] } = await query(
+        `SELECT u.username FROM users u WHERE u.id=$1`, [myId]
+      );
       await query(`DELETE FROM dm_participants WHERE conversation_id=$1 AND user_id=$2`, [groupId, myId]);
+
+      // Insert system message into group chat
+      const { rows: [sysMsg] } = await query(
+        `WITH ins AS (
+           INSERT INTO dm_messages (conversation_id, sender_id, content, is_system)
+           VALUES ($1, $2, $3, true) RETURNING *
+         )
+         SELECT ins.*, u.username AS sender_username, u.avatar_url AS sender_avatar,
+                $1::text AS group_id
+         FROM ins JOIN users u ON u.id = ins.sender_id`,
+        [groupId, myId, `${leaver?.username || 'Użytkownik'} opuścił/a grupę`]
+      );
+
       if (io) {
+        // Notify leaver — remove from their list
         io.to(`user:${myId}`).emit('group_dm_left', { id: groupId });
+        // Notify remaining participants — update member list + system message
+        const remaining = parts.filter((p: { user_id: string }) => p.user_id !== myId);
+        for (const p of remaining) {
+          io.to(`user:${p.user_id}`).emit('group_dm_member_left', {
+            group_id: groupId,
+            user_id: myId,
+            system_message: sysMsg,
+          });
+        }
       }
     }
     return res.json({ success: true });
