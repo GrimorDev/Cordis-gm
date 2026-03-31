@@ -7382,6 +7382,11 @@ export default function App() {
     sock.on('group_call_participant_left', (payload: any) => {
       setGroupCallState(prev => prev?.group_id === payload.group_id ? { ...prev, participants: payload.participants, pending: payload.pending ?? [] } : prev);
       setActiveGroupCall(prev => prev?.group_id === payload.group_id ? { ...prev, participants: payload.participants, pending: payload.pending ?? [] } : prev);
+      // Close the peer connection to the user who left — otherwise stale PC stays
+      // in peerConnsRef and openPeer's guard returns it on rejoin → no audio.
+      if (activeGroupCallRef.current?.group_id === payload.group_id && payload.left_user_id) {
+        closePeer(payload.left_user_id);
+      }
     });
     sock.on('group_call_ended', ({ group_id }: { group_id: string }) => {
       if (activeGroupCallRef.current?.group_id === group_id) {
@@ -7897,7 +7902,16 @@ export default function App() {
   };
   const openPeer = async (remoteUserId: string, isInitiator: boolean, sdpOffer?: RTCSessionDescriptionInit) => {
     const existing = peerConnsRef.current.get(remoteUserId);
-    if (existing) return existing;
+    // If existing connection is dead (closed/failed), close it and recreate.
+    // A stale closed PC produces no audio — must not be reused.
+    if (existing) {
+      const dead = existing.connectionState === 'failed' || existing.connectionState === 'closed'
+                || existing.iceConnectionState === 'failed'  || existing.iceConnectionState === 'closed';
+      if (!dead) return existing;
+      existing.close();
+      peerConnsRef.current.delete(remoteUserId);
+      detachRemoteAudio(remoteUserId);
+    }
     const pc = makePeerConnection(
       (c) => getSocket().emit('webrtc_ice', { to: remoteUserId, candidate: c }),
       (e) => {
@@ -8038,11 +8052,22 @@ export default function App() {
       },
       onOffer: async ({ from, sdp }: any) => {
         const existing = peerConnsRef.current.get(from);
-        if (existing) {
+        // Only treat as renegotiation if the PC is live (not closed/failed).
+        // A dead PC here means the guard in openPeer would have cleaned it up,
+        // but handle defensively: fall through to openPeer which recreates it.
+        const isLive = existing
+          && existing.connectionState !== 'closed'
+          && existing.connectionState !== 'failed'
+          && existing.iceConnectionState !== 'closed'
+          && existing.iceConnectionState !== 'failed';
+        if (isLive) {
           // Renegotiation (e.g. remote peer added screen share track)
-          await existing.setRemoteDescription(new RTCSessionDescription(sdp));
-          const answer = await existing.createAnswer();
-          await existing.setLocalDescription(answer);
+          await existing!.setRemoteDescription(new RTCSessionDescription(sdp));
+          const rawAnswer = await existing!.createAnswer();
+          const tunedSdp  = preferH264(rawAnswer.sdp ?? '');
+          const answer    = { ...rawAnswer, sdp: tunedSdp };
+          await existing!.setLocalDescription(answer);
+          tuneAudioSender(existing!, (activeCh as any)?.bitrate ?? 64);
           getSocket().emit('webrtc_answer', { to: from, sdp: answer });
         } else {
           await openPeer(from, false, sdp);
