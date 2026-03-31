@@ -1871,17 +1871,29 @@ function AttachmentRenderer({ url, staticUrl, addToast }: { url: string; staticU
   const handleDownload = (e: React.MouseEvent) => {
     e.preventDefault();
     if (downloading) return;
-    // Jeśli plik jest na R2 (/api/files/...) → navigation z ?dl=1
-    // backend generuje signed URL z Content-Disposition: attachment
-    // Brak fetch() = brak problemu CORS
-    if (full.includes('/api/files/')) {
-      // Navigation bez _blank — Content-Disposition: attachment zatrzymuje pobieranie w tle
-      const dlUrl = `${full}${full.includes('?') ? '&' : '?'}dl=1&name=${encodeURIComponent(name)}`;
+
+    // Helper: navigate to backend proxy URL (avoids CORS — no fetch())
+    const proxyDownload = (proxyPath: string) => {
+      const dlUrl = `${proxyPath}${proxyPath.includes('?') ? '&' : '?'}dl=1&name=${encodeURIComponent(name)}`;
       window.location.href = dlUrl;
       addToast?.(`⬇️ Pobieranie: ${name}`, 'info');
+    };
+
+    // /api/files/... — already routed through backend proxy
+    if (full.includes('/api/files/')) {
+      proxyDownload(full);
       return;
     }
-    // Fallback: lokalne pliki (stary dysk) — blob download
+
+    // Direct R2 public URL (pub-*.r2.dev/KEY) — fetch would be blocked by CORS.
+    // Extract the object key and route through backend proxy instead.
+    const r2Match = full.match(/\.r2\.dev\/(.+)$/);
+    if (r2Match) {
+      proxyDownload(`/api/files/${r2Match[1]}`);
+      return;
+    }
+
+    // Fallback: any other absolute URL — blob download via fetch
     setDownloading(true);
     addToast?.(`⬇️ Pobieranie: ${name}`, 'info');
     fetch(full)
@@ -7988,13 +8000,21 @@ export default function App() {
     );
     peerConnsRef.current.set(remoteUserId, pc);
     // ICE + connection state monitoring — critical for diagnosing voice call failures
+    let _iceRestartCount = 0;
     pc.oniceconnectionstatechange = () => {
       const s = pc.iceConnectionState;
       console.log(`[Cordis WebRTC] ICE state (${remoteUserId}):`, s);
       if (s === 'failed') {
-        if (isInitiator) {
-          console.warn('[Cordis WebRTC] ICE failed — restarting ICE for', remoteUserId);
-          pc.restartIce();
+        if (isInitiator && _iceRestartCount < 3) {
+          _iceRestartCount++;
+          console.warn(`[Cordis WebRTC] ICE failed — sending restart offer for ${remoteUserId} (attempt ${_iceRestartCount})`);
+          // restartIce() alone does nothing — MUST follow with createOffer({iceRestart:true})
+          // to actually send new ICE credentials to the remote peer.
+          pc.createOffer({ iceRestart: true })
+            .then(offer => pc.setLocalDescription(offer).then(() => {
+              getSocket().emit('webrtc_offer', { to: remoteUserId, sdp: offer });
+            }))
+            .catch(e => console.warn('[Cordis WebRTC] ICE restart offer failed:', e));
         }
       }
       if (s === 'disconnected') {
@@ -8005,7 +8025,8 @@ export default function App() {
       const s = pc.connectionState;
       console.log(`[Cordis WebRTC] connection state (${remoteUserId}):`, s);
       if (s === 'failed') {
-        addToast(`Problem z połączeniem głosowym — sprawdź konsolę przeglądarki (F12)`, 'error');
+        console.error(`[Cordis WebRTC] connection permanently failed for ${remoteUserId}`);
+        addToast(`Problem z połączeniem głosowym z jednym z uczestników`, 'error');
       }
     };
     if (localStreamRef.current)
