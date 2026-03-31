@@ -7988,13 +7988,21 @@ export default function App() {
     );
     peerConnsRef.current.set(remoteUserId, pc);
     // ICE + connection state monitoring — critical for diagnosing voice call failures
+    let _iceRestartCount = 0;
     pc.oniceconnectionstatechange = () => {
       const s = pc.iceConnectionState;
       console.log(`[Cordis WebRTC] ICE state (${remoteUserId}):`, s);
       if (s === 'failed') {
-        if (isInitiator) {
-          console.warn('[Cordis WebRTC] ICE failed — restarting ICE for', remoteUserId);
-          pc.restartIce();
+        if (isInitiator && _iceRestartCount < 3) {
+          _iceRestartCount++;
+          console.warn(`[Cordis WebRTC] ICE failed — sending restart offer for ${remoteUserId} (attempt ${_iceRestartCount})`);
+          // restartIce() alone does nothing — MUST follow with createOffer({iceRestart:true})
+          // to actually send new ICE credentials to the remote peer.
+          pc.createOffer({ iceRestart: true })
+            .then(offer => pc.setLocalDescription(offer).then(() => {
+              getSocket().emit('webrtc_offer', { to: remoteUserId, sdp: offer });
+            }))
+            .catch(e => console.warn('[Cordis WebRTC] ICE restart offer failed:', e));
         }
       }
       if (s === 'disconnected') {
@@ -8005,7 +8013,8 @@ export default function App() {
       const s = pc.connectionState;
       console.log(`[Cordis WebRTC] connection state (${remoteUserId}):`, s);
       if (s === 'failed') {
-        addToast(`Problem z połączeniem głosowym — sprawdź konsolę przeglądarki (F12)`, 'error');
+        console.error(`[Cordis WebRTC] connection permanently failed for ${remoteUserId}`);
+        addToast(`Problem z połączeniem głosowym z jednym z uczestników`, 'error');
       }
     };
     if (localStreamRef.current)
