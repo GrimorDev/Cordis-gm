@@ -6053,7 +6053,7 @@ export default function App() {
   const [groupCallMinimized, setGroupCallMinimized] = useState(false);
 
   // Group call state
-  type GroupCallInfo = { group_id: string; participants: string[]; pending: string[]; caller?: { id: string; username: string; avatar_url: string|null } };
+  type GroupCallInfo = { group_id: string; participants: string[]; pending: string[]; isMuted?: boolean; caller?: { id: string; username: string; avatar_url: string|null } };
   const [activeGroupCall, setActiveGroupCall] = useState<GroupCallInfo|null>(null);
   const activeGroupCallRef = useRef<GroupCallInfo|null>(null);
   useEffect(() => { activeGroupCallRef.current = activeGroupCall; }, [activeGroupCall]);
@@ -7378,15 +7378,18 @@ export default function App() {
       setActiveGroupCall(prev => prev?.group_id === payload.group_id ? { ...prev, participants: payload.participants, pending: payload.pending ?? [] } : prev);
     });
     sock.on('group_call_ended', ({ group_id }: { group_id: string }) => {
-      stopIncomingRing(); stopRing();
       if (activeGroupCallRef.current?.group_id === group_id) {
+        stopRing();
         cleanupWebRTC();
         setActiveGroupCall(null);
         setGroupCallState(null);
         playCallEnded();
       }
-      setGroupCallIncoming(prev => prev?.group_id === group_id ? null : prev);
-      setGroupCallState(null);
+      setGroupCallIncoming(prev => {
+        if (prev?.group_id === group_id) { stopIncomingRing(); return null; }
+        return prev;
+      });
+      setGroupCallState(prev => prev?.group_id === group_id ? null : prev);
     });
 
     loadServers(); loadDms(); loadGroupConvs();
@@ -9259,6 +9262,13 @@ export default function App() {
     const call = activeCallRef.current;
     if (call?.channelId) getSocket().emit('voice_state' as any, { muted, deafened: call.isDeafened, channel_id: call.channelId });
     if (call?.userId)    getSocket().emit('voice_state' as any, { muted, deafened: call.isDeafened, to_user_id: call.userId });
+  };
+  const toggleGroupCallMute = () => {
+    const muted = !(activeGroupCallRef.current?.isMuted ?? false);
+    localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !muted; });
+    setActiveGroupCall(p => p ? { ...p, isMuted: muted } : p);
+    const gc = activeGroupCallRef.current;
+    if (gc) getSocket().emit('voice_state' as any, { muted, deafened: false, channel_id: undefined, to_user_id: undefined });
   };
   const toggleDeafen = () => {
     const deaf = !activeCall?.isDeafened;
@@ -11947,9 +11957,9 @@ export default function App() {
                             className="px-2.5 py-1 rounded-lg bg-emerald-600/60 hover:bg-emerald-600 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 shrink-0">
                             <Maximize2 size={11}/> Rozwiń
                           </button>
-                          <button onClick={toggleMute} title={activeCall?.isMuted ? 'Włącz mikrofon' : 'Wycisz'}
-                            className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors shrink-0 ${activeCall?.isMuted ? 'bg-rose-500 text-white' : 'bg-white/[0.08] text-zinc-300 hover:text-white'}`}>
-                            {activeCall?.isMuted ? <MicOff size={11}/> : <Mic size={11}/>}
+                          <button onClick={toggleGroupCallMute} title={activeGroupCall?.isMuted ? 'Włącz mikrofon' : 'Wycisz'}
+                            className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors shrink-0 ${activeGroupCall?.isMuted ? 'bg-rose-500 text-white' : 'bg-white/[0.08] text-zinc-300 hover:text-white'}`}>
+                            {activeGroupCall?.isMuted ? <MicOff size={11}/> : <Mic size={11}/>}
                           </button>
                           <button onClick={leaveCall}
                             className="w-6 h-6 rounded-lg bg-rose-500 hover:bg-rose-400 flex items-center justify-center text-white transition-colors shrink-0">
@@ -11967,8 +11977,8 @@ export default function App() {
                               const isActive = callParts.includes(uid);
                               const isPending = callPending.includes(uid);
                               const isMe = uid === currentUser?.id;
-                              const isSpeaking = speakingUsers.has(uid) && !(isMe ? (activeCall?.isMuted ?? false) : (voiceUserStates[uid]?.muted ?? false));
-                              const isMutedUser = isMe ? (activeCall?.isMuted ?? false) : (voiceUserStates[uid]?.muted ?? false);
+                              const isSpeaking = speakingUsers.has(uid) && !(isMe ? (activeGroupCall?.isMuted ?? false) : (voiceUserStates[uid]?.muted ?? false));
+                              const isMutedUser = isMe ? (activeGroupCall?.isMuted ?? false) : (voiceUserStates[uid]?.muted ?? false);
                               if (!isActive && !isPending) return null;
                               return (
                                 <div key={uid} className="flex flex-col items-center gap-2.5">
@@ -12004,13 +12014,13 @@ export default function App() {
                               className="w-12 h-12 rounded-2xl bg-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.14] flex items-center justify-center transition-all active:scale-90">
                               <Minimize2 size={18}/>
                             </button>
-                            <button onClick={toggleMute} title={activeCall?.isMuted ? 'Włącz mikrofon' : 'Wycisz'}
+                            <button onClick={toggleGroupCallMute} title={activeGroupCall?.isMuted ? 'Włącz mikrofon' : 'Wycisz'}
                               className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all active:scale-90 ${
-                                activeCall?.isMuted
+                                activeGroupCall?.isMuted
                                   ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30 hover:bg-rose-400'
                                   : 'bg-white/[0.08] text-zinc-300 hover:bg-white/[0.14] hover:text-white'
                               }`}>
-                              {activeCall?.isMuted ? <MicOff size={18}/> : <Mic size={18}/>}
+                              {activeGroupCall?.isMuted ? <MicOff size={18}/> : <Mic size={18}/>}
                             </button>
                             <button onClick={leaveCall} title="Rozłącz"
                               className="w-14 h-12 rounded-2xl bg-rose-500 hover:bg-rose-400 active:scale-90 flex items-center justify-center text-white transition-all shadow-lg shadow-rose-500/30">
