@@ -9109,6 +9109,22 @@ export default function App() {
   const acquireMic = async (deviceId?: string, noiseCancelOverride?: boolean): Promise<MediaStream|null> => {
     const useNoise = noiseCancelOverride !== undefined ? noiseCancelOverride : noiseCancel;
     try {
+      // ── Acquire NEW raw mic stream FIRST (before stopping old one) ───────────
+      // CRITICAL for Tauri/WebView2 on Windows: if we stop the old track before
+      // calling getUserMedia(), Windows releases the audio device and the next
+      // getUserMedia() returns a stream that appears live but produces silence.
+      // By getting the new stream first the device is "handed over" seamlessly.
+      const audioConstraints: MediaTrackConstraints = {
+        ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+        echoCancellation: true,  // hardware echo cancel — eliminates speaker feedback
+        autoGainControl:  true,  // normalize mic level automatically
+        noiseSuppression: true,  // browser baseline NS always on; AudioWorklet adds deeper layer
+        sampleRate: 48000,       // 48 kHz — standard Opus/WebRTC, najlepsza jakość głosu
+        channelCount: 1,         // mono — wystarczy dla głosu, mniejsze opóźnienie
+      };
+      const rawStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+
+      // ── NOW clean up previous resources (new stream is already live) ─────────
       // Stop previous speaking detection
       const old = speakStopRef.current.get('self'); if (old) { old(); speakStopRef.current.delete('self'); }
       // Clean up previous noise pipeline (this also stops the old raw mic stream)
@@ -9119,18 +9135,6 @@ export default function App() {
         localStreamRef.current?.getTracks().forEach(t => t.stop());
       }
       localStreamRef.current = null;
-
-      // Acquire raw mic — all three WebRTC filters ON as baseline (echo/gain/noise).
-      // AudioWorklet gate runs on top for deeper noise removal — they complement, not conflict.
-      const audioConstraints: MediaTrackConstraints = {
-        ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
-        echoCancellation: true,  // hardware echo cancel — eliminates speaker feedback
-        autoGainControl:  true,  // normalize mic level automatically
-        noiseSuppression: true,  // browser baseline NS always on; AudioWorklet adds deeper layer
-        sampleRate: 48000,       // 48 kHz — standard Opus/WebRTC, najlepsza jakość głosu
-        channelCount: 1,         // mono — wystarczy dla głosu, mniejsze opóźnienie
-      };
-      const rawStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
 
       // Speaking detection on the raw stream (pre-gate) so indicator stays accurate
       if (currentUserRef.current?.id) {
@@ -9202,6 +9206,12 @@ export default function App() {
       if (currentUser) setVoiceUsers(p => ({ ...p, [curCall.channelId!]: (p[curCall.channelId!]||[]).filter(u=>u.id!==currentUser.id) }));
       cleanupWebRTC();
     }
+    // Leave any active group call first — prevent group_call_ended from killing voice stream
+    if (activeGroupCallRef.current) {
+      leaveGroupCall(activeGroupCallRef.current.group_id);
+      cleanupWebRTC();
+      setActiveGroupCall(null); setGroupCallState(null); setGroupCallMinimized(false);
+    }
     await acquireMic(selMic || undefined);
     joinVoiceChannel(ch.id);
     playVoiceJoin();
@@ -9247,6 +9257,12 @@ export default function App() {
       if (currentUser) setVoiceUsers(p => ({ ...p, [curCall.channelId!]: (p[curCall.channelId!]||[]).filter(u=>u.id!==currentUser.id) }));
       cleanupWebRTC();
       setActiveCall(null); setShowCallPanel(false);
+    }
+    // Leave any active group call first — prevent group_call_ended from killing DM call stream
+    if (activeGroupCallRef.current) {
+      leaveGroupCall(activeGroupCallRef.current.group_id);
+      cleanupWebRTC();
+      setActiveGroupCall(null); setGroupCallState(null); setGroupCallMinimized(false);
     }
     await acquireMic(selMic || undefined);
     sendCallInvite(userId, type);
@@ -17338,6 +17354,18 @@ export default function App() {
             <div className="flex gap-2">
               <button onClick={async()=>{
                 stopIncomingRing();
+                // End any active DM/voice call first — only 1 call at a time
+                const curCall = activeCallRef.current;
+                if (curCall?.channelId) {
+                  leaveVoiceChannel(curCall.channelId);
+                  if (currentUser) setVoiceUsers(p => ({ ...p, [curCall.channelId!]: (p[curCall.channelId!]||[]).filter(u=>u.id!==currentUser.id) }));
+                  cleanupWebRTC(); setActiveCall(null); setShowCallPanel(false);
+                }
+                if (curCall?.userId) {
+                  endCall(curCall.userId); stopRing();
+                  dmsApi.sendSystem(curCall.userId, `📞 Rozmowa zakończona`).catch(()=>{});
+                  cleanupWebRTC(); setActiveCall(null); setShowCallPanel(false);
+                }
                 await acquireMic(selMic||undefined);
                 joinGroupCall(groupCallIncoming.group_id);
                 setActiveGroupCall({ group_id: groupCallIncoming.group_id, participants: groupCallIncoming.participants || [], pending: groupCallIncoming.pending || [], isMuted: false });
