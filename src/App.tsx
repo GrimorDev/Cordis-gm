@@ -72,6 +72,7 @@ import {
   setOutputDevice, watchSpeaking, getMediaDevices, applyNoiseGate, applyDeepFilter, type NoisePipeline,
   preferH264, tuneAudioSender, tuneVideoSenders,
   onDeepFilterStatus, type DeepFilterStatus,
+  primePlaybackContext,
 } from './webrtc';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -9188,6 +9189,8 @@ export default function App() {
         return;
       }
     }
+    // Pre-warm AudioContext inside this user-gesture so remote audio plays in Tauri/WebView2
+    primePlaybackContext();
     // Close settings / admin panel so the call panel is visible
     setSrvSettOpen(false);
     if (activeViewRef.current === 'admin') setActiveView('servers');
@@ -9249,6 +9252,8 @@ export default function App() {
   };
 
   const startDmCall = async (userId: string, username: string, type: 'voice'|'video', avatarUrl?: string | null) => {
+    // Pre-warm AudioContext inside this user-gesture so remote audio plays in Tauri/WebView2
+    primePlaybackContext();
     const curCall = activeCallRef.current;
     // Leave any active voice channel first — only 1 call allowed at a time
     if (curCall?.channelId) {
@@ -11575,9 +11580,10 @@ export default function App() {
                       ? <button onClick={()=>{ leaveGroupCall(activeGroupDm!); cleanupWebRTC(); setActiveGroupCall(null); setGroupCallState(null); playCallEnded(); }}
                           className="w-8 h-8 flex items-center justify-center rounded-xl text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 transition-all duration-150 active:scale-95" title="Zakończ rozmowę"><PhoneOff size={15}/></button>
                       : groupCallState?.group_id === activeGroupDm
-                        ? <button onClick={async()=>{ await acquireMic(selMic||undefined); joinGroupCall(activeGroupDm!); setActiveGroupCall({ group_id: activeGroupDm!, participants: groupCallState.participants, pending: groupCallState.pending, isMuted: false }); stopIncomingRing(); setGroupCallIncoming(null); }}
+                        ? <button onClick={async()=>{ primePlaybackContext(); await acquireMic(selMic||undefined); joinGroupCall(activeGroupDm!); setActiveGroupCall({ group_id: activeGroupDm!, participants: groupCallState.participants, pending: groupCallState.pending, isMuted: false }); stopIncomingRing(); setGroupCallIncoming(null); }}
                             className="w-8 h-8 flex items-center justify-center rounded-xl text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all duration-150 active:scale-95 animate-pulse" title="Dołącz do aktywnej rozmowy"><Phone size={15}/></button>
                         : <button onClick={async()=>{
+                            primePlaybackContext();
                             const gid = activeGroupDm!;
                             await acquireMic(selMic||undefined);
                             startGroupCall(gid);
@@ -17303,6 +17309,7 @@ export default function App() {
             </div>
             <div className="flex gap-2">
               <button onClick={async ()=>{
+                primePlaybackContext(); // pre-warm AudioContext inside user gesture (Tauri fix)
                 stopIncomingRing();
                 playCallAccepted();
                 // Leave any active voice channel first — only 1 call allowed at a time
@@ -17353,6 +17360,7 @@ export default function App() {
             </div>
             <div className="flex gap-2">
               <button onClick={async()=>{
+                primePlaybackContext(); // pre-warm AudioContext inside user gesture (Tauri fix)
                 stopIncomingRing();
                 // End any active DM/voice call first — only 1 call at a time
                 const curCall = activeCallRef.current;

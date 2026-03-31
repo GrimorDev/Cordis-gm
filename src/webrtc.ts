@@ -51,9 +51,65 @@ export function makePeerConnection(
   return pc;
 }
 
-// ─── Remote Audio Elements ───────────────────────────────────────────────────
-const remoteAudios = new Map<string, HTMLAudioElement>();       // microphone audio
-const remoteScreenAudios = new Map<string, HTMLAudioElement>(); // screen-share audio (separate element)
+// ─── Playback AudioContext (primary path for Tauri/WebView2) ─────────────────
+//
+// HTMLAudioElement + srcObject=MediaStream is unreliable in Tauri/WebView2:
+// the promise from play() resolves but no audio comes out (WebView2 bug).
+//
+// Fix: route remote streams through AudioContext → ctx.destination (speakers).
+// IMPORTANT: AudioContext must be created INSIDE a user gesture to start in
+// 'running' state. Call primePlaybackContext() on the first user click that
+// triggers a call/channel join.
+//
+// Previous failed approach used createMediaStreamDestination() which creates
+// another MediaStream (not speakers output) — that was the wrong API.
+// Correct: createMediaStreamSource(stream).connect(ctx.destination) → speakers.
+//
+let _playCtx: AudioContext | null = null;
+// Per-user nodes kept so we can disconnect/reconnect cleanly
+const _playSources = new Map<string, MediaStreamAudioSourceNode>();
+const _playGains   = new Map<string, GainNode>();
+// User volume preferences (0-200, default 100)
+const _playVols    = new Map<string, number>();
+const _playMuted   = new Map<string, boolean>();
+
+/**
+ * Pre-warm the playback AudioContext.
+ * MUST be called inside a user-gesture handler (click/keydown) so the
+ * AudioContext starts in 'running' state — never from async code.
+ */
+export function primePlaybackContext(): void {
+  if (!_playCtx || _playCtx.state === 'closed') {
+    _playCtx = new AudioContext({ sampleRate: 48000 });
+  }
+  if (_playCtx.state === 'suspended') {
+    _playCtx.resume().catch(() => {});
+  }
+}
+
+function _connectAudioCtx(userId: string, stream: MediaStream): void {
+  if (!_playCtx) return;
+  // Disconnect old nodes if re-attaching
+  try { _playSources.get(userId)?.disconnect(); } catch {}
+  try { _playGains.get(userId)?.disconnect(); } catch {}
+  try {
+    const src  = _playCtx.createMediaStreamSource(stream);
+    const gain = _playCtx.createGain();
+    const vol  = _playVols.get(userId) ?? 100;
+    const mute = _playMuted.get(userId) ?? false;
+    gain.gain.value = mute ? 0 : vol / 100;
+    src.connect(gain);
+    gain.connect(_playCtx.destination);
+    _playSources.set(userId, src);
+    _playGains.set(userId, gain);
+  } catch (e) {
+    console.warn('[Cordis] AudioContext connect failed for', userId, e);
+  }
+}
+
+// ─── Remote Audio Elements (fallback for pure-web / non-Tauri) ───────────────
+const remoteAudios      = new Map<string, HTMLAudioElement>();
+const remoteScreenAudios = new Map<string, HTMLAudioElement>();
 
 function makeAudioEl(): HTMLAudioElement {
   const el = document.createElement('audio');
@@ -64,26 +120,44 @@ function makeAudioEl(): HTMLAudioElement {
 }
 
 /**
- * Attach a remote WebRTC audio stream to a hidden <audio> element for playback.
+ * Attach a remote WebRTC audio stream for playback.
  *
- * Design: direct srcObject only — NO AudioContext chain.
- * Previous versions routed through AudioContext (GainNode → dest.stream) but:
- * - AudioContext created outside a user-gesture starts SUSPENDED → dest.stream silent
- * - ctx.resume() may fail or be delayed → prolonged silence / no audio at all
- * Conclusion: native srcObject = stream is 100% reliable for WebRTC playback.
- * Volume > 100% (GainNode feature) is sacrificed for guaranteed functionality.
+ * Strategy (dual-path):
+ *   1. AudioContext path (primary) — if primePlaybackContext() was called inside
+ *      a user gesture, the ctx is 'running' and this path is used. Reliable in
+ *      Tauri/WebView2 where <audio srcObject=MediaStream> plays silently.
+ *   2. <audio> element (fallback) — used when AudioContext not yet primed or
+ *      suspended. Works fine in regular browsers.
+ * Only ONE path is active per user at a time to avoid double playback.
  */
 export function attachRemoteAudio(userId: string, stream: MediaStream) {
-  let el = remoteAudios.get(userId);
-  if (!el) { el = makeAudioEl(); remoteAudios.set(userId, el); }
-  el.srcObject = stream;
-  // Explicit play() — autoplay attribute alone is not always honoured by the browser.
-  el.play().catch(err => {
-    console.warn('[Cordis] attachRemoteAudio play() blocked:', err.name, '— will retry on next user interaction');
-    // Retry on next user gesture (e.g. click anywhere)
-    const retry = () => { el!.play().catch(() => {}); document.removeEventListener('click', retry); };
-    document.addEventListener('click', retry, { once: true });
-  });
+  if (_playCtx && _playCtx.state === 'running') {
+    // ── AudioContext path ──────────────────────────────────────────────────
+    // Detach any existing <audio> element so there's no double-play
+    const oldEl = remoteAudios.get(userId);
+    if (oldEl) { oldEl.srcObject = null; oldEl.pause(); }
+    _connectAudioCtx(userId, stream);
+  } else {
+    // ── <audio> element path (fallback) ───────────────────────────────────
+    let el = remoteAudios.get(userId);
+    if (!el) { el = makeAudioEl(); remoteAudios.set(userId, el); }
+    el.srcObject = stream;
+    el.play().catch(err => {
+      console.warn('[Cordis] attachRemoteAudio play() blocked:', err.name, '— retry on next click');
+      const retry = () => {
+        // If AudioContext has been primed by now, switch to that path
+        if (_playCtx && _playCtx.state === 'running') {
+          _connectAudioCtx(userId, stream);
+          const e2 = remoteAudios.get(userId);
+          if (e2) { e2.srcObject = null; e2.pause(); }
+        } else {
+          el!.play().catch(() => {});
+        }
+        document.removeEventListener('click', retry);
+      };
+      document.addEventListener('click', retry, { once: true });
+    });
+  }
 }
 
 /** Separate element for screen-share audio so it doesn't overwrite mic audio. */
@@ -95,6 +169,12 @@ export function attachRemoteScreenAudio(userId: string, stream: MediaStream) {
 }
 
 export function detachRemoteAudio(userId: string) {
+  // AudioContext path cleanup
+  try { _playSources.get(userId)?.disconnect(); } catch {}
+  try { _playGains.get(userId)?.disconnect(); } catch {}
+  _playSources.delete(userId);
+  _playGains.delete(userId);
+  // <audio> path cleanup
   const el = remoteAudios.get(userId);
   if (el) { el.srcObject = null; el.remove(); remoteAudios.delete(userId); }
   const sel = remoteScreenAudios.get(userId);
@@ -102,7 +182,12 @@ export function detachRemoteAudio(userId: string) {
 }
 
 export function setRemoteVolume(userId: string, volumePct: number) {
-  // volumePct: 0–100 → el.volume 0.0–1.0
+  _playVols.set(userId, volumePct);
+  const mute = _playMuted.get(userId) ?? false;
+  // AudioContext path
+  const gain = _playGains.get(userId);
+  if (gain) gain.gain.value = mute ? 0 : volumePct / 100;
+  // <audio> path
   const el = remoteAudios.get(userId);
   if (el) el.volume = Math.max(0, Math.min(1, volumePct / 100));
 }
@@ -112,7 +197,7 @@ export function setRemoteScreenVolume(userId: string, volumePct: number) {
   const el = remoteScreenAudios.get(userId);
   if (!el) return;
   el.volume = Math.max(0, Math.min(1, volumePct / 100));
-  if (volumePct > 0) el.muted = false; // un-mute if raising volume
+  if (volumePct > 0) el.muted = false;
 }
 
 /** Mute/unmute only the screen-share audio for a remote user. */
@@ -122,6 +207,14 @@ export function muteRemoteScreenStream(userId: string, muted: boolean) {
 }
 
 export function muteRemoteUser(userId: string, muted: boolean) {
+  _playMuted.set(userId, muted);
+  // AudioContext path
+  const gain = _playGains.get(userId);
+  if (gain) {
+    const vol = _playVols.get(userId) ?? 100;
+    gain.gain.value = muted ? 0 : vol / 100;
+  }
+  // <audio> path
   const el = remoteAudios.get(userId);
   if (el) el.muted = muted;
   const sel = remoteScreenAudios.get(userId);
@@ -129,16 +222,24 @@ export function muteRemoteUser(userId: string, muted: boolean) {
 }
 
 export function muteAllRemote(muted: boolean) {
+  // AudioContext path
+  _playGains.forEach((gain, userId) => {
+    const vol = _playVols.get(userId) ?? 100;
+    gain.gain.value = muted ? 0 : vol / 100;
+  });
+  // <audio> path
   remoteAudios.forEach(el => { el.muted = muted; });
   remoteScreenAudios.forEach(el => { el.muted = muted; });
 }
 
 export async function setOutputDevice(deviceId: string) {
+  // <audio> elements support setSinkId
   for (const el of [...remoteAudios.values(), ...remoteScreenAudios.values()]) {
     if ('setSinkId' in el) {
       try { await (el as any).setSinkId(deviceId); } catch {}
     }
   }
+  // AudioContext destination — not widely supported yet, skip silently
 }
 
 // ─── Voice Activity Detection (VAD) ──────────────────────────────────────────
