@@ -8330,6 +8330,8 @@ export default function App() {
   const handleMicToggle = () => {
     if (activeCall) {
       toggleMute();
+    } else if (activeGroupCallRef.current) {
+      toggleGroupCallMute();
     } else {
       const next = !isMicMuted;
       setIsMicMuted(next);
@@ -10494,13 +10496,13 @@ export default function App() {
 
               {/* Mic + Settings buttons */}
               <div className="flex items-center gap-0.5 shrink-0">
-                <button title={isMicMuted||activeCall?.isMuted?'Włącz mikrofon':'Wycisz mikrofon'}
+                <button title={isMicMuted||activeCall?.isMuted||activeGroupCall?.isMuted?'Włącz mikrofon':'Wycisz mikrofon'}
                   onClick={handleMicToggle}
                   className={`w-7 h-7 flex items-center justify-center rounded-md transition-all ${
-                    (isMicMuted||(activeCall?.isMuted??false))
+                    (isMicMuted||(activeCall?.isMuted??false)||(activeGroupCall?.isMuted??false))
                       ? 'text-rose-400 bg-rose-500/10 hover:bg-rose-500/20'
                       : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07]'}`}>
-                  {(isMicMuted||(activeCall?.isMuted??false))?<MicOff size={13}/>:<Mic size={13}/>}
+                  {(isMicMuted||(activeCall?.isMuted??false)||(activeGroupCall?.isMuted??false))?<MicOff size={13}/>:<Mic size={13}/>}
                 </button>
                 <button title="Skróty klawiszowe (?)" onClick={()=>setShowShortcuts(true)}
                   className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all"><Keyboard size={12}/></button>
@@ -11557,13 +11559,13 @@ export default function App() {
                       ? <button onClick={()=>{ leaveGroupCall(activeGroupDm!); cleanupWebRTC(); setActiveGroupCall(null); setGroupCallState(null); playCallEnded(); }}
                           className="w-8 h-8 flex items-center justify-center rounded-xl text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 transition-all duration-150 active:scale-95" title="Zakończ rozmowę"><PhoneOff size={15}/></button>
                       : groupCallState?.group_id === activeGroupDm
-                        ? <button onClick={async()=>{ await acquireMic(selMic||undefined); joinGroupCall(activeGroupDm!); setActiveGroupCall({ group_id: activeGroupDm!, participants: groupCallState.participants, pending: groupCallState.pending }); stopIncomingRing(); setGroupCallIncoming(null); }}
+                        ? <button onClick={async()=>{ await acquireMic(selMic||undefined); joinGroupCall(activeGroupDm!); setActiveGroupCall({ group_id: activeGroupDm!, participants: groupCallState.participants, pending: groupCallState.pending, isMuted: false }); stopIncomingRing(); setGroupCallIncoming(null); }}
                             className="w-8 h-8 flex items-center justify-center rounded-xl text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all duration-150 active:scale-95 animate-pulse" title="Dołącz do aktywnej rozmowy"><Phone size={15}/></button>
                         : <button onClick={async()=>{
                             const gid = activeGroupDm!;
                             await acquireMic(selMic||undefined);
                             startGroupCall(gid);
-                            setActiveGroupCall({ group_id: gid, participants: [currentUser?.id||''], pending: [] });
+                            setActiveGroupCall({ group_id: gid, participants: [currentUser?.id||''], pending: [], isMuted: false });
                             startRing();
                             // Auto-stop ring and dismiss pending after 15s
                             setTimeout(() => {
@@ -17338,7 +17340,7 @@ export default function App() {
                 stopIncomingRing();
                 await acquireMic(selMic||undefined);
                 joinGroupCall(groupCallIncoming.group_id);
-                setActiveGroupCall({ group_id: groupCallIncoming.group_id, participants: groupCallIncoming.participants || [], pending: groupCallIncoming.pending || [] });
+                setActiveGroupCall({ group_id: groupCallIncoming.group_id, participants: groupCallIncoming.participants || [], pending: groupCallIncoming.pending || [], isMuted: false });
                 setGroupCallState(groupCallIncoming);
                 setActiveView('dms');
                 setActiveGroupDm(groupCallIncoming.group_id);
