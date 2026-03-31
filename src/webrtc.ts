@@ -65,6 +65,14 @@ export function makePeerConnection(
 // another MediaStream (not speakers output) — that was the wrong API.
 // Correct: createMediaStreamSource(stream).connect(ctx.destination) → speakers.
 //
+// ── Tauri mode flag ───────────────────────────────────────────────────────────
+// Only use AudioContext playback path in Tauri/WebView2. On web, <audio> elements
+// work perfectly and must remain the primary path.
+let _isTauri = false;
+/** Call once at app start with `isTauri` value so AudioContext path is only
+ *  activated in the desktop app where HTMLAudioElement+srcObject is broken. */
+export function setTauriMode(v: boolean): void { _isTauri = v; }
+
 let _playCtx: AudioContext | null = null;
 // Per-user nodes kept so we can disconnect/reconnect cleanly
 const _playSources = new Map<string, MediaStreamAudioSourceNode>();
@@ -77,8 +85,10 @@ const _playMuted   = new Map<string, boolean>();
  * Pre-warm the playback AudioContext.
  * MUST be called inside a user-gesture handler (click/keydown) so the
  * AudioContext starts in 'running' state — never from async code.
+ * Only relevant in Tauri — on web this is a no-op.
  */
 export function primePlaybackContext(): void {
+  if (!_isTauri) return; // web uses <audio> elements — no AudioContext needed
   if (!_playCtx || _playCtx.state === 'closed') {
     _playCtx = new AudioContext({ sampleRate: 48000 });
   }
@@ -131,22 +141,24 @@ function makeAudioEl(): HTMLAudioElement {
  * Only ONE path is active per user at a time to avoid double playback.
  */
 export function attachRemoteAudio(userId: string, stream: MediaStream) {
-  if (_playCtx && _playCtx.state === 'running') {
-    // ── AudioContext path ──────────────────────────────────────────────────
-    // Detach any existing <audio> element so there's no double-play
+  if (_isTauri && _playCtx && _playCtx.state === 'running') {
+    // ── AudioContext path (Tauri/WebView2 only) ────────────────────────────
+    // HTMLAudioElement.play() resolves but produces no audio in WebView2.
+    // Route through AudioContext → ctx.destination (speakers) instead.
+    // Detach any existing <audio> element so there's no double-play.
     const oldEl = remoteAudios.get(userId);
     if (oldEl) { oldEl.srcObject = null; oldEl.pause(); }
     _connectAudioCtx(userId, stream);
   } else {
-    // ── <audio> element path (fallback) ───────────────────────────────────
+    // ── <audio> element path (web browsers + Tauri fallback) ──────────────
     let el = remoteAudios.get(userId);
     if (!el) { el = makeAudioEl(); remoteAudios.set(userId, el); }
     el.srcObject = stream;
     el.play().catch(err => {
       console.warn('[Cordis] attachRemoteAudio play() blocked:', err.name, '— retry on next click');
       const retry = () => {
-        // If AudioContext has been primed by now, switch to that path
-        if (_playCtx && _playCtx.state === 'running') {
+        // In Tauri: if AudioContext is now primed (from a subsequent gesture), switch paths
+        if (_isTauri && _playCtx && _playCtx.state === 'running') {
           _connectAudioCtx(userId, stream);
           const e2 = remoteAudios.get(userId);
           if (e2) { e2.srcObject = null; e2.pause(); }

@@ -73,6 +73,7 @@ import {
   preferH264, tuneAudioSender, tuneVideoSenders,
   onDeepFilterStatus, type DeepFilterStatus,
   primePlaybackContext,
+  setTauriMode,
 } from './webrtc';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -5483,6 +5484,10 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
 // ─── Main App ─────────────────────────────────────────────────────────────────
 // Detect /join/:code in URL (evaluated once on module load)
 const _inviteCodeFromUrl = (() => { const m = window.location.pathname.match(/^\/join\/([a-f0-9]+)$/i); return m ? m[1] : null; })();
+
+// Inform webrtc module whether we're running inside Tauri/WebView2.
+// Must be set before any calls join so AudioContext path is only used on desktop.
+setTauriMode(isTauri);
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
