@@ -7914,12 +7914,11 @@ export default function App() {
   };
   const openPeer = async (remoteUserId: string, isInitiator: boolean, sdpOffer?: RTCSessionDescriptionInit) => {
     const existing = peerConnsRef.current.get(remoteUserId);
-    // If existing connection is dead (closed/failed), close it and recreate.
-    // A stale closed PC produces no audio — must not be reused.
+    // Only recreate if signalingState === 'closed' — the one state where a PC is
+    // truly unusable.  connectionState/iceConnectionState 'failed' is NOT the same:
+    // those PCs can still accept ICE restart offers, so we must not close them here.
     if (existing) {
-      const dead = existing.connectionState === 'failed' || existing.connectionState === 'closed'
-                || existing.iceConnectionState === 'failed'  || existing.iceConnectionState === 'closed';
-      if (!dead) return existing;
+      if (existing.signalingState !== 'closed') return existing;
       existing.close();
       peerConnsRef.current.delete(remoteUserId);
       detachRemoteAudio(remoteUserId);
@@ -8073,24 +8072,20 @@ export default function App() {
       },
       onOffer: async ({ from, sdp }: any) => {
         const existing = peerConnsRef.current.get(from);
-        // Only treat as renegotiation if the PC is live (not closed/failed).
-        // A dead PC here means the guard in openPeer would have cleaned it up,
-        // but handle defensively: fall through to openPeer which recreates it.
-        const isLive = existing
-          && existing.connectionState !== 'closed'
-          && existing.connectionState !== 'failed'
-          && existing.iceConnectionState !== 'closed'
-          && existing.iceConnectionState !== 'failed';
-        if (isLive) {
-          // Renegotiation (e.g. remote peer added screen share track)
-          await existing!.setRemoteDescription(new RTCSessionDescription(sdp));
-          const rawAnswer = await existing!.createAnswer();
+        // Renegotiation OR ICE restart — apply to existing PC as long as it isn't
+        // truly closed (signalingState === 'closed').  A PC with iceConnectionState
+        // or connectionState 'failed' can still accept an ICE restart offer, so we
+        // MUST NOT close it here and recreate — that would break the ICE restart.
+        if (existing && existing.signalingState !== 'closed') {
+          await existing.setRemoteDescription(new RTCSessionDescription(sdp));
+          const rawAnswer = await existing.createAnswer();
           const tunedSdp  = preferH264(rawAnswer.sdp ?? '');
           const answer    = { ...rawAnswer, sdp: tunedSdp };
-          await existing!.setLocalDescription(answer);
-          tuneAudioSender(existing!, (activeCh as any)?.bitrate ?? 64);
+          await existing.setLocalDescription(answer);
+          tuneAudioSender(existing, (activeCh as any)?.bitrate ?? 64);
           getSocket().emit('webrtc_answer', { to: from, sdp: answer });
         } else {
+          // No existing PC or truly closed — create fresh one
           await openPeer(from, false, sdp);
         }
       },
