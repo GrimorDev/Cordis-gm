@@ -98,6 +98,11 @@ export async function joinRoom(params: {
     }
   });
 
+  sendTransport.on('connectionstatechange', (state) => {
+    console.log(`[MediaSoup] sendTransport connectionstate: ${state}`);
+    if (state === 'failed') console.error('[MediaSoup] Send transport ICE FAILED — check MEDIASOUP_ANNOUNCED_IP and firewall ports 20000-20500');
+  });
+
   sendTransport.on('produce', async ({ kind, rtpParameters, appData }, callback, errback) => {
     try {
       const { producerId } = await emitWithCallback<{ producerId: string }>(socket, 'ms_produce', {
@@ -128,6 +133,11 @@ export async function joinRoom(params: {
     } catch (err: any) {
       errback(err);
     }
+  });
+
+  recvTransport.on('connectionstatechange', (state) => {
+    console.log(`[MediaSoup] recvTransport connectionstate: ${state}`);
+    if (state === 'failed') console.error('[MediaSoup] Recv transport ICE FAILED — check MEDIASOUP_ANNOUNCED_IP and firewall ports 20000-20500');
   });
 
   // 5. Store room state
@@ -242,21 +252,27 @@ async function consumeRemote(
     });
 
     // Build MediaStream and deliver to caller
-   const track = consumer.track;
+    const track = consumer.track;
 
-// 🔥 poczekaj aż track się "odblokuje"
-await new Promise<void>((resolve) => {
-  if (!track.muted) return resolve();
+    // Wait for track to unmute (fires when RTP data starts flowing), but cap at 3s
+    // to avoid hanging forever if ICE/DTLS fails
+    if (track.muted) {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(() => {
+          track.removeEventListener('unmute', onUnmute);
+          console.warn('[MediaSoup] track still muted after 3s — ICE may have failed');
+          resolve();
+        }, 3000);
+        const onUnmute = () => {
+          clearTimeout(timer);
+          track.removeEventListener('unmute', onUnmute);
+          resolve();
+        };
+        track.addEventListener('unmute', onUnmute);
+      });
+    }
 
-  const onUnmute = () => {
-    track.removeEventListener('unmute', onUnmute);
-    resolve();
-  };
-
-  track.addEventListener('unmute', onUnmute);
-});
-
-const stream = new MediaStream([track]);
+    const stream = new MediaStream([track]);
     const producerKind: 'mic' | 'screen' =
       producer.appData?.kind === 'screen' ? 'screen' : 'mic';
 
