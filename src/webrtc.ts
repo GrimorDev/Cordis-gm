@@ -1,29 +1,7 @@
-// ─── WebRTC Utilities for Cordis ─────────────────────────────────────────────
-
-// ─── TURN server support ──────────────────────────────────────────────────────
-function buildIceServers(): RTCIceServer[] {
-  const servers: RTCIceServer[] = [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-  ];
-  const turnUrl  = (import.meta.env.VITE_TURN_URL  as string | undefined) || '';
-  const turnUser = (import.meta.env.VITE_TURN_USERNAME   as string | undefined) || '';
-  const turnCred = (import.meta.env.VITE_TURN_CREDENTIAL as string | undefined) || '';
-  if (turnUrl) {
-    servers.push({
-      urls: [
-        turnUrl.replace(/^turns?:/, 'turn:'),
-        turnUrl.replace(/^turns?:/, 'turns:'),
-      ],
-      username:   turnUser,
-      credential: turnCred,
-    });
-  }
-  return servers;
-}
-
-export const ICE_SERVERS = buildIceServers();
+// ─── WebRTC Audio Utilities for Cordis ───────────────────────────────────────
+// NOTE: P2P WebRTC (makePeerConnection, ICE servers) has been removed.
+// This module now only exports audio playback utilities and voice processing helpers
+// used by src/mediasoup.ts.
 
 // ─── DeepFilter status observable ────────────────────────────────────────────
 export type DeepFilterStatus = 'idle' | 'loading' | 'active' | 'failed';
@@ -38,17 +16,6 @@ export function getDeepFilterStatus(): DeepFilterStatus { return _deepFilterStat
 export function onDeepFilterStatus(fn: (s: DeepFilterStatus) => void): () => void {
   _dfListeners.add(fn);
   return () => _dfListeners.delete(fn);
-}
-
-// ─── Peer Connection ─────────────────────────────────────────────────────────
-export function makePeerConnection(
-  onIce: (c: RTCIceCandidateInit) => void,
-  onTrack: (e: RTCTrackEvent) => void,
-): RTCPeerConnection {
-  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-  pc.onicecandidate = e => { if (e.candidate) onIce(e.candidate.toJSON()); };
-  pc.ontrack = onTrack;
-  return pc;
 }
 
 // ─── Playback AudioContext (primary path for Tauri/WebView2) ─────────────────

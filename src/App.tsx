@@ -67,7 +67,7 @@ import {
   playStreamJoin,
 } from './sounds';
 import {
-  makePeerConnection, attachRemoteAudio, attachRemoteScreenAudio, detachRemoteAudio,
+  attachRemoteAudio, attachRemoteScreenAudio, detachRemoteAudio,
   muteAllRemote, setRemoteVolume, setRemoteScreenVolume, muteRemoteUser, muteRemoteScreenStream,
   setOutputDevice, watchSpeaking, getMediaDevices, applyNoiseGate, applyDeepFilter, type NoisePipeline,
   preferH264, tuneAudioSender, tuneVideoSenders,
@@ -75,6 +75,17 @@ import {
   primePlaybackContext,
   setTauriMode,
 } from './webrtc';
+import {
+  joinRoom as msJoinRoom,
+  leaveRoom as msLeaveRoom,
+  replaceTrack as msReplaceTrack,
+  setMicEnabled as msSetMicEnabled,
+  produceScreen as msProduceScreen,
+  stopScreenShare as msStopScreenShare,
+  isInRoom as msIsInRoom,
+  getCurrentRoomId as msGetCurrentRoomId,
+  type RemoteStream,
+} from './mediasoup';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 // Configure marked once — GFM mode, line-break aware
@@ -5878,8 +5889,7 @@ export default function App() {
   const localStreamRef          = useRef<MediaStream|null>(null);
   const screenStreamRef         = useRef<MediaStream|null>(null);
   const remoteScreenStreamsRef  = useRef(new Map<string, MediaStream>());
-  const peerConnsRef            = useRef(new Map<string, RTCPeerConnection>());
-  const speakStopRef     = useRef(new Map<string, ()=>void>()); // speaking detection cleanup
+  const speakStopRef     = useRef(new Map<string, ()=>void>()); // speaking detection cleanup (local mic only)
   const currentUserRef      = useRef(currentUser);
   const activeCallRef       = useRef(activeCall);
   const activeDmUserIdRef   = useRef(activeDmUserId);
@@ -6186,23 +6196,11 @@ export default function App() {
       });
     };
 
-    // ── WebRTC packet loss (supplementary, no RTT from here) ─────────
+    // ── MediaSoup packet loss (not available via client API — show 0) ──
     const measurePktLoss = async () => {
-      const pcs = [...peerConnsRef.current.values()];
-      if (!pcs.length) return;
-      let lost = 0, recv = 0;
-      await Promise.all(pcs.map(async pc => {
-        const stats = await pc.getStats().catch(() => null);
-        if (!stats) return;
-        stats.forEach((r: any) => {
-          if (r.type === 'inbound-rtp' && r.kind === 'audio') {
-            lost += r.packetsLost ?? 0;
-            recv += r.packetsReceived ?? 0;
-          }
-        });
-      }));
-      const pktLoss = (recv + lost) > 0 ? Math.min(100, (lost / (recv + lost)) * 100) : 0;
-      setVoiceStats(p => ({...p, pktLoss}));
+      // MediaSoup-client does not expose getStats() per consumer directly.
+      // Packet loss metrics can be added later via server-side RTP monitoring.
+      setVoiceStats(p => ({...p, pktLoss: 0}));
     };
 
     measurePing(); // immediate first sample
@@ -6811,9 +6809,7 @@ export default function App() {
       autoToast(`${u.username} zaakceptował(a) Twoje zaproszenie! 🎉`, 'success');
     });
     // WebRTC signaling
-    sock.on('webrtc_offer',  (d: any) => voiceHandlerRef.current.onOffer?.(d));
-    sock.on('webrtc_answer', (d: any) => voiceHandlerRef.current.onAnswer?.(d));
-    sock.on('webrtc_ice',    (d: any) => voiceHandlerRef.current.onIce?.(d));
+    // webrtc_offer/answer/ice removed — using MediaSoup SFU instead
     // Voice state of other participants (muted/deafened)
     sock.on('voice_user_state' as any, ({ user_id, muted, deafened }: { user_id: string; muted: boolean; deafened: boolean }) => {
       setVoiceUserStates(p => ({ ...p, [user_id]: { muted, deafened } }));
@@ -7025,8 +7021,7 @@ export default function App() {
       // Clean up if we somehow got past the frontend pre-check (race condition)
       if (activeCallRef.current?.channelId === channel_id) {
         leaveVoiceChannel(channel_id);
-        peerConnsRef.current.forEach((pc, uid) => { pc.close(); detachRemoteAudio(uid); });
-        peerConnsRef.current.clear();
+        cleanupWebRTC();
         setActiveCall(null);
         setShowCallPanel(false);
       }
@@ -7383,21 +7378,16 @@ export default function App() {
       // Stop ring when first participant joins the group call
       if (activeGroupCallRef.current?.group_id === payload.group_id && payload.new_user_id !== currentUser?.id) {
         stopRing();
-        // WebRTC: open peer to new participant
-        if (payload.existing_participants?.includes(currentUser?.id)) {
-          openPeer(payload.new_user_id, true);
-        } else {
-          openPeer(payload.new_user_id, false);
-        }
+        // MediaSoup handles audio automatically via ms_new_producer event
       }
     });
     sock.on('group_call_participant_left', (payload: any) => {
       setGroupCallState(prev => prev?.group_id === payload.group_id ? { ...prev, participants: payload.participants, pending: payload.pending ?? [] } : prev);
       setActiveGroupCall(prev => prev?.group_id === payload.group_id ? { ...prev, participants: payload.participants, pending: payload.pending ?? [] } : prev);
-      // Close the peer connection to the user who left — otherwise stale PC stays
-      // in peerConnsRef and openPeer's guard returns it on rejoin → no audio.
+      // MediaSoup handles cleanup automatically via ms_producer_closed event
       if (activeGroupCallRef.current?.group_id === payload.group_id && payload.left_user_id) {
-        closePeer(payload.left_user_id);
+        detachRemoteAudio(payload.left_user_id);
+        setSpeakingUsers(p => { const n = new Set(p); n.delete(payload.left_user_id); return n; });
       }
     });
     sock.on('group_call_ended', ({ group_id }: { group_id: string }) => {
@@ -7901,165 +7891,45 @@ export default function App() {
 
   // ── WebRTC voice signaling handlers ─────────────────────────────
   // These are updated via ref so socket callbacks always get latest version
-  const closePeer = (userId: string) => {
-    const pc = peerConnsRef.current.get(userId);
-    if (pc) { pc.close(); peerConnsRef.current.delete(userId); }
-    detachRemoteAudio(userId);
-    remoteScreenStreamsRef.current.delete(userId);
-    setScreenShareTick(t => t + 1);
-    const stop = speakStopRef.current.get(userId);
-    if (stop) { stop(); speakStopRef.current.delete(userId); }
-    setSpeakingUsers(p => { const n = new Set(p); n.delete(userId); return n; });
-    setVoiceUserStates(p => { const n = {...p}; delete n[userId]; return n; });
-  };
-  const openPeer = async (remoteUserId: string, isInitiator: boolean, sdpOffer?: RTCSessionDescriptionInit) => {
-    const existing = peerConnsRef.current.get(remoteUserId);
-    // Only recreate if signalingState === 'closed' — the one state where a PC is
-    // truly unusable.  connectionState/iceConnectionState 'failed' is NOT the same:
-    // those PCs can still accept ICE restart offers, so we must not close them here.
-    if (existing) {
-      if (existing.signalingState !== 'closed') return existing;
-      existing.close();
-      peerConnsRef.current.delete(remoteUserId);
-      detachRemoteAudio(remoteUserId);
-    }
-    const pc = makePeerConnection(
-      (c) => getSocket().emit('webrtc_ice', { to: remoteUserId, candidate: c }),
-      (e) => {
-        const stream = e.streams[0];
-        console.log(`[Cordis WebRTC] ontrack from ${remoteUserId}: kind=${e.track.kind} streams=${e.streams.length} stream=${stream?.id}`);
-        if (!stream) {
-          console.warn(`[Cordis WebRTC] ontrack: e.streams[0] is empty for ${remoteUserId} — audio will NOT play`);
-          return;
-        }
-        if (e.track.kind === 'video') {
-          // Remote video track (camera or screen share)
-          remoteScreenStreamsRef.current.set(remoteUserId, stream);
-          setScreenShareTick(t => t + 1);
-          // Clear frozen frame when remote turns off camera/share
-          e.track.onended = () => {
-            if (remoteScreenStreamsRef.current.get(remoteUserId) === stream) {
-              remoteScreenStreamsRef.current.delete(remoteUserId);
-              setScreenShareTick(t => t + 1);
+  // ── MediaSoup callbacks: onNewStream + onStreamClosed ────────────
+  // These are set up fresh each call via msJoinRoom, so we keep refs for latest closures
+  const onNewStreamRef    = useRef<((s: RemoteStream) => void) | null>(null);
+  const onStreamClosedRef = useRef<((userId: string, kind: 'mic' | 'screen') => void) | null>(null);
+
+  const buildMsCallbacks = () => {
+    const onNewStream = (s: RemoteStream) => {
+      // attachRemoteAudio is handled inside mediasoup.ts for mic streams
+      // Restore saved volume preference
+      if (s.kind === 'mic') {
+        try {
+          const saved = localStorage.getItem(`cordyn_vol_${s.userId}`);
+          if (saved !== null) {
+            const vol = parseInt(saved, 10);
+            if (!isNaN(vol)) {
+              setUserVols(p => ({ ...p, [s.userId]: vol }));
+              setRemoteVolume(s.userId, vol);
             }
-          };
-          e.track.onmute = () => {
-            if (remoteScreenStreamsRef.current.get(remoteUserId) === stream) {
-              remoteScreenStreamsRef.current.delete(remoteUserId);
-              setScreenShareTick(t => t + 1);
-            }
-          };
-          // Attach screen-share audio — MUTED by default until user clicks "Dołącz do oglądania"
-          if (stream.getAudioTracks().length > 0) {
-            attachRemoteScreenAudio(remoteUserId, stream);
-            muteRemoteScreenStream(remoteUserId, true); // silent until joined
-            // Restore saved stream volume preference (applied on join, not now)
-            try {
-              const saved = localStorage.getItem(`cordyn_streamvol_${remoteUserId}`);
-              if (saved !== null) {
-                const vol = parseInt(saved, 10);
-                if (!isNaN(vol)) setStreamVols(p => ({ ...p, [remoteUserId]: vol }));
-              }
-            } catch {}
           }
-        } else {
-          // Audio track — only attach as mic audio if stream has NO video (not a screen-share stream)
-          if (stream.getVideoTracks().length === 0) {
-            attachRemoteAudio(remoteUserId, stream);
-            // Restore saved volume preference for this user
-            try {
-              const saved = localStorage.getItem(`cordyn_vol_${remoteUserId}`);
-              if (saved !== null) {
-                const vol = parseInt(saved, 10);
-                if (!isNaN(vol)) {
-                  setUserVols(p => ({ ...p, [remoteUserId]: vol }));
-                  setRemoteVolume(remoteUserId, vol);
-                }
-              }
-            } catch {}
-            const stop = watchSpeaking(stream, (s) =>
-              setSpeakingUsers(p => { const n = new Set(p); s ? n.add(remoteUserId) : n.delete(remoteUserId); return n; }));
-            const old = speakStopRef.current.get(remoteUserId); if (old) old();
-            speakStopRef.current.set(remoteUserId, stop);
-          }
-          // Audio track on a stream that also has video = screen-share audio arriving separately
-          // (race: audio track fires before/after video track; attachRemoteScreenAudio is idempotent)
-          else {
-            attachRemoteScreenAudio(remoteUserId, stream);
-            try {
-              const saved = localStorage.getItem(`cordyn_streamvol_${remoteUserId}`);
-              if (saved !== null) {
-                const vol = parseInt(saved, 10);
-                if (!isNaN(vol)) { setStreamVols(p => ({ ...p, [remoteUserId]: vol })); setRemoteScreenVolume(remoteUserId, vol); }
-              }
-            } catch {}
-          }
-        }
-      },
-    );
-    peerConnsRef.current.set(remoteUserId, pc);
-    // ICE + connection state monitoring — critical for diagnosing voice call failures
-    let _iceRestartCount = 0;
-    pc.oniceconnectionstatechange = () => {
-      const s = pc.iceConnectionState;
-      console.log(`[Cordis WebRTC] ICE state (${remoteUserId}):`, s);
-      if (s === 'failed') {
-        if (isInitiator && _iceRestartCount < 3) {
-          _iceRestartCount++;
-          console.warn(`[Cordis WebRTC] ICE failed — sending restart offer for ${remoteUserId} (attempt ${_iceRestartCount})`);
-          // restartIce() alone does nothing — MUST follow with createOffer({iceRestart:true})
-          // to actually send new ICE credentials to the remote peer.
-          pc.createOffer({ iceRestart: true })
-            .then(offer => pc.setLocalDescription(offer).then(() => {
-              getSocket().emit('webrtc_offer', { to: remoteUserId, sdp: offer });
-            }))
-            .catch(e => console.warn('[Cordis WebRTC] ICE restart offer failed:', e));
-        }
-      }
-      if (s === 'disconnected') {
-        console.warn('[Cordis WebRTC] ICE disconnected from', remoteUserId, '— may recover');
+        } catch {}
       }
     };
-    pc.onconnectionstatechange = () => {
-      const s = pc.connectionState;
-      console.log(`[Cordis WebRTC] connection state (${remoteUserId}):`, s);
-      if (s === 'failed') {
-        console.error(`[Cordis WebRTC] connection permanently failed for ${remoteUserId}`);
-        addToast(`Problem z połączeniem głosowym z jednym z uczestników`, 'error');
-      }
+    const onStreamClosed = (userId: string, _kind: 'mic' | 'screen') => {
+      detachRemoteAudio(userId);
+      setSpeakingUsers(p => { const n = new Set(p); n.delete(userId); return n; });
     };
-    if (localStreamRef.current)
-      localStreamRef.current.getTracks().forEach(t => pc.addTrack(t, localStreamRef.current!));
-    if (screenStreamRef.current)
-      screenStreamRef.current.getTracks().forEach(t => pc.addTrack(t, screenStreamRef.current!));
-    if (isInitiator) {
-      const rawOffer = await pc.createOffer();
-      const tunedSdp = preferH264(rawOffer.sdp ?? '');
-      const offer    = { ...rawOffer, sdp: tunedSdp };
-      await pc.setLocalDescription(offer);
-      tuneAudioSender(pc, (activeCh as any)?.bitrate ?? 64);
-      tuneVideoSenders(pc, screenStreamRef.current);
-      getSocket().emit('webrtc_offer', { to: remoteUserId, sdp: offer });
-    } else if (sdpOffer) {
-      await pc.setRemoteDescription(new RTCSessionDescription(sdpOffer));
-      const rawAnswer = await pc.createAnswer();
-      const tunedSdp  = preferH264(rawAnswer.sdp ?? '');
-      const answer     = { ...rawAnswer, sdp: tunedSdp };
-      await pc.setLocalDescription(answer);
-      tuneAudioSender(pc, (activeCh as any)?.bitrate ?? 64);
-      tuneVideoSenders(pc, screenStreamRef.current);
-      getSocket().emit('webrtc_answer', { to: remoteUserId, sdp: answer });
-    }
-    return pc;
+    onNewStreamRef.current    = onNewStream;
+    onStreamClosedRef.current = onStreamClosed;
+    return { onNewStream, onStreamClosed };
   };
+
   useEffect(() => {
     voiceHandlerRef.current = {
-      onUserJoined: async ({ channel_id, user }: any) => {
+      onUserJoined: ({ channel_id, user }: any) => {
         setVoiceUsers(p => ({ ...p, [channel_id]: [...(p[channel_id]||[]).filter((u:VoiceUser)=>u.id!==user.id), user] }));
         const me = currentUserRef.current; const call = activeCallRef.current;
         if (me && user.id !== me.id && call?.channelId === channel_id) {
           playVoiceJoin();
-          if (!user.is_bot) await openPeer(user.id, true); // bots don't do WebRTC
+          // MediaSoup handles audio automatically via ms_new_producer event
         }
       },
       onUserLeft: ({ channel_id, user_id }: any) => {
@@ -8068,42 +7938,34 @@ export default function App() {
         if (me && user_id !== me.id && call?.channelId === channel_id) {
           playVoiceLeave();  // someone else left my channel
         }
-        closePeer(user_id);
+        // MediaSoup handles cleanup via ms_producer_closed event
+        detachRemoteAudio(user_id);
+        setSpeakingUsers(p => { const n = new Set(p); n.delete(user_id); return n; });
+        setVoiceUserStates(p => { const n = {...p}; delete n[user_id]; return n; });
       },
-      onOffer: async ({ from, sdp }: any) => {
-        const existing = peerConnsRef.current.get(from);
-        // Renegotiation OR ICE restart — apply to existing PC as long as it isn't
-        // truly closed (signalingState === 'closed').  A PC with iceConnectionState
-        // or connectionState 'failed' can still accept an ICE restart offer, so we
-        // MUST NOT close it here and recreate — that would break the ICE restart.
-        if (existing && existing.signalingState !== 'closed') {
-          await existing.setRemoteDescription(new RTCSessionDescription(sdp));
-          const rawAnswer = await existing.createAnswer();
-          const tunedSdp  = preferH264(rawAnswer.sdp ?? '');
-          const answer    = { ...rawAnswer, sdp: tunedSdp };
-          await existing.setLocalDescription(answer);
-          tuneAudioSender(existing, (activeCh as any)?.bitrate ?? 64);
-          getSocket().emit('webrtc_answer', { to: from, sdp: answer });
-        } else {
-          // No existing PC or truly closed — create fresh one
-          await openPeer(from, false, sdp);
-        }
-      },
-      onAnswer: async ({ from, sdp }: any) => {
-        const pc = peerConnsRef.current.get(from);
-        if (pc && pc.signalingState !== 'stable')
-          await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-      },
-      onIce: async ({ from, candidate }: any) => {
-        const pc = peerConnsRef.current.get(from);
-        if (pc) try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
-      },
-      // Called when the DM call recipient accepts — caller initiates WebRTC
-      // remoteUserId is passed directly from the socket event to avoid stale ref race condition
+      // Called when the DM call recipient accepts — join mediasoup room
       onCallAccepted: async (remoteUserId: string) => {
         const userId = remoteUserId || activeCallRef.current?.userId;
-        if (!userId) return;
-        await openPeer(userId, true);
+        if (!userId || !localStreamRef.current) return;
+        const callData = activeCallRef.current;
+        if (!callData?.userId) return;
+        const roomId = `dm:${[currentUserRef.current?.id, callData.userId].filter(Boolean).sort().join(':')}`;
+        const { onNewStream, onStreamClosed } = buildMsCallbacks();
+        try {
+          await msJoinRoom({
+            roomId,
+            localStream: localStreamRef.current,
+            socket: getSocket(),
+            onNewStream,
+            onStreamClosed,
+            onSpeaking: (uid, speaking) => {
+              setSpeakingUsers(p => { const n = new Set(p); speaking ? n.add(uid) : n.delete(uid); return n; });
+            },
+          });
+        } catch (err) {
+          console.error('[MediaSoup] Failed to join DM room:', err);
+          addToast('Problem z połączeniem głosowym', 'error');
+        }
       },
     };
   }); // runs every render to keep closures fresh
@@ -9140,15 +9002,17 @@ export default function App() {
 
   // ── Voice / Call ──────────────────────────────────────────────────
   const cleanupWebRTC = () => {
-    // Stop all peer connections
-    peerConnsRef.current.forEach((pc, uid) => { pc.close(); detachRemoteAudio(uid); });
-    peerConnsRef.current.clear();
+    // Leave mediasoup room (async but fire-and-forget — we can't await in sync cleanup)
+    const roomId = msGetCurrentRoomId();
+    if (roomId) {
+      msLeaveRoom(roomId).catch(err => console.warn('[MediaSoup] leaveRoom error:', err));
+    }
     // Stop noise pipeline (closes AudioContext + raw mic)
     if (noisePipelineRef.current) { noisePipelineRef.current.cleanup(); noisePipelineRef.current = null; }
     else { localStreamRef.current?.getTracks().forEach(t => t.stop()); }
     localStreamRef.current = null;
     screenStreamRef.current?.getTracks().forEach(t => t.stop()); screenStreamRef.current = null;
-    // Stop speaking detection
+    // Stop local speaking detection
     speakStopRef.current.forEach(fn => fn()); speakStopRef.current.clear();
     setSpeakingUsers(new Set());
   };
@@ -9206,13 +9070,11 @@ export default function App() {
       }
 
       localStreamRef.current = sendStream;
-      // Pipe processed (or raw) stream to peer connections
-      peerConnsRef.current.forEach(pc =>
-        sendStream.getTracks().forEach(newTrack => {
-          const sender = pc.getSenders().find(s => s.track?.kind === newTrack.kind);
-          if (sender) { sender.replaceTrack(newTrack).catch(console.error); }
-          else { pc.addTrack(newTrack, sendStream); }
-        }));
+      // Replace track in mediasoup if in a room
+      const audioTrack = sendStream.getAudioTracks()[0];
+      if (audioTrack && msGetCurrentRoomId()) {
+        msReplaceTrack(audioTrack).catch(console.error);
+      }
       // Re-enumerate after permission granted — now we get real device labels
       getMediaDevices().then(setDevices).catch(() => {});
       return sendStream;
@@ -9261,10 +9123,28 @@ export default function App() {
       cleanupWebRTC();
       setActiveGroupCall(null); setGroupCallState(null); setGroupCallMinimized(false);
     }
-    await acquireMic(selMic || undefined);
+    const micStream = await acquireMic(selMic || undefined);
     joinVoiceChannel(ch.id);
     playVoiceJoin();
     setActiveCall({ type: 'voice_channel', channelId: ch.id, channelName: ch.name, serverId: activeServer, isMuted: false, isDeafened: false, isCameraOn: false, isScreenSharing: false });
+    // Join MediaSoup room
+    if (micStream) {
+      const roomId = `channel:${ch.id}`;
+      const { onNewStream, onStreamClosed } = buildMsCallbacks();
+      msJoinRoom({
+        roomId,
+        localStream: micStream,
+        socket: getSocket(),
+        onNewStream,
+        onStreamClosed,
+        onSpeaking: (uid, speaking) => {
+          setSpeakingUsers(p => { const n = new Set(p); speaking ? n.add(uid) : n.delete(uid); return n; });
+        },
+      }).catch(err => {
+        console.error('[MediaSoup] Failed to join voice room:', err);
+        addToast('Problem z połączeniem głosowym — spróbuj ponownie', 'error');
+      });
+    }
     // Load current voice DJ for this channel
     spotifyApi.voiceDjGet(ch.id).then(r => {
       if (r.dj) setVoiceDj(p=>({...p,[ch.id]:r.dj}));
@@ -9348,46 +9228,9 @@ export default function App() {
     if (call?.userId)    getSocket().emit('voice_state' as any, { muted: call.isMuted, deafened: deaf, to_user_id: call.userId });
   };
   const toggleCamera = async () => {
-    if (activeCall?.isCameraOn) {
-      // Stop local video tracks
-      localStreamRef.current?.getVideoTracks().forEach(t => { t.stop(); });
-      // Remove video senders from all peer connections and renegotiate
-      peerConnsRef.current.forEach(async (pc, peerId) => {
-        const videoSenders = pc.getSenders().filter(s => s.track?.kind === 'video');
-        videoSenders.forEach(s => { try { pc.removeTrack(s); } catch {} });
-        if (pc.signalingState === 'stable') {
-          try {
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            getSocket().emit('webrtc_offer', { to: peerId, sdp: offer });
-          } catch {}
-        }
-      });
-      localStreamRef.current = localStreamRef.current ?
-        new MediaStream(localStreamRef.current.getAudioTracks()) : null;
-      setActiveCall(p => p ? {...p, isCameraOn: false} : p);
-    } else {
-      try {
-        const vs = await navigator.mediaDevices.getUserMedia({ video: selCamera ? { deviceId: { exact: selCamera } } : true });
-        vs.getVideoTracks().forEach(t => { localStreamRef.current?.addTrack(t); });
-        // Add video track to each peer connection and renegotiate
-        peerConnsRef.current.forEach(async (pc, peerId) => {
-          vs.getVideoTracks().forEach(t => {
-            const existing = pc.getSenders().find(s => s.track?.kind === 'video');
-            if (existing) { existing.replaceTrack(t).catch(() => {}); }
-            else { pc.addTrack(t, localStreamRef.current!); }
-          });
-          if (pc.signalingState === 'stable') {
-            try {
-              const offer = await pc.createOffer();
-              await pc.setLocalDescription(offer);
-              getSocket().emit('webrtc_offer', { to: peerId, sdp: offer });
-            } catch {}
-          }
-        });
-        setActiveCall(p => p ? {...p, isCameraOn: true} : p);
-      } catch { addToast('Brak dostępu do kamery', 'error'); }
-    }
+    // Camera toggle is not implemented for MediaSoup yet (video not in scope for SFU migration)
+    // This was a video-call feature from P2P era — stub it out to prevent crashes
+    addToast('Kamera w połączeniach głosowych niedostępna w tej wersji', 'info');
   };
   const toggleScreen = async () => {
     const emitScreenStop = () => {
@@ -9440,23 +9283,14 @@ export default function App() {
           }
         }
         screenStreamRef.current = stream;
-        // Add ALL tracks (video + audio) to every peer connection BEFORE renegotiating
-        stream.getTracks().forEach(t => {
-          peerConnsRef.current.forEach((pc) => { pc.addTrack(t, stream); });
-        });
-        // Renegotiate once per peer: prefer H264 + set 8 Mbps / 60 fps on video senders
-        peerConnsRef.current.forEach(async (pc, peerId) => {
-          try {
-            tuneVideoSenders(pc, stream);   // 8 Mbps, 60 fps, high priority
-            if (pc.signalingState === 'stable') {
-              const rawOffer = await pc.createOffer();
-              const tunedSdp = preferH264(rawOffer.sdp ?? '');
-              const offer    = { ...rawOffer, sdp: tunedSdp };
-              await pc.setLocalDescription(offer);
-              getSocket().emit('webrtc_offer', { to: peerId, sdp: offer });
-            }
-          } catch {}
-        });
+        // Produce screen share via MediaSoup
+        const roomId = msGetCurrentRoomId();
+        if (roomId) {
+          msProduceScreen(roomId, stream).catch(err => {
+            console.error('[MediaSoup] produceScreen failed:', err);
+            addToast('Nie można udostępnić ekranu przez SFU', 'error');
+          });
+        }
         // Stop screen share when video track ends (user clicks browser stop button)
         stream.getVideoTracks().forEach(t => {
           t.onended = () => {
@@ -9464,6 +9298,7 @@ export default function App() {
             if (isTauri) {
               import('./audioLoopback').then(m => m.stopLoopbackCapture()).catch(() => {});
             }
+            if (roomId) msStopScreenShare(roomId).catch(() => {});
             emitScreenStop();
             setActiveCall(p => p ? {...p, isScreenSharing: false} : p);
           };
@@ -11626,15 +11461,29 @@ export default function App() {
                       ? <button onClick={()=>{ leaveGroupCall(activeGroupDm!); cleanupWebRTC(); setActiveGroupCall(null); setGroupCallState(null); playCallEnded(); }}
                           className="w-8 h-8 flex items-center justify-center rounded-xl text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 transition-all duration-150 active:scale-95" title="Zakończ rozmowę"><PhoneOff size={15}/></button>
                       : groupCallState?.group_id === activeGroupDm
-                        ? <button onClick={async()=>{ primePlaybackContext(); await acquireMic(selMic||undefined); joinGroupCall(activeGroupDm!); setActiveGroupCall({ group_id: activeGroupDm!, participants: groupCallState.participants, pending: groupCallState.pending, isMuted: false }); stopIncomingRing(); setGroupCallIncoming(null); }}
+                        ? <button onClick={async()=>{
+                              primePlaybackContext();
+                              const gcStream = await acquireMic(selMic||undefined);
+                              joinGroupCall(activeGroupDm!);
+                              setActiveGroupCall({ group_id: activeGroupDm!, participants: groupCallState.participants, pending: groupCallState.pending, isMuted: false });
+                              stopIncomingRing(); setGroupCallIncoming(null);
+                              if (gcStream && activeGroupDm) {
+                                const { onNewStream, onStreamClosed } = buildMsCallbacks();
+                                msJoinRoom({ roomId: `group:${activeGroupDm}`, localStream: gcStream, socket: getSocket(), onNewStream, onStreamClosed, onSpeaking: (uid, sp) => setSpeakingUsers(p => { const n = new Set(p); sp ? n.add(uid) : n.delete(uid); return n; }) }).catch(console.error);
+                              }
+                            }}
                             className="w-8 h-8 flex items-center justify-center rounded-xl text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all duration-150 active:scale-95 animate-pulse" title="Dołącz do aktywnej rozmowy"><Phone size={15}/></button>
                         : <button onClick={async()=>{
                             primePlaybackContext();
                             const gid = activeGroupDm!;
-                            await acquireMic(selMic||undefined);
+                            const gcStream = await acquireMic(selMic||undefined);
                             startGroupCall(gid);
                             setActiveGroupCall({ group_id: gid, participants: [currentUser?.id||''], pending: [], isMuted: false });
                             startRing();
+                            if (gcStream) {
+                              const { onNewStream, onStreamClosed } = buildMsCallbacks();
+                              msJoinRoom({ roomId: `group:${gid}`, localStream: gcStream, socket: getSocket(), onNewStream, onStreamClosed, onSpeaking: (uid, sp) => setSpeakingUsers(p => { const n = new Set(p); sp ? n.add(uid) : n.delete(uid); return n; }) }).catch(console.error);
+                            }
                             // Auto-stop ring and dismiss pending after 15s
                             setTimeout(() => {
                               stopRing();
@@ -17367,11 +17216,29 @@ export default function App() {
                   cleanupWebRTC();
                   setActiveCall(null); setShowCallPanel(false);
                 }
-                // Acquire mic before notifying caller — ensures localStreamRef is set when offer arrives
-                await acquireMic(selMic || undefined);
+                // Acquire mic, join mediasoup room, then notify caller
+                const calleeStream = await acquireMic(selMic || undefined);
                 acceptCall(incomingCall.conversation_id, incomingCall.from.id);
                 setActiveCall({type: incomingCall.type==='video'?'dm_video':'dm_voice', userId: incomingCall.from.id, username: incomingCall.from.username, avatarUrl: incomingCall.from.avatar_url, isMuted:false,isDeafened:false,isCameraOn:false,isScreenSharing:false});
                 setActiveDmUserId(incomingCall.from.id); setActiveView('dms'); setShowCallPanel(true); setIncomingCall(null);
+                // Join mediasoup room as callee
+                if (calleeStream && currentUser) {
+                  const dmRoomId = `dm:${[currentUser.id, incomingCall.from.id].sort().join(':')}`;
+                  const { onNewStream, onStreamClosed } = buildMsCallbacks();
+                  msJoinRoom({
+                    roomId: dmRoomId,
+                    localStream: calleeStream,
+                    socket: getSocket(),
+                    onNewStream,
+                    onStreamClosed,
+                    onSpeaking: (uid, speaking) => {
+                      setSpeakingUsers(p => { const n = new Set(p); speaking ? n.add(uid) : n.delete(uid); return n; });
+                    },
+                  }).catch(err => {
+                    console.error('[MediaSoup] callee join failed:', err);
+                    addToast('Problem z połączeniem głosowym', 'error');
+                  });
+                }
               }} className="flex-1 h-9 bg-emerald-500 hover:bg-emerald-400 rounded-xl text-white font-semibold flex items-center justify-center gap-1.5 text-sm transition-colors">
                 <Phone size={14}/> Odbierz
               </button>
@@ -17420,7 +17287,7 @@ export default function App() {
                   dmsApi.sendSystem(curCall.userId, `📞 Rozmowa zakończona`).catch(()=>{});
                   cleanupWebRTC(); setActiveCall(null); setShowCallPanel(false);
                 }
-                await acquireMic(selMic||undefined);
+                const gcInStream = await acquireMic(selMic||undefined);
                 joinGroupCall(groupCallIncoming.group_id);
                 setActiveGroupCall({ group_id: groupCallIncoming.group_id, participants: groupCallIncoming.participants || [], pending: groupCallIncoming.pending || [], isMuted: false });
                 setGroupCallState(groupCallIncoming);
@@ -17428,6 +17295,11 @@ export default function App() {
                 setActiveGroupDm(groupCallIncoming.group_id);
                 setGroupCallIncoming(null);
                 stopRing();
+                if (gcInStream) {
+                  const gid = groupCallIncoming.group_id;
+                  const { onNewStream, onStreamClosed } = buildMsCallbacks();
+                  msJoinRoom({ roomId: `group:${gid}`, localStream: gcInStream, socket: getSocket(), onNewStream, onStreamClosed, onSpeaking: (uid, sp) => setSpeakingUsers(p => { const n = new Set(p); sp ? n.add(uid) : n.delete(uid); return n; }) }).catch(console.error);
+                }
               }} className="flex-1 h-9 bg-emerald-500 hover:bg-emerald-400 rounded-xl text-white font-semibold flex items-center justify-center gap-1.5 text-sm transition-colors">
                 <Phone size={14}/> Dołącz
               </button>

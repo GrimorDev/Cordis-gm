@@ -95,3 +95,55 @@ export function leaveGroupCall(groupId: string) {
 export function dismissGroupCall(groupId: string) {
   getSocket().emit('group_call_dismiss', { group_id: groupId });
 }
+
+// ── MediaSoup SFU helpers ──────────────────────────────────────────
+function msEmit<T = any>(event: string, data: object): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    getSocket().emit(event as any, data, (res: any) => {
+      if (res && res.error) reject(new Error(res.error));
+      else resolve(res as T);
+    });
+  });
+}
+
+export function msJoin(roomId: string): Promise<{ rtpCapabilities: any; existingProducers: any[] }> {
+  return msEmit('ms_join', { roomId });
+}
+
+export function msCreateTransport(roomId: string, producing: boolean): Promise<any> {
+  return msEmit('ms_create_transport', { roomId, producing });
+}
+
+export function msConnectTransport(roomId: string, transportId: string, dtlsParameters: any): Promise<void> {
+  return msEmit('ms_connect_transport', { roomId, transportId, dtlsParameters });
+}
+
+export function msProduce(
+  roomId: string,
+  transportId: string,
+  kind: string,
+  rtpParameters: any,
+  appData: any,
+): Promise<{ producerId: string }> {
+  return msEmit('ms_produce', { roomId, transportId, kind, rtpParameters, appData });
+}
+
+export function msConsume(
+  roomId: string,
+  producerId: string,
+  rtpCapabilities: any,
+): Promise<any> {
+  return msEmit('ms_consume', { roomId, producerId, rtpCapabilities });
+}
+
+export function msResumeConsumer(roomId: string, consumerId: string): Promise<void> {
+  return msEmit('ms_resume_consumer', { roomId, consumerId });
+}
+
+export function msCloseProducer(roomId: string, kind: string): Promise<void> {
+  return msEmit('ms_close_producer', { roomId, kind });
+}
+
+export function msLeave(roomId: string): Promise<void> {
+  return msEmit('ms_leave', { roomId });
+}

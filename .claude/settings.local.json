@@ -185,7 +185,8 @@
       "WebFetch(domain:ar5iv.labs.arxiv.org)",
       "Bash(grep -n \"applyNoiseGate\\\\|applyDeepFilter\\\\|from ''''./webrtc''''\" src/App.tsx)",
       "Bash(pnpm build:*)",
-      "Bash(node_modules/.bin/tsc --noEmit)"
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(where gh:*)"
     ]
   }
 }

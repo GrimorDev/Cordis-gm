@@ -13,6 +13,7 @@ import { query } from '../db/pool';
 import { JwtPayload, ServerToClientEvents, ClientToServerEvents } from '../types';
 import { runAutomations } from '../services/automations';
 import { musicStates, MusicBotState } from '../routes/bots';
+import * as ms from '../mediasoup/index';
 
 interface SocketData {
   user: {
@@ -20,6 +21,7 @@ interface SocketData {
     username: string;
     email: string;
   };
+  msRooms?: Set<string>; // mediasoup room IDs this socket has joined
 }
 
 
@@ -512,18 +514,111 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
       }
     });
 
-    // ── WebRTC signaling ─────────────────────────────────────────────
-    socket.on('webrtc_offer', ({ to, sdp }) => {
-      io.to(`user:${to}`).emit('webrtc_offer', { from: user.id, sdp });
-    });
+    // ── MediaSoup SFU signaling ───────────────────────────────────────
+    // Track which mediasoup rooms this socket has joined (for disconnect cleanup)
+    (socket.data as SocketData).msRooms = new Set<string>();
 
-    socket.on('webrtc_answer', ({ to, sdp }) => {
-      io.to(`user:${to}`).emit('webrtc_answer', { from: user.id, sdp });
-    });
+    // Helper: wrap async handler with error-to-callback
+    const msHandle = (
+      fn: (data: any, cb: (res: any) => void) => Promise<void>,
+    ) => async (data: any, cb: (res: any) => void) => {
+      if (typeof cb !== 'function') return; // safety guard
+      try {
+        await fn(data, cb);
+      } catch (err: any) {
+        console.error('[MediaSoup] handler error:', err?.message || err);
+        cb({ error: err?.message || 'Internal mediasoup error' });
+      }
+    };
 
-    socket.on('webrtc_ice', ({ to, candidate }) => {
-      io.to(`user:${to}`).emit('webrtc_ice', { from: user.id, candidate });
-    });
+    socket.on('ms_join', msHandle(async ({ roomId }: { roomId: string }, cb) => {
+      await ms.getOrCreateRouter(roomId);
+      ms.joinRoom(roomId, user.id);
+      socket.join(`ms_room:${roomId}`);
+      (socket.data as SocketData).msRooms!.add(roomId);
+      const existingProducers = ms.getExistingProducers(roomId, user.id);
+      const rtpCapabilities   = ms.getRtpCapabilities(roomId);
+      cb({ rtpCapabilities, existingProducers });
+    }));
+
+    socket.on('ms_create_transport', msHandle(async (
+      { roomId, producing }: { roomId: string; producing: boolean },
+      cb,
+    ) => {
+      const params = await ms.createWebRtcTransport(roomId, user.id, producing);
+      cb(params);
+    }));
+
+    socket.on('ms_connect_transport', msHandle(async (
+      { roomId, transportId, dtlsParameters }: { roomId: string; transportId: string; dtlsParameters: any },
+      cb,
+    ) => {
+      await ms.connectTransport(roomId, user.id, transportId, dtlsParameters);
+      cb({});
+    }));
+
+    socket.on('ms_produce', msHandle(async (
+      { roomId, transportId, kind, rtpParameters, appData }: {
+        roomId: string; transportId: string; kind: any; rtpParameters: any; appData: any;
+      },
+      cb,
+    ) => {
+      const producerId = await ms.produce(roomId, user.id, transportId, kind, rtpParameters, appData ?? {});
+      // Notify other room members about new producer
+      socket.to(`ms_room:${roomId}`).emit('ms_new_producer' as any, {
+        userId: user.id,
+        producerId,
+        kind,
+        appData: appData ?? {},
+      });
+      cb({ producerId });
+    }));
+
+    socket.on('ms_consume', msHandle(async (
+      { roomId, producerId, rtpCapabilities }: {
+        roomId: string; producerId: string; rtpCapabilities: any;
+      },
+      cb,
+    ) => {
+      const result = await ms.consume(roomId, user.id, producerId, rtpCapabilities);
+      cb(result);
+    }));
+
+    socket.on('ms_resume_consumer', msHandle(async (
+      { roomId, consumerId }: { roomId: string; consumerId: string },
+      cb,
+    ) => {
+      await ms.resumeConsumer(roomId, user.id, consumerId);
+      cb({});
+    }));
+
+    socket.on('ms_close_producer', msHandle(async (
+      { roomId, kind }: { roomId: string; kind: 'mic' | 'screen' },
+      cb,
+    ) => {
+      ms.closeProducer(roomId, user.id, kind);
+      socket.to(`ms_room:${roomId}`).emit('ms_producer_closed' as any, {
+        userId: user.id,
+        kind,
+      });
+      cb({});
+    }));
+
+    socket.on('ms_leave', msHandle(async (
+      { roomId }: { roomId: string },
+      cb,
+    ) => {
+      const closedProducerIds = ms.leaveRoom(roomId, user.id);
+      socket.leave(`ms_room:${roomId}`);
+      (socket.data as SocketData).msRooms?.delete(roomId);
+      for (const producerId of closedProducerIds) {
+        socket.to(`ms_room:${roomId}`).emit('ms_producer_closed' as any, {
+          userId: user.id,
+          producerId,
+        });
+      }
+      cb({});
+    }));
 
     // ── Voice state (mute/deafen) ────────────────────────────────────
     socket.on('voice_state', ({ muted, deafened, channel_id, to_user_id }) => {
@@ -636,6 +731,23 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
     // ── Disconnect ───────────────────────────────────────────────────
     socket.on('disconnect', async () => {
       console.log(`Socket disconnected: ${user.username}`);
+
+      // Clean up mediasoup rooms on disconnect
+      const msRooms = (socket.data as SocketData).msRooms;
+      if (msRooms) {
+        for (const roomId of msRooms) {
+          try {
+            const closedProducerIds = ms.leaveRoom(roomId, user.id);
+            for (const producerId of closedProducerIds) {
+              io.to(`ms_room:${roomId}`).emit('ms_producer_closed' as any, {
+                userId: user.id,
+                producerId,
+              });
+            }
+          } catch { /* ignore errors on disconnect */ }
+        }
+        msRooms.clear();
+      }
 
       // Clean up voice DJ session if user disconnects while DJ
       const djChannel = await getMyVoiceDjChannel(user.id);

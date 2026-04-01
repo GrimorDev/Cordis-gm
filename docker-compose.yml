@@ -47,7 +47,7 @@ services:
       start_period: 30s
       retries: 5
 
-  # ── Backend (Node.js API + Socket.IO) ────────────────────────────
+  # ── Backend (Node.js API + Socket.IO + MediaSoup SFU) ────────────
   backend:
     build:
       context: .
@@ -55,6 +55,8 @@ services:
     # NOTE: no 'image:' tag — Portainer builds locally from Dockerfile (not from registry)
     container_name: cordis-backend
     restart: unless-stopped
+    ports:
+      - "40000-40100:40000-40100/udp"
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: 4000
@@ -95,6 +97,12 @@ services:
       TWITCH_CLIENT_ID: ${TWITCH_CLIENT_ID:-}
       TWITCH_CLIENT_SECRET: ${TWITCH_CLIENT_SECRET:-}
       TWITCH_REDIRECT_URI: ${TWITCH_REDIRECT_URI:-}
+      # ── MediaSoup SFU ─────────────────────────────────────────────────
+      # Publiczne IP serwera — wymagane dla połączeń z zewnątrz!
+      # Ustaw w Portainer na publiczne IP VPS-a, np. 1.2.3.4
+      MEDIASOUP_ANNOUNCED_IP: ${MEDIASOUP_ANNOUNCED_IP:-}
+      MEDIASOUP_RTC_MIN_PORT: ${MEDIASOUP_RTC_MIN_PORT:-40000}
+      MEDIASOUP_RTC_MAX_PORT: ${MEDIASOUP_RTC_MAX_PORT:-40100}
     volumes:
       - backend-uploads:/app/uploads
     depends_on:

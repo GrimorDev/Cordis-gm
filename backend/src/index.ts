@@ -15,6 +15,7 @@ import { runMigrations } from './db/migrate';
 import { redis } from './redis/client';
 import { initSocket } from './socket';
 import { startSpotifyPoller } from './services/spotifyPoller';
+import { createWorker as createMediasoupWorker } from './mediasoup/index';
 
 // Routes
 import authRoutes from './routes/auth';
@@ -250,6 +251,15 @@ async function start() {
   } catch (err) {
     console.error('Migration failed:', err);
     process.exit(1);
+  }
+
+  // Initialize MediaSoup SFU worker
+  try {
+    await createMediasoupWorker();
+    console.log('[MediaSoup] Worker initialized');
+  } catch (err) {
+    console.error('[MediaSoup] Worker initialization failed:', err);
+    // Non-fatal — voice/calls won't work but the rest of the app will
   }
 
   httpServer.listen(config.port, () => {

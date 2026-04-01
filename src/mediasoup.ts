@@ -1,0 +1,397 @@
+// ── MediaSoup Client for Cordis ───────────────────────────────────────────────
+import { Device, types as msTypes } from 'mediasoup-client';
+import type { Socket } from 'socket.io-client';
+type Transport = msTypes.Transport;
+type Producer  = msTypes.Producer;
+type Consumer  = msTypes.Consumer;
+import {
+  attachRemoteAudio, detachRemoteAudio,
+  setRemoteVolume, muteRemoteUser, muteAllRemote,
+  watchSpeaking,
+} from './webrtc';
+
+// ── Public types ──────────────────────────────────────────────────────────────
+export interface RemoteStream {
+  userId: string;
+  stream: MediaStream;
+  kind: 'mic' | 'screen';
+}
+
+type OnNewStream    = (s: RemoteStream) => void;
+type OnStreamClosed = (userId: string, kind: 'mic' | 'screen') => void;
+type OnSpeaking     = (userId: string, speaking: boolean) => void;
+
+// ── Per-room state ────────────────────────────────────────────────────────────
+interface RoomState {
+  roomId:        string;
+  socket:        Socket;
+  device:        Device;
+  sendTransport: Transport | null;
+  recvTransport: Transport | null;
+  micProducer:   Producer | null;
+  screenProducer: Producer | null;
+  consumers:     Map<string, Consumer>; // consumerId → Consumer
+  onNewStream:   OnNewStream;
+  onStreamClosed: OnStreamClosed;
+  onSpeaking?:   OnSpeaking;
+  // Speaking detection cleanup functions keyed by userId
+  speakCleanup:  Map<string, () => void>;
+}
+
+// Only one active room at a time (voice channel, DM call, or group call)
+let _room: RoomState | null = null;
+
+// ── Socket promise helpers (callback pattern) ─────────────────────────────────
+function emitWithCallback<T = any>(socket: Socket, event: string, data: object): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    socket.emit(event as any, data, (res: any) => {
+      if (res && res.error) {
+        reject(new Error(res.error));
+      } else {
+        resolve(res as T);
+      }
+    });
+  });
+}
+
+// ── Join a MediaSoup room ─────────────────────────────────────────────────────
+export async function joinRoom(params: {
+  roomId:       string;
+  localStream:  MediaStream;
+  socket:       Socket;
+  onNewStream:  OnNewStream;
+  onStreamClosed: OnStreamClosed;
+  onSpeaking?:  OnSpeaking;
+}): Promise<void> {
+  const { roomId, localStream, socket, onNewStream, onStreamClosed, onSpeaking } = params;
+
+  // If already in a room, leave it first
+  if (_room) {
+    await leaveRoom(_room.roomId);
+  }
+
+  const device = new Device();
+
+  // 1. Join room on server — get RTP caps + existing producers
+  const { rtpCapabilities, existingProducers } = await emitWithCallback<{
+    rtpCapabilities: any;
+    existingProducers: { userId: string; producerId: string; kind: string; appData: any }[];
+  }>(socket, 'ms_join', { roomId });
+
+  // 2. Load device with router RTP capabilities
+  await device.load({ routerRtpCapabilities: rtpCapabilities });
+
+  // 3. Create send transport
+  const sendParams = await emitWithCallback<any>(socket, 'ms_create_transport', { roomId, producing: true });
+  const sendTransport = device.createSendTransport(sendParams);
+
+  sendTransport.on('connect', async ({ dtlsParameters }, callback, errback) => {
+    try {
+      await emitWithCallback(socket, 'ms_connect_transport', {
+        roomId,
+        transportId: sendTransport.id,
+        dtlsParameters,
+      });
+      callback();
+    } catch (err: any) {
+      errback(err);
+    }
+  });
+
+  sendTransport.on('produce', async ({ kind, rtpParameters, appData }, callback, errback) => {
+    try {
+      const { producerId } = await emitWithCallback<{ producerId: string }>(socket, 'ms_produce', {
+        roomId,
+        transportId: sendTransport.id,
+        kind,
+        rtpParameters,
+        appData,
+      });
+      callback({ id: producerId });
+    } catch (err: any) {
+      errback(err);
+    }
+  });
+
+  // 4. Create recv transport
+  const recvParams = await emitWithCallback<any>(socket, 'ms_create_transport', { roomId, producing: false });
+  const recvTransport = device.createRecvTransport(recvParams);
+
+  recvTransport.on('connect', async ({ dtlsParameters }, callback, errback) => {
+    try {
+      await emitWithCallback(socket, 'ms_connect_transport', {
+        roomId,
+        transportId: recvTransport.id,
+        dtlsParameters,
+      });
+      callback();
+    } catch (err: any) {
+      errback(err);
+    }
+  });
+
+  // 5. Store room state
+  const room: RoomState = {
+    roomId,
+    socket,
+    device,
+    sendTransport,
+    recvTransport,
+    micProducer: null,
+    screenProducer: null,
+    consumers: new Map(),
+    onNewStream,
+    onStreamClosed,
+    onSpeaking,
+    speakCleanup: new Map(),
+  };
+  _room = room;
+
+  // 6. Produce mic track
+  const audioTrack = localStream.getAudioTracks()[0];
+  if (audioTrack) {
+    try {
+      const micProducer = await sendTransport.produce({
+        track: audioTrack,
+        codecOptions: {
+          opusStereo: false,
+          opusDtx:    true,
+        },
+        appData: { kind: 'mic' },
+      });
+      room.micProducer = micProducer;
+      micProducer.on('transportclose', () => { room.micProducer = null; });
+      micProducer.on('trackended',      () => { room.micProducer = null; });
+    } catch (err) {
+      console.warn('[MediaSoup] Failed to produce mic:', err);
+    }
+  }
+
+  // 7. Subscribe to new producers and closures from the server
+  const onNewProducer = async (data: { userId: string; producerId: string; kind: string; appData: any }) => {
+    if (!_room || _room.roomId !== roomId) return;
+    await consumeRemote(room, data);
+  };
+  const onProducerClosed = (data: { userId: string; producerId?: string; kind?: 'mic' | 'screen' }) => {
+    if (!_room || _room.roomId !== roomId) return;
+    // Close any consumers for this producer
+    for (const [consumerId, consumer] of room.consumers) {
+      if (consumer.producerId === data.producerId || (data.userId && !data.producerId)) {
+        consumer.close();
+        room.consumers.delete(consumerId);
+      }
+    }
+    // Stop speaking detection for this user if mic closed
+    if (data.kind === 'mic' || !data.kind) {
+      const stopFn = room.speakCleanup.get(data.userId);
+      if (stopFn) { stopFn(); room.speakCleanup.delete(data.userId); }
+    }
+    const kind: 'mic' | 'screen' = data.kind ?? 'mic';
+    onStreamClosed(data.userId, kind);
+    detachRemoteAudio(data.userId);
+  };
+
+  socket.on('ms_new_producer' as any, onNewProducer);
+  socket.on('ms_producer_closed' as any, onProducerClosed);
+
+  // Store listeners so we can remove them on leaveRoom
+  (room as any)._onNewProducer    = onNewProducer;
+  (room as any)._onProducerClosed = onProducerClosed;
+
+  // 8. Consume all existing producers
+  for (const producer of existingProducers) {
+    await consumeRemote(room, producer);
+  }
+}
+
+// ── Consume a remote producer ─────────────────────────────────────────────────
+async function consumeRemote(
+  room: RoomState,
+  producer: { userId: string; producerId: string; kind: string; appData: any },
+): Promise<void> {
+  try {
+    if (!room.device.loaded) return;
+    if (!room.recvTransport) return;
+
+    const { consumerId, producerId, kind, rtpParameters } = await emitWithCallback<{
+      consumerId:    string;
+      producerId:    string;
+      kind:          string;
+      rtpParameters: any;
+    }>(room.socket, 'ms_consume', {
+      roomId:         room.roomId,
+      producerId:     producer.producerId,
+      rtpCapabilities: room.device.rtpCapabilities,
+    });
+
+    const consumer = await room.recvTransport.consume({
+      id:            consumerId,
+      producerId,
+      kind:          kind as any,
+      rtpParameters,
+    });
+
+    room.consumers.set(consumer.id, consumer);
+
+    consumer.on('transportclose', () => { room.consumers.delete(consumer.id); });
+
+    // Resume consumer on server
+    await emitWithCallback(room.socket, 'ms_resume_consumer', {
+      roomId:     room.roomId,
+      consumerId: consumer.id,
+    });
+
+    // Build MediaStream and deliver to caller
+    const stream = new MediaStream([consumer.track]);
+    const producerKind: 'mic' | 'screen' =
+      producer.appData?.kind === 'screen' ? 'screen' : 'mic';
+
+    room.onNewStream({ userId: producer.userId, stream, kind: producerKind });
+
+    // Attach audio for playback (mic tracks only — screen share audio is separate)
+    if (kind === 'audio') {
+      attachRemoteAudio(producer.userId, stream);
+
+      // Speaking detection for remote user
+      if (room.onSpeaking) {
+        const onSpeakingFn = room.onSpeaking;
+        const userId       = producer.userId;
+        const oldStop = room.speakCleanup.get(userId);
+        if (oldStop) oldStop();
+        const stopWatch = watchSpeaking(stream, (speaking) => {
+          onSpeakingFn(userId, speaking);
+        });
+        room.speakCleanup.set(userId, stopWatch);
+      }
+    }
+  } catch (err) {
+    console.warn('[MediaSoup] consumeRemote failed for', producer.userId, producer.producerId, err);
+  }
+}
+
+// ── Leave a room ──────────────────────────────────────────────────────────────
+export async function leaveRoom(roomId: string): Promise<void> {
+  if (!_room || _room.roomId !== roomId) return;
+  const room = _room;
+  _room = null;
+
+  // Remove socket listeners
+  room.socket.off('ms_new_producer' as any, (room as any)._onNewProducer);
+  room.socket.off('ms_producer_closed' as any, (room as any)._onProducerClosed);
+
+  // Stop speaking detection
+  room.speakCleanup.forEach(fn => fn());
+  room.speakCleanup.clear();
+
+  // Close all consumers
+  room.consumers.forEach(c => { try { c.close(); } catch {} });
+  room.consumers.clear();
+
+  // Close producers
+  try { room.micProducer?.close(); }    catch {}
+  try { room.screenProducer?.close(); } catch {}
+
+  // Close transports
+  try { room.sendTransport?.close(); } catch {}
+  try { room.recvTransport?.close(); } catch {}
+
+  // Notify server
+  try {
+    await emitWithCallback(room.socket, 'ms_leave', { roomId });
+  } catch { /* server might already be gone */ }
+}
+
+// ── Replace mic track (device change) ────────────────────────────────────────
+export async function replaceTrack(track: MediaStreamTrack): Promise<void> {
+  if (!_room?.micProducer) return;
+  try {
+    await _room.micProducer.replaceTrack({ track });
+  } catch (err) {
+    console.warn('[MediaSoup] replaceTrack failed:', err);
+  }
+}
+
+// ── Toggle mic (mute/unmute locally) ─────────────────────────────────────────
+export async function setMicEnabled(enabled: boolean): Promise<void> {
+  if (!_room?.micProducer) return;
+  if (enabled) {
+    _room.micProducer.resume();
+  } else {
+    _room.micProducer.pause();
+  }
+  // Also pause/resume the track directly for immediate effect
+  const track = _room.micProducer.track;
+  if (track) track.enabled = enabled;
+}
+
+// ── Screen share ──────────────────────────────────────────────────────────────
+export async function produceScreen(roomId: string, screenStream: MediaStream): Promise<void> {
+  if (!_room || _room.roomId !== roomId || !_room.sendTransport) {
+    throw new Error('Not in mediasoup room or send transport missing');
+  }
+  const room = _room;
+
+  // Close existing screen producer if any
+  if (room.screenProducer) {
+    room.screenProducer.close();
+    room.screenProducer = null;
+  }
+
+  const videoTrack = screenStream.getVideoTracks()[0];
+  if (!videoTrack) throw new Error('No video track in screen stream');
+
+  const screenProducer = await room.sendTransport.produce({
+    track: videoTrack,
+    appData: { kind: 'screen' },
+  });
+
+  room.screenProducer = screenProducer;
+  screenProducer.on('transportclose', () => { room.screenProducer = null; });
+  screenProducer.on('trackended',      () => { room.screenProducer = null; });
+
+  // Also produce screen audio if available
+  const audioTrack = screenStream.getAudioTracks()[0];
+  if (audioTrack) {
+    try {
+      await room.sendTransport.produce({
+        track:      audioTrack,
+        appData:    { kind: 'screen' },
+      });
+    } catch { /* screen audio not critical */ }
+  }
+}
+
+export async function stopScreenShare(roomId: string): Promise<void> {
+  if (!_room || _room.roomId !== roomId) return;
+  const room = _room;
+
+  if (room.screenProducer) {
+    const producerId = room.screenProducer.id;
+    room.screenProducer.close();
+    room.screenProducer = null;
+    // Notify server via ms_close_producer
+    try {
+      await emitWithCallback(room.socket, 'ms_close_producer', { roomId, kind: 'screen' });
+    } catch {}
+  }
+}
+
+// ── Status helpers ────────────────────────────────────────────────────────────
+export function isInRoom(roomId: string): boolean {
+  return _room?.roomId === roomId;
+}
+
+export function getCurrentRoomId(): string | null {
+  return _room?.roomId ?? null;
+}
+
+// ── Volume / mute passthrough to webrtc.ts audio utilities ───────────────────
+export { setRemoteVolume, muteRemoteUser, muteAllRemote, detachRemoteAudio as detachAllRemote };
+
+// Re-export detachAllRemote as a function that detaches everything
+// (for use in cleanupWebRTC)
+export function detachAll(): void {
+  // webrtc.ts manages the audio element / AudioContext maps —
+  // individual detachRemoteAudio calls happen via onStreamClosed callback
+  // but we can't iterate them here. App.tsx calls detachRemoteAudio per user.
+}

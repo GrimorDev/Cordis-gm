@@ -144,6 +144,9 @@ export interface ServerToClientEvents {
   group_call_participant_joined: (data: any) => void;
   group_call_participant_left: (data: any) => void;
   group_call_ended: (data: { group_id: string }) => void;
+  // MediaSoup SFU — server→client push events
+  ms_new_producer: (data: { userId: string; producerId: string; kind: string; appData: any }) => void;
+  ms_producer_closed: (data: { userId: string; producerId?: string; kind?: string }) => void;
 }
 
 export interface ClientToServerEvents {
@@ -174,6 +177,15 @@ export interface ClientToServerEvents {
   group_call_join: (data: { group_id: string }) => void;
   group_call_leave: (data: { group_id: string }) => void;
   group_call_dismiss: (data: { group_id: string }) => void;
+  // MediaSoup SFU — client→server (all use callback pattern)
+  ms_join: (data: { roomId: string }, cb: (res: any) => void) => void;
+  ms_create_transport: (data: { roomId: string; producing: boolean }, cb: (res: any) => void) => void;
+  ms_connect_transport: (data: { roomId: string; transportId: string; dtlsParameters: any }, cb: (res: any) => void) => void;
+  ms_produce: (data: { roomId: string; transportId: string; kind: string; rtpParameters: any; appData: any }, cb: (res: any) => void) => void;
+  ms_consume: (data: { roomId: string; producerId: string; rtpCapabilities: any }, cb: (res: any) => void) => void;
+  ms_resume_consumer: (data: { roomId: string; consumerId: string }, cb: (res: any) => void) => void;
+  ms_close_producer: (data: { roomId: string; kind: string }, cb: (res: any) => void) => void;
+  ms_leave: (data: { roomId: string }, cb: (res: any) => void) => void;
 }
 
 export interface MessageWithSender extends Message {
