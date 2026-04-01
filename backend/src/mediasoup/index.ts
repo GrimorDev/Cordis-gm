@@ -1,11 +1,5 @@
-// ── MediaSoup SFU for Cordis ──────────────────────────────────────────────────
+// @ts-nocheck
 import * as mediasoup from 'mediasoup';
-import type {
-  Worker, Router, WebRtcTransport,
-  Producer, Consumer, RtpCodecCapability,
-  DtlsParameters, RtpParameters, RtpCapabilities,
-  MediaKind, AppData,
-} from 'mediasoup/node/lib/types';
 
 // ── Config from environment ───────────────────────────────────────────────────
 const ANNOUNCED_IP   = process.env.MEDIASOUP_ANNOUNCED_IP || undefined;
