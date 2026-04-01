@@ -192,6 +192,28 @@ export async function joinRoom(params: {
         console.warn('[MediaSoup] mic track ended — no more audio will be sent');
         room.micProducer = null;
       });
+
+      // Check RTP stats after 3s — if bytesSent=0, browser is not sending audio
+      setTimeout(async () => {
+        try {
+          const stats = await sendTransport.getStats();
+          let bytesSent = 0;
+          let packetsSent = 0;
+          stats.forEach((report: any) => {
+            if (report.type === 'outbound-rtp' && report.kind === 'audio') {
+              bytesSent   = report.bytesSent   ?? 0;
+              packetsSent = report.packetsSent ?? 0;
+            }
+          });
+          if (bytesSent === 0) {
+            console.error('[MediaSoup] ⚠️ bytesSent=0 after 3s — browser is NOT sending audio RTP! Track source may be silent.');
+          } else {
+            console.log(`[MediaSoup] ✓ RTP sending OK: ${packetsSent} packets / ${bytesSent} bytes`);
+          }
+        } catch (e) {
+          console.warn('[MediaSoup] getStats failed:', e);
+        }
+      }, 3000);
     } catch (err) {
       console.warn('[MediaSoup] Failed to produce mic:', err);
     }
