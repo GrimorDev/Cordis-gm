@@ -141,9 +141,6 @@ export async function setOutputDevice(deviceId: string) {
   }
 }
 
-/** No-op — kept for call-site compatibility. Audio uses <audio> elements only. */
-export function primePlaybackContext(): void {}
-
 // ─── Voice Activity Detection (VAD) ──────────────────────────────────────────
 /**
  * Proper VAD with:

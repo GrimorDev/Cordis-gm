@@ -425,9 +425,7 @@ router.post('/group/create', authMiddleware, async (req: AuthRequest, res) => {
       [allIds]
     );
 
-    // Re-query to get the updated row (with name/icon set by UPDATE above)
-    const freshConv = await query('SELECT * FROM dm_conversations WHERE id=$1', [conv.id]);
-    const result = { ...(freshConv.rows[0] || conv), is_group: true, participants: participants.rows };
+    const result = { ...conv, is_group: true, participants: participants.rows };
 
     // Notify all participants via socket
     const io = req.app.get('io');
@@ -543,56 +541,6 @@ router.delete('/group/:id', authMiddleware, async (req: AuthRequest, res) => {
     return res.json({ success: true });
   } catch (err) {
     console.error('[group-dm] delete error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// POST /api/dms/group/:id/invite — add a new member (creator only)
-router.post('/group/:id/invite', authMiddleware, async (req: AuthRequest, res) => {
-  const myId = req.user!.id;
-  const groupId = req.params.id;
-  const { userId } = req.body;
-  if (!userId) return res.status(400).json({ error: 'userId required' });
-  try {
-    const { rows: [conv] } = await query(
-      `SELECT creator_id FROM dm_conversations WHERE id=$1 AND is_group=true`, [groupId]
-    );
-    if (!conv) return res.status(404).json({ error: 'Not found' });
-    if (conv.creator_id !== myId) return res.status(403).json({ error: 'Only creator can invite' });
-
-    await query(
-      `INSERT INTO dm_participants (conversation_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
-      [groupId, userId]
-    );
-
-    // Get fresh group + full participant list
-    const [groupInfo, participants] = await Promise.all([
-      query(`SELECT * FROM dm_conversations WHERE id=$1`, [groupId]),
-      query(
-        `SELECT u.id AS user_id, u.username, u.avatar_url
-         FROM dm_participants dp JOIN users u ON u.id=dp.user_id
-         WHERE dp.conversation_id=$1`, [groupId]
-      )
-    ]);
-    const fullGroup = { ...groupInfo.rows[0], participants: participants.rows };
-
-    const io = req.app.get('io');
-    if (io) {
-      // Tell new member — they'll add the group to their list
-      io.to(`user:${userId}`).emit('group_dm_created', fullGroup);
-      // Tell existing members the participant list changed
-      for (const p of participants.rows) {
-        if (p.user_id !== userId) {
-          io.to(`user:${p.user_id}`).emit('group_dm_member_added', {
-            group_id: groupId,
-            user: participants.rows.find((u: any) => u.user_id === userId),
-          });
-        }
-      }
-    }
-    return res.json({ ok: true });
-  } catch (err) {
-    console.error('[group-dm] invite error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

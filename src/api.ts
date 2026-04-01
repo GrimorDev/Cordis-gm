@@ -806,12 +806,9 @@ export const groupDmApi = {
   info:     (id: string) => req<GroupDmConversation>('GET', `/dms/group/${id}`),
   messages: (id: string, before?: string) =>
     req<DmMessageFull[]>('GET', `/dms/group/${id}/messages${before ? `?before=${before}` : ''}`),
-  send:     (id: string, content: string, opts?: { attachment_url?: string; reply_to_id?: string }) =>
-    req<DmMessageFull>('POST', `/dms/group/${id}/messages`, { content, ...opts }),
-  update:   (id: string, patch: { name?: string; icon_url?: string }) =>
-    req<{ok:boolean}>('PATCH', `/dms/group/${id}`, patch),
+  send:     (id: string, content: string, attachments?: string[]) =>
+    req<DmMessageFull>('POST', `/dms/group/${id}/messages`, { content, attachments }),
   leave:    (id: string) => req<{success:boolean}>('DELETE', `/dms/group/${id}`),
-  invite:   (id: string, userId: string) => req<{ok:boolean}>('POST', `/dms/group/${id}/invite`, { userId }),
 };
 
 // ── Server Events ─────────────────────────────────────────────────────────────

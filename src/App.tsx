@@ -56,7 +56,6 @@ import { CSS } from '@dnd-kit/utilities';
 import {
   connectSocket, disconnectSocket, joinChannel, leaveChannel,
   joinVoiceChannel, leaveVoiceChannel, sendCallInvite, acceptCall, rejectCall, endCall,
-  startGroupCall, joinGroupCall, leaveGroupCall, dismissGroupCall,
   getSocket,
 } from './socket';
 import {
@@ -72,7 +71,6 @@ import {
   setOutputDevice, watchSpeaking, getMediaDevices, applyNoiseGate, applyDeepFilter, type NoisePipeline,
   preferH264, tuneAudioSender, tuneVideoSenders,
   onDeepFilterStatus, type DeepFilterStatus,
-  primePlaybackContext,
 } from './webrtc';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -1870,29 +1868,17 @@ function AttachmentRenderer({ url, staticUrl, addToast }: { url: string; staticU
   const handleDownload = (e: React.MouseEvent) => {
     e.preventDefault();
     if (downloading) return;
-
-    // Helper: navigate to backend proxy URL (avoids CORS — no fetch())
-    const proxyDownload = (proxyPath: string) => {
-      const dlUrl = `${proxyPath}${proxyPath.includes('?') ? '&' : '?'}dl=1&name=${encodeURIComponent(name)}`;
+    // Jeśli plik jest na R2 (/api/files/...) → navigation z ?dl=1
+    // backend generuje signed URL z Content-Disposition: attachment
+    // Brak fetch() = brak problemu CORS
+    if (full.includes('/api/files/')) {
+      // Navigation bez _blank — Content-Disposition: attachment zatrzymuje pobieranie w tle
+      const dlUrl = `${full}${full.includes('?') ? '&' : '?'}dl=1&name=${encodeURIComponent(name)}`;
       window.location.href = dlUrl;
       addToast?.(`⬇️ Pobieranie: ${name}`, 'info');
-    };
-
-    // /api/files/... — already routed through backend proxy
-    if (full.includes('/api/files/')) {
-      proxyDownload(full);
       return;
     }
-
-    // Direct R2 public URL (pub-*.r2.dev/KEY) — fetch would be blocked by CORS.
-    // Extract the object key and route through backend proxy instead.
-    const r2Match = full.match(/\.r2\.dev\/(.+)$/);
-    if (r2Match) {
-      proxyDownload(`/api/files/${r2Match[1]}`);
-      return;
-    }
-
-    // Fallback: any other absolute URL — blob download via fetch
+    // Fallback: lokalne pliki (stary dysk) — blob download
     setDownloading(true);
     addToast?.(`⬇️ Pobieranie: ${name}`, 'info');
     fetch(full)
@@ -6054,24 +6040,6 @@ export default function App() {
   const [groupDmSearchQ, setGroupDmSearchQ]   = useState('');
   const [activeGroupDm, setActiveGroupDm]     = useState<string|null>(null);
   const [groupMessages, setGroupMessages]     = useState<Record<string, any[]>>({});
-  const [groupSettingsOpen, setGroupSettingsOpen] = useState(false);
-  const [groupEditName, setGroupEditName]     = useState('');
-  const [groupEditIconFile, setGroupEditIconFile] = useState<File|null>(null);
-  const [groupEditIconPreview, setGroupEditIconPreview] = useState<string|null>(null);
-  const [groupEditSaving, setGroupEditSaving] = useState(false);
-
-  // Group invite (in settings modal)
-  const [groupInviteQ, setGroupInviteQ]       = useState('');
-  const [groupInviting, setGroupInviting]     = useState<string|null>(null); // userId being invited
-  const [groupCallMinimized, setGroupCallMinimized] = useState(false);
-
-  // Group call state
-  type GroupCallInfo = { group_id: string; participants: string[]; pending: string[]; isMuted?: boolean; caller?: { id: string; username: string; avatar_url: string|null } };
-  const [activeGroupCall, setActiveGroupCall] = useState<GroupCallInfo|null>(null);
-  const activeGroupCallRef = useRef<GroupCallInfo|null>(null);
-  useEffect(() => { activeGroupCallRef.current = activeGroupCall; }, [activeGroupCall]);
-  const [groupCallState, setGroupCallState]   = useState<GroupCallInfo|null>(null);
-  const [groupCallIncoming, setGroupCallIncoming] = useState<GroupCallInfo|null>(null);
 
   // ── Feature: Server Events ───────────────────────────────────────
   const [serverEvents, setServerEvents]       = useState<ServerEvent[]>([]);
@@ -7312,9 +7280,6 @@ export default function App() {
     sock.on('group_dm_created', (conv: GroupDmConversation) => {
       setGroupConvs(p => p.some(c => c.id === conv.id) ? p : [conv, ...p]);
     });
-    sock.on('group_dm_updated', ({ id, name, icon_url }: { id: string; name: string | null; icon_url: string | null }) => {
-      setGroupConvs(p => p.map(c => c.id === id ? { ...c, ...(name !== undefined ? { name } : {}), ...(icon_url !== undefined ? { icon_url } : {}) } : c));
-    });
     sock.on('group_dm_deleted', ({ id }: { id: string }) => {
       setGroupConvs(p => p.filter(c => c.id !== id));
       setGroupMessages(p => { const n = {...p}; delete n[id]; return n; });
@@ -7324,90 +7289,6 @@ export default function App() {
       setGroupConvs(p => p.filter(c => c.id !== id));
       setGroupMessages(p => { const n = {...p}; delete n[id]; return n; });
       setActiveGroupDm(prev => prev === id ? null : prev);
-    });
-    sock.on('group_dm_member_left', ({ group_id, user_id, system_message }: { group_id: string; user_id: string; system_message: any }) => {
-      // Remove participant from the group's participant list
-      setGroupConvs(p => p.map(c => c.id === group_id
-        ? { ...c, participants: c.participants.filter(part => part.user_id !== user_id) }
-        : c
-      ));
-      // Append system message to chat
-      if (system_message) {
-        setGroupMessages(p => {
-          const existing = p[group_id] || [];
-          if (existing.some((m: any) => m.id === system_message.id)) return p;
-          return { ...p, [group_id]: [...existing, system_message] };
-        });
-      }
-    });
-
-    sock.on('group_dm_member_added', ({ group_id, user }: { group_id: string; user: { user_id: string; username: string; avatar_url: string | null } }) => {
-      setGroupConvs(p => p.map(c => c.id === group_id
-        ? { ...c, participants: c.participants.some(pt => pt.user_id === user.user_id) ? c.participants : [...c.participants, user] }
-        : c
-      ));
-    });
-
-    // ── Group call events ─────────────────────────────────────────────
-    sock.on('group_call_invite', (payload: any) => {
-      setGroupCallIncoming(payload);
-      // Also keep track that a call is active for this group (for "Join" button in header)
-      setGroupCallState(payload);
-      startIncomingRing();
-      // Auto-dismiss after 15 seconds
-      setTimeout(() => {
-        setGroupCallIncoming(prev => prev?.group_id === payload.group_id ? null : prev);
-        stopIncomingRing();
-        dismissGroupCall(payload.group_id);
-      }, 15000);
-      if (isTauri && !isWindowFocused.current) {
-        import('@tauri-apps/plugin-notification').then(async ({ isPermissionGranted, sendNotification }) => {
-          if (!await isPermissionGranted()) return;
-          sendNotification({ title: 'Rozmowa grupowa', body: `${payload.caller?.username} dzwoni do grupy…` });
-        }).catch(() => {});
-      }
-    });
-    sock.on('group_call_state', (payload: any) => {
-      setGroupCallState(payload);
-      // If I'm the caller or already in this call, sync our local state
-      setActiveGroupCall(prev => prev?.group_id === payload.group_id ? { ...prev, ...payload } : prev);
-    });
-    sock.on('group_call_participant_joined', (payload: any) => {
-      setGroupCallState(prev => prev?.group_id === payload.group_id ? { ...prev, participants: payload.participants, pending: payload.pending } : prev);
-      setActiveGroupCall(prev => prev?.group_id === payload.group_id ? { ...prev, participants: payload.participants, pending: payload.pending } : prev);
-      // Stop ring when first participant joins the group call
-      if (activeGroupCallRef.current?.group_id === payload.group_id && payload.new_user_id !== currentUser?.id) {
-        stopRing();
-        // WebRTC: open peer to new participant
-        if (payload.existing_participants?.includes(currentUser?.id)) {
-          openPeer(payload.new_user_id, true);
-        } else {
-          openPeer(payload.new_user_id, false);
-        }
-      }
-    });
-    sock.on('group_call_participant_left', (payload: any) => {
-      setGroupCallState(prev => prev?.group_id === payload.group_id ? { ...prev, participants: payload.participants, pending: payload.pending ?? [] } : prev);
-      setActiveGroupCall(prev => prev?.group_id === payload.group_id ? { ...prev, participants: payload.participants, pending: payload.pending ?? [] } : prev);
-      // Close the peer connection to the user who left — otherwise stale PC stays
-      // in peerConnsRef and openPeer's guard returns it on rejoin → no audio.
-      if (activeGroupCallRef.current?.group_id === payload.group_id && payload.left_user_id) {
-        closePeer(payload.left_user_id);
-      }
-    });
-    sock.on('group_call_ended', ({ group_id }: { group_id: string }) => {
-      if (activeGroupCallRef.current?.group_id === group_id) {
-        stopRing();
-        cleanupWebRTC();
-        setActiveGroupCall(null);
-        setGroupCallState(null);
-        playCallEnded();
-      }
-      setGroupCallIncoming(prev => {
-        if (prev?.group_id === group_id) { stopIncomingRing(); return null; }
-        return prev;
-      });
-      setGroupCallState(prev => prev?.group_id === group_id ? null : prev);
     });
 
     loadServers(); loadDms(); loadGroupConvs();
@@ -7909,15 +7790,7 @@ export default function App() {
   };
   const openPeer = async (remoteUserId: string, isInitiator: boolean, sdpOffer?: RTCSessionDescriptionInit) => {
     const existing = peerConnsRef.current.get(remoteUserId);
-    // Only recreate if signalingState === 'closed' — the one state where a PC is
-    // truly unusable.  connectionState/iceConnectionState 'failed' is NOT the same:
-    // those PCs can still accept ICE restart offers, so we must not close them here.
-    if (existing) {
-      if (existing.signalingState !== 'closed') return existing;
-      existing.close();
-      peerConnsRef.current.delete(remoteUserId);
-      detachRemoteAudio(remoteUserId);
-    }
+    if (existing) return existing;
     const pc = makePeerConnection(
       (c) => getSocket().emit('webrtc_ice', { to: remoteUserId, candidate: c }),
       (e) => {
@@ -7994,21 +7867,13 @@ export default function App() {
     );
     peerConnsRef.current.set(remoteUserId, pc);
     // ICE + connection state monitoring — critical for diagnosing voice call failures
-    let _iceRestartCount = 0;
     pc.oniceconnectionstatechange = () => {
       const s = pc.iceConnectionState;
       console.log(`[Cordis WebRTC] ICE state (${remoteUserId}):`, s);
       if (s === 'failed') {
-        if (isInitiator && _iceRestartCount < 3) {
-          _iceRestartCount++;
-          console.warn(`[Cordis WebRTC] ICE failed — sending restart offer for ${remoteUserId} (attempt ${_iceRestartCount})`);
-          // restartIce() alone does nothing — MUST follow with createOffer({iceRestart:true})
-          // to actually send new ICE credentials to the remote peer.
-          pc.createOffer({ iceRestart: true })
-            .then(offer => pc.setLocalDescription(offer).then(() => {
-              getSocket().emit('webrtc_offer', { to: remoteUserId, sdp: offer });
-            }))
-            .catch(e => console.warn('[Cordis WebRTC] ICE restart offer failed:', e));
+        if (isInitiator) {
+          console.warn('[Cordis WebRTC] ICE failed — restarting ICE for', remoteUserId);
+          pc.restartIce();
         }
       }
       if (s === 'disconnected') {
@@ -8019,8 +7884,7 @@ export default function App() {
       const s = pc.connectionState;
       console.log(`[Cordis WebRTC] connection state (${remoteUserId}):`, s);
       if (s === 'failed') {
-        console.error(`[Cordis WebRTC] connection permanently failed for ${remoteUserId}`);
-        addToast(`Problem z połączeniem głosowym z jednym z uczestników`, 'error');
+        addToast(`Problem z połączeniem głosowym — sprawdź konsolę przeglądarki (F12)`, 'error');
       }
     };
     if (localStreamRef.current)
@@ -8067,20 +7931,13 @@ export default function App() {
       },
       onOffer: async ({ from, sdp }: any) => {
         const existing = peerConnsRef.current.get(from);
-        // Renegotiation OR ICE restart — apply to existing PC as long as it isn't
-        // truly closed (signalingState === 'closed').  A PC with iceConnectionState
-        // or connectionState 'failed' can still accept an ICE restart offer, so we
-        // MUST NOT close it here and recreate — that would break the ICE restart.
-        if (existing && existing.signalingState !== 'closed') {
+        if (existing) {
+          // Renegotiation (e.g. remote peer added screen share track)
           await existing.setRemoteDescription(new RTCSessionDescription(sdp));
-          const rawAnswer = await existing.createAnswer();
-          const tunedSdp  = preferH264(rawAnswer.sdp ?? '');
-          const answer    = { ...rawAnswer, sdp: tunedSdp };
+          const answer = await existing.createAnswer();
           await existing.setLocalDescription(answer);
-          tuneAudioSender(existing, (activeCh as any)?.bitrate ?? 64);
           getSocket().emit('webrtc_answer', { to: from, sdp: answer });
         } else {
-          // No existing PC or truly closed — create fresh one
           await openPeer(from, false, sdp);
         }
       },
@@ -8372,8 +8229,6 @@ export default function App() {
   const handleMicToggle = () => {
     if (activeCall) {
       toggleMute();
-    } else if (activeGroupCallRef.current) {
-      toggleGroupCallMute();
     } else {
       const next = !isMicMuted;
       setIsMicMuted(next);
@@ -8460,10 +8315,7 @@ export default function App() {
     if (sending) return;
     setSending(true);
     try {
-      if (activeView === 'dms' && activeGroupDm) {
-        const sentMsg = await groupDmApi.send(activeGroupDm, gifUrl);
-        setGroupMessages(p => ({ ...p, [activeGroupDm]: [...(p[activeGroupDm] || []), sentMsg] }));
-      } else if (activeView === 'dms' && activeDmUserId) await dmsApi.send(activeDmUserId, gifUrl, {});
+      if (activeView === 'dms' && activeDmUserId) await dmsApi.send(activeDmUserId, gifUrl, {});
       else if (activeChannel) await messagesApi.send(activeChannel, gifUrl, {});
     } catch (err: any) {
       addToast(err?.message || 'Nie udało się wysłać GIF-a', 'error');
@@ -8590,10 +8442,7 @@ export default function App() {
     const curKey = prevConvKeyRef.current;
     if (curKey) { delete msgDraftsRef.current[curKey]; setDraftKeys(s=>{const n=new Set(s);n.delete(curKey);return n;}); }
     try {
-      if (activeView === 'dms' && activeGroupDm) {
-        const sentMsg = await groupDmApi.send(activeGroupDm, finalContent, { attachment_url: opts.attachment_url, reply_to_id: opts.reply_to_id });
-        setGroupMessages(p => ({ ...p, [activeGroupDm]: [...(p[activeGroupDm] || []), sentMsg] }));
-      } else if (activeView === 'dms' && activeDmUserId) await dmsApi.send(activeDmUserId, finalContent, opts);
+      if (activeView === 'dms' && activeDmUserId) await dmsApi.send(activeDmUserId, finalContent, opts);
       else if (activeChannel) await messagesApi.send(activeChannel, finalContent, opts);
       playMessageSent();
     } catch (err: any) {
@@ -9151,22 +9000,6 @@ export default function App() {
   const acquireMic = async (deviceId?: string, noiseCancelOverride?: boolean): Promise<MediaStream|null> => {
     const useNoise = noiseCancelOverride !== undefined ? noiseCancelOverride : noiseCancel;
     try {
-      // ── Acquire NEW raw mic stream FIRST (before stopping old one) ───────────
-      // CRITICAL for Tauri/WebView2 on Windows: if we stop the old track before
-      // calling getUserMedia(), Windows releases the audio device and the next
-      // getUserMedia() returns a stream that appears live but produces silence.
-      // By getting the new stream first the device is "handed over" seamlessly.
-      const audioConstraints: MediaTrackConstraints = {
-        ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
-        echoCancellation: true,  // hardware echo cancel — eliminates speaker feedback
-        autoGainControl:  true,  // normalize mic level automatically
-        noiseSuppression: true,  // browser baseline NS always on; AudioWorklet adds deeper layer
-        sampleRate: 48000,       // 48 kHz — standard Opus/WebRTC, najlepsza jakość głosu
-        channelCount: 1,         // mono — wystarczy dla głosu, mniejsze opóźnienie
-      };
-      const rawStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
-
-      // ── NOW clean up previous resources (new stream is already live) ─────────
       // Stop previous speaking detection
       const old = speakStopRef.current.get('self'); if (old) { old(); speakStopRef.current.delete('self'); }
       // Clean up previous noise pipeline (this also stops the old raw mic stream)
@@ -9177,6 +9010,18 @@ export default function App() {
         localStreamRef.current?.getTracks().forEach(t => t.stop());
       }
       localStreamRef.current = null;
+
+      // Acquire raw mic — all three WebRTC filters ON as baseline (echo/gain/noise).
+      // AudioWorklet gate runs on top for deeper noise removal — they complement, not conflict.
+      const audioConstraints: MediaTrackConstraints = {
+        ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+        echoCancellation: true,  // hardware echo cancel — eliminates speaker feedback
+        autoGainControl:  true,  // normalize mic level automatically
+        noiseSuppression: true,  // browser baseline NS always on; AudioWorklet adds deeper layer
+        sampleRate: 48000,       // 48 kHz — standard Opus/WebRTC, najlepsza jakość głosu
+        channelCount: 1,         // mono — wystarczy dla głosu, mniejsze opóźnienie
+      };
+      const rawStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
 
       // Speaking detection on the raw stream (pre-gate) so indicator stays accurate
       if (currentUserRef.current?.id) {
@@ -9230,8 +9075,6 @@ export default function App() {
         return;
       }
     }
-    // Pre-warm AudioContext inside this user-gesture so remote audio plays in Tauri/WebView2
-    primePlaybackContext();
     // Close settings / admin panel so the call panel is visible
     setSrvSettOpen(false);
     if (activeViewRef.current === 'admin') setActiveView('servers');
@@ -9249,12 +9092,6 @@ export default function App() {
       leaveVoiceChannel(curCall.channelId);
       if (currentUser) setVoiceUsers(p => ({ ...p, [curCall.channelId!]: (p[curCall.channelId!]||[]).filter(u=>u.id!==currentUser.id) }));
       cleanupWebRTC();
-    }
-    // Leave any active group call first — prevent group_call_ended from killing voice stream
-    if (activeGroupCallRef.current) {
-      leaveGroupCall(activeGroupCallRef.current.group_id);
-      cleanupWebRTC();
-      setActiveGroupCall(null); setGroupCallState(null); setGroupCallMinimized(false);
     }
     await acquireMic(selMic || undefined);
     joinVoiceChannel(ch.id);
@@ -9293,8 +9130,6 @@ export default function App() {
   };
 
   const startDmCall = async (userId: string, username: string, type: 'voice'|'video', avatarUrl?: string | null) => {
-    // Pre-warm AudioContext inside this user-gesture so remote audio plays in Tauri/WebView2
-    primePlaybackContext();
     const curCall = activeCallRef.current;
     // Leave any active voice channel first — only 1 call allowed at a time
     if (curCall?.channelId) {
@@ -9303,12 +9138,6 @@ export default function App() {
       if (currentUser) setVoiceUsers(p => ({ ...p, [curCall.channelId!]: (p[curCall.channelId!]||[]).filter(u=>u.id!==currentUser.id) }));
       cleanupWebRTC();
       setActiveCall(null); setShowCallPanel(false);
-    }
-    // Leave any active group call first — prevent group_call_ended from killing DM call stream
-    if (activeGroupCallRef.current) {
-      leaveGroupCall(activeGroupCallRef.current.group_id);
-      cleanupWebRTC();
-      setActiveGroupCall(null); setGroupCallState(null); setGroupCallMinimized(false);
     }
     await acquireMic(selMic || undefined);
     sendCallInvite(userId, type);
@@ -9326,13 +9155,6 @@ export default function App() {
     const call = activeCallRef.current;
     if (call?.channelId) getSocket().emit('voice_state' as any, { muted, deafened: call.isDeafened, channel_id: call.channelId });
     if (call?.userId)    getSocket().emit('voice_state' as any, { muted, deafened: call.isDeafened, to_user_id: call.userId });
-  };
-  const toggleGroupCallMute = () => {
-    const muted = !(activeGroupCallRef.current?.isMuted ?? false);
-    localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !muted; });
-    setActiveGroupCall(p => p ? { ...p, isMuted: muted } : p);
-    const gc = activeGroupCallRef.current;
-    if (gc) getSocket().emit('voice_state' as any, { muted, deafened: false, channel_id: undefined, to_user_id: undefined });
   };
   const toggleDeafen = () => {
     const deaf = !activeCall?.isDeafened;
@@ -10289,7 +10111,7 @@ export default function App() {
                     className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/15 text-white border border-indigo-500/25':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
                     <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 flex items-center justify-center shrink-0 overflow-hidden">
                       {gc.icon_url
-                        ? <img src={staticUrl(gc.icon_url)} className="w-full h-full object-cover" alt=""/>
+                        ? <img src={gc.icon_url} className="w-full h-full object-cover" alt=""/>
                         : <Users size={14} className="text-indigo-400"/>}
                     </div>
                     <div className="flex-1 truncate text-left min-w-0">
@@ -10558,13 +10380,13 @@ export default function App() {
 
               {/* Mic + Settings buttons */}
               <div className="flex items-center gap-0.5 shrink-0">
-                <button title={isMicMuted||activeCall?.isMuted||activeGroupCall?.isMuted?'Włącz mikrofon':'Wycisz mikrofon'}
+                <button title={isMicMuted||activeCall?.isMuted?'Włącz mikrofon':'Wycisz mikrofon'}
                   onClick={handleMicToggle}
                   className={`w-7 h-7 flex items-center justify-center rounded-md transition-all ${
-                    (isMicMuted||(activeCall?.isMuted??false)||(activeGroupCall?.isMuted??false))
+                    (isMicMuted||(activeCall?.isMuted??false))
                       ? 'text-rose-400 bg-rose-500/10 hover:bg-rose-500/20'
                       : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07]'}`}>
-                  {(isMicMuted||(activeCall?.isMuted??false)||(activeGroupCall?.isMuted??false))?<MicOff size={13}/>:<Mic size={13}/>}
+                  {(isMicMuted||(activeCall?.isMuted??false))?<MicOff size={13}/>:<Mic size={13}/>}
                 </button>
                 <button title="Skróty klawiszowe (?)" onClick={()=>setShowShortcuts(true)}
                   className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all"><Keyboard size={12}/></button>
@@ -11119,7 +10941,40 @@ export default function App() {
                   <p className="text-sm text-zinc-500">Wybierz kanał tekstowy z listy po lewej stronie.</p></>
               }
             </div>
-          ) : activeView==='dms' && !activeDmUserId && !activeGroupDm ? (
+          ) : activeView==='dms' && activeGroupDm ? (
+            /* ── Group DM chat view ── */
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="h-14 border-b border-white/[0.06] flex items-center px-5 shrink-0 glass-dark gap-3">
+                <button onClick={()=>setActiveGroupDm(null)} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all"><ArrowLeft size={14}/></button>
+                <Users size={15} className="text-indigo-400 shrink-0"/>
+                <h1 className="text-sm font-bold text-white truncate">{groupConvs.find(g=>g.id===activeGroupDm)?.name||'Grupa'}</h1>
+                <span className="text-xs text-zinc-600 ml-auto">{groupConvs.find(g=>g.id===activeGroupDm)?.participants.length} osób</span>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 custom-scrollbar flex flex-col gap-2">
+                {(groupMessages[activeGroupDm]||[]).map((msg:any,i:number)=>(
+                  <div key={msg.id||i} className={`flex gap-2.5 ${msg.sender_id===currentUser?.id?'flex-row-reverse':''}`}>
+                    <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} className="w-7 h-7 rounded-xl object-cover shrink-0 self-start mt-0.5" alt=""/>
+                    <div className={`max-w-[70%] px-3 py-2 rounded-2xl text-sm ${msg.sender_id===currentUser?.id?'bg-indigo-600/80 text-white':'bg-white/[0.08] text-zinc-200'}`}>
+                      {msg.content}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="p-4 border-t border-white/[0.06]">
+                <form onSubmit={async e=>{
+                  e.preventDefault();
+                  const inp = (e.currentTarget.querySelector('input') as HTMLInputElement);
+                  if (!inp.value.trim()) return;
+                  const msg = await groupDmApi.send(activeGroupDm!, inp.value.trim());
+                  setGroupMessages(p=>({...p,[activeGroupDm!]:[...(p[activeGroupDm!]||[]),msg]}));
+                  inp.value='';
+                }} className="flex gap-2">
+                  <input placeholder="Wyślij wiadomość..." className={`${gi} flex-1 px-3 py-2 text-sm`}/>
+                  <button type="submit" className="w-9 h-9 rounded-xl bg-indigo-600 hover:bg-indigo-500 flex items-center justify-center text-white transition-colors"><Send size={13}/></button>
+                </form>
+              </div>
+            </div>
+          ) : activeView==='dms' && !activeDmUserId ? (
             <div className="flex-1 flex flex-col items-center justify-center p-8">
               <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4}}
                 className="w-full max-w-sm flex flex-col items-center text-center">
@@ -11576,20 +11431,7 @@ export default function App() {
               {/* Chat header */}
               <header className="h-14 border-b border-white/[0.06] flex items-center justify-between px-5 glass-dark border-b border-white/[0.05] z-10 shrink-0 gap-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  {activeView==='dms' ? (activeGroupDm ? (() => {
-                    const gc = groupConvs.find(g=>g.id===activeGroupDm);
-                    return (
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-2xl bg-indigo-500/20 flex items-center justify-center shrink-0 overflow-hidden">
-                          {gc?.icon_url ? <img src={staticUrl(gc.icon_url)} className="w-full h-full object-cover" alt=""/> : <Users size={14} className="text-indigo-400"/>}
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-white text-sm leading-tight">{gc?.name || 'Grupa'}</h3>
-                          <p className="text-xs text-zinc-500 leading-tight">{gc?.participants?.length ?? 0} osób</p>
-                        </div>
-                      </div>
-                    );
-                  })() : activeDm ? (
+                  {activeView==='dms' ? (activeDm ? (
                     <div className="flex items-center gap-3">
                       <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})}")`} as React.CSSProperties}>
                         <img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className={`w-8 h-8 rounded-2xl object-cover shadow-sm av-eff-${(activeDm as any).other_avatar_effect||'none'}`} alt=""/>
@@ -11615,36 +11457,6 @@ export default function App() {
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {activeView==='dms'&&activeGroupDm&&(<>
-                    {/* Group call button */}
-                    {activeGroupCall?.group_id === activeGroupDm
-                      ? <button onClick={()=>{ leaveGroupCall(activeGroupDm!); cleanupWebRTC(); setActiveGroupCall(null); setGroupCallState(null); playCallEnded(); }}
-                          className="w-8 h-8 flex items-center justify-center rounded-xl text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 transition-all duration-150 active:scale-95" title="Zakończ rozmowę"><PhoneOff size={15}/></button>
-                      : groupCallState?.group_id === activeGroupDm
-                        ? <button onClick={async()=>{ primePlaybackContext(); await acquireMic(selMic||undefined); joinGroupCall(activeGroupDm!); setActiveGroupCall({ group_id: activeGroupDm!, participants: groupCallState.participants, pending: groupCallState.pending, isMuted: false }); stopIncomingRing(); setGroupCallIncoming(null); }}
-                            className="w-8 h-8 flex items-center justify-center rounded-xl text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all duration-150 active:scale-95 animate-pulse" title="Dołącz do aktywnej rozmowy"><Phone size={15}/></button>
-                        : <button onClick={async()=>{
-                            primePlaybackContext();
-                            const gid = activeGroupDm!;
-                            await acquireMic(selMic||undefined);
-                            startGroupCall(gid);
-                            setActiveGroupCall({ group_id: gid, participants: [currentUser?.id||''], pending: [], isMuted: false });
-                            startRing();
-                            // Auto-stop ring and dismiss pending after 15s
-                            setTimeout(() => {
-                              stopRing();
-                              setActiveGroupCall(prev => prev?.group_id === gid ? { ...prev, pending: [] } : prev);
-                              setGroupCallState(prev => prev?.group_id === gid ? { ...prev, pending: [] } : prev);
-                            }, 15000);
-                          }}
-                            className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all duration-150 active:scale-95" title="Zadzwoń do grupy"><Phone size={15}/></button>
-                    }
-                    {groupConvs.find(g=>g.id===activeGroupDm)?.creator_id===currentUser?.id&&<>
-                      <button onClick={()=>{ const gc=groupConvs.find(g=>g.id===activeGroupDm); setGroupEditName(gc?.name||''); setGroupEditIconFile(null); setGroupEditIconPreview(gc?.icon_url?staticUrl(gc.icon_url):null); setGroupSettingsOpen(true); }}
-                        className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all duration-150 active:scale-95" title="Ustawienia grupy"><Settings size={15}/></button>
-                    </>}
-                    <div className="w-px h-4 bg-white/[0.06] mx-1"/>
-                  </>)}
                   {activeView==='dms'&&activeDm&&<>
                     <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'voice',activeDm.other_avatar)} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all duration-150 active:scale-95"><Phone size={15}/></button>
                     <button onClick={()=>startDmCall(activeDm.other_user_id,activeDm.other_username,'video',activeDm.other_avatar)} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-sky-400 hover:bg-sky-500/10 transition-all duration-150 active:scale-95"><Video size={15}/></button>
@@ -11996,107 +11808,6 @@ export default function App() {
                     <p className="text-xs text-zinc-400 mt-1">Obrazy, audio, wideo, kod, archiwa i więcej</p>
                   </div>
                 )}
-
-                {/* ── Active Group Call panel (voice-channel style, supports minimize) ── */}
-                {activeView==='dms' && activeGroupDm && activeGroupCall?.group_id === activeGroupDm && (() => {
-                  const gc = groupConvs.find(g => g.id === activeGroupDm);
-                  const allMembers = gc?.participants || [];
-                  const callParts = activeGroupCall.participants || [];
-                  const callPending = activeGroupCall.pending || [];
-                  const leaveCall = () => { leaveGroupCall(activeGroupDm!); cleanupWebRTC(); setActiveGroupCall(null); setGroupCallState(null); setGroupCallMinimized(false); stopRing(); playCallEnded(); };
-                  return (
-                    <>
-                      {/* Mini banner shown when call is minimized */}
-                      {groupCallMinimized && (
-                        <div className="absolute top-0 left-0 right-0 z-20 flex items-center gap-3 px-4 py-2 bg-emerald-900/60 border-b border-emerald-500/20 backdrop-blur-sm">
-                          <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse shrink-0"/>
-                          <span className="text-xs font-semibold text-emerald-300 flex-1">Rozmowa grupowa w toku</span>
-                          {/* Participant avatars mini-row */}
-                          <div className="flex -space-x-1.5 mr-2">
-                            {allMembers.filter((m:any) => callParts.includes(m.user_id)).slice(0,5).map((m:any) => (
-                              <img key={m.user_id} src={ava({avatar_url:m.avatar_url,username:m.username})}
-                                className="w-5 h-5 rounded-full border border-emerald-900 object-cover" alt=""/>
-                            ))}
-                          </div>
-                          <button onClick={()=>setGroupCallMinimized(false)}
-                            className="px-2.5 py-1 rounded-lg bg-emerald-600/60 hover:bg-emerald-600 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 shrink-0">
-                            <Maximize2 size={11}/> Rozwiń
-                          </button>
-                          <button onClick={toggleGroupCallMute} title={activeGroupCall?.isMuted ? 'Włącz mikrofon' : 'Wycisz'}
-                            className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors shrink-0 ${activeGroupCall?.isMuted ? 'bg-rose-500 text-white' : 'bg-white/[0.08] text-zinc-300 hover:text-white'}`}>
-                            {activeGroupCall?.isMuted ? <MicOff size={11}/> : <Mic size={11}/>}
-                          </button>
-                          <button onClick={leaveCall}
-                            className="w-6 h-6 rounded-lg bg-rose-500 hover:bg-rose-400 flex items-center justify-center text-white transition-colors shrink-0">
-                            <PhoneOff size={11}/>
-                          </button>
-                        </div>
-                      )}
-                      {/* Full-panel (hidden when minimized) */}
-                      {!groupCallMinimized && (
-                        <div className="absolute inset-0 z-20 flex flex-col bg-[#0d0d14]">
-                          {/* Participants grid */}
-                          <div className="flex-1 flex flex-wrap items-center justify-center gap-6 p-8 overflow-y-auto">
-                            {allMembers.map((m: any) => {
-                              const uid = m.user_id;
-                              const isActive = callParts.includes(uid);
-                              const isPending = callPending.includes(uid);
-                              const isMe = uid === currentUser?.id;
-                              const isSpeaking = speakingUsers.has(uid) && !(isMe ? (activeGroupCall?.isMuted ?? false) : (voiceUserStates[uid]?.muted ?? false));
-                              const isMutedUser = isMe ? (activeGroupCall?.isMuted ?? false) : (voiceUserStates[uid]?.muted ?? false);
-                              if (!isActive && !isPending) return null;
-                              return (
-                                <div key={uid} className="flex flex-col items-center gap-2.5">
-                                  <div className={`relative p-1 rounded-2xl border-2 transition-all duration-150 ${
-                                    isPending ? 'border-zinc-700/50' :
-                                    isSpeaking ? 'border-emerald-500 shadow-[0_0_16px_3px_rgba(16,185,129,0.4)]' :
-                                    isMutedUser ? 'border-rose-500/40' : 'border-white/10'
-                                  }`}>
-                                    <img src={ava({ avatar_url: m.avatar_url, username: m.username })}
-                                      className={`w-24 h-24 rounded-xl object-cover ${isPending ? 'opacity-40 grayscale' : ''}`} alt=""/>
-                                    <div className={`absolute bottom-1 right-1 w-6 h-6 rounded-full flex items-center justify-center border-2 border-[#0d0d14] ${
-                                      isPending ? 'bg-zinc-700' : isMutedUser ? 'bg-rose-500' : isSpeaking ? 'bg-emerald-500' : 'bg-zinc-700'
-                                    }`}>
-                                      {isPending
-                                        ? <div className="flex gap-0.5">{[0,1,2].map(i=><span key={i} className="w-1 h-1 bg-zinc-400 rounded-full animate-bounce" style={{animationDelay:`${i*0.15}s`}}/>)}</div>
-                                        : isMutedUser ? <MicOff size={10} className="text-white"/> : <Mic size={10} className="text-white"/>
-                                      }
-                                    </div>
-                                  </div>
-                                  <p className={`text-sm font-semibold ${
-                                    isPending ? 'text-zinc-600' : isSpeaking ? 'text-emerald-400' : isMutedUser ? 'text-rose-400' : 'text-white'
-                                  }`}>
-                                    {m.username}{isMe && <span className="text-zinc-600 font-normal text-xs"> (Ty)</span>}
-                                  </p>
-                                  {isPending && <span className="text-[11px] text-zinc-700 -mt-1">dzwoni…</span>}
-                                </div>
-                              );
-                            })}
-                          </div>
-                          {/* Controls bar */}
-                          <div className="shrink-0 h-20 border-t border-white/[0.06] bg-black/30 flex items-center justify-center gap-4 px-6">
-                            <button onClick={()=>setGroupCallMinimized(true)} title="Minimalizuj — wróć do czatu"
-                              className="w-12 h-12 rounded-2xl bg-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.14] flex items-center justify-center transition-all active:scale-90">
-                              <Minimize2 size={18}/>
-                            </button>
-                            <button onClick={toggleGroupCallMute} title={activeGroupCall?.isMuted ? 'Włącz mikrofon' : 'Wycisz'}
-                              className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all active:scale-90 ${
-                                activeGroupCall?.isMuted
-                                  ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30 hover:bg-rose-400'
-                                  : 'bg-white/[0.08] text-zinc-300 hover:bg-white/[0.14] hover:text-white'
-                              }`}>
-                              {activeGroupCall?.isMuted ? <MicOff size={18}/> : <Mic size={18}/>}
-                            </button>
-                            <button onClick={leaveCall} title="Rozłącz"
-                              className="w-14 h-12 rounded-2xl bg-rose-500 hover:bg-rose-400 active:scale-90 flex items-center justify-center text-white transition-all shadow-lg shadow-rose-500/30">
-                              <PhoneOff size={18}/>
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  );
-                })()}
                 {/* New messages indicator — shown when user scrolled up and new message arrived */}
                 {hasNewMsgs && (
                   <button
@@ -12149,77 +11860,10 @@ export default function App() {
                 {/* mode="sync" (default) so new content mounts immediately — mode="wait" kept
                     new DOM out until old exit animation finished, breaking scrollHeight */}
                 <AnimatePresence initial={false}>
-                <motion.div key={`${activeServer}-${activeChannel}-${activeDmUserId}-${activeGroupDm}`}
+                <motion.div key={`${activeServer}-${activeChannel}-${activeDmUserId}`}
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
                   className="mt-auto flex flex-col gap-1">
-                  {/* ── Group DM messages ── */}
-                  {activeView==='dms' && activeGroupDm && (() => {
-                    const msgs = groupMessages[activeGroupDm] || [];
-                    return (
-                      <>
-                        {msgs.length === 0 && !msgsLoading && (
-                          <div className="text-center py-8 mb-3">
-                            <div className="w-20 h-20 rounded-2xl bg-indigo-500/20 flex items-center justify-center mx-auto mb-4 border-4 border-zinc-950 shadow-2xl">
-                              <Users size={32} className="text-indigo-400"/>
-                            </div>
-                            <h1 className="text-2xl font-bold text-white mb-1">{groupConvs.find(g=>g.id===activeGroupDm)?.name || 'Grupa'}</h1>
-                            <p className="text-sm text-zinc-500">Początek grupowej rozmowy.</p>
-                          </div>
-                        )}
-                        {msgs.map((msg: any, i: number) => {
-                          // System message (e.g. "X opuścił/a grupę")
-                          if (msg.is_system) {
-                            return (
-                              <div key={msg.id || i} className="flex items-center gap-3 my-2 px-2">
-                                <div className="flex-1 h-px bg-white/[0.05]"/>
-                                <span className="text-[11px] text-zinc-600 shrink-0 flex items-center gap-1.5">
-                                  <LogOut size={10} className="text-zinc-700"/>
-                                  {msg.content}
-                                </span>
-                                <div className="flex-1 h-px bg-white/[0.05]"/>
-                              </div>
-                            );
-                          }
-                          const prev = msgs[i-1];
-                          const sameAuthor = !prev?.is_system && prev?.sender_id === msg.sender_id;
-                          const isMe = msg.sender_id === currentUser?.id;
-                          return (
-                            <div key={msg.id || i} className={`flex gap-2.5 ${isMe ? 'flex-row-reverse' : ''} ${sameAuthor ? 'mt-0.5' : 'mt-3'}`}>
-                              {!sameAuthor
-                                ? <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} className="w-8 h-8 rounded-xl object-cover shrink-0 self-start mt-0.5" alt=""/>
-                                : <div className="w-8 shrink-0"/>}
-                              <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[70%]`}>
-                                {!sameAuthor && !isMe && <p className="text-[11px] font-semibold text-zinc-400 mb-1 px-1">{msg.sender_username}</p>}
-                                {msg.attachment_url && (() => {
-                                  const isImg = /\.(png|jpg|jpeg|gif|webp|svg)(\?|$)/i.test(msg.attachment_url) || msg.attachment_url.startsWith('data:image');
-                                  return isImg
-                                    ? <img src={staticUrl(msg.attachment_url)} className="max-w-xs max-h-64 rounded-2xl object-cover mb-1 cursor-pointer" onClick={()=>setLightboxSrc(staticUrl(msg.attachment_url))} alt=""/>
-                                    : <a href={staticUrl(msg.attachment_url)} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.06] border border-white/[0.08] text-xs text-indigo-300 hover:text-indigo-200 mb-1"><Paperclip size={11}/> Załącznik</a>;
-                                })()}
-                                {msg.content && (() => {
-                                  const c = msg.content;
-                                  if (/^https:\/\/media\.tenor\.com\/[^\s]+$/i.test(c)) {
-                                    return (
-                                      <div className="max-w-[260px] rounded-2xl overflow-hidden shadow-lg cursor-zoom-in hover:opacity-90 transition-opacity mb-1"
-                                        onClick={()=>setLightboxSrc(c)}>
-                                        <img src={c} alt="GIF" className="w-full h-auto rounded-2xl" loading="lazy"/>
-                                      </div>
-                                    );
-                                  }
-                                  return (
-                                    <div className={`px-3 py-2 rounded-2xl text-sm msg-md ${isMe ? 'bg-indigo-600/80 text-white' : 'bg-white/[0.08] text-zinc-200'}`}
-                                      dangerouslySetInnerHTML={{__html: renderMsgHTML(c)}}/>
-                                  );
-                                })()}
-                                <span className="text-[10px] text-zinc-700 mt-0.5 px-1">{new Date(msg.created_at).toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'})}</span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </>
-                    );
-                  })()}
                   {searchQuery.trim()&&(
                     <div className="flex items-center gap-2 px-3 py-2 mb-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-300">
                       <Search size={12} className="shrink-0"/>
@@ -12227,7 +11871,7 @@ export default function App() {
                       <button onClick={()=>setSearchQuery('')} className="ml-auto text-indigo-400 hover:text-white transition-colors"><X size={12}/></button>
                     </div>
                   )}
-                  {!activeGroupDm && !msgsLoading&&!searchQuery.trim()&&<div className="text-center py-8 mb-3">
+                  {!msgsLoading&&!searchQuery.trim()&&<div className="text-center py-8 mb-3">
                     {activeView==='dms'&&activeDm ? (
                       <>
                         <img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className="w-20 h-20 rounded-2xl mx-auto mb-4 border-4 border-zinc-950 object-cover shadow-2xl" alt=""/>
@@ -12249,7 +11893,7 @@ export default function App() {
                     )}
                   </div>}
 
-                  {!activeGroupDm && (messages as (MessageFull|DmMessageFull)[]).map((msg, idx) => {
+                  {(messages as (MessageFull|DmMessageFull)[]).map((msg, idx) => {
                     const isOwn = currentUser?.id === msg.sender_id;
                     // Date separator
                     const msgDate = new Date(msg.created_at).toDateString();
@@ -13177,46 +12821,6 @@ export default function App() {
           </button>
         )}
         <aside className={`hidden xl:flex shrink-0 flex-col gap-0 glass-panel rounded-2xl overflow-y-auto custom-scrollbar transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${showCallPanel && activeCall && !rightPanelOpen ? 'w-0 opacity-0 overflow-hidden p-0' : 'w-64 opacity-100'}`}>
-          {/* ─ GROUP DM MEMBERS ─ */}
-          {activeView==='dms' && activeGroupDm && (() => {
-            const gc = groupConvs.find(g => g.id === activeGroupDm);
-            const parts = gc?.participants || [];
-            if (!parts.length) return null;
-            return (
-              <div className="p-4 border-b border-white/[0.07]">
-                <div className="flex items-center gap-2 mb-3">
-                  <Users size={12} className="text-zinc-500"/>
-                  <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Członkowie — {parts.length}</span>
-                </div>
-                <div className="flex flex-col gap-1">
-                  {parts.map((p: GroupDmParticipant) => {
-                    const uid = p.user_id;
-                    const isMe = uid === currentUser?.id;
-                    const isOwner = uid === gc?.creator_id;
-                    const status = isMe
-                      ? (currentUser?.status || 'offline')
-                      : (friends.find(f => f.id === uid)?.status
-                         || dmConvs.find(d => d.other_user_id === uid)?.other_status
-                         || 'offline');
-                    return (
-                      <div key={uid} className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl hover:bg-white/[0.04] transition-all group cursor-pointer"
-                        onClick={e => showHoverCard(uid, e)}>
-                        <div className="relative shrink-0">
-                          <img src={ava({avatar_url: p.avatar_url, username: p.username})} className="w-8 h-8 rounded-xl object-cover" alt=""/>
-                          <StatusBadge status={status} size={9} className="absolute -bottom-0.5 -right-0.5"/>
-                        </div>
-                        <div className="flex-1 min-w-0 flex items-center gap-1.5">
-                          <p className="text-[13px] font-semibold text-zinc-300 group-hover:text-white transition-colors truncate">{maskName(p.username)}</p>
-                          {isOwner && <Crown size={11} className="text-amber-400 shrink-0" title="Właściciel grupy"/>}
-                          {isMe && !isOwner && <span className="text-[10px] text-indigo-400 shrink-0">Ty</span>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })()}
           {/* ─ LIVE VOICE BLOCK ─ */}
           {activeView==='servers'&&canViewServerActivity&&(()=>{
             // find first voice channel on current server with users
@@ -17350,7 +16954,6 @@ export default function App() {
             </div>
             <div className="flex gap-2">
               <button onClick={async ()=>{
-                primePlaybackContext(); // pre-warm AudioContext inside user gesture (Tauri fix)
                 stopIncomingRing();
                 playCallAccepted();
                 // Leave any active voice channel first — only 1 call allowed at a time
@@ -17372,65 +16975,6 @@ export default function App() {
               </button>
               <button onClick={()=>{stopIncomingRing(); playCallEnded(); rejectCall(incomingCall.from.id); setIncomingCall(null);}}
                 className="flex-1 h-9 bg-rose-500 hover:bg-rose-400 rounded-xl text-white font-semibold flex items-center justify-center gap-1.5 text-sm transition-colors">
-                <PhoneOff size={14}/> Odrzuć
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── INCOMING GROUP CALL ──────────────────────────────────────── */}
-      <AnimatePresence>
-        {groupCallIncoming && !activeGroupCall && (
-          <motion.div initial={{opacity:0,x:100,scale:0.95}} animate={{opacity:1,x:0,scale:1}} exit={{opacity:0,x:80,scale:0.95}}
-            transition={{duration:0.35,ease:[0.16,1,0.3,1]}}
-            className={`fixed top-20 right-6 z-[160] ${gm} p-5 min-w-[17rem] shadow-2xl border-indigo-500/25`}>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="relative shrink-0">
-                <div className="w-11 h-11 rounded-2xl bg-indigo-500/30 flex items-center justify-center shadow-lg">
-                  <Users size={20} className="text-indigo-300"/>
-                </div>
-                <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/40">
-                  <Phone size={10} className="text-white"/>
-                </div>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-white truncate">{groupCallIncoming.caller?.username || 'Ktoś'} dzwoni</p>
-                <p className="text-xs text-zinc-500 animate-pulse">{groupConvs.find(g=>g.id===groupCallIncoming.group_id)?.name || 'Rozmowa grupowa'}...</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={async()=>{
-                primePlaybackContext(); // pre-warm AudioContext inside user gesture (Tauri fix)
-                stopIncomingRing();
-                // End any active DM/voice call first — only 1 call at a time
-                const curCall = activeCallRef.current;
-                if (curCall?.channelId) {
-                  leaveVoiceChannel(curCall.channelId);
-                  if (currentUser) setVoiceUsers(p => ({ ...p, [curCall.channelId!]: (p[curCall.channelId!]||[]).filter(u=>u.id!==currentUser.id) }));
-                  cleanupWebRTC(); setActiveCall(null); setShowCallPanel(false);
-                }
-                if (curCall?.userId) {
-                  endCall(curCall.userId); stopRing();
-                  dmsApi.sendSystem(curCall.userId, `📞 Rozmowa zakończona`).catch(()=>{});
-                  cleanupWebRTC(); setActiveCall(null); setShowCallPanel(false);
-                }
-                await acquireMic(selMic||undefined);
-                joinGroupCall(groupCallIncoming.group_id);
-                setActiveGroupCall({ group_id: groupCallIncoming.group_id, participants: groupCallIncoming.participants || [], pending: groupCallIncoming.pending || [], isMuted: false });
-                setGroupCallState(groupCallIncoming);
-                setActiveView('dms');
-                setActiveGroupDm(groupCallIncoming.group_id);
-                setGroupCallIncoming(null);
-                stopRing();
-              }} className="flex-1 h-9 bg-emerald-500 hover:bg-emerald-400 rounded-xl text-white font-semibold flex items-center justify-center gap-1.5 text-sm transition-colors">
-                <Phone size={14}/> Dołącz
-              </button>
-              <button onClick={()=>{
-                stopIncomingRing();
-                dismissGroupCall(groupCallIncoming.group_id);
-                setGroupCallIncoming(null);
-              }} className="flex-1 h-9 bg-rose-500 hover:bg-rose-400 rounded-xl text-white font-semibold flex items-center justify-center gap-1.5 text-sm transition-colors">
                 <PhoneOff size={14}/> Odrzuć
               </button>
             </div>
@@ -17928,124 +17472,6 @@ export default function App() {
                 } catch(e:any){ addToast(e.message||'Błąd','error'); }
               }} className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">
                 Akceptuję zasady i dołączam
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Group DM Settings Modal ─────────────────────────────── */}
-      <AnimatePresence>
-        {groupSettingsOpen && activeGroupDm && (
-          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
-            onClick={()=>setGroupSettingsOpen(false)}>
-            <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
-              onClick={e=>e.stopPropagation()}
-              className="bg-[#141420] border border-white/[0.1] rounded-2xl p-6 w-full max-w-sm shadow-2xl flex flex-col gap-5">
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-white">Ustawienia grupy</h2>
-                <button onClick={()=>setGroupSettingsOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all"><X size={14}/></button>
-              </div>
-              {/* Icon upload */}
-              <div className="flex flex-col items-center gap-3">
-                <label className="cursor-pointer group relative">
-                  <div className="w-20 h-20 rounded-2xl bg-indigo-500/20 flex items-center justify-center overflow-hidden border-2 border-dashed border-indigo-500/30 group-hover:border-indigo-500/60 transition-all">
-                    {groupEditIconPreview
-                      ? <img src={groupEditIconPreview} className="w-full h-full object-cover" alt=""/>
-                      : <Users size={28} className="text-indigo-400"/>}
-                  </div>
-                  <div className="absolute inset-0 rounded-2xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <Image size={18} className="text-white"/>
-                  </div>
-                  <input type="file" accept="image/*" className="hidden" onChange={e=>{
-                    const f = e.target.files?.[0]; if(!f) return;
-                    setGroupEditIconFile(f);
-                    setGroupEditIconPreview(URL.createObjectURL(f));
-                  }}/>
-                </label>
-                <p className="text-xs text-zinc-500">Kliknij, aby zmienić zdjęcie grupy</p>
-              </div>
-              {/* Name */}
-              <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2">Nazwa grupy</label>
-                <input value={groupEditName} onChange={e=>setGroupEditName(e.target.value)}
-                  placeholder="Wpisz nazwę grupy..."
-                  className="w-full bg-white/[0.06] border border-white/[0.1] rounded-xl px-3 py-2.5 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 transition-all"/>
-              </div>
-              {/* Invite member */}
-              <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2">Zaproś do grupy</label>
-                {(() => {
-                  const gc = groupConvs.find(g => g.id === activeGroupDm);
-                  const currentMemberIds = gc?.participants.map(p => p.user_id) || [];
-                  const invitableFriends = friends.filter(f => !currentMemberIds.includes(f.id));
-                  const filtered = groupInviteQ.trim()
-                    ? invitableFriends.filter(f => (f.display_name||f.username).toLowerCase().includes(groupInviteQ.toLowerCase()))
-                    : invitableFriends;
-                  return (
-                    <>
-                      <div className="relative">
-                        <input value={groupInviteQ} onChange={e=>setGroupInviteQ(e.target.value)}
-                          placeholder="Szukaj znajomych..."
-                          className="w-full bg-white/[0.06] border border-white/[0.1] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 transition-all pr-8"/>
-                        {groupInviteQ && <button onClick={()=>setGroupInviteQ('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-white"><X size={12}/></button>}
-                      </div>
-                      {filtered.length > 0 && (
-                        <div className="mt-2 flex flex-col gap-1 max-h-32 overflow-y-auto">
-                          {filtered.slice(0,8).map(f => (
-                            <div key={f.id} className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-white/[0.05] transition-colors">
-                              <img src={ava(f)} className="w-7 h-7 rounded-lg object-cover shrink-0" alt=""/>
-                              <span className="text-sm text-zinc-300 flex-1 truncate">{f.display_name||f.username}</span>
-                              <button
-                                disabled={groupInviting === f.id}
-                                onClick={async()=>{
-                                  setGroupInviting(f.id);
-                                  try {
-                                    await groupDmApi.invite(activeGroupDm!, f.id);
-                                    addToast(`${f.display_name||f.username} dodany/a do grupy`, 'success');
-                                    setGroupInviteQ('');
-                                  } catch(e:any){ addToast(e?.message||'Błąd', 'error'); }
-                                  finally { setGroupInviting(null); }
-                                }}
-                                className="px-2.5 py-1 rounded-lg bg-indigo-600/70 hover:bg-indigo-600 disabled:opacity-50 text-white text-xs font-semibold transition-all shrink-0 flex items-center gap-1">
-                                {groupInviting === f.id ? <Loader2 size={10} className="animate-spin"/> : <UserPlus size={10}/>}
-                                Dodaj
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {invitableFriends.length === 0 && (
-                        <p className="text-xs text-zinc-600 mt-1">Wszyscy znajomi są już w grupie</p>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
-              <button disabled={groupEditSaving} onClick={async()=>{
-                setGroupEditSaving(true);
-                try {
-                  let icon_url: string | undefined;
-                  if (groupEditIconFile) {
-                    icon_url = await uploadFile(groupEditIconFile, 'avatars');
-                  }
-                  await groupDmApi.update(activeGroupDm, {
-                    name: groupEditName,
-                    ...(icon_url !== undefined ? { icon_url } : {}),
-                  });
-                  setGroupConvs(p => p.map(g => g.id === activeGroupDm
-                    ? { ...g, name: groupEditName, ...(icon_url !== undefined ? { icon_url } : {}) }
-                    : g));
-                  addToast('Ustawienia grupy zapisane', 'success');
-                  setGroupSettingsOpen(false);
-                } catch (err: any) {
-                  addToast(err?.message || 'Błąd zapisu', 'error');
-                } finally { setGroupEditSaving(false); }
-              }}
-                className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-sm transition-colors flex items-center justify-center gap-2">
-                {groupEditSaving && <Loader2 size={14} className="animate-spin"/>}
-                Zapisz
               </button>
             </motion.div>
           </motion.div>

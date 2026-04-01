@@ -26,11 +26,6 @@ interface SocketData {
 // stream_watchers: "channel_id:streamer_id" → Map<watcher_user_id, username>
 const streamWatchers = new Map<string, Map<string, string>>();
 
-// ── Group call state ──────────────────────────────────────────────
-// groupId → { participants: Set<userId>, pending: Set<userId>, memberIds: string[] }
-type GroupCallState = { participants: Set<string>; pending: Set<string>; memberIds: string[] };
-const groupCalls = new Map<string, GroupCallState>();
-
 // ── Activity caches (real-time state, cleared on disconnect) ──────
 // Keyed by user_id. Stores last known state + timestamp for freshness check.
 interface ActivityEntry<T> { data: T; ts: number; }
@@ -419,97 +414,6 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
 
     socket.on('call_end', ({ to_user_id }) => {
       io.to(`user:${to_user_id}`).emit('call_ended', { by_user_id: user.id });
-    });
-
-    // ── Group Calls ───────────────────────────────────────────────────
-    socket.on('group_call_start', async ({ group_id }) => {
-      try {
-        const { rows: parts } = await query(
-          `SELECT dp.user_id, u.username, u.avatar_url
-           FROM dm_participants dp JOIN users u ON u.id=dp.user_id
-           WHERE dp.conversation_id=$1`, [group_id]
-        );
-        const memberIds = parts.map((p: any) => p.user_id as string);
-        if (!memberIds.includes(user.id)) return;
-
-        // Init or reuse call state
-        if (!groupCalls.has(group_id)) {
-          groupCalls.set(group_id, { participants: new Set(), pending: new Set(), memberIds });
-        }
-        const cs = groupCalls.get(group_id)!;
-        cs.memberIds = memberIds;
-        cs.participants.add(user.id);
-        // Pending = everyone except caller
-        const others = memberIds.filter(id => id !== user.id);
-        others.forEach(id => cs.pending.add(id));
-
-        const callerInfo = parts.find((p: any) => p.user_id === user.id);
-        const statePayload = {
-          group_id,
-          participants: [...cs.participants],
-          pending: [...cs.pending],
-          caller: { id: user.id, username: user.username, avatar_url: callerInfo?.avatar_url || null },
-        };
-        // Notify others (invite)
-        for (const uid of others) {
-          io.to(`user:${uid}`).emit('group_call_invite', statePayload);
-        }
-        // Notify caller of initial state
-        socket.emit('group_call_state', statePayload);
-      } catch (err) {
-        console.error('[group-call] start error:', err);
-      }
-    });
-
-    socket.on('group_call_join', async ({ group_id }) => {
-      const cs = groupCalls.get(group_id);
-      if (!cs) return;
-      cs.pending.delete(user.id);
-      const existingParticipants = [...cs.participants];
-      cs.participants.add(user.id);
-
-      const statePayload = {
-        group_id,
-        participants: [...cs.participants],
-        pending: [...cs.pending],
-        new_user_id: user.id,
-        existing_participants: existingParticipants,
-      };
-      for (const uid of cs.participants) {
-        io.to(`user:${uid}`).emit('group_call_participant_joined', statePayload);
-      }
-    });
-
-    socket.on('group_call_dismiss', ({ group_id }) => {
-      const cs = groupCalls.get(group_id);
-      if (!cs) return;
-      cs.pending.delete(user.id);
-      const statePayload = { group_id, participants: [...cs.participants], pending: [...cs.pending] };
-      for (const uid of cs.participants) {
-        io.to(`user:${uid}`).emit('group_call_state', statePayload);
-      }
-    });
-
-    socket.on('group_call_leave', ({ group_id }) => {
-      const cs = groupCalls.get(group_id);
-      if (!cs) return;
-      cs.participants.delete(user.id);
-      cs.pending.delete(user.id);
-
-      if (cs.participants.size === 0) {
-        for (const uid of cs.memberIds) {
-          io.to(`user:${uid}`).emit('group_call_ended', { group_id });
-        }
-        groupCalls.delete(group_id);
-      } else {
-        const statePayload = { group_id, participants: [...cs.participants], pending: [...cs.pending], left_user_id: user.id };
-        for (const uid of cs.participants) {
-          io.to(`user:${uid}`).emit('group_call_participant_left', statePayload);
-        }
-        for (const uid of cs.pending) {
-          io.to(`user:${uid}`).emit('group_call_state', { group_id, participants: [...cs.participants], pending: [...cs.pending] });
-        }
-      }
     });
 
     // ── WebRTC signaling ─────────────────────────────────────────────
