@@ -396,9 +396,12 @@ export async function applyDeepFilter(rawStream: MediaStream): Promise<NoisePipe
     const { DeepFilterNet3Core } = await import('deepfilternet3-noise-filter');
     const { STATIC_BASE } = await import('./api');
     const ctx  = new AudioContext({ sampleRate: 48000 });
-    // CRITICAL: AudioContext may start suspended if created after async await chain.
-    // Must resume before building the pipeline — otherwise dest.stream outputs silence.
     await ctx.resume();
+    if (ctx.state !== 'running') {
+      ctx.close().catch(() => {});
+      setDFStatus('failed');
+      return null;
+    }
     // Use nginx proxy (/df-cdn/) instead of cdn.mezon.ai directly — avoids CORS block.
     // STATIC_BASE: '' on web same-origin, 'https://cordyn.pl' in Tauri (where /df-cdn is nginx proxy)
     // nginx adds Access-Control-Allow-Origin:* so Tauri cross-origin fetch works too.
@@ -448,11 +451,18 @@ export interface NoisePipeline {
 export async function applyNoiseGate(rawStream: MediaStream): Promise<NoisePipeline | null> {
   try {
     const ctx = new AudioContext({ sampleRate: 48000 });
+    // Resume BEFORE addModule — must be as close to user gesture as possible.
+    // In Chrome, AudioContext created deep inside async chain may stay 'suspended'
+    // even after resume(). If it stays suspended, dest.stream outputs silence.
+    await ctx.resume();
+    if (ctx.state !== 'running') {
+      // Chrome blocked resume (no active user gesture context) — fall back to raw mic
+      ctx.close().catch(() => {});
+      console.warn('[NoiseGate] AudioContext suspended — falling back to raw mic');
+      return null;
+    }
     // Load the worklet processor from the public folder
     await ctx.audioWorklet.addModule('/noise-processor.js');
-    // CRITICAL: AudioContext may start suspended if created after async await chain.
-    // Must resume before building the pipeline — otherwise dest.stream outputs silence.
-    await ctx.resume();
 
     const source  = ctx.createMediaStreamSource(rawStream);
     const worklet = new AudioWorkletNode(ctx, 'cordis-noise-processor');
