@@ -241,7 +241,7 @@ export async function consume(
   const consumer = await recvTransport.consume({
     producerId,
     rtpCapabilities,
-    paused: true, // start paused, client must call resume
+    paused: false, // start paused, client must call resume
   });
 
   consumer.on('transportclose', () => { consumer.close(); });
