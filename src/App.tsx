@@ -9016,22 +9016,16 @@ export default function App() {
       }
       localStreamRef.current = null;
 
-      // Acquire raw mic.
-      // Tauri/WebView2: use minimal constraints — complex constraints (sampleRate,
-      // echoCancellation etc.) are handled differently by WebView2 and can cause
-      // getUserMedia to fail or return a broken track.
-      // Web: full constraints for best quality.
-      const _inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-      const audioConstraints: MediaTrackConstraints = _inTauri
-        ? { ...(deviceId ? { deviceId: { exact: deviceId } } : {}) }
-        : {
-            ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
-            echoCancellation: true,
-            autoGainControl:  true,
-            noiseSuppression: true,
-            sampleRate: 48000,
-            channelCount: 1,
-          };
+      // Acquire raw mic — all three WebRTC filters ON as baseline (echo/gain/noise).
+      // AudioWorklet gate runs on top for deeper noise removal — they complement, not conflict.
+      const audioConstraints: MediaTrackConstraints = {
+        ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+        echoCancellation: true,  // hardware echo cancel — eliminates speaker feedback
+        autoGainControl:  true,  // normalize mic level automatically
+        noiseSuppression: true,  // browser baseline NS always on; AudioWorklet adds deeper layer
+        sampleRate: 48000,       // 48 kHz — standard Opus/WebRTC
+        channelCount: 1,         // mono — wystarczy dla głosu, mniejsze opóźnienie
+      };
       const rawStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
 
       // Speaking detection on the raw stream (pre-gate) so indicator stays accurate
