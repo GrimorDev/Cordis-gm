@@ -3,8 +3,8 @@ import * as mediasoup from 'mediasoup';
 
 // ── Config from environment ───────────────────────────────────────────────────
 const ANNOUNCED_IP   = process.env.MEDIASOUP_ANNOUNCED_IP || undefined;
-const RTC_MIN_PORT   = parseInt(process.env.MEDIASOUP_RTC_MIN_PORT  || '40000', 10);
-const RTC_MAX_PORT   = parseInt(process.env.MEDIASOUP_RTC_MAX_PORT  || '49999', 10);
+const RTC_MIN_PORT   = parseInt(process.env.MEDIASOUP_RTC_MIN_PORT  || '20000', 10);
+const RTC_MAX_PORT   = parseInt(process.env.MEDIASOUP_RTC_MAX_PORT  || '20500', 10);
 
 if (!ANNOUNCED_IP) {
   console.error(
