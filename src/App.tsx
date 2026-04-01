@@ -71,6 +71,7 @@ import {
   setOutputDevice, watchSpeaking, getMediaDevices, applyNoiseGate, applyDeepFilter, type NoisePipeline,
   preferH264, tuneAudioSender, tuneVideoSenders,
   onDeepFilterStatus, type DeepFilterStatus,
+  setTauriMode,
 } from './webrtc';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -5482,6 +5483,10 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
 // Detect /join/:code in URL (evaluated once on module load)
 const _inviteCodeFromUrl = (() => { const m = window.location.pathname.match(/^\/join\/([a-f0-9]+)$/i); return m ? m[1] : null; })();
 
+// Tell webrtc.ts whether we're in Tauri so it can use AudioContext instead of
+// <audio> elements (WebView2 bug: <audio srcObject>.play() is silent).
+setTauriMode(typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window);
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authLoading, setAuthLoading]         = useState(true);
@@ -9011,16 +9016,22 @@ export default function App() {
       }
       localStreamRef.current = null;
 
-      // Acquire raw mic — all three WebRTC filters ON as baseline (echo/gain/noise).
-      // AudioWorklet gate runs on top for deeper noise removal — they complement, not conflict.
-      const audioConstraints: MediaTrackConstraints = {
-        ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
-        echoCancellation: true,  // hardware echo cancel — eliminates speaker feedback
-        autoGainControl:  true,  // normalize mic level automatically
-        noiseSuppression: true,  // browser baseline NS always on; AudioWorklet adds deeper layer
-        sampleRate: 48000,       // 48 kHz — standard Opus/WebRTC, najlepsza jakość głosu
-        channelCount: 1,         // mono — wystarczy dla głosu, mniejsze opóźnienie
-      };
+      // Acquire raw mic.
+      // Tauri/WebView2: use minimal constraints — complex constraints (sampleRate,
+      // echoCancellation etc.) are handled differently by WebView2 and can cause
+      // getUserMedia to fail or return a broken track.
+      // Web: full constraints for best quality.
+      const _inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+      const audioConstraints: MediaTrackConstraints = _inTauri
+        ? { ...(deviceId ? { deviceId: { exact: deviceId } } : {}) }
+        : {
+            ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+            echoCancellation: true,
+            autoGainControl:  true,
+            noiseSuppression: true,
+            sampleRate: 48000,
+            channelCount: 1,
+          };
       const rawStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
 
       // Speaking detection on the raw stream (pre-gate) so indicator stays accurate

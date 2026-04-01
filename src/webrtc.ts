@@ -51,9 +51,48 @@ export function makePeerConnection(
   return pc;
 }
 
-// ─── Remote Audio Elements ───────────────────────────────────────────────────
-const remoteAudios = new Map<string, HTMLAudioElement>();       // microphone audio
-const remoteScreenAudios = new Map<string, HTMLAudioElement>(); // screen-share audio (separate element)
+// ─── Tauri/WebView2 audio fix ─────────────────────────────────────────────────
+// WebView2 bug: <audio srcObject=MediaStream>.play() resolves but outputs silence.
+// Fix: in Tauri only, route through AudioContext → ctx.destination (real speakers).
+// Web keeps plain <audio> elements — reliable in all browsers.
+//
+// Auto-prime: AudioContext is created on the first user click/keydown.
+// By the time ontrack fires (after async WebRTC negotiation), ctx is 'running'.
+// No specific call-sites needed — works automatically.
+
+let _isTauri = false;
+export function setTauriMode(v: boolean): void { _isTauri = v; }
+
+let _playCtx: AudioContext | null = null;
+const _playSources = new Map<string, MediaStreamAudioSourceNode>();
+const _playGains   = new Map<string, GainNode>();
+
+if (typeof document !== 'undefined') {
+  const _prime = () => {
+    if (!_isTauri) return;
+    if (!_playCtx || _playCtx.state === 'closed') _playCtx = new AudioContext({ sampleRate: 48000 });
+    if (_playCtx.state === 'suspended') _playCtx.resume().catch(() => {});
+  };
+  document.addEventListener('click',   _prime);
+  document.addEventListener('keydown', _prime);
+}
+
+function _ctxConnect(userId: string, stream: MediaStream): void {
+  if (!_playCtx) return;
+  try { _playSources.get(userId)?.disconnect(); } catch {}
+  try { _playGains.get(userId)?.disconnect();   } catch {}
+  const src  = _playCtx.createMediaStreamSource(stream);
+  const gain = _playCtx.createGain();
+  gain.gain.value = 1;
+  src.connect(gain);
+  gain.connect(_playCtx.destination);
+  _playSources.set(userId, src);
+  _playGains.set(userId, gain);
+}
+
+// ─── Remote Audio Elements (web path) ────────────────────────────────────────
+const remoteAudios      = new Map<string, HTMLAudioElement>();
+const remoteScreenAudios = new Map<string, HTMLAudioElement>();
 
 function makeAudioEl(): HTMLAudioElement {
   const el = document.createElement('audio');
@@ -63,25 +102,28 @@ function makeAudioEl(): HTMLAudioElement {
   return el;
 }
 
-/**
- * Attach a remote WebRTC audio stream to a hidden <audio> element for playback.
- *
- * Design: direct srcObject only — NO AudioContext chain.
- * Previous versions routed through AudioContext (GainNode → dest.stream) but:
- * - AudioContext created outside a user-gesture starts SUSPENDED → dest.stream silent
- * - ctx.resume() may fail or be delayed → prolonged silence / no audio at all
- * Conclusion: native srcObject = stream is 100% reliable for WebRTC playback.
- * Volume > 100% (GainNode feature) is sacrificed for guaranteed functionality.
- */
 export function attachRemoteAudio(userId: string, stream: MediaStream) {
+  if (_isTauri && _playCtx && _playCtx.state === 'running') {
+    // Tauri: AudioContext → ctx.destination (bypasses WebView2 silent-audio bug)
+    const old = remoteAudios.get(userId);
+    if (old) { old.srcObject = null; old.pause(); }
+    _ctxConnect(userId, stream);
+    return;
+  }
+  // Web: plain <audio> element
   let el = remoteAudios.get(userId);
   if (!el) { el = makeAudioEl(); remoteAudios.set(userId, el); }
   el.srcObject = stream;
-  // Explicit play() — autoplay attribute alone is not always honoured by the browser.
   el.play().catch(err => {
-    console.warn('[Cordis] attachRemoteAudio play() blocked:', err.name, '— will retry on next user interaction');
-    // Retry on next user gesture (e.g. click anywhere)
-    const retry = () => { el!.play().catch(() => {}); document.removeEventListener('click', retry); };
+    console.warn('[Cordis] attachRemoteAudio play() blocked:', err.name, '— retry on next click');
+    const retry = () => {
+      // If Tauri ctx is now primed, switch paths
+      if (_isTauri && _playCtx && _playCtx.state === 'running') {
+        _ctxConnect(userId, stream);
+        const e2 = remoteAudios.get(userId); if (e2) { e2.srcObject = null; e2.pause(); }
+      } else { el!.play().catch(() => {}); }
+      document.removeEventListener('click', retry);
+    };
     document.addEventListener('click', retry, { once: true });
   });
 }
@@ -95,6 +137,9 @@ export function attachRemoteScreenAudio(userId: string, stream: MediaStream) {
 }
 
 export function detachRemoteAudio(userId: string) {
+  try { _playSources.get(userId)?.disconnect(); } catch {}
+  try { _playGains.get(userId)?.disconnect();   } catch {}
+  _playSources.delete(userId); _playGains.delete(userId);
   const el = remoteAudios.get(userId);
   if (el) { el.srcObject = null; el.remove(); remoteAudios.delete(userId); }
   const sel = remoteScreenAudios.get(userId);
@@ -102,9 +147,9 @@ export function detachRemoteAudio(userId: string) {
 }
 
 export function setRemoteVolume(userId: string, volumePct: number) {
-  // volumePct: 0–100 → el.volume 0.0–1.0
-  const el = remoteAudios.get(userId);
-  if (el) el.volume = Math.max(0, Math.min(1, volumePct / 100));
+  const v = Math.max(0, Math.min(1, volumePct / 100));
+  const gain = _playGains.get(userId); if (gain) gain.gain.value = v;
+  const el   = remoteAudios.get(userId); if (el) el.volume = v;
 }
 
 /** Set volume for a user's screen-share audio (0–100%). */
@@ -122,13 +167,13 @@ export function muteRemoteScreenStream(userId: string, muted: boolean) {
 }
 
 export function muteRemoteUser(userId: string, muted: boolean) {
-  const el = remoteAudios.get(userId);
-  if (el) el.muted = muted;
-  const sel = remoteScreenAudios.get(userId);
-  if (sel) sel.muted = muted;
+  const gain = _playGains.get(userId); if (gain) gain.gain.value = muted ? 0 : 1;
+  const el   = remoteAudios.get(userId); if (el) el.muted = muted;
+  const sel  = remoteScreenAudios.get(userId); if (sel) sel.muted = muted;
 }
 
 export function muteAllRemote(muted: boolean) {
+  _playGains.forEach(g => { g.gain.value = muted ? 0 : 1; });
   remoteAudios.forEach(el => { el.muted = muted; });
   remoteScreenAudios.forEach(el => { el.muted = muted; });
 }
