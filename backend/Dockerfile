@@ -4,7 +4,7 @@ WORKDIR /app
 
 # MediaSoup requires Python3 + C++ build tools to compile its native addon
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
-    python3 make g++ linux-headers-generic \
+    python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/package.json ./package.json

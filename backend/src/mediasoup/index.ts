@@ -4,7 +4,16 @@ import * as mediasoup from 'mediasoup';
 // ── Config from environment ───────────────────────────────────────────────────
 const ANNOUNCED_IP   = process.env.MEDIASOUP_ANNOUNCED_IP || undefined;
 const RTC_MIN_PORT   = parseInt(process.env.MEDIASOUP_RTC_MIN_PORT  || '40000', 10);
-const RTC_MAX_PORT   = parseInt(process.env.MEDIASOUP_RTC_MAX_PORT  || '40100', 10);
+const RTC_MAX_PORT   = parseInt(process.env.MEDIASOUP_RTC_MAX_PORT  || '49999', 10);
+
+if (!ANNOUNCED_IP) {
+  console.error(
+    '[MediaSoup] ⚠️  MEDIASOUP_ANNOUNCED_IP is not set!\n' +
+    '            ICE candidates will use internal Docker IP (172.x.x.x).\n' +
+    '            Clients CANNOT connect from the internet without this.\n' +
+    '            Set MEDIASOUP_ANNOUNCED_IP to your VPS public IP in Portainer!'
+  );
+}
 
 // ── Codec configuration ───────────────────────────────────────────────────────
 // preferredPayloadType is not required when configuring a Router — mediasoup assigns it.
@@ -141,7 +150,7 @@ export async function createWebRtcTransport(
 
   const listenIps: { ip: string; announcedIp?: string }[] = ANNOUNCED_IP
     ? [{ ip: '0.0.0.0', announcedIp: ANNOUNCED_IP }]
-    : [{ ip: '127.0.0.1' }];
+    : [{ ip: '0.0.0.0' }]; // fallback: no announcedIp — works only if VPS has public IP on interface
 
   const transport = await router.createWebRtcTransport({
     listenIps,
