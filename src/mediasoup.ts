@@ -242,7 +242,21 @@ async function consumeRemote(
     });
 
     // Build MediaStream and deliver to caller
-    const stream = new MediaStream([consumer.track]);
+   const track = consumer.track;
+
+// 🔥 poczekaj aż track się "odblokuje"
+await new Promise<void>((resolve) => {
+  if (!track.muted) return resolve();
+
+  const onUnmute = () => {
+    track.removeEventListener('unmute', onUnmute);
+    resolve();
+  };
+
+  track.addEventListener('unmute', onUnmute);
+});
+
+const stream = new MediaStream([track]);
     const producerKind: 'mic' | 'screen' =
       producer.appData?.kind === 'screen' ? 'screen' : 'mic';
 
