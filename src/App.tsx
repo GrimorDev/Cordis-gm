@@ -71,7 +71,6 @@ import {
   setOutputDevice, watchSpeaking, getMediaDevices, applyNoiseGate, applyDeepFilter, type NoisePipeline,
   preferH264, tuneAudioSender, tuneVideoSenders,
   onDeepFilterStatus, type DeepFilterStatus,
-  setTauriMode,
 } from './webrtc';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -5482,9 +5481,6 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
 // ─── Main App ─────────────────────────────────────────────────────────────────
 // Detect /join/:code in URL (evaluated once on module load)
 const _inviteCodeFromUrl = (() => { const m = window.location.pathname.match(/^\/join\/([a-f0-9]+)$/i); return m ? m[1] : null; })();
-
-// Enable WebView2-safe AudioContext audio path only in the Tauri desktop app.
-setTauriMode('__TAURI_INTERNALS__' in window);
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
