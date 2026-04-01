@@ -6025,7 +6025,7 @@ export default function App() {
   const [noiseGateSens, setNoiseGateSens] = useState<number>(() => {
     const s = localStorage.getItem('cordyn_ng_sens'); return s ? Math.max(0,Math.min(100,parseInt(s)||50)) : 50;
   });
-  const ngSensToThreshold = (v: number) => 0.005 + (v / 100) * 0.055; // 0→0.005, 100→0.060
+  const ngSensToThreshold = (v: number) => 0.002 + (v / 100) * 0.025; // 0→0.002, 100→0.027
   // Active noise gate pipeline (AudioWorklet + AudioContext); cleanup on re-acquire or leave
   const noisePipelineRef = useRef<NoisePipeline | null>(null);
 

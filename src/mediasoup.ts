@@ -181,7 +181,7 @@ export async function joinRoom(params: {
         track: audioTrack,
         codecOptions: {
           opusStereo: false,
-          opusDtx:    true,
+          opusDtx:    false,  // DTX off — constant RTP stream, consumer track stays unmuted
         },
         appData: { kind: 'mic' },
       });
