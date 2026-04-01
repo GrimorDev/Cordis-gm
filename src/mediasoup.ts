@@ -40,6 +40,8 @@ interface RoomState {
 
 // Only one active room at a time (voice channel, DM call, or group call)
 let _room: RoomState | null = null;
+// Mutex: prevent concurrent joinRoom calls (racing condition causes duplicate transports)
+let _joining = false;
 
 // ── Socket promise helpers (callback pattern) ─────────────────────────────────
 function emitWithCallback<T = any>(socket: Socket, event: string, data: object): Promise<T> {
@@ -65,6 +67,14 @@ export async function joinRoom(params: {
 }): Promise<void> {
   const { roomId, localStream, socket, onNewStream, onStreamClosed, onSpeaking } = params;
 
+  // Guard: drop concurrent joinRoom calls (clicking multiple times / racing events)
+  if (_joining) {
+    console.warn('[MediaSoup] joinRoom already in progress, ignoring duplicate call');
+    return;
+  }
+  _joining = true;
+
+  try {
   // If already in a room, leave it first
   if (_room) {
     await leaveRoom(_room.roomId);
@@ -160,6 +170,12 @@ export async function joinRoom(params: {
   // 6. Produce mic track
   const audioTrack = localStream.getAudioTracks()[0];
   if (audioTrack) {
+    console.log('[MediaSoup] mic track state:', {
+      enabled:   audioTrack.enabled,
+      muted:     audioTrack.muted,
+      readyState: audioTrack.readyState,
+      label:     audioTrack.label,
+    });
     try {
       const micProducer = await sendTransport.produce({
         track: audioTrack,
@@ -169,12 +185,18 @@ export async function joinRoom(params: {
         },
         appData: { kind: 'mic' },
       });
+      console.log('[MediaSoup] mic producer created, id=', micProducer.id, 'paused=', micProducer.paused);
       room.micProducer = micProducer;
       micProducer.on('transportclose', () => { room.micProducer = null; });
-      micProducer.on('trackended',      () => { room.micProducer = null; });
+      micProducer.on('trackended',      () => {
+        console.warn('[MediaSoup] mic track ended — no more audio will be sent');
+        room.micProducer = null;
+      });
     } catch (err) {
       console.warn('[MediaSoup] Failed to produce mic:', err);
     }
+  } else {
+    console.error('[MediaSoup] No audio track in localStream — mic not acquired or stream empty');
   }
 
   // 7. Subscribe to new producers and closures from the server
@@ -211,6 +233,10 @@ export async function joinRoom(params: {
   // 8. Consume all existing producers
   for (const producer of existingProducers) {
     await consumeRemote(room, producer);
+  }
+
+  } finally {
+    _joining = false;
   }
 }
 
