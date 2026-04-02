@@ -79,8 +79,9 @@ function _connectAudioCtx(userId: string, stream: MediaStream): void {
     gain.connect(_playCtx.destination);
     _playSources.set(userId, src);
     _playGains.set(userId, gain);
+    console.log(`[Cordis] _connectAudioCtx OK userId=${userId} gain=${gain.gain.value} ctxState=${_playCtx.state} sampleRate=${_playCtx.sampleRate}`);
   } catch (e) {
-    console.warn('[Cordis] AudioContext connect failed for', userId, e);
+    console.error('[Cordis] AudioContext connect FAILED for', userId, e);
   }
 }
 
@@ -108,35 +109,50 @@ function makeAudioEl(): HTMLAudioElement {
  * Only ONE path is active per user at a time to avoid double playback.
  */
 export function attachRemoteAudio(userId: string, stream: MediaStream) {
-  if (_isTauri && _playCtx && _playCtx.state === 'running') {
-    // ── AudioContext path (Tauri/WebView2 only) ────────────────────────────
-    // HTMLAudioElement.play() resolves but produces no audio in WebView2.
-    // Route through AudioContext → ctx.destination (speakers) instead.
-    // Detach any existing <audio> element so there's no double-play.
+  const tracks = stream.getAudioTracks();
+  console.log(`[Cordis] attachRemoteAudio userId=${userId} isTauri=${_isTauri} ctxState=${_playCtx?.state ?? 'null'} tracks=${tracks.length} trackMuted=${tracks[0]?.muted} trackEnabled=${tracks[0]?.enabled} trackState=${tracks[0]?.readyState}`);
+
+  // ── Tauri/WebView2: use AudioContext path ─────────────────────────────────
+  // <audio srcObject=MediaStream> plays silently in WebView2 — known Chromium bug.
+  // Use AudioContext → destination instead. Resume context if auto-suspended.
+  if (_isTauri && _playCtx && _playCtx.state !== 'closed') {
+    if (_playCtx.state === 'suspended') {
+      console.warn('[Cordis] attachRemoteAudio: AudioContext suspended — resuming');
+      _playCtx.resume().catch(e => console.error('[Cordis] AudioContext resume failed:', e));
+    }
+    // Disconnect and remove any stale <audio> element (prevents double-play)
     const oldEl = remoteAudios.get(userId);
     if (oldEl) { oldEl.srcObject = null; oldEl.pause(); }
     _connectAudioCtx(userId, stream);
-  } else {
-    // ── <audio> element path (web browsers + Tauri fallback) ──────────────
-    let el = remoteAudios.get(userId);
-    if (!el) { el = makeAudioEl(); remoteAudios.set(userId, el); }
-    el.srcObject = stream;
-    el.play().catch(err => {
-      console.warn('[Cordis] attachRemoteAudio play() blocked:', err.name, '— retry on next click');
-      const retry = () => {
-        // In Tauri: if AudioContext is now primed (from a subsequent gesture), switch paths
-        if (_isTauri && _playCtx && _playCtx.state === 'running') {
-          _connectAudioCtx(userId, stream);
-          const e2 = remoteAudios.get(userId);
-          if (e2) { e2.srcObject = null; e2.pause(); }
-        } else {
-          el!.play().catch(() => {});
-        }
-        document.removeEventListener('click', retry);
-      };
-      document.addEventListener('click', retry, { once: true });
-    });
+    return;
   }
+
+  // ── Tauri fallback: _playCtx not primed yet ───────────────────────────────
+  // This should not happen if primePlaybackContext() was called on voice join.
+  if (_isTauri) {
+    console.error('[Cordis] attachRemoteAudio: TAURI but _playCtx is', _playCtx?.state ?? 'null', '— falling back to <audio> (will be silent!)');
+  }
+
+  // ── Web browsers: <audio> element path ───────────────────────────────────
+  let el = remoteAudios.get(userId);
+  if (!el) { el = makeAudioEl(); remoteAudios.set(userId, el); }
+  el.srcObject = stream;
+  el.play().catch(err => {
+    console.warn('[Cordis] attachRemoteAudio play() blocked:', err.name, '— retry on next click');
+    const retry = () => {
+      // In Tauri: if AudioContext is now primed (from a subsequent gesture), switch paths
+      if (_isTauri && _playCtx && _playCtx.state !== 'closed') {
+        if (_playCtx.state === 'suspended') _playCtx.resume().catch(() => {});
+        _connectAudioCtx(userId, stream);
+        const e2 = remoteAudios.get(userId);
+        if (e2) { e2.srcObject = null; e2.pause(); }
+      } else {
+        el!.play().catch(() => {});
+      }
+      document.removeEventListener('click', retry);
+    };
+    document.addEventListener('click', retry, { once: true });
+  });
 }
 
 /** Separate element for screen-share audio so it doesn't overwrite mic audio. */
