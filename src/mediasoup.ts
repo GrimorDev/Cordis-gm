@@ -79,6 +79,47 @@ export async function joinRoom(params: {
   }
   _joining = true;
 
+  // ── RACE-CONDITION FIX ────────────────────────────────────────────────────────
+  // Register socket listeners BEFORE ms_join so we never miss a ms_new_producer
+  // event that arrives during transport setup (which takes 300–500 ms).
+  // Events that arrive before _room is set are buffered in pendingProducers and
+  // replayed after full setup, after consuming the existingProducers list returned
+  // by ms_join. This is disjoint: existingProducers = producers at ms_join time,
+  // pendingProducers = producers created during our setup window.
+  const pendingProducers: Array<{ userId: string; producerId: string; kind: string; appData: any }> = [];
+
+  const onNewProducer = async (data: { userId: string; producerId: string; kind: string; appData: any }) => {
+    if (!_room) { pendingProducers.push(data); return; } // buffer during setup
+    if (_room.roomId !== roomId) return;
+    await consumeRemote(_room, data);
+  };
+  const onProducerClosed = (data: { userId: string; producerId?: string; kind?: 'mic' | 'screen' }) => {
+    if (!_room || _room.roomId !== roomId) return;
+    const room = _room;
+    // Close the specific consumer matching this producer.
+    // IMPORTANT: never use (data.userId && !data.producerId) as a fallback — that
+    // condition is always true when producerId is absent and would close ALL consumers.
+    for (const [consumerId, consumer] of room.consumers) {
+      if (data.producerId && consumer.producerId === data.producerId) {
+        consumer.close();
+        room.consumers.delete(consumerId);
+      }
+    }
+    // Stop speaking detection for this user if mic closed
+    if (data.kind === 'mic' || !data.kind) {
+      const stopFn = room.speakCleanup.get(data.userId);
+      if (stopFn) { stopFn(); room.speakCleanup.delete(data.userId); }
+    }
+    const kind: 'mic' | 'screen' = data.kind ?? 'mic';
+    onStreamClosed(data.userId, kind);
+    // Only remove audio attachment when it's the mic producer — screen close shouldn't
+    // silence the user's mic.
+    if (kind === 'mic') detachRemoteAudio(data.userId);
+  };
+
+  socket.on('ms_new_producer' as any, onNewProducer);
+  socket.on('ms_producer_closed' as any, onProducerClosed);
+
   try {
   // If already in a different room, leave it first
   if (_room) {
@@ -155,7 +196,7 @@ export async function joinRoom(params: {
     if (state === 'failed') console.error('[MediaSoup] Recv transport ICE FAILED — check MEDIASOUP_ANNOUNCED_IP and firewall ports 20000-20500');
   });
 
-  // 5. Store room state
+  // 5. Store room state — from this point onNewProducer will call consumeRemote directly
   const room: RoomState = {
     roomId,
     socket,
@@ -171,6 +212,10 @@ export async function joinRoom(params: {
     speakCleanup: new Map(),
   };
   _room = room;
+
+  // Store listeners so leaveRoom can remove them
+  (room as any)._onNewProducer    = onNewProducer;
+  (room as any)._onProducerClosed = onProducerClosed;
 
   // 6. Produce mic track
   const audioTrack = localStream.getAudioTracks()[0];
@@ -226,42 +271,21 @@ export async function joinRoom(params: {
     console.error('[MediaSoup] No audio track in localStream — mic not acquired or stream empty');
   }
 
-  // 7. Subscribe to new producers and closures from the server
-  const onNewProducer = async (data: { userId: string; producerId: string; kind: string; appData: any }) => {
-    if (!_room || _room.roomId !== roomId) return;
-    await consumeRemote(room, data);
-  };
-  const onProducerClosed = (data: { userId: string; producerId?: string; kind?: 'mic' | 'screen' }) => {
-    if (!_room || _room.roomId !== roomId) return;
-    // Close any consumers for this producer
-    for (const [consumerId, consumer] of room.consumers) {
-      if (consumer.producerId === data.producerId || (data.userId && !data.producerId)) {
-        consumer.close();
-        room.consumers.delete(consumerId);
-      }
-    }
-    // Stop speaking detection for this user if mic closed
-    if (data.kind === 'mic' || !data.kind) {
-      const stopFn = room.speakCleanup.get(data.userId);
-      if (stopFn) { stopFn(); room.speakCleanup.delete(data.userId); }
-    }
-    const kind: 'mic' | 'screen' = data.kind ?? 'mic';
-    onStreamClosed(data.userId, kind);
-    detachRemoteAudio(data.userId);
-  };
-
-  socket.on('ms_new_producer' as any, onNewProducer);
-  socket.on('ms_producer_closed' as any, onProducerClosed);
-
-  // Store listeners so we can remove them on leaveRoom
-  (room as any)._onNewProducer    = onNewProducer;
-  (room as any)._onProducerClosed = onProducerClosed;
-
-  // 8. Consume all existing producers
+  // 7. Consume existing producers, then replay any that arrived during setup
   for (const producer of existingProducers) {
     await consumeRemote(room, producer);
   }
+  // pendingProducers: ms_new_producer events buffered while _room was null (setup window).
+  // These are guaranteed to be disjoint from existingProducers (they produced AFTER our ms_join).
+  for (const producer of pendingProducers) {
+    await consumeRemote(room, producer);
+  }
 
+  } catch (err) {
+    // Remove listeners if setup failed so they don't leak
+    socket.off('ms_new_producer' as any, onNewProducer);
+    socket.off('ms_producer_closed' as any, onProducerClosed);
+    throw err;
   } finally {
     _joining = false;
   }
@@ -335,8 +359,11 @@ async function consumeRemote(
 
     room.onNewStream({ userId: producer.userId, stream, kind: producerKind });
 
-    // Attach audio for playback (mic tracks only — screen share audio is separate)
-    if (kind === 'audio') {
+    // Attach audio for playback — mic tracks only.
+    // Do NOT use `kind === 'audio'` here because screen-share audio producers also have
+    // kind='audio', and routing them through attachRemoteAudio would overwrite the mic
+    // audio slot for that user (both keyed by userId).
+    if (producerKind === 'mic') {
       console.log('[MediaSoup] calling attachRemoteAudio for', producer.userId, 'track.muted=', track.muted);
       attachRemoteAudio(producer.userId, stream);
 
