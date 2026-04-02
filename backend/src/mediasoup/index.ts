@@ -280,18 +280,25 @@ export async function resumeConsumer(
 }
 
 // ── Close Producer ────────────────────────────────────────────────────────────
+// Returns the closed producer's id (or undefined if not found) so callers can
+// include it in ms_producer_closed notifications — clients need producerId to
+// identify which consumer to close without accidentally wiping all consumers.
 export function closeProducer(
   roomId: string,
   userId: string,
   producerKind: 'mic' | 'screen',
-): void {
+): string | undefined {
   const peer = getPeer(roomId, userId);
   if (producerKind === 'screen') {
+    const id = peer.producers.screen?.id;
     peer.producers.screen?.close();
     peer.producers.screen = undefined;
+    return id;
   } else {
+    const id = peer.producers.mic?.id;
     peer.producers.mic?.close();
     peer.producers.mic = undefined;
+    return id;
   }
 }
 

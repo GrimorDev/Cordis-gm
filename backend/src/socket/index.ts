@@ -596,10 +596,11 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
       { roomId, kind }: { roomId: string; kind: 'mic' | 'screen' },
       cb,
     ) => {
-      ms.closeProducer(roomId, user.id, kind);
+      const producerId = ms.closeProducer(roomId, user.id, kind);
       socket.to(`ms_room:${roomId}`).emit('ms_producer_closed' as any, {
         userId: user.id,
         kind,
+        producerId, // include id so clients can match the exact consumer to close
       });
       cb({});
     }));
