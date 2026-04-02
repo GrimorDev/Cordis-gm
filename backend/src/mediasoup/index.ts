@@ -250,7 +250,8 @@ export async function consume(
   const consumer = await recvTransport.consume({
     producerId,
     rtpCapabilities,
-    paused: true, // start paused; client calls ms_resume_consumer to start RTP flow
+    paused: false, // start unpaused — RTP flows as soon as DTLS is ready
+    // NOTE: client still calls ms_resume_consumer (no-op when unpaused) for compatibility
   });
 
   consumer.on('transportclose', () => { consumer.close(); });
