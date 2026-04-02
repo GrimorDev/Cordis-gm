@@ -271,14 +271,21 @@ export async function joinRoom(params: {
     console.error('[MediaSoup] No audio track in localStream — mic not acquired or stream empty');
   }
 
-  // 7. Consume existing producers, then replay any that arrived during setup
+  // 7. Consume existing producers, then replay any that arrived during setup.
+  // Dedup: if the socket was still in ms_room from a previous session when a
+  // ms_new_producer event fired, the same producerId can appear in BOTH
+  // existingProducers AND pendingProducers. Creating two consumers for the same
+  // producer on the same transport causes SSRC conflicts in WebRTC → silent audio.
+  const consumedProducerIds = new Set<string>();
+
   for (const producer of existingProducers) {
+    consumedProducerIds.add(producer.producerId);
     await consumeRemote(room, producer);
   }
-  // pendingProducers: ms_new_producer events buffered while _room was null (setup window).
-  // These are guaranteed to be disjoint from existingProducers (they produced AFTER our ms_join).
   for (const producer of pendingProducers) {
-    await consumeRemote(room, producer);
+    if (!consumedProducerIds.has(producer.producerId)) {
+      await consumeRemote(room, producer);
+    }
   }
 
   } catch (err) {
