@@ -496,6 +496,22 @@ export async function applyNoiseGate(rawStream: MediaStream): Promise<NoisePipel
     lpf.connect(worklet);
     worklet.connect(dest);
 
+    // Keep the noise-gate AudioContext alive: Chrome may auto-suspend AudioContexts
+    // that have no output connected to ctx.destination (ours outputs to a
+    // MediaStreamDestination, not speakers). A suspended context outputs silence.
+    // Fix: connect a zero-gain node to ctx.destination so Chrome sees active output.
+    const keepAliveGain = ctx.createGain();
+    keepAliveGain.gain.value = 0;
+    worklet.connect(keepAliveGain);
+    keepAliveGain.connect(ctx.destination);
+
+    // Auto-resume if Chrome suspends the context (e.g. tab loses focus)
+    ctx.addEventListener('statechange', () => {
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+    });
+
     const enabledParam   = worklet.parameters.get('enabled');
     const thresholdParam = worklet.parameters.get('threshold');
 
