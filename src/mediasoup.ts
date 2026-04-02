@@ -72,10 +72,15 @@ export async function joinRoom(params: {
     console.warn('[MediaSoup] joinRoom already in progress, ignoring duplicate call');
     return;
   }
+  // Guard: already in THIS room — don't rejoin unnecessarily (causes double-produce)
+  if (_room && _room.roomId === roomId) {
+    console.warn('[MediaSoup] already in room', roomId, '— skipping redundant joinRoom');
+    return;
+  }
   _joining = true;
 
   try {
-  // If already in a room, leave it first
+  // If already in a different room, leave it first
   if (_room) {
     await leaveRoom(_room.roomId);
   }
@@ -267,9 +272,10 @@ async function consumeRemote(
   room: RoomState,
   producer: { userId: string; producerId: string; kind: string; appData: any },
 ): Promise<void> {
+  console.log('[MediaSoup] consumeRemote start —', producer.userId, 'producer:', producer.producerId, 'kind:', producer.kind);
   try {
-    if (!room.device.loaded) return;
-    if (!room.recvTransport) return;
+    if (!room.device.loaded) { console.warn('[MediaSoup] consumeRemote: device not loaded'); return; }
+    if (!room.recvTransport) { console.warn('[MediaSoup] consumeRemote: no recvTransport yet — producer will be missed!'); return; }
 
     const { consumerId, producerId, kind, rtpParameters } = await emitWithCallback<{
       consumerId:    string;
@@ -305,16 +311,18 @@ async function consumeRemote(
     // Wait for track to unmute (fires when RTP data starts flowing), but cap at 3s
     // to avoid hanging forever if ICE/DTLS fails
     const trackWasMuted = track.muted;
+    console.log('[MediaSoup] consumer track initial muted state:', track.muted, 'for', producer.userId);
     if (track.muted) {
       await new Promise<void>((resolve) => {
         const timer = setTimeout(() => {
           track.removeEventListener('unmute', onUnmute);
-          console.warn('[MediaSoup] track still muted after 3s — ICE may have failed');
+          console.warn('[MediaSoup] consumer track STILL MUTED after 3s for', producer.userId, '— RTP not flowing!');
           resolve();
         }, 3000);
         const onUnmute = () => {
           clearTimeout(timer);
           track.removeEventListener('unmute', onUnmute);
+          console.log('[MediaSoup] consumer track unmuted for', producer.userId, '— RTP flowing');
           resolve();
         };
         track.addEventListener('unmute', onUnmute);
@@ -329,6 +337,7 @@ async function consumeRemote(
 
     // Attach audio for playback (mic tracks only — screen share audio is separate)
     if (kind === 'audio') {
+      console.log('[MediaSoup] calling attachRemoteAudio for', producer.userId, 'track.muted=', track.muted);
       attachRemoteAudio(producer.userId, stream);
 
       // If the track was still muted when we attached (3s timeout fired before RTP arrived),
