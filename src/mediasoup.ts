@@ -304,6 +304,7 @@ async function consumeRemote(
 
     // Wait for track to unmute (fires when RTP data starts flowing), but cap at 3s
     // to avoid hanging forever if ICE/DTLS fails
+    const trackWasMuted = track.muted;
     if (track.muted) {
       await new Promise<void>((resolve) => {
         const timer = setTimeout(() => {
@@ -329,6 +330,17 @@ async function consumeRemote(
     // Attach audio for playback (mic tracks only — screen share audio is separate)
     if (kind === 'audio') {
       attachRemoteAudio(producer.userId, stream);
+
+      // If the track was still muted when we attached (3s timeout fired before RTP arrived),
+      // register a one-shot listener to re-attach once RTP actually starts flowing.
+      // CRITICAL for Tauri/WebView2: createMediaStreamSource(mutedTrack) creates a
+      // permanently-silent source node that never recovers even after the track unmutes.
+      // Re-calling attachRemoteAudio with a fresh MediaStream fixes this.
+      if (trackWasMuted && track.muted) {
+        track.addEventListener('unmute', () => {
+          attachRemoteAudio(producer.userId, new MediaStream([track]));
+        }, { once: true });
+      }
 
       // Speaking detection for remote user
       if (room.onSpeaking) {

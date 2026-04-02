@@ -250,7 +250,7 @@ export async function consume(
   const consumer = await recvTransport.consume({
     producerId,
     rtpCapabilities,
-    paused: false, // start paused, client must call resume
+    paused: true, // start paused; client calls ms_resume_consumer to start RTP flow
   });
 
   consumer.on('transportclose', () => { consumer.close(); });
