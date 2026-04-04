@@ -424,6 +424,7 @@ export async function applyDeepFilter(rawStream: MediaStream): Promise<NoisePipe
     setDFStatus('active');
     return {
       processedStream: dest.stream,
+      isRunning: () => ctx.state === 'running',
       cleanup: () => {
         rawStream.getTracks().forEach(t => t.stop());
         core.destroy();
@@ -449,6 +450,9 @@ export interface NoisePipeline {
   /** Change enabled/threshold live without re-acquiring mic. */
   setEnabled: (v: boolean) => void;
   setThreshold: (v: number) => void;
+  /** Returns true if the underlying AudioContext is actually running (not suspended).
+   *  If false, the processedStream is silent — caller should fall back to raw stream. */
+  isRunning: () => boolean;
 }
 
 /**
@@ -497,6 +501,7 @@ export async function applyNoiseGate(rawStream: MediaStream): Promise<NoisePipel
         // Only close the context if we created a fresh one (not the shared _recCtx)
         if (ctx !== _recCtx) ctx.close().catch(() => {});
       },
+      isRunning: () => ctx.state === 'running',
       setEnabled:   (v) => { if (enabledParam)   enabledParam.setValueAtTime(v ? 1 : 0, ctx.currentTime); },
       setThreshold: (v) => { if (thresholdParam) thresholdParam.setValueAtTime(v, ctx.currentTime); },
     };

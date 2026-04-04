@@ -9077,11 +9077,24 @@ export default function App() {
       if (useNoise) {
         const pipeline = await applyNoiseGate(rawStream);
         if (pipeline) {
-          noisePipelineRef.current = pipeline;
-          // Apply saved sensitivity (user-controlled threshold slider)
-          pipeline.setThreshold(ngSensToThreshold(noiseGateSens));
-          sendStream = pipeline.processedStream;
+          // CRITICAL: verify the AudioContext is actually running before using its output.
+          // If the context is suspended (Tauri/WebView2 autoplay policy), processedStream
+          // produces silence — remote peers hear nothing from this user.
+          // In that case, discard the pipeline and fall back to the raw mic stream.
+          if (pipeline.isRunning()) {
+            noisePipelineRef.current = pipeline;
+            // Apply saved sensitivity (user-controlled threshold slider)
+            pipeline.setThreshold(ngSensToThreshold(noiseGateSens));
+            sendStream = pipeline.processedStream;
+            console.log('[Cordis] acquireMic: using noise gate pipeline, ctx running ✓');
+          } else {
+            console.warn('[Cordis] acquireMic: noise gate ctx suspended → falling back to raw stream');
+            pipeline.cleanup();
+          }
         }
+      }
+      if (sendStream === rawStream) {
+        console.log('[Cordis] acquireMic: using raw mic stream (no noise gate)');
       }
 
       localStreamRef.current = sendStream;
