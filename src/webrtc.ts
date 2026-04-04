@@ -63,27 +63,80 @@ function makeAudioEl(): HTMLAudioElement {
   return el;
 }
 
+// ─── Playback AudioContext (Tauri/WebView2 fix) ───────────────────────────────
+// In Tauri/WebView2, <audio srcObject=MediaStream> is silently broken — audio
+// arrives but produces no sound. AudioContext.createMediaStreamSource() routes
+// audio through the native pipeline and works reliably.
+// The context must be created / resumed within a user gesture to avoid suspension.
+// Call primePlaybackContext() when the user clicks join/accept for a call.
+let _playCtx: AudioContext | null = null;
+interface AudioPlayNode { source: MediaStreamAudioSourceNode; gain: GainNode; }
+const _playNodes   = new Map<string, AudioPlayNode>(); // userId → WebRTC audio nodes
+const _playVolumes = new Map<string, number>();        // userId → volume 0..1
+
 /**
- * Attach a remote WebRTC audio stream to a hidden <audio> element for playback.
+ * Create / resume the shared playback AudioContext.
+ * MUST be called within a user-gesture handler (button click) so the context
+ * is allowed to start in the running state.
+ */
+export function primePlaybackContext(): void {
+  try {
+    if (!_playCtx || _playCtx.state === 'closed') {
+      _playCtx = new AudioContext({ sampleRate: 48000 });
+    }
+    _playCtx.resume().catch(() => {});
+  } catch {}
+}
+
+/**
+ * Attach a remote WebRTC audio stream for playback.
  *
- * Design: direct srcObject only — NO AudioContext chain.
- * Previous versions routed through AudioContext (GainNode → dest.stream) but:
- * - AudioContext created outside a user-gesture starts SUSPENDED → dest.stream silent
- * - ctx.resume() may fail or be delayed → prolonged silence / no audio at all
- * Conclusion: native srcObject = stream is 100% reliable for WebRTC playback.
- * Volume > 100% (GainNode feature) is sacrificed for guaranteed functionality.
+ * Primary path (Tauri + web): AudioContext — routes stream directly to speaker
+ * via createMediaStreamSource → GainNode → ctx.destination.
+ * Works in WebView2 where <audio srcObject=MediaStream> produces no sound.
+ *
+ * Fallback (no primed ctx): <audio srcObject> with muted→play→unmute trick
+ * to bypass autoplay restrictions.
  */
 export function attachRemoteAudio(userId: string, stream: MediaStream) {
+  // ── AudioContext path ────────────────────────────────────────────────────────
+  if (_playCtx && _playCtx.state !== 'closed') {
+    const prev = _playNodes.get(userId);
+    if (prev) { try { prev.source.disconnect(); prev.gain.disconnect(); } catch {} _playNodes.delete(userId); }
+    try {
+      _playCtx.resume().catch(() => {});
+      const source = _playCtx.createMediaStreamSource(stream);
+      const gain   = _playCtx.createGain();
+      gain.gain.value = _playVolumes.get(userId) ?? 1.0;
+      source.connect(gain);
+      gain.connect(_playCtx.destination);
+      _playNodes.set(userId, { source, gain });
+      // Keep a muted <audio> element so setSinkId() still routes to the right device
+      let el = remoteAudios.get(userId);
+      if (!el) { el = makeAudioEl(); remoteAudios.set(userId, el); }
+      el.muted = true; // actual audio comes from AudioContext
+      el.srcObject = stream;
+      console.log(`[Cordis] attachRemoteAudio(${userId}): AudioContext path, state=${_playCtx.state}`);
+      return;
+    } catch (err) {
+      console.warn('[Cordis] attachRemoteAudio AudioContext path failed, falling back to <audio>:', err);
+    }
+  }
+
+  // ── Fallback: native <audio srcObject> ──────────────────────────────────────
   let el = remoteAudios.get(userId);
   if (!el) { el = makeAudioEl(); remoteAudios.set(userId, el); }
   el.srcObject = stream;
-  // Explicit play() — autoplay attribute alone is not always honoured by the browser.
-  el.play().catch(err => {
-    console.warn('[Cordis] attachRemoteAudio play() blocked:', err.name, '— will retry on next user interaction');
-    // Retry on next user gesture (e.g. click anywhere)
-    const retry = () => { el!.play().catch(() => {}); document.removeEventListener('click', retry); };
-    document.addEventListener('click', retry, { once: true });
-  });
+  el.muted = true; // muted→play→unmute bypasses autoplay policy
+  el.play()
+    .then(() => { if (el) el.muted = false; })
+    .catch(err => {
+      if (el) el.muted = false;
+      console.warn('[Cordis] attachRemoteAudio play() blocked:', err.name, '— will retry on next user interaction');
+      const retry = () => { el!.play().catch(() => {}); document.removeEventListener('click', retry); };
+      document.addEventListener('click', retry, { once: true });
+    });
+  console.log(`[Cordis] attachRemoteAudio(${userId}): <audio> fallback path`);
 }
 
 /** Separate element for screen-share audio so it doesn't overwrite mic audio. */
@@ -95,6 +148,9 @@ export function attachRemoteScreenAudio(userId: string, stream: MediaStream) {
 }
 
 export function detachRemoteAudio(userId: string) {
+  const node = _playNodes.get(userId);
+  if (node) { try { node.source.disconnect(); node.gain.disconnect(); } catch {} _playNodes.delete(userId); }
+  _playVolumes.delete(userId);
   const el = remoteAudios.get(userId);
   if (el) { el.srcObject = null; el.remove(); remoteAudios.delete(userId); }
   const sel = remoteScreenAudios.get(userId);
@@ -102,9 +158,13 @@ export function detachRemoteAudio(userId: string) {
 }
 
 export function setRemoteVolume(userId: string, volumePct: number) {
-  // volumePct: 0–100 → el.volume 0.0–1.0
+  const vol = Math.max(0, Math.min(1, volumePct / 100));
+  _playVolumes.set(userId, vol);
+  const node = _playNodes.get(userId);
+  if (node) { node.gain.gain.value = vol; return; }
+  // Fallback: <audio> element
   const el = remoteAudios.get(userId);
-  if (el) el.volume = Math.max(0, Math.min(1, volumePct / 100));
+  if (el) el.volume = vol;
 }
 
 /** Set volume for a user's screen-share audio (0–100%). */
@@ -122,6 +182,13 @@ export function muteRemoteScreenStream(userId: string, muted: boolean) {
 }
 
 export function muteRemoteUser(userId: string, muted: boolean) {
+  const node = _playNodes.get(userId);
+  if (node) {
+    node.gain.gain.value = muted ? 0 : (_playVolumes.get(userId) ?? 1.0);
+    const sel = remoteScreenAudios.get(userId);
+    if (sel) sel.muted = muted;
+    return;
+  }
   const el = remoteAudios.get(userId);
   if (el) el.muted = muted;
   const sel = remoteScreenAudios.get(userId);
@@ -129,6 +196,9 @@ export function muteRemoteUser(userId: string, muted: boolean) {
 }
 
 export function muteAllRemote(muted: boolean) {
+  _playNodes.forEach((node, userId) => {
+    node.gain.gain.value = muted ? 0 : (_playVolumes.get(userId) ?? 1.0);
+  });
   remoteAudios.forEach(el => { el.muted = muted; });
   remoteScreenAudios.forEach(el => { el.muted = muted; });
 }
