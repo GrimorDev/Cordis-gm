@@ -63,28 +63,48 @@ function makeAudioEl(): HTMLAudioElement {
   return el;
 }
 
-// ─── Playback AudioContext (Tauri/WebView2 fix) ───────────────────────────────
+// ─── Shared AudioContexts (Tauri/WebView2 fix) ───────────────────────────────
 // In Tauri/WebView2, <audio srcObject=MediaStream> is silently broken — audio
 // arrives but produces no sound. AudioContext.createMediaStreamSource() routes
 // audio through the native pipeline and works reliably.
-// The context must be created / resumed within a user gesture to avoid suspension.
-// Call primePlaybackContext() when the user clicks join/accept for a call.
+//
+// Two shared contexts:
+//   _playCtx — for remote audio PLAYBACK (attachRemoteAudio)
+//   _recCtx  — for local mic PROCESSING (applyNoiseGate / noise gate worklet)
+//
+// Both MUST be created and resumed inside a user-gesture handler.
+// Call primePlaybackContext() when the user clicks join/accept for a call —
+// it primes BOTH contexts so they are in "running" state before any async ops.
 let _playCtx: AudioContext | null = null;
+let _recCtx:  AudioContext | null = null;
 interface AudioPlayNode { source: MediaStreamAudioSourceNode; gain: GainNode; }
 const _playNodes   = new Map<string, AudioPlayNode>(); // userId → WebRTC audio nodes
 const _playVolumes = new Map<string, number>();        // userId → volume 0..1
 
+function makeResumedCtx(): AudioContext {
+  const ctx = new AudioContext({ sampleRate: 48000 });
+  ctx.resume().catch(() => {});
+  // Auto-resume if the browser suspends the context (e.g. WebView2 focus loss)
+  ctx.addEventListener('statechange', () => {
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  });
+  return ctx;
+}
+
 /**
- * Create / resume the shared playback AudioContext.
- * MUST be called within a user-gesture handler (button click) so the context
- * is allowed to start in the running state.
+ * Create / resume the shared playback + recording AudioContexts.
+ * MUST be called within a user-gesture handler (button click) so the contexts
+ * are allowed to start in the running state.
+ * Primes both _playCtx (remote audio) and _recCtx (noise gate / mic processing).
  */
 export function primePlaybackContext(): void {
   try {
-    if (!_playCtx || _playCtx.state === 'closed') {
-      _playCtx = new AudioContext({ sampleRate: 48000 });
-    }
-    _playCtx.resume().catch(() => {});
+    if (!_playCtx || _playCtx.state === 'closed') _playCtx = makeResumedCtx();
+    else _playCtx.resume().catch(() => {});
+  } catch {}
+  try {
+    if (!_recCtx || _recCtx.state === 'closed') _recCtx = makeResumedCtx();
+    else _recCtx.resume().catch(() => {});
   } catch {}
 }
 
@@ -437,12 +457,17 @@ export interface NoisePipeline {
  */
 export async function applyNoiseGate(rawStream: MediaStream): Promise<NoisePipeline | null> {
   try {
-    const ctx = new AudioContext({ sampleRate: 48000 });
+    // Reuse the pre-primed _recCtx if available (already in "running" state from user gesture).
+    // Creating a new AudioContext here would be after several awaits (getUserMedia etc.),
+    // outside the user-gesture call stack — new context would start suspended → silent output.
+    const ctx = (_recCtx && _recCtx.state !== 'closed') ? _recCtx : makeResumedCtx();
+    // Ensure running (belt + suspenders)
+    if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
+
     // Load the worklet processor from the public folder
     await ctx.audioWorklet.addModule('/noise-processor.js');
-    // CRITICAL: AudioContext may start suspended if created after async await chain.
-    // Must resume before building the pipeline — otherwise dest.stream outputs silence.
-    await ctx.resume();
+    // Resume again — addModule() is async and may have triggered a browser suspension
+    if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
 
     const source  = ctx.createMediaStreamSource(rawStream);
     const worklet = new AudioWorkletNode(ctx, 'cordis-noise-processor');
@@ -463,11 +488,14 @@ export async function applyNoiseGate(rawStream: MediaStream): Promise<NoisePipel
     const enabledParam   = worklet.parameters.get('enabled');
     const thresholdParam = worklet.parameters.get('threshold');
 
+    console.log('[Cordis] Noise gate active, ctx.state=', ctx.state, 'dest tracks:', dest.stream.getTracks().length);
+
     return {
       processedStream: dest.stream,
       cleanup: () => {
         rawStream.getTracks().forEach(t => t.stop());
-        ctx.close().catch(() => {});
+        // Only close the context if we created a fresh one (not the shared _recCtx)
+        if (ctx !== _recCtx) ctx.close().catch(() => {});
       },
       setEnabled:   (v) => { if (enabledParam)   enabledParam.setValueAtTime(v ? 1 : 0, ctx.currentTime); },
       setThreshold: (v) => { if (thresholdParam) thresholdParam.setValueAtTime(v, ctx.currentTime); },
