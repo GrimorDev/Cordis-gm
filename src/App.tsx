@@ -7517,13 +7517,15 @@ export default function App() {
   // Set flag on channel/DM/view switch
   useEffect(() => { scrollToBottomOnLoadRef.current = true; setHasNewMsgs(false); }, [activeChannel, activeDmUserId, activeView]);
   // PRIMARY: scroll when msgsLoading transitions false — messages are in DOM at this point.
+  // Also re-runs on view/channel/DM switches so that when messages are already cached
+  // (msgsLoading stays false, no loading cycle), we still scroll to bottom on navigation.
   // Use requestAnimationFrame so the browser has finished layout before we read scrollHeight.
   useEffect(() => {
     if (!msgsLoading && scrollToBottomOnLoadRef.current) {
       scrollToBottomOnLoadRef.current = false;
       requestAnimationFrame(() => requestAnimationFrame(() => scrollToBottom(false)));
     }
-  }, [msgsLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [msgsLoading, activeView, activeChannel, activeDmUserId]); // eslint-disable-line react-hooks/exhaustive-deps
   // Smart-scroll on new incoming messages (only near bottom, not during initial load)
   useEffect(() => {
     if (scrollToBottomOnLoadRef.current) return;
