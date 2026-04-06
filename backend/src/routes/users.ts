@@ -123,6 +123,7 @@ router.put('/me', authMiddleware,
     body('card_color').optional().isIn(['default','slate','midnight','crimson','forest','ocean','neon','copper','violet','teal','charcoal','olive','rose','white','sky','lavender','cream','coral','mint','sand']),
     body('card_font').optional().isIn(['default','mono','serif','nunito','raleway','josefin','exo','ubuntu','pixel','orbitron','bebas','cinzel','playfair','caveat','dancing','pacifico','righteous','comic']),
     body('theme_id').optional().isIn(['default','midnight','amoled','forest','sakura','sunset']),
+    body('banner_preset').optional().isIn(['none','aurora','violet','fire','ocean','neon-pink','matrix','gold','galaxy','ice','sakura','cyber']),
   ],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
@@ -132,7 +133,7 @@ router.put('/me', authMiddleware,
       accent_color, compact_messages, voice_noise_cancel,
       font_size, show_timestamps, show_chat_avatars, message_animations, show_link_previews,
       privacy_status_visible, privacy_typing_visible, privacy_read_receipts, privacy_friend_requests,
-      privacy_dm_from_strangers, avatar_effect, card_effect, card_color, card_font, theme_id,
+      privacy_dm_from_strangers, avatar_effect, card_effect, card_color, card_font, theme_id, banner_preset,
     } = req.body;
     const updates: string[] = [];
     const values: any[] = [];
@@ -160,6 +161,7 @@ router.put('/me', authMiddleware,
     if (card_color                !== undefined) { updates.push(`card_color=$${idx++}`);                values.push(card_color); }
     if (card_font                 !== undefined) { updates.push(`card_font=$${idx++}`);                 values.push(card_font); }
     if (theme_id                  !== undefined) { updates.push(`theme_id=$${idx++}`);                  values.push(theme_id); }
+    if (banner_preset             !== undefined) { updates.push(`banner_preset=$${idx++}`);             values.push(banner_preset); }
     if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update' });
     updates.push(`updated_at=NOW()`);
     values.push(req.user!.id);
@@ -174,10 +176,10 @@ router.put('/me', authMiddleware,
                    accent_color,compact_messages,voice_noise_cancel,
                    font_size,show_timestamps,show_chat_avatars,message_animations,show_link_previews,
                    privacy_status_visible,privacy_typing_visible,privacy_read_receipts,
-                   privacy_friend_requests,privacy_dm_from_strangers,avatar_effect,card_effect,card_color,card_font,theme_id`,
+                   privacy_friend_requests,privacy_dm_from_strangers,avatar_effect,card_effect,card_color,card_font,theme_id,banner_preset`,
         values
       );
-      await broadcastUserUpdate(req, { id: rows[0].id, username: rows[0].username, avatar_url: rows[0].avatar_url, banner_url: rows[0].banner_url, banner_color: rows[0].banner_color, bio: rows[0].bio, custom_status: rows[0].custom_status, privacy_read_receipts: rows[0].privacy_read_receipts, avatar_effect: rows[0].avatar_effect });
+      await broadcastUserUpdate(req, { id: rows[0].id, username: rows[0].username, avatar_url: rows[0].avatar_url, banner_url: rows[0].banner_url, banner_color: rows[0].banner_color, bio: rows[0].bio, custom_status: rows[0].custom_status, privacy_read_receipts: rows[0].privacy_read_receipts, avatar_effect: rows[0].avatar_effect, banner_preset: rows[0].banner_preset });
       return res.json(rows[0]);
     } catch { return res.status(500).json({ error: 'Internal server error' }); }
   }
