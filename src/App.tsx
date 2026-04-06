@@ -7517,15 +7517,28 @@ export default function App() {
   // Set flag on channel/DM/view switch
   useEffect(() => { scrollToBottomOnLoadRef.current = true; setHasNewMsgs(false); }, [activeChannel, activeDmUserId, activeView]);
   // PRIMARY: scroll when msgsLoading transitions false — messages are in DOM at this point.
-  // Also re-runs on view/channel/DM switches so that when messages are already cached
-  // (msgsLoading stays false, no loading cycle), we still scroll to bottom on navigation.
   // Use requestAnimationFrame so the browser has finished layout before we read scrollHeight.
   useEffect(() => {
     if (!msgsLoading && scrollToBottomOnLoadRef.current) {
       scrollToBottomOnLoadRef.current = false;
       requestAnimationFrame(() => requestAnimationFrame(() => scrollToBottom(false)));
     }
-  }, [msgsLoading, activeView, activeChannel, activeDmUserId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [msgsLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+  // SECONDARY: scroll when switching BACK to the same DM (activeView changes but
+  // activeDmUserId stays the same → effect 7465 doesn't reload → msgsLoading stays false
+  // → primary effect never fires). Only scroll immediately when the DM user is unchanged
+  // so we don't consume the flag before messages finish loading.
+  const _prevDmUserIdRef  = useRef('');
+  const _prevActiveViewRef = useRef('');
+  useEffect(() => {
+    const viewChanged = activeView !== _prevActiveViewRef.current;
+    const dmUnchanged = activeDmUserId === _prevDmUserIdRef.current;
+    _prevActiveViewRef.current  = activeView;
+    _prevDmUserIdRef.current    = activeDmUserId;
+    if (viewChanged && dmUnchanged && activeView === 'dms' && activeDmUserId && !msgsLoading) {
+      requestAnimationFrame(() => requestAnimationFrame(() => scrollToBottom(false)));
+    }
+  }, [activeView, activeDmUserId, msgsLoading]); // eslint-disable-line react-hooks/exhaustive-deps
   // Smart-scroll on new incoming messages (only near bottom, not during initial load)
   useEffect(() => {
     if (scrollToBottomOnLoadRef.current) return;
