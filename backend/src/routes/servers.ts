@@ -354,7 +354,7 @@ router.get('/:id/members', authMiddleware, async (req: AuthRequest, res: Respons
       return res.status(403).json({ error: 'No access' });
     }
     const { rows } = await query(
-      `SELECT u.id, u.username, u.avatar_url, u.status, u.custom_status, u.avatar_effect,
+      `SELECT u.id, u.username, u.avatar_url, u.status, u.custom_status, u.avatar_effect, u.banner_preset,
               u.is_bot, u.active_tag_server_id, st.tag as active_tag, st.color as active_tag_color, st.icon as active_tag_icon,
               sm.role_name, sm.joined_at,
               COALESCE(

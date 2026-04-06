@@ -220,18 +220,26 @@ const GRADIENTS = [
 ];
 // ─── Member list banner presets ───────────────────────────────────────────────
 const BANNER_PRESETS = [
-  { key: 'none',      label: 'Brak',       color: '#27272a' },
-  { key: 'aurora',    label: 'Aurora',     color: '#0ea5e9' },
-  { key: 'violet',    label: 'Violet',     color: '#7c3aed' },
-  { key: 'fire',      label: 'Fire',       color: '#ef4444' },
-  { key: 'ocean',     label: 'Ocean',      color: '#0369a1' },
-  { key: 'neon-pink', label: 'Neon Pink',  color: '#ec4899' },
-  { key: 'matrix',    label: 'Matrix',     color: '#16a34a' },
-  { key: 'gold',      label: 'Gold',       color: '#d97706' },
-  { key: 'galaxy',    label: 'Galaxy',     color: '#4c1d95' },
-  { key: 'ice',       label: 'Ice',        color: '#7dd3fc' },
-  { key: 'sakura',    label: 'Sakura',     color: '#fb7185' },
-  { key: 'cyber',     label: 'Cyber',      color: '#06b6d4' },
+  // — colours —
+  { key: 'none',      label: 'Brak',       color: '#27272a', group: 'color' },
+  { key: 'aurora',    label: 'Aurora',     color: '#0ea5e9', group: 'color' },
+  { key: 'violet',    label: 'Violet',     color: '#7c3aed', group: 'color' },
+  { key: 'fire',      label: 'Fire',       color: '#ef4444', group: 'color' },
+  { key: 'ocean',     label: 'Ocean',      color: '#0369a1', group: 'color' },
+  { key: 'neon-pink', label: 'Neon Pink',  color: '#ec4899', group: 'color' },
+  { key: 'matrix',    label: 'Matrix',     color: '#16a34a', group: 'color' },
+  { key: 'gold',      label: 'Gold',       color: '#d97706', group: 'color' },
+  { key: 'galaxy',    label: 'Galaxy',     color: '#4c1d95', group: 'color' },
+  { key: 'ice',       label: 'Ice',        color: '#7dd3fc', group: 'color' },
+  { key: 'sakura',    label: 'Sakura',     color: '#fb7185', group: 'color' },
+  { key: 'cyber',     label: 'Cyber',      color: '#06b6d4', group: 'color' },
+  // — scenes —
+  { key: 'city',      label: 'Miasto',     color: '#0d1f3c', group: 'scene' },
+  { key: 'space',     label: 'Kosmos',     color: '#030012', group: 'scene' },
+  { key: 'forest',    label: 'Las',        color: '#063d19', group: 'scene' },
+  { key: 'mountains', label: 'Góry',       color: '#2d0080', group: 'scene' },
+  { key: 'rain',      label: 'Deszcz',     color: '#0a1220', group: 'scene' },
+  { key: 'lava',      label: 'Lawa',       color: '#3d0800', group: 'scene' },
 ] as const;
 type BannerPresetKey = typeof BANNER_PRESETS[number]['key'];
 
@@ -4449,33 +4457,53 @@ function ProfilePage({
                       <span className="text-[10px] text-zinc-600 ml-auto">Zmień →</span>
                     </div>
                     {editProf?.banner_preset && editProf.banner_preset !== 'none' && (
-                      <div className={`bp-banner bp-${editProf.banner_preset}`} aria-hidden="true" style={{animationPlayState:'running'}}/>
+                      <div className={`absolute inset-0 bp-${editProf.banner_preset}`} aria-hidden="true" style={{animationPlayState:'running', maskImage:'none', WebkitMaskImage:'none', opacity:0.85, borderRadius:'0.75rem'}}/>
                     )}
                   </div>
                   {/* Picker popup */}
                   {showBannerPresetPicker && (
                     <div className="fixed inset-0 z-[200] flex items-center justify-center" onClick={()=>setShowBannerPresetPicker(false)}>
                       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"/>
-                      <div className="relative bg-[#18181f] border border-white/10 rounded-2xl p-5 shadow-2xl w-72 z-10" onClick={e=>e.stopPropagation()}>
+                      <div className="relative bg-[#18181f] border border-white/10 rounded-2xl p-5 shadow-2xl w-80 z-10 max-h-[80vh] overflow-y-auto" onClick={e=>e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-4">
                           <h3 className="text-sm font-bold text-white">Wybierz baner</h3>
-                          <button onClick={()=>setShowBannerPresetPicker(false)} className="text-zinc-500 hover:text-zinc-300 transition-colors">✕</button>
+                          <button onClick={()=>setShowBannerPresetPicker(false)} className="text-zinc-500 hover:text-zinc-300 transition-colors text-lg leading-none">✕</button>
                         </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          {BANNER_PRESETS.map(p=>{
+                        {/* Colours */}
+                        <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Kolory</p>
+                        <div className="grid grid-cols-4 gap-2 mb-4">
+                          {BANNER_PRESETS.filter(p=>p.group==='color').map(p=>{
                             const isSelected = (editProf?.banner_preset||'none') === p.key;
                             return (
                               <button key={p.key}
                                 onClick={()=>{setEditProf((prev:any)=>({...prev,banner_preset:p.key}));setShowBannerPresetPicker(false);}}
-                                className={`relative flex flex-col items-center gap-1 p-2 rounded-xl border transition-all ${isSelected?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
-                                <div className="relative w-full h-8 rounded-lg overflow-hidden bg-zinc-800 group">
-                                  {p.key !== 'none' && (
-                                    <div className={`bp-banner bp-${p.key}`} aria-hidden="true" style={{animationPlayState:'running'}}/>
-                                  )}
-                                  {p.key === 'none' && <div className="absolute inset-0 flex items-center justify-center text-zinc-600 text-[10px]">–</div>}
+                                className={`relative flex flex-col items-center gap-1 p-1.5 rounded-xl border transition-all ${isSelected?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+                                <div className="relative w-full h-9 rounded-lg overflow-hidden group" style={{background: p.key==='none'?'#18181f':undefined}}>
+                                  {p.key !== 'none'
+                                    ? <div className={`absolute inset-0 bp-${p.key}`} style={{animationPlayState:'running', maskImage:'none', WebkitMaskImage:'none'}} aria-hidden="true"/>
+                                    : <div className="absolute inset-0 flex items-center justify-center text-zinc-600 text-sm">–</div>
+                                  }
                                 </div>
-                                <span className="text-[9px] text-zinc-400 font-medium leading-tight text-center">{p.label}</span>
-                                {isSelected && <span className="absolute top-1 right-1 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><svg width="7" height="7" viewBox="0 0 7 7" fill="none"><path d="M1 3.5L2.8 5.5L6 1.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>}
+                                <span className="text-[8px] text-zinc-400 font-medium leading-tight text-center truncate w-full">{p.label}</span>
+                                {isSelected && <span className="absolute top-0.5 right-0.5 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><svg width="7" height="7" viewBox="0 0 7 7" fill="none"><path d="M1 3.5L2.8 5.5L6 1.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {/* Scenes */}
+                        <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Sceny animowane</p>
+                        <div className="grid grid-cols-4 gap-2">
+                          {BANNER_PRESETS.filter(p=>p.group==='scene').map(p=>{
+                            const isSelected = (editProf?.banner_preset||'none') === p.key;
+                            return (
+                              <button key={p.key}
+                                onClick={()=>{setEditProf((prev:any)=>({...prev,banner_preset:p.key}));setShowBannerPresetPicker(false);}}
+                                className={`relative flex flex-col items-center gap-1 p-1.5 rounded-xl border transition-all ${isSelected?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+                                <div className="relative w-full h-9 rounded-lg overflow-hidden group">
+                                  <div className={`absolute inset-0 bp-${p.key}`} style={{animationPlayState:'running', maskImage:'none', WebkitMaskImage:'none'}} aria-hidden="true"/>
+                                </div>
+                                <span className="text-[8px] text-zinc-400 font-medium leading-tight text-center truncate w-full">{p.label}</span>
+                                {isSelected && <span className="absolute top-0.5 right-0.5 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><svg width="7" height="7" viewBox="0 0 7 7" fill="none"><path d="M1 3.5L2.8 5.5L6 1.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>}
                               </button>
                             );
                           })}
