@@ -218,6 +218,23 @@ const GRADIENTS = [
   'from-amber-500 via-orange-500 to-red-500',
   'from-zinc-700 via-zinc-600 to-zinc-700',
 ];
+// ─── Member list banner presets ───────────────────────────────────────────────
+const BANNER_PRESETS = [
+  { key: 'none',      label: 'Brak',       color: '#27272a' },
+  { key: 'aurora',    label: 'Aurora',     color: '#0ea5e9' },
+  { key: 'violet',    label: 'Violet',     color: '#7c3aed' },
+  { key: 'fire',      label: 'Fire',       color: '#ef4444' },
+  { key: 'ocean',     label: 'Ocean',      color: '#0369a1' },
+  { key: 'neon-pink', label: 'Neon Pink',  color: '#ec4899' },
+  { key: 'matrix',    label: 'Matrix',     color: '#16a34a' },
+  { key: 'gold',      label: 'Gold',       color: '#d97706' },
+  { key: 'galaxy',    label: 'Galaxy',     color: '#4c1d95' },
+  { key: 'ice',       label: 'Ice',        color: '#7dd3fc' },
+  { key: 'sakura',    label: 'Sakura',     color: '#fb7185' },
+  { key: 'cyber',     label: 'Cyber',      color: '#06b6d4' },
+] as const;
+type BannerPresetKey = typeof BANNER_PRESETS[number]['key'];
+
 // ─── Theme system ──────────────────────────────────────────────────────────────
 const THEMES = [
   { id: 'default',  name: 'Ciemny',        desc: 'Domyślny motyw Cordyna',     vars: {} },
@@ -4170,6 +4187,7 @@ function ProfilePage({
   onJamJoin: (hostId:string)=>void; onJamLeave: ()=>void;
   viewedUserJam?: { jam_id: string; host: any; members: any[] } | null;
 }) {
+  const [showBannerPresetPicker, setShowBannerPresetPicker] = useState(false);
   const isOwn   = currentUser?.id === viewUserId;
   const user    = profileData || (isOwn ? currentUser : null);
   const disp    = isOwn ? editProf : user;
@@ -4415,6 +4433,56 @@ function ProfilePage({
                         className={`h-7 rounded-lg bg-gradient-to-r ${g} border-2 transition-all ${editProf?.banner_color===g?'border-white scale-105':'border-transparent'}`}/>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Banner preset picker (own) */}
+              {isOwn && (
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-2 block">Baner na liście członków</label>
+                  {/* Preview strip */}
+                  <div className="relative h-9 rounded-xl overflow-hidden bg-white/[0.04] border border-white/[0.06] mb-2 group cursor-pointer" onClick={()=>setShowBannerPresetPicker(true)}>
+                    <div className="absolute inset-0 flex items-center px-3 gap-2 z-10">
+                      <span className="text-[11px] text-zinc-400">
+                        {BANNER_PRESETS.find(p=>p.key===(editProf?.banner_preset||'none'))?.label ?? 'Brak'}
+                      </span>
+                      <span className="text-[10px] text-zinc-600 ml-auto">Zmień →</span>
+                    </div>
+                    {editProf?.banner_preset && editProf.banner_preset !== 'none' && (
+                      <div className={`bp-banner bp-${editProf.banner_preset}`} aria-hidden="true" style={{animationPlayState:'running'}}/>
+                    )}
+                  </div>
+                  {/* Picker popup */}
+                  {showBannerPresetPicker && (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center" onClick={()=>setShowBannerPresetPicker(false)}>
+                      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"/>
+                      <div className="relative bg-[#18181f] border border-white/10 rounded-2xl p-5 shadow-2xl w-72 z-10" onClick={e=>e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-sm font-bold text-white">Wybierz baner</h3>
+                          <button onClick={()=>setShowBannerPresetPicker(false)} className="text-zinc-500 hover:text-zinc-300 transition-colors">✕</button>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          {BANNER_PRESETS.map(p=>{
+                            const isSelected = (editProf?.banner_preset||'none') === p.key;
+                            return (
+                              <button key={p.key}
+                                onClick={()=>{setEditProf((prev:any)=>({...prev,banner_preset:p.key}));setShowBannerPresetPicker(false);}}
+                                className={`relative flex flex-col items-center gap-1 p-2 rounded-xl border transition-all ${isSelected?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+                                <div className="relative w-full h-8 rounded-lg overflow-hidden bg-zinc-800 group">
+                                  {p.key !== 'none' && (
+                                    <div className={`bp-banner bp-${p.key}`} aria-hidden="true" style={{animationPlayState:'running'}}/>
+                                  )}
+                                  {p.key === 'none' && <div className="absolute inset-0 flex items-center justify-center text-zinc-600 text-[10px]">–</div>}
+                                </div>
+                                <span className="text-[9px] text-zinc-400 font-medium leading-tight text-center">{p.label}</span>
+                                {isSelected && <span className="absolute top-1 right-1 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><svg width="7" height="7" viewBox="0 0 7 7" fill="none"><path d="M1 3.5L2.8 5.5L6 1.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -9017,7 +9085,7 @@ export default function App() {
     try {
       let bannerUrl = editProf.banner_url;
       if (profBannerFile) { const r = await users.uploadBanner(profBannerFile); bannerUrl = r.banner_url; setProfBannerFile(null); setProfBannerPrev(null); }
-      const upd = await users.updateMe({ username: editProf.username, bio: editProf.bio, custom_status: editProf.custom_status, banner_color: editProf.banner_color, banner_url: bannerUrl });
+      const upd = await users.updateMe({ username: editProf.username, bio: editProf.bio, custom_status: editProf.custom_status, banner_color: editProf.banner_color, banner_url: bannerUrl, banner_preset: editProf.banner_preset });
       setCurrentUser(upd); setEditProf({...upd}); setSelUser(upd);
       setProfilePageData(upd);
       if (opts?.closeProfileModal !== false) setProfileOpen(false);
@@ -13246,7 +13314,10 @@ export default function App() {
               const mTwitch = userTwitchActivities.get(m.id);
               const mSteam = userSteamActivities.get(m.id);
               return (
-                <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl hover:bg-white/[0.06] hover:transition-all" onClick={e=>opacity?showHoverCard(m.id,e):showHoverCard(m.id,e)}>
+                <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl relative overflow-hidden hover:bg-white/[0.06] hover:transition-all" onClick={e=>opacity?showHoverCard(m.id,e):showHoverCard(m.id,e)}>
+                  {m.banner_preset && m.banner_preset !== 'none' && !opacity && (
+                    <div className={`bp-banner bp-${m.banner_preset}`} aria-hidden="true"/>
+                  )}
                   <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava(m)}")`} as React.CSSProperties}>
                     {isNew&&<div className="absolute inset-0 rounded-xl ring-2 ring-emerald-400/60 ring-offset-1 ring-offset-[#1e1e30] pointer-events-none animate-pulse z-10"/>}
                     <img src={ava(m)} className={`w-10 h-10 rounded-xl object-cover ${opacity?'opacity-35':''} av-eff-${m.avatar_effect||'none'} av-sc`} alt=""/>

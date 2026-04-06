@@ -731,6 +731,7 @@ CREATE TABLE IF NOT EXISTS server_onboarding_completions (
 DO $$ BEGIN ALTER TABLE users ADD COLUMN card_effect VARCHAR(30) DEFAULT 'none'; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN card_color  VARCHAR(30) DEFAULT 'default'; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN card_font   VARCHAR(30) DEFAULT 'default'; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE users ADD COLUMN banner_preset VARCHAR(30) DEFAULT 'none'; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 `;
 
 const SEED_SQL = `
