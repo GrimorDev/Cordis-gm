@@ -1275,16 +1275,16 @@ img.av-eff-arcade-coin { transition: filter 0.3s; }
 
 /* ── Member list banner presets ──────────────────────────────────────── */
 /* Base shared styles for all banner overlays                             */
+/* Mask starts transparent at 62% → fully visible at 87%                 */
+/* This keeps the avatar + text area fully clear                          */
 .bp-banner {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  -webkit-mask-image: linear-gradient(to right, transparent 28%, black 62%);
-  mask-image: linear-gradient(to right, transparent 28%, black 62%);
-  opacity: 0.82;
-  background-size: 400% 400%;
-  animation-duration: 5s;
-  animation-timing-function: ease;
+  -webkit-mask-image: linear-gradient(to right, transparent 62%, black 87%);
+  mask-image: linear-gradient(to right, transparent 62%, black 87%);
+  opacity: 0.90;
+  animation-timing-function: linear;
   animation-iteration-count: infinite;
   animation-play-state: paused;
 }
@@ -1293,83 +1293,218 @@ img.av-eff-arcade-coin { transition: filter 0.3s; }
 /* No preset */
 .bp-none { display: none !important; }
 
+/* ── Shared gradient shift keyframe ────────────────────────── */
 @keyframes bp-shift {
   0%   { background-position: 0% 50%; }
   50%  { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
 }
-@keyframes bp-shift-fast {
-  0%   { background-position: 0% 50%; }
-  50%  { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+
+/* ══ COLOR PRESETS ══════════════════════════════════════════════════════ */
+
+/* aurora */
+.bp-aurora {
+  background: linear-gradient(120deg, #00d4ff, #7c3aed, #10b981, #0ea5e9, #a855f7, #00d4ff);
+  background-size: 400% 400%;
+  animation-name: bp-shift;
+  animation-duration: 5s;
+  animation-timing-function: ease;
+}
+/* violet */
+.bp-violet {
+  background: linear-gradient(120deg, #4c1d95, #7c3aed, #c084fc, #9333ea, #6d28d9, #4c1d95);
+  background-size: 400% 400%;
+  animation-name: bp-shift;
+  animation-duration: 4s;
+  animation-timing-function: ease;
+}
+/* fire */
+.bp-fire {
+  background: linear-gradient(120deg, #7f1d1d, #dc2626, #f97316, #eab308, #f97316, #dc2626);
+  background-size: 400% 400%;
+  animation-name: bp-shift;
+  animation-duration: 2.5s;
+}
+/* ocean */
+.bp-ocean {
+  background: linear-gradient(120deg, #0c4a6e, #0ea5e9, #06b6d4, #0891b2, #2563eb, #0369a1);
+  background-size: 400% 400%;
+  animation-name: bp-shift;
+  animation-duration: 5s;
+  animation-timing-function: ease;
+}
+/* neon-pink */
+.bp-neon-pink {
+  background: linear-gradient(120deg, #831843, #ec4899, #d946ef, #f43f5e, #c026d3, #db2777);
+  background-size: 400% 400%;
+  animation-name: bp-shift;
+  animation-duration: 3.5s;
+  animation-timing-function: ease;
+}
+/* matrix */
+.bp-matrix {
+  background: linear-gradient(120deg, #052e16, #16a34a, #4ade80, #22c55e, #15803d, #052e16);
+  background-size: 400% 400%;
+  animation-name: bp-shift;
+  animation-duration: 3s;
+}
+/* gold */
+.bp-gold {
+  background: linear-gradient(120deg, #451a03, #d97706, #fbbf24, #f59e0b, #92400e, #d97706);
+  background-size: 400% 400%;
+  animation-name: bp-shift;
+  animation-duration: 4s;
+  animation-timing-function: ease;
+}
+/* cyber */
+.bp-cyber {
+  background: linear-gradient(120deg, #164e63, #06b6d4, #a3e635, #22d3ee, #eab308, #06b6d4);
+  background-size: 400% 400%;
+  animation-name: bp-shift;
+  animation-duration: 2.5s;
 }
 
-/* aurora — shifting teal/violet/green */
-.bp-aurora {
-  background-image: linear-gradient(120deg, #00d4ff, #7c3aed, #10b981, #0ea5e9, #a855f7, #00d4ff);
-  animation-name: bp-shift;
-  animation-duration: 5s;
+/* ══ SCENE PRESETS ══════════════════════════════════════════════════════ */
+
+/* ── city — glowing windows scrolling upward ──────────────── */
+.bp-city {
+  background-color: #060d1a;
+  background-image:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(255,220,80,0.30) 0px, rgba(255,220,80,0.30) 2px,
+      transparent 2px, transparent 7px,
+      rgba(120,180,255,0.20) 7px, rgba(120,180,255,0.20) 9px,
+      transparent 9px, transparent 18px,
+      rgba(255,140,60,0.18) 18px, rgba(255,140,60,0.18) 20px,
+      transparent 20px, transparent 30px
+    ),
+    linear-gradient(180deg, #060d1a 0%, #0d1f3c 40%, #0a1628 70%, #060d1a 100%);
+  background-size: 100% 60px, 100% 100%;
+  animation: bp-city-scroll 2.5s linear infinite;
 }
-/* violet — deep purple shimmer */
-.bp-violet {
-  background-image: linear-gradient(120deg, #4c1d95, #7c3aed, #c084fc, #9333ea, #6d28d9, #4c1d95);
-  animation-name: bp-shift;
-  animation-duration: 4s;
+@keyframes bp-city-scroll {
+  0%   { background-position: 0px 0px, 0 0; }
+  100% { background-position: 0px -60px, 0 0; }
 }
-/* fire — red/orange/yellow blaze */
-.bp-fire {
-  background-image: linear-gradient(120deg, #dc2626, #f97316, #eab308, #f97316, #ef4444, #dc2626);
-  animation-name: bp-shift-fast;
-  animation-duration: 3s;
+
+/* ── space — nebula clouds drifting through stars ─────────── */
+.bp-space {
+  background:
+    radial-gradient(ellipse at 75% 25%, rgba(180,80,255,0.55) 0%, transparent 40%),
+    radial-gradient(ellipse at 90% 75%, rgba(60,130,255,0.45) 0%, transparent 35%),
+    radial-gradient(ellipse at 65% 60%, rgba(0,200,255,0.30) 0%, transparent 28%),
+    radial-gradient(ellipse at 80% 40%, rgba(255,80,180,0.25) 0%, transparent 22%),
+    linear-gradient(135deg, #00000e, #030012, #060020);
+  background-size: 200% 200%, 180% 180%, 150% 150%, 120% 120%, 100% 100%;
+  animation: bp-space-drift 8s ease-in-out infinite;
 }
-/* ocean — blue/teal/cyan waves */
-.bp-ocean {
-  background-image: linear-gradient(120deg, #0369a1, #0ea5e9, #06b6d4, #0891b2, #2563eb, #0369a1);
-  animation-name: bp-shift;
-  animation-duration: 5s;
+@keyframes bp-space-drift {
+  0%   { background-position: 0%   0%,   100% 0%,   50% 100%, 80% 30%,  0 0; }
+  33%  { background-position: 50%  50%,  50%  100%, 20% 50%,  30% 70%,  0 0; }
+  66%  { background-position: 100% 100%, 0%   50%,  80% 20%,  60% 10%,  0 0; }
+  100% { background-position: 0%   0%,   100% 0%,   50% 100%, 80% 30%,  0 0; }
 }
-/* neon-pink — hot pink/magenta */
-.bp-neon-pink {
-  background-image: linear-gradient(120deg, #db2777, #ec4899, #d946ef, #f43f5e, #c026d3, #db2777);
-  animation-name: bp-shift;
-  animation-duration: 4s;
+
+/* ── forest — deep canopy with light rays ─────────────────── */
+.bp-forest {
+  background:
+    repeating-linear-gradient(
+      100deg,
+      transparent 0%,  transparent 8%,
+      rgba(100,220,130,0.08) 8%, rgba(100,220,130,0.08) 9%,
+      transparent 9%,  transparent 17%,
+      rgba(60,180,90,0.06) 17%, rgba(60,180,90,0.06) 18%,
+      transparent 18%, transparent 26%
+    ),
+    linear-gradient(180deg, #001206 0%, #022c0f 25%, #063d19 50%, #0a5c24 70%, #042e10 90%, #001206 100%);
+  background-size: 300% 100%, 100% 300%;
+  animation: bp-forest-sway 5s ease-in-out infinite;
 }
-/* matrix — digital greens */
-.bp-matrix {
-  background-image: linear-gradient(120deg, #14532d, #16a34a, #4ade80, #22c55e, #166534, #14532d);
-  animation-name: bp-shift-fast;
-  animation-duration: 3.5s;
+@keyframes bp-forest-sway {
+  0%   { background-position: 0%   50%, 0% 0%;   }
+  50%  { background-position: 100% 50%, 0% 100%; }
+  100% { background-position: 0%   50%, 0% 0%;   }
 }
-/* gold — shimmering amber/gold */
-.bp-gold {
-  background-image: linear-gradient(120deg, #92400e, #d97706, #fbbf24, #f59e0b, #b45309, #92400e);
-  animation-name: bp-shift;
-  animation-duration: 4.5s;
+
+/* ── mountains — purple dusk with glowing peaks ───────────── */
+.bp-mountains {
+  background:
+    linear-gradient(180deg,
+      #0d0020 0%, #1a0040 15%, #2d0080 30%,
+      #5b21b6 45%, #7c3aed 55%, #a855f7 65%,
+      #c4b5fd 75%, #ede9fe 85%, #faf5ff 92%, #ffffff 100%
+    ),
+    linear-gradient(120deg, #1a0040, #4a1d96, #1a0040);
+  background-size: 100% 100%, 400% 400%;
+  animation: bp-mountains-glow 5s ease-in-out infinite;
 }
-/* galaxy — deep space purple/indigo */
+@keyframes bp-mountains-glow {
+  0%,100% { opacity: 0.75; background-position: 0 0, 0%   50%; }
+  50%      { opacity: 1.00; background-position: 0 0, 100% 50%; }
+}
+
+/* ── rain — diagonal streaks falling ─────────────────────── */
+.bp-rain {
+  background-color: #0a1220;
+  background-image:
+    repeating-linear-gradient(
+      174deg,
+      transparent  0px, transparent  5px,
+      rgba(150,210,255,0.28) 5px, rgba(150,210,255,0.28) 6px,
+      transparent  6px, transparent  13px,
+      rgba(100,170,230,0.15) 13px, rgba(100,170,230,0.15) 14px,
+      transparent  14px, transparent  22px
+    ),
+    linear-gradient(180deg, #0a1220, #112035, #0d1a2c);
+  background-size: 100% 70px, 100% 100%;
+  animation: bp-rain-fall 0.7s linear infinite;
+}
+@keyframes bp-rain-fall {
+  0%   { background-position: 8px  0px, 0 0; }
+  100% { background-position: 0px  70px, 0 0; }
+}
+
+/* galaxy — deep space indigo */
 .bp-galaxy {
-  background-image: linear-gradient(120deg, #0f0c29, #4c1d95, #1e40af, #312e81, #1e1b4b, #0f0c29);
+  background: linear-gradient(120deg, #0f0c29, #4c1d95, #1e40af, #312e81, #1e1b4b, #0f0c29);
+  background-size: 400% 400%;
   animation-name: bp-shift;
-  animation-duration: 6s;
-  opacity: 0.95;
+  animation-duration: 7s;
+  animation-timing-function: ease;
 }
-/* ice — pale blue/white crystal */
+/* ice — pale blue crystal */
 .bp-ice {
-  background-image: linear-gradient(120deg, #bae6fd, #e0f2fe, #7dd3fc, #cffafe, #a5f3fc, #bae6fd);
+  background: linear-gradient(120deg, #bae6fd, #e0f2fe, #7dd3fc, #cffafe, #a5f3fc, #bae6fd);
+  background-size: 400% 400%;
   animation-name: bp-shift;
   animation-duration: 5s;
+  animation-timing-function: ease;
   opacity: 0.65;
 }
-/* sakura — soft pink/rose petals */
+/* sakura — soft rose petals */
 .bp-sakura {
-  background-image: linear-gradient(120deg, #f9a8d4, #fda4af, #fb7185, #f472b6, #fbcfe8, #f9a8d4);
+  background: linear-gradient(120deg, #f9a8d4, #fda4af, #fb7185, #f472b6, #fbcfe8, #f9a8d4);
+  background-size: 400% 400%;
   animation-name: bp-shift;
-  animation-duration: 4.5s;
+  animation-duration: 5s;
+  animation-timing-function: ease;
   opacity: 0.75;
 }
-/* cyber — cyan/lime cyberpunk */
-.bp-cyber {
-  background-image: linear-gradient(120deg, #06b6d4, #a3e635, #22d3ee, #eab308, #67e8f9, #06b6d4);
-  animation-name: bp-shift-fast;
-  animation-duration: 3s;
+
+/* ── lava — slow molten rock bubbling ─────────────────────── */
+.bp-lava {
+  background:
+    radial-gradient(ellipse at 70% 30%, rgba(255,100,0,0.7) 0%, transparent 45%),
+    radial-gradient(ellipse at 85% 80%, rgba(220,30,0,0.6)  0%, transparent 38%),
+    radial-gradient(ellipse at 60% 65%, rgba(255,200,0,0.4) 0%, transparent 30%),
+    linear-gradient(180deg, #1a0300, #3d0800, #200400);
+  background-size: 250% 250%, 200% 200%, 180% 180%, 100% 100%;
+  animation: bp-lava-bubble 6s ease-in-out infinite;
+}
+@keyframes bp-lava-bubble {
+  0%   { background-position: 0%   0%,   100% 100%, 50%  0%,   0 0; }
+  33%  { background-position: 100% 50%,  0%   50%,  100% 50%,  0 0; }
+  66%  { background-position: 50%  100%, 100% 0%,   30%  100%, 0 0; }
+  100% { background-position: 0%   0%,   100% 100%, 50%  0%,   0 0; }
 }

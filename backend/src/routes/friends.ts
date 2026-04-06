@@ -32,7 +32,7 @@ const router = Router();
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { rows } = await query(
-      `SELECT u.id, u.username, u.avatar_url, u.status, u.custom_status,
+      `SELECT u.id, u.username, u.avatar_url, u.status, u.custom_status, u.banner_preset,
               f.id as friendship_id, f.created_at as friends_since
        FROM friends f
        INNER JOIN users u ON u.id = CASE WHEN f.requester_id = $1 THEN f.addressee_id ELSE f.requester_id END
