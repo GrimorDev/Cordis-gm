@@ -13696,105 +13696,35 @@ export default function App() {
         {showPowerModal && (
           <>
             <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-              className="fixed inset-0 z-[9998] bg-black/70 backdrop-blur-sm"
+              className="fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm"
               onClick={()=>setShowPowerModal(false)}/>
             <motion.div
-              initial={{opacity:0, scale:0.88, y:32}}
+              initial={{opacity:0, scale:0.92, y:24}}
               animate={{opacity:1, scale:1, y:0}}
-              exit={{opacity:0, scale:0.88, y:32}}
-              transition={{type:'spring', stiffness:380, damping:28}}
+              exit={{opacity:0, scale:0.92, y:24}}
+              transition={{type:'spring', stiffness:400, damping:30}}
               className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none">
-              <div className="pointer-events-auto w-[420px] rounded-3xl overflow-hidden shadow-2xl shadow-black/80 border border-white/[0.08]"
-                style={{background:'linear-gradient(160deg,#0d0d20 0%,#110d24 50%,#0a0a18 100%)'}}>
-
-                {/* Banner z logo + efekt glow */}
-                <div className="relative h-52 flex items-center justify-center overflow-hidden"
-                  style={{background:'linear-gradient(135deg,#1a0a35 0%,#0e0a28 40%,#1a0535 100%)'}}>
-                  {/* Glow rings */}
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-48 h-48 rounded-full" style={{background:'radial-gradient(circle,rgba(139,92,246,0.25) 0%,transparent 70%)'}}/>
-                  </div>
-                  <div className="absolute bottom-0 left-0 right-0 h-24 pointer-events-none"
-                    style={{background:'linear-gradient(to top,rgba(13,13,32,1) 0%,transparent 100%)'}}/>
-                  {/* Animowane cząsteczki */}
-                  {[...Array(6)].map((_,i)=>(
-                    <motion.div key={i}
-                      className="absolute w-1 h-1 rounded-full bg-violet-400/60"
-                      style={{left:`${15+i*14}%`, top:`${20+((i*17)%60)}%`}}
-                      animate={{y:[-6,6,-6], opacity:[0.4,1,0.4]}}
-                      transition={{duration:2+i*0.4, repeat:Infinity, ease:'easeInOut', delay:i*0.3}}/>
-                  ))}
-                  {/* Logo Cordyn */}
-                  <motion.div
-                    animate={{y:[0,-6,0]}}
-                    transition={{duration:3, repeat:Infinity, ease:'easeInOut'}}>
-                    <div className="relative">
-                      <div className="absolute inset-0 blur-2xl scale-150"
-                        style={{background:'radial-gradient(circle,rgba(139,92,246,0.6) 0%,transparent 70%)'}}/>
-                      <img src="/cordyn.png" alt="Cordyn Power"
-                        className="relative w-28 h-28 object-contain drop-shadow-[0_0_30px_rgba(139,92,246,0.8)]"/>
+              <div className="pointer-events-auto w-[360px] rounded-2xl overflow-hidden shadow-2xl shadow-black/60 border border-white/[0.08] bg-zinc-900">
+                <div className="flex items-center justify-between px-5 pt-5 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-rose-500/15 flex items-center justify-center">
+                      <Upload size={16} className="text-rose-400"/>
                     </div>
-                  </motion.div>
-                  {/* Zamknij */}
+                    <span className="font-semibold text-white text-sm">Plik za duży</span>
+                  </div>
                   <button onClick={()=>setShowPowerModal(false)}
-                    className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.15] transition-all">
+                    className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all">
                     <X size={14}/>
                   </button>
                 </div>
-
-                {/* Treść */}
-                <div className="px-8 pb-8 -mt-2 flex flex-col items-center text-center">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-4 text-[11px] font-bold tracking-wider uppercase"
-                    style={{background:'linear-gradient(90deg,rgba(139,92,246,0.2),rgba(217,70,239,0.2))',border:'1px solid rgba(139,92,246,0.4)',color:'#c084fc'}}>
-                    <Zap size={10} className="shrink-0"/> Cordyn Power
-                  </div>
-                  <h2 className="text-2xl font-black text-white mb-2 leading-tight">
-                    Plik jest za duży
-                  </h2>
-                  <p className="text-sm text-zinc-400 leading-relaxed mb-1">
-                    Darmowe konto pozwala na pliki do <span className="text-zinc-200 font-semibold">50 MB</span>.
+                <div className="px-5 pb-5">
+                  <p className="text-sm text-zinc-400 leading-relaxed">
+                    Maksymalny rozmiar pliku to <span className="text-zinc-200 font-semibold">50 MB</span>. Wybierz mniejszy plik i spróbuj ponownie.
                   </p>
-                  <p className="text-sm text-zinc-400 leading-relaxed mb-6">
-                    Odblokuj <span className="text-violet-300 font-semibold">Cordyn Power</span> i wysyłaj pliki do{' '}
-                    <span className="text-violet-300 font-black">600 MB</span> — oraz ciesz się pozostałymi przywilejami.
-                  </p>
-
-                  {/* Korzyści */}
-                  <div className="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 mb-6 text-left space-y-2.5">
-                    {[
-                      { icon: '📁', text: 'Pliki do 600 MB' },
-                      { icon: '🎨', text: 'Ekskluzywne motywy i efekty' },
-                      { icon: '⚡', text: 'Animowane avatary' },
-                      { icon: '🏅', text: 'Odznaka Power na profilu' },
-                      { icon: '🔓', text: 'Priorytetowe wsparcie' },
-                    ].map(b => (
-                      <div key={b.text} className="flex items-center gap-2.5 text-sm text-zinc-300">
-                        <span className="text-base w-5 text-center shrink-0">{b.icon}</span>
-                        <span>{b.text}</span>
-                        <Check size={12} className="ml-auto text-violet-400 shrink-0"/>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Cena + CTA */}
-                  <div className="w-full space-y-3">
-                    <motion.button
-                      whileHover={{scale:1.02}} whileTap={{scale:0.98}}
-                      onClick={()=>setShowPowerModal(false)}
-                      className="w-full py-3.5 rounded-2xl font-bold text-sm text-white relative overflow-hidden"
-                      style={{background:'linear-gradient(135deg,#7c3aed 0%,#a855f7 50%,#d946ef 100%)'}}>
-                      <div className="absolute inset-0 opacity-0 hover:opacity-100 transition-opacity"
-                        style={{background:'linear-gradient(135deg,#6d28d9 0%,#9333ea 50%,#c026d3 100%)'}}/>
-                      <span className="relative flex items-center justify-center gap-2">
-                        <Zap size={15} className="shrink-0"/>
-                        Zdobądź Cordyn Power — 10 zł/msc
-                      </span>
-                    </motion.button>
-                    <button onClick={()=>setShowPowerModal(false)}
-                      className="w-full py-2.5 rounded-2xl text-sm text-zinc-500 hover:text-zinc-300 transition-colors">
-                      Nie teraz
-                    </button>
-                  </div>
+                  <button onClick={()=>setShowPowerModal(false)}
+                    className="mt-4 w-full py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm text-zinc-300 font-medium transition-colors">
+                    OK
+                  </button>
                 </div>
               </div>
             </motion.div>
