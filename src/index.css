@@ -1711,14 +1711,14 @@ img.av-eff-arcade-coin { transition: filter 0.3s; }
 
 /* ══ GIF / MEME PRESETS ═════════════════════════════════════════════════ */
 /* GIFs cannot be paused via CSS — using opacity 0→0.85 on group:hover   */
-/* achieves the same "frozen until hover" visual behaviour                */
+/* achieves the same "frozen until hover" visual behaviour.               */
+/* GIF is placed on ::before covering only the RIGHT 50% of the row      */
+/* so its center (75% of row) lands in the mask's visible zone (62-87%). */
 .bp-this-is-fine,
 .bp-nyan-cat,
 .bp-homer-bush,
 .bp-rickroll {
-  background-size: cover;
-  background-position: right center;
-  background-repeat: no-repeat;
+  background: transparent;
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -1727,11 +1727,24 @@ img.av-eff-arcade-coin { transition: filter 0.3s; }
 .group:hover .bp-homer-bush,
 .group:hover .bp-rickroll { opacity: 0.85; }
 
-/* 🔥 This is Fine — everything is fine dog meme */
-.bp-this-is-fine { background-image: url('https://media.giphy.com/media/NTur7XlVDUdqM/giphy.gif'); }
+/* GIF fills only the right 50% — its centre aligns with mask visible zone */
+.bp-this-is-fine::before,
+.bp-nyan-cat::before,
+.bp-homer-bush::before,
+.bp-rickroll::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0; right: 0;
+  width: 50%;
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+/* 🔥 This is Fine */
+.bp-this-is-fine::before { background-image: url('https://media.giphy.com/media/NTur7XlVDUdqM/giphy.gif'); }
 /* 🌈 Nyan Cat */
-.bp-nyan-cat     { background-image: url('https://media.giphy.com/media/sIIhZliB2McAo/giphy.gif'); }
-/* 🌿 Homer Bush — Homer disappears into bushes */
-.bp-homer-bush   { background-image: url('https://media.giphy.com/media/jUwpNzg9IcyrK/giphy.gif'); }
-/* 🎵 Rickroll — Never gonna give you up */
-.bp-rickroll     { background-image: url('https://media.giphy.com/media/Ju7l5y9osyymQ/giphy.gif'); }
+.bp-nyan-cat::before     { background-image: url('https://media.giphy.com/media/sIIhZliB2McAo/giphy.gif'); }
+/* 🌿 Homer Bush */
+.bp-homer-bush::before   { background-image: url('https://media.giphy.com/media/jUwpNzg9IcyrK/giphy.gif'); }
+/* 🎵 Rickroll */
+.bp-rickroll::before     { background-image: url('https://media.giphy.com/media/Ju7l5y9osyymQ/giphy.gif'); }
