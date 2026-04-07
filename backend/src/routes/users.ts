@@ -123,7 +123,7 @@ router.put('/me', authMiddleware,
     body('card_color').optional().isIn(['default','slate','midnight','crimson','forest','ocean','neon','copper','violet','teal','charcoal','olive','rose','white','sky','lavender','cream','coral','mint','sand']),
     body('card_font').optional().isIn(['default','mono','serif','nunito','raleway','josefin','exo','ubuntu','pixel','orbitron','bebas','cinzel','playfair','caveat','dancing','pacifico','righteous','comic']),
     body('theme_id').optional().isIn(['default','midnight','amoled','forest','sakura','sunset']),
-    body('banner_preset').optional().isIn(['none','aurora','violet','fire','ocean','neon-pink','matrix','gold','galaxy','ice','sakura','cyber','city','space','forest','mountains','rain','lava','misty-forest','deep-space','night-city','lava-lamp','retro-sunset']),
+    body('banner_preset').optional().isIn(['none','aurora','violet','fire','ocean','neon-pink','matrix','gold','galaxy','ice','sakura','cyber','city','space','forest','mountains','rain','lava','misty-forest','deep-space','night-city','lava-lamp','retro-sunset','this-is-fine','nyan-cat','homer-bush','rickroll']),
   ],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);

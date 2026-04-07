@@ -245,6 +245,11 @@ const BANNER_PRESETS = [
   { key: 'night-city',    label: 'Nocne miasto',   color: '#172554', group: 'scene' },
   { key: 'lava-lamp',     label: 'Lava Lamp',      color: '#2e1065', group: 'scene' },
   { key: 'retro-sunset',  label: 'Retro Sunset',   color: '#1e1b4b', group: 'scene' },
+  // — memes —
+  { key: 'this-is-fine',  label: 'This is Fine',   color: '#7c2d12', group: 'meme' },
+  { key: 'nyan-cat',      label: 'Nyan Cat',       color: '#1e1b4b', group: 'meme' },
+  { key: 'homer-bush',    label: 'Homer Bush',     color: '#14532d', group: 'meme' },
+  { key: 'rickroll',      label: 'Rickroll',       color: '#1c1c1c', group: 'meme' },
 ] as const;
 type BannerPresetKey = typeof BANNER_PRESETS[number]['key'];
 
@@ -4497,7 +4502,7 @@ function ProfilePage({
                         </div>
                         {/* Scenes */}
                         <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Sceny animowane</p>
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className="grid grid-cols-4 gap-2 mb-4">
                           {BANNER_PRESETS.filter(p=>p.group==='scene').map(p=>{
                             const isSelected = (editProf?.banner_preset||'none') === p.key;
                             return (
@@ -4506,6 +4511,25 @@ function ProfilePage({
                                 className={`relative flex flex-col items-center gap-1 p-1.5 rounded-xl border transition-all ${isSelected?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
                                 <div className="relative w-full h-9 rounded-lg overflow-hidden group">
                                   <div className={`absolute inset-0 bp-${p.key}`} style={{animationPlayState:'running', maskImage:'none', WebkitMaskImage:'none'}} aria-hidden="true"/>
+                                </div>
+                                <span className="text-[8px] text-zinc-400 font-medium leading-tight text-center truncate w-full">{p.label}</span>
+                                {isSelected && <span className="absolute top-0.5 right-0.5 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><svg width="7" height="7" viewBox="0 0 7 7" fill="none"><path d="M1 3.5L2.8 5.5L6 1.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {/* Memes */}
+                        <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Memy 🔥</p>
+                        <div className="grid grid-cols-4 gap-2">
+                          {BANNER_PRESETS.filter(p=>p.group==='meme').map(p=>{
+                            const isSelected = (editProf?.banner_preset||'none') === p.key;
+                            return (
+                              <button key={p.key}
+                                onClick={()=>{setEditProf((prev:any)=>({...prev,banner_preset:p.key}));setShowBannerPresetPicker(false);}}
+                                className={`relative flex flex-col items-center gap-1 p-1.5 rounded-xl border transition-all ${isSelected?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+                                {/* GIF preview — always visible at fixed opacity in picker */}
+                                <div className="relative w-full h-9 rounded-lg overflow-hidden" style={{background: p.color}}>
+                                  <div className={`absolute inset-0 bp-${p.key}`} style={{opacity:0.85, maskImage:'none', WebkitMaskImage:'none'}} aria-hidden="true"/>
                                 </div>
                                 <span className="text-[8px] text-zinc-400 font-medium leading-tight text-center truncate w-full">{p.label}</span>
                                 {isSelected && <span className="absolute top-0.5 right-0.5 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><svg width="7" height="7" viewBox="0 0 7 7" fill="none"><path d="M1 3.5L2.8 5.5L6 1.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>}

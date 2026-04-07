@@ -1708,3 +1708,30 @@ img.av-eff-arcade-coin { transition: filter 0.3s; }
   0%   { background-position: 0% 0%;  }
   100% { background-position: 0% 8px; }
 }
+
+/* ══ GIF / MEME PRESETS ═════════════════════════════════════════════════ */
+/* GIFs cannot be paused via CSS — using opacity 0→0.85 on group:hover   */
+/* achieves the same "frozen until hover" visual behaviour                */
+.bp-this-is-fine,
+.bp-nyan-cat,
+.bp-homer-bush,
+.bp-rickroll {
+  background-size: cover;
+  background-position: right center;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.group:hover .bp-this-is-fine,
+.group:hover .bp-nyan-cat,
+.group:hover .bp-homer-bush,
+.group:hover .bp-rickroll { opacity: 0.85; }
+
+/* 🔥 This is Fine — everything is fine dog meme */
+.bp-this-is-fine { background-image: url('https://media.giphy.com/media/NTur7XlVDUdqM/giphy.gif'); }
+/* 🌈 Nyan Cat */
+.bp-nyan-cat     { background-image: url('https://media.giphy.com/media/sIIhZliB2McAo/giphy.gif'); }
+/* 🌿 Homer Bush — Homer disappears into bushes */
+.bp-homer-bush   { background-image: url('https://media.giphy.com/media/jUwpNzg9IcyrK/giphy.gif'); }
+/* 🎵 Rickroll — Never gonna give you up */
+.bp-rickroll     { background-image: url('https://media.giphy.com/media/Ju7l5y9osyymQ/giphy.gif'); }
