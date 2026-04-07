@@ -1508,3 +1508,106 @@ img.av-eff-arcade-coin { transition: filter 0.3s; }
   66%  { background-position: 50%  100%, 100% 0%,   30%  100%, 0 0; }
   100% { background-position: 0%   0%,   100% 100%, 50%  0%,   0 0; }
 }
+
+/* ══ PRESETS FROM FRIEND'S DESIGN ═══════════════════════════════════════ */
+/* These use ::before / ::after pseudo-elements for multi-layer effects   */
+/* Their own animations are paused by default; group:hover starts them    */
+
+@keyframes bp-banner-pan {
+  0%   { background-position: 0%   0%; }
+  100% { background-position: 100% 0%; }
+}
+@keyframes bp-spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes bp-night-light {
+  0%   { transform: translate(-50%, -50%); }
+  100% { transform: translate(0%,   -50%); }
+}
+
+/* ── misty-forest — foggy green woodland with panning noise mist ─── */
+.bp-misty-forest {
+  background-color: #0a1f15;
+  overflow: hidden;
+  opacity: 1;
+}
+.bp-misty-forest::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url('https://picsum.photos/seed/forest/400/100') center / cover no-repeat;
+  opacity: 0.4;
+  mix-blend-mode: luminosity;
+}
+.bp-misty-forest::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.012' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  background-size: 300% 100%;
+  opacity: 0.3;
+  mix-blend-mode: screen;
+  animation: bp-banner-pan 12s linear infinite;
+  animation-play-state: paused;
+}
+.group:hover .bp-misty-forest::after { animation-play-state: running; }
+
+/* ── deep-space — slowly rotating galaxy ────────────────────────── */
+.bp-deep-space {
+  background-color: #000;
+  overflow: hidden;
+  opacity: 1;
+}
+.bp-deep-space::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: url('https://picsum.photos/seed/galaxy/400/400') center / cover no-repeat;
+  opacity: 0.6;
+  animation: bp-spin-slow 60s linear infinite;
+  animation-play-state: paused;
+}
+.bp-deep-space::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to right, transparent, rgba(88,28,135,0.5));
+  mix-blend-mode: overlay;
+}
+.group:hover .bp-deep-space::before { animation-play-state: running; }
+
+/* ── night-city — cyberpunk cityscape with sweeping light ───────── */
+.bp-night-city {
+  background-color: #172554;
+  overflow: hidden;
+  opacity: 1;
+}
+.bp-night-city::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, transparent, rgba(59,130,246,0.2), rgba(168,85,247,0.4)),
+    url('https://picsum.photos/seed/city/400/100');
+  background-size: 100% 100%, cover;
+  background-position: 0 0, center;
+  opacity: 0.5;
+  mix-blend-mode: luminosity;
+}
+.bp-night-city::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 200%;
+  height: 2px;
+  background: linear-gradient(to right, transparent, rgba(250,204,21,0.8), transparent);
+  transform: translate(-50%, -50%);
+  animation: bp-night-light 3s linear infinite;
+  animation-play-state: paused;
+}
+.group:hover .bp-night-city::after { animation-play-state: running; }

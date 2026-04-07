@@ -234,12 +234,15 @@ const BANNER_PRESETS = [
   { key: 'sakura',    label: 'Sakura',     color: '#fb7185', group: 'color' },
   { key: 'cyber',     label: 'Cyber',      color: '#06b6d4', group: 'color' },
   // — scenes —
-  { key: 'city',      label: 'Miasto',     color: '#0d1f3c', group: 'scene' },
-  { key: 'space',     label: 'Kosmos',     color: '#030012', group: 'scene' },
-  { key: 'forest',    label: 'Las',        color: '#063d19', group: 'scene' },
-  { key: 'mountains', label: 'Góry',       color: '#2d0080', group: 'scene' },
-  { key: 'rain',      label: 'Deszcz',     color: '#0a1220', group: 'scene' },
-  { key: 'lava',      label: 'Lawa',       color: '#3d0800', group: 'scene' },
+  { key: 'city',         label: 'Miasto',      color: '#0d1f3c', group: 'scene' },
+  { key: 'space',        label: 'Kosmos',      color: '#030012', group: 'scene' },
+  { key: 'forest',       label: 'Las',         color: '#063d19', group: 'scene' },
+  { key: 'mountains',    label: 'Góry',        color: '#2d0080', group: 'scene' },
+  { key: 'rain',         label: 'Deszcz',      color: '#0a1220', group: 'scene' },
+  { key: 'lava',         label: 'Lawa',        color: '#3d0800', group: 'scene' },
+  { key: 'misty-forest', label: 'Mglisty las', color: '#0a1f15', group: 'scene' },
+  { key: 'deep-space',   label: 'Głęboki kosmos', color: '#000000', group: 'scene' },
+  { key: 'night-city',   label: 'Nocne miasto',   color: '#172554', group: 'scene' },
 ] as const;
 type BannerPresetKey = typeof BANNER_PRESETS[number]['key'];
 
