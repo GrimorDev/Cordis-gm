@@ -240,9 +240,11 @@ const BANNER_PRESETS = [
   { key: 'mountains',    label: 'Góry',        color: '#2d0080', group: 'scene' },
   { key: 'rain',         label: 'Deszcz',      color: '#0a1220', group: 'scene' },
   { key: 'lava',         label: 'Lawa',        color: '#3d0800', group: 'scene' },
-  { key: 'misty-forest', label: 'Mglisty las', color: '#0a1f15', group: 'scene' },
-  { key: 'deep-space',   label: 'Głęboki kosmos', color: '#000000', group: 'scene' },
-  { key: 'night-city',   label: 'Nocne miasto',   color: '#172554', group: 'scene' },
+  { key: 'misty-forest',  label: 'Mglisty las',    color: '#0a1f15', group: 'scene' },
+  { key: 'deep-space',    label: 'Głęboki kosmos', color: '#000000', group: 'scene' },
+  { key: 'night-city',    label: 'Nocne miasto',   color: '#172554', group: 'scene' },
+  { key: 'lava-lamp',     label: 'Lava Lamp',      color: '#2e1065', group: 'scene' },
+  { key: 'retro-sunset',  label: 'Retro Sunset',   color: '#1e1b4b', group: 'scene' },
 ] as const;
 type BannerPresetKey = typeof BANNER_PRESETS[number]['key'];
 
@@ -13349,12 +13351,12 @@ export default function App() {
                   {m.banner_preset && m.banner_preset !== 'none' && !opacity && (
                     <div className={`bp-banner bp-${m.banner_preset}`} aria-hidden="true"/>
                   )}
-                  <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava(m)}")`} as React.CSSProperties}>
+                  <div className="relative z-[1] shrink-0 av-frozen" style={{'--av-url':`url("${ava(m)}")`} as React.CSSProperties}>
                     {isNew&&<div className="absolute inset-0 rounded-xl ring-2 ring-emerald-400/60 ring-offset-1 ring-offset-[#1e1e30] pointer-events-none animate-pulse z-10"/>}
                     <img src={ava(m)} className={`w-10 h-10 rounded-xl object-cover ${opacity?'opacity-35':''} av-eff-${m.avatar_effect||'none'} av-sc`} alt=""/>
                     <StatusBadge status={opacity?'offline':m.status} size={10} className={`absolute -bottom-0.5 -right-0.5 ${opacity?'opacity-50':''}`}/>
                   </div>
-                  <div className="min-w-0 flex-1">
+                  <div className="relative z-[1] min-w-0 flex-1">
                     <div className="flex items-center gap-1 flex-wrap">
                       <p className={`text-[13px] font-${opacity?'medium':'semibold'} truncate ${opacity?'group-hover:opacity-70':'group-hover:opacity-90'} transition-colors leading-tight`}
                         style={{ color: opacity ? (m.roles?.[0]?.color?`${m.roles[0].color}80`:'#52525b') : (m.roles?.[0]?.color||'#d4d4d8') }}>
