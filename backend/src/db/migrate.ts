@@ -793,6 +793,91 @@ CREATE TABLE IF NOT EXISTS status_incident_updates (
     message     TEXT NOT NULL,
     created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ── is_bot column on users ────────────────────────────────────────────────────
+DO $$ BEGIN ALTER TABLE users ADD COLUMN is_bot BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- ── Developer Applications ────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS developer_applications (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    owner_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name           VARCHAR(100) NOT NULL,
+    description    TEXT,
+    icon_url       TEXT,
+    client_id      VARCHAR(64) UNIQUE NOT NULL DEFAULT encode(gen_random_bytes(20), 'hex'),
+    client_secret  TEXT NOT NULL,
+    redirect_uris  TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+    bot_user_id    UUID UNIQUE REFERENCES users(id) ON DELETE SET NULL,
+    is_public      BOOLEAN DEFAULT FALSE,
+    is_verified    BOOLEAN DEFAULT FALSE,
+    terms_url      TEXT,
+    privacy_url    TEXT,
+    rate_limit_tier VARCHAR(20) DEFAULT 'standard' CHECK (rate_limit_tier IN ('standard','elevated','unlimited')),
+    created_at     TIMESTAMPTZ DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_devapps_owner ON developer_applications(owner_id);
+CREATE INDEX IF NOT EXISTS idx_devapps_client_id ON developer_applications(client_id);
+
+-- ── Bot Tokens ────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS bot_tokens (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    application_id UUID NOT NULL REFERENCES developer_applications(id) ON DELETE CASCADE,
+    bot_user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash     TEXT NOT NULL,
+    token_prefix   VARCHAR(16) NOT NULL,
+    last_used_at   TIMESTAMPTZ,
+    created_at     TIMESTAMPTZ DEFAULT NOW(),
+    revoked_at     TIMESTAMPTZ,
+    UNIQUE(application_id)
+);
+CREATE INDEX IF NOT EXISTS idx_bot_tokens_hash ON bot_tokens(token_hash);
+
+-- ── OAuth2 Authorization Codes ────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS oauth2_authorization_codes (
+    code           VARCHAR(128) PRIMARY KEY,
+    application_id UUID NOT NULL REFERENCES developer_applications(id) ON DELETE CASCADE,
+    user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    scopes         TEXT[] NOT NULL,
+    redirect_uri   TEXT NOT NULL,
+    code_challenge TEXT,
+    code_challenge_method VARCHAR(10),
+    expires_at     TIMESTAMPTZ NOT NULL,
+    used           BOOLEAN DEFAULT FALSE,
+    created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ── OAuth2 Tokens ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS oauth2_tokens (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    application_id  UUID NOT NULL REFERENCES developer_applications(id) ON DELETE CASCADE,
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    access_token    TEXT NOT NULL UNIQUE,
+    refresh_token   TEXT NOT NULL UNIQUE,
+    scopes          TEXT[] NOT NULL,
+    access_expires  TIMESTAMPTZ NOT NULL,
+    refresh_expires TIMESTAMPTZ NOT NULL,
+    revoked         BOOLEAN DEFAULT FALSE,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    last_used_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_oauth2_tokens_access  ON oauth2_tokens(access_token);
+CREATE INDEX IF NOT EXISTS idx_oauth2_tokens_refresh ON oauth2_tokens(refresh_token);
+CREATE INDEX IF NOT EXISTS idx_oauth2_tokens_user    ON oauth2_tokens(user_id, application_id);
+
+-- ── Bot Server Installations ──────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS bot_server_installations (
+    server_id      UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    application_id UUID NOT NULL REFERENCES developer_applications(id) ON DELETE CASCADE,
+    bot_user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    installed_by   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    granted_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+    installed_at   TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (server_id, application_id)
+);
+CREATE INDEX IF NOT EXISTS idx_bot_installs_server ON bot_server_installations(server_id);
+CREATE INDEX IF NOT EXISTS idx_bot_installs_app    ON bot_server_installations(application_id);
+CREATE INDEX IF NOT EXISTS idx_bot_installs_bot    ON bot_server_installations(bot_user_id);
 `;
 
 const SEED_SQL = `
