@@ -767,6 +767,32 @@ CREATE TABLE IF NOT EXISTS member_warnings (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_warnings_server_user ON member_warnings(server_id, user_id);
+
+-- ── Service Status ────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS service_checks (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    service     VARCHAR(50) NOT NULL,
+    status      VARCHAR(20) NOT NULL CHECK (status IN ('operational','degraded','outage')),
+    response_ms INT,
+    checked_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_service_checks_svc_time ON service_checks(service, checked_at DESC);
+CREATE TABLE IF NOT EXISTS status_incidents (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title       VARCHAR(200) NOT NULL,
+    service     VARCHAR(50),
+    status      VARCHAR(20) DEFAULT 'investigating'
+                CHECK (status IN ('investigating','identified','monitoring','resolved')),
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    resolved_at TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS status_incident_updates (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    incident_id UUID NOT NULL REFERENCES status_incidents(id) ON DELETE CASCADE,
+    status      VARCHAR(20),
+    message     TEXT NOT NULL,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
 `;
 
 const SEED_SQL = `
@@ -784,6 +810,8 @@ export async function runMigrations(): Promise<void> {
   try {
     console.log('Running database migrations...');
     await client.query(SCHEMA_SQL);
+    // Prune old service checks (keep 100 days)
+    await client.query(`DELETE FROM service_checks WHERE checked_at < NOW() - INTERVAL '100 days'`).catch(() => {});
     await client.query(SEED_SQL);
     console.log('Migrations complete.');
   } catch (err) {
