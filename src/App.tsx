@@ -2263,36 +2263,44 @@ function AutomationsTab({ serverId, gi, roles, channels }: {
   roles: ServerRole[];
   channels: ChannelData[];
 }) {
-  const [automations, setAutomations] = React.useState<import('./api').ServerAutomation[]>([]);
+  type Auto = import('./api').ServerAutomation;
+  type AutoCond = import('./api').AutomationCondition;
+
+  const [automations, setAutomations] = React.useState<Auto[]>([]);
   const [autoLoading, setAutoLoading] = React.useState(true);
-  const [editAuto, setEditAuto] = React.useState<Partial<import('./api').ServerAutomation> | null>(null);
+  const [editAuto, setEditAuto] = React.useState<Partial<Auto> | null>(null);
   const [autoSaving, setAutoSaving] = React.useState(false);
+  const [condTab, setCondTab] = React.useState<'actions'|'conditions'>('actions');
 
   React.useEffect(() => {
-    automationsApi.list(serverId).then(list => { setAutomations(list); setAutoLoading(false); }).catch(() => setAutoLoading(false));
+    automationsApi.list(serverId)
+      .then(list => { setAutomations(list); setAutoLoading(false); })
+      .catch(() => setAutoLoading(false));
   }, [serverId]);
+
+  const newAuto = (): Partial<Auto> => ({
+    name: '', trigger_type: 'member_join', trigger_config: {},
+    actions: [], conditions: [], cooldown_seconds: 0, enabled: true,
+  });
 
   const saveAuto = async () => {
     if (!editAuto) return;
     setAutoSaving(true);
     try {
+      const payload = {
+        name: editAuto.name || 'Nowa reguła',
+        enabled: editAuto.enabled ?? true,
+        trigger_type: (editAuto.trigger_type || 'member_join') as import('./api').AutomationTrigger,
+        trigger_config: editAuto.trigger_config || {},
+        actions: editAuto.actions || [],
+        conditions: editAuto.conditions || [],
+        cooldown_seconds: editAuto.cooldown_seconds || 0,
+      };
       if (editAuto.id) {
-        const updated = await automationsApi.update(serverId, editAuto.id, {
-          name: editAuto.name || 'Reguła',
-          enabled: editAuto.enabled ?? true,
-          trigger_type: (editAuto.trigger_type || 'member_join') as import('./api').AutomationTrigger,
-          trigger_config: editAuto.trigger_config || {},
-          actions: editAuto.actions || [],
-        });
+        const updated = await automationsApi.update(serverId, editAuto.id, payload);
         setAutomations(p => p.map(a => a.id === updated.id ? updated : a));
       } else {
-        const created = await automationsApi.create(serverId, {
-          name: editAuto.name || 'Nowa reguła',
-          enabled: true,
-          trigger_type: (editAuto.trigger_type || 'member_join') as import('./api').AutomationTrigger,
-          trigger_config: editAuto.trigger_config || {},
-          actions: editAuto.actions || [],
-        });
+        const created = await automationsApi.create(serverId, payload);
         setAutomations(p => [...p, created]);
       }
       setEditAuto(null);
@@ -2310,126 +2318,398 @@ function AutomationsTab({ serverId, gi, roles, channels }: {
     setAutomations(p => p.map(a => a.id === id ? { ...a, enabled } : a));
   };
 
+  // ── helpers ────────────────────────────────────────────────────────────────
+  const setTrigCfg = (k: string, v: any) =>
+    setEditAuto(p => ({...p!, trigger_config: {...(p?.trigger_config||{}), [k]: v}}));
+  const setAction = (idx: number, patch: object) =>
+    setEditAuto(p => { const a=[...(p?.actions||[])]; a[idx]={...a[idx],...patch}; return {...p!,actions:a}; });
+  const setActionCfg = (idx: number, k: string, v: any) =>
+    setEditAuto(p => { const a=[...(p?.actions||[])]; a[idx]={...a[idx],config:{...a[idx].config,[k]:v}}; return {...p!,actions:a}; });
+  const setCond = (idx: number, patch: object) =>
+    setEditAuto(p => { const c=[...(p?.conditions||[])]; c[idx]={...c[idx],...patch}; return {...p!,conditions:c}; });
+
   const TRIGGER_LABELS: Record<string, string> = {
-    member_join: 'Nowy member dołącza',
-    member_leave: 'Member opuszcza serwer',
-    role_assigned: 'Rola przypisana',
-    message_contains: 'Wiadomość zawiera słowo',
-  };
-  const ACTION_LABELS: Record<string, string> = {
-    assign_role: 'Przypisz rolę',
-    remove_role: 'Usuń rolę',
-    send_channel_message: 'Wyślij wiadomość na kanał',
-    send_dm: 'Wyślij DM do usera',
-    delete_message: 'Usuń wiadomość',
-    kick_member: 'Kicknij usera',
+    member_join:      '👋 Member dołącza do serwera',
+    member_leave:     '🚪 Member opuszcza serwer',
+    role_assigned:    '🎖️ Rola przypisana userowi',
+    role_removed:     '❌ Rola usunięta od usera',
+    message_contains: '🔍 Wiadomość zawiera słowo',
+    message_sent:     '💬 Wiadomość wysłana na kanale',
+    reaction_added:   '😀 Reakcja dodana do wiadomości',
+    member_banned:    '🔨 Member zbanowany',
   };
 
+  const ACTION_LABELS: Record<string, string> = {
+    assign_role:          '🎖️ Przypisz rolę',
+    remove_role:          '➖ Usuń rolę',
+    send_channel_message: '💬 Wyślij wiadomość na kanał',
+    send_dm:              '📩 Wyślij DM do usera',
+    delete_message:       '🗑️ Usuń wiadomość',
+    kick_member:          '👢 Kicknij usera',
+    ban_member:           '🔨 Zbanuj usera',
+    mute_member:          '🔇 Wycisz usera',
+    log_to_channel:       '📋 Zaloguj zdarzenie na kanale',
+    warn_user:            '⚠️ Ostrzeż usera',
+    add_reaction:         '😀 Dodaj reakcję do wiadomości',
+    send_webhook:         '🌐 Wyślij webhook',
+    pin_message:          '📌 Przypnij wiadomość',
+  };
+
+  const COND_LABELS: Record<string, string> = {
+    user_has_role:          '✅ User ma rolę',
+    user_not_has_role:      '🚫 User nie ma roli',
+    in_channel:             '📢 Wiadomość w kanale',
+    account_age_less_than:  '🆕 Konto młodsze niż X dni',
+    account_age_more_than:  '📅 Konto starsze niż X dni',
+    member_count_above:     '📈 Liczba memberów > X',
+    member_count_below:     '📉 Liczba memberów < X',
+  };
+
+  // actions that make sense only with a message in context
+  const MSG_TRIGGERS = new Set(['message_contains','message_sent','reaction_added']);
+  const MSG_ACTIONS = new Set(['delete_message','add_reaction','pin_message']);
+
+  const TPL_HINT = '{username} · {mention} · {server} · {channel} · {count} · {time} · {date} · {role}';
+
+  // ── Edit view ───────────────────────────────────────────────────────────────
   if (editAuto !== null) {
+    const tc = editAuto.trigger_config || {};
+    const tt = editAuto.trigger_type || 'member_join';
+
     return (
-      <div className="max-w-2xl mx-auto flex flex-col gap-4">
+      <div className="max-w-2xl mx-auto flex flex-col gap-5">
+        {/* Header */}
         <div className="flex items-center gap-3">
-          <button onClick={() => setEditAuto(null)} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-white hover:bg-white/[0.07] transition-all"><ArrowLeft size={16}/></button>
-          <h2 className="text-base font-bold text-white">{editAuto.id ? 'Edytuj regułę' : 'Nowa reguła'}</h2>
+          <button onClick={() => setEditAuto(null)} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-white hover:bg-white/[0.07] transition-all">
+            <ArrowLeft size={16}/>
+          </button>
+          <div>
+            <h2 className="text-base font-bold text-white">{editAuto.id ? 'Edytuj regułę' : 'Nowa reguła'}</h2>
+            <p className="text-[10px] text-zinc-600">Reguła uruchamia się automatycznie w czasie rzeczywistym</p>
+          </div>
         </div>
 
+        {/* Name */}
         <div>
           <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Nazwa reguły</label>
           <input value={editAuto.name || ''} onChange={e => setEditAuto(p => ({...p!, name: e.target.value}))}
             placeholder="Np. Powitanie nowego użytkownika" className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
         </div>
 
-        <div>
-          <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Wyzwalacz</label>
-          <select value={editAuto.trigger_type || 'member_join'}
-            onChange={e => setEditAuto(p => ({...p!, trigger_type: e.target.value as any, trigger_config: {}}))}
+        {/* Trigger */}
+        <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-4 flex flex-col gap-3">
+          <label className="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold">⚡ Wyzwalacz</label>
+          <select value={tt} onChange={e => setEditAuto(p => ({...p!, trigger_type: e.target.value as any, trigger_config: {}}))}
             className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}>
             {Object.entries(TRIGGER_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
           </select>
-        </div>
 
-        {editAuto.trigger_type === 'role_assigned' && (
-          <div>
-            <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Rola wyzwalająca</label>
-            <select value={(editAuto.trigger_config as any)?.role_id || ''}
-              onChange={e => setEditAuto(p => ({...p!, trigger_config: {...(p?.trigger_config||{}), role_id: e.target.value}}))}
-              className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}>
-              <option value="">— wybierz rolę —</option>
-              {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-            </select>
-            <p className="text-xs text-zinc-600 mt-1">Akcja uruchamia się gdy ta rola zostanie przypisana</p>
-          </div>
-        )}
-        {editAuto.trigger_type === 'message_contains' && (
-          <div>
-            <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Słowo kluczowe</label>
-            <input value={(editAuto.trigger_config as any)?.keyword || ''}
-              onChange={e => setEditAuto(p => ({...p!, trigger_config: {...(p?.trigger_config||{}), keyword: e.target.value}}))}
-              placeholder="Np. spam, discord.gg, itp." className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
-          </div>
-        )}
+          {/* role_assigned / role_removed config */}
+          {(tt === 'role_assigned' || tt === 'role_removed') && (
+            <div>
+              <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">
+                {tt === 'role_assigned' ? 'Rola przypisywana (puste = każda)' : 'Rola usuwana (puste = każda)'}
+              </label>
+              <select value={(tc as any).role_id||''} onChange={e => setTrigCfg('role_id', e.target.value)}
+                className={`w-full ${gi} rounded-xl px-3 py-2 text-sm`}>
+                <option value="">— każda rola —</option>
+                {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            </div>
+          )}
 
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-[10px] text-zinc-600 uppercase tracking-widest block">Akcje ({(editAuto.actions||[]).length})</label>
-            <button onClick={() => setEditAuto(p => ({...p!, actions: [...(p?.actions||[]), {type:'send_dm', config:{}} as any]}))}
-              className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
-              <Plus size={11}/> Dodaj akcję
-            </button>
-          </div>
-          <div className="flex flex-col gap-2">
-            {(editAuto.actions || []).map((action, idx) => (
-              <div key={idx} className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-3 flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <select value={action.type} onChange={e => setEditAuto(p => {
-                    const acts = [...(p?.actions||[])];
-                    acts[idx] = {...acts[idx], type: e.target.value as any, config: {}};
-                    return {...p!, actions: acts};
-                  })} className={`flex-1 ${gi} rounded-xl px-3 py-2 text-xs`}>
-                    {Object.entries(ACTION_LABELS).map(([k,v]) => {
-                      if (editAuto.trigger_type !== 'message_contains' && (k === 'delete_message' || k === 'kick_member')) return null;
-                      return <option key={k} value={k}>{v}</option>;
-                    })}
-                  </select>
-                  <button onClick={() => setEditAuto(p => ({...p!, actions: (p?.actions||[]).filter((_,i)=>i!==idx)}))}
-                    className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-500/10 text-zinc-600 hover:text-rose-400 transition-colors shrink-0">
-                    <Trash2 size={11}/>
-                  </button>
+          {/* message_contains config */}
+          {tt === 'message_contains' && (
+            <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Słowo / fraza / regex</label>
+                  <input value={(tc as any).keyword||''} onChange={e => setTrigCfg('keyword', e.target.value)}
+                    placeholder="Np. discord.gg, spam, .gg$" className={`w-full ${gi} rounded-xl px-3 py-2 text-sm`}/>
                 </div>
-                {(action.type === 'assign_role' || action.type === 'remove_role') && (
-                  <select value={(action.config as any)?.role_id || ''} onChange={e => setEditAuto(p => {
-                    const acts = [...(p?.actions||[])]; acts[idx] = {...acts[idx], config: {...(acts[idx].config||{}), role_id: e.target.value}}; return {...p!, actions: acts};
-                  })} className={`${gi} rounded-xl px-3 py-2 text-xs`}>
-                    <option value="">— wybierz rolę —</option>
-                    {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                <div>
+                  <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Tryb dopasowania</label>
+                  <select value={(tc as any).match_type||'contains'} onChange={e => setTrigCfg('match_type', e.target.value)}
+                    className={`w-full ${gi} rounded-xl px-3 py-2 text-sm`}>
+                    <option value="contains">Zawiera</option>
+                    <option value="starts_with">Zaczyna się od</option>
+                    <option value="ends_with">Kończy się na</option>
+                    <option value="exact">Dokładne dopasowanie</option>
+                    <option value="regex">Wyrażenie regularne</option>
                   </select>
-                )}
-                {action.type === 'send_channel_message' && (
-                  <div className="flex flex-col gap-1.5">
-                    <select value={(action.config as any)?.channel_id || ''} onChange={e => setEditAuto(p => {
-                      const acts = [...(p?.actions||[])]; acts[idx] = {...acts[idx], config: {...(acts[idx].config||{}), channel_id: e.target.value}}; return {...p!, actions: acts};
-                    })} className={`${gi} rounded-xl px-3 py-2 text-xs`}>
-                      <option value="">— wybierz kanał —</option>
-                      {channels.filter(c => c.type === 'text' || c.type === 'announcement').map(c => <option key={c.id} value={c.id}>#{c.name}</option>)}
-                    </select>
-                    <textarea value={(action.config as any)?.message || ''} onChange={e => setEditAuto(p => {
-                      const acts = [...(p?.actions||[])]; acts[idx] = {...acts[idx], config: {...(acts[idx].config||{}), message: e.target.value}}; return {...p!, actions: acts};
-                    })} placeholder="Treść wiadomości. Użyj {username} i {server}" rows={2} className={`${gi} rounded-xl px-3 py-2 text-xs resize-none`}/>
-                  </div>
-                )}
-                {action.type === 'send_dm' && (
-                  <textarea value={(action.config as any)?.message || ''} onChange={e => setEditAuto(p => {
-                    const acts = [...(p?.actions||[])]; acts[idx] = {...acts[idx], config: {...(acts[idx].config||{}), message: e.target.value}}; return {...p!, actions: acts};
-                  })} placeholder="Treść DM. Użyj {username} i {server}" rows={2} className={`${gi} rounded-xl px-3 py-2 text-xs resize-none`}/>
-                )}
+                </div>
               </div>
+              <div className="flex items-center gap-4">
+                <div>
+                  <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Filtr kanału (opcj.)</label>
+                  <select value={(tc as any).channel_id||''} onChange={e => setTrigCfg('channel_id', e.target.value)}
+                    className={`${gi} rounded-xl px-3 py-2 text-sm`}>
+                    <option value="">— wszystkie kanały —</option>
+                    {channels.filter(c => c.type==='text'||c.type==='announcement').map(c => <option key={c.id} value={c.id}>#{c.name}</option>)}
+                  </select>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer mt-4">
+                  <input type="checkbox" checked={!!(tc as any).case_sensitive} onChange={e => setTrigCfg('case_sensitive', e.target.checked)}
+                    className="rounded accent-indigo-500"/>
+                  <span className="text-xs text-zinc-400">Uwzględnij wielkość liter</span>
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/* message_sent config */}
+          {tt === 'message_sent' && (
+            <div>
+              <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Filtr kanału (opcjonalny)</label>
+              <select value={(tc as any).channel_id||''} onChange={e => setTrigCfg('channel_id', e.target.value)}
+                className={`w-full ${gi} rounded-xl px-3 py-2 text-sm`}>
+                <option value="">— wszystkie kanały —</option>
+                {channels.filter(c => c.type==='text'||c.type==='announcement').map(c => <option key={c.id} value={c.id}>#{c.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* reaction_added config */}
+          {tt === 'reaction_added' && (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Emoji (opcj., np. 👍)</label>
+                <input value={(tc as any).emoji||''} onChange={e => setTrigCfg('emoji', e.target.value)}
+                  placeholder="👍" className={`w-full ${gi} rounded-xl px-3 py-2 text-sm`}/>
+              </div>
+              <div>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Filtr kanału (opcj.)</label>
+                <select value={(tc as any).channel_id||''} onChange={e => setTrigCfg('channel_id', e.target.value)}
+                  className={`w-full ${gi} rounded-xl px-3 py-2 text-sm`}>
+                  <option value="">— wszystkie kanały —</option>
+                  {channels.filter(c => c.type==='text'||c.type==='announcement').map(c => <option key={c.id} value={c.id}>#{c.name}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Actions / Conditions tabs */}
+        <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl overflow-hidden">
+          <div className="flex border-b border-white/[0.06]">
+            {(['actions','conditions'] as const).map(tab => (
+              <button key={tab} onClick={() => setCondTab(tab)}
+                className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${condTab===tab ? 'bg-white/[0.05] text-white' : 'text-zinc-500 hover:text-zinc-300'}`}>
+                {tab === 'actions' ? `⚡ Akcje (${(editAuto.actions||[]).length})` : `🔒 Warunki (${(editAuto.conditions||[]).length})`}
+              </button>
             ))}
-            {(editAuto.actions||[]).length === 0 && (
-              <p className="text-xs text-zinc-700 py-3 text-center">Brak akcji — dodaj przynajmniej jedną</p>
-            )}
+          </div>
+
+          <div className="p-3 flex flex-col gap-2">
+            {/* ── ACTIONS ─────────────────────────────────────────────────── */}
+            {condTab === 'actions' && (<>
+              {(editAuto.actions||[]).map((action, idx) => (
+                <div key={idx} className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-3 flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <select value={action.type} onChange={e => setAction(idx, {type: e.target.value as any, config:{}})}
+                      className={`flex-1 ${gi} rounded-xl px-3 py-2 text-xs`}>
+                      {Object.entries(ACTION_LABELS).map(([k,v]) => {
+                        if (MSG_ACTIONS.has(k) && !MSG_TRIGGERS.has(tt)) return null;
+                        return <option key={k} value={k}>{v}</option>;
+                      })}
+                    </select>
+                    <button onClick={() => setEditAuto(p => ({...p!, actions: (p?.actions||[]).filter((_,i)=>i!==idx)}))}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-500/10 text-zinc-600 hover:text-rose-400 transition-colors shrink-0">
+                      <Trash2 size={11}/>
+                    </button>
+                  </div>
+
+                  {/* assign_role / remove_role */}
+                  {(action.type==='assign_role'||action.type==='remove_role') && (
+                    <select value={action.config?.role_id||''} onChange={e => setActionCfg(idx,'role_id',e.target.value)}
+                      className={`${gi} rounded-xl px-3 py-2 text-xs`}>
+                      <option value="">— wybierz rolę —</option>
+                      {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    </select>
+                  )}
+
+                  {/* send_channel_message / log_to_channel */}
+                  {(action.type==='send_channel_message'||action.type==='log_to_channel') && (
+                    <div className="flex flex-col gap-1.5">
+                      <select value={action.config?.channel_id||''} onChange={e => setActionCfg(idx,'channel_id',e.target.value)}
+                        className={`${gi} rounded-xl px-3 py-2 text-xs`}>
+                        <option value="">— wybierz kanał —</option>
+                        {channels.filter(c => c.type==='text'||c.type==='announcement').map(c => <option key={c.id} value={c.id}>#{c.name}</option>)}
+                      </select>
+                      {action.type==='send_channel_message' && (
+                        <textarea value={action.config?.message||''} onChange={e => setActionCfg(idx,'message',e.target.value)}
+                          placeholder={`Treść wiadomości\n${TPL_HINT}`} rows={2} className={`${gi} rounded-xl px-3 py-2 text-xs resize-none`}/>
+                      )}
+                      {action.type==='log_to_channel' && (
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" checked={!!action.config?.include_details} onChange={e => setActionCfg(idx,'include_details',e.target.checked)} className="rounded accent-indigo-500"/>
+                          <span className="text-xs text-zinc-400">Dołącz szczegóły (treść wiadomości)</span>
+                        </label>
+                      )}
+                    </div>
+                  )}
+
+                  {/* send_dm / warn_user */}
+                  {(action.type==='send_dm'||action.type==='warn_user') && (
+                    <div className="flex flex-col gap-1.5">
+                      <textarea value={action.config?.message||''} onChange={e => setActionCfg(idx,'message',e.target.value)}
+                        placeholder={`Treść DM\n${TPL_HINT}`} rows={2} className={`${gi} rounded-xl px-3 py-2 text-xs resize-none`}/>
+                      {action.type==='warn_user' && (
+                        <select value={action.config?.channel_id||''} onChange={e => setActionCfg(idx,'channel_id',e.target.value)}
+                          className={`${gi} rounded-xl px-3 py-2 text-xs`}>
+                          <option value="">— kanał moderacji (opcj.) —</option>
+                          {channels.filter(c => c.type==='text').map(c => <option key={c.id} value={c.id}>#{c.name}</option>)}
+                        </select>
+                      )}
+                    </div>
+                  )}
+
+                  {/* mute_member */}
+                  {action.type==='mute_member' && (
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div>
+                        <label className="text-[10px] text-zinc-600 mb-1 block">Czas wyciszenia (minuty)</label>
+                        <input type="number" min={1} max={40320} value={action.config?.duration_minutes||10}
+                          onChange={e => setActionCfg(idx,'duration_minutes',Number(e.target.value))}
+                          className={`w-full ${gi} rounded-xl px-3 py-2 text-xs`}/>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-600 mb-1 block">Powód (opcj.)</label>
+                        <input value={action.config?.reason||''} onChange={e => setActionCfg(idx,'reason',e.target.value)}
+                          placeholder="Powód wyciszenia" className={`w-full ${gi} rounded-xl px-3 py-2 text-xs`}/>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ban_member */}
+                  {action.type==='ban_member' && (
+                    <input value={action.config?.reason||''} onChange={e => setActionCfg(idx,'reason',e.target.value)}
+                      placeholder="Powód bana (opcjonalny)" className={`${gi} rounded-xl px-3 py-2 text-xs`}/>
+                  )}
+
+                  {/* add_reaction */}
+                  {action.type==='add_reaction' && (
+                    <input value={action.config?.emoji||''} onChange={e => setActionCfg(idx,'emoji',e.target.value)}
+                      placeholder="Emoji np. 👍 🔥 ✅" className={`${gi} rounded-xl px-3 py-2 text-xs`}/>
+                  )}
+
+                  {/* send_webhook */}
+                  {action.type==='send_webhook' && (
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex gap-1.5">
+                        <select value={action.config?.method||'POST'} onChange={e => setActionCfg(idx,'method',e.target.value)}
+                          className={`${gi} rounded-xl px-3 py-2 text-xs w-24 shrink-0`}>
+                          <option value="POST">POST</option>
+                          <option value="GET">GET</option>
+                          <option value="PUT">PUT</option>
+                        </select>
+                        <input value={action.config?.url||''} onChange={e => setActionCfg(idx,'url',e.target.value)}
+                          placeholder="https://hooks.example.com/..." className={`flex-1 ${gi} rounded-xl px-3 py-2 text-xs`}/>
+                      </div>
+                      <textarea value={action.config?.body||''} onChange={e => setActionCfg(idx,'body',e.target.value)}
+                        placeholder={`Body JSON (opcj.)\n{"username":"{username}","server":"{server}"}`} rows={2}
+                        className={`${gi} rounded-xl px-3 py-2 text-xs font-mono resize-none`}/>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {(editAuto.actions||[]).length === 0 && (
+                <p className="text-xs text-zinc-700 py-4 text-center">Brak akcji — dodaj przynajmniej jedną</p>
+              )}
+
+              <button onClick={() => setEditAuto(p => ({...p!, actions: [...(p?.actions||[]), {type:'send_dm', config:{}} as any]}))}
+                className="w-full py-2 text-xs text-indigo-400 hover:text-indigo-300 border border-dashed border-indigo-500/30 hover:border-indigo-500/50 rounded-xl transition-colors flex items-center justify-center gap-1.5">
+                <Plus size={11}/> Dodaj akcję
+              </button>
+
+              {/* Template var hint */}
+              <div className="flex items-start gap-2 bg-zinc-900/40 border border-white/[0.04] rounded-xl px-3 py-2 mt-1">
+                <span className="text-zinc-600 text-[10px] shrink-0 mt-0.5">📝</span>
+                <p className="text-[10px] text-zinc-600 leading-relaxed">
+                  Zmienne w treści: <span className="text-zinc-500 font-mono">{TPL_HINT}</span>
+                </p>
+              </div>
+            </>)}
+
+            {/* ── CONDITIONS ──────────────────────────────────────────────── */}
+            {condTab === 'conditions' && (<>
+              <p className="text-[10px] text-zinc-600 pb-1">Wszystkie warunki muszą być spełnione, aby reguła się uruchomiła</p>
+
+              {(editAuto.conditions||[]).map((cond, idx) => (
+                <div key={idx} className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-3 flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <select value={cond.type} onChange={e => setCond(idx, {type: e.target.value as any, role_id:undefined, channel_id:undefined, days:undefined, count:undefined})}
+                      className={`flex-1 ${gi} rounded-xl px-3 py-2 text-xs`}>
+                      {Object.entries(COND_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                    <button onClick={() => setEditAuto(p => ({...p!, conditions: (p?.conditions||[]).filter((_,i)=>i!==idx)}))}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-500/10 text-zinc-600 hover:text-rose-400 transition-colors shrink-0">
+                      <Trash2 size={11}/>
+                    </button>
+                  </div>
+
+                  {(cond.type==='user_has_role'||cond.type==='user_not_has_role') && (
+                    <select value={cond.role_id||''} onChange={e => setCond(idx, {role_id: e.target.value})}
+                      className={`${gi} rounded-xl px-3 py-2 text-xs`}>
+                      <option value="">— wybierz rolę —</option>
+                      {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    </select>
+                  )}
+
+                  {cond.type==='in_channel' && (
+                    <select value={cond.channel_id||''} onChange={e => setCond(idx, {channel_id: e.target.value})}
+                      className={`${gi} rounded-xl px-3 py-2 text-xs`}>
+                      <option value="">— wybierz kanał —</option>
+                      {channels.filter(c => c.type==='text'||c.type==='announcement').map(c => <option key={c.id} value={c.id}>#{c.name}</option>)}
+                    </select>
+                  )}
+
+                  {(cond.type==='account_age_less_than'||cond.type==='account_age_more_than') && (
+                    <div className="flex items-center gap-2">
+                      <input type="number" min={1} max={3650} value={cond.days||7} onChange={e => setCond(idx, {days: Number(e.target.value)})}
+                        className={`w-24 ${gi} rounded-xl px-3 py-2 text-xs`}/>
+                      <span className="text-xs text-zinc-500">dni</span>
+                    </div>
+                  )}
+
+                  {(cond.type==='member_count_above'||cond.type==='member_count_below') && (
+                    <div className="flex items-center gap-2">
+                      <input type="number" min={1} value={cond.count||100} onChange={e => setCond(idx, {count: Number(e.target.value)})}
+                        className={`w-28 ${gi} rounded-xl px-3 py-2 text-xs`}/>
+                      <span className="text-xs text-zinc-500">memberów</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {(editAuto.conditions||[]).length === 0 && (
+                <p className="text-xs text-zinc-700 py-4 text-center">Brak warunków — reguła uruchamia się zawsze</p>
+              )}
+
+              <button onClick={() => setEditAuto(p => ({...p!, conditions: [...(p?.conditions||[]), {type:'user_has_role'} as AutoCond]}))}
+                className="w-full py-2 text-xs text-zinc-400 hover:text-zinc-300 border border-dashed border-white/10 hover:border-white/20 rounded-xl transition-colors flex items-center justify-center gap-1.5">
+                <Plus size={11}/> Dodaj warunek
+              </button>
+            </>)}
           </div>
         </div>
 
+        {/* Cooldown */}
+        <div className="flex items-center gap-3 bg-white/[0.02] border border-white/[0.06] rounded-2xl px-4 py-3">
+          <div className="flex-1">
+            <p className="text-xs font-semibold text-zinc-300">Cooldown na użytkownika</p>
+            <p className="text-[10px] text-zinc-600 mt-0.5">Reguła nie uruchomi się ponownie dla tego samego usera przez X sekund</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <input type="number" min={0} max={86400} value={editAuto.cooldown_seconds||0}
+              onChange={e => setEditAuto(p => ({...p!, cooldown_seconds: Number(e.target.value)}))}
+              className={`w-20 ${gi} rounded-xl px-3 py-2 text-sm text-center`}/>
+            <span className="text-xs text-zinc-600">sek</span>
+          </div>
+        </div>
+
+        {/* Save */}
         <button onClick={saveAuto} disabled={autoSaving || !editAuto.name?.trim() || !(editAuto.actions||[]).length}
           className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
           {autoSaving ? <Loader2 size={15} className="animate-spin"/> : <Check size={15}/>}
@@ -2439,14 +2719,22 @@ function AutomationsTab({ serverId, gi, roles, channels }: {
     );
   }
 
+  // ── List view ───────────────────────────────────────────────────────────────
+  const TRIGGER_SHORT: Record<string, string> = {
+    member_join: '👋 Dołączenie', member_leave: '🚪 Opuszczenie',
+    role_assigned: '🎖️ Rola przypisana', role_removed: '❌ Rola usunięta',
+    message_contains: '🔍 Słowo kluczowe', message_sent: '💬 Wiadomość',
+    reaction_added: '😀 Reakcja', member_banned: '🔨 Ban',
+  };
+
   return (
     <div className="max-w-2xl mx-auto flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-bold text-white">Automatyzacje ({automations.length})</h2>
-          <p className="text-xs text-zinc-600 mt-0.5">Automatycznie wykonuj akcje na podstawie zdarzeń serwera</p>
+          <p className="text-xs text-zinc-600 mt-0.5">Automatycznie wykonuj akcje na podstawie zdarzeń serwera w czasie rzeczywistym</p>
         </div>
-        <button onClick={() => setEditAuto({name:'', trigger_type:'member_join', trigger_config:{}, actions:[], enabled:true})}
+        <button onClick={() => { setCondTab('actions'); setEditAuto(newAuto()); }}
           className="bg-indigo-500 hover:bg-indigo-400 text-white px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5">
           <Plus size={14}/> Nowa reguła
         </button>
@@ -2460,37 +2748,48 @@ function AutomationsTab({ serverId, gi, roles, channels }: {
             <Zap size={22} className="text-indigo-400"/>
           </div>
           <p className="text-sm font-semibold text-zinc-300">Brak reguł automatyzacji</p>
-          <p className="text-xs text-zinc-600 leading-relaxed max-w-xs">Stwórz reguły które automatycznie przypisują role, wysyłają wiadomości powitalne lub moderują serwer</p>
-          <button onClick={() => setEditAuto({name:'', trigger_type:'member_join', trigger_config:{}, actions:[], enabled:true})}
+          <p className="text-xs text-zinc-600 leading-relaxed max-w-xs">Automatycznie przypisuj role, witaj nowych memberów, moderuj serwer, wysyłaj webhooks i wiele więcej</p>
+          <button onClick={() => { setCondTab('actions'); setEditAuto(newAuto()); }}
             className="mt-1 text-sm font-semibold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/15 border border-indigo-500/20 px-4 py-2 rounded-xl transition-all flex items-center gap-2">
             <Plus size={14}/> Utwórz pierwszą regułę
           </button>
         </div>
       )}
 
-      {automations.map(auto => (
-        <div key={auto.id} className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-4 flex items-start gap-3 group hover:border-white/[0.1] transition-colors">
-          <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${auto.enabled ? 'bg-emerald-500' : 'bg-zinc-600'}`}/>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white">{auto.name}</p>
-            <p className="text-xs text-zinc-500 mt-0.5">
-              Wyzwalacz: <span className="text-zinc-400">{TRIGGER_LABELS[auto.trigger_type] || auto.trigger_type}</span>
-              {' · '}{auto.actions.length} {auto.actions.length === 1 ? 'akcja' : 'akcje'}
-            </p>
+      {automations.map(auto => {
+        const conds = (auto.conditions||[]).length;
+        const cd = auto.cooldown_seconds || 0;
+        return (
+          <div key={auto.id} className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-4 flex items-start gap-3 group hover:border-white/[0.1] transition-colors">
+            <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${auto.enabled ? 'bg-emerald-500' : 'bg-zinc-600'}`}/>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-white">{auto.name}</p>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                <span className="text-zinc-400">{TRIGGER_SHORT[auto.trigger_type]||auto.trigger_type}</span>
+                {' → '}
+                <span className="text-zinc-400">{auto.actions.length} {auto.actions.length===1?'akcja':'akcje'}</span>
+                {conds>0 && <span className="text-zinc-600"> · {conds} {conds===1?'warunek':'warunki'}</span>}
+                {cd>0 && <span className="text-zinc-600"> · cd {cd}s</span>}
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={() => toggleAuto(auto.id, !auto.enabled)} title={auto.enabled?'Wyłącz':'Włącz'}
+                className={`w-8 h-5 rounded-full transition-all relative ${auto.enabled?'bg-indigo-500':'bg-zinc-700'}`}>
+                <span className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all"
+                  style={{left: auto.enabled ? 'calc(100% - 1.125rem)' : '0.125rem'}}/>
+              </button>
+              <button onClick={() => { setCondTab('actions'); setEditAuto(auto); }}
+                className="w-7 h-7 bg-white/[0.05] hover:bg-white/[0.09] text-zinc-400 hover:text-white rounded-lg flex items-center justify-center transition-colors">
+                <Edit3 size={12}/>
+              </button>
+              <button onClick={() => deleteAuto(auto.id)}
+                className="w-7 h-7 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg flex items-center justify-center transition-colors">
+                <Trash2 size={12}/>
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={() => toggleAuto(auto.id, !auto.enabled)} title={auto.enabled ? 'Wyłącz' : 'Włącz'}
-              className={`w-8 h-5 rounded-full transition-all relative ${auto.enabled ? 'bg-indigo-500' : 'bg-zinc-700'}`}>
-              <span className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all"
-                style={{left: auto.enabled ? 'calc(100% - 1.125rem)' : '0.125rem'}}/>
-            </button>
-            <button onClick={() => setEditAuto(auto)}
-              className="w-7 h-7 bg-white/[0.05] hover:bg-white/[0.09] text-zinc-400 hover:text-white rounded-lg flex items-center justify-center transition-colors"><Edit3 size={12}/></button>
-            <button onClick={() => deleteAuto(auto.id)}
-              className="w-7 h-7 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg flex items-center justify-center transition-colors"><Trash2 size={12}/></button>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

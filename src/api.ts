@@ -739,17 +739,60 @@ export const pushApi = {
 };
 
 // ── Server Automations ────────────────────────────────────────────────────
-export type AutomationTrigger = 'member_join'|'member_leave'|'role_assigned'|'message_contains';
-export type AutomationActionType = 'assign_role'|'remove_role'|'send_channel_message'|'send_dm'|'delete_message'|'kick_member';
+export type AutomationTrigger =
+  | 'member_join' | 'member_leave'
+  | 'role_assigned' | 'role_removed'
+  | 'message_contains' | 'message_sent'
+  | 'reaction_added' | 'member_banned';
+
+export type AutomationActionType =
+  | 'assign_role' | 'remove_role'
+  | 'send_channel_message' | 'send_dm'
+  | 'delete_message' | 'kick_member' | 'ban_member'
+  | 'mute_member' | 'log_to_channel' | 'warn_user'
+  | 'add_reaction' | 'send_webhook' | 'pin_message';
+
 export interface AutomationAction {
   type: AutomationActionType;
-  config: { role_id?: string; channel_id?: string; message?: string };
+  config: {
+    role_id?: string;
+    channel_id?: string;
+    message?: string;
+    reason?: string;
+    duration_minutes?: number;
+    delete_days?: number;
+    url?: string;
+    method?: string;
+    body?: string;
+    emoji?: string;
+    include_details?: boolean;
+  };
 }
+
+export interface AutomationCondition {
+  type: 'user_has_role' | 'user_not_has_role' | 'in_channel' | 'account_age_less_than' | 'account_age_more_than' | 'member_count_above' | 'member_count_below';
+  role_id?: string;
+  channel_id?: string;
+  days?: number;
+  count?: number;
+}
+
 export interface ServerAutomation {
   id: string; server_id: string; name: string; enabled: boolean;
   trigger_type: AutomationTrigger;
-  trigger_config: { role_id?: string; keyword?: string };
-  actions: AutomationAction[]; created_by: string | null; created_at: string;
+  trigger_config: {
+    role_id?: string;
+    keyword?: string;
+    match_type?: 'contains' | 'starts_with' | 'ends_with' | 'exact' | 'regex';
+    channel_id?: string;
+    emoji?: string;
+    case_sensitive?: boolean;
+  };
+  actions: AutomationAction[];
+  conditions: AutomationCondition[];
+  cooldown_seconds: number;
+  created_by: string | null;
+  created_at: string;
 }
 export const automationsApi = {
   list:   (serverId: string) => req<ServerAutomation[]>('GET', `/servers/${serverId}/automations`),
