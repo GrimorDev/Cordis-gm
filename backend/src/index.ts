@@ -15,6 +15,8 @@ import { runMigrations } from './db/migrate';
 import { redis } from './redis/client';
 import { initSocket } from './socket';
 import { startSpotifyPoller } from './services/spotifyPoller';
+import statusRoutes from './routes/status';
+import { startHealthChecker } from './services/healthChecker';
 
 // Routes
 import authRoutes from './routes/auth';
@@ -138,6 +140,7 @@ app.use('/api/servers/:serverId/automations', automationsRoutes);
 app.use('/api/servers/:serverId/events', eventsRoutes);
 app.use('/api/servers/:serverId/bots', botsRoutes);
 app.use('/api/bookmarks', bookmarksRoutes);
+app.use('/api/status', statusRoutes);
 
 // ── Music audio stream proxy ──────────────────────────────────────────────────
 // Proxies the YouTube CDN audio URL through our server to bypass browser CORS restrictions.
@@ -254,6 +257,7 @@ async function start() {
 
   httpServer.listen(config.port, () => {
     console.log(`Cordis backend running on port ${config.port} [${config.nodeEnv}]`);
+    startHealthChecker(config.port || 4000);
   });
 }
 
