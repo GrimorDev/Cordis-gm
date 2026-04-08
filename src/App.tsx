@@ -591,7 +591,8 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
   const [showModal, setShowModal] = useState(false);
   const [modalTab, setModalTab] = useState<'login' | 'register'>('login');
   const [regStep, setRegStep] = useState<'form' | 'verify'>('form');
-  const [form, setForm] = useState({ login: localStorage.getItem('cordyn_saved_login') || '', username: '', email: '', password: '', confirm: '' });
+  const savedCreds = (() => { try { const r = localStorage.getItem('cordyn_saved_creds'); return r ? JSON.parse(atob(r)) as { login: string; password: string } : null; } catch { return null; } })();
+  const [form, setForm] = useState({ login: savedCreds?.login || localStorage.getItem('cordyn_saved_login') || '', username: '', email: '', password: savedCreds?.password || '', confirm: '' });
   const [verifyCode, setVerifyCode] = useState('');
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
@@ -601,7 +602,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
   const [twoFaCode, setTwoFaCode] = useState('');
   const [twoFaType, setTwoFaType] = useState<'totp' | 'backup'>('totp');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
+  const [rememberMe, setRememberMe] = useState(!!savedCreds || true);
 
   // Direct .exe download URL — use env override or resolve from GitHub Releases API
   const [desktopUrl, setDesktopUrl] = useState(import.meta.env.VITE_DESKTOP_DOWNLOAD_URL || '');
@@ -685,14 +686,19 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
       if (res.requiresTwoFactor) {
         setTwoFaSession(res.sessionId); setTwoFaCode(''); setTwoFaType('totp');
       } else {
-        // Zawsze zapisuj email/login do autouzupełniania na desktopie
+        // Save login for autocomplete always; save full creds only when rememberMe
         localStorage.setItem('cordyn_saved_login', form.login);
-        if (!rememberMe) {
-          // Session only — clear on browser close via sessionStorage
-          localStorage.removeItem('cordyn_token');
-          sessionStorage.setItem('cordyn_token', res.token);
-        } else {
+        if (rememberMe) {
+          localStorage.setItem('cordyn_saved_creds', btoa(JSON.stringify({ login: form.login, password: form.password })));
           setToken(res.token); // persist in localStorage
+        } else {
+          localStorage.removeItem('cordyn_saved_creds');
+          if (isTauri) {
+            setToken(res.token); // desktop always persists session
+          } else {
+            localStorage.removeItem('cordyn_token');
+            sessionStorage.setItem('cordyn_token', res.token);
+          }
         }
         onAuth(res.user, res.token, false);
       }
@@ -825,12 +831,14 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   <div className="relative">
                     <MessageSquare size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
                     <input required autoFocus value={form.login} onChange={set('login')} placeholder="Login lub email"
+                      autoComplete="username" name="username"
                       className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`} />
                   </div>
                   <div className="relative">
                     <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
                     <input required type={showPass ? 'text' : 'password'} value={form.password} onChange={set('password')}
-                      placeholder="Hasło" minLength={6} className={`${gi} rounded-xl pl-10 pr-10 py-3 text-sm w-full`} />
+                      placeholder="Hasło" minLength={6} autoComplete="current-password" name="password"
+                      className={`${gi} rounded-xl pl-10 pr-10 py-3 text-sm w-full`} />
                     <button type="button" onClick={() => setShowPass(v => !v)}
                       className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
                       {showPass ? <Eye size={15} /> : <EyeOff size={15} />}
@@ -1542,12 +1550,13 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     <div className="relative">
                       <MessageSquare size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
                       <input required value={form.login} onChange={set('login')} placeholder="Login lub email"
+                        autoComplete="username" name="username"
                         className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`}/>
                     </div>
                     <div className="relative">
                       <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
                       <input required type={showPass ? 'text' : 'password'} value={form.password} onChange={set('password')}
-                        placeholder="Hasło" minLength={6}
+                        placeholder="Hasło" minLength={6} autoComplete="current-password" name="password"
                         className={`${gi} rounded-xl pl-10 pr-10 py-3 text-sm w-full`}/>
                       <button type="button" onClick={() => setShowPass(v => !v)}
                         className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
