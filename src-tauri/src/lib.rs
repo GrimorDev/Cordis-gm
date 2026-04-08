@@ -152,6 +152,7 @@ fn stop_audio_loopback(state: tauri::State<LoopbackState>) {
 pub fn run() {
     tauri::Builder::default()
         .manage(LoopbackState(std::sync::Mutex::new(None)))
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_shell::init())
@@ -218,6 +219,11 @@ pub fn run() {
             main_window.on_window_event(move |event| {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
+                    // Persist window position/size/monitor before hiding to tray
+                    use tauri_plugin_window_state::AppHandleExt;
+                    let _ = app_handle.save_window_state(
+                        tauri_plugin_window_state::StateFlags::all(),
+                    );
                     if let Some(win) = app_handle.get_webview_window("main") {
                         let _ = win.hide();
                     }
