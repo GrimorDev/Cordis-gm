@@ -1910,42 +1910,39 @@ function AttachmentRenderer({ url, staticUrl, addToast }: { url: string; staticU
   const [textLoading, setTextLoading] = React.useState(false);
   const [downloading, setDownloading] = React.useState(false);
 
+  // Konwertuje dowolny URL pliku na URL przez backend proxy (unika CORS na r2.dev)
+  const toProxyUrl = (rawUrl: string, dl = false): string => {
+    // Już idzie przez nasz backend
+    if (rawUrl.startsWith('/api/files/')) {
+      return dl ? `${rawUrl}${rawUrl.includes('?') ? '&' : '?'}dl=1&name=${encodeURIComponent(name)}` : rawUrl;
+    }
+    // Stary publiczny R2 URL (pub-*.r2.dev/uploads/hash.ext) → wyciągnij klucz i przekieruj przez proxy
+    const r2Match = rawUrl.match(/r2\.dev\/(.+)$/);
+    if (r2Match) {
+      const key = r2Match[1];
+      const proxy = `/api/files/${key}`;
+      return dl ? `${proxy}?dl=1&name=${encodeURIComponent(name)}` : proxy;
+    }
+    // Lokalne /uploads/ — bez zmian
+    return rawUrl;
+  };
+
   const handleDownload = (e: React.MouseEvent) => {
     e.preventDefault();
     if (downloading) return;
-    // Jeśli plik jest na R2 (/api/files/...) → navigation z ?dl=1
-    // backend generuje signed URL z Content-Disposition: attachment
-    // Brak fetch() = brak problemu CORS
-    if (full.includes('/api/files/')) {
-      // Navigation bez _blank — Content-Disposition: attachment zatrzymuje pobieranie w tle
-      const dlUrl = `${full}${full.includes('?') ? '&' : '?'}dl=1&name=${encodeURIComponent(name)}`;
-      window.location.href = dlUrl;
-      addToast?.(`⬇️ Pobieranie: ${name}`, 'info');
-      return;
-    }
-    // Fallback: lokalne pliki (stary dysk) — blob download
-    setDownloading(true);
+    // Zawsze pobieramy przez backend proxy — Content-Disposition: attachment, bez CORS
+    const dlUrl = toProxyUrl(full, true);
     addToast?.(`⬇️ Pobieranie: ${name}`, 'info');
-    fetch(full)
-      .then(r => r.blob())
-      .then(blob => {
-        const objUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = objUrl; a.download = name;
-        document.body.appendChild(a); a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(objUrl);
-        addToast?.(`✅ Pobrano: ${name}`, 'success');
-      })
-      .catch(() => addToast?.(`Błąd pobierania: ${name}`, 'error'))
-      .finally(() => setDownloading(false));
+    window.location.href = dlUrl;
   };
 
   const loadText = async () => {
     if (textContent !== null) { setExpanded(p => !p); return; }
     setTextLoading(true);
     try {
-      const r = await fetch(full);
+      // Fetch przez backend proxy (nie bezpośrednio z R2) — brak CORS
+      const fetchUrl = toProxyUrl(full, false);
+      const r = await fetch(fetchUrl);
       const t = await r.text();
       setTextContent(t);
       setExpanded(true);
@@ -1969,7 +1966,7 @@ function AttachmentRenderer({ url, staticUrl, addToast }: { url: string; staticU
             <p className="text-xs font-semibold text-white truncate leading-tight">{name}</p>
             <p className="text-[10px] text-zinc-500 mt-0.5">{ext.toUpperCase()} · Audio</p>
           </div>
-          <a href={full} download={name} title="Pobierz"
+          <a href={toProxyUrl(full, true)} download={name} title="Pobierz"
             className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all">
             <Download size={13}/>
           </a>
@@ -1994,7 +1991,7 @@ function AttachmentRenderer({ url, staticUrl, addToast }: { url: string; staticU
         <div className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.03]">
           <FileVideo size={11} className="text-pink-400 shrink-0"/>
           <span className="text-xs text-zinc-500 truncate flex-1">{name}</span>
-          <a href={full} download={name} className="text-zinc-600 hover:text-pink-400 transition-colors" title="Pobierz"><Download size={11}/></a>
+          <a href={toProxyUrl(full, true)} download={name} className="text-zinc-600 hover:text-pink-400 transition-colors" title="Pobierz"><Download size={11}/></a>
         </div>
       </div>
     </div>
@@ -2008,7 +2005,7 @@ function AttachmentRenderer({ url, staticUrl, addToast }: { url: string; staticU
         <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.06] bg-white/[0.02]">
           {getFileIcon(type, 13)}
           <span className="text-xs font-mono text-zinc-400 truncate flex-1">{name}</span>
-          <a href={full} download={name} className="text-zinc-600 hover:text-zinc-300 transition-colors shrink-0" title="Pobierz"><Download size={11}/></a>
+          <a href={toProxyUrl(full, true)} download={name} className="text-zinc-600 hover:text-zinc-300 transition-colors shrink-0" title="Pobierz"><Download size={11}/></a>
           <button onClick={loadText} className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-200 transition-colors shrink-0 ml-1">
             {textLoading ? <span className="text-[10px]">Ładowanie...</span> : expanded ? <ChevronUp size={11}/> : <ChevronDown size={11}/>}
             {!textLoading && <span className="text-[10px]">{expanded ? 'Zwiń' : 'Podgląd'}</span>}

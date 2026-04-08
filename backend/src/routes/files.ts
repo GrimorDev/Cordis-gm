@@ -55,7 +55,19 @@ router.get('/*', async (req: Request, res: Response) => {
         res.end(Buffer.from(bytes));
       }
     } else {
-      // ── Wyświetlanie: redirect na pre-signed URL (img/audio/video ładują transparentnie) ─
+      // ── Wyświetlanie: redirect do public URL (CDN) lub pre-signed URL ─────
+      // Dodajemy nagłówki CORS by fetch() z przeglądarki też działał (dla loadText etc.)
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD');
+
+      if (config.r2.publicUrl) {
+        // Mamy CDN/public URL — redirect bez generowania signed URL (szybciej)
+        const publicFileUrl = `${config.r2.publicUrl}/${key}`;
+        res.setHeader('Cache-Control', 'public, max-age=3300');
+        return res.redirect(302, publicFileUrl);
+      }
+
+      // Brak CDN — generuj signed URL
       const signedCmd = new GetObjectCommand({
         Bucket: config.r2.bucket,
         Key: key,
