@@ -83,10 +83,9 @@ export async function uploadToR2(
     }));
   }
 
-  // URL: custom CDN domain (jeśli ustawione) lub ścieżka przez backend proxy
-  const url = config.r2.publicUrl
-    ? `${config.r2.publicUrl}/${key}`   // np. https://cdn.cordyn.pl/uploads/hash.ext
-    : `/api/files/${key}`;              // proxy przez backend z pre-signed redirect
+  // Zawsze zwracamy ścieżkę przez backend proxy — unikamy CORS na r2.dev.
+  // R2_PUBLIC_URL jest używany wewnętrznie w files.ts do redirectu (bez fetch() po stronie klienta).
+  const url = `/api/files/${key}`;
 
   return { url, key, deduplicated };
 }
