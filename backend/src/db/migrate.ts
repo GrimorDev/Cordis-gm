@@ -732,6 +732,41 @@ DO $$ BEGIN ALTER TABLE users ADD COLUMN card_effect VARCHAR(30) DEFAULT 'none';
 DO $$ BEGIN ALTER TABLE users ADD COLUMN card_color  VARCHAR(30) DEFAULT 'default'; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN card_font   VARCHAR(30) DEFAULT 'default'; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN banner_preset VARCHAR(30) DEFAULT 'none'; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- ── Automations: expand trigger types + new columns ───────────────────────────
+ALTER TABLE server_automations DROP CONSTRAINT IF EXISTS server_automations_trigger_type_check;
+DO $$ BEGIN
+  ALTER TABLE server_automations ADD CONSTRAINT server_automations_trigger_type_check
+    CHECK (trigger_type IN (
+      'member_join','member_leave','role_assigned','role_removed',
+      'message_contains','message_sent','reaction_added','member_banned'
+    ));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE server_automations ADD COLUMN conditions JSONB DEFAULT '[]'; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE server_automations ADD COLUMN cooldown_seconds INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- ── Server mutes ──────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS server_mutes (
+    server_id  UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    user_id    UUID NOT NULL REFERENCES users(id)   ON DELETE CASCADE,
+    muted_by   UUID REFERENCES users(id) ON DELETE SET NULL,
+    reason     TEXT,
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (server_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_server_mutes_user ON server_mutes(user_id);
+
+-- ── Member warnings ───────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS member_warnings (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    server_id  UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    user_id    UUID NOT NULL REFERENCES users(id)   ON DELETE CASCADE,
+    warned_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+    reason     TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_warnings_server_user ON member_warnings(server_id, user_id);
 `;
 
 const SEED_SQL = `

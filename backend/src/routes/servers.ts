@@ -452,10 +452,24 @@ router.put('/:id/members/:userId/roles', authMiddleware, async (req: AuthRequest
           });
         }
       }
-      // Run role_assigned automations for each new role
+      // Run role_assigned / role_removed automations
       const assignedRoles = Array.isArray(role_ids) ? role_ids : [];
       for (const roleId of assignedRoles) {
         runAutomations(req.params.id, 'role_assigned', { userId: req.params.userId, roleId, io }).catch(console.error);
+      }
+      // role_removed: detect removed roles (previous vs current)
+      if (role_ids !== undefined) {
+        const { rows: currentRoles } = await query(
+          'SELECT role_id FROM member_roles WHERE server_id=$1 AND user_id=$2',
+          [req.params.id, req.params.userId]
+        );
+        const currentIds = new Set(currentRoles.map((r: any) => r.role_id));
+        const prevIds = new Set(assignedRoles);
+        for (const roleId of prevIds) {
+          if (!currentIds.has(roleId)) {
+            runAutomations(req.params.id, 'role_removed', { userId: req.params.userId, roleId, io }).catch(console.error);
+          }
+        }
       }
       // Log role change to server activity
       try {
@@ -561,6 +575,8 @@ router.post('/:id/bans/:userId', authMiddleware, async (req: AuthRequest, res: R
         s.emit('banned_from_server', { server_id: req.params.id });
       }
     }
+    // ── member_banned automation trigger ─────────────────────────────────
+    runAutomations(req.params.id, 'member_banned', { userId: req.params.userId, io }).catch(console.error);
     return res.json({ message: 'User banned' });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });

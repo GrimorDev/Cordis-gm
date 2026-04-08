@@ -201,11 +201,11 @@ router.post('/channel/:channelId', authMiddleware, msgLimiter,
       // Invalidate latest-messages cache for this channel
       try { await redis.del(KEYS.msgCache(req.params.channelId)); } catch { /* ignore */ }
 
-      // ── message_contains automation trigger ───────────────────────────
+      // ── automation triggers ───────────────────────────────────────────
       if (access.serverId) {
-        runAutomations(access.serverId, 'message_contains', {
-          userId: req.user!.id, messageId: msg.id, messageContent: content, io
-        }).catch(console.error);
+        const autoCtx = { userId: req.user!.id, messageId: msg.id, channelId: req.params.channelId, messageContent: content, io };
+        runAutomations(access.serverId, 'message_contains', autoCtx).catch(console.error);
+        runAutomations(access.serverId, 'message_sent', autoCtx).catch(console.error);
       }
 
       // ── @everyone / @here: ping all server members ────────────────────
@@ -443,6 +443,17 @@ router.post('/:id/reactions', authMiddleware, async (req: AuthRequest, res: Resp
     await query('INSERT INTO message_reactions (message_id,user_id,emoji) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
       [req.params.id, req.user!.id, emoji]);
     await broadcastReactionUpdate(req, req.params.id, emoji);
+    // ── reaction_added automation trigger ─────────────────────────────
+    const { rows: [msgInfo] } = await query(
+      'SELECT m.channel_id, ch.server_id FROM messages m JOIN channels ch ON ch.id=m.channel_id WHERE m.id=$1',
+      [req.params.id]
+    );
+    if (msgInfo?.server_id) {
+      const io = req.app.get('io');
+      runAutomations(msgInfo.server_id, 'reaction_added', {
+        userId: req.user!.id, messageId: req.params.id, channelId: msgInfo.channel_id, emoji, io,
+      }).catch(console.error);
+    }
     return res.json({ ok: true });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
