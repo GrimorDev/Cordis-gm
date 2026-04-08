@@ -32,6 +32,8 @@
     "fs:allow-exists",
     "fs:scope-appdata",
     "fs:scope-appdata-recursive",
-    "shell:allow-open"
+    "shell:allow-open",
+    "window-state:allow-restore-state",
+    "window-state:allow-save-window-state"
   ]
 }
