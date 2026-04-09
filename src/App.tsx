@@ -6231,9 +6231,12 @@ export default function App() {
 
   // ── Cordyn Apps modal ────────────────────────────────────────────
   const [appsModalOpen, setAppsModalOpen] = useState(false);
-  const [appsTab, setAppsTab] = useState<'browse'|'installed'>('browse');
+  const [appsTab, setAppsTab] = useState<'browse'|'installed'|'public'>('browse');
   const [installedBots, setInstalledBots] = useState<import('./api').InstalledBot[]>([]);
   const [botInstalling, setBotInstalling] = useState<string|null>(null);
+  const [publicApps, setPublicApps] = useState<import('./developer/developerApi').PublicApp[]>([]);
+  const [publicAppsLoading, setPublicAppsLoading] = useState(false);
+  const [publicBotInstalling, setPublicBotInstalling] = useState<string|null>(null);
   // Music bot state per channel
   const [musicBotState, setMusicBotState] = useState<Record<string, import('./api').MusicBotState>>({});
   const [musicVolume, setMusicVolume]   = useState(() => { try { return parseInt(localStorage.getItem('cordyn_music_vol') ?? '100'); } catch { return 100; } });
@@ -8881,6 +8884,16 @@ export default function App() {
       setInstalledBots([]);
     }
   }, [activeServer, appsModalOpen]);
+
+  // Load public apps when "Publiczne" tab is opened
+  useEffect(() => {
+    if (appsTab === 'public' && publicApps.length === 0) {
+      setPublicAppsLoading(true);
+      import('./developer/developerApi').then(({ appsApi }) =>
+        appsApi.list().then(setPublicApps).catch(() => {})
+      ).finally(() => setPublicAppsLoading(false));
+    }
+  }, [appsTab]);
 
   // Auto-resize message textarea
   useEffect(() => {
@@ -14437,21 +14450,98 @@ export default function App() {
                   <h2 className="font-bold text-white text-base">Cordyn Apps</h2>
                   <p className="text-xs text-zinc-500">Rozszerzenia i boty dla serwera <span className="text-zinc-300">{serverFull?.name}</span></p>
                 </div>
+                <a
+                  href="/apps"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-violet-400 hover:text-violet-300 border border-violet-500/25 hover:bg-violet-500/10 transition-all shrink-0 mr-1"
+                >
+                  <ExternalLink size={11}/> Biblioteka
+                </a>
                 <button onClick={()=>setAppsModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.07] transition-all">
                   <X size={16}/>
                 </button>
               </div>
               {/* Tabs */}
               <div className="flex gap-0.5 px-3 py-2 border-b border-white/[0.05] bg-white/[0.02]">
-                {(['browse','installed'] as const).map(tab => (
+                {(['browse','public','installed'] as const).map(tab => (
                   <button key={tab} onClick={()=>setAppsTab(tab)}
                     className={`px-3.5 py-1.5 rounded-xl text-sm font-medium transition-all ${appsTab===tab?'bg-violet-500/15 text-violet-300 border border-violet-500/25':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]'}`}>
-                    {tab==='browse' ? 'Przeglądaj' : 'Zainstalowane'}
+                    {tab==='browse' ? 'Przeglądaj' : tab==='public' ? 'Publiczne' : 'Zainstalowane'}
                   </button>
                 ))}
               </div>
               {/* Content */}
               <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
+                {appsTab === 'public' && (
+                  publicAppsLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 size={22} className="animate-spin text-violet-400"/>
+                    </div>
+                  ) : publicApps.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
+                      <div className="w-14 h-14 rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center">
+                        <Globe size={22} className="text-zinc-600"/>
+                      </div>
+                      <p className="text-zinc-500 text-sm">Brak publicznych aplikacji od społeczności</p>
+                      <a href="/apps" target="_blank" rel="noopener noreferrer" className="text-xs text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1">
+                        <ExternalLink size={11}/> Otwórz Cordyn Apps →
+                      </a>
+                    </div>
+                  ) : publicApps.map(app => {
+                    const alreadyIn = installedBots.some(b => b.bot_id === app.bot_user_id);
+                    return (
+                      <div key={app.client_id} className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4 hover:border-violet-500/20 transition-all">
+                        <div className="flex items-start gap-3.5">
+                          {app.bot_avatar ? (
+                            <img src={app.bot_avatar} alt="" className="w-12 h-12 rounded-xl object-cover shrink-0"/>
+                          ) : (
+                            <div className="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0 text-xl font-bold text-violet-300">
+                              {app.name[0]}
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                              <h3 className="font-bold text-white text-sm">{app.name}</h3>
+                              {app.is_verified && <BadgeCheck size={13} className="text-green-400"/>}
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-zinc-700 text-zinc-500 uppercase tracking-wider">BOT</span>
+                            </div>
+                            <p className="text-xs text-zinc-500 leading-relaxed mb-2 line-clamp-2">{app.description || 'Brak opisu.'}</p>
+                            <p className="text-[11px] text-zinc-600 flex items-center gap-1">
+                              <Server size={10}/> {app.server_count} {app.server_count === 1 ? 'serwer' : 'serwerów'}
+                            </p>
+                          </div>
+                          <div className="shrink-0">
+                            {alreadyIn ? (
+                              <span className="text-xs text-green-400 font-medium flex items-center gap-1">
+                                <Check size={12}/> Dodano
+                              </span>
+                            ) : (
+                              <button
+                                disabled={publicBotInstalling === app.client_id}
+                                onClick={async () => {
+                                  if (!activeServer) return;
+                                  setPublicBotInstalling(app.client_id);
+                                  try {
+                                    await import('./developer/developerApi').then(({ devApi }) =>
+                                      devApi.addBotToServer(app.client_id, activeServer)
+                                    );
+                                    setInstalledBots(p => [...p, { bot_id: app.bot_user_id, installed_at: new Date().toISOString() } as any]);
+                                  } catch { /* ignore */ } finally {
+                                    setPublicBotInstalling(null);
+                                  }
+                                }}
+                                className="px-3 py-1.5 text-xs font-medium rounded-xl bg-violet-500 hover:bg-violet-400 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5">
+                                {publicBotInstalling === app.client_id ? <Loader2 size={11} className="animate-spin"/> : <Plus size={11}/>}
+                                Dodaj
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
                 {appsTab === 'browse' && AVAILABLE_BOTS.map(bot => {
                   const isInstalled = installedBots.some(b => b.bot_id === bot.id);
                   return (
