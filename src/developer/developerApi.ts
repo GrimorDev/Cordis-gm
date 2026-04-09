@@ -19,6 +19,28 @@ async function req<T>(method: string, path: string, body?: any): Promise<T> {
   return res.json();
 }
 
+export interface MyServer {
+  id: string;
+  name: string;
+  icon_url: string | null;
+  role_name: string;
+  member_count: number;
+}
+
+export interface PublicApp {
+  client_id: string;
+  name: string;
+  description: string | null;
+  icon_url: string | null;
+  is_verified: boolean;
+  terms_url: string | null;
+  privacy_url: string | null;
+  bot_user_id: string;
+  bot_username: string;
+  bot_avatar: string | null;
+  server_count: number;
+}
+
 export interface DevApplication {
   id: string;
   name: string;
@@ -75,4 +97,19 @@ export const devApi = {
     ),
   getBotServers: (appId: string) =>
     req<BotServer[]>('GET', `${BASE}/applications/${appId}/bot/servers`),
+
+  // Bot invite helpers (used by DeveloperPortal + AppsMarketplace)
+  getMyServers: () =>
+    req<MyServer[]>('GET', '/api/oauth2/bot-invite/my-servers'),
+  addBotToServer: (clientId: string, serverId: string) =>
+    req<{ success: boolean }>('POST', '/api/oauth2/bot-invite/confirm', {
+      client_id: clientId,
+      server_id: serverId,
+    }),
+};
+
+export const appsApi = {
+  list: () => req<PublicApp[]>('GET', '/api/apps'),
+  search: (q: string) => req<PublicApp[]>('GET', `/api/apps/search?q=${encodeURIComponent(q)}`),
+  get: (clientId: string) => req<PublicApp>('GET', `/api/apps/${clientId}`),
 };

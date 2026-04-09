@@ -46,6 +46,7 @@ import { musicStates } from './routes/bots';
 import developerRoutes from './routes/developer/index';
 import oauth2Routes from './routes/oauth2/index';
 import v1Routes from './routes/v1/index';
+import appsRoutes from './routes/apps';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -147,6 +148,7 @@ app.use('/api/status', statusRoutes);
 app.use('/api/developer', developerRoutes);
 app.use('/api/oauth2', oauth2Routes);
 app.use('/api/v1', v1Routes);
+app.use('/api/apps', appsRoutes);
 
 // ── Music audio stream proxy ──────────────────────────────────────────────────
 // Proxies the YouTube CDN audio URL through our server to bypass browser CORS restrictions.
