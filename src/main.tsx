@@ -6,6 +6,7 @@ import './index.css';
 
 const DeveloperPortal = lazy(() => import('./DeveloperPortal.tsx'));
 const OAuthConsent = lazy(() => import('./oauth2/OAuthConsent.tsx'));
+const AppsMarketplace = lazy(() => import('./AppsMarketplace.tsx'));
 
 const path = window.location.pathname;
 
@@ -16,6 +17,8 @@ if (path === '/stats') {
   Component = DeveloperPortal as any;
 } else if (path.startsWith('/oauth2/authorize')) {
   Component = OAuthConsent as any;
+} else if (path.startsWith('/apps')) {
+  Component = AppsMarketplace as any;
 } else {
   Component = App;
 }

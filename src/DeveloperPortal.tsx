@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { devApi, DevApplication, BotServer } from './developer/developerApi';
+import { devApi, DevApplication, BotServer, MyServer } from './developer/developerApi';
 
 // ===== INLINE SVG ICONS =====
 const CopyIcon = () => (
@@ -366,6 +366,7 @@ function GeneralTab({ app, onUpdate }: GeneralTabProps) {
   const [desc, setDesc] = useState(app.description || '');
   const [redirectInput, setRedirectInput] = useState('');
   const [redirectUris, setRedirectUris] = useState<string[]>(app.redirect_uris || []);
+  const [isPublic, setIsPublic] = useState(app.is_public ?? false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
   const [showSecret, setShowSecret] = useState(false);
@@ -379,6 +380,7 @@ function GeneralTab({ app, onUpdate }: GeneralTabProps) {
     setDesc(app.description || '');
     setRedirectUris(app.redirect_uris || []);
     setSecret(app.client_secret || '');
+    setIsPublic(app.is_public ?? false);
   }, [app.id]);
 
   const handleSave = async () => {
@@ -389,7 +391,8 @@ function GeneralTab({ app, onUpdate }: GeneralTabProps) {
         name: name.trim(),
         description: desc.trim() || null,
         redirect_uris: redirectUris,
-      });
+        is_public: isPublic,
+      } as any);
       onUpdate(updated);
       setSaveMsg('Zapisano!');
       setTimeout(() => setSaveMsg(''), 3000);
@@ -546,6 +549,47 @@ function GeneralTab({ app, onUpdate }: GeneralTabProps) {
         </div>
       </div>
 
+      {/* is_public toggle */}
+      <div style={{ marginBottom: 24 }}>
+        <label style={labelStyle}>WIDOCZNOŚĆ W CORDYN APPS</label>
+        <label style={{
+          display: 'flex', alignItems: 'flex-start', gap: 12,
+          padding: '12px 16px', background: '#18181b',
+          border: `1px solid ${isPublic ? 'rgba(99,102,241,0.4)' : '#27272a'}`,
+          borderRadius: 10, cursor: 'pointer', transition: 'border-color 0.15s',
+        }}>
+          <div
+            onClick={() => setIsPublic(p => !p)}
+            style={{
+              width: 40, height: 22, borderRadius: 11, flexShrink: 0,
+              background: isPublic ? '#6366f1' : '#3f3f46',
+              position: 'relative', cursor: 'pointer', transition: 'background 0.2s', marginTop: 1,
+            }}
+          >
+            <div style={{
+              position: 'absolute', top: 3, left: isPublic ? 21 : 3,
+              width: 16, height: 16, borderRadius: '50%', background: '#fff',
+              transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+            }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#f4f4f5', marginBottom: 2 }}>
+              Publiczna aplikacja
+              {isPublic && (
+                <span style={{ marginLeft: 8, fontSize: 11, padding: '1px 6px', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 4, color: '#818cf8' }}>
+                  WIDOCZNA W CORDYN APPS
+                </span>
+              )}
+            </div>
+            <p style={{ margin: 0, fontSize: 12, color: '#71717a', lineHeight: 1.5 }}>
+              {isPublic
+                ? 'Bot jest widoczny w katalogu Cordyn Apps. Każdy właściciel serwera może go dodać.'
+                : 'Bot jest prywatny. Tylko Ty możesz go dodawać do serwerów.'}
+            </p>
+          </div>
+        </label>
+      </div>
+
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <button onClick={handleSave} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
           {saving ? 'Zapisywanie...' : 'Zapisz zmiany'}
@@ -555,6 +599,125 @@ function GeneralTab({ app, onUpdate }: GeneralTabProps) {
             {saveMsg}
           </span>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ===== ADD TO SERVER MODAL =====
+interface AddToServerModalProps {
+  clientId: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function AddToServerModal({ clientId, onClose, onSuccess }: AddToServerModalProps) {
+  const [servers, setServers] = useState<MyServer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    devApi.getMyServers()
+      .then(setServers)
+      .catch(() => setError('Nie udało się załadować serwerów'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleAdd = async (serverId: string) => {
+    setAdding(serverId);
+    setError('');
+    try {
+      await devApi.addBotToServer(clientId, serverId);
+      setDone(serverId);
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message || 'Błąd dodawania bota');
+    } finally {
+      setAdding(null);
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 999, padding: 20,
+    }}>
+      <div style={{
+        background: '#18181b', border: '1px solid #27272a', borderRadius: 14,
+        padding: 24, width: '100%', maxWidth: 480, maxHeight: '80vh',
+        display: 'flex', flexDirection: 'column',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#f4f4f5' }}>
+            Dodaj bota do serwera
+          </h3>
+          <button onClick={onClose} style={{ padding: 6, background: 'transparent', border: 'none', color: '#71717a', cursor: 'pointer' }}>
+            <XIcon />
+          </button>
+        </div>
+
+        <p style={{ margin: '0 0 16px', fontSize: 13, color: '#71717a' }}>
+          Wybierz serwer, do którego chcesz dodać bota. Musisz być właścicielem lub adminem.
+        </p>
+
+        {error && (
+          <div style={{ padding: '8px 12px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, color: '#f87171', fontSize: 13, marginBottom: 12 }}>
+            {error}
+          </div>
+        )}
+
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {loading ? (
+            <p style={{ color: '#52525b', fontSize: 13 }}>Ładowanie serwerów...</p>
+          ) : servers.length === 0 ? (
+            <p style={{ color: '#52525b', fontSize: 13, fontStyle: 'italic' }}>
+              Nie jesteś właścicielem ani adminem żadnego serwera.
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {servers.map(server => {
+                const isDone = done === server.id;
+                const isAdding = adding === server.id;
+                return (
+                  <div key={server.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '10px 14px', background: '#09090b',
+                    border: `1px solid ${isDone ? 'rgba(74,222,128,0.3)' : '#27272a'}`,
+                    borderRadius: 10, transition: 'border-color 0.15s',
+                  }}>
+                    {server.icon_url ? (
+                      <img src={server.icon_url} alt={server.name} style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0 }} />
+                    ) : (
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#27272a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#71717a', fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
+                        {server.name[0]}
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#f4f4f5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{server.name}</div>
+                      <div style={{ fontSize: 11, color: '#71717a' }}>{server.member_count} członków · {server.role_name}</div>
+                    </div>
+                    {isDone ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#4ade80', fontWeight: 600 }}>
+                        <CheckIcon /> Dodano
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleAdd(server.id)}
+                        disabled={isAdding || !!adding}
+                        style={{ ...btnPrimary, padding: '5px 12px', fontSize: 12, opacity: (isAdding || (!!adding && !isAdding)) ? 0.6 : 1 }}
+                      >
+                        {isAdding ? '...' : 'Dodaj'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -572,6 +735,7 @@ function BotTab({ app, onUpdate }: BotTabProps) {
   const [loadingServers, setLoadingServers] = useState(false);
   const [tokenModal, setTokenModal] = useState<string | null>(null);
   const [creatingBot, setCreatingBot] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const { copy, copiedKey } = useCopyToClipboard();
   const hasBot = !!app.bot_user_id;
 
@@ -677,6 +841,13 @@ function BotTab({ app, onUpdate }: BotTabProps) {
           onClose={() => setTokenModal(null)}
         />
       )}
+      {showAddModal && (
+        <AddToServerModal
+          clientId={app.client_id}
+          onClose={() => setShowAddModal(false)}
+          onSuccess={() => { loadServers(); }}
+        />
+      )}
 
       {/* Bot info */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: '#18181b', border: '1px solid #27272a', borderRadius: 10, marginBottom: 24 }}>
@@ -727,13 +898,13 @@ function BotTab({ app, onUpdate }: BotTabProps) {
         </div>
       </div>
 
-      {/* Invite URL */}
+      {/* Invite URL + Quick Add */}
       {inviteUrl && (
         <div style={{ marginBottom: 24 }}>
           <label style={labelStyle}>LINK ZAPROSZENIA</label>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{
-              flex: 1, fontFamily: 'monospace', fontSize: 12,
+              flex: 1, minWidth: 180, fontFamily: 'monospace', fontSize: 12,
               background: '#18181b', border: '1px solid #3f3f46',
               borderRadius: 8, padding: '8px 12px', color: '#a1a1aa',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -749,6 +920,18 @@ function BotTab({ app, onUpdate }: BotTabProps) {
             >
               <ExternalLinkIcon /> Otwórz
             </a>
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <button
+              onClick={() => setShowAddModal(true)}
+              style={{ ...btnPrimary, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <ServerIcon />
+              Dodaj do mojego serwera
+            </button>
+            <span style={{ marginLeft: 10, fontSize: 12, color: '#71717a' }}>
+              Szybkie dodanie bez opuszczania portalu
+            </span>
           </div>
         </div>
       )}
