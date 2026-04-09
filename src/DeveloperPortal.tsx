@@ -1220,16 +1220,16 @@ const LANGS: { id: DocLang; label: string }[] = [
   { id: 'java',   label: 'Java'       },
 ];
 
-const DOC_SECTIONS: { id: DocSection; label: string; icon: string }[] = [
-  { id: 'quickstart', label: 'Pierwsze kroki',   icon: '🚀' },
-  { id: 'auth',       label: 'Autentykacja',      icon: '🔑' },
-  { id: 'oauth2',     label: 'OAuth2 Flow',       icon: '🔐' },
-  { id: 'users',      label: 'Użytkownicy',       icon: '👤' },
-  { id: 'guilds',     label: 'Serwery (Guilds)',  icon: '🏠' },
-  { id: 'channels',   label: 'Kanały',            icon: '#'  },
-  { id: 'messages',   label: 'Wiadomości',        icon: '💬' },
-  { id: 'bot',        label: 'Bot API',           icon: '🤖' },
-  { id: 'errors',     label: 'Błędy & Limity',   icon: '⚠️' },
+const DOC_SECTIONS: { id: DocSection; label: string }[] = [
+  { id: 'quickstart', label: 'Pierwsze kroki'  },
+  { id: 'auth',       label: 'Autentykacja'    },
+  { id: 'oauth2',     label: 'OAuth2 Flow'     },
+  { id: 'users',      label: 'Użytkownicy'     },
+  { id: 'guilds',     label: 'Serwery'         },
+  { id: 'channels',   label: 'Kanały'          },
+  { id: 'messages',   label: 'Wiadomości'      },
+  { id: 'bot',        label: 'Bot API'         },
+  { id: 'errors',     label: 'Błędy & Limity' },
 ];
 
 function codeSample(lang: DocLang, opts: {
@@ -1476,7 +1476,7 @@ function DocsTab({ app }: DocsTabProps) {
   const sectionContent: Record<DocSection, React.ReactNode> = {
     quickstart: (
       <div>
-        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>🚀 Pierwsze kroki</h2>
+        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>Pierwsze kroki</h2>
         <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a', lineHeight: 1.7 }}>
           Cordyn API jest REST-owym API HTTP z JSON. Boty używają tokenu <code style={{ fontFamily: 'monospace', color: '#818cf8' }}>Authorization: Bot TOKEN</code>, aplikacje użytkownika — <code style={{ fontFamily: 'monospace', color: '#4ade80' }}>Authorization: Bearer OAUTH2_TOKEN</code>.
         </p>
@@ -1508,7 +1508,7 @@ function DocsTab({ app }: DocsTabProps) {
 
     auth: (
       <div>
-        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>🔑 Autentykacja</h2>
+        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>Autentykacja</h2>
         <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a', lineHeight: 1.7 }}>
           API obsługuje dwa schematy autentykacji. Każde zapytanie musi zawierać nagłówek <code style={{ fontFamily: 'monospace', color: '#d4d4d8' }}>Authorization</code>.
         </p>
@@ -1534,7 +1534,7 @@ function DocsTab({ app }: DocsTabProps) {
 
     oauth2: (
       <div>
-        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>🔐 OAuth2 Flow</h2>
+        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>OAuth2 Flow</h2>
         <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a', lineHeight: 1.7 }}>Cordyn używa standardowego OAuth2 Authorization Code Flow. Poniżej kompletny przykład w wybranym języku.</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
           {[
@@ -1570,7 +1570,7 @@ function DocsTab({ app }: DocsTabProps) {
 
     users: (
       <div>
-        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>👤 Użytkownicy</h2>
+        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>Użytkownicy</h2>
         <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a' }}>Endpointy do pobierania danych użytkowników. Scope <code style={{ fontFamily: 'monospace', color: '#818cf8' }}>identify</code> wymagany dla /@me.</p>
         <EP method="GET" path="/api/v1/@me" desc="Własny profil bota/użytkownika" auth="Bot/Bearer"
           resp={`{\n  "id": "550e8400-e29b-41d4-a716-446655440000",\n  "username": "moj_bot",\n  "avatar_url": null,\n  "is_bot": true,\n  "custom_status": "Bot dla MojejAplikacji",\n  "created_at": "2025-01-01T00:00:00.000Z"\n}`} />
@@ -1584,7 +1584,7 @@ function DocsTab({ app }: DocsTabProps) {
 
     guilds: (
       <div>
-        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>🏠 Serwery (Guilds)</h2>
+        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>Serwery (Guilds)</h2>
         <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a' }}>Bot ma dostęp tylko do serwerów, na których jest zainstalowany. Wszystkie zapytania sprawdzają przynależność.</p>
         <EP method="GET" path="/api/v1/guilds/:guildId" desc="Dane serwera" auth="Bot"
           params={[{ name: 'guildId', type: 'UUID', req: true, desc: 'ID serwera' }]}
@@ -1605,7 +1605,7 @@ function DocsTab({ app }: DocsTabProps) {
 
     channels: (
       <div>
-        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}># Kanały</h2>
+        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>Kanały</h2>
         <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a' }}>Odczyt i zarządzanie kanałami. Bot musi być w serwerze, do którego należy kanał.</p>
         <EP method="GET" path="/api/v1/channels/:channelId" desc="Dane kanału" auth="Bot"
           params={[{ name: 'channelId', type: 'UUID', req: true, desc: 'ID kanału' }]}
@@ -1623,7 +1623,7 @@ function DocsTab({ app }: DocsTabProps) {
 
     messages: (
       <div>
-        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>💬 Wiadomości</h2>
+        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>Wiadomości</h2>
         <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a' }}>Wysyłanie, edycja i usuwanie wiadomości. Scope <code style={{ fontFamily: 'monospace', color: '#818cf8' }}>messages.send</code> wymagany dla botów OAuth2.</p>
         <EP method="POST" path="/api/v1/channels/:channelId/messages" desc="Wyślij wiadomość" auth="Bot"
           body={[
@@ -1678,7 +1678,7 @@ function DocsTab({ app }: DocsTabProps) {
 
     bot: (
       <div>
-        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>🤖 Bot API</h2>
+        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>Bot API</h2>
         <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a', lineHeight: 1.7 }}>
           Boty używają prefiksu <code style={{ fontFamily: 'monospace', color: '#818cf8' }}>/api/v1/</code> z tokenem <code style={{ fontFamily: 'monospace' }}>Authorization: Bot TOKEN</code>. Mają dostęp tylko do serwerów, na których są zainstalowane.
         </p>
@@ -1733,7 +1733,7 @@ function DocsTab({ app }: DocsTabProps) {
 
     errors: (
       <div>
-        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>⚠️ Błędy & Rate Limiting</h2>
+        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>Błędy & Rate Limiting</h2>
         <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a' }}>API używa standardowych kodów HTTP. Wszystkie błędy zwracają JSON z polem <code style={{ fontFamily: 'monospace', color: '#f87171' }}>error</code>.</p>
         <div style={{ marginBottom: 24 }}>
           <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: '#f4f4f5' }}>Kody odpowiedzi HTTP</h3>
@@ -1788,40 +1788,46 @@ function DocsTab({ app }: DocsTabProps) {
   };
 
   return (
-    <div style={{ display: 'flex', gap: 0, minHeight: 600 }}>
-      {/* Left sidebar nav */}
-      <div style={{ width: 180, flexShrink: 0, borderRight: '1px solid #27272a', paddingRight: 0 }}>
-        <div style={{ position: 'sticky', top: 0 }}>
+    <div style={{ display: 'flex', height: '100%', minHeight: 500 }}>
+      {/* Left nav */}
+      <div style={{ width: 200, flexShrink: 0, borderRight: '1px solid #1c1c1f' }}>
+        <div style={{ padding: '8px 0' }}>
+          <div style={{ padding: '4px 16px 8px', fontSize: 10, fontWeight: 700, color: '#3f3f46', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Sekcje
+          </div>
           {DOC_SECTIONS.map(s => (
-            <button key={s.id} onClick={() => setSection(s.id)}
-              style={{
-                width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-                padding: '8px 12px', background: section === s.id ? 'rgba(99,102,241,0.12)' : 'transparent',
-                border: 'none', borderRight: section === s.id ? '2px solid #6366f1' : '2px solid transparent',
-                color: section === s.id ? '#818cf8' : '#71717a',
-                fontSize: 13, fontWeight: section === s.id ? 600 : 400,
-                cursor: 'pointer', textAlign: 'left', transition: 'all 0.1s',
-              }}>
-              <span style={{ fontSize: 14 }}>{s.icon}</span>
+            <button key={s.id} onClick={() => setSection(s.id)} style={{
+              width: '100%', display: 'block', textAlign: 'left',
+              padding: '7px 16px',
+              background: section === s.id ? 'rgba(99,102,241,0.1)' : 'transparent',
+              border: 'none',
+              borderLeft: `3px solid ${section === s.id ? '#6366f1' : 'transparent'}`,
+              color: section === s.id ? '#a5b4fc' : '#71717a',
+              fontSize: 13, fontWeight: section === s.id ? 600 : 400,
+              cursor: 'pointer', transition: 'all 0.1s',
+            }}>
               {s.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Content */}
-      <div style={{ flex: 1, paddingLeft: 24, minWidth: 0 }}>
-        {/* Language selector */}
-        <div style={{ display: 'flex', gap: 4, marginBottom: 20, flexWrap: 'wrap' }}>
+      {/* Content area */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px', minWidth: 0 }}>
+        {/* Language tabs */}
+        <div style={{
+          display: 'flex', gap: 2, marginBottom: 24, flexWrap: 'wrap',
+          borderBottom: '1px solid #1c1c1f', paddingBottom: 16,
+        }}>
+          <span style={{ fontSize: 12, color: '#52525b', alignSelf: 'center', marginRight: 8 }}>Język:</span>
           {LANGS.map(l => (
-            <button key={l.id} onClick={() => setLang(l.id)}
-              style={{
-                padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 500,
-                background: lang === l.id ? '#6366f1' : '#27272a',
-                border: `1px solid ${lang === l.id ? '#6366f1' : '#3f3f46'}`,
-                color: lang === l.id ? '#fff' : '#a1a1aa',
-                cursor: 'pointer', transition: 'all 0.1s',
-              }}>
+            <button key={l.id} onClick={() => setLang(l.id)} style={{
+              padding: '5px 14px', borderRadius: 6, fontSize: 12, fontWeight: 500,
+              background: lang === l.id ? '#6366f1' : 'transparent',
+              border: `1px solid ${lang === l.id ? '#6366f1' : '#27272a'}`,
+              color: lang === l.id ? '#fff' : '#71717a',
+              cursor: 'pointer', transition: 'all 0.1s',
+            }}>
               {l.label}
             </button>
           ))}
@@ -1905,6 +1911,7 @@ export default function DeveloperPortal() {
   const [apps, setApps] = useState<DevApplication[]>([]);
   const [selectedApp, setSelectedApp] = useState<DevApplication | null>(null);
   const [tab, setTab] = useState<Tab>('general');
+  const [viewMode, setViewMode] = useState<'app' | 'docs'>('app');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showNewModal, setShowNewModal] = useState(false);
@@ -1912,19 +1919,14 @@ export default function DeveloperPortal() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const loadApps = useCallback(async () => {
-    setLoading(true);
-    setError('');
+    setLoading(true); setError('');
     try {
       const list = await devApi.listApps();
       setApps(list);
-      if (list.length > 0 && !selectedApp) {
-        setSelectedApp(list[0]);
-      }
+      if (list.length > 0 && !selectedApp) setSelectedApp(list[0]);
     } catch (err: any) {
-      setError(err.message || 'Błąd ładowania aplikacji');
-    } finally {
-      setLoading(false);
-    }
+      setError(err.message || 'Błąd ładowania');
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { loadApps(); }, [loadApps]);
@@ -1933,6 +1935,7 @@ export default function DeveloperPortal() {
     const created = await devApi.createApp(name, desc);
     setApps(prev => [...prev, created]);
     setSelectedApp(created);
+    setViewMode('app');
     setShowNewModal(false);
     setCreatedSecret(created.client_secret || null);
     setSidebarOpen(false);
@@ -1940,6 +1943,7 @@ export default function DeveloperPortal() {
 
   const handleSelectApp = (app: DevApplication) => {
     setSelectedApp(app);
+    setViewMode('app');
     setTab('general');
     setSidebarOpen(false);
   };
@@ -1951,238 +1955,227 @@ export default function DeveloperPortal() {
 
   const handleDeleteApp = async () => {
     if (!selectedApp) return;
-    const ok = window.confirm(`Czy na pewno chcesz usunąć aplikację "${selectedApp.name}"?\n\nWszystkie tokeny i secrety przestaną działać natychmiast. Ta akcja jest nieodwracalna.`);
-    if (!ok) return;
+    if (!window.confirm(`Usunąć aplikację "${selectedApp.name}"? Ta akcja jest nieodwracalna.`)) return;
     try {
       await devApi.deleteApp(selectedApp.id);
       const remaining = apps.filter(a => a.id !== selectedApp.id);
       setApps(remaining);
       setSelectedApp(remaining[0] || null);
-    } catch (err: any) {
-      alert('Błąd usuwania: ' + err.message);
-    }
+    } catch (err: any) { alert('Błąd: ' + err.message); }
   };
 
-  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: 'general', label: 'Ogólne', icon: <GlobeIcon /> },
-    { id: 'bot', label: 'Bot', icon: <BotIcon /> },
-    { id: 'oauth2', label: 'OAuth2', icon: <KeyIcon /> },
-    { id: 'docs', label: 'Dokumentacja', icon: <CodeIcon /> },
+  const appTabs: { id: Tab; label: string }[] = [
+    { id: 'general', label: 'Ogólne'  },
+    { id: 'bot',     label: 'Bot'     },
+    { id: 'oauth2',  label: 'OAuth2'  },
   ];
+
+  const sidebar = (
+    <aside style={{
+      width: 220, minWidth: 220, borderRight: '1px solid #18181b',
+      background: '#09090b', display: 'flex', flexDirection: 'column',
+      overflowY: 'auto', position: 'sticky', top: 56,
+      height: 'calc(100vh - 56px)', zIndex: 50,
+      transform: sidebarOpen ? 'translateX(0)' : undefined,
+    }}>
+      {/* Dokumentacja button */}
+      <div style={{ padding: '12px 10px 4px' }}>
+        <button
+          onClick={() => { setViewMode('docs'); setSidebarOpen(false); }}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+            padding: '8px 12px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+            background: viewMode === 'docs' ? 'rgba(99,102,241,0.12)' : 'transparent',
+            border: viewMode === 'docs' ? '1px solid rgba(99,102,241,0.25)' : '1px solid transparent',
+            color: viewMode === 'docs' ? '#818cf8' : '#71717a',
+            fontSize: 13, fontWeight: viewMode === 'docs' ? 600 : 400,
+            transition: 'all 0.1s',
+          }}
+        >
+          <CodeIcon /> Dokumentacja API
+        </button>
+      </div>
+
+      <div style={{ margin: '8px 10px', borderBottom: '1px solid #18181b' }} />
+
+      {/* New app */}
+      <div style={{ padding: '0 10px 8px' }}>
+        <button
+          onClick={() => setShowNewModal(true)}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+            padding: '8px 12px', background: 'rgba(99,102,241,0.1)',
+            border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8,
+            color: '#818cf8', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+          }}
+        >
+          <PlusIcon /> Nowa aplikacja
+        </button>
+      </div>
+
+      {/* App list */}
+      <div style={{ padding: '0 10px', flex: 1 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#3f3f46', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '4px 4px 6px' }}>
+          Twoje aplikacje
+        </div>
+        {loading ? (
+          <div style={{ padding: '8px 4px', color: '#52525b', fontSize: 13 }}>Ładowanie...</div>
+        ) : error ? (
+          <div style={{ padding: '8px 4px', color: '#f87171', fontSize: 12 }}>{error}</div>
+        ) : apps.length === 0 ? (
+          <div style={{ padding: '8px 4px', color: '#52525b', fontSize: 13 }}>Brak aplikacji.</div>
+        ) : apps.map(app => {
+          const active = viewMode === 'app' && selectedApp?.id === app.id;
+          return (
+            <button key={app.id} onClick={() => handleSelectApp(app)} style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+              padding: '7px 10px', borderRadius: 8, cursor: 'pointer',
+              background: active ? 'rgba(99,102,241,0.1)' : 'transparent',
+              border: active ? '1px solid rgba(99,102,241,0.2)' : '1px solid transparent',
+              color: active ? '#a5b4fc' : '#a1a1aa',
+              fontSize: 13, fontWeight: active ? 600 : 400,
+              marginBottom: 1, textAlign: 'left', transition: 'all 0.1s',
+            }}>
+              {app.icon_url ? (
+                <img src={app.icon_url} alt="" style={{ width: 24, height: 24, borderRadius: 6, flexShrink: 0 }} />
+              ) : (
+                <div style={{ width: 24, height: 24, borderRadius: 6, flexShrink: 0, background: active ? 'rgba(99,102,241,0.25)' : '#27272a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: active ? '#818cf8' : '#71717a' }}>
+                  {app.name[0].toUpperCase()}
+                </div>
+              )}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{app.name}</span>
+              {app.is_verified && <span style={{ color: '#4ade80', flexShrink: 0 }}><CheckIcon /></span>}
+            </button>
+          );
+        })}
+      </div>
+    </aside>
+  );
 
   return (
     <div style={{ minHeight: '100vh', background: '#09090b', color: '#f4f4f5', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       {/* Header */}
       <header style={{
-        height: 56, borderBottom: '1px solid #18181b',
+        height: 52, borderBottom: '1px solid #18181b',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '0 20px', position: 'sticky', top: 0,
-        background: 'rgba(9,9,11,0.9)', backdropFilter: 'blur(8px)', zIndex: 100,
+        background: 'rgba(9,9,11,0.95)', backdropFilter: 'blur(8px)', zIndex: 100,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button
-            onClick={() => setSidebarOpen(o => !o)}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button onClick={() => setSidebarOpen(o => !o)}
             style={{ display: 'none', padding: 6, background: 'transparent', border: 'none', color: '#a1a1aa', cursor: 'pointer' }}
-            className="mobile-menu-btn"
-          >
+            className="mobile-menu-btn">
             {sidebarOpen ? <XIcon /> : <MenuIcon />}
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 6, background: 'linear-gradient(135deg,#6366f1,#818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14, color: '#fff' }}>
-              C
-            </div>
-            <span style={{ fontSize: 15, fontWeight: 700, color: '#f4f4f5' }}>Cordyn</span>
-            <span style={{ color: '#27272a', fontSize: 16, margin: '0 2px' }}>/</span>
-            <span style={{ fontSize: 14, color: '#71717a' }}>Developer Portal</span>
-          </div>
+          <div style={{ width: 26, height: 26, borderRadius: 6, background: 'linear-gradient(135deg,#6366f1,#818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 13, color: '#fff' }}>C</div>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#f4f4f5' }}>Cordyn</span>
+          <span style={{ color: '#27272a', fontSize: 15 }}>/</span>
+          <span style={{ fontSize: 13, color: '#52525b' }}>Developer Portal</span>
         </div>
-        <a
-          href="/"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: '#71717a', textDecoration: 'none', padding: '6px 10px', border: '1px solid #27272a', borderRadius: 6 }}
-        >
+        <a href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#52525b', textDecoration: 'none', padding: '5px 10px', border: '1px solid #27272a', borderRadius: 6 }}>
           <ExternalLinkIcon /> Do aplikacji
         </a>
       </header>
 
-      <div style={{ display: 'flex', height: 'calc(100vh - 56px)' }}>
-        {/* Sidebar overlay for mobile */}
+      <div style={{ display: 'flex', height: 'calc(100vh - 52px)' }}>
         {sidebarOpen && (
-          <div
-            onClick={() => setSidebarOpen(false)}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 49, top: 56 }}
-          />
+          <div onClick={() => setSidebarOpen(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 49, top: 52 }} />
         )}
 
-        {/* Sidebar */}
-        <aside style={{
-          width: 240,
-          minWidth: 240,
-          borderRight: '1px solid #18181b',
-          background: '#09090b',
-          display: 'flex',
-          flexDirection: 'column',
-          overflowY: 'auto',
-          position: 'sticky',
-          top: 56,
-          height: 'calc(100vh - 56px)',
-          zIndex: 50,
-          transform: sidebarOpen ? 'translateX(0)' : undefined,
-        }}>
-          <div style={{ padding: '16px 12px 8px' }}>
-            <button
-              onClick={() => setShowNewModal(true)}
-              style={{
-                width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-                padding: '8px 12px', background: 'rgba(99,102,241,0.12)',
-                border: '1px solid rgba(99,102,241,0.25)', borderRadius: 8,
-                color: '#818cf8', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-                transition: 'all 0.15s',
-              }}
-            >
-              <PlusIcon />
-              Nowa aplikacja
-            </button>
-          </div>
+        {sidebar}
 
-          <div style={{ padding: '8px 12px', flex: 1 }}>
-            {loading ? (
-              <div style={{ padding: '16px 4px', color: '#52525b', fontSize: 13 }}>Ładowanie...</div>
-            ) : error ? (
-              <div style={{ padding: '12px 4px', color: '#f87171', fontSize: 12 }}>{error}</div>
-            ) : apps.length === 0 ? (
-              <div style={{ padding: '16px 4px', color: '#52525b', fontSize: 13 }}>
-                Brak aplikacji. Utwórz pierwszą!
+        {/* Main */}
+        {viewMode === 'docs' ? (
+          /* ── DOKUMENTACJA — pełna szerokość ── */
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {/* Docs header bar */}
+            <div style={{ padding: '16px 32px', borderBottom: '1px solid #18181b', background: '#09090b', flexShrink: 0 }}>
+              <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#f4f4f5' }}>Dokumentacja API</h1>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: '#52525b' }}>
+                Pełna dokumentacja Cordyn API — endpointy, autentykacja, przykłady kodu.
+                {selectedApp && <> Client ID: <code style={{ fontFamily: 'monospace', color: '#a5b4fc' }}>{selectedApp.client_id}</code></>}
+              </p>
+            </div>
+            {/* Docs content — takes remaining height */}
+            <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+              <DocsTab app={selectedApp || { client_id: 'TWÓJ_CLIENT_ID', rate_limit_tier: 'free' } as any} />
+            </div>
+          </div>
+        ) : (
+          /* ── APP SETTINGS ── */
+          <main style={{ flex: 1, overflowY: 'auto', padding: '28px 36px', maxWidth: 820 }}>
+            {!selectedApp ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '55%', gap: 14, textAlign: 'center' }}>
+                <div style={{ color: '#27272a' }}>
+                  <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/>
+                  </svg>
+                </div>
+                <div>
+                  <h2 style={{ margin: '0 0 6px', fontSize: 18, fontWeight: 700, color: '#52525b' }}>Wybierz aplikację</h2>
+                  <p style={{ margin: '0 0 18px', fontSize: 14, color: '#3f3f46' }}>Kliknij aplikację na liście lub utwórz nową.</p>
+                  <button onClick={() => setShowNewModal(true)} style={{ ...btnPrimary }}>
+                    <PlusIcon /> Utwórz aplikację
+                  </button>
+                </div>
               </div>
             ) : (
               <>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '4px 4px 8px' }}>
-                  Twoje aplikacje
-                </div>
-                {apps.map(app => (
-                  <button
-                    key={app.id}
-                    onClick={() => handleSelectApp(app)}
-                    style={{
-                      width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
-                      background: selectedApp?.id === app.id ? 'rgba(99,102,241,0.12)' : 'transparent',
-                      border: selectedApp?.id === app.id ? '1px solid rgba(99,102,241,0.2)' : '1px solid transparent',
-                      color: selectedApp?.id === app.id ? '#818cf8' : '#a1a1aa',
-                      fontSize: 13, fontWeight: selectedApp?.id === app.id ? 600 : 400,
-                      marginBottom: 2, textAlign: 'left',
-                      transition: 'all 0.1s',
-                    }}
-                  >
-                    {app.icon_url ? (
-                      <img src={app.icon_url} alt="" style={{ width: 26, height: 26, borderRadius: 6, flexShrink: 0 }} />
+                {/* App header */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    {selectedApp.icon_url ? (
+                      <img src={selectedApp.icon_url} alt="" style={{ width: 48, height: 48, borderRadius: 12 }} />
                     ) : (
-                      <div style={{
-                        width: 26, height: 26, borderRadius: 6, flexShrink: 0,
-                        background: selectedApp?.id === app.id ? 'rgba(99,102,241,0.25)' : '#27272a',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 12, fontWeight: 700, color: selectedApp?.id === app.id ? '#818cf8' : '#71717a',
-                      }}>
-                        {app.name[0].toUpperCase()}
+                      <div style={{ width: 48, height: 48, borderRadius: 12, background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800, color: '#fff' }}>
+                        {selectedApp.name[0].toUpperCase()}
                       </div>
                     )}
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {app.name}
-                    </span>
-                    {app.is_verified && (
-                      <span style={{ marginLeft: 'auto', flexShrink: 0, color: '#4ade80' }}><CheckIcon /></span>
-                    )}
-                  </button>
-                ))}
-              </>
-            )}
-          </div>
-        </aside>
-
-        {/* Main content */}
-        <main style={{ flex: 1, overflowY: 'auto', padding: '24px 32px', maxWidth: 900 }}>
-          {!selectedApp ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60%', gap: 16 }}>
-              <div style={{ fontSize: 48, color: '#27272a' }}>
-                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2"/>
-                  <path d="M9 9h6M9 12h6M9 15h4"/>
-                </svg>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 700, color: '#71717a' }}>Wybierz aplikację</h2>
-                <p style={{ margin: '0 0 20px', fontSize: 14, color: '#3f3f46' }}>Wybierz aplikację z listy lub utwórz nową.</p>
-                <button onClick={() => setShowNewModal(true)} style={{ ...btnPrimary, display: 'inline-flex' }}>
-                  <PlusIcon /> Utwórz pierwszą aplikację
-                </button>
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* App header */}
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  {selectedApp.icon_url ? (
-                    <img src={selectedApp.icon_url} alt="" style={{ width: 52, height: 52, borderRadius: 12 }} />
-                  ) : (
-                    <div style={{ width: 52, height: 52, borderRadius: 12, background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 800, color: '#fff' }}>
-                      {selectedApp.name[0].toUpperCase()}
+                    <div>
+                      <h1 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f4f4f5', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {selectedApp.name}
+                        {selectedApp.is_verified && <span style={{ color: '#4ade80' }}><CheckIcon /></span>}
+                      </h1>
+                      <p style={{ margin: '2px 0 0', fontSize: 12, color: '#52525b' }}>
+                        {selectedApp.description || 'Brak opisu'} · ID: <code style={{ fontFamily: 'monospace', color: '#3f3f46' }}>{selectedApp.client_id.slice(0, 16)}…</code>
+                      </p>
                     </div>
-                  )}
-                  <div>
-                    <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>{selectedApp.name}</h1>
-                    <p style={{ margin: '2px 0 0', fontSize: 13, color: '#71717a' }}>
-                      {selectedApp.description || 'Brak opisu'}
-                      {selectedApp.is_verified && (
-                        <span style={{ marginLeft: 8, color: '#4ade80' }}><CheckIcon /></span>
-                      )}
-                    </p>
                   </div>
+                  <button onClick={handleDeleteApp} style={{ ...btnDanger, fontSize: 12, padding: '6px 12px' }}>
+                    <TrashIcon /> Usuń aplikację
+                  </button>
                 </div>
-                <button
-                  onClick={handleDeleteApp}
-                  style={{ ...btnDanger, fontSize: 12, padding: '6px 12px' }}
-                >
-                  <TrashIcon /> Usuń aplikację
-                </button>
-              </div>
 
-              {/* Tabs */}
-              <div style={{ display: 'flex', borderBottom: '1px solid #18181b', marginBottom: 24, gap: 2 }}>
-                {tabs.map(t => (
-                  <button
-                    key={t.id}
-                    onClick={() => setTab(t.id)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 6,
-                      padding: '9px 14px', fontSize: 13, fontWeight: tab === t.id ? 600 : 400,
-                      color: tab === t.id ? '#818cf8' : '#71717a',
+                {/* Tabs */}
+                <div style={{ display: 'flex', borderBottom: '1px solid #18181b', marginBottom: 24, gap: 0 }}>
+                  {appTabs.map(t => (
+                    <button key={t.id} onClick={() => setTab(t.id)} style={{
+                      padding: '8px 18px', fontSize: 13,
+                      fontWeight: tab === t.id ? 600 : 400,
+                      color: tab === t.id ? '#a5b4fc' : '#71717a',
                       background: 'transparent', border: 'none',
                       borderBottom: `2px solid ${tab === t.id ? '#6366f1' : 'transparent'}`,
-                      cursor: 'pointer', marginBottom: -1,
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    {t.icon} {t.label}
-                  </button>
-                ))}
-              </div>
+                      cursor: 'pointer', marginBottom: -1, transition: 'all 0.15s',
+                    }}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
 
-              {/* Tab content */}
-              <div style={{ background: '#111113', border: '1px solid #1c1c1f', borderRadius: 12, padding: '24px' }}>
-                {tab === 'general' && <GeneralTab app={selectedApp} onUpdate={handleUpdateApp} />}
-                {tab === 'bot' && <BotTab app={selectedApp} onUpdate={handleUpdateApp} />}
-                {tab === 'oauth2' && <OAuth2Tab app={selectedApp} onUpdate={handleUpdateApp} />}
-                {tab === 'docs' && <DocsTab app={selectedApp} />}
-              </div>
-            </>
-          )}
-        </main>
+                {/* Tab content */}
+                <div style={{ background: '#0d0d10', border: '1px solid #1c1c1f', borderRadius: 12, padding: '24px' }}>
+                  {tab === 'general' && <GeneralTab app={selectedApp} onUpdate={handleUpdateApp} />}
+                  {tab === 'bot'     && <BotTab     app={selectedApp} onUpdate={handleUpdateApp} />}
+                  {tab === 'oauth2'  && <OAuth2Tab  app={selectedApp} onUpdate={handleUpdateApp} />}
+                </div>
+              </>
+            )}
+          </main>
+        )}
       </div>
 
-      {/* Modals */}
-      {showNewModal && (
-        <NewAppModal onClose={() => setShowNewModal(false)} onCreate={handleCreate} />
-      )}
+      {showNewModal && <NewAppModal onClose={() => setShowNewModal(false)} onCreate={handleCreate} />}
       {createdSecret && (
         <SecretRevealModal
           secret={createdSecret}
@@ -2195,24 +2188,12 @@ export default function DeveloperPortal() {
       <style>{`
         * { box-sizing: border-box; }
         body { margin: 0; }
-        input:focus, textarea:focus {
-          border-color: #6366f1 !important;
-          box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
-        }
+        input:focus, textarea:focus { border-color: #6366f1 !important; box-shadow: 0 0 0 2px rgba(99,102,241,0.12); }
         button:not(:disabled):hover { opacity: 0.85; }
         @media (max-width: 640px) {
           .mobile-menu-btn { display: flex !important; }
-          aside {
-            position: fixed !important;
-            top: 56px !important;
-            left: 0;
-            height: calc(100vh - 56px) !important;
-            transform: translateX(-100%) !important;
-            transition: transform 0.2s ease !important;
-          }
-          aside[style*="translateX(0)"] {
-            transform: translateX(0) !important;
-          }
+          aside { position: fixed !important; top: 52px !important; left: 0; height: calc(100vh - 52px) !important; transform: translateX(-100%) !important; transition: transform 0.2s ease !important; }
+          aside[style*="translateX(0)"] { transform: translateX(0) !important; }
           main { padding: 16px !important; }
         }
       `}</style>
