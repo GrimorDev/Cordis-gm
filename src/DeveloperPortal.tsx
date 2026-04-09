@@ -994,123 +994,369 @@ function BotTab({ app, onUpdate }: BotTabProps) {
 
 interface OAuth2TabProps {
   app: DevApplication;
+  onUpdate: (updated: DevApplication) => void;
 }
 
 const OAUTH2_SCOPES = [
-  { id: 'identify', label: 'identify', desc: 'Dostęp do nazwy użytkownika, avatara i ID', recommended: true },
-  { id: 'email', label: 'email', desc: 'Dostęp do adresu email (weryfikowanego)', recommended: false },
-  { id: 'guilds', label: 'guilds', desc: 'Lista serwerów użytkownika', recommended: false },
-  { id: 'guilds.join', label: 'guilds.join', desc: 'Dołączanie do serwerów w imieniu użytkownika', recommended: false },
-  { id: 'bot', label: 'bot', desc: 'Dodawanie bota do serwera', recommended: false },
-  { id: 'messages.read', label: 'messages.read', desc: 'Odczyt wiadomości z kanałów', recommended: false },
-  { id: 'connections', label: 'connections', desc: 'Powiązane konta (Twitter, GitHub, etc.)', recommended: false },
+  { id: 'identify',      label: 'identify',      desc: 'Dostęp do nazwy użytkownika, avatara i ID',       group: 'Podstawowe',   recommended: true  },
+  { id: 'email',         label: 'email',          desc: 'Dostęp do adresu email (weryfikowanego)',           group: 'Podstawowe',   recommended: false },
+  { id: 'guilds',        label: 'guilds',         desc: 'Lista serwerów użytkownika (nazwy, ikony, ID)',     group: 'Serwery',      recommended: false },
+  { id: 'guilds.join',   label: 'guilds.join',    desc: 'Dołączanie do serwerów w imieniu użytkownika',     group: 'Serwery',      recommended: false },
+  { id: 'guilds.members.read', label: 'guilds.members.read', desc: 'Odczyt listy członków serwerów',         group: 'Serwery',      recommended: false },
+  { id: 'bot',           label: 'bot',            desc: 'Dodawanie bota do serwera (wymaga scope=bot)',      group: 'Bot',          recommended: false },
+  { id: 'messages.read', label: 'messages.read',  desc: 'Odczyt wiadomości z kanałów tekstowych',           group: 'Wiadomości',   recommended: false },
+  { id: 'messages.send', label: 'messages.send',  desc: 'Wysyłanie wiadomości w imieniu użytkownika',       group: 'Wiadomości',   recommended: false },
+  { id: 'connections',   label: 'connections',    desc: 'Powiązane konta zewnętrzne (GitHub, Steam, etc.)', group: 'Inne',         recommended: false },
+  { id: 'dm.read',       label: 'dm.read',        desc: 'Odczyt wiadomości prywatnych',                     group: 'Wiadomości',   recommended: false },
 ];
 
-function OAuth2Tab({ app }: OAuth2TabProps) {
-  const [selectedScopes, setSelectedScopes] = useState<string[]>(['identify']);
+function OAuth2Tab({ app, onUpdate }: OAuth2TabProps) {
+  const scopeKey = `cordyn_oauth2_scopes_${app.id}`;
+  const [selectedScopes, setSelectedScopes] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(scopeKey) || '["identify"]'); } catch { return ['identify']; }
+  });
+  const [redirectUris, setRedirectUris] = useState<string[]>(app.redirect_uris || []);
+  const [redirectInput, setRedirectInput] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState('');
   const { copy, copiedKey } = useCopyToClipboard();
 
+  useEffect(() => {
+    setRedirectUris(app.redirect_uris || []);
+  }, [app.id]);
+
   const toggleScope = (id: string) => {
-    setSelectedScopes(prev =>
-      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
-    );
+    setSelectedScopes(prev => {
+      const next = prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id];
+      localStorage.setItem(scopeKey, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const addUri = () => {
+    const t = redirectInput.trim();
+    if (!t || redirectUris.includes(t)) return;
+    setRedirectUris(p => [...p, t]);
+    setRedirectInput('');
+  };
+
+  const handleSave = async () => {
+    setSaving(true); setSaveMsg('');
+    try {
+      const updated = await devApi.updateApp(app.id, { redirect_uris: redirectUris } as any);
+      onUpdate(updated);
+      setSaveMsg('Zapisano!');
+      setTimeout(() => setSaveMsg(''), 3000);
+    } catch (err: any) {
+      setSaveMsg('Błąd: ' + (err.message || 'Nieznany'));
+    } finally { setSaving(false); }
   };
 
   const authUrl = `${window.location.origin}/oauth2/authorize?client_id=${app.client_id}&response_type=code&scope=${encodeURIComponent(selectedScopes.join(' '))}`;
   const tokenEndpoint = `${window.location.origin}/api/oauth2/token`;
 
+  const groups = [...new Set(OAUTH2_SCOPES.map(s => s.group))];
+
   return (
     <div>
+      {/* Redirect URIs */}
+      <div style={{ marginBottom: 28 }}>
+        <label style={labelStyle}>REDIRECT URIS</label>
+        <p style={{ margin: '0 0 10px', fontSize: 13, color: '#71717a' }}>
+          Adresy URL, na które Cordyn przekieruje użytkownika po autoryzacji. Muszą być dokładnie zgodne z <code style={{ fontFamily: 'monospace', color: '#d4d4d8' }}>redirect_uri</code> w zapytaniu.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+          {redirectUris.length === 0 ? (
+            <p style={{ color: '#52525b', fontSize: 13, fontStyle: 'italic', margin: 0 }}>Brak redirect URIs — dodaj przynajmniej jeden.</p>
+          ) : redirectUris.map(uri => (
+            <div key={uri} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ flex: 1, fontFamily: 'monospace', fontSize: 12, background: '#18181b', border: '1px solid #3f3f46', borderRadius: 6, padding: '6px 10px', color: '#d4d4d8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {uri}
+              </div>
+              <button onClick={() => setRedirectUris(p => p.filter(u => u !== uri))}
+                style={{ padding: 6, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 6, color: '#f87171', cursor: 'pointer' }}>
+                <TrashIcon />
+              </button>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input value={redirectInput} onChange={e => setRedirectInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addUri())}
+            placeholder="https://example.com/callback" style={{ ...inputStyle, flex: 1 }} />
+          <button onClick={addUri} style={{ ...btnPrimary, gap: 4 }}><PlusIcon /> Dodaj</button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
+          <button onClick={handleSave} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
+            {saving ? 'Zapisywanie...' : 'Zapisz redirect URIs'}
+          </button>
+          {saveMsg && <span style={{ fontSize: 13, color: saveMsg.startsWith('Błąd') ? '#f87171' : '#4ade80' }}>{saveMsg}</span>}
+        </div>
+      </div>
+
+      {/* Scope selector */}
       <div style={{ marginBottom: 24 }}>
         <label style={labelStyle}>ZAKRESY (SCOPES)</label>
         <p style={{ margin: '0 0 12px', fontSize: 13, color: '#71717a' }}>
-          Wybierz zakresy dostępu, których potrzebuje Twoja aplikacja.
+          Wybierz uprawnienia potrzebne Twojej aplikacji. Zakresy są dołączane do URL autoryzacji poniżej.
         </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {OAUTH2_SCOPES.map(scope => (
-            <label key={scope.id} style={{
-              display: 'flex', alignItems: 'flex-start', gap: 10,
-              padding: '10px 14px', background: '#18181b',
-              border: `1px solid ${selectedScopes.includes(scope.id) ? 'rgba(99,102,241,0.4)' : '#27272a'}`,
-              borderRadius: 8, cursor: 'pointer',
-              transition: 'border-color 0.15s',
-            }}>
-              <input
-                type="checkbox"
-                checked={selectedScopes.includes(scope.id)}
-                onChange={() => toggleScope(scope.id)}
-                style={{ marginTop: 2, accentColor: '#6366f1' }}
-              />
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, fontFamily: 'monospace', color: '#f4f4f5' }}>{scope.label}</span>
-                  {scope.recommended && (
-                    <span style={{ fontSize: 10, padding: '1px 6px', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 4, color: '#818cf8' }}>
-                      ZALECANY
-                    </span>
-                  )}
-                </div>
-                <p style={{ margin: '2px 0 0', fontSize: 12, color: '#71717a' }}>{scope.desc}</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {groups.map(group => (
+            <div key={group} style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{group}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {OAUTH2_SCOPES.filter(s => s.group === group).map(scope => (
+                  <label key={scope.id} style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 10,
+                    padding: '9px 14px', background: '#18181b',
+                    border: `1px solid ${selectedScopes.includes(scope.id) ? 'rgba(99,102,241,0.4)' : '#27272a'}`,
+                    borderRadius: 8, cursor: 'pointer', transition: 'border-color 0.15s',
+                  }}>
+                    <input type="checkbox" checked={selectedScopes.includes(scope.id)} onChange={() => toggleScope(scope.id)}
+                      style={{ marginTop: 2, accentColor: '#6366f1' }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, fontFamily: 'monospace', color: '#f4f4f5' }}>{scope.label}</span>
+                        {scope.recommended && (
+                          <span style={{ fontSize: 10, padding: '1px 6px', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 4, color: '#818cf8' }}>ZALECANY</span>
+                        )}
+                      </div>
+                      <p style={{ margin: '2px 0 0', fontSize: 12, color: '#71717a' }}>{scope.desc}</p>
+                    </div>
+                  </label>
+                ))}
               </div>
-            </label>
+            </div>
           ))}
         </div>
       </div>
 
+      {/* Auth URL builder */}
       <div style={{ marginBottom: 20 }}>
-        <label style={labelStyle}>WYGENEROWANY AUTHORIZATION URL</label>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-          <div style={{
-            flex: 1, fontFamily: 'monospace', fontSize: 12,
-            background: '#18181b', border: '1px solid #3f3f46',
-            borderRadius: 8, padding: '10px 12px', color: '#a1a1aa',
-            wordBreak: 'break-all', lineHeight: 1.6,
-          }}>
-            {authUrl}
-          </div>
+        <label style={labelStyle}>AUTHORIZATION URL (BUILDER)</label>
+        <div style={{ fontFamily: 'monospace', fontSize: 12, background: '#18181b', border: '1px solid #3f3f46', borderRadius: 8, padding: '10px 12px', color: '#a1a1aa', wordBreak: 'break-all', lineHeight: 1.7, marginBottom: 8 }}>
+          {authUrl}
         </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <div style={{ display: 'flex', gap: 8 }}>
           <CopyButton text={authUrl} copyKey="auth_url" copiedKey={copiedKey} onCopy={copy} />
-          <a
-            href={authUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', background: '#27272a', border: '1px solid #3f3f46', borderRadius: 6, color: '#a1a1aa', textDecoration: 'none', fontSize: 12 }}
-          >
-            <ExternalLinkIcon /> Testuj
+          <a href={authUrl} target="_blank" rel="noopener noreferrer"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', background: '#27272a', border: '1px solid #3f3f46', borderRadius: 6, color: '#a1a1aa', textDecoration: 'none', fontSize: 12 }}>
+            <ExternalLinkIcon /> Testuj flow
           </a>
         </div>
       </div>
 
-      <div style={{ marginBottom: 24 }}>
-        <label style={labelStyle}>TOKEN ENDPOINT</label>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <div style={{
-            flex: 1, fontFamily: 'monospace', fontSize: 12,
-            background: '#18181b', border: '1px solid #3f3f46',
-            borderRadius: 8, padding: '8px 12px', color: '#a1a1aa',
-          }}>
-            {tokenEndpoint}
+      {/* Endpoints */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 24 }}>
+        {[
+          { label: 'Token Endpoint', val: `${window.location.origin}/api/oauth2/token`, key: 'tok_ep' },
+          { label: 'Revoke Endpoint', val: `${window.location.origin}/api/oauth2/revoke`, key: 'rev_ep' },
+        ].map(e => (
+          <div key={e.key} style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: 8, padding: '10px 12px' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>{e.label}</div>
+            <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#d4d4d8', wordBreak: 'break-all', marginBottom: 6 }}>{e.val}</div>
+            <CopyButton text={e.val} copyKey={e.key} copiedKey={copiedKey} onCopy={copy} />
           </div>
-          <CopyButton text={tokenEndpoint} copyKey="token_endpoint" copiedKey={copiedKey} onCopy={copy} />
+        ))}
+      </div>
+
+      {/* PKCE info */}
+      <div style={{ padding: '16px', background: '#18181b', border: '1px solid #27272a', borderRadius: 10, marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <span style={{ color: '#818cf8' }}><KeyIcon /></span>
+          <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#f4f4f5' }}>PKCE — Proof Key for Code Exchange</h4>
+        </div>
+        <p style={{ margin: '0 0 10px', fontSize: 13, color: '#71717a', lineHeight: 1.6 }}>
+          Dla aplikacji SPA i mobilnych (bez backendu) użyj PKCE zamiast <code style={{ fontFamily: 'monospace' }}>client_secret</code>. Wygeneruj losowy <code style={{ fontFamily: 'monospace' }}>code_verifier</code>, oblicz <code style={{ fontFamily: 'monospace' }}>code_challenge = BASE64URL(SHA256(verifier))</code>.
+        </p>
+        <div style={{ fontFamily: 'monospace', fontSize: 12, background: '#09090b', borderRadius: 6, padding: '10px 12px', color: '#a1a1aa', lineHeight: 1.8 }}>
+          {`// Krok 1: Generuj weryfikator (128 znaków losowych)
+const verifier = crypto.randomBytes(64).toString('base64url');
+
+// Krok 2: Oblicz challenge
+const challenge = crypto.createHash('sha256')
+  .update(verifier).digest('base64url');
+
+// Krok 3: Dodaj do auth URL
+authUrl += '&code_challenge=' + challenge;
+authUrl += '&code_challenge_method=S256';
+
+// Krok 4: Przy wymianie code → token dołącz verifier
+body.code_verifier = verifier; // zamiast client_secret`}
         </div>
       </div>
 
+      {/* Grant types */}
       <div style={{ padding: '16px', background: '#18181b', border: '1px solid #27272a', borderRadius: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <span style={{ color: '#818cf8' }}><KeyIcon /></span>
-          <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#f4f4f5' }}>PKCE (Proof Key for Code Exchange)</h4>
-        </div>
-        <p style={{ margin: '0 0 10px', fontSize: 13, color: '#71717a', lineHeight: 1.6 }}>
-          Dla aplikacji SPA i mobilnych zalecamy używanie PKCE zamiast client_secret. Dodaj parametry:
-        </p>
-        <div style={{ fontFamily: 'monospace', fontSize: 12, background: '#09090b', borderRadius: 6, padding: '10px 12px', color: '#a1a1aa', lineHeight: 1.7 }}>
-          code_challenge=&lt;base64url(sha256(verifier))&gt;<br />
-          code_challenge_method=S256
+        <h4 style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600, color: '#f4f4f5' }}>Obsługiwane Grant Types</h4>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {[
+            { name: 'authorization_code', desc: 'Standardowy flow OAuth2 — redirect użytkownika, wymiana code na token' },
+            { name: 'refresh_token', desc: 'Odnowienie access_token przy użyciu refresh_token (bez ponownego logowania)' },
+          ].map(g => (
+            <div key={g.name} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '8px 12px', background: '#09090b', borderRadius: 8 }}>
+              <code style={{ fontFamily: 'monospace', fontSize: 12, color: '#818cf8', flexShrink: 0, marginTop: 1 }}>{g.name}</code>
+              <span style={{ fontSize: 12, color: '#71717a' }}>{g.desc}</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>
   );
+}
+
+// ===== DOCS TAB =====
+type DocLang = 'curl' | 'js' | 'node' | 'python' | 'php' | 'ruby' | 'go' | 'java';
+type DocSection = 'quickstart' | 'auth' | 'oauth2' | 'users' | 'guilds' | 'channels' | 'messages' | 'bot' | 'errors';
+
+const LANGS: { id: DocLang; label: string }[] = [
+  { id: 'curl',   label: 'cURL'       },
+  { id: 'js',     label: 'JavaScript' },
+  { id: 'node',   label: 'Node.js'    },
+  { id: 'python', label: 'Python'     },
+  { id: 'php',    label: 'PHP'        },
+  { id: 'ruby',   label: 'Ruby'       },
+  { id: 'go',     label: 'Go'         },
+  { id: 'java',   label: 'Java'       },
+];
+
+const DOC_SECTIONS: { id: DocSection; label: string; icon: string }[] = [
+  { id: 'quickstart', label: 'Pierwsze kroki',   icon: '🚀' },
+  { id: 'auth',       label: 'Autentykacja',      icon: '🔑' },
+  { id: 'oauth2',     label: 'OAuth2 Flow',       icon: '🔐' },
+  { id: 'users',      label: 'Użytkownicy',       icon: '👤' },
+  { id: 'guilds',     label: 'Serwery (Guilds)',  icon: '🏠' },
+  { id: 'channels',   label: 'Kanały',            icon: '#'  },
+  { id: 'messages',   label: 'Wiadomości',        icon: '💬' },
+  { id: 'bot',        label: 'Bot API',           icon: '🤖' },
+  { id: 'errors',     label: 'Błędy & Limity',   icon: '⚠️' },
+];
+
+function codeSample(lang: DocLang, opts: {
+  method?: string; url: string; token?: string; tokenType?: 'Bot' | 'Bearer';
+  body?: Record<string, any>; comment?: string;
+}): string {
+  const m = opts.method || 'GET';
+  const u = opts.url;
+  const auth = opts.token ? `${opts.tokenType || 'Bot'} ${opts.token}` : 'Bot SEJ_TOKEN_BOTA';
+  const bd = opts.body ? JSON.stringify(opts.body, null, 2) : null;
+
+  switch (lang) {
+    case 'curl': return [
+      opts.comment ? `# ${opts.comment}` : '',
+      `curl -X ${m} "${u}" \\`,
+      `  -H "Authorization: ${auth}"`,
+      ...(bd ? ['  -H "Content-Type: application/json" \\', `  -d '${bd}'`] : []),
+    ].filter(Boolean).join('\n');
+
+    case 'js': return [
+      opts.comment ? `// ${opts.comment}` : '',
+      `const res = await fetch('${u}', {`,
+      `  method: '${m}',`,
+      `  headers: {`,
+      `    'Authorization': '${auth}',`,
+      ...(bd ? [`    'Content-Type': 'application/json',`] : []),
+      `  },`,
+      ...(bd ? [`  body: JSON.stringify(${bd}),`] : []),
+      `});`,
+      `const data = await res.json();`,
+      `console.log(data);`,
+    ].filter(Boolean).join('\n');
+
+    case 'node': return [
+      opts.comment ? `// ${opts.comment}` : '',
+      `const axios = require('axios');`,
+      ``,
+      `const { data } = await axios.${m.toLowerCase()}('${u}',`,
+      ...(bd ? [`  ${bd},`] : []),
+      `  { headers: { Authorization: '${auth}' } }`,
+      `);`,
+      `console.log(data);`,
+    ].filter(Boolean).join('\n');
+
+    case 'python': return [
+      opts.comment ? `# ${opts.comment}` : '',
+      `import requests`,
+      ``,
+      `headers = {'Authorization': '${auth}'}`,
+      ...(bd ? [`payload = ${JSON.stringify(opts.body, null, 2).replace(/"/g, "'")}`] : []),
+      `r = requests.${m.toLowerCase()}(`,
+      `    '${u}',`,
+      `    headers=headers,`,
+      ...(bd ? [`    json=payload`] : []),
+      `)`,
+      `print(r.json())`,
+    ].filter(Boolean).join('\n');
+
+    case 'php': return [
+      opts.comment ? `// ${opts.comment}` : '',
+      `<?php`,
+      `use GuzzleHttp\\Client;`,
+      ``,
+      `$client = new Client();`,
+      `$response = $client->${m === 'GET' ? 'get' : m === 'POST' ? 'post' : m.toLowerCase()}('${u}', [`,
+      `    'headers' => ['Authorization' => '${auth}'],`,
+      ...(bd ? [`    'json'    => ${JSON.stringify(opts.body)},`] : []),
+      `]);`,
+      `$data = json_decode($response->getBody(), true);`,
+      `print_r($data);`,
+    ].filter(Boolean).join('\n');
+
+    case 'ruby': return [
+      opts.comment ? `# ${opts.comment}` : '',
+      `require 'httparty'`,
+      ``,
+      `response = HTTParty.${m.toLowerCase()}(`,
+      `  '${u}',`,
+      `  headers: { 'Authorization' => '${auth}'${bd ? ", 'Content-Type' => 'application/json'" : ''} }${bd ? `,\n  body: ${JSON.stringify(opts.body)}.to_json` : ''}`,
+      `)`,
+      `puts response.parsed_response`,
+    ].filter(Boolean).join('\n');
+
+    case 'go': return [
+      opts.comment ? `// ${opts.comment}` : '',
+      `package main`,
+      ``,
+      `import (`,
+      `    "fmt"; "io"; "net/http"${bd ? `; "strings"; "encoding/json"` : ''}`,
+      `)`,
+      ``,
+      `func main() {`,
+      ...(bd ? [
+        `    payload, _ := json.Marshal(${JSON.stringify(opts.body)})`,
+        `    req, _ := http.NewRequest("${m}", "${u}", strings.NewReader(string(payload)))`,
+        `    req.Header.Set("Content-Type", "application/json")`,
+      ] : [
+        `    req, _ := http.NewRequest("${m}", "${u}", nil)`,
+      ]),
+      `    req.Header.Set("Authorization", "${auth}")`,
+      `    resp, _ := http.DefaultClient.Do(req)`,
+      `    body, _ := io.ReadAll(resp.Body)`,
+      `    fmt.Println(string(body))`,
+      `}`,
+    ].filter(Boolean).join('\n');
+
+    case 'java': return [
+      opts.comment ? `// ${opts.comment}` : '',
+      `import okhttp3.*;`,
+      ``,
+      `OkHttpClient client = new OkHttpClient();`,
+      ...(bd ? [
+        `MediaType JSON = MediaType.get("application/json");`,
+        `RequestBody body = RequestBody.create(`,
+        `    ${JSON.stringify(JSON.stringify(opts.body))}, JSON);`,
+      ] : []),
+      `Request request = new Request.Builder()`,
+      `    .url("${u}")`,
+      `    .addHeader("Authorization", "${auth}")`,
+      ...(bd ? [`    .${m.toLowerCase()}(body)`] : [`    .${m === 'GET' ? 'get()' : m.toLowerCase() + '(body)'}`]),
+      `    .build();`,
+      `Response response = client.newCall(request).execute();`,
+      `System.out.println(response.body().string());`,
+    ].filter(Boolean).join('\n');
+
+    default: return '';
+  }
 }
 
 interface DocsTabProps {
@@ -1120,183 +1366,469 @@ interface DocsTabProps {
 function DocsTab({ app }: DocsTabProps) {
   const { copy, copiedKey } = useCopyToClipboard();
   const origin = window.location.origin;
+  const [lang, setLang] = useState<DocLang>('curl');
+  const [section, setSection] = useState<DocSection>('quickstart');
 
-  const codeBlockStyle: React.CSSProperties = {
-    fontFamily: 'monospace',
-    fontSize: 12,
-    background: '#09090b',
-    border: '1px solid #27272a',
-    borderRadius: 8,
-    padding: '12px 14px',
-    color: '#d4d4d8',
-    lineHeight: 1.7,
-    overflowX: 'auto',
-    whiteSpace: 'pre',
-    margin: '8px 0 16px',
+  const base = `${origin}/api/v1`;
+
+  const CB = (code: string, key: string) => (
+    <div style={{ position: 'relative', marginBottom: 16 }}>
+      <pre style={{ fontFamily: 'monospace', fontSize: 12, background: '#09090b', border: '1px solid #27272a', borderRadius: 8, padding: '14px 14px 14px 14px', color: '#d4d4d8', lineHeight: 1.75, overflowX: 'auto', whiteSpace: 'pre', margin: 0 }}>
+        {code}
+      </pre>
+      <div style={{ position: 'absolute', top: 8, right: 8 }}>
+        <CopyButton text={code} copyKey={key} copiedKey={copiedKey} onCopy={copy} />
+      </div>
+    </div>
+  );
+
+  const M = (method: string) => {
+    const c: Record<string, string> = { GET: '#4ade80', POST: '#818cf8', PATCH: '#fbbf24', DELETE: '#f87171', PUT: '#fb923c' };
+    return <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'monospace', color: c[method] || '#a1a1aa', minWidth: 52, textAlign: 'center' as const, flexShrink: 0 }}>{method}</span>;
   };
 
-  const endpointStyle: React.CSSProperties = {
-    display: 'flex', alignItems: 'center', gap: 10,
-    padding: '10px 14px', background: '#18181b',
-    border: '1px solid #27272a', borderRadius: 8,
-    marginBottom: 6,
-  };
-
-  const methodBadge = (method: string) => {
-    const colors: Record<string, string> = {
-      GET: '#4ade80', POST: '#818cf8', PATCH: '#fbbf24', DELETE: '#f87171', PUT: '#fb923c',
-    };
+  const EP = ({ method, path, desc, auth, params, body, resp }: {
+    method: string; path: string; desc: string; auth?: string;
+    params?: { name: string; type: string; req: boolean; desc: string }[];
+    body?: { name: string; type: string; req: boolean; desc: string }[];
+    resp?: string;
+  }) => {
+    const [open, setOpen] = useState(false);
+    const fullUrl = `${origin}${path}`;
+    const sampleCode = codeSample(lang, {
+      method, url: fullUrl,
+      tokenType: auth === 'Bot' ? 'Bot' : 'Bearer',
+    });
     return (
-      <span style={{
-        fontSize: 11, fontWeight: 700, fontFamily: 'monospace',
-        color: colors[method] || '#a1a1aa',
-        minWidth: 48, textAlign: 'center',
-      }}>
-        {method}
-      </span>
+      <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: 10, marginBottom: 8, overflow: 'hidden' }}>
+        <button onClick={() => setOpen(o => !o)} style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+          padding: '10px 14px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left',
+        }}>
+          {M(method)}
+          <code style={{ fontFamily: 'monospace', fontSize: 12, color: '#d4d4d8', flex: 1 }}>{path}</code>
+          {auth && <span style={{ fontSize: 10, padding: '2px 6px', background: auth === 'Bot' ? 'rgba(99,102,241,0.12)' : 'rgba(74,222,128,0.1)', border: `1px solid ${auth === 'Bot' ? 'rgba(99,102,241,0.3)' : 'rgba(74,222,128,0.2)'}`, borderRadius: 4, color: auth === 'Bot' ? '#818cf8' : '#4ade80', flexShrink: 0 }}>{auth}</span>}
+          <span style={{ fontSize: 12, color: '#52525b', flexShrink: 0 }}>{desc}</span>
+          <span style={{ color: '#52525b', fontSize: 12, marginLeft: 4 }}>{open ? '▲' : '▼'}</span>
+        </button>
+        {open && (
+          <div style={{ padding: '0 14px 14px', borderTop: '1px solid #27272a' }}>
+            {params && params.length > 0 && (
+              <div style={{ marginTop: 12, marginBottom: 12 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Parametry URL / Query</div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid #27272a' }}>
+                      {['Nazwa','Typ','Wymagany','Opis'].map(h => <th key={h} style={{ textAlign: 'left', padding: '4px 8px', color: '#71717a', fontWeight: 600 }}>{h}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {params.map(p => (
+                      <tr key={p.name} style={{ borderBottom: '1px solid #27272a' }}>
+                        <td style={{ padding: '6px 8px' }}><code style={{ fontFamily: 'monospace', color: '#818cf8' }}>{p.name}</code></td>
+                        <td style={{ padding: '6px 8px', color: '#71717a' }}>{p.type}</td>
+                        <td style={{ padding: '6px 8px', color: p.req ? '#4ade80' : '#52525b' }}>{p.req ? '✓' : '—'}</td>
+                        <td style={{ padding: '6px 8px', color: '#a1a1aa' }}>{p.desc}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {body && body.length > 0 && (
+              <div style={{ marginTop: 12, marginBottom: 12 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Request Body (JSON)</div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid #27272a' }}>
+                      {['Pole','Typ','Wymagane','Opis'].map(h => <th key={h} style={{ textAlign: 'left', padding: '4px 8px', color: '#71717a', fontWeight: 600 }}>{h}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {body.map(f => (
+                      <tr key={f.name} style={{ borderBottom: '1px solid #27272a' }}>
+                        <td style={{ padding: '6px 8px' }}><code style={{ fontFamily: 'monospace', color: '#fbbf24' }}>{f.name}</code></td>
+                        <td style={{ padding: '6px 8px', color: '#71717a' }}>{f.type}</td>
+                        <td style={{ padding: '6px 8px', color: f.req ? '#4ade80' : '#52525b' }}>{f.req ? '✓' : '—'}</td>
+                        <td style={{ padding: '6px 8px', color: '#a1a1aa' }}>{f.desc}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Przykład — {LANGS.find(l => l.id === lang)?.label}</div>
+              {CB(sampleCode, `ep_${method}_${path.replace(/\//g, '_')}`)}
+            </div>
+            {resp && (
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Przykład odpowiedzi</div>
+                {CB(resp, `resp_${method}_${path.replace(/\//g, '_')}`)}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     );
   };
 
-  const jsExample = `// Przykład autoryzacji OAuth2 (JavaScript)
-const CLIENT_ID = '${app.client_id}';
-const REDIRECT_URI = 'https://twoja-aplikacja.com/callback';
-const SCOPES = ['identify', 'guilds'];
-
-// 1. Przekieruj użytkownika do autoryzacji
-const authUrl = new URL('${origin}/oauth2/authorize');
-authUrl.searchParams.set('client_id', CLIENT_ID);
-authUrl.searchParams.set('redirect_uri', REDIRECT_URI);
-authUrl.searchParams.set('response_type', 'code');
-authUrl.searchParams.set('scope', SCOPES.join(' '));
-window.location.href = authUrl.toString();
-
-// 2. Po powrocie na redirect_uri, wymień code na token
-const code = new URLSearchParams(window.location.search).get('code');
-const response = await fetch('${origin}/api/oauth2/token', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    client_id: CLIENT_ID,
-    client_secret: 'TWÓJ_CLIENT_SECRET',
-    code,
-    redirect_uri: REDIRECT_URI,
-    grant_type: 'authorization_code',
-  }),
-});
-const { access_token, token_type } = await response.json();
-
-// 3. Użyj tokenu do zapytań API
-const me = await fetch('${origin}/api/users/me', {
-  headers: { Authorization: \`Bearer \${access_token}\` },
-});`;
-
-  const curlExample = `# Pobierz info o zalogowanym użytkowniku
-curl -H "Authorization: Bearer ACCESS_TOKEN" \\
-  ${origin}/api/users/me
-
-# Pobierz serwery użytkownika
-curl -H "Authorization: Bearer ACCESS_TOKEN" \\
-  ${origin}/api/servers
-
-# Wymień code na access_token
-curl -X POST ${origin}/api/oauth2/token \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "client_id": "${app.client_id}",
-    "client_secret": "CLIENT_SECRET",
-    "code": "AUTHORIZATION_CODE",
-    "redirect_uri": "REDIRECT_URI",
-    "grant_type": "authorization_code"
-  }'`;
-
-  return (
-    <div>
-      <section style={{ marginBottom: 32 }}>
-        <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 700, color: '#f4f4f5', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: '#818cf8' }}><GlobeIcon /></span>
-          Pierwsze kroki
-        </h3>
-        <p style={{ margin: '0 0 16px', fontSize: 13, color: '#71717a', lineHeight: 1.6 }}>
-          Cordyn API używa OAuth2 do autoryzacji. Twoja aplikacja otrzymuje token dostępu, którym autoryzuje wszystkie dalsze zapytania.
+  const sectionContent: Record<DocSection, React.ReactNode> = {
+    quickstart: (
+      <div>
+        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>🚀 Pierwsze kroki</h2>
+        <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a', lineHeight: 1.7 }}>
+          Cordyn API jest REST-owym API HTTP z JSON. Boty używają tokenu <code style={{ fontFamily: 'monospace', color: '#818cf8' }}>Authorization: Bot TOKEN</code>, aplikacje użytkownika — <code style={{ fontFamily: 'monospace', color: '#4ade80' }}>Authorization: Bearer OAUTH2_TOKEN</code>.
         </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10, marginBottom: 24 }}>
           {[
-            { label: 'CLIENT ID', value: app.client_id },
-            { label: 'BASE URL', value: origin + '/api' },
-            { label: 'AUTH URL', value: origin + '/oauth2/authorize' },
-            { label: 'TOKEN URL', value: origin + '/api/oauth2/token' },
-          ].map(item => (
-            <div key={item.label} style={{ padding: '10px 12px', background: '#18181b', border: '1px solid #27272a', borderRadius: 8 }}>
-              <div style={{ fontSize: 10, fontWeight: 600, color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{item.label}</div>
-              <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#d4d4d8', wordBreak: 'break-all' }}>{item.value}</div>
+            { l: 'Client ID',   v: app.client_id,                          k: 'qs_cid' },
+            { l: 'Base URL',    v: `${origin}/api`,                         k: 'qs_base' },
+            { l: 'V1 Base URL', v: `${origin}/api/v1`,                      k: 'qs_v1' },
+            { l: 'Auth URL',    v: `${origin}/oauth2/authorize`,             k: 'qs_auth' },
+            { l: 'Token URL',   v: `${origin}/api/oauth2/token`,            k: 'qs_tok' },
+            { l: 'Rate limit',  v: `${app.rate_limit_tier} tier`,           k: 'qs_rl' },
+          ].map(i => (
+            <div key={i.k} style={{ padding: '10px 12px', background: '#18181b', border: '1px solid #27272a', borderRadius: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{i.l}</div>
+              <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#d4d4d8', wordBreak: 'break-all', marginBottom: 6 }}>{i.v}</div>
+              <CopyButton text={i.v} copyKey={i.k} copiedKey={copiedKey} onCopy={copy} />
             </div>
           ))}
         </div>
-      </section>
-
-      <section style={{ marginBottom: 32 }}>
-        <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: '#f4f4f5', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: '#818cf8' }}><CodeIcon /></span>
-          Przykład JavaScript
-        </h3>
-        <div style={{ position: 'relative' }}>
-          <pre style={codeBlockStyle}>{jsExample}</pre>
-          <div style={{ position: 'absolute', top: 8, right: 8 }}>
-            <CopyButton text={jsExample} copyKey="js_example" copiedKey={copiedKey} onCopy={copy} />
-          </div>
+        <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 700, color: '#f4f4f5' }}>Hello World — pierwsze zapytanie</h3>
+        {CB(codeSample(lang, { url: `${origin}/api/v1/@me`, tokenType: 'Bot', comment: 'Pobierz info o własnym bocie' }), 'qs_hello')}
+        <div style={{ padding: '14px 16px', background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 10 }}>
+          <h4 style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: '#f4f4f5' }}>Format odpowiedzi</h4>
+          <p style={{ margin: '0 0 8px', fontSize: 13, color: '#71717a' }}>Wszystkie odpowiedzi są JSON. Błędy zwracają pole <code style={{ fontFamily: 'monospace', color: '#f87171' }}>error</code>:</p>
+          {CB(`// Sukces (2xx)\n{ "id": "...", "username": "...", ... }\n\n// Błąd (4xx/5xx)\n{ "error": "Opis błędu" }`, 'qs_fmt')}
         </div>
-      </section>
+      </div>
+    ),
 
-      <section style={{ marginBottom: 32 }}>
-        <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: '#f4f4f5', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: '#818cf8' }}><CodeIcon /></span>
-          Przykład cURL
-        </h3>
-        <div style={{ position: 'relative' }}>
-          <pre style={codeBlockStyle}>{curlExample}</pre>
-          <div style={{ position: 'absolute', top: 8, right: 8 }}>
-            <CopyButton text={curlExample} copyKey="curl_example" copiedKey={copiedKey} onCopy={copy} />
-          </div>
-        </div>
-      </section>
-
-      <section style={{ marginBottom: 32 }}>
-        <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: '#f4f4f5', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: '#818cf8' }}><ServerIcon /></span>
-          Endpointy API
-        </h3>
-        {[
-          { method: 'GET', path: '/api/users/me', desc: 'Dane zalogowanego użytkownika' },
-          { method: 'GET', path: '/api/users/:id', desc: 'Dane użytkownika po ID' },
-          { method: 'GET', path: '/api/servers', desc: 'Lista serwerów użytkownika' },
-          { method: 'POST', path: '/api/servers', desc: 'Utwórz nowy serwer' },
-          { method: 'GET', path: '/api/servers/:id', desc: 'Dane serwera' },
-          { method: 'GET', path: '/api/channels/:id/messages', desc: 'Wiadomości z kanału' },
-          { method: 'POST', path: '/api/channels/:id/messages', desc: 'Wyślij wiadomość' },
-          { method: 'GET', path: '/api/dms/conversations', desc: 'Lista konwersacji DM' },
-          { method: 'GET', path: '/api/friends', desc: 'Lista znajomych' },
-          { method: 'POST', path: '/api/oauth2/token', desc: 'Wymiana code na token' },
-          { method: 'POST', path: '/api/oauth2/token/refresh', desc: 'Odśwież access token' },
-          { method: 'DELETE', path: '/api/oauth2/token', desc: 'Unieważnij token' },
-        ].map((ep, i) => (
-          <div key={i} style={endpointStyle}>
-            {methodBadge(ep.method)}
-            <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#d4d4d8' }}>{ep.path}</span>
-            <span style={{ fontSize: 12, color: '#71717a', marginLeft: 'auto' }}>{ep.desc}</span>
-          </div>
-        ))}
-      </section>
-
-      <section style={{ padding: '16px', background: '#18181b', border: '1px solid #27272a', borderRadius: 10 }}>
-        <h4 style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: '#f4f4f5' }}>Rate Limiting</h4>
-        <p style={{ margin: 0, fontSize: 13, color: '#71717a', lineHeight: 1.6 }}>
-          Twoja aplikacja jest na planie <strong style={{ color: '#818cf8' }}>{app.rate_limit_tier}</strong>.
-          Limity są zwracane w nagłówkach: <code style={{ fontFamily: 'monospace', color: '#d4d4d8' }}>X-RateLimit-Limit</code>,{' '}
-          <code style={{ fontFamily: 'monospace', color: '#d4d4d8' }}>X-RateLimit-Remaining</code>,{' '}
-          <code style={{ fontFamily: 'monospace', color: '#d4d4d8' }}>X-RateLimit-Reset</code>.
-          Po przekroczeniu limitu API zwraca status <code style={{ fontFamily: 'monospace', color: '#f87171' }}>429 Too Many Requests</code>.
+    auth: (
+      <div>
+        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>🔑 Autentykacja</h2>
+        <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a', lineHeight: 1.7 }}>
+          API obsługuje dwa schematy autentykacji. Każde zapytanie musi zawierać nagłówek <code style={{ fontFamily: 'monospace', color: '#d4d4d8' }}>Authorization</code>.
         </p>
-      </section>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
+          {[
+            { type: 'Bot TOKEN', color: '#818cf8', bg: 'rgba(99,102,241,0.08)', desc: 'Dla botów — token generowany w Developer Portal. Nie wygasa automatycznie.' },
+            { type: 'Bearer TOKEN', color: '#4ade80', bg: 'rgba(74,222,128,0.06)', desc: 'Dla aplikacji OAuth2 — token dostępu uzyskany przez flow Authorization Code. Wygasa po 1h.' },
+          ].map(a => (
+            <div key={a.type} style={{ padding: '14px 16px', background: a.bg, border: `1px solid ${a.color}30`, borderRadius: 10 }}>
+              <div style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: a.color, marginBottom: 6 }}>{`Authorization: ${a.type}`}</div>
+              <p style={{ margin: 0, fontSize: 13, color: '#71717a' }}>{a.desc}</p>
+            </div>
+          ))}
+        </div>
+        <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 700, color: '#f4f4f5' }}>Przykład — nagłówek autentykacji</h3>
+        {CB(codeSample(lang, { url: `${origin}/api/v1/@me`, comment: 'Bot token' }), 'auth_bot')}
+        {CB(codeSample(lang, { url: `${origin}/api/v1/@me`, tokenType: 'Bearer', comment: 'OAuth2 Bearer token' }), 'auth_bearer')}
+        <div style={{ padding: '12px 16px', background: 'rgba(234,179,8,0.06)', border: '1px solid rgba(234,179,8,0.2)', borderRadius: 8 }}>
+          <p style={{ margin: 0, fontSize: 13, color: '#ca8a04' }}>⚠️ Nigdy nie umieszczaj tokenów w kodzie po stronie klienta ani publicznych repozytoriach. Użyj zmiennych środowiskowych (<code style={{ fontFamily: 'monospace' }}>process.env.BOT_TOKEN</code>).</p>
+        </div>
+      </div>
+    ),
+
+    oauth2: (
+      <div>
+        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>🔐 OAuth2 Flow</h2>
+        <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a', lineHeight: 1.7 }}>Cordyn używa standardowego OAuth2 Authorization Code Flow. Poniżej kompletny przykład w wybranym języku.</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+          {[
+            { n: '1', t: 'Redirect do autoryzacji', d: `Przekieruj użytkownika na ${origin}/oauth2/authorize z client_id, redirect_uri, scope, response_type=code` },
+            { n: '2', t: 'Odbiór code', d: 'Cordyn przekierowuje na Twój redirect_uri z parametrem ?code=AUTHORIZATION_CODE' },
+            { n: '3', t: 'Wymiana code → token', d: `POST ${origin}/api/oauth2/token z code, client_id, client_secret (lub PKCE), grant_type=authorization_code` },
+            { n: '4', t: 'Użycie tokenu', d: 'Użyj access_token w nagłówku Authorization: Bearer TOKEN. Odnawiaj przez refresh_token.' },
+          ].map(s => (
+            <div key={s.n} style={{ display: 'flex', gap: 12, padding: '12px 14px', background: '#18181b', border: '1px solid #27272a', borderRadius: 8 }}>
+              <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#818cf8', flexShrink: 0 }}>{s.n}</div>
+              <div><div style={{ fontSize: 13, fontWeight: 600, color: '#f4f4f5', marginBottom: 2 }}>{s.t}</div><div style={{ fontSize: 12, color: '#71717a' }}>{s.d}</div></div>
+            </div>
+          ))}
+        </div>
+        <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 700, color: '#f4f4f5' }}>Krok 1 — URL autoryzacji</h3>
+        {CB(`${origin}/oauth2/authorize\n  ?client_id=${app.client_id}\n  &response_type=code\n  &redirect_uri=https%3A%2F%2Ftwoja-aplikacja.com%2Fcallback\n  &scope=identify%20guilds`, 'oauth_url')}
+        <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 700, color: '#f4f4f5' }}>Krok 3 — Wymiana code na token</h3>
+        {CB(codeSample(lang, {
+          method: 'POST', url: `${origin}/api/oauth2/token`,
+          body: { client_id: app.client_id, client_secret: 'CLIENT_SECRET', code: 'AUTHORIZATION_CODE', redirect_uri: 'https://twoja-aplikacja.com/callback', grant_type: 'authorization_code' },
+          comment: 'Wymień code na access_token',
+        }), 'oauth_token')}
+        <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 700, color: '#f4f4f5' }}>Przykład odpowiedzi</h3>
+        {CB(`{\n  "access_token": "eyJhbGciOiJIUzI1...",\n  "token_type": "Bearer",\n  "expires_in": 3600,\n  "refresh_token": "refresh_...",\n  "scope": "identify guilds"\n}`, 'oauth_resp')}
+        <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 700, color: '#f4f4f5' }}>Odnawianie tokenu (refresh)</h3>
+        {CB(codeSample(lang, {
+          method: 'POST', url: `${origin}/api/oauth2/token`,
+          body: { client_id: app.client_id, client_secret: 'CLIENT_SECRET', refresh_token: 'REFRESH_TOKEN', grant_type: 'refresh_token' },
+          comment: 'Odnów access_token bez ponownego logowania',
+        }), 'oauth_refresh')}
+      </div>
+    ),
+
+    users: (
+      <div>
+        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>👤 Użytkownicy</h2>
+        <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a' }}>Endpointy do pobierania danych użytkowników. Scope <code style={{ fontFamily: 'monospace', color: '#818cf8' }}>identify</code> wymagany dla /@me.</p>
+        <EP method="GET" path="/api/v1/@me" desc="Własny profil bota/użytkownika" auth="Bot/Bearer"
+          resp={`{\n  "id": "550e8400-e29b-41d4-a716-446655440000",\n  "username": "moj_bot",\n  "avatar_url": null,\n  "is_bot": true,\n  "custom_status": "Bot dla MojejAplikacji",\n  "created_at": "2025-01-01T00:00:00.000Z"\n}`} />
+        <EP method="GET" path="/api/v1/@me/guilds" desc="Serwery do których należy bot/użytkownik" auth="Bot/Bearer"
+          resp={`[\n  {\n    "id": "guild-id",\n    "name": "Nazwa Serwera",\n    "icon_url": null,\n    "member_count": 42,\n    "role_name": "Bot"\n  }\n]`} />
+        <EP method="GET" path="/api/v1/users/:userId" desc="Publiczny profil użytkownika" auth="Bot"
+          params={[{ name: 'userId', type: 'UUID', req: true, desc: 'ID użytkownika' }]}
+          resp={`{\n  "id": "...",\n  "username": "graczek",\n  "avatar_url": "https://...",\n  "is_bot": false\n}`} />
+      </div>
+    ),
+
+    guilds: (
+      <div>
+        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>🏠 Serwery (Guilds)</h2>
+        <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a' }}>Bot ma dostęp tylko do serwerów, na których jest zainstalowany. Wszystkie zapytania sprawdzają przynależność.</p>
+        <EP method="GET" path="/api/v1/guilds/:guildId" desc="Dane serwera" auth="Bot"
+          params={[{ name: 'guildId', type: 'UUID', req: true, desc: 'ID serwera' }]}
+          resp={`{\n  "id": "...",\n  "name": "Mój Serwer",\n  "icon_url": null,\n  "owner_id": "...",\n  "member_count": 150,\n  "created_at": "2025-01-01T00:00:00.000Z"\n}`} />
+        <EP method="GET" path="/api/v1/guilds/:guildId/channels" desc="Lista kanałów serwera" auth="Bot"
+          resp={`[\n  {\n    "id": "...",\n    "name": "general",\n    "type": "text",\n    "position": 0,\n    "category_id": null\n  }\n]`} />
+        <EP method="GET" path="/api/v1/guilds/:guildId/members" desc="Lista członków (paginowana)" auth="Bot"
+          params={[
+            { name: 'guildId', type: 'UUID', req: true, desc: 'ID serwera' },
+            { name: 'limit',   type: 'int',  req: false, desc: 'Max wyników (domyślnie 50, max 100)' },
+            { name: 'after',   type: 'UUID', req: false, desc: 'Paginacja — pobierz po tym user_id' },
+          ]}
+          resp={`[\n  {\n    "user_id": "...",\n    "username": "graczek",\n    "avatar_url": null,\n    "role_name": "Member",\n    "joined_at": "2025-01-01T00:00:00.000Z"\n  }\n]`} />
+        <EP method="GET" path="/api/v1/guilds/:guildId/roles" desc="Lista ról serwera" auth="Bot"
+          resp={`[\n  {\n    "id": "...",\n    "name": "Moderator",\n    "color": "#ff0000",\n    "position": 2,\n    "permissions": ["kick_members","ban_members"]\n  }\n]`} />
+      </div>
+    ),
+
+    channels: (
+      <div>
+        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}># Kanały</h2>
+        <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a' }}>Odczyt i zarządzanie kanałami. Bot musi być w serwerze, do którego należy kanał.</p>
+        <EP method="GET" path="/api/v1/channels/:channelId" desc="Dane kanału" auth="Bot"
+          params={[{ name: 'channelId', type: 'UUID', req: true, desc: 'ID kanału' }]}
+          resp={`{\n  "id": "...",\n  "name": "general",\n  "type": "text",\n  "server_id": "...",\n  "topic": "Kanał ogólny",\n  "slowmode_seconds": 0\n}`} />
+        <EP method="GET" path="/api/v1/channels/:channelId/messages" desc="Historia wiadomości" auth="Bot"
+          params={[
+            { name: 'channelId', type: 'UUID', req: true,  desc: 'ID kanału' },
+            { name: 'limit',     type: 'int',  req: false, desc: 'Max wiadomości (domyślnie 50, max 100)' },
+            { name: 'before',    type: 'UUID', req: false, desc: 'Pobierz wiadomości przed tym ID' },
+            { name: 'after',     type: 'UUID', req: false, desc: 'Pobierz wiadomości po tym ID' },
+          ]}
+          resp={`[\n  {\n    "id": "...",\n    "content": "Cześć!",\n    "author": { "id": "...", "username": "graczek" },\n    "created_at": "2025-01-01T12:00:00.000Z",\n    "attachments": [],\n    "reactions": []\n  }\n]`} />
+      </div>
+    ),
+
+    messages: (
+      <div>
+        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>💬 Wiadomości</h2>
+        <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a' }}>Wysyłanie, edycja i usuwanie wiadomości. Scope <code style={{ fontFamily: 'monospace', color: '#818cf8' }}>messages.send</code> wymagany dla botów OAuth2.</p>
+        <EP method="POST" path="/api/v1/channels/:channelId/messages" desc="Wyślij wiadomość" auth="Bot"
+          body={[
+            { name: 'content',    type: 'string', req: false, desc: 'Treść wiadomości (max 2000 znaków)' },
+            { name: 'embed',      type: 'object', req: false, desc: 'Rich embed — {title, description, color, fields[], footer}' },
+            { name: 'reply_to',   type: 'UUID',   req: false, desc: 'ID wiadomości, na którą odpowiadasz' },
+            { name: 'mentions',   type: 'UUID[]', req: false, desc: 'Tablica ID użytkowników do wzmianki' },
+          ]}
+          resp={`{\n  "id": "...",\n  "content": "Cześć ze strony bota!",\n  "author": { "id": "bot-id", "username": "moj_bot", "is_bot": true },\n  "created_at": "2025-01-01T12:00:00.000Z"\n}`} />
+        <EP method="DELETE" path="/api/v1/channels/:channelId/messages/:messageId" desc="Usuń wiadomość bota" auth="Bot"
+          params={[
+            { name: 'channelId', type: 'UUID', req: true, desc: 'ID kanału' },
+            { name: 'messageId', type: 'UUID', req: true, desc: 'ID wiadomości (musi być własnością bota)' },
+          ]}
+          resp={`{ "success": true }`} />
+        <EP method="PUT"  path="/api/v1/channels/:channelId/messages/:messageId/reactions/:emoji" desc="Dodaj reakcję emoji" auth="Bot"
+          params={[
+            { name: 'channelId', type: 'UUID',   req: true, desc: 'ID kanału' },
+            { name: 'messageId', type: 'UUID',   req: true, desc: 'ID wiadomości' },
+            { name: 'emoji',     type: 'string', req: true, desc: 'Emoji URL-encoded, np. %F0%9F%91%8D (👍)' },
+          ]}
+          resp={`{ "success": true }`} />
+        <EP method="DELETE" path="/api/v1/channels/:channelId/messages/:messageId/reactions/:emoji" desc="Usuń reakcję bota" auth="Bot"
+          resp={`{ "success": true }`} />
+        <div style={{ marginTop: 20, padding: '14px 16px', background: '#18181b', border: '1px solid #27272a', borderRadius: 10 }}>
+          <h4 style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, color: '#f4f4f5' }}>Embed — pola obiektu</h4>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead><tr style={{ borderBottom: '1px solid #27272a' }}>{['Pole','Typ','Opis'].map(h => <th key={h} style={{ textAlign: 'left', padding: '4px 8px', color: '#71717a' }}>{h}</th>)}</tr></thead>
+            <tbody>
+              {[
+                { f: 'title',       t: 'string',   d: 'Tytuł embeda (max 256 znaków)' },
+                { f: 'description', t: 'string',   d: 'Opis (max 4096 znaków, obsługa markdown)' },
+                { f: 'color',       t: 'string',   d: 'Kolor paska bocznego w formacie #RRGGBB' },
+                { f: 'url',         t: 'string',   d: 'URL linku na tytule' },
+                { f: 'thumbnail',   t: 'string',   d: 'URL miniaturki (prawy górny róg)' },
+                { f: 'image',       t: 'string',   d: 'URL obrazka w treści' },
+                { f: 'fields',      t: 'Field[]',  d: '[{name, value, inline?}] — max 25 pól' },
+                { f: 'footer',      t: 'object',   d: '{text, icon_url?} — stopka embeda' },
+                { f: 'timestamp',   t: 'ISO 8601', d: 'Data wyświetlana w stopce' },
+              ].map(r => (
+                <tr key={r.f} style={{ borderBottom: '1px solid #27272a' }}>
+                  <td style={{ padding: '5px 8px' }}><code style={{ fontFamily: 'monospace', color: '#fbbf24' }}>{r.f}</code></td>
+                  <td style={{ padding: '5px 8px', color: '#71717a' }}>{r.t}</td>
+                  <td style={{ padding: '5px 8px', color: '#a1a1aa' }}>{r.d}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    ),
+
+    bot: (
+      <div>
+        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>🤖 Bot API</h2>
+        <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a', lineHeight: 1.7 }}>
+          Boty używają prefiksu <code style={{ fontFamily: 'monospace', color: '#818cf8' }}>/api/v1/</code> z tokenem <code style={{ fontFamily: 'monospace' }}>Authorization: Bot TOKEN</code>. Mają dostęp tylko do serwerów, na których są zainstalowane.
+        </p>
+        <div style={{ padding: '14px 16px', background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 10, marginBottom: 20 }}>
+          <h4 style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, color: '#f4f4f5' }}>Uprawnienia bota</h4>
+          <p style={{ margin: '0 0 8px', fontSize: 13, color: '#71717a' }}>Bot po dodaniu do serwera automatycznie otrzymuje rolę <code style={{ fontFamily: 'monospace', color: '#818cf8' }}>Bot</code> i zakres <code style={{ fontFamily: 'monospace' }}>bot messages.read messages.send reactions</code>.</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            {[
+              { s: 'messages.read',  d: 'Odczyt wiadomości z kanałów' },
+              { s: 'messages.send',  d: 'Wysyłanie wiadomości' },
+              { s: 'reactions',      d: 'Dodawanie/usuwanie reakcji' },
+              { s: 'members.read',   d: 'Odczyt listy członków' },
+            ].map(p => (
+              <div key={p.s} style={{ padding: '6px 10px', background: '#18181b', borderRadius: 6, fontSize: 12 }}>
+                <code style={{ fontFamily: 'monospace', color: '#818cf8' }}>{p.s}</code>
+                <span style={{ color: '#71717a', marginLeft: 8 }}>{p.d}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 700, color: '#f4f4f5' }}>Przykład — Bot wysyłający wiadomość powitalną</h3>
+        {CB(codeSample(lang, {
+          method: 'POST',
+          url: `${origin}/api/v1/channels/CHANNEL_ID/messages`,
+          body: {
+            content: 'Cześć! 👋 Jestem botem. Wpisz /help aby zobaczyć komendy.',
+            embed: { title: 'Witaj na serwerze!', description: 'Miło Cię widzieć.', color: '#6366f1' },
+          },
+          comment: 'Bot wysyła wiadomość powitalną',
+        }), 'bot_hello')}
+        <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 700, color: '#f4f4f5' }}>Przykład — Pobierz ostatnie wiadomości i odpowiedz</h3>
+        {CB(codeSample(lang, {
+          url: `${origin}/api/v1/channels/CHANNEL_ID/messages?limit=10`,
+          comment: 'Pobierz ostatnie 10 wiadomości z kanału',
+        }), 'bot_msgs')}
+        <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 700, color: '#f4f4f5' }}>Wskazówki dla botów</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {[
+            { t: 'Nie odpowiadaj na własne wiadomości', d: 'Sprawdzaj czy author.is_bot === false przed odpowiedzią — unikniesz pętli.' },
+            { t: 'Przechowuj token bezpiecznie', d: 'Użyj zmiennych środowiskowych: process.env.BOT_TOKEN lub .env + dotenv.' },
+            { t: 'Obsługuj rate limiting', d: 'Sprawdzaj nagłówki X-RateLimit-*. Przy 429 czekaj X-RateLimit-Reset ms.' },
+            { t: 'Używaj webhook zamiast pollingu', d: 'Zamiast co chwilę pytać o nowe wiadomości, podłącz Socket.IO do zdarzeń realtime.' },
+          ].map((t, i) => (
+            <div key={i} style={{ padding: '10px 14px', background: '#18181b', border: '1px solid #27272a', borderRadius: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#f4f4f5', marginBottom: 2 }}>{t.t}</div>
+              <div style={{ fontSize: 12, color: '#71717a' }}>{t.d}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    ),
+
+    errors: (
+      <div>
+        <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>⚠️ Błędy & Rate Limiting</h2>
+        <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a' }}>API używa standardowych kodów HTTP. Wszystkie błędy zwracają JSON z polem <code style={{ fontFamily: 'monospace', color: '#f87171' }}>error</code>.</p>
+        <div style={{ marginBottom: 24 }}>
+          <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: '#f4f4f5' }}>Kody odpowiedzi HTTP</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {[
+              { code: 200, color: '#4ade80', desc: 'OK — zapytanie zakończone sukcesem' },
+              { code: 201, color: '#4ade80', desc: 'Created — zasób utworzony pomyślnie' },
+              { code: 204, color: '#4ade80', desc: 'No Content — sukces bez treści odpowiedzi' },
+              { code: 400, color: '#fbbf24', desc: 'Bad Request — nieprawidłowe parametry lub body' },
+              { code: 401, color: '#f87171', desc: 'Unauthorized — brak lub nieprawidłowy token' },
+              { code: 403, color: '#f87171', desc: 'Forbidden — brak uprawnień do zasobu' },
+              { code: 404, color: '#f87171', desc: 'Not Found — zasób nie istnieje lub bot nie ma do niego dostępu' },
+              { code: 409, color: '#fb923c', desc: 'Conflict — zasób już istnieje (np. bot już na serwerze)' },
+              { code: 422, color: '#fb923c', desc: 'Unprocessable Entity — błąd walidacji (szczegóły w errors[])' },
+              { code: 429, color: '#f87171', desc: 'Too Many Requests — przekroczono limit zapytań' },
+              { code: 500, color: '#f87171', desc: 'Internal Server Error — błąd po stronie serwera' },
+            ].map(e => (
+              <div key={e.code} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: '#18181b', border: '1px solid #27272a', borderRadius: 8 }}>
+                <code style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: e.color, minWidth: 36 }}>{e.code}</code>
+                <span style={{ fontSize: 13, color: '#a1a1aa' }}>{e.desc}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ marginBottom: 24 }}>
+          <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: '#f4f4f5' }}>Rate Limiting</h3>
+          <p style={{ margin: '0 0 12px', fontSize: 13, color: '#71717a' }}>
+            Twój plan: <strong style={{ color: '#818cf8' }}>{app.rate_limit_tier}</strong> — 50 req/s per aplikacja. Limity w nagłówkach odpowiedzi:
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+            {[
+              { h: 'X-RateLimit-Limit',     d: 'Maksymalna liczba zapytań w oknie' },
+              { h: 'X-RateLimit-Remaining', d: 'Pozostałe zapytania w bieżącym oknie' },
+              { h: 'X-RateLimit-Reset',     d: 'Unix timestamp (ms) resetu okna' },
+              { h: 'Retry-After',           d: 'Sekundy oczekiwania przy 429' },
+            ].map(r => (
+              <div key={r.h} style={{ padding: '8px 12px', background: '#18181b', border: '1px solid #27272a', borderRadius: 8 }}>
+                <code style={{ fontFamily: 'monospace', fontSize: 11, color: '#818cf8' }}>{r.h}</code>
+                <p style={{ margin: '3px 0 0', fontSize: 11, color: '#71717a' }}>{r.d}</p>
+              </div>
+            ))}
+          </div>
+          <h4 style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: '#f4f4f5' }}>Obsługa 429 w kodzie</h4>
+          {CB(codeSample(lang, { url: `${origin}/api/v1/@me`, comment: 'Przykład obsługi rate limit — retry po Retry-After' }), 'err_rl')}
+        </div>
+        <div style={{ padding: '14px 16px', background: '#18181b', border: '1px solid #27272a', borderRadius: 10 }}>
+          <h4 style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, color: '#f4f4f5' }}>Przykładowe odpowiedzi błędów</h4>
+          {CB(`// 401 Unauthorized\n{ "error": "Invalid or expired token" }\n\n// 403 Forbidden\n{ "error": "Bot is not a member of this server" }\n\n// 422 Validation Error\n{ "error": "Validation failed", "errors": [{ "field": "content", "msg": "Content is required" }] }\n\n// 429 Rate Limited\n{ "error": "Too many requests, slow down" }`, 'err_examples')}
+        </div>
+      </div>
+    ),
+  };
+
+  return (
+    <div style={{ display: 'flex', gap: 0, minHeight: 600 }}>
+      {/* Left sidebar nav */}
+      <div style={{ width: 180, flexShrink: 0, borderRight: '1px solid #27272a', paddingRight: 0 }}>
+        <div style={{ position: 'sticky', top: 0 }}>
+          {DOC_SECTIONS.map(s => (
+            <button key={s.id} onClick={() => setSection(s.id)}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 12px', background: section === s.id ? 'rgba(99,102,241,0.12)' : 'transparent',
+                border: 'none', borderRight: section === s.id ? '2px solid #6366f1' : '2px solid transparent',
+                color: section === s.id ? '#818cf8' : '#71717a',
+                fontSize: 13, fontWeight: section === s.id ? 600 : 400,
+                cursor: 'pointer', textAlign: 'left', transition: 'all 0.1s',
+              }}>
+              <span style={{ fontSize: 14 }}>{s.icon}</span>
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, paddingLeft: 24, minWidth: 0 }}>
+        {/* Language selector */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 20, flexWrap: 'wrap' }}>
+          {LANGS.map(l => (
+            <button key={l.id} onClick={() => setLang(l.id)}
+              style={{
+                padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 500,
+                background: lang === l.id ? '#6366f1' : '#27272a',
+                border: `1px solid ${lang === l.id ? '#6366f1' : '#3f3f46'}`,
+                color: lang === l.id ? '#fff' : '#a1a1aa',
+                cursor: 'pointer', transition: 'all 0.1s',
+              }}>
+              {l.label}
+            </button>
+          ))}
+        </div>
+
+        {sectionContent[section]}
+      </div>
     </div>
   );
 }
@@ -1639,7 +2171,7 @@ export default function DeveloperPortal() {
               <div style={{ background: '#111113', border: '1px solid #1c1c1f', borderRadius: 12, padding: '24px' }}>
                 {tab === 'general' && <GeneralTab app={selectedApp} onUpdate={handleUpdateApp} />}
                 {tab === 'bot' && <BotTab app={selectedApp} onUpdate={handleUpdateApp} />}
-                {tab === 'oauth2' && <OAuth2Tab app={selectedApp} />}
+                {tab === 'oauth2' && <OAuth2Tab app={selectedApp} onUpdate={handleUpdateApp} />}
                 {tab === 'docs' && <DocsTab app={selectedApp} />}
               </div>
             </>
