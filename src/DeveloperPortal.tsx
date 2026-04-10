@@ -1918,6 +1918,8 @@ export default function DeveloperPortal() {
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const isLoggedIn = !!(localStorage.getItem('cordyn_token') || sessionStorage.getItem('cordyn_token'));
+
   const loadApps = useCallback(async () => {
     setLoading(true); setError('');
     try {
@@ -2051,6 +2053,25 @@ export default function DeveloperPortal() {
       </div>
     </aside>
   );
+
+  if (!isLoggedIn) {
+    return (
+      <div style={{ background: '#09090b', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui, sans-serif' }}>
+        <div style={{ textAlign: 'center', maxWidth: 400 }}>
+          <div style={{ width: 56, height: 56, borderRadius: 14, background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#f4f4f5', margin: '0 0 10px' }}>Wymagane logowanie</h1>
+          <p style={{ fontSize: 14, color: '#71717a', margin: '0 0 28px', lineHeight: 1.6 }}>
+            Dostęp do portalu dla deweloperów wymaga zalogowanego konta Cordyn.
+          </p>
+          <a href="/" style={{ display: 'inline-block', padding: '10px 24px', background: '#6366f1', color: '#fff', borderRadius: 8, textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>
+            Przejdź do logowania
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: '#09090b', color: '#f4f4f5', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
