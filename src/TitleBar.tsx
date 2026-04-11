@@ -90,3 +90,18 @@ export function TitleBar() {
 // @tauri-apps/api on web builds (dynamic import keeps it tree-shaken).
 export const isTauri =
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+/**
+ * Open a URL in the system browser.
+ * In Tauri: uses @tauri-apps/plugin-shell so the OS browser opens the link.
+ * On web: uses window.open with _blank.
+ */
+export function openExternalLink(url: string): void {
+  if (isTauri) {
+    import('@tauri-apps/plugin-shell').then(({ open }) => open(url)).catch(() => {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    });
+  } else {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+}
