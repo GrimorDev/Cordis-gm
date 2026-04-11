@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { assertBotInGuild, requireScope } from '../../middleware/botAuth';
 import { query } from '../../db/pool';
+import crypto from 'crypto';
+import { query as dbQuery } from '../../db/pool';
 
 const router = Router();
 
@@ -90,6 +92,40 @@ router.post('/:channelId/messages', requireScope('messages.send'), async (req: R
 
     const io = req.app.get('io');
     if (io) io.to(`channel:${channel.id}`).emit('new_message', full);
+
+    // Bot analytics: increment messages_processed
+    const p = req.v1Principal!;
+    if (p.type === 'bot') {
+      dbQuery(
+        `INSERT INTO bot_analytics (app_id, date, messages_processed)
+         VALUES ($1, CURRENT_DATE, 1)
+         ON CONFLICT (app_id, date) DO UPDATE
+           SET messages_processed = bot_analytics.messages_processed + 1`,
+        [p.applicationId]
+      ).catch(() => {});
+
+      // Webhook delivery with HMAC-SHA256 signature
+      dbQuery(
+        `SELECT webhook_url, webhook_secret FROM developer_applications WHERE id = $1`,
+        [p.applicationId]
+      ).then(({ rows }) => {
+        if (!rows.length || !rows[0].webhook_url) return;
+        const { webhook_url, webhook_secret } = rows[0];
+        const payload = JSON.stringify({ event: 'MESSAGE_CREATE', data: full });
+        const sig = crypto.createHmac('sha256', webhook_secret || '')
+          .update(payload).digest('hex');
+        fetch(webhook_url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Cordyn-Signature-256': `sha256=${sig}`,
+            'X-Cordyn-Event': 'MESSAGE_CREATE',
+          },
+          body: payload,
+          signal: AbortSignal.timeout(5000),
+        }).catch(() => {}); // fire-and-forget
+      }).catch(() => {});
+    }
 
     res.status(201).json(full);
   } catch (err) { res.status(500).json({ error: 'Internal server error' }); }

@@ -185,7 +185,27 @@
       "WebFetch(domain:ar5iv.labs.arxiv.org)",
       "Bash(grep -n \"applyNoiseGate\\\\|applyDeepFilter\\\\|from ''''./webrtc''''\" src/App.tsx)",
       "Bash(pnpm build:*)",
-      "Bash(node_modules/.bin/tsc --noEmit)"
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(find /e/Cordis-gm-main/.claude/worktrees/zen-franklin -name *.json -path */lottie* -o -name *lottie* -type f)",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d.get\\(''''version''''\\) or d.get\\(''''package'''',{}\\).get\\(''''version'''',''''?''''\\)\\)\")",
+      "Read(//e/Cordis-gm-main/**)",
+      "Bash(sed -i 's/\"\"\"\"version\"\"\"\": \"\"\"\"0.1.99\"\"\"\"/\"\"\"\"version\"\"\"\": \"\"\"\"0.1.182\"\"\"\"/' src-tauri/tauri.conf.json)",
+      "Bash(grep -v \"^$\")",
+      "Bash(powershell -Command \"Get-Content ''E:\\\\Cordis-gm-main\\\\.claude\\\\worktrees\\\\zen-franklin\\\\src\\\\App.tsx'' | Select-Object -Skip 9600 -First 30\")",
+      "Bash(powershell -Command \"Get-Content ''E:\\\\Cordis-gm-main\\\\.claude\\\\worktrees\\\\zen-franklin\\\\src\\\\App.tsx'' | Select-Object -Skip 9650 -First 30\")",
+      "Bash(powershell -Command \"Get-Content ''E:\\\\Cordis-gm-main\\\\.claude\\\\worktrees\\\\zen-franklin\\\\src\\\\App.tsx'' | Select-Object -Skip 9740 -First 50\")",
+      "Bash(powershell -Command \"Get-Content ''E:\\\\Cordis-gm-main\\\\.claude\\\\worktrees\\\\zen-franklin\\\\src\\\\App.tsx'' | Select-Object -Skip 9800 -First 60\")",
+      "Bash(cat /e/Cordis-gm-main/src-tauri/capabilities/*.json)",
+      "Bash(gh run:*)",
+      "Bash(ls /e/Cordis-gm-main/public/*.js)",
+      "Bash(where gh:*)",
+      "Bash(curl -s \"https://api.github.com/repos/GrimorDev/Cordis-gm/releases\")",
+      "Bash(curl -s https://api.github.com/repos/GrimorDev/Cordis-gm/releases)",
+      "Bash(ls E:Cordis-gm-mainsrc/*.ts)",
+      "Bash(find E:Cordis-gm-mainsrc -name *.ts -o -name *.tsx)",
+      "Bash(grep -n \"from ''''./webrtc''''\" src/App.tsx)",
+      "Bash(grep -n \"DO $$|ADD COLUMN\\\\|avatar_effect\\\\|card_effect\\\\|card_color\\\\|card_font\\\\|theme_id\\\\|is_premium\" \"E:\\\\Cordis-gm-main\\\\.claude\\\\worktrees\\\\zen-franklin\\\\backend\\\\src\\\\db\\\\migrate.ts\")",
+      "Bash(grep -l \"runAutomations\\\\|member_join\\\\|message_contains\" \"E:\\\\Cordis-gm-main\\\\.claude\\\\worktrees\\\\zen-franklin\\\\backend\\\\src\\\\routes\"/*.ts)"
     ]
   }
 }

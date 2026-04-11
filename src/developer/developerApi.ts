@@ -110,6 +110,24 @@ export const devApi = {
       client_id: clientId,
       server_id: serverId,
     }),
+
+  // Webhook secret
+  getWebhookSecret: (appId: string) =>
+    req<{ webhook_secret: string }>('GET', `${BASE}/applications/${appId}/webhook-secret`),
+  regenerateWebhookSecret: (appId: string) =>
+    req<{ webhook_secret: string }>('POST', `${BASE}/applications/${appId}/webhook-secret`),
+
+  // Audit logs
+  getAuditLogs: (appId: string, page = 1) =>
+    req<{ logs: any[]; total: number; page: number; pages: number }>('GET', `${BASE}/applications/${appId}/audit-logs?page=${page}`),
+
+  // Rate limit dashboard
+  getRateLimits: (appId: string) =>
+    req<{ today: number; this_hour: number; hourly: { hour: string; count: number }[] }>('GET', `${BASE}/applications/${appId}/rate-limits`),
+
+  // Bot analytics
+  getAnalytics: (appId: string) =>
+    req<{ days: any[]; totals: { messages: number; commands: number } }>('GET', `${BASE}/applications/${appId}/analytics`),
 };
 
 export const appsApi = {
