@@ -600,6 +600,7 @@ function GeneralTab({ app, onUpdate }: GeneralTabProps) {
           </span>
         )}
       </div>
+      <AuditLogSection appId={app.id} />
     </div>
   );
 }
@@ -719,7 +720,6 @@ function AddToServerModal({ clientId, onClose, onSuccess }: AddToServerModalProp
           )}
         </div>
       </div>
-      <AuditLogSection appId={app.id} />
     </div>
   );
 }
