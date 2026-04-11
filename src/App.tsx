@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import ReactDOM from 'react-dom';
-import { TitleBar, isTauri } from './TitleBar';
+import { TitleBar, isTauri, openExternalLink } from './TitleBar';
 import ImageCropModal, { type CropShape } from './ImageCropModal';
 import { translate, resolveLocale, bcp47 as localeBcp47, loadLocale, detectLocale, LOCALES, type Locale, type TimeFormat } from './i18n';
 import { motion, AnimatePresence } from 'motion/react';
@@ -14450,14 +14450,12 @@ export default function App() {
                   <h2 className="font-bold text-white text-base">Cordyn Apps</h2>
                   <p className="text-xs text-zinc-500">Rozszerzenia i boty dla serwera <span className="text-zinc-300">{serverFull?.name}</span></p>
                 </div>
-                <a
-                  href="/apps"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  onClick={() => openExternalLink(STATIC_BASE ? `${STATIC_BASE}/apps` : '/apps')}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-violet-400 hover:text-violet-300 border border-violet-500/25 hover:bg-violet-500/10 transition-all shrink-0 mr-1"
                 >
                   <ExternalLink size={11}/> Biblioteka
-                </a>
+                </button>
                 <button onClick={()=>setAppsModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.07] transition-all">
                   <X size={16}/>
                 </button>
@@ -14484,9 +14482,9 @@ export default function App() {
                         <Globe size={22} className="text-zinc-600"/>
                       </div>
                       <p className="text-zinc-500 text-sm">Brak publicznych aplikacji od społeczności</p>
-                      <a href="/apps" target="_blank" rel="noopener noreferrer" className="text-xs text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1">
+                      <button onClick={() => openExternalLink(STATIC_BASE ? `${STATIC_BASE}/apps` : '/apps')} className="text-xs text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1">
                         <ExternalLink size={11}/> Otwórz Cordyn Apps →
-                      </a>
+                      </button>
                     </div>
                   ) : publicApps.map(app => {
                     const alreadyIn = installedBots.some(b => b.bot_id === app.bot_user_id);

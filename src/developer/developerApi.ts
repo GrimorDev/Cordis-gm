@@ -1,4 +1,8 @@
-const BASE = '/api/developer';
+import { API_BASE } from '../api';
+
+// Strip trailing /api to get the root API base, then re-add /api/developer
+// so this works in web (relative /api) AND Tauri desktop (absolute URL).
+const BASE = `${API_BASE}/developer`;
 
 async function req<T>(method: string, path: string, body?: any): Promise<T> {
   const token =
@@ -100,16 +104,16 @@ export const devApi = {
 
   // Bot invite helpers (used by DeveloperPortal + AppsMarketplace)
   getMyServers: () =>
-    req<MyServer[]>('GET', '/api/oauth2/bot-invite/my-servers'),
+    req<MyServer[]>('GET', `${API_BASE}/oauth2/bot-invite/my-servers`),
   addBotToServer: (clientId: string, serverId: string) =>
-    req<{ success: boolean }>('POST', '/api/oauth2/bot-invite/confirm', {
+    req<{ success: boolean }>('POST', `${API_BASE}/oauth2/bot-invite/confirm`, {
       client_id: clientId,
       server_id: serverId,
     }),
 };
 
 export const appsApi = {
-  list: () => req<PublicApp[]>('GET', '/api/apps'),
-  search: (q: string) => req<PublicApp[]>('GET', `/api/apps/search?q=${encodeURIComponent(q)}`),
-  get: (clientId: string) => req<PublicApp>('GET', `/api/apps/${clientId}`),
+  list: () => req<PublicApp[]>('GET', `${API_BASE}/apps`),
+  search: (q: string) => req<PublicApp[]>('GET', `${API_BASE}/apps/search?q=${encodeURIComponent(q)}`),
+  get: (clientId: string) => req<PublicApp>('GET', `${API_BASE}/apps/${clientId}`),
 };
