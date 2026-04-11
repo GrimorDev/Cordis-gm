@@ -878,6 +878,39 @@ CREATE TABLE IF NOT EXISTS bot_server_installations (
 CREATE INDEX IF NOT EXISTS idx_bot_installs_server ON bot_server_installations(server_id);
 CREATE INDEX IF NOT EXISTS idx_bot_installs_app    ON bot_server_installations(application_id);
 CREATE INDEX IF NOT EXISTS idx_bot_installs_bot    ON bot_server_installations(bot_user_id);
+
+-- ── Developer Audit Logs ──────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS developer_audit_logs (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  app_id     UUID NOT NULL REFERENCES developer_applications(id) ON DELETE CASCADE,
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  action     VARCHAR(64) NOT NULL,
+  details    JSONB DEFAULT '{}',
+  ip         VARCHAR(64),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_dev_audit_app ON developer_audit_logs(app_id, created_at DESC);
+
+-- ── Bot Analytics ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS bot_analytics (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  app_id              UUID NOT NULL REFERENCES developer_applications(id) ON DELETE CASCADE,
+  date                DATE NOT NULL,
+  messages_processed  INT DEFAULT 0,
+  commands_executed   INT DEFAULT 0,
+  unique_user_count   INT DEFAULT 0,
+  servers_active      INT DEFAULT 0,
+  UNIQUE(app_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_bot_analytics_app ON bot_analytics(app_id, date DESC);
+
+-- ── Developer Applications extra columns ─────────────────────────────────────
+DO $$ BEGIN
+  ALTER TABLE developer_applications ADD COLUMN webhook_url TEXT;
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE developer_applications ADD COLUMN webhook_secret TEXT;
+EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 `;
 
 const SEED_SQL = `

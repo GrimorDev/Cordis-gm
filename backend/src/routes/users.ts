@@ -55,6 +55,27 @@ function makeUpload(folder: string) {
 const avatarUpload = makeUpload('avatars');
 const bannerUpload = makeUpload('banners');
 
+// GET /api/users/me/unread-counts
+router.get('/me/unread-counts', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { rows } = await query(
+      `SELECT crs.channel_id,
+              COUNT(m.id)::int AS unread_count
+       FROM channel_read_state crs
+       JOIN messages m ON m.channel_id = crs.channel_id
+         AND m.created_at > crs.last_read_at
+         AND m.sender_id != $1
+       WHERE crs.user_id = $1
+       GROUP BY crs.channel_id
+       HAVING COUNT(m.id) > 0`,
+      [req.user!.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/users/:id
 router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {

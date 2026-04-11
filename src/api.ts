@@ -107,6 +107,7 @@ export interface ChannelData {
   user_limit?: number;  // 0 = unlimited, >0 = max voice users (admin bypasses)
   bitrate?: number;     // kbps for voice (8–96)
   allowed_roles?: { role_id: string; role_name: string; color: string }[];
+  unread_count?: number;
 }
 export interface ForumPost {
   id: string; channel_id: string; author_id: string; title: string; content: string;
@@ -478,6 +479,7 @@ export const channelsApi = {
     req<{ ok: boolean }>('PATCH', '/channels/categories/reorder', { server_id: serverId, categories }),
   reorderChannels: (serverId: string, channels: { id: string; position: number; category_id: string }[]) =>
     req<{ ok: boolean }>('PATCH', '/channels/reorder', { server_id: serverId, channels }),
+  markRead: (channelId: string) => req<{ ok: boolean }>('POST', `/channels/${channelId}/read`).catch(() => {}),
 };
 
 // ── Forum ─────────────────────────────────────────────────────────────────

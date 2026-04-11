@@ -719,6 +719,7 @@ function AddToServerModal({ clientId, onClose, onSuccess }: AddToServerModalProp
           )}
         </div>
       </div>
+      <AuditLogSection appId={app.id} />
     </div>
   );
 }
@@ -978,6 +979,15 @@ function BotTab({ app, onUpdate }: BotTabProps) {
         )}
       </div>
 
+      {/* Webhook */}
+      <WebhookSection app={app} onUpdate={onUpdate} />
+
+      {/* Rate Limit Dashboard */}
+      <RateLimitSection appId={app.id} />
+
+      {/* Bot Analytics */}
+      <AnalyticsSection appId={app.id} />
+
       {/* Delete bot */}
       <div style={{ paddingTop: 20, borderTop: '1px solid #27272a' }}>
         <h4 style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: '#f87171' }}>Strefa zagrożenia</h4>
@@ -988,6 +998,215 @@ function BotTab({ app, onUpdate }: BotTabProps) {
           <TrashIcon /> Usuń bota
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── Webhook Section ───────────────────────────────────────────────────────────
+function WebhookSection({ app, onUpdate }: { app: DevApplication; onUpdate: (u: DevApplication) => void }) {
+  const [webhookUrl, setWebhookUrl] = useState((app as any).webhook_url || '');
+  const [webhookSecret, setWebhookSecret] = useState('');
+  const [showSecret, setShowSecret] = useState(false);
+  const [loadingSecret, setLoadingSecret] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const { copy, copiedKey } = useCopyToClipboard();
+
+  const revealSecret = async () => {
+    if (webhookSecret) { setShowSecret(s => !s); return; }
+    setLoadingSecret(true);
+    try {
+      const r = await devApi.getWebhookSecret(app.id);
+      setWebhookSecret(r.webhook_secret);
+      setShowSecret(true);
+    } catch { /* ignore */ } finally { setLoadingSecret(false); }
+  };
+
+  const regenerateSecret = async () => {
+    if (!confirm('Zregenerować webhook secret? Stary przestanie działać natychmiast.')) return;
+    try {
+      const r = await devApi.regenerateWebhookSecret(app.id);
+      setWebhookSecret(r.webhook_secret);
+      setShowSecret(true);
+    } catch (e: any) { alert('Błąd: ' + e.message); }
+  };
+
+  const saveUrl = async () => {
+    setSaving(true);
+    try {
+      const updated = await devApi.updateApp(app.id, { webhook_url: webhookUrl } as any);
+      onUpdate(updated);
+    } catch (e: any) { alert('Błąd: ' + e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{ marginBottom: 28, paddingTop: 20, borderTop: '1px solid #27272a' }}>
+      <h4 style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: '#f4f4f5' }}>Webhook</h4>
+      <p style={{ margin: '0 0 14px', fontSize: 12, color: '#71717a' }}>
+        Cordyn wyśle zdarzenia (MESSAGE_CREATE, itp.) na ten URL z nagłówkiem <code style={{ color: '#818cf8', fontFamily: 'monospace' }}>X-Cordyn-Signature-256</code>.
+      </p>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+        <input value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} placeholder="https://twój-serwer.pl/webhook"
+          style={{ flex: 1, background: '#09090b', border: '1px solid #27272a', borderRadius: 6, padding: '8px 12px', color: '#f4f4f5', fontSize: 13 }} />
+        <button onClick={saveUrl} disabled={saving} style={btnPrimary}>{saving ? '...' : 'Zapisz'}</button>
+      </div>
+      <label style={labelStyle}>WEBHOOK SECRET</label>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 4 }}>
+        <div style={{ flex: 1, fontFamily: 'monospace', fontSize: 12, padding: '8px 12px', background: '#09090b', border: '1px solid #27272a', borderRadius: 6, color: '#a1a1aa', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {webhookSecret && showSecret ? webhookSecret : '••••••••••••••••••••••••••••••••'}
+        </div>
+        <button onClick={revealSecret} style={btnSecondary}>{loadingSecret ? '...' : showSecret ? 'Ukryj' : 'Pokaż'}</button>
+        {webhookSecret && showSecret && <button onClick={() => copy(webhookSecret, 'wh_secret')} style={btnSecondary}>{copiedKey === 'wh_secret' ? '✓' : 'Kopiuj'}</button>}
+        <button onClick={regenerateSecret} style={btnSecondary} title="Regeneruj">↺</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Rate Limit Dashboard ──────────────────────────────────────────────────────
+function RateLimitSection({ appId }: { appId: string }) {
+  const [data, setData] = useState<{ today: number; this_hour: number; hourly: { hour: string; count: number }[] } | null>(null);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const load = async () => {
+    if (data) return;
+    setLoading(true);
+    try { setData(await devApi.getRateLimits(appId)); } catch { /* ignore */ } finally { setLoading(false); }
+  };
+
+  const toggle = () => { if (!open) load(); setOpen(o => !o); };
+  const maxCount = data ? Math.max(...data.hourly.map(h => h.count), 1) : 1;
+
+  return (
+    <div style={{ marginBottom: 28, paddingTop: 20, borderTop: '1px solid #27272a' }}>
+      <button onClick={toggle} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: '#f4f4f5', fontSize: 13, fontWeight: 700, padding: 0 }}>
+        <span style={{ fontSize: 10, color: '#71717a' }}>{open ? '▼' : '▶'}</span> Użycie API (ostatnie 24h)
+      </button>
+      {open && (
+        <div style={{ marginTop: 12 }}>
+          {loading ? <p style={{ color: '#52525b', fontSize: 13 }}>Ładowanie...</p> : data ? (
+            <>
+              <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
+                {[{ label: 'Dziś', val: data.today }, { label: 'Ta godzina', val: data.this_hour }].map(({ label, val }) => (
+                  <div key={label} style={{ flex: 1, background: '#18181b', border: '1px solid #27272a', borderRadius: 8, padding: '12px 16px' }}>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: '#818cf8' }}>{val.toLocaleString()}</div>
+                    <div style={{ fontSize: 11, color: '#71717a', marginTop: 2 }}>{label}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 60, background: '#18181b', border: '1px solid #27272a', borderRadius: 8, padding: '8px 8px 4px' }}>
+                {data.hourly.map((h, i) => (
+                  <div key={i} title={`${h.hour.slice(-2)}:00 — ${h.count} req`} style={{ flex: 1, minWidth: 0, background: h.count > 0 ? '#6366f1' : '#27272a', borderRadius: 2, height: `${Math.max(4, (h.count / maxCount) * 100)}%`, transition: 'height 0.2s' }} />
+                ))}
+              </div>
+              <p style={{ margin: '4px 0 0', fontSize: 10, color: '#52525b', textAlign: 'center' }}>Ostatnie 24 godziny (każdy słupek = 1h)</p>
+            </>
+          ) : <p style={{ color: '#52525b', fontSize: 13 }}>Brak danych.</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Bot Analytics Section ─────────────────────────────────────────────────────
+function AnalyticsSection({ appId }: { appId: string }) {
+  const [data, setData] = useState<{ days: any[]; totals: { messages: number; commands: number } } | null>(null);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const load = async () => {
+    if (data) return;
+    setLoading(true);
+    try { setData(await devApi.getAnalytics(appId)); } catch { /* ignore */ } finally { setLoading(false); }
+  };
+
+  const toggle = () => { if (!open) load(); setOpen(o => !o); };
+  const maxMsg = data ? Math.max(...data.days.map(d => d.messages_processed), 1) : 1;
+
+  return (
+    <div style={{ marginBottom: 28, paddingTop: 20, borderTop: '1px solid #27272a' }}>
+      <button onClick={toggle} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: '#f4f4f5', fontSize: 13, fontWeight: 700, padding: 0 }}>
+        <span style={{ fontSize: 10, color: '#71717a' }}>{open ? '▼' : '▶'}</span> Statystyki bota (ostatnie 30 dni)
+      </button>
+      {open && (
+        <div style={{ marginTop: 12 }}>
+          {loading ? <p style={{ color: '#52525b', fontSize: 13 }}>Ładowanie...</p> : data ? (
+            <>
+              <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
+                {[
+                  { label: 'Wiadomości łącznie', val: data.totals.messages },
+                  { label: 'Komendy łącznie', val: data.totals.commands },
+                  { label: 'Aktywnych dni', val: data.days.filter(d => d.messages_processed > 0).length },
+                ].map(({ label, val }) => (
+                  <div key={label} style={{ flex: 1, background: '#18181b', border: '1px solid #27272a', borderRadius: 8, padding: '12px 16px' }}>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: '#818cf8' }}>{val.toLocaleString()}</div>
+                    <div style={{ fontSize: 11, color: '#71717a', marginTop: 2 }}>{label}</div>
+                  </div>
+                ))}
+              </div>
+              {data.days.length > 0 && (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 60, background: '#18181b', border: '1px solid #27272a', borderRadius: 8, padding: '8px 8px 4px' }}>
+                    {data.days.map((d, i) => (
+                      <div key={i} title={`${d.date}: ${d.messages_processed} wiad.`} style={{ flex: 1, minWidth: 0, background: d.messages_processed > 0 ? '#6366f1' : '#27272a', borderRadius: 2, height: `${Math.max(4, (d.messages_processed / maxMsg) * 100)}%`, transition: 'height 0.2s' }} />
+                    ))}
+                  </div>
+                  <p style={{ margin: '4px 0 0', fontSize: 10, color: '#52525b', textAlign: 'center' }}>Wiadomości dziennie — ostatnie 30 dni</p>
+                </>
+              )}
+            </>
+          ) : <p style={{ color: '#52525b', fontSize: 13 }}>Brak danych analitycznych.</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Audit Log Section (for GeneralTab) ───────────────────────────────────────
+function AuditLogSection({ appId }: { appId: string }) {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const load = async () => {
+    if (logs.length) return;
+    setLoading(true);
+    try { const r = await devApi.getAuditLogs(appId); setLogs(r.logs); } catch { /* ignore */ } finally { setLoading(false); }
+  };
+
+  const toggle = () => { if (!open) load(); setOpen(o => !o); };
+
+  const actionColors: Record<string, string> = {
+    app_created: '#4ade80', app_updated: '#818cf8', app_deleted: '#f87171',
+    secret_regenerated: '#fb923c', webhook_secret_regenerated: '#fb923c',
+    bot_created: '#34d399', bot_deleted: '#f87171', bot_token_regenerated: '#fb923c',
+    bot_added_to_server: '#60a5fa',
+  };
+
+  return (
+    <div style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid #27272a' }}>
+      <button onClick={toggle} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, color: '#f4f4f5', fontSize: 13, fontWeight: 700, padding: 0 }}>
+        <span style={{ fontSize: 10, color: '#71717a' }}>{open ? '▼' : '▶'}</span> Logi audytu
+      </button>
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          {loading ? <p style={{ color: '#52525b', fontSize: 13 }}>Ładowanie...</p> : logs.length === 0 ? (
+            <p style={{ color: '#52525b', fontSize: 13, fontStyle: 'italic' }}>Brak wpisów w logu audytu.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {logs.map(log => (
+                <div key={log.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px', background: '#18181b', border: '1px solid #27272a', borderRadius: 6, fontSize: 12 }}>
+                  <span style={{ padding: '2px 6px', borderRadius: 4, background: `${actionColors[log.action] || '#71717a'}20`, color: actionColors[log.action] || '#71717a', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>{log.action}</span>
+                  <span style={{ color: '#71717a', flexShrink: 0 }}>{log.actor_username}</span>
+                  <span style={{ color: '#3f3f46', flexShrink: 0 }}>{new Date(log.created_at).toLocaleString('pl-PL')}</span>
+                  {log.ip && <span style={{ color: '#3f3f46', marginLeft: 'auto', flexShrink: 0 }}>{log.ip}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -5933,6 +5933,7 @@ export default function App() {
   const [callDuration, setCallDuration]       = useState(0);
   const [toasts, setToasts]                   = useState<Toast[]>([]);
   const [isConnected, setIsConnected]         = useState(true);
+  const [justReconnected, setJustReconnected] = useState(false);
 
   const [serverList, setServerList]           = useState<ServerData[]>([]);
   const [serverFull, setServerFull]           = useState<ServerFull | null>(null);
@@ -7633,7 +7634,10 @@ export default function App() {
 
     // ── Reconnection: re-join rooms + refresh data ──────────────────
     sock.on('connect', () => {
-      setIsConnected(true);
+      setIsConnected(prev => {
+        if (!prev) { setJustReconnected(true); setTimeout(() => setJustReconnected(false), 2500); }
+        return true;
+      });
       // Reset Steam emission guard so the next poll re-broadcasts current game
       // (backend in-memory cache is cleared on restart, so friends need a fresh emit)
       lastEmittedGame.current = undefined;
@@ -7839,6 +7843,12 @@ export default function App() {
       setServerFull(s);
       setSrvForm({ name: s.name, description: s.description||'', icon_url: s.icon_url||'', banner_url: s.banner_url||'', accent_color: (s as any).accent_color||'indigo' });
       setServerAccentColor((s as any).accent_color||'indigo');
+      // Seed unread counts from backend (socket-incremented values win via spread order)
+      const serverUnreads: Record<string, number> = {};
+      s.categories.flatMap(c => c.channels).forEach(ch => {
+        if ((ch as any).unread_count > 0) serverUnreads[ch.id] = (ch as any).unread_count;
+      });
+      setUnreadChs(prev => ({ ...serverUnreads, ...prev }));
       // Load server emojis
       emojisApi.list(activeServer).then(emojis => {
         setServerEmojis(p => new Map(p).set(activeServer, emojis));
@@ -7881,6 +7891,7 @@ export default function App() {
     setTypingUsers({});
     setUnreadChs(p => { const n = {...p}; delete n[activeChannel]; return n; });
     setPingChs(p => { const n = {...p}; delete n[activeChannel]; return n; });
+    channelsApi.markRead(activeChannel);
     setForumPost(null); setShowNewPost(false); setReplyContent('');
     // Load content based on channel type
     const ch = serverFull?.categories.flatMap(c=>c.channels).find(c=>c.id===activeChannel);
@@ -7996,6 +8007,11 @@ export default function App() {
   useEffect(() => { activeServerRef.current   = activeServer;   }, [activeServer]);
   useEffect(() => { callDurationRef.current   = callDuration;   }, [callDuration]);
   useEffect(() => { serverFullRef.current     = serverFull;     }, [serverFull]);
+  // Update browser/desktop tab title with total unread count
+  useEffect(() => {
+    const total = Object.values(unreadChs).reduce((a, b) => a + b, 0);
+    document.title = total > 0 ? `(${total > 99 ? '99+' : total}) Cordyn` : 'Cordyn';
+  }, [unreadChs]);
   // Track window focus for desktop push notifications
   useEffect(() => {
     const onFocus     = () => { isWindowFocused.current = true; };
@@ -17447,13 +17463,19 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* ── RECONNECTING BANNER ──────────────────────────────────────────── */}
+      {/* ── RECONNECTING / RECONNECTED BANNER ───────────────────────────── */}
       <AnimatePresence>
         {isAuthenticated && !isConnected && (
-          <motion.div initial={{opacity:0,y:-40}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-40}} transition={{duration:0.3,ease:[0.16,1,0.3,1]}}
+          <motion.div key="disconnected" initial={{opacity:0,y:-40}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-40}} transition={{duration:0.3,ease:[0.16,1,0.3,1]}}
             className="fixed top-0 left-0 right-0 z-[300] flex items-center justify-center gap-2 py-2.5 px-4 bg-amber-500/95 backdrop-blur-sm text-black text-xs font-bold tracking-wide uppercase">
             <div className="w-3 h-3 border-2 border-black/40 border-t-black rounded-full animate-spin shrink-0"/>
-            Łączenie z serwerem…
+            Brak połączenia — próba ponownego połączenia…
+          </motion.div>
+        )}
+        {isAuthenticated && justReconnected && (
+          <motion.div key="reconnected" initial={{opacity:0,y:-40}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-40}} transition={{duration:0.3,ease:[0.16,1,0.3,1]}}
+            className="fixed top-0 left-0 right-0 z-[300] flex items-center justify-center gap-2 py-2.5 px-4 bg-emerald-500/95 backdrop-blur-sm text-white text-xs font-bold tracking-wide uppercase">
+            <Check size={12} className="shrink-0"/> Połączono
           </motion.div>
         )}
       </AnimatePresence>

@@ -33,6 +33,24 @@ const v1Limiter = rateLimit({
 router.use(v1AuthMiddleware);
 router.use(v1Limiter);
 
+// Track bot API usage in Redis for the rate-limit dashboard
+router.use((req, _res, next) => {
+  const p = (req as any).v1Principal;
+  if (p?.type === 'bot') {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const day = `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())}`;
+    const hour = `${day}-${pad(now.getUTCHours())}`;
+    const pipe = redis.pipeline();
+    pipe.incr(`ratelimit:bot:${p.applicationId}:hour:${hour}`);
+    pipe.expire(`ratelimit:bot:${p.applicationId}:hour:${hour}`, 90000);
+    pipe.incr(`ratelimit:bot:${p.applicationId}:day:${day}`);
+    pipe.expire(`ratelimit:bot:${p.applicationId}:day:${day}`, 691200);
+    pipe.exec().catch(() => {});
+  }
+  next();
+});
+
 router.use('/users', usersRouter);
 router.use('/guilds', guildsRouter);
 router.use('/channels', channelsRouter);
