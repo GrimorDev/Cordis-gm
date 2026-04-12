@@ -6427,6 +6427,7 @@ export default function App() {
   const [inviteJoining, setInviteJoining]     = useState(false);
   const [currentUser, setCurrentUser]         = useState<UserProfile | null>(null);
   const [activeServer, setActiveServer]       = useState('');
+  const [serverReloadKey, setServerReloadKey] = useState(0);
   const [activeChannel, setActiveChannel]     = useState('');
   const [activeDmUserId, setActiveDmUserId]   = useState('');
   const [isMobileOpen, setIsMobileOpen]       = useState(false);
@@ -8373,7 +8374,9 @@ export default function App() {
     }).catch(console.error);
     serversApi.members(activeServer).then(setMembers).catch(console.error);
     serversApi.roles.list(activeServer).then(setRoles).catch(console.error);
-  }, [activeServer]);
+  // serverReloadKey forces a re-fetch when returning from DMs to the same server
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeServer, serverReloadKey]);
 
   // ── Clear typing users when leaving server view ──────────────────
   useEffect(() => {
@@ -10626,7 +10629,7 @@ export default function App() {
                 const isActive = activeServer===srv.id&&activeView==='servers';
                 return (
                   <button key={srv.id}
-                    onClick={() => { if(activeServer===srv.id&&activeView==='servers') return; setActiveServer(srv.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); setProfileViewId(null); }}
+                    onClick={() => { if(activeServer===srv.id&&activeView==='servers') return; const sameServer=activeServer===srv.id; setActiveServer(srv.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); setProfileViewId(null); if(sameServer) setServerReloadKey(k=>k+1); }}
                     onContextMenu={e => { e.preventDefault(); setSrvContextMenu({ x: e.clientX, y: e.clientY, srv }); }}
                     className={`flex items-center gap-2 h-full px-3 text-sm font-medium transition-all duration-200 border-r border-white/[0.05] whitespace-nowrap relative group shrink-0 ${isActive?'text-white bg-black/20':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'}`}>
                     {isActive&&<motion.span layoutId="nav-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"/>}
@@ -10740,10 +10743,12 @@ export default function App() {
                           <button key={notif.id} onClick={() => {
                             // Navigate to server+channel
                             if (notif.server_id) {
+                              const sameServer = activeServer === notif.server_id;
                               setActiveView('servers');
                               setActiveServer(notif.server_id);
                               setServerFull(null);
                               if (notif.channel_id) setActiveChannel(notif.channel_id);
+                              if (sameServer) setServerReloadKey(k => k + 1);
                             }
                             // Mark as read
                             setNotifications(p => p.map(n => n.id===notif.id ? {...n,read:true} : n));
@@ -10821,7 +10826,7 @@ export default function App() {
             <div className="w-px h-7 bg-white/[0.07] self-center mx-0.5"/>
             {serverList.map(s => (
               <button key={s.id}
-                onClick={() => { if(activeServer===s.id&&activeView==='servers') return; setActiveServer(s.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); setIsMobileOpen(false); setProfileViewId(null); }}
+                onClick={() => { if(activeServer===s.id&&activeView==='servers') return; const sameServer=activeServer===s.id; setActiveServer(s.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); setIsMobileOpen(false); setProfileViewId(null); if(sameServer) setServerReloadKey(k=>k+1); }}
                 onContextMenu={e=>{ e.preventDefault(); setSrvContextMenu({x:e.clientX,y:e.clientY,srv:s}); }}
                 className={`w-10 h-10 shrink-0 rounded-xl overflow-hidden border ${activeServer===s.id&&activeView==='servers'?'border-indigo-500/40':'border-white/[0.05]'}`}>
                 <span className="text-sm font-bold text-white flex w-full h-full items-center justify-center bg-zinc-800">{s.name.charAt(0)}</span>
@@ -18629,7 +18634,7 @@ export default function App() {
                       </button>
                     ))}
                     {serverMatches.slice(0,5).map(s => (
-                      <button key={s.id} onClick={()=>{ setActiveServer(s.id); setQuickSwitcherOpen(false); }}
+                      <button key={s.id} onClick={()=>{ const sameServer=activeServer===s.id; setActiveServer(s.id); setActiveView('servers'); setServerFull(null); setActiveChannel(''); setQuickSwitcherOpen(false); if(sameServer) setServerReloadKey(k=>k+1); }}
                         className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/[0.06] text-left transition-all">
                         {s.icon_url ? (
                           <img src={staticUrl(s.icon_url)} alt={s.name} className="w-5 h-5 rounded-full object-cover shrink-0"/>
