@@ -564,8 +564,42 @@ export interface AdminOverview {
   total_users: number; total_servers: number; total_messages: number;
   total_dms: number; total_channels: number; online_users: number;
   registrations_7d: { date: string; count: number }[];
+  messages_7d: { date: string; count: number }[];
+  top_servers: { id: string; name: string; icon_url: string | null; member_count: number }[];
   memory: { rss: number; heapUsed: number; heapTotal: number };
   node_version: string; uptime_seconds: number;
+}
+export interface AdminServerDetail {
+  server: {
+    id: string; name: string; icon_url?: string | null; owner_id: string; owner_name: string;
+    description?: string | null; created_at: string; member_count: number; channel_count: number;
+  };
+  members: {
+    user_id: string; username: string; avatar_url?: string | null;
+    status: string; role_name: string; joined_at: string;
+  }[];
+  channels: { id: string; name: string; type: string; position: number }[];
+}
+export interface AdminUserDetail {
+  user: {
+    id: string; username: string; email: string; avatar_url?: string | null;
+    status: string; is_admin: boolean; created_at: string; bio?: string | null;
+    custom_status?: string | null; is_premium: boolean; storage_used_bytes: number;
+    message_count: number; dm_count: number; badges: Badge[];
+  };
+  servers: { id: string; name: string; icon_url?: string | null; role_name: string; joined_at: string }[];
+  bans: { id: string; ban_type: string; reason?: string | null; banned_until?: string | null; is_active: boolean; created_at: string; banned_by_username?: string }[];
+  sessions: { ip_address?: string | null; user_agent?: string | null; created_at: string; last_seen_at: string }[];
+}
+export interface AdminAuditEntry {
+  id: string; admin_id: string; admin_username: string; admin_avatar?: string | null;
+  action: string; target_type?: string | null; target_id?: string | null;
+  details: Record<string, any>; ip?: string | null; created_at: string;
+}
+export interface AdminSystemInfo {
+  node: { version: string; uptime_seconds: number; memory: { rss: number; heapUsed: number; heapTotal: number; external: number } };
+  postgres: { db_size: string; active_connections: number; pg_version: string } | null;
+  redis: { version: string | null; uptime_seconds: number; connected_clients: number; used_memory_human: string | null; total_commands_processed: number; keyspace_hits: number; keyspace_misses: number } | null;
 }
 // ── Games (RAWG) ───────────────────────────────────────────────────────────
 export const gamesApi = {
@@ -668,6 +702,14 @@ export const adminApi = {
     unban: (userId: string) => req<{ ok: boolean }>('DELETE', `/admin/users/${userId}/ban`),
   },
   servers: () => req<AdminServer[]>('GET', '/admin/servers'),
+  serverDetail:  (serverId: string) => req<AdminServerDetail>('GET', `/admin/servers/${serverId}`),
+  deleteServer:  (serverId: string) => req<{ ok: boolean }>('DELETE', `/admin/servers/${serverId}`),
+  kickMember:    (serverId: string, userId: string) => req<{ ok: boolean }>('DELETE', `/admin/servers/${serverId}/members/${userId}`),
+  userDetail:    (userId: string) => req<AdminUserDetail>('GET', `/admin/users/${userId}/detail`),
+  editUser:      (userId: string, data: { username?: string; email?: string }) => req<{ id: string; username: string; email: string }>('PUT', `/admin/users/${userId}/edit`, data),
+  auditLog:      (page = 1) => req<{ logs: AdminAuditEntry[]; total: number }>('GET', `/admin/audit-log?page=${page}`),
+  broadcast:     (data: { message: string; type?: 'info'|'warning'|'success'; server_id?: string }) => req<{ ok: boolean }>('POST', '/admin/broadcast', data),
+  systemInfo:    () => req<AdminSystemInfo>('GET', '/admin/system/info'),
   storage: {
     stats:     () => req<AdminStorageStats>('GET', '/admin/storage'),
     users:     (page = 1, q = '') => req<{ users: StorageUser[]; total: number }>('GET', `/admin/storage/users?page=${page}&limit=50${q ? `&q=${encodeURIComponent(q)}` : ''}`),

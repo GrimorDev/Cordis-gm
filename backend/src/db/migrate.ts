@@ -911,6 +911,20 @@ EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN
   ALTER TABLE developer_applications ADD COLUMN webhook_secret TEXT;
 EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- ── Admin Audit Log ───────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS admin_audit_log (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  action      VARCHAR(64) NOT NULL,
+  target_type VARCHAR(20),
+  target_id   TEXT,
+  details     JSONB DEFAULT '{}',
+  ip          VARCHAR(64),
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_time ON admin_audit_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_admin ON admin_audit_log(admin_id, created_at DESC);
 `;
 
 const SEED_SQL = `
