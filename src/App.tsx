@@ -23,6 +23,7 @@ import {
   HardDrive, PieChart, Trash, History,
   Bookmark, BookmarkCheck, Timer, Square, ImageIcon,
   Keyboard, Radio, Compass, CalendarPlus, Mic2,
+  Home, BookOpen, TrendingUp, Layers,
   type LucideIcon
 } from 'lucide-react';
 import {
@@ -7004,6 +7005,7 @@ export default function App() {
   const [discoveryQ, setDiscoveryQ]           = useState('');
   const [discoveryList, setDiscoveryList]     = useState<DiscoverServer[]>([]);
   const [discoveryLoading, setDiscoveryLoading] = useState(false);
+  const [discoveryCategory, setDiscoveryCategory] = useState<string>('all');
 
   // ── Feature: Server Onboarding ───────────────────────────────────
   const [onboardingData, setOnboardingData]   = useState<ServerOnboarding|null>(null);
@@ -10656,7 +10658,7 @@ export default function App() {
             <Plus size={15}/>
           </button>
           {/* Compass — discover public servers */}
-          <button onClick={()=>{ setDiscoveryLoading(true); discoverApi.list('').then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false)); setShowDiscovery(true); }}
+          <button onClick={()=>{ setDiscoveryCategory('all'); setDiscoveryQ(''); setDiscoveryLoading(true); discoverApi.list('').then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false)); setShowDiscovery(true); }}
             title="Odkryj serwery"
             className="hidden md:flex items-center justify-center w-9 h-full text-zinc-600 hover:text-violet-400 hover:bg-violet-500/10 transition-all duration-200 border-r border-white/[0.05] shrink-0">
             <Compass size={15}/>
@@ -10833,7 +10835,7 @@ export default function App() {
               </button>
             ))}
             <button onClick={() => setCreateSrvOpen(true)} className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-xl ${gb}`} title="Utwórz serwer"><Plus size={16}/></button>
-            <button onClick={()=>{ setDiscoveryLoading(true); discoverApi.list('').then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false)); setShowDiscovery(true); }}
+            <button onClick={()=>{ setDiscoveryCategory('all'); setDiscoveryQ(''); setDiscoveryLoading(true); discoverApi.list('').then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false)); setShowDiscovery(true); }}
               className={`w-10 h-10 shrink-0 flex items-center justify-center rounded-xl ${gb}`} title="Odkryj serwery"><Compass size={16}/></button>
           </div>
 
@@ -18661,64 +18663,194 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* ── Server Discovery Modal ──────────────────────────────── */}
+      {/* ── Server Discovery — full-screen page ─────────────────── */}
       <AnimatePresence>
-        {showDiscovery && (
-          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-            onClick={()=>setShowDiscovery(false)}>
-            <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
-              className={`${gm} p-6 w-full max-w-2xl max-h-[80vh] flex flex-col`}
-              onClick={e=>e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-bold text-white flex items-center gap-2"><Compass size={16} className="text-indigo-400"/>Odkryj serwery</h2>
-                <button onClick={()=>setShowDiscovery(false)} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all"><X size={14}/></button>
+        {showDiscovery && (()=>{
+          const DISC_CATS = [
+            { key:'all',          label:'Strona główna',   icon:<Home size={15}/>,       kw:[] },
+            { key:'gaming',       label:'Gracze',          icon:<Gamepad2 size={15}/>,   kw:['gra','game','gaming','cs','minecraft','fps','rpg','mmo','esport'] },
+            { key:'music',        label:'Muzyka',          icon:<Music size={15}/>,      kw:['muzyk','music','rap','hip','rock','dj','spotify','beats'] },
+            { key:'entertainment',label:'Rozrywka',        icon:<Film size={15}/>,       kw:['rozrywk','fun','meme','entertainment','anime','film','serial','stream'] },
+            { key:'education',    label:'Edukacja',        icon:<BookOpen size={15}/>,   kw:['nauka','edu','learn','uni','school','programm','kod','code'] },
+            { key:'science',      label:'Nauka i tech',    icon:<FlaskConical size={15}/>,kw:['tech','nauka','science','ai','ml','dev','python','linux'] },
+            { key:'trending',     label:'Na czasie',       icon:<TrendingUp size={15}/>, kw:[] },
+          ];
+          const catKw = DISC_CATS.find(c=>c.key===discoveryCategory)?.kw??[];
+          const filtered = discoveryList.filter(s => {
+            const haystack = `${s.name} ${s.description??''} ${s.discovery_description??''}`.toLowerCase();
+            if (discoveryCategory==='all') return true;
+            if (discoveryCategory==='trending') return s.online_count > 0;
+            return catKw.some(kw=>haystack.includes(kw));
+          });
+          const doSearch = (q:string) => { setDiscoveryLoading(true); discoverApi.list(q).then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false)); };
+          return (
+          <motion.div key="discovery-fs" initial={{opacity:0,y:24}} animate={{opacity:1,y:0}} exit={{opacity:0,y:24}} transition={{duration:0.22}}
+            className="fixed inset-0 z-[200] bg-[#0d0d18] flex flex-col">
+            {/* ── Top bar ─────────────────────────────────────── */}
+            <div className="h-[52px] shrink-0 border-b border-white/[0.06] flex items-center px-5 gap-4 bg-[#0d0d18]/95 backdrop-blur-md">
+              <button onClick={()=>setShowDiscovery(false)}
+                className="flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors text-sm font-medium shrink-0">
+                <ChevronLeft size={16}/> Wróć
+              </button>
+              <div className="flex items-center gap-2 text-white font-bold text-sm shrink-0">
+                <Compass size={15} className="text-indigo-400"/> Odkryj serwery
               </div>
-              <div className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 mb-4">
-                <Search size={13} className="text-zinc-600 shrink-0"/>
-                <input value={discoveryQ} onChange={e=>setDiscoveryQ(e.target.value)}
-                  onKeyDown={e=>{ if(e.key==='Enter'){ setDiscoveryLoading(true); discoverApi.list(discoveryQ).then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false)); } }}
-                  placeholder="Szukaj publicznych serwerów..."
-                  className="flex-1 bg-transparent outline-none text-sm text-white placeholder-zinc-600"/>
-                <button onClick={()=>{ setDiscoveryLoading(true); discoverApi.list(discoveryQ).then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false)); }}
-                  className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">Szukaj</button>
-              </div>
-              {discoveryLoading ? (
-                <div className="flex-1 flex items-center justify-center"><Loader2 size={20} className="animate-spin text-zinc-600"/></div>
-              ) : discoveryList.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center gap-2 text-zinc-600">
-                  <Compass size={32} className="opacity-30"/>
-                  <p className="text-sm">{discoveryQ ? `Brak wyników dla "${discoveryQ}"` : 'Brak publicznych serwerów'}</p>
+              {/* Search */}
+              <div className="flex-1 max-w-lg mx-auto">
+                <div className="flex items-center gap-2 bg-white/[0.06] border border-white/[0.09] rounded-xl px-3 py-1.5 focus-within:border-indigo-500/50 focus-within:bg-white/[0.08] transition-all">
+                  <Search size={13} className="text-zinc-500 shrink-0"/>
+                  <input value={discoveryQ}
+                    onChange={e=>setDiscoveryQ(e.target.value)}
+                    onKeyDown={e=>{ if(e.key==='Enter') doSearch(discoveryQ); }}
+                    placeholder="Szukaj publicznych serwerów…"
+                    className="flex-1 bg-transparent outline-none text-sm text-white placeholder-zinc-600"/>
+                  {discoveryQ && (
+                    <button onClick={()=>{ setDiscoveryQ(''); doSearch(''); }} className="text-zinc-600 hover:text-zinc-300 transition-colors"><X size={12}/></button>
+                  )}
                 </div>
-              ) : (
-                <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-3">
-                  {discoveryList.map(s => (
-                    <div key={s.id} className="flex items-center gap-4 p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl hover:border-white/[0.1] transition-all">
-                      {s.icon_url ? (
-                        <img src={s.icon_url} alt={s.name} className="w-12 h-12 rounded-2xl object-cover shrink-0"/>
-                      ) : (
-                        <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 flex items-center justify-center text-xl font-bold text-indigo-300 shrink-0">{s.name[0]}</div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-white text-sm">{s.name}</p>
-                        <p className="text-xs text-zinc-500 truncate mt-0.5">{s.discovery_description || s.description || 'Brak opisu'}</p>
-                        <p className="text-xs text-zinc-600 mt-1">{s.member_count} członków</p>
-                      </div>
-                      {!serverList.find(sv=>sv.id===s.id) && (
-                        <button onClick={async()=>{
-                          try { await serversApi.joinPublic(s.id); await loadServers(); setShowDiscovery(false); addToast(`Dołączono do ${s.name}!`,'success'); }
-                          catch(e:any){ addToast(e.message||'Błąd','error'); }
-                        }} className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white transition-colors shrink-0">
-                          Dołącz
-                        </button>
-                      )}
+              </div>
+              <button onClick={()=>doSearch(discoveryQ)}
+                className="px-4 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white font-medium transition-colors shrink-0">
+                Szukaj
+              </button>
+            </div>
+
+            {/* ── Body ────────────────────────────────────────── */}
+            <div className="flex flex-1 overflow-hidden">
+              {/* Left sidebar */}
+              <div className="w-52 shrink-0 border-r border-white/[0.05] p-3 flex flex-col gap-0.5 overflow-y-auto custom-scrollbar">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 px-3 py-2">Kategorie</p>
+                {DISC_CATS.map(cat=>(
+                  <button key={cat.key}
+                    onClick={()=>setDiscoveryCategory(cat.key)}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-all text-left ${discoveryCategory===cat.key?'bg-indigo-500/15 text-indigo-300 font-semibold':'text-zinc-400 hover:text-white hover:bg-white/[0.05]'}`}>
+                    <span className={discoveryCategory===cat.key?'text-indigo-400':'text-zinc-600'}>{cat.icon}</span>
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Main content */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {/* Hero banner */}
+                {discoveryCategory==='all' && !discoveryQ && (
+                  <div className="relative h-52 overflow-hidden shrink-0">
+                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-purple-900 to-[#0d0d18]"/>
+                    <div className="absolute inset-0" style={{backgroundImage:'radial-gradient(ellipse at 20% 50%,rgba(99,102,241,0.25) 0%,transparent 60%),radial-gradient(ellipse at 80% 50%,rgba(139,92,246,0.20) 0%,transparent 60%)'}}/>
+                    <div className="relative z-10 flex flex-col items-center justify-center h-full text-center px-6">
+                      <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight">Znajdź swoją społeczność</h1>
+                      <p className="text-zinc-300 text-sm max-w-md">Przeglądaj tysiące publicznych serwerów — gry, muzyka, nauka i nie tylko.</p>
                     </div>
-                  ))}
+                  </div>
+                )}
+
+                <div className="p-6">
+                  {/* Section label */}
+                  <div className="flex items-center justify-between mb-5">
+                    <h2 className="text-base font-bold text-white">
+                      {discoveryQ ? `Wyniki dla „${discoveryQ}"` : DISC_CATS.find(c=>c.key===discoveryCategory)?.label ?? 'Serwery'}
+                    </h2>
+                    {!discoveryLoading && <span className="text-xs text-zinc-600">{filtered.length} {filtered.length===1?'serwer':filtered.length<5?'serwery':'serwerów'}</span>}
+                  </div>
+
+                  {/* States */}
+                  {discoveryLoading ? (
+                    <div className="flex flex-col items-center justify-center py-24 gap-3">
+                      <Loader2 size={28} className="animate-spin text-indigo-500"/>
+                      <p className="text-sm text-zinc-500">Ładowanie serwerów…</p>
+                    </div>
+                  ) : filtered.length===0 ? (
+                    <div className="flex flex-col items-center justify-center py-24 gap-3 text-zinc-600">
+                      <Compass size={40} className="opacity-25"/>
+                      <p className="text-sm font-medium">{discoveryQ ? `Brak wyników dla „${discoveryQ}"` : 'Brak serwerów w tej kategorii'}</p>
+                      {discoveryQ && <button onClick={()=>{setDiscoveryQ('');doSearch('');}} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">Wyczyść wyszukiwanie</button>}
+                    </div>
+                  ) : (
+                    /* Server cards grid */
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {filtered.map(s=>{
+                        const alreadyJoined = !!serverList.find(sv=>sv.id===s.id);
+                        // Pick accent color for gradient fallback
+                        const accentMap: Record<string,string> = {indigo:'from-indigo-900/80 to-indigo-800/30',violet:'from-violet-900/80 to-violet-800/30',purple:'from-purple-900/80 to-purple-800/30',rose:'from-rose-900/80 to-rose-800/30',emerald:'from-emerald-900/80 to-emerald-800/30',amber:'from-amber-900/80 to-amber-800/30',sky:'from-sky-900/80 to-sky-800/30'};
+                        const grad = accentMap[s.accent_color??''] ?? 'from-zinc-900/80 to-zinc-800/30';
+                        return (
+                          <div key={s.id} className="bg-[#14141f] rounded-2xl overflow-hidden border border-white/[0.06] hover:border-white/[0.13] hover:shadow-[0_4px_32px_rgba(0,0,0,0.4)] transition-all duration-200 flex flex-col group">
+                            {/* Banner area */}
+                            <div className="relative h-28 overflow-hidden shrink-0">
+                              {s.banner_url ? (
+                                <img src={staticUrl(s.banner_url)} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/>
+                              ) : (
+                                <div className={`w-full h-full bg-gradient-to-br ${grad}`}/>
+                              )}
+                              {/* Soft bottom fade to card bg */}
+                              <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-[#14141f] to-transparent"/>
+                              {/* Server icon — overlaps banner/content boundary */}
+                              <div className="absolute left-4 -bottom-5">
+                                {s.icon_url ? (
+                                  <img src={staticUrl(s.icon_url)} alt={s.name}
+                                    className="w-[42px] h-[42px] rounded-xl object-cover border-[3px] border-[#14141f] shadow-lg"/>
+                                ) : (
+                                  <div className="w-[42px] h-[42px] rounded-xl bg-indigo-600 flex items-center justify-center text-lg font-extrabold text-white border-[3px] border-[#14141f] shadow-lg">
+                                    {s.name[0].toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
+                              {s.is_official && (
+                                <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/60 backdrop-blur-sm rounded-full px-2 py-0.5">
+                                  <BadgeCheck size={10} className="text-amber-400"/>
+                                  <span className="text-[9px] font-bold text-amber-400 uppercase tracking-wide">Oficjalny</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Content */}
+                            <div className="flex-1 flex flex-col px-4 pb-4 pt-7">
+                              <div className="flex items-start justify-between gap-2 mb-1.5">
+                                <h3 className="font-bold text-white text-sm leading-tight truncate">{s.name}</h3>
+                              </div>
+                              <p className="text-[11px] text-zinc-500 leading-relaxed line-clamp-2 flex-1 mb-3">
+                                {s.discovery_description || s.description || 'Brak opisu'}
+                              </p>
+                              {/* Stats row */}
+                              <div className="flex items-center gap-3 mb-3">
+                                {s.online_count > 0 && (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"/>
+                                    <span className="text-[11px] text-zinc-400">{s.online_count.toLocaleString()} online</span>
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-1.5">
+                                  <Users size={10} className="text-zinc-600 shrink-0"/>
+                                  <span className="text-[11px] text-zinc-500">{s.member_count.toLocaleString()} członków</span>
+                                </div>
+                              </div>
+                              {/* Join button */}
+                              {alreadyJoined ? (
+                                <button
+                                  onClick={()=>{ setActiveServer(s.id); setActiveView('servers'); setServerFull(null); setActiveChannel(''); setShowDiscovery(false); if(activeServer===s.id) setServerReloadKey(k=>k+1); }}
+                                  className="w-full py-1.5 text-xs font-semibold rounded-xl bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/20 hover:border-emerald-500/40 transition-all">
+                                  Jesteś na serwerze
+                                </button>
+                              ) : (
+                                <button onClick={async()=>{
+                                  try { await serversApi.joinPublic(s.id); await loadServers(); setShowDiscovery(false); setActiveServer(s.id); setActiveView('servers'); addToast(`Dołączono do ${s.name}!`,'success'); }
+                                  catch(ex:any){ addToast(ex.message||'Błąd','error'); }
+                                }} className="w-full py-1.5 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition-colors border border-transparent hover:border-indigo-400/30">
+                                  Dołącz
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              )}
-            </motion.div>
+              </div>
+            </div>
           </motion.div>
-        )}
+          );
+        })()}
       </AnimatePresence>
 
       {/* ── Server Onboarding Modal ─────────────────────────────── */}
