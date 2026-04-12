@@ -26,6 +26,18 @@ async function adminMiddleware(req: AuthRequest, res: Response, next: NextFuncti
 router.use(authMiddleware as any);
 router.use(adminMiddleware as any);
 
+// ── Audit log helper ──────────────────────────────────────────────────
+async function auditLog(req: AuthRequest, action: string, targetType: string | null, targetId: string | null, details: object = {}) {
+  try {
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim()
+      || (req.socket as any)?.remoteAddress || null;
+    await query(
+      'INSERT INTO admin_audit_log (admin_id, action, target_type, target_id, details, ip) VALUES ($1,$2,$3,$4,$5,$6)',
+      [req.user!.id, action, targetType, targetId, JSON.stringify(details), ip]
+    );
+  } catch {}
+}
+
 // ── GET /api/admin/stats ──────────────────────────────────────────────
 router.get('/stats', async (_req, res: Response) => {
   try {
@@ -57,6 +69,55 @@ router.get('/stats', async (_req, res: Response) => {
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// ── GET /api/admin/overview ───────────────────────────────────────
+router.get('/overview', async (_req, res: Response) => {
+  try {
+    const [users, servers, messages, dms, channels, registrations, onlineUsers, messages7d, topServers] = await Promise.all([
+      query('SELECT COUNT(*)::int as n FROM users'),
+      query('SELECT COUNT(*)::int as n FROM servers'),
+      query('SELECT COUNT(*)::int as n FROM messages'),
+      query('SELECT COUNT(*)::int as n FROM dm_messages'),
+      query('SELECT COUNT(*)::int as n FROM channels'),
+      query(
+        `SELECT DATE(created_at) as date, COUNT(*)::int as count
+         FROM users WHERE created_at > NOW()-INTERVAL '7 days'
+         GROUP BY DATE(created_at) ORDER BY date`
+      ),
+      query(`SELECT COUNT(*)::int as n FROM users WHERE status='online'`),
+      query(
+        `SELECT DATE(created_at) as date, COUNT(*)::int as count
+         FROM messages WHERE created_at > NOW()-INTERVAL '7 days'
+         GROUP BY DATE(created_at) ORDER BY date`
+      ),
+      query(
+        `SELECT s.id, s.name, s.icon_url, COUNT(sm.user_id)::int as member_count
+         FROM servers s
+         LEFT JOIN server_members sm ON sm.server_id = s.id
+         GROUP BY s.id ORDER BY member_count DESC LIMIT 5`
+      ),
+    ]);
+    const mem = process.memoryUsage();
+    return res.json({
+      total_users:      users.rows[0].n,
+      total_servers:    servers.rows[0].n,
+      total_messages:   messages.rows[0].n,
+      total_dms:        dms.rows[0].n,
+      total_channels:   channels.rows[0].n,
+      online_users:     onlineUsers.rows[0].n,
+      registrations_7d: registrations.rows,
+      messages_7d:      messages7d.rows,
+      top_servers:      topServers.rows,
+      memory: {
+        rss:       Math.round(mem.rss       / 1024 / 1024),
+        heapUsed:  Math.round(mem.heapUsed  / 1024 / 1024),
+        heapTotal: Math.round(mem.heapTotal / 1024 / 1024),
+      },
+      node_version:    process.version,
+      uptime_seconds:  Math.round(process.uptime()),
+    });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
 // ── GET /api/admin/badges ─────────────────────────────────────────────
 router.get('/badges', async (_req, res: Response) => {
   try {
@@ -84,6 +145,7 @@ router.post('/badges',
         'INSERT INTO global_badges (name,label,color,icon,description,position) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
         [name, label, color, icon, description || null, position]
       );
+      auditLog(req, 'create_badge', 'badge', rows[0].id, { name, label });
       return res.status(201).json(rows[0]);
     } catch (e: any) {
       if (e.code === '23505') return res.status(409).json({ error: 'Badge name already exists' });
@@ -118,6 +180,7 @@ router.put('/badges/:id',
     try {
       const { rows } = await query(`UPDATE global_badges SET ${updates.join(',')} WHERE id=$${idx} RETURNING *`, values);
       if (!rows[0]) return res.status(404).json({ error: 'Badge not found' });
+      auditLog(req, 'update_badge', 'badge', req.params.id, { label, color });
       return res.json(rows[0]);
     } catch { return res.status(500).json({ error: 'Internal server error' }); }
   }
@@ -126,8 +189,10 @@ router.put('/badges/:id',
 // ── DELETE /api/admin/badges/:id ──────────────────────────────────────
 router.delete('/badges/:id', async (req: AuthRequest, res: Response) => {
   try {
+    const { rows } = await query('SELECT name, label FROM global_badges WHERE id=$1', [req.params.id]);
     const { rowCount } = await query('DELETE FROM global_badges WHERE id=$1', [req.params.id]);
     if (!rowCount) return res.status(404).json({ error: 'Badge not found' });
+    auditLog(req, 'delete_badge', 'badge', req.params.id, { name: rows[0]?.name, label: rows[0]?.label });
     return res.json({ ok: true });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -163,7 +228,6 @@ router.post('/badges/assign',
         'INSERT INTO user_badges (user_id, badge_id, assigned_by) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
         [user_id, badge_id, req.user!.id]
       );
-      // Notify the user via socket
       const io = req.app.get('io');
       if (io) {
         const { rows: [updatedUser] } = await query(
@@ -172,10 +236,9 @@ router.post('/badges/assign',
              FROM user_badges ub INNER JOIN global_badges gb ON gb.id = ub.badge_id WHERE ub.user_id = u.id),
             '[]'::json) as badges FROM users u WHERE u.id=$1`, [user_id]
         );
-        if (updatedUser) {
-          io.to(`user:${user_id}`).emit('badges_updated', { badges: updatedUser.badges });
-        }
+        if (updatedUser) io.to(`user:${user_id}`).emit('badges_updated', { badges: updatedUser.badges });
       }
+      auditLog(req, 'assign_badge', 'user', user_id, { badge_id });
       return res.json({ ok: true });
     } catch { return res.status(500).json({ error: 'Internal server error' }); }
   }
@@ -193,10 +256,9 @@ router.delete('/users/:userId/badges/:badgeId', async (req: AuthRequest, res: Re
            FROM user_badges ub INNER JOIN global_badges gb ON gb.id = ub.badge_id WHERE ub.user_id = u.id),
           '[]'::json) as badges FROM users u WHERE u.id=$1`, [req.params.userId]
       );
-      if (updatedUser) {
-        io.to(`user:${req.params.userId}`).emit('badges_updated', { badges: updatedUser.badges });
-      }
+      if (updatedUser) io.to(`user:${req.params.userId}`).emit('badges_updated', { badges: updatedUser.badges });
     }
+    auditLog(req, 'remove_badge', 'user', req.params.userId, { badge_id: req.params.badgeId });
     return res.json({ ok: true });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -228,6 +290,83 @@ router.get('/users', async (req: AuthRequest, res: Response) => {
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// ── GET /api/admin/users/:userId/detail ───────────────────────────────
+router.get('/users/:userId/detail', async (req: AuthRequest, res: Response) => {
+  const { userId } = req.params;
+  try {
+    const [userRes, serversRes, bansRes, sessionsRes] = await Promise.all([
+      query(
+        `SELECT u.id, u.username, u.email, u.avatar_url, u.status, u.is_admin, u.created_at,
+                u.bio, u.custom_status, u.is_premium, u.storage_used_bytes,
+                (SELECT COUNT(*)::int FROM messages WHERE sender_id=u.id) as message_count,
+                (SELECT COUNT(*)::int FROM dm_messages WHERE sender_id=u.id) as dm_count,
+                COALESCE(
+                  (SELECT json_agg(json_build_object('id',gb.id,'name',gb.name,'label',gb.label,'color',gb.color,'icon',gb.icon) ORDER BY gb.position)
+                   FROM user_badges ub JOIN global_badges gb ON gb.id=ub.badge_id WHERE ub.user_id=u.id),
+                  '[]'::json
+                ) as badges
+         FROM users u WHERE u.id=$1`, [userId]
+      ),
+      query(
+        `SELECT s.id, s.name, s.icon_url, sm.role_name, sm.joined_at
+         FROM server_members sm
+         JOIN servers s ON s.id = sm.server_id
+         WHERE sm.user_id = $1
+         ORDER BY sm.joined_at DESC LIMIT 20`, [userId]
+      ),
+      query(
+        `SELECT ub.*, u.username as banned_by_username
+         FROM user_bans ub LEFT JOIN users u ON u.id=ub.banned_by
+         WHERE ub.user_id=$1 ORDER BY ub.created_at DESC LIMIT 10`, [userId]
+      ),
+      query(
+        `SELECT ip_address, user_agent, created_at, last_seen_at
+         FROM user_sessions WHERE user_id=$1
+         ORDER BY last_seen_at DESC LIMIT 8`, [userId]
+      ).catch(() => ({ rows: [] })),
+    ]);
+    if (!userRes.rows[0]) return res.status(404).json({ error: 'User not found' });
+    return res.json({
+      user:     userRes.rows[0],
+      servers:  serversRes.rows,
+      bans:     bansRes.rows,
+      sessions: sessionsRes.rows,
+    });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ── PUT /api/admin/users/:userId/edit ────────────────────────────────
+router.put('/users/:userId/edit',
+  [
+    body('username').optional().trim().isLength({ min: 2, max: 32 }).matches(/^[a-zA-Z0-9_.\-]+$/),
+    body('email').optional().isEmail().normalizeEmail(),
+  ],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    const { username, email } = req.body;
+    const updates: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+    if (username !== undefined) { updates.push(`username=$${idx++}`); values.push(username); }
+    if (email    !== undefined) { updates.push(`email=$${idx++}`);    values.push(email); }
+    if (!updates.length) return res.status(400).json({ error: 'Nothing to update' });
+    values.push(req.params.userId);
+    try {
+      const { rows: [u] } = await query(
+        `UPDATE users SET ${updates.join(',')} WHERE id=$${idx} RETURNING id, username, email`,
+        values
+      );
+      if (!u) return res.status(404).json({ error: 'User not found' });
+      auditLog(req, 'edit_user', 'user', req.params.userId, { username, email });
+      return res.json(u);
+    } catch (e: any) {
+      if (e.code === '23505') return res.status(409).json({ error: 'Nazwa użytkownika lub email jest już zajęty' });
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
 // ── GET /api/admin/servers ────────────────────────────────────────
 router.get('/servers', async (_req, res: Response) => {
   try {
@@ -245,39 +384,70 @@ router.get('/servers', async (_req, res: Response) => {
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// ── GET /api/admin/overview ───────────────────────────────────────
-router.get('/overview', async (_req, res: Response) => {
+// ── GET /api/admin/servers/:serverId — server details ────────────
+router.get('/servers/:serverId', async (req: AuthRequest, res: Response) => {
+  const { serverId } = req.params;
   try {
-    const [users, servers, messages, dms, channels, registrations, onlineUsers] = await Promise.all([
-      query('SELECT COUNT(*)::int as n FROM users'),
-      query('SELECT COUNT(*)::int as n FROM servers'),
-      query('SELECT COUNT(*)::int as n FROM messages'),
-      query('SELECT COUNT(*)::int as n FROM dm_messages'),
-      query('SELECT COUNT(*)::int as n FROM channels'),
+    const [serverRes, membersRes, channelsRes] = await Promise.all([
       query(
-        `SELECT DATE(created_at) as date, COUNT(*)::int as count
-         FROM users WHERE created_at > NOW()-INTERVAL '7 days'
-         GROUP BY DATE(created_at) ORDER BY date`
+        `SELECT s.*, u.username as owner_name,
+                COUNT(DISTINCT sm.user_id)::int as member_count,
+                COUNT(DISTINCT c.id)::int as channel_count
+         FROM servers s
+         JOIN users u ON u.id = s.owner_id
+         LEFT JOIN server_members sm ON sm.server_id = s.id
+         LEFT JOIN channels c ON c.server_id = s.id
+         WHERE s.id = $1
+         GROUP BY s.id, u.username`, [serverId]
       ),
-      query(`SELECT COUNT(*)::int as n FROM users WHERE status='online'`),
+      query(
+        `SELECT sm.user_id, sm.role_name, sm.joined_at,
+                u.username, u.avatar_url, u.status
+         FROM server_members sm
+         JOIN users u ON u.id = sm.user_id
+         WHERE sm.server_id = $1
+         ORDER BY sm.joined_at`, [serverId]
+      ),
+      query(
+        `SELECT id, name, type, position
+         FROM channels WHERE server_id = $1
+         ORDER BY position`, [serverId]
+      ),
     ]);
-    const mem = process.memoryUsage();
+    if (!serverRes.rows[0]) return res.status(404).json({ error: 'Server not found' });
     return res.json({
-      total_users:    users.rows[0].n,
-      total_servers:  servers.rows[0].n,
-      total_messages: messages.rows[0].n,
-      total_dms:      dms.rows[0].n,
-      total_channels: channels.rows[0].n,
-      online_users:   onlineUsers.rows[0].n,
-      registrations_7d: registrations.rows,
-      memory: {
-        rss:       Math.round(mem.rss       / 1024 / 1024),
-        heapUsed:  Math.round(mem.heapUsed  / 1024 / 1024),
-        heapTotal: Math.round(mem.heapTotal / 1024 / 1024),
-      },
-      node_version:    process.version,
-      uptime_seconds:  Math.round(process.uptime()),
+      server:   serverRes.rows[0],
+      members:  membersRes.rows,
+      channels: channelsRes.rows,
     });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ── DELETE /api/admin/servers/:serverId — delete server ──────────
+router.delete('/servers/:serverId', async (req: AuthRequest, res: Response) => {
+  try {
+    const { rows: [s] } = await query('SELECT name FROM servers WHERE id=$1', [req.params.serverId]);
+    if (!s) return res.status(404).json({ error: 'Server not found' });
+    const io = req.app.get('io');
+    if (io) io.to(`server:${req.params.serverId}`).emit('server_deleted', { server_id: req.params.serverId });
+    await query('DELETE FROM servers WHERE id=$1', [req.params.serverId]);
+    auditLog(req, 'delete_server', 'server', req.params.serverId, { name: s.name });
+    return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ── DELETE /api/admin/servers/:serverId/members/:userId — kick ───
+router.delete('/servers/:serverId/members/:userId', async (req: AuthRequest, res: Response) => {
+  try {
+    const { rowCount } = await query(
+      'DELETE FROM server_members WHERE server_id=$1 AND user_id=$2',
+      [req.params.serverId, req.params.userId]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Member not found' });
+    const io = req.app.get('io');
+    if (io) io.to(`user:${req.params.userId}`).emit('kicked_from_server', { server_id: req.params.serverId });
+    auditLog(req, 'kick_member', 'user', req.params.userId, { server_id: req.params.serverId });
+    return res.json({ ok: true });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
@@ -289,6 +459,7 @@ router.post('/users/:userId/set-admin',
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
     try {
       await query('UPDATE users SET is_admin=$1 WHERE id=$2', [req.body.is_admin, req.params.userId]);
+      auditLog(req, req.body.is_admin ? 'grant_admin' : 'revoke_admin', 'user', req.params.userId, {});
       return res.json({ ok: true });
     } catch { return res.status(500).json({ error: 'Internal server error' }); }
   }
@@ -332,7 +503,6 @@ router.post('/users/:userId/ban',
          VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
         [req.params.userId, req.user!.id, reason || null, ban_type, banned_until, ip_address || null]
       );
-      // Force-disconnect the banned user — delay disconnect so force_logout event is delivered first
       const io = req.app.get('io');
       if (io) {
         io.to(`user:${req.params.userId}`).emit('force_logout', { reason: reason || 'Zostałeś zbanowany' });
@@ -341,6 +511,7 @@ router.post('/users/:userId/ban',
           for (const s of sockets) s.disconnect(true);
         }, 800);
       }
+      auditLog(req, 'ban_user', 'user', req.params.userId, { ban_type, reason, duration_hours });
       return res.json(ban);
     } catch { return res.status(500).json({ error: 'Internal server error' }); }
   }
@@ -350,7 +521,105 @@ router.post('/users/:userId/ban',
 router.delete('/users/:userId/ban', async (req: AuthRequest, res: Response) => {
   try {
     await query(`UPDATE user_bans SET is_active=FALSE WHERE user_id=$1 AND is_active=TRUE`, [req.params.userId]);
+    auditLog(req, 'unban_user', 'user', req.params.userId, {});
     return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ── GET /api/admin/audit-log?page=1 ──────────────────────────────────
+router.get('/audit-log', async (req: AuthRequest, res: Response) => {
+  const page   = Math.max(1, parseInt(req.query.page as string) || 1);
+  const limit  = 50;
+  const offset = (page - 1) * limit;
+  try {
+    const [logsRes, totalRes] = await Promise.all([
+      query(
+        `SELECT al.*, u.username as admin_username, u.avatar_url as admin_avatar
+         FROM admin_audit_log al
+         JOIN users u ON u.id = al.admin_id
+         ORDER BY al.created_at DESC
+         LIMIT $1 OFFSET $2`,
+        [limit, offset]
+      ),
+      query('SELECT COUNT(*)::int as n FROM admin_audit_log'),
+    ]);
+    return res.json({ logs: logsRes.rows, total: totalRes.rows[0].n });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ── POST /api/admin/broadcast ─────────────────────────────────────────
+router.post('/broadcast',
+  [
+    body('message').trim().isLength({ min: 1, max: 1000 }),
+    body('server_id').optional().isUUID(),
+    body('type').optional().isIn(['info', 'warning', 'success']),
+  ],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    const { message, server_id, type = 'info' } = req.body;
+    const io = req.app.get('io');
+    if (!io) return res.status(500).json({ error: 'Socket.IO not available' });
+    const payload = {
+      message,
+      type,
+      from: 'Cordyn Admin',
+      timestamp: new Date().toISOString(),
+    };
+    if (server_id) {
+      io.to(`server:${server_id}`).emit('admin_broadcast', payload);
+    } else {
+      io.emit('admin_broadcast', payload);
+    }
+    auditLog(req, 'broadcast', server_id ? 'server' : null, server_id || null, {
+      message: message.substring(0, 100),
+      type,
+      global: !server_id,
+    });
+    return res.json({ ok: true });
+  }
+);
+
+// ── GET /api/admin/system/info ─────────────────────────────────────────
+router.get('/system/info', async (_req, res: Response) => {
+  try {
+    const mem = process.memoryUsage();
+    const [dbRes, redisRes] = await Promise.allSettled([
+      query(`SELECT
+        pg_size_pretty(pg_database_size(current_database())) as db_size,
+        (SELECT COUNT(*)::int FROM pg_stat_activity WHERE state='active') as active_connections,
+        version() as pg_version
+      `),
+      (async () => {
+        const { redis } = await import('../redis/client');
+        const info = await redis.info();
+        const lines = info.split('\r\n');
+        const get = (k: string) => lines.find(l => l.startsWith(k + ':'))?.split(':').slice(1).join(':').trim() || null;
+        return {
+          version:                   get('redis_version'),
+          uptime_seconds:            parseInt(get('uptime_in_seconds') || '0'),
+          connected_clients:         parseInt(get('connected_clients') || '0'),
+          used_memory_human:         get('used_memory_human'),
+          total_commands_processed:  parseInt(get('total_commands_processed') || '0'),
+          keyspace_hits:             parseInt(get('keyspace_hits') || '0'),
+          keyspace_misses:           parseInt(get('keyspace_misses') || '0'),
+        };
+      })(),
+    ]);
+    return res.json({
+      node: {
+        version:        process.version,
+        uptime_seconds: Math.round(process.uptime()),
+        memory: {
+          rss:       Math.round(mem.rss       / 1024 / 1024),
+          heapUsed:  Math.round(mem.heapUsed  / 1024 / 1024),
+          heapTotal: Math.round(mem.heapTotal / 1024 / 1024),
+          external:  Math.round(mem.external  / 1024 / 1024),
+        },
+      },
+      postgres: dbRes.status === 'fulfilled' ? dbRes.value.rows[0] : null,
+      redis:    redisRes.status === 'fulfilled' ? redisRes.value : null,
+    });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
@@ -362,7 +631,6 @@ router.delete('/users/:userId/ban', async (req: AuthRequest, res: Response) => {
 router.get('/storage', async (_req, res: Response) => {
   try {
     const [totals, byMime, topUsers, recent] = await Promise.all([
-      // Global totals
       query(`
         SELECT
           COUNT(*)::int                                         AS total_files,
@@ -377,7 +645,6 @@ router.get('/storage', async (_req, res: Response) => {
           COUNT(DISTINCT user_id)::int                         AS unique_uploaders
         FROM attachments
       `),
-      // By MIME category
       query(`
         SELECT
           CASE
@@ -395,7 +662,6 @@ router.get('/storage', async (_req, res: Response) => {
         FROM attachments
         GROUP BY 1 ORDER BY bytes DESC
       `),
-      // Top users by storage
       query(`
         SELECT u.id, u.username, u.avatar_url, u.is_premium,
                u.storage_used_bytes::bigint,
@@ -408,7 +674,6 @@ router.get('/storage', async (_req, res: Response) => {
         ORDER BY u.storage_used_bytes DESC
         LIMIT 20
       `),
-      // Recent uploads
       query(`
         SELECT a.id, a.r2_key, a.url, a.file_size, a.mime_type, a.original_name, a.created_at,
                u.username, u.avatar_url
@@ -462,11 +727,7 @@ router.delete('/storage/attachment/:id', async (req: AuthRequest, res: Response)
   try {
     const { rows: [att] } = await query('SELECT * FROM attachments WHERE id=$1', [req.params.id]);
     if (!att) return res.status(404).json({ error: 'Nie znaleziono' });
-
-    // Delete from R2
     if (att.r2_key) await deleteFromR2(att.r2_key);
-
-    // Subtract from user quota
     await query(
       'UPDATE users SET storage_used_bytes = GREATEST(0, storage_used_bytes - $1) WHERE id=$2',
       [att.file_size, att.user_id]
@@ -483,8 +744,8 @@ router.post('/storage/users/:userId/quota', async (req: AuthRequest, res: Respon
     const updates: string[] = [];
     const vals: any[] = [];
     let idx = 1;
-    if (quota_mb !== undefined) { updates.push(`storage_quota_bytes=$${idx++}`); vals.push(Math.round(Number(quota_mb) * 1024 * 1024)); }
-    if (is_premium !== undefined) { updates.push(`is_premium=$${idx++}`); vals.push(Boolean(is_premium)); }
+    if (quota_mb   !== undefined) { updates.push(`storage_quota_bytes=$${idx++}`); vals.push(Math.round(Number(quota_mb) * 1024 * 1024)); }
+    if (is_premium !== undefined) { updates.push(`is_premium=$${idx++}`);          vals.push(Boolean(is_premium)); }
     if (!updates.length) return res.status(400).json({ error: 'Brak danych' });
     vals.push(req.params.userId);
     await query(`UPDATE users SET ${updates.join(',')} WHERE id=$${idx}`, vals);
@@ -517,8 +778,8 @@ router.get('/r2/debug', async (_req, res: Response) => {
       MaxKeys: 30,
     }));
     return res.json({
-      bucket: config.r2.bucket,
-      endpoint: config.r2.endpoint,
+      bucket:    config.r2.bucket,
+      endpoint:  config.r2.endpoint,
       key_count: result.KeyCount,
       keys: (result.Contents || []).map(o => ({ key: o.Key, size: o.Size })),
     });

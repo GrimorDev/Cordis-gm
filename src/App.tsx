@@ -3916,12 +3916,13 @@ function StorageTab({ addToast }: { addToast: (m:string,t?:any)=>void }) {
 }
 
 // ─── Admin Panel component ────────────────────────────────────────────────────
+type AdminTab = 'dashboard'|'users'|'servers'|'badges'|'storage'|'audit'|'broadcast'|'system';
 interface AdminPanelProps {
   currentUser: import('./api').UserProfile | null;
   overview: import('./api').AdminOverview | null;
   setOverview: (v: import('./api').AdminOverview | null) => void;
-  tab: 'dashboard'|'users'|'servers'|'badges'|'system'|'storage';
-  setTab: (t: 'dashboard'|'users'|'servers'|'badges'|'system'|'storage') => void;
+  tab: AdminTab;
+  setTab: (t: AdminTab) => void;
   badges: Badge[]; setBadges: (v: Badge[]) => void;
   users: AdminUser[]; setUsers: (v: AdminUser[]) => void;
   usersTotal: number; setUsersTotal: (v: number) => void;
@@ -3943,19 +3944,51 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
 
   const gi2 = 'bg-white/[0.06] border border-white/[0.08] text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 transition-all rounded-xl';
 
+  // ── server detail modal ──
+  const [serverDetailData, setServerDetailData] = React.useState<import('./api').AdminServerDetail|null>(null);
+  const [serverDetailLoading, setServerDetailLoading] = React.useState(false);
+  const [deleteServerConfirmId, setDeleteServerConfirmId] = React.useState<string|null>(null);
+  const [serversQ, setServersQ] = React.useState('');
+
+  // ── user detail slide-over ──
+  const [userDetailData, setUserDetailData] = React.useState<import('./api').AdminUserDetail|null>(null);
+  const [userDetailLoading, setUserDetailLoading] = React.useState(false);
+  const [editUserForm, setEditUserForm] = React.useState<{username:string;email:string}|null>(null);
+  const [editUserLoading, setEditUserLoading] = React.useState(false);
+
+  // ── audit log ──
+  const [auditLogs, setAuditLogs] = React.useState<import('./api').AdminAuditEntry[]>([]);
+  const [auditTotal, setAuditTotal] = React.useState(0);
+  const [auditPage, setAuditPage] = React.useState(1);
+  const [auditLoading, setAuditLoading] = React.useState(false);
+
+  // ── broadcast ──
+  const [broadcastMsg, setBroadcastMsg] = React.useState('');
+  const [broadcastType, setBroadcastType] = React.useState<'info'|'warning'|'success'>('info');
+  const [broadcastServerId, setBroadcastServerId] = React.useState('');
+  const [broadcastLoading, setBroadcastLoading] = React.useState(false);
+
+  // ── system info ──
+  const [sysInfo, setSysInfo] = React.useState<import('./api').AdminSystemInfo|null>(null);
+  const [sysLoading, setSysLoading] = React.useState(false);
+
   React.useEffect(() => {
-    // Load all data when admin panel opens
     adminApi.overview().then(d => setOverview(d)).catch(()=>{});
     adminApi.badges.list().then(d => setBadges(d)).catch(()=>{});
     adminApi.users.list(1, 50).then(d => { setUsers(d.users); setUsersTotal(d.total); }).catch(()=>{});
     adminApi.servers().then(d => setServersList(d)).catch(()=>{});
   }, []);
 
-  // Load more users on page change
   React.useEffect(() => {
     if (usersPage === 1) return;
     adminApi.users.list(usersPage, 50).then(d => { setUsers(d.users); setUsersTotal(d.total); }).catch(()=>{});
   }, [usersPage]);
+
+  React.useEffect(() => {
+    if (tab === 'audit') loadAuditLogs(auditPage);
+    if (tab === 'system' && !sysInfo) loadSysInfo();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   const searchUsers = React.useCallback(async (q: string) => {
     if (!q.trim()) {
@@ -3971,6 +4004,7 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
     return () => clearTimeout(t);
   }, [userQ]);
 
+  // ── Badge handlers ──
   const handleCreateBadge = async () => {
     if (!badgeForm.name || !badgeForm.label) return;
     setBadgeSaving(true);
@@ -4014,10 +4048,11 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
     try {
       await adminApi.users.setAdmin(u.id, newState);
       setUsers(users.map(x => x.id===u.id ? { ...x, is_admin: newState } : x));
+      if (userDetailData?.user.id === u.id) setUserDetailData(d => d ? { ...d, user: { ...d.user, is_admin: newState } } : d);
     } catch { addToast({ type:'error', message:'Błąd zmiany uprawnień' }); }
   };
 
-  // Ban state (local to AdminPanel)
+  // ── Ban handlers ──
   const [banTarget, setBanTarget] = React.useState<AdminUser|null>(null);
   const [banForm, setBanForm] = React.useState({ type:'permanent' as 'permanent'|'temporary'|'ip', reason:'', hours:'24', ip:'' });
   const [banLoading, setBanLoading] = React.useState(false);
@@ -4044,13 +4079,101 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
     } catch (e: any) { addToast({ type:'error', message: e?.message || 'Błąd odbanowania' }); }
   };
 
-  const TABS: { id: 'dashboard'|'users'|'servers'|'badges'|'system'|'storage'; label: string; icon: React.ReactNode }[] = [
-    { id:'dashboard', label:'Dashboard',        icon: <LayoutDashboard size={14}/> },
-    { id:'users',     label:'Użytkownicy',      icon: <Users size={14}/> },
-    { id:'servers',   label:'Serwery',          icon: <Server size={14}/> },
-    { id:'badges',    label:'Odznaki',          icon: <Award size={14}/> },
-    { id:'storage',   label:'Przestrzeń dys.',  icon: <HardDrive size={14}/> },
-    { id:'system',    label:'System',           icon: <Database size={14}/> },
+  // ── Server detail ──
+  const loadServerDetail = async (serverId: string) => {
+    setServerDetailLoading(true);
+    try {
+      const d = await adminApi.serverDetail(serverId);
+      setServerDetailData(d);
+    } catch { addToast({ type:'error', message:'Nie udało się załadować serwera' }); }
+    finally { setServerDetailLoading(false); }
+  };
+
+  const handleDeleteServer = async (serverId: string) => {
+    try {
+      await adminApi.deleteServer(serverId);
+      setServersList(serversList.filter(s => s.id !== serverId));
+      setServerDetailData(null);
+      setDeleteServerConfirmId(null);
+      addToast({ type:'success', message:'Serwer usunięty' });
+    } catch { addToast({ type:'error', message:'Błąd usuwania serwera' }); }
+  };
+
+  const handleKickMember = async (serverId: string, userId: string, username: string) => {
+    try {
+      await adminApi.kickMember(serverId, userId);
+      setServerDetailData(d => d ? { ...d, members: d.members.filter(m => m.user_id !== userId) } : d);
+      const s = serversList.find(x => x.id === serverId);
+      if (s) setServersList(serversList.map(x => x.id === serverId ? { ...x, member_count: Math.max(0, x.member_count - 1) } : x));
+      addToast({ type:'success', message:`Wyrzucono ${username}` });
+    } catch { addToast({ type:'error', message:'Błąd wyrzucania członka' }); }
+  };
+
+  // ── User detail ──
+  const loadUserDetail = async (userId: string) => {
+    setUserDetailLoading(true);
+    try {
+      const d = await adminApi.userDetail(userId);
+      setUserDetailData(d);
+      setEditUserForm(null);
+    } catch { addToast({ type:'error', message:'Nie udało się załadować profilu' }); }
+    finally { setUserDetailLoading(false); }
+  };
+
+  const handleEditUser = async () => {
+    if (!editUserForm || !userDetailData) return;
+    setEditUserLoading(true);
+    try {
+      const updated = await adminApi.editUser(userDetailData.user.id, editUserForm);
+      setUserDetailData(d => d ? { ...d, user: { ...d.user, username: updated.username, email: updated.email } } : d);
+      setUsers(users.map(u => u.id === userDetailData.user.id ? { ...u, username: updated.username } : u));
+      setEditUserForm(null);
+      addToast({ type:'success', message:'Profil zaktualizowany' });
+    } catch (e: any) { addToast({ type:'error', message: e?.message || 'Błąd edycji' }); }
+    finally { setEditUserLoading(false); }
+  };
+
+  // ── Audit log ──
+  const loadAuditLogs = async (page: number) => {
+    setAuditLoading(true);
+    try {
+      const d = await adminApi.auditLog(page);
+      setAuditLogs(d.logs); setAuditTotal(d.total);
+    } catch {} finally { setAuditLoading(false); }
+  };
+
+  React.useEffect(() => { if (tab === 'audit') loadAuditLogs(auditPage); }, [auditPage]);
+
+  // ── Broadcast ──
+  const handleBroadcast = async () => {
+    if (!broadcastMsg.trim()) return;
+    setBroadcastLoading(true);
+    try {
+      await adminApi.broadcast({ message: broadcastMsg, type: broadcastType, server_id: broadcastServerId || undefined });
+      setBroadcastMsg('');
+      addToast({ type:'success', message:'Ogłoszenie wysłane' });
+    } catch { addToast({ type:'error', message:'Błąd wysyłania ogłoszenia' }); }
+    finally { setBroadcastLoading(false); }
+  };
+
+  // ── System info ──
+  const loadSysInfo = async () => {
+    setSysLoading(true);
+    try {
+      const d = await adminApi.systemInfo();
+      setSysInfo(d);
+    } catch {} finally { setSysLoading(false); }
+  };
+
+  const TABS: { id: AdminTab; label: string; icon: React.ReactNode }[] = [
+    { id:'dashboard',  label:'Dashboard',        icon: <LayoutDashboard size={14}/> },
+    { id:'users',      label:'Użytkownicy',       icon: <Users size={14}/> },
+    { id:'servers',    label:'Serwery',           icon: <Server size={14}/> },
+    { id:'badges',     label:'Odznaki',           icon: <Award size={14}/> },
+    { id:'storage',    label:'Przestrzeń dys.',   icon: <HardDrive size={14}/> },
+    { id:'audit',      label:'Dziennik adm.',     icon: <History size={14}/> },
+    { id:'broadcast',  label:'Ogłoszenia',        icon: <Megaphone size={14}/> },
+    { id:'system',     label:'System',            icon: <Database size={14}/> },
   ];
 
   const fmtUptime = (s: number) => {
@@ -4058,8 +4181,22 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
     return [d&&`${d}d`, h&&`${h}h`, `${m}m`].filter(Boolean).join(' ');
   };
 
-  const reg7 = overview?.registrations_7d ?? [];
+  const reg7   = overview?.registrations_7d ?? [];
+  const msgs7  = overview?.messages_7d ?? [];
   const maxReg = Math.max(1, ...reg7.map(r=>r.count));
+  const maxMsg = Math.max(1, ...msgs7.map(r=>r.count));
+
+  const auditActionColor = (action: string) => {
+    if (action.startsWith('ban') || action.includes('delete') || action.includes('kick')) return 'bg-rose-500/15 text-rose-300 border-rose-500/30';
+    if (action.startsWith('grant') || action.startsWith('assign') || action.includes('create')) return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+    if (action.startsWith('unban') || action.includes('revoke') || action.includes('remove')) return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
+    if (action === 'broadcast') return 'bg-violet-500/15 text-violet-300 border-violet-500/30';
+    return 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30';
+  };
+
+  const filteredServers = serversQ.trim()
+    ? serversList.filter(s => s.name.toLowerCase().includes(serversQ.toLowerCase()) || s.owner_name.toLowerCase().includes(serversQ.toLowerCase()))
+    : serversList;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-[#0d0d18]">
@@ -4093,16 +4230,22 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
           {/* ── Dashboard ── */}
           {tab==='dashboard'&&(
             <div className="max-w-4xl mx-auto space-y-6">
-              <h2 className="text-base font-bold text-white">Dashboard</h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-bold text-white">Dashboard</h2>
+                <button onClick={()=>adminApi.overview().then(d=>setOverview(d)).catch(()=>{})}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 hover:text-white rounded-xl transition-all">
+                  <Activity size={11}/> Odśwież
+                </button>
+              </div>
               {/* Stat cards */}
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {[
-                  { label:'Użytkownicy', val: overview?.total_users, icon:<Users size={16} className="text-indigo-400"/>, color:'indigo' },
-                  { label:'Online teraz', val: overview?.online_users, icon:<Activity size={16} className="text-emerald-400"/>, color:'emerald' },
-                  { label:'Serwery', val: overview?.total_servers, icon:<Server size={16} className="text-violet-400"/>, color:'violet' },
-                  { label:'Wiadomości', val: overview?.total_messages, icon:<MessageCircle size={16} className="text-blue-400"/>, color:'blue' },
-                  { label:'DM', val: overview?.total_dms, icon:<MessageSquare size={16} className="text-pink-400"/>, color:'pink' },
-                  { label:'Kanały', val: overview?.total_channels, icon:<Hash size={16} className="text-amber-400"/>, color:'amber' },
+                  { label:'Użytkownicy', val: overview?.total_users, icon:<Users size={16} className="text-indigo-400"/> },
+                  { label:'Online teraz', val: overview?.online_users, icon:<Activity size={16} className="text-emerald-400"/> },
+                  { label:'Serwery', val: overview?.total_servers, icon:<Server size={16} className="text-violet-400"/> },
+                  { label:'Wiadomości', val: overview?.total_messages, icon:<MessageCircle size={16} className="text-blue-400"/> },
+                  { label:'DM', val: overview?.total_dms, icon:<MessageSquare size={16} className="text-pink-400"/> },
+                  { label:'Kanały', val: overview?.total_channels, icon:<Hash size={16} className="text-amber-400"/> },
                 ].map(c=>(
                   <div key={c.label} className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4 flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/[0.06]">{c.icon}</div>
@@ -4113,16 +4256,52 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                   </div>
                 ))}
               </div>
-              {/* 7-day registration chart */}
-              {reg7.length>0&&(
+              {/* Charts row */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Rejestracje chart */}
+                {reg7.length>0&&(
+                  <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-5">
+                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4">Rejestracje — 7 dni</h3>
+                    <div className="flex items-end gap-1.5 h-20">
+                      {reg7.map(r=>(
+                        <div key={r.date} className="flex-1 flex flex-col items-center gap-1">
+                          <span className="text-[9px] text-zinc-500">{r.count}</span>
+                          <div className="w-full rounded-t-md bg-indigo-500/70" style={{height:`${Math.max(3,(r.count/maxReg)*64)}px`}}/>
+                          <span className="text-[8px] text-zinc-600">{new Date(r.date).toLocaleDateString('pl',{weekday:'short'})}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Wiadomości chart */}
+                {msgs7.length>0&&(
+                  <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-5">
+                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4">Wiadomości — 7 dni</h3>
+                    <div className="flex items-end gap-1.5 h-20">
+                      {msgs7.map(r=>(
+                        <div key={r.date} className="flex-1 flex flex-col items-center gap-1">
+                          <span className="text-[9px] text-zinc-500">{r.count}</span>
+                          <div className="w-full rounded-t-md bg-blue-500/70" style={{height:`${Math.max(3,(r.count/maxMsg)*64)}px`}}/>
+                          <span className="text-[8px] text-zinc-600">{new Date(r.date).toLocaleDateString('pl',{weekday:'short'})}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              {/* Top servers */}
+              {(overview?.top_servers?.length ?? 0) > 0 && (
                 <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-5">
-                  <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4">Rejestracje — ostatnie 7 dni</h3>
-                  <div className="flex items-end gap-2 h-24">
-                    {reg7.map(r=>(
-                      <div key={r.date} className="flex-1 flex flex-col items-center gap-1.5">
-                        <span className="text-[10px] text-zinc-500">{r.count}</span>
-                        <div className="w-full rounded-t-lg bg-indigo-500/70 transition-all" style={{height:`${Math.max(4,(r.count/maxReg)*80)}px`}}/>
-                        <span className="text-[9px] text-zinc-600">{new Date(r.date).toLocaleDateString('pl',{weekday:'short'})}</span>
+                  <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Top serwery</h3>
+                  <div className="space-y-2">
+                    {overview!.top_servers.map((s, i)=>(
+                      <div key={s.id} className="flex items-center gap-3">
+                        <span className="text-xs font-bold text-zinc-600 w-4 shrink-0">#{i+1}</span>
+                        <div className="w-7 h-7 rounded-lg overflow-hidden bg-zinc-800 shrink-0">
+                          {s.icon_url ? <img src={staticUrl(s.icon_url)} className="w-full h-full object-cover" alt=""/> : <div className="w-full h-full flex items-center justify-center text-xs font-bold text-zinc-500">{s.name[0]}</div>}
+                        </div>
+                        <span className="text-sm text-white flex-1 truncate">{s.name}</span>
+                        <span className="text-xs text-zinc-500 shrink-0">{s.member_count} członków</span>
                       </div>
                     ))}
                   </div>
@@ -4133,64 +4312,171 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
 
           {/* ── Users ── */}
           {tab==='users'&&(
-            <div className="max-w-5xl mx-auto space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-white">Użytkownicy <span className="text-zinc-500 font-normal text-sm">({usersTotal})</span></h2>
-                <input value={userQ} onChange={e=>setUserQ(e.target.value)} placeholder="Szukaj użytkownika..." className={`${gi2} px-3 py-1.5 text-sm w-52`}/>
-              </div>
-              <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
-                <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-2 px-4 py-2 border-b border-white/[0.06] text-[10px] font-bold text-zinc-600 uppercase tracking-wider">
-                  <span>Użytkownik</span><span>Status</span><span>Serwery</span><span>Wiad.</span><span>Dołączył</span><span>Akcje</span>
+            <div className="flex gap-4 max-w-6xl mx-auto">
+              {/* Main table */}
+              <div className="flex-1 min-w-0 space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-base font-bold text-white shrink-0">Użytkownicy <span className="text-zinc-500 font-normal text-sm">({usersTotal})</span></h2>
+                  <input value={userQ} onChange={e=>setUserQ(e.target.value)} placeholder="Szukaj użytkownika..." className={`${gi2} px-3 py-1.5 text-sm w-52`}/>
                 </div>
-                {users.map(u=>(
-                  <div key={u.id} className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-2 px-4 py-3 border-b border-white/[0.04] last:border-0 items-center hover:bg-white/[0.02] transition-colors">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-7 h-7 rounded-lg overflow-hidden bg-zinc-800 shrink-0">
-                        {u.avatar_url ? <img src={staticUrl(u.avatar_url)} className="w-full h-full object-cover" alt=""/> : <div className="w-full h-full flex items-center justify-center text-xs font-bold text-zinc-400">{u.username[0].toUpperCase()}</div>}
+                <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
+                  <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-2 px-4 py-2 border-b border-white/[0.06] text-[10px] font-bold text-zinc-600 uppercase tracking-wider">
+                    <span>Użytkownik</span><span>Status</span><span>Serwery</span><span>Wiad.</span><span>Dołączył</span><span>Akcje</span>
+                  </div>
+                  {users.map(u=>(
+                    <div key={u.id} className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-2 px-4 py-3 border-b border-white/[0.04] last:border-0 items-center hover:bg-white/[0.02] transition-colors">
+                      <button className="flex items-center gap-2 min-w-0 text-left" onClick={()=>loadUserDetail(u.id)}>
+                        <div className="w-7 h-7 rounded-lg overflow-hidden bg-zinc-800 shrink-0">
+                          {u.avatar_url ? <img src={staticUrl(u.avatar_url)} className="w-full h-full object-cover" alt=""/> : <div className="w-full h-full flex items-center justify-center text-xs font-bold text-zinc-400">{u.username[0].toUpperCase()}</div>}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-sm font-semibold text-white truncate hover:text-indigo-300 transition-colors">{u.username}</span>
+                            {u.is_admin&&<span className="text-[9px] font-bold bg-violet-500/15 text-violet-400 border border-violet-500/25 rounded-full px-1.5 py-0.5 leading-none">Admin</span>}
+                            {u.badges?.map(b=>(
+                              <span key={b.id} style={{color:b.color,borderColor:`${b.color}40`,background:`${b.color}15`}}
+                                className="text-[9px] font-bold border rounded-full px-1.5 py-0.5 leading-none flex items-center gap-0.5">
+                                {b.icon} {b.label}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </button>
+                      <span className={`text-xs font-medium ${u.status==='online'?'text-emerald-400':u.status==='idle'?'text-amber-400':u.status==='dnd'?'text-rose-400':'text-zinc-500'}`}>{u.status}</span>
+                      <span className="text-xs text-zinc-400">{u.server_count ?? '-'}</span>
+                      <span className="text-xs text-zinc-400">{u.message_count ?? '-'}</span>
+                      <span className="text-xs text-zinc-500">{new Date(u.created_at).toLocaleDateString('pl')}</span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={()=>{ setAssignUser(u); setAssignBadgeId(badges[0]?.id??''); }} title="Odznaki"
+                          className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/[0.04] hover:bg-indigo-500/20 hover:text-indigo-400 text-zinc-500 transition-colors">
+                          <Award size={11}/>
+                        </button>
+                        <button onClick={()=>handleToggleAdmin(u)} title={u.is_admin?'Odbierz admina':'Nadaj admina'}
+                          className={`w-6 h-6 flex items-center justify-center rounded-lg transition-colors ${u.is_admin?'bg-violet-500/15 text-violet-400 hover:bg-rose-500/20 hover:text-rose-400':'bg-white/[0.04] text-zinc-500 hover:bg-violet-500/15 hover:text-violet-400'}`}>
+                          <ShieldCheck size={11}/>
+                        </button>
+                        <button onClick={()=>{ setBanTarget(u); setBanForm({ type:'permanent', reason:'', hours:'24', ip:'' }); }} title="Zbanuj"
+                          className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/[0.04] hover:bg-rose-500/20 hover:text-rose-400 text-zinc-500 transition-colors">
+                          <Hammer size={11}/>
+                        </button>
                       </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-sm font-semibold text-white truncate">{u.username}</span>
-                          {u.is_admin&&<span className="text-[9px] font-bold bg-violet-500/15 text-violet-400 border border-violet-500/25 rounded-full px-1.5 py-0.5 leading-none">Admin</span>}
-                          {u.badges?.map(b=>(
-                            <span key={b.id} style={{color:b.color,borderColor:`${b.color}40`,background:`${b.color}15`}}
-                              className="text-[9px] font-bold border rounded-full px-1.5 py-0.5 leading-none flex items-center gap-0.5">
-                              {b.icon} {b.label}
-                            </span>
-                          ))}
+                    </div>
+                  ))}
+                  {users.length===0&&<p className="text-xs text-zinc-600 text-center py-8">Brak wyników</p>}
+                </div>
+                {usersTotal>50&&!userQ&&(
+                  <div className="flex justify-center gap-2">
+                    <button disabled={usersPage===1} onClick={()=>setUsersPage(usersPage-1)} className="px-3 py-1.5 text-xs rounded-lg bg-white/[0.05] text-zinc-400 hover:text-white disabled:opacity-30 transition-all"><ChevronLeft size={12}/></button>
+                    <span className="px-3 py-1.5 text-xs text-zinc-400">str. {usersPage} / {Math.ceil(usersTotal/50)}</span>
+                    <button disabled={usersPage>=Math.ceil(usersTotal/50)} onClick={()=>setUsersPage(usersPage+1)} className="px-3 py-1.5 text-xs rounded-lg bg-white/[0.05] text-zinc-400 hover:text-white disabled:opacity-30 transition-all"><ChevronRight size={12}/></button>
+                  </div>
+                )}
+              </div>
+              {/* User detail slide-over */}
+              {(userDetailData || userDetailLoading) && (
+                <div className="w-72 shrink-0 bg-white/[0.03] border border-white/[0.06] rounded-2xl flex flex-col overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
+                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Profil użytkownika</span>
+                    <button onClick={()=>{ setUserDetailData(null); setEditUserForm(null); }} className="text-zinc-600 hover:text-white transition-colors"><X size={13}/></button>
+                  </div>
+                  {userDetailLoading ? (
+                    <div className="flex justify-center py-12"><Loader2 size={18} className="animate-spin text-zinc-600"/></div>
+                  ) : userDetailData && (
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
+                      {/* Header */}
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl overflow-hidden bg-zinc-800 shrink-0">
+                          {userDetailData.user.avatar_url ? <img src={staticUrl(userDetailData.user.avatar_url)} className="w-full h-full object-cover" alt=""/> : <div className="w-full h-full flex items-center justify-center text-sm font-bold text-zinc-400">{userDetailData.user.username[0]}</div>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-bold text-white truncate">{userDetailData.user.username}</div>
+                          <div className="text-xs text-zinc-500 truncate">{userDetailData.user.email}</div>
                         </div>
                       </div>
+                      {/* Stats row */}
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { label:'Wiad.', val: userDetailData.user.message_count },
+                          { label:'Serwery', val: userDetailData.servers.length },
+                          { label:'DM', val: userDetailData.user.dm_count },
+                        ].map(s=>(
+                          <div key={s.label} className="bg-white/[0.04] rounded-xl p-2 text-center">
+                            <div className="text-sm font-bold text-white">{s.val}</div>
+                            <div className="text-[10px] text-zinc-600">{s.label}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {/* Bio */}
+                      {userDetailData.user.bio && (
+                        <p className="text-xs text-zinc-400 bg-white/[0.03] rounded-xl px-3 py-2">{userDetailData.user.bio}</p>
+                      )}
+                      {/* Edit form */}
+                      {editUserForm ? (
+                        <div className="space-y-2">
+                          <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Edytuj profil</div>
+                          <input value={editUserForm.username} onChange={e=>setEditUserForm(f=>f?({...f,username:e.target.value}):f)}
+                            placeholder="Nazwa użytkownika" className={`${gi2} w-full px-3 py-2 text-sm`}/>
+                          <input value={editUserForm.email} onChange={e=>setEditUserForm(f=>f?({...f,email:e.target.value}):f)}
+                            placeholder="Email" className={`${gi2} w-full px-3 py-2 text-sm`}/>
+                          <div className="flex gap-2">
+                            <button onClick={handleEditUser} disabled={editUserLoading}
+                              className="flex-1 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 text-white py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1">
+                              {editUserLoading&&<Loader2 size={10} className="animate-spin"/>} Zapisz
+                            </button>
+                            <button onClick={()=>setEditUserForm(null)} className="flex-1 bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 py-1.5 rounded-xl text-xs transition-colors">Anuluj</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button onClick={()=>setEditUserForm({ username: userDetailData.user.username, email: userDetailData.user.email })}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs bg-white/[0.04] hover:bg-indigo-500/15 hover:text-indigo-300 text-zinc-400 rounded-xl transition-colors">
+                          <Edit3 size={11}/> Edytuj profil
+                        </button>
+                      )}
+                      {/* Servers */}
+                      {userDetailData.servers.length > 0 && (
+                        <div>
+                          <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Serwery ({userDetailData.servers.length})</div>
+                          <div className="space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar">
+                            {userDetailData.servers.map(s=>(
+                              <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 bg-white/[0.03] rounded-lg">
+                                <div className="w-5 h-5 rounded-md overflow-hidden bg-zinc-800 shrink-0">
+                                  {s.icon_url ? <img src={staticUrl(s.icon_url)} className="w-full h-full object-cover" alt=""/> : <div className="w-full h-full flex items-center justify-center text-[9px] font-bold text-zinc-500">{s.name[0]}</div>}
+                                </div>
+                                <span className="text-xs text-zinc-300 truncate flex-1">{s.name}</span>
+                                <span className="text-[9px] text-zinc-600 shrink-0">{s.role_name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* Sessions */}
+                      {userDetailData.sessions.length > 0 && (
+                        <div>
+                          <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Ostatnie sesje</div>
+                          <div className="space-y-1.5">
+                            {userDetailData.sessions.slice(0,4).map((s,i)=>(
+                              <div key={i} className="px-2 py-1.5 bg-white/[0.03] rounded-lg">
+                                <div className="text-xs font-mono text-zinc-300">{s.ip_address || '—'}</div>
+                                <div className="text-[9px] text-zinc-600 mt-0.5">{s.last_seen_at ? new Date(s.last_seen_at).toLocaleString('pl') : '—'}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* Ban history */}
+                      {userDetailData.bans.filter(b=>b.is_active).length > 0 && (
+                        <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2">
+                          <div className="text-xs font-bold text-rose-300 mb-1">Aktywny ban</div>
+                          {userDetailData.bans.filter(b=>b.is_active).map(b=>(
+                            <div key={b.id} className="text-xs text-rose-400/80">
+                              <span className="font-semibold">{b.ban_type}</span>{b.reason&&` — ${b.reason}`}
+                              {b.banned_until&&<span className="text-rose-500/60 ml-1">do {new Date(b.banned_until).toLocaleDateString('pl')}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <span className={`text-xs font-medium ${u.status==='online'?'text-emerald-400':u.status==='idle'?'text-amber-400':u.status==='dnd'?'text-rose-400':'text-zinc-500'}`}>{u.status}</span>
-                    <span className="text-xs text-zinc-400">{u.server_count ?? '-'}</span>
-                    <span className="text-xs text-zinc-400">{u.message_count ?? '-'}</span>
-                    <span className="text-xs text-zinc-500">{new Date(u.created_at).toLocaleDateString('pl')}</span>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button onClick={()=>{ setAssignUser(u); setAssignBadgeId(badges[0]?.id??''); }}
-                        title="Odznaki"
-                        className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/[0.04] hover:bg-indigo-500/20 hover:text-indigo-400 text-zinc-500 transition-colors">
-                        <Award size={11}/>
-                      </button>
-                      <button onClick={()=>handleToggleAdmin(u)} title={u.is_admin?'Odbierz admina':'Nadaj admina'}
-                        className={`w-6 h-6 flex items-center justify-center rounded-lg transition-colors ${u.is_admin?'bg-violet-500/15 text-violet-400 hover:bg-rose-500/20 hover:text-rose-400':'bg-white/[0.04] text-zinc-500 hover:bg-violet-500/15 hover:text-violet-400'}`}>
-                        <ShieldCheck size={11}/>
-                      </button>
-                      <button onClick={()=>{ setBanTarget(u); setBanForm({ type:'permanent', reason:'', hours:'24', ip:'' }); }}
-                        title="Zbanuj / zarządzaj banem"
-                        className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/[0.04] hover:bg-rose-500/20 hover:text-rose-400 text-zinc-500 transition-colors">
-                        <Hammer size={11}/>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {users.length===0&&<p className="text-xs text-zinc-600 text-center py-8">Brak wyników</p>}
-              </div>
-              {/* Pagination */}
-              {usersTotal>50&&!userQ&&(
-                <div className="flex justify-center gap-2">
-                  <button disabled={usersPage===1} onClick={()=>setUsersPage(usersPage-1)} className="px-3 py-1.5 text-xs rounded-lg bg-white/[0.05] text-zinc-400 hover:text-white disabled:opacity-30 transition-all"><ChevronLeft size={12}/></button>
-                  <span className="px-3 py-1.5 text-xs text-zinc-400">str. {usersPage} / {Math.ceil(usersTotal/50)}</span>
-                  <button disabled={usersPage>=Math.ceil(usersTotal/50)} onClick={()=>setUsersPage(usersPage+1)} className="px-3 py-1.5 text-xs rounded-lg bg-white/[0.05] text-zinc-400 hover:text-white disabled:opacity-30 transition-all"><ChevronRight size={12}/></button>
+                  )}
                 </div>
               )}
               {/* Ban dialog */}
@@ -4201,7 +4487,6 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                       <Hammer size={14} className="text-rose-400"/>
                       <h3 className="text-sm font-bold text-white">Zbanuj — {banTarget.username}</h3>
                     </div>
-                    {/* Type */}
                     <div className="space-y-1.5">
                       <label className="text-xs text-zinc-500">Typ bana</label>
                       <div className="flex gap-2">
@@ -4213,14 +4498,12 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                         ))}
                       </div>
                     </div>
-                    {/* Reason */}
                     <div className="space-y-1.5">
                       <label className="text-xs text-zinc-500">Powód (opcjonalnie)</label>
                       <input value={banForm.reason} onChange={e=>setBanForm(f=>({...f,reason:e.target.value}))}
                         placeholder="np. spam, nieodpowiednie zachowanie..."
                         className="w-full bg-white/[0.06] border border-white/[0.08] text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 rounded-xl px-3 py-2 text-sm"/>
                     </div>
-                    {/* Duration — only for temporary */}
                     {banForm.type==='temporary'&&(
                       <div className="space-y-1.5">
                         <label className="text-xs text-zinc-500">Czas zawieszenia (godziny)</label>
@@ -4229,7 +4512,6 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                           className="w-full bg-white/[0.06] border border-white/[0.08] text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 rounded-xl px-3 py-2 text-sm"/>
                       </div>
                     )}
-                    {/* IP — only for ip ban */}
                     {banForm.type==='ip'&&(
                       <div className="space-y-1.5">
                         <label className="text-xs text-zinc-500">Adres IP</label>
@@ -4247,15 +4529,11 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                         className="flex-1 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 py-2 rounded-xl text-sm font-semibold transition-colors">
                         Odbanuj
                       </button>
-                      <button onClick={()=>setBanTarget(null)}
-                        className="px-3 py-2 bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 rounded-xl text-sm transition-colors">
-                        <X size={13}/>
-                      </button>
+                      <button onClick={()=>setBanTarget(null)} className="px-3 py-2 bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 rounded-xl text-sm transition-colors"><X size={13}/></button>
                     </div>
                   </div>
                 </div>
               )}
-
               {/* Assign badge dialog */}
               {assignUser&&(
                 <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={()=>setAssignUser(null)}>
@@ -4268,7 +4546,6 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                       <button onClick={handleAssignBadge} className="flex-1 bg-indigo-500 hover:bg-indigo-400 text-white py-2 rounded-xl text-sm font-semibold transition-colors">Przypisz</button>
                       <button onClick={()=>setAssignUser(null)} className="flex-1 bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 py-2 rounded-xl text-sm transition-colors">Anuluj</button>
                     </div>
-                    {/* Remove badge section */}
                     {assignUser.badges?.length>0&&(
                       <div>
                         <p className="text-xs text-zinc-500 mb-2">Aktualne odznaki:</p>
@@ -4291,28 +4568,114 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
 
           {/* ── Servers ── */}
           {tab==='servers'&&(
-            <div className="max-w-4xl mx-auto space-y-4">
-              <h2 className="text-base font-bold text-white">Serwery <span className="text-zinc-500 font-normal text-sm">({serversList.length})</span></h2>
+            <div className="max-w-5xl mx-auto space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-base font-bold text-white">Serwery <span className="text-zinc-500 font-normal text-sm">({serversList.length})</span></h2>
+                <input value={serversQ} onChange={e=>setServersQ(e.target.value)} placeholder="Szukaj serwera..." className={`${gi2} px-3 py-1.5 text-sm w-52`}/>
+              </div>
               <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
-                <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr_1fr] gap-2 px-4 py-2 border-b border-white/[0.06] text-[10px] font-bold text-zinc-600 uppercase tracking-wider">
-                  <span>Serwer</span><span>Właściciel</span><span>Członkowie</span><span>Kanały</span><span>Utworzony</span>
+                <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr_1fr_auto] gap-2 px-4 py-2 border-b border-white/[0.06] text-[10px] font-bold text-zinc-600 uppercase tracking-wider">
+                  <span>Serwer</span><span>Właściciel</span><span>Członkowie</span><span>Kanały</span><span>Utworzony</span><span>Akcje</span>
                 </div>
-                {serversList.map(s=>(
-                  <div key={s.id} className="grid grid-cols-[2fr_1.5fr_1fr_1fr_1fr] gap-2 px-4 py-3 border-b border-white/[0.04] last:border-0 items-center hover:bg-white/[0.02]">
-                    <div className="flex items-center gap-2 min-w-0">
+                {filteredServers.map(s=>(
+                  <div key={s.id} className="grid grid-cols-[2fr_1.5fr_1fr_1fr_1fr_auto] gap-2 px-4 py-3 border-b border-white/[0.04] last:border-0 items-center hover:bg-white/[0.02]">
+                    <button className="flex items-center gap-2 min-w-0 text-left" onClick={()=>loadServerDetail(s.id)}>
                       <div className="w-7 h-7 rounded-lg overflow-hidden bg-zinc-800 shrink-0">
                         {s.icon_url ? <img src={staticUrl(s.icon_url)} className="w-full h-full object-cover" alt=""/> : <div className="w-full h-full flex items-center justify-center text-xs font-bold text-zinc-500">{s.name[0]}</div>}
                       </div>
-                      <span className="text-sm font-semibold text-white truncate">{s.name}</span>
-                    </div>
+                      <span className="text-sm font-semibold text-white truncate hover:text-indigo-300 transition-colors">{s.name}</span>
+                    </button>
                     <span className="text-xs text-zinc-400 truncate">{s.owner_name}</span>
                     <span className="text-xs text-zinc-400">{s.member_count}</span>
                     <span className="text-xs text-zinc-400">{s.channel_count}</span>
                     <span className="text-xs text-zinc-500">{new Date(s.created_at).toLocaleDateString('pl')}</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button onClick={()=>loadServerDetail(s.id)} title="Szczegóły"
+                        className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/[0.04] hover:bg-indigo-500/20 hover:text-indigo-400 text-zinc-500 transition-colors">
+                        <Eye size={11}/>
+                      </button>
+                      <button onClick={()=>setDeleteServerConfirmId(s.id)} title="Usuń serwer"
+                        className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/[0.04] hover:bg-rose-500/20 hover:text-rose-400 text-zinc-500 transition-colors">
+                        <Trash2 size={11}/>
+                      </button>
+                    </div>
                   </div>
                 ))}
-                {serversList.length===0&&<p className="text-xs text-zinc-600 text-center py-8"><Loader2 size={14} className="animate-spin inline"/></p>}
+                {filteredServers.length===0&&<p className="text-xs text-zinc-600 text-center py-8">{serversList.length===0?<Loader2 size={14} className="animate-spin inline"/>:'Brak wyników'}</p>}
               </div>
+              {/* Delete server confirm dialog */}
+              {deleteServerConfirmId&&(
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={()=>setDeleteServerConfirmId(null)}>
+                  <div className="bg-[#16162a] border border-white/[0.09] rounded-2xl p-5 w-80 space-y-4" onClick={e=>e.stopPropagation()}>
+                    <div className="flex items-center gap-2">
+                      <Trash2 size={14} className="text-rose-400"/>
+                      <h3 className="text-sm font-bold text-white">Usuń serwer</h3>
+                    </div>
+                    <p className="text-sm text-zinc-400">Czy na pewno chcesz usunąć serwer <span className="text-white font-semibold">{serversList.find(s=>s.id===deleteServerConfirmId)?.name}</span>? Tej operacji nie można cofnąć.</p>
+                    <div className="flex gap-2">
+                      <button onClick={()=>handleDeleteServer(deleteServerConfirmId)}
+                        className="flex-1 bg-rose-500 hover:bg-rose-400 text-white py-2 rounded-xl text-sm font-semibold transition-colors">Usuń</button>
+                      <button onClick={()=>setDeleteServerConfirmId(null)} className="flex-1 bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 py-2 rounded-xl text-sm transition-colors">Anuluj</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* Server detail modal */}
+              {(serverDetailData || serverDetailLoading) && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={()=>setServerDetailData(null)}>
+                  <div className="bg-[#16162a] border border-white/[0.09] rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col" onClick={e=>e.stopPropagation()}>
+                    <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/[0.07] shrink-0">
+                      <div className="flex items-center gap-2.5">
+                        {serverDetailData?.server.icon_url && <img src={staticUrl(serverDetailData.server.icon_url)} className="w-6 h-6 rounded-lg object-cover" alt=""/>}
+                        <span className="text-sm font-bold text-white">{serverDetailData?.server.name ?? '...'}</span>
+                        {serverDetailData && <span className="text-xs text-zinc-500">właś. {serverDetailData.server.owner_name}</span>}
+                      </div>
+                      <button onClick={()=>setServerDetailData(null)} className="text-zinc-600 hover:text-white transition-colors"><X size={14}/></button>
+                    </div>
+                    {serverDetailLoading ? (
+                      <div className="flex justify-center py-12"><Loader2 size={20} className="animate-spin text-zinc-600"/></div>
+                    ) : serverDetailData && (
+                      <div className="flex flex-1 overflow-hidden">
+                        {/* Members list */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
+                          <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">Członkowie ({serverDetailData.members.length})</div>
+                          <div className="space-y-1.5">
+                            {serverDetailData.members.map(m=>(
+                              <div key={m.user_id} className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-white/[0.03] group">
+                                <div className="w-7 h-7 rounded-lg overflow-hidden bg-zinc-800 shrink-0">
+                                  {m.avatar_url ? <img src={staticUrl(m.avatar_url)} className="w-full h-full object-cover" alt=""/> : <div className="w-full h-full flex items-center justify-center text-xs font-bold text-zinc-500">{m.username[0]}</div>}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-xs font-semibold text-white truncate">{m.username}</div>
+                                  <div className="text-[9px] text-zinc-600">{m.role_name}</div>
+                                </div>
+                                <div className={`w-2 h-2 rounded-full shrink-0 ${m.status==='online'?'bg-emerald-400':m.status==='idle'?'bg-amber-400':m.status==='dnd'?'bg-rose-400':'bg-zinc-600'}`}/>
+                                <button onClick={()=>handleKickMember(serverDetailData.server.id, m.user_id, m.username)}
+                                  title="Wyrzuć"
+                                  className="w-6 h-6 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 hover:bg-rose-500/20 hover:text-rose-400 text-zinc-600 transition-all">
+                                  <UserX size={11}/>
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        {/* Channels list */}
+                        <div className="w-44 shrink-0 border-l border-white/[0.06] overflow-y-auto custom-scrollbar p-4">
+                          <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3">Kanały ({serverDetailData.channels.length})</div>
+                          <div className="space-y-1">
+                            {serverDetailData.channels.map(c=>(
+                              <div key={c.id} className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-zinc-400">
+                                {c.type==='voice'?<Volume2 size={10} className="shrink-0"/>:<Hash size={10} className="shrink-0"/>}
+                                <span className="text-xs truncate">{c.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -4320,7 +4683,6 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
           {tab==='badges'&&(
             <div className="max-w-2xl mx-auto space-y-6">
               <h2 className="text-base font-bold text-white">Odznaki</h2>
-              {/* Create form */}
               <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4 space-y-3">
                 <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Nowa odznaka</h3>
                 <div className="grid grid-cols-2 gap-3">
@@ -4334,7 +4696,6 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                   {badgeSaving&&<Loader2 size={13} className="animate-spin"/>} Utwórz
                 </button>
               </div>
-              {/* Badge list */}
               <div className="flex flex-col gap-2">
                 {badges.map(b=>(
                   <div key={b.id} className="flex items-center gap-3 px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
@@ -4361,43 +4722,188 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
             <StorageTab addToast={addToast}/>
           )}
 
-          {/* ── System ── */}
-          {tab==='system'&&(
-            <div className="max-w-xl mx-auto space-y-4">
-              <h2 className="text-base font-bold text-white">System</h2>
-              {overview ? (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4">
-                      <div className="text-xs text-zinc-500 mb-1">Node.js</div>
-                      <div className="text-sm font-bold text-emerald-400">{overview.node_version}</div>
-                    </div>
-                    <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4">
-                      <div className="text-xs text-zinc-500 mb-1">Uptime</div>
-                      <div className="text-sm font-bold text-indigo-400">{fmtUptime(overview.uptime_seconds)}</div>
-                    </div>
+          {/* ── Audit log ── */}
+          {tab==='audit'&&(
+            <div className="max-w-4xl mx-auto space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-bold text-white">Dziennik administracyjny <span className="text-zinc-500 font-normal text-sm">({auditTotal})</span></h2>
+                <button onClick={()=>loadAuditLogs(auditPage)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 hover:text-white rounded-xl transition-all">
+                  <Activity size={11}/> Odśwież
+                </button>
+              </div>
+              {auditLoading ? (
+                <div className="flex justify-center py-12"><Loader2 size={20} className="animate-spin text-zinc-600"/></div>
+              ) : (
+                <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
+                  <div className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-3 px-4 py-2 border-b border-white/[0.06] text-[10px] font-bold text-zinc-600 uppercase tracking-wider">
+                    <span>Admin</span><span>Akcja</span><span>Cel</span><span>IP</span><span>Czas</span>
                   </div>
-                  {/* Memory bars */}
-                  <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4 space-y-3">
-                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Pamięć</h3>
-                    {([
-                      { label:'RSS', val: overview.memory.rss, total: overview.memory.rss, color:'bg-violet-500' },
-                      { label:'Heap Used', val: overview.memory.heapUsed, total: overview.memory.heapTotal, color:'bg-indigo-500' },
-                      { label:'Heap Total', val: overview.memory.heapTotal, total: overview.memory.rss, color:'bg-blue-500/60' },
-                    ] as const).map(m=>(
-                      <div key={m.label}>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-zinc-400">{m.label}</span>
-                          <span className="text-zinc-300 font-semibold">{m.val} MB</span>
+                  {auditLogs.map(l=>(
+                    <div key={l.id} className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-3 px-4 py-2.5 border-b border-white/[0.04] last:border-0 items-center hover:bg-white/[0.02]">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-6 h-6 rounded-lg overflow-hidden bg-zinc-800 shrink-0">
+                          {l.admin_avatar ? <img src={staticUrl(l.admin_avatar)} className="w-full h-full object-cover" alt=""/> : <div className="w-full h-full flex items-center justify-center text-[9px] font-bold text-zinc-500">{l.admin_username[0]}</div>}
                         </div>
-                        <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
-                          <div className={`h-full ${m.color} rounded-full transition-all`} style={{width:`${Math.min(100,(m.val/Math.max(1,m.total))*100)}%`}}/>
-                        </div>
+                        <span className="text-xs font-semibold text-zinc-300 truncate max-w-[80px]">{l.admin_username}</span>
                       </div>
+                      <span className={`text-[10px] font-bold border rounded-full px-2 py-0.5 w-fit ${auditActionColor(l.action)}`}>{l.action}</span>
+                      <span className="text-xs text-zinc-500 font-mono truncate max-w-[100px]">{l.target_type&&`${l.target_type}:`}{l.target_id?.slice(0,8)}</span>
+                      <span className="text-xs text-zinc-600 font-mono">{l.ip || '—'}</span>
+                      <span className="text-xs text-zinc-600 whitespace-nowrap">{new Date(l.created_at).toLocaleString('pl',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+                    </div>
+                  ))}
+                  {auditLogs.length===0&&<p className="text-xs text-zinc-600 text-center py-8">Brak wpisów</p>}
+                </div>
+              )}
+              {auditTotal>50&&(
+                <div className="flex justify-center gap-2">
+                  <button disabled={auditPage===1} onClick={()=>setAuditPage(p=>p-1)} className="px-3 py-1.5 text-xs rounded-lg bg-white/[0.05] text-zinc-400 hover:text-white disabled:opacity-30 transition-all"><ChevronLeft size={12}/></button>
+                  <span className="px-3 py-1.5 text-xs text-zinc-400">str. {auditPage} / {Math.ceil(auditTotal/50)}</span>
+                  <button disabled={auditPage>=Math.ceil(auditTotal/50)} onClick={()=>setAuditPage(p=>p+1)} className="px-3 py-1.5 text-xs rounded-lg bg-white/[0.05] text-zinc-400 hover:text-white disabled:opacity-30 transition-all"><ChevronRight size={12}/></button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Broadcast ── */}
+          {tab==='broadcast'&&(
+            <div className="max-w-2xl mx-auto space-y-6">
+              <h2 className="text-base font-bold text-white">Ogłoszenia systemowe</h2>
+              <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-5 space-y-4">
+                <p className="text-xs text-zinc-500">Wyślij ogłoszenie do wszystkich zalogowanych użytkowników lub tylko do konkretnego serwera. Pojawi się jako powiadomienie toast.</p>
+                {/* Type */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-400">Typ ogłoszenia</label>
+                  <div className="flex gap-2">
+                    {([
+                      { id:'info' as const, label:'Informacja', color:'text-blue-400 bg-blue-500/15 border-blue-500/30' },
+                      { id:'warning' as const, label:'Ostrzeżenie', color:'text-amber-400 bg-amber-500/15 border-amber-500/30' },
+                      { id:'success' as const, label:'Sukces', color:'text-emerald-400 bg-emerald-500/15 border-emerald-500/30' },
+                    ]).map(t=>(
+                      <button key={t.id} onClick={()=>setBroadcastType(t.id)}
+                        className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors border ${broadcastType===t.id?t.color:'bg-white/[0.04] text-zinc-500 border-transparent hover:text-zinc-300'}`}>
+                        {t.label}
+                      </button>
                     ))}
                   </div>
                 </div>
-              ) : <div className="flex justify-center py-12"><Loader2 size={20} className="animate-spin text-zinc-600"/></div>}
+                {/* Target server */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-400">Cel (opcjonalnie — pozostaw puste dla wszystkich)</label>
+                  <select value={broadcastServerId} onChange={e=>setBroadcastServerId(e.target.value)} className={`${gi2} w-full px-3 py-2 text-sm`}>
+                    <option value="">Wszyscy użytkownicy</option>
+                    {serversList.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                {/* Message */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-400">Treść ogłoszenia</label>
+                  <textarea value={broadcastMsg} onChange={e=>setBroadcastMsg(e.target.value)} rows={4}
+                    placeholder="Treść ogłoszenia systemowego..."
+                    className={`${gi2} w-full px-3 py-2 text-sm resize-none`}/>
+                  <div className="text-[10px] text-zinc-600 text-right">{broadcastMsg.length}/1000</div>
+                </div>
+                {/* Preview */}
+                {broadcastMsg.trim() && (
+                  <div className={`flex items-start gap-2.5 px-3.5 py-3 rounded-xl border text-sm ${broadcastType==='info'?'bg-blue-500/10 border-blue-500/20 text-blue-200':broadcastType==='warning'?'bg-amber-500/10 border-amber-500/20 text-amber-200':'bg-emerald-500/10 border-emerald-500/20 text-emerald-200'}`}>
+                    <Megaphone size={14} className="shrink-0 mt-0.5"/>
+                    <div>
+                      <div className="text-[10px] font-bold opacity-70 mb-0.5">Cordyn Admin</div>
+                      {broadcastMsg}
+                    </div>
+                  </div>
+                )}
+                <button onClick={handleBroadcast} disabled={broadcastLoading||!broadcastMsg.trim()}
+                  className="w-full bg-violet-500 hover:bg-violet-400 disabled:opacity-40 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2">
+                  {broadcastLoading&&<Loader2 size={13} className="animate-spin"/>}
+                  <Megaphone size={13}/> Wyślij ogłoszenie {broadcastServerId ? `do ${serversList.find(s=>s.id===broadcastServerId)?.name}` : 'do wszystkich'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── System ── */}
+          {tab==='system'&&(
+            <div className="max-w-2xl mx-auto space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-bold text-white">System</h2>
+                <button onClick={loadSysInfo} disabled={sysLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 hover:text-white rounded-xl transition-all disabled:opacity-40">
+                  {sysLoading?<Loader2 size={11} className="animate-spin"/>:<Activity size={11}/>} Odśwież
+                </button>
+              </div>
+              {sysLoading && !sysInfo ? (
+                <div className="flex justify-center py-12"><Loader2 size={20} className="animate-spin text-zinc-600"/></div>
+              ) : sysInfo ? (
+                <div className="space-y-4">
+                  {/* Node.js */}
+                  <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4 space-y-3">
+                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2"><Database size={12}/>Node.js</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div><div className="text-[10px] text-zinc-600 mb-0.5">Wersja</div><div className="text-sm font-bold text-emerald-400">{sysInfo.node.version}</div></div>
+                      <div><div className="text-[10px] text-zinc-600 mb-0.5">Uptime</div><div className="text-sm font-bold text-indigo-400">{fmtUptime(sysInfo.node.uptime_seconds)}</div></div>
+                    </div>
+                    <div className="space-y-2">
+                      {([
+                        { label:'RSS', val: sysInfo.node.memory.rss, total: sysInfo.node.memory.rss, color:'bg-violet-500' },
+                        { label:'Heap Used', val: sysInfo.node.memory.heapUsed, total: sysInfo.node.memory.heapTotal, color:'bg-indigo-500' },
+                        { label:'Heap Total', val: sysInfo.node.memory.heapTotal, total: sysInfo.node.memory.rss, color:'bg-blue-500/60' },
+                        { label:'External', val: sysInfo.node.memory.external, total: sysInfo.node.memory.rss, color:'bg-cyan-500/60' },
+                      ]).map(m=>(
+                        <div key={m.label}>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-zinc-400">{m.label}</span>
+                            <span className="text-zinc-300 font-semibold">{m.val} MB</span>
+                          </div>
+                          <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                            <div className={`h-full ${m.color} rounded-full`} style={{width:`${Math.min(100,(m.val/Math.max(1,m.total))*100)}%`}}/>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {/* PostgreSQL */}
+                  {sysInfo.postgres && (
+                    <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4 space-y-3">
+                      <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2"><Database size={12}/>PostgreSQL</h3>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div><div className="text-[10px] text-zinc-600 mb-0.5">Rozmiar BD</div><div className="text-sm font-bold text-blue-400">{sysInfo.postgres.db_size}</div></div>
+                        <div><div className="text-[10px] text-zinc-600 mb-0.5">Połączenia</div><div className="text-sm font-bold text-amber-400">{sysInfo.postgres.active_connections}</div></div>
+                        <div><div className="text-[10px] text-zinc-600 mb-0.5">Wersja</div><div className="text-xs font-semibold text-zinc-400 truncate">{sysInfo.postgres.pg_version?.split(' ').slice(0,2).join(' ')}</div></div>
+                      </div>
+                    </div>
+                  )}
+                  {/* Redis */}
+                  {sysInfo.redis && (
+                    <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4 space-y-3">
+                      <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2"><Zap size={12}/>Redis</h3>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div><div className="text-[10px] text-zinc-600 mb-0.5">Wersja</div><div className="text-sm font-bold text-rose-400">{sysInfo.redis.version}</div></div>
+                        <div><div className="text-[10px] text-zinc-600 mb-0.5">Klienci</div><div className="text-sm font-bold text-orange-400">{sysInfo.redis.connected_clients}</div></div>
+                        <div><div className="text-[10px] text-zinc-600 mb-0.5">Pamięć</div><div className="text-sm font-bold text-emerald-400">{sysInfo.redis.used_memory_human}</div></div>
+                        <div><div className="text-[10px] text-zinc-600 mb-0.5">Uptime</div><div className="text-sm font-bold text-indigo-400">{fmtUptime(sysInfo.redis.uptime_seconds)}</div></div>
+                        <div><div className="text-[10px] text-zinc-600 mb-0.5">Trafienia</div><div className="text-sm font-bold text-zinc-300">{sysInfo.redis.keyspace_hits.toLocaleString()}</div></div>
+                        <div><div className="text-[10px] text-zinc-600 mb-0.5">Chybienia</div><div className="text-sm font-bold text-zinc-500">{sysInfo.redis.keyspace_misses.toLocaleString()}</div></div>
+                      </div>
+                      {(sysInfo.redis.keyspace_hits + sysInfo.redis.keyspace_misses) > 0 && (
+                        <div>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-zinc-500">Cache hit rate</span>
+                            <span className="text-emerald-400 font-semibold">{Math.round(sysInfo.redis.keyspace_hits / (sysInfo.redis.keyspace_hits + sysInfo.redis.keyspace_misses) * 100)}%</span>
+                          </div>
+                          <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-500/70 rounded-full" style={{width:`${Math.round(sysInfo.redis.keyspace_hits/(sysInfo.redis.keyspace_hits+sysInfo.redis.keyspace_misses)*100)}%`}}/>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-5">
+                  <p className="text-sm text-zinc-500 text-center">Kliknij Odśwież aby załadować dane systemowe</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -6198,7 +6704,7 @@ export default function App() {
 
   // ── Admin panel ──────────────────────────────────────────────────
   const [prevView, setPrevView]               = useState<'servers'|'dms'|'friends'>('dms');
-  const [adminTab, setAdminTab]               = useState<'dashboard'|'users'|'servers'|'badges'|'system'|'storage'>('dashboard');
+  const [adminTab, setAdminTab]               = useState<'dashboard'|'users'|'servers'|'badges'|'storage'|'audit'|'broadcast'|'system'>('dashboard');
   const [adminOverview, setAdminOverview]     = useState<AdminOverview|null>(null);
   const [adminStats, setAdminStats]           = useState<AdminStats|null>(null);
   const [adminBadges, setAdminBadges]         = useState<Badge[]>([]);
@@ -7292,6 +7798,10 @@ export default function App() {
       playCallEnded();
       setActiveCall(null); setShowCallPanel(false); setCallDuration(0);
       autoToast('Rozmowa zakończona', 'info');
+    });
+    // ── Admin broadcast ─────────────────────────────────────────────
+    sock.on('admin_broadcast' as any, ({ message, type }: { message: string; type: 'info'|'warning'|'success' }) => {
+      autoToast(`📢 ${message}`, type || 'info');
     });
     // ── Force logout (ban) ──────────────────────────────────────────
     sock.on('force_logout' as any, ({ reason }: { reason?: string }) => {
