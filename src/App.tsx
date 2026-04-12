@@ -18767,55 +18767,63 @@ export default function App() {
                     </div>
                   ) : (
                     /* Server cards grid */
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                      {filtered.map(s=>{
+                    <motion.div
+                      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+                      variants={{show:{transition:{staggerChildren:0.06}}}}
+                      initial="hidden" animate="show">
+                      {filtered.map((s,_si)=>{
                         const alreadyJoined = !!serverList.find(sv=>sv.id===s.id);
                         // Pick accent color for gradient fallback
                         const accentMap: Record<string,string> = {indigo:'from-indigo-900/80 to-indigo-800/30',violet:'from-violet-900/80 to-violet-800/30',purple:'from-purple-900/80 to-purple-800/30',rose:'from-rose-900/80 to-rose-800/30',emerald:'from-emerald-900/80 to-emerald-800/30',amber:'from-amber-900/80 to-amber-800/30',sky:'from-sky-900/80 to-sky-800/30'};
                         const grad = accentMap[s.accent_color??''] ?? 'from-zinc-900/80 to-zinc-800/30';
                         return (
-                          <div key={s.id} className="bg-[#14141f] rounded-2xl overflow-hidden border border-white/[0.06] hover:border-white/[0.13] hover:shadow-[0_4px_32px_rgba(0,0,0,0.4)] transition-all duration-200 flex flex-col group">
-                            {/* Banner area */}
-                            <div className="relative h-28 overflow-hidden shrink-0">
+                          <motion.div key={s.id}
+                            variants={{hidden:{opacity:0,y:18,scale:0.96},show:{opacity:1,y:0,scale:1,transition:{duration:0.3,ease:[0.22,1,0.36,1]}}}}
+                            whileHover={{y:-5, scale:1.02, transition:{duration:0.18, ease:'easeOut'}}}
+                            className="relative bg-[#14141f] rounded-2xl border border-white/[0.06] hover:border-indigo-500/30 hover:shadow-[0_8px_40px_rgba(99,102,241,0.18)] transition-[border-color,box-shadow] duration-300 flex flex-col group overflow-visible">
+                            {/* ── Banner (clipped separately so icon can escape) ── */}
+                            <div className="relative h-28 shrink-0 rounded-t-2xl overflow-hidden">
+                              {/* image / gradient — inner overflow-hidden for scale anim */}
                               {s.banner_url ? (
-                                <img src={staticUrl(s.banner_url)} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/>
+                                <img src={staticUrl(s.banner_url)} alt=""
+                                  className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"/>
                               ) : (
-                                <div className={`w-full h-full bg-gradient-to-br ${grad}`}/>
+                                <div className={`w-full h-full bg-gradient-to-br ${grad} transition-opacity duration-300 group-hover:opacity-80`}/>
                               )}
-                              {/* Soft bottom fade to card bg */}
-                              <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-[#14141f] to-transparent"/>
-                              {/* Server icon — overlaps banner/content boundary */}
-                              <div className="absolute left-4 -bottom-5">
-                                {s.icon_url ? (
-                                  <img src={staticUrl(s.icon_url)} alt={s.name}
-                                    className="w-[42px] h-[42px] rounded-xl object-cover border-[3px] border-[#14141f] shadow-lg"/>
-                                ) : (
-                                  <div className="w-[42px] h-[42px] rounded-xl bg-indigo-600 flex items-center justify-center text-lg font-extrabold text-white border-[3px] border-[#14141f] shadow-lg">
-                                    {s.name[0].toUpperCase()}
-                                  </div>
-                                )}
-                              </div>
+                              {/* vignette fading into card bg */}
+                              <div className="absolute inset-0 bg-gradient-to-t from-[#14141f] via-[#14141f]/10 to-transparent"/>
+                              {/* "Oficjalny" badge */}
                               {s.is_official && (
-                                <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/60 backdrop-blur-sm rounded-full px-2 py-0.5">
-                                  <BadgeCheck size={10} className="text-amber-400"/>
-                                  <span className="text-[9px] font-bold text-amber-400 uppercase tracking-wide">Oficjalny</span>
+                                <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/55 backdrop-blur-sm rounded-full px-2 py-0.5 border border-amber-400/20">
+                                  <BadgeCheck size={9} className="text-amber-400"/>
+                                  <span className="text-[9px] font-bold text-amber-300 uppercase tracking-wide">Oficjalny</span>
                                 </div>
                               )}
                             </div>
 
-                            {/* Content */}
-                            <div className="flex-1 flex flex-col px-4 pb-4 pt-7">
-                              <div className="flex items-start justify-between gap-2 mb-1.5">
-                                <h3 className="font-bold text-white text-sm leading-tight truncate">{s.name}</h3>
-                              </div>
+                            {/* ── Icon — positioned on the card (not inside banner) ── */}
+                            <div className="absolute left-4 top-[88px] z-10">
+                              {s.icon_url ? (
+                                <img src={staticUrl(s.icon_url)} alt={s.name}
+                                  className="w-[46px] h-[46px] rounded-[14px] object-cover border-[3px] border-[#14141f] shadow-[0_4px_16px_rgba(0,0,0,0.6)] transition-transform duration-300 group-hover:scale-110"/>
+                              ) : (
+                                <div className="w-[46px] h-[46px] rounded-[14px] bg-indigo-600 flex items-center justify-center text-lg font-extrabold text-white border-[3px] border-[#14141f] shadow-[0_4px_16px_rgba(0,0,0,0.6)] transition-transform duration-300 group-hover:scale-110">
+                                  {s.name[0].toUpperCase()}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* ── Content ── */}
+                            <div className="flex-1 flex flex-col px-4 pb-4 pt-8">
+                              <h3 className="font-bold text-white text-sm leading-tight truncate mb-1 group-hover:text-indigo-200 transition-colors duration-200">{s.name}</h3>
                               <p className="text-[11px] text-zinc-500 leading-relaxed line-clamp-2 flex-1 mb-3">
                                 {s.discovery_description || s.description || 'Brak opisu'}
                               </p>
-                              {/* Stats row */}
+                              {/* Stats */}
                               <div className="flex items-center gap-3 mb-3">
                                 {s.online_count > 0 && (
                                   <div className="flex items-center gap-1.5">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"/>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"/>
                                     <span className="text-[11px] text-zinc-400">{s.online_count.toLocaleString()} online</span>
                                   </div>
                                 )}
@@ -18826,24 +18834,26 @@ export default function App() {
                               </div>
                               {/* Join button */}
                               {alreadyJoined ? (
-                                <button
+                                <motion.button whileTap={{scale:0.96}}
                                   onClick={()=>{ setActiveServer(s.id); setActiveView('servers'); setServerFull(null); setActiveChannel(''); setShowDiscovery(false); if(activeServer===s.id) setServerReloadKey(k=>k+1); }}
-                                  className="w-full py-1.5 text-xs font-semibold rounded-xl bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/20 hover:border-emerald-500/40 transition-all">
-                                  Jesteś na serwerze
-                                </button>
+                                  className="w-full py-2 text-xs font-semibold rounded-xl bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/25 hover:border-emerald-400/50 transition-all duration-200">
+                                  Jesteś na serwerze →
+                                </motion.button>
                               ) : (
-                                <button onClick={async()=>{
-                                  try { await serversApi.joinPublic(s.id); await loadServers(); setShowDiscovery(false); setActiveServer(s.id); setActiveView('servers'); addToast(`Dołączono do ${s.name}!`,'success'); }
-                                  catch(ex:any){ addToast(ex.message||'Błąd','error'); }
-                                }} className="w-full py-1.5 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition-colors border border-transparent hover:border-indigo-400/30">
+                                <motion.button whileTap={{scale:0.96}}
+                                  onClick={async()=>{
+                                    try { await serversApi.joinPublic(s.id); await loadServers(); setShowDiscovery(false); setActiveServer(s.id); setActiveView('servers'); addToast(`Dołączono do ${s.name}!`,'success'); }
+                                    catch(ex:any){ addToast(ex.message||'Błąd','error'); }
+                                  }}
+                                  className="w-full py-2 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white transition-all duration-200 shadow-[0_2px_12px_rgba(99,102,241,0.3)] hover:shadow-[0_4px_20px_rgba(99,102,241,0.5)]">
                                   Dołącz
-                                </button>
+                                </motion.button>
                               )}
                             </div>
-                          </div>
+                          </motion.div>
                         );
                       })}
-                    </div>
+                    </motion.div>
                   )}
                 </div>
               </div>
