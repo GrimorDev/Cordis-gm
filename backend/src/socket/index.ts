@@ -33,8 +33,8 @@ const groupCalls = new Map<string, GroupCallState>();
 
 // ── Activity caches (real-time state, cleared on disconnect) ──────
 // Keyed by user_id. Stores last known state + timestamp for freshness check.
-interface ActivityEntry<T> { data: T; ts: number; }
-const spotifyCache = new Map<string, ActivityEntry<any>>();
+export interface ActivityEntry<T> { data: T; ts: number; }
+export const spotifyCache = new Map<string, ActivityEntry<any>>();
 const twitchCache  = new Map<string, ActivityEntry<any>>();
 const steamCache   = new Map<string, ActivityEntry<any>>();
 const ACTIVITY_STALE_MS = 30 * 60 * 1000; // 30 min — keep activity visible across brief disconnects
