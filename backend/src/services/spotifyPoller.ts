@@ -1,5 +1,6 @@
 import { query } from '../db/pool';
 import { Server as SocketServer } from 'socket.io';
+import { spotifyCache } from '../socket';
 
 const CLIENT_ID     = (process.env.SPOTIFY_CLIENT_ID     || '').trim();
 const CLIENT_SECRET = (process.env.SPOTIFY_CLIENT_SECRET || '').trim();
@@ -83,12 +84,19 @@ async function pollOnce(io: SocketServer): Promise<void> {
         }
       }
 
+      const progress_captured_at = Date.now();
+
+      // Always keep the shared cache fresh so that newly-connecting users get
+      // a correct initial snapshot even if the user's tab is closed and no
+      // frontend `spotify_update` events have been emitted.
+      // The cache entry is updated on every poll cycle (regardless of dedup)
+      // so that the 30-minute staleness window never expires for active listeners.
+      spotifyCache.set(userId, { data: track, ts: progress_captured_at });
+
       // Skip broadcast if nothing changed (compare name+artists as fingerprint)
       const fingerprint = track ? `${track.name}|${track.artists}` : 'null';
       if (lastTrackKey.get(userId) === fingerprint) continue;
       lastTrackKey.set(userId, fingerprint);
-
-      const progress_captured_at = Date.now();
 
       // Broadcast to all server rooms this user belongs to
       const { rows: serverRows } = await query(
