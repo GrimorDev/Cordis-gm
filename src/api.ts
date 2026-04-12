@@ -924,7 +924,8 @@ export const eventsApi = {
 export interface DiscoverServer {
   id: string; name: string; description: string | null;
   discovery_description: string | null; icon_url: string | null;
-  member_count: number; is_official: boolean;
+  banner_url: string | null; accent_color: string | null;
+  member_count: number; online_count: number; is_official: boolean;
 }
 export const discoverApi = {
   list: (q?: string) => req<DiscoverServer[]>('GET', `/servers/discover/list${q ? `?q=${encodeURIComponent(q)}` : ''}`),

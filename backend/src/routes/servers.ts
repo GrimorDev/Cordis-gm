@@ -920,15 +920,18 @@ router.get('/discover/list', authMiddleware, async (req: AuthRequest, res: Respo
   const q = (req.query.q as string || '').toLowerCase();
   try {
     const { rows } = await query(
-      `SELECT s.id, s.name, s.description, s.discovery_description, s.icon_url, s.is_official,
-              COUNT(sm.user_id)::int AS member_count
+      `SELECT s.id, s.name, s.description, s.discovery_description,
+              s.icon_url, s.banner_url, s.accent_color, s.is_official,
+              COUNT(sm.user_id)::int AS member_count,
+              COUNT(CASE WHEN u.status NOT IN ('offline') THEN 1 END)::int AS online_count
        FROM servers s
        LEFT JOIN server_members sm ON sm.server_id = s.id
+       LEFT JOIN users u ON u.id = sm.user_id
        WHERE s.is_public = true
-         ${q ? `AND (LOWER(s.name) LIKE '%' || $1 || '%' OR LOWER(s.description) LIKE '%' || $1 || '%')` : ''}
+         ${q ? `AND (LOWER(s.name) LIKE '%' || $1 || '%' OR LOWER(s.description) LIKE '%' || $1 || '%' OR LOWER(COALESCE(s.discovery_description,'')) LIKE '%' || $1 || '%')` : ''}
        GROUP BY s.id
        ORDER BY member_count DESC
-       LIMIT 50`,
+       LIMIT 100`,
       q ? [q] : []
     );
     return res.json(rows);
