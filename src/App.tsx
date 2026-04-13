@@ -4178,19 +4178,9 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
     { id:'admins',     label:'Administratorzy',   icon: <ShieldCheck size={14}/> },
   ];
 
-  // ── Right metrics panel state ──
-  const [metrics, setMetrics] = React.useState<import('./api').AdminSystemInfo|null>(null);
-  const [metricsLoading, setMetricsLoading] = React.useState(false);
+  // ── Admins list state (local to AdminPanel) ──
   const [adminsList, setAdminsList] = React.useState<import('./api').AdminAdminUser[]>([]);
   const [adminsLoading, setAdminsLoading] = React.useState(false);
-
-  // Auto-refresh metrics every 10 s
-  React.useEffect(() => {
-    const load = () => { setMetricsLoading(true); adminApi.systemInfo().then(setMetrics).catch(()=>{}).finally(()=>setMetricsLoading(false)); };
-    load();
-    const t = setInterval(load, 10_000);
-    return () => clearInterval(t);
-  }, []);
 
   React.useEffect(() => {
     if (tab === 'admins' && adminsList.length === 0) {
@@ -4985,111 +4975,6 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
 
         </div>
 
-        {/* ── RIGHT METRICS PANEL ─────────────────────────────── */}
-        {(()=>{
-          const m = metrics;
-          const fmtMb = (v:number) => v>=1024?`${(v/1024).toFixed(1)} GB`:`${v} MB`;
-          const MetricBar = ({pct,color}:{pct:number,color:string})=>(
-            <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden mt-1.5">
-              <div className={`h-full rounded-full transition-all duration-700 ${color}`} style={{width:`${Math.min(100,Math.max(0,pct))}%`}}/>
-            </div>
-          );
-          const Block = ({title,icon,children}:{title:string,icon:React.ReactNode,children:React.ReactNode})=>(
-            <div className="bg-white/[0.035] border border-white/[0.06] rounded-xl p-3 space-y-2.5">
-              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-                {icon}{title}
-              </div>
-              {children}
-            </div>
-          );
-          const Row = ({label,value,cls}:{label:string,value:React.ReactNode,cls?:string})=>(
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] text-zinc-500 truncate">{label}</span>
-              <span className={`text-[11px] font-bold shrink-0 ${cls||'text-zinc-200'}`}>{value}</span>
-            </div>
-          );
-          return (
-            <div className="w-60 shrink-0 border-l border-white/[0.05] overflow-y-auto custom-scrollbar p-3 space-y-2.5 bg-[#0a0a14]">
-              <div className="flex items-center justify-between px-1 pt-1 pb-0.5">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">Live metryki</span>
-                {metricsLoading && <Loader2 size={9} className="animate-spin text-zinc-700"/>}
-              </div>
-
-              {/* Users online/offline */}
-              <Block title="Użytkownicy" icon={<Users size={10}/>}>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {[
-                    {label:'Online', val:m?.users?.online??'-', cls:'text-emerald-400', dot:'bg-emerald-400'},
-                    {label:'Idle',   val:m?.users?.idle??'-',   cls:'text-amber-400',   dot:'bg-amber-400'},
-                    {label:'DND',    val:m?.users?.dnd??'-',    cls:'text-rose-400',     dot:'bg-rose-500'},
-                    {label:'Offline',val:m?.users?.offline??'-',cls:'text-zinc-500',    dot:'bg-zinc-600'},
-                  ].map(s=>(
-                    <div key={s.label} className="bg-white/[0.03] rounded-lg px-2 py-1.5 flex items-center gap-1.5">
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.dot}`}/>
-                      <div>
-                        <div className={`text-sm font-bold leading-none ${s.cls}`}>{s.val}</div>
-                        <div className="text-[9px] text-zinc-600 mt-0.5">{s.label}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {m?.users && <Row label="Łącznie" value={m.users.total} cls="text-zinc-300"/>}
-              </Block>
-
-              {/* CPU */}
-              <Block title="CPU serwera" icon={<Activity size={10}/>}>
-                <Row label="Obciążenie" value={m?`${m.os?.cpu_load_percent??0}%`:'-'} cls={m?.os?.cpu_load_percent&&m.os.cpu_load_percent>70?'text-rose-400':m?.os?.cpu_load_percent&&m.os.cpu_load_percent>40?'text-amber-400':'text-emerald-400'}/>
-                <MetricBar pct={m?.os?.cpu_load_percent??0} color={m?.os?.cpu_load_percent&&m.os!.cpu_load_percent>70?'bg-rose-500':m?.os?.cpu_load_percent&&m.os!.cpu_load_percent>40?'bg-amber-500':'bg-emerald-500'}/>
-                {m?.os && <>
-                  <Row label="Rdzenie" value={m.os.cpu_cores} cls="text-zinc-400"/>
-                  <Row label="Load avg" value={m.os.load_avg?.map(v=>v.toFixed(2)).join(' / ')} cls="text-zinc-400"/>
-                </>}
-              </Block>
-
-              {/* RAM serwera */}
-              <Block title="RAM serwera" icon={<Database size={10}/>}>
-                <Row label="Używane" value={m?fmtMb(m.os?.used_mem_mb??0):'-'} cls="text-violet-400"/>
-                <Row label="Dostępne" value={m?fmtMb(m.os?.free_mem_mb??0):'-'} cls="text-zinc-400"/>
-                <Row label="Łącznie" value={m?fmtMb(m.os?.total_mem_mb??0):'-'} cls="text-zinc-500"/>
-                <MetricBar pct={m?.os?.mem_percent??0} color={m?.os?.mem_percent&&m.os!.mem_percent>80?'bg-rose-500':m?.os?.mem_percent&&m.os!.mem_percent>60?'bg-amber-500':'bg-violet-500'}/>
-              </Block>
-
-              {/* Node.js */}
-              <Block title="Node.js" icon={<Code2 size={10}/>}>
-                <Row label="Wersja" value={m?.node.version??'-'} cls="text-emerald-400"/>
-                <Row label="Heap" value={m?`${m.node.memory.heapUsed}/${m.node.memory.heapTotal} MB`:'-'} cls="text-indigo-400"/>
-                <MetricBar pct={m?(m.node.memory.heapUsed/Math.max(1,m.node.memory.heapTotal))*100:0} color="bg-indigo-500"/>
-                <Row label="Uptime" value={m?fmtUptime(m.node.uptime_seconds):'-'} cls="text-zinc-300"/>
-              </Block>
-
-              {/* API */}
-              <Block title="Statystyki API" icon={<Zap size={10}/>}>
-                <Row label="Req/s" value={m?.api?`${m.api.requests_per_sec}`:'-'} cls="text-amber-400"/>
-                <Row label="Łącznie" value={m?.api?.requests_total.toLocaleString()??'-'} cls="text-zinc-300"/>
-                {m?.postgres && <Row label="PG połącz." value={m.postgres.active_connections} cls="text-blue-400"/>}
-              </Block>
-
-              {/* Voice */}
-              <Block title="Voice" icon={<Volume2 size={10}/>}>
-                <Row label="Aktywni użytkownicy" value={m?.voice?.active_users??'-'} cls="text-sky-400"/>
-              </Block>
-
-              {/* Redis */}
-              {m?.redis && (
-                <Block title="Redis" icon={<Server size={10}/>}>
-                  <Row label="Klienci" value={m.redis.connected_clients} cls="text-rose-400"/>
-                  <Row label="Pamięć" value={m.redis.used_memory_human??'-'} cls="text-orange-400"/>
-                  {(m.redis.keyspace_hits+m.redis.keyspace_misses)>0&&(
-                    <>
-                      <Row label="Cache hit" value={`${Math.round(m.redis.keyspace_hits/(m.redis.keyspace_hits+m.redis.keyspace_misses)*100)}%`} cls="text-emerald-400"/>
-                      <MetricBar pct={m.redis.keyspace_hits/(m.redis.keyspace_hits+m.redis.keyspace_misses)*100} color="bg-emerald-500/70"/>
-                    </>
-                  )}
-                </Block>
-              )}
-            </div>
-          );
-        })()}
       </div>
     </div>
   );
@@ -6900,6 +6785,8 @@ export default function App() {
   const [adminBadgeSaving, setAdminBadgeSaving] = useState(false);
   const [adminAssignUser, setAdminAssignUser] = useState<AdminUser|null>(null);
   const [adminAssignBadgeId, setAdminAssignBadgeId] = useState('');
+  const [adminMetrics, setAdminMetrics]       = useState<import('./api').AdminSystemInfo|null>(null);
+  const [adminMetricsLoading, setAdminMetricsLoading] = useState(false);
   // ── DnD ──────────────────────────────────────────────────────────
   const [activeDragId,   setActiveDragId]     = useState<string|null>(null);
   const [activeDragType, setActiveDragType]   = useState<'category'|'channel'|null>(null);
@@ -8880,6 +8767,19 @@ export default function App() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
+
+  // ── Admin metrics auto-refresh (every 10 s when admin panel is open) ─
+  useEffect(() => {
+    if (activeView !== 'admin') return;
+    const load = () => {
+      setAdminMetricsLoading(true);
+      adminApi.systemInfo().then(setAdminMetrics).catch(()=>{}).finally(()=>setAdminMetricsLoading(false));
+    };
+    load();
+    const t = setInterval(load, 10_000);
+    return () => clearInterval(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView]);
 
   // ── Close status picker on outside click ────────────────────────
   useEffect(() => {
@@ -14177,6 +14077,97 @@ export default function App() {
           </button>
         )}
         <aside className={`hidden xl:flex shrink-0 flex-col gap-0 glass-panel rounded-2xl overflow-y-auto custom-scrollbar transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${showCallPanel && activeCall && !rightPanelOpen ? 'w-0 opacity-0 overflow-hidden p-0' : 'w-64 opacity-100'}`}>
+          {/* ─ ADMIN LIVE METRICS (shown when admin panel is open) ─ */}
+          {activeView==='admin'&&(()=>{
+            const m = adminMetrics;
+            const fmtMb = (v:number) => v>=1024?`${(v/1024).toFixed(1)} GB`:`${v} MB`;
+            const fmtUptime = (s:number)=>{const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),mn=Math.floor((s%3600)/60);return[d&&`${d}d`,h&&`${h}h`,`${mn}m`].filter(Boolean).join(' ');};
+            const MetricBar = ({pct,color}:{pct:number,color:string})=>(
+              <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden mt-1">
+                <div className={`h-full rounded-full transition-all duration-700 ${color}`} style={{width:`${Math.min(100,Math.max(0,pct))}%`}}/>
+              </div>
+            );
+            const Block = ({title,icon,children}:{title:string,icon:React.ReactNode,children:React.ReactNode})=>(
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 space-y-2">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-500">{icon}{title}</div>
+                {children}
+              </div>
+            );
+            const Row = ({label,value,cls}:{label:string,value:React.ReactNode,cls?:string})=>(
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] text-zinc-500 truncate">{label}</span>
+                <span className={`text-[11px] font-bold shrink-0 ${cls||'text-zinc-200'}`}>{value}</span>
+              </div>
+            );
+            return (
+              <div className="flex flex-col gap-2.5 p-3">
+                <div className="flex items-center justify-between pt-1 pb-0.5">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-1.5"><Activity size={10}/>Live metryki</span>
+                  {adminMetricsLoading&&<Loader2 size={9} className="animate-spin text-zinc-600"/>}
+                </div>
+
+                <Block title="Użytkownicy" icon={<Users size={10}/>}>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {([
+                      {l:'Online',  v:m?.users?.online??'-', c:'text-emerald-400', d:'bg-emerald-400'},
+                      {l:'Idle',    v:m?.users?.idle??'-',   c:'text-amber-400',   d:'bg-amber-400'},
+                      {l:'DND',     v:m?.users?.dnd??'-',    c:'text-rose-400',    d:'bg-rose-500'},
+                      {l:'Offline', v:m?.users?.offline??'-',c:'text-zinc-500',    d:'bg-zinc-600'},
+                    ] as const).map(s=>(
+                      <div key={s.l} className="bg-white/[0.03] rounded-lg px-2 py-1.5 flex items-center gap-1.5">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.d}`}/>
+                        <div>
+                          <div className={`text-sm font-bold leading-none ${s.c}`}>{s.v}</div>
+                          <div className="text-[9px] text-zinc-600 mt-0.5">{s.l}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {m?.users&&<Row label="Łącznie" value={m.users.total} cls="text-zinc-300"/>}
+                </Block>
+
+                <Block title="CPU serwera" icon={<Activity size={10}/>}>
+                  <Row label="Obciążenie" value={m?`${m.os?.cpu_load_percent??0}%`:'-'} cls={(m?.os?.cpu_load_percent??0)>70?'text-rose-400':(m?.os?.cpu_load_percent??0)>40?'text-amber-400':'text-emerald-400'}/>
+                  <MetricBar pct={m?.os?.cpu_load_percent??0} color={(m?.os?.cpu_load_percent??0)>70?'bg-rose-500':(m?.os?.cpu_load_percent??0)>40?'bg-amber-500':'bg-emerald-500'}/>
+                  {m?.os&&<><Row label="Rdzenie" value={m.os.cpu_cores} cls="text-zinc-400"/><Row label="Load avg" value={m.os.load_avg?.map(v=>v.toFixed(1)).join(' / ')} cls="text-zinc-400"/></>}
+                </Block>
+
+                <Block title="RAM serwera" icon={<Database size={10}/>}>
+                  <Row label="Używane" value={m?fmtMb(m.os?.used_mem_mb??0):'-'} cls="text-violet-400"/>
+                  <Row label="Łącznie" value={m?fmtMb(m.os?.total_mem_mb??0):'-'} cls="text-zinc-500"/>
+                  <MetricBar pct={m?.os?.mem_percent??0} color={(m?.os?.mem_percent??0)>80?'bg-rose-500':(m?.os?.mem_percent??0)>60?'bg-amber-500':'bg-violet-500'}/>
+                </Block>
+
+                <Block title="Node.js" icon={<Code2 size={10}/>}>
+                  <Row label="Wersja" value={m?.node.version??'-'} cls="text-emerald-400"/>
+                  <Row label="Heap" value={m?`${m.node.memory.heapUsed}/${m.node.memory.heapTotal} MB`:'-'} cls="text-indigo-400"/>
+                  <MetricBar pct={m?(m.node.memory.heapUsed/Math.max(1,m.node.memory.heapTotal))*100:0} color="bg-indigo-500"/>
+                  <Row label="Uptime" value={m?fmtUptime(m.node.uptime_seconds):'-'} cls="text-zinc-300"/>
+                </Block>
+
+                <Block title="Statystyki API" icon={<Zap size={10}/>}>
+                  <Row label="Req/s" value={m?.api?`${m.api.requests_per_sec}`:'-'} cls="text-amber-400"/>
+                  <Row label="Łącznie" value={m?.api?.requests_total.toLocaleString()??'-'} cls="text-zinc-300"/>
+                  {m?.postgres&&<Row label="PG połącz." value={m.postgres.active_connections} cls="text-blue-400"/>}
+                </Block>
+
+                <Block title="Voice" icon={<Volume2 size={10}/>}>
+                  <Row label="Aktywni" value={m?.voice?.active_users??'-'} cls="text-sky-400"/>
+                </Block>
+
+                {m?.redis&&(
+                  <Block title="Redis" icon={<Server size={10}/>}>
+                    <Row label="Klienci" value={m.redis.connected_clients} cls="text-rose-400"/>
+                    <Row label="Pamięć" value={m.redis.used_memory_human??'-'} cls="text-orange-400"/>
+                    {(m.redis.keyspace_hits+m.redis.keyspace_misses)>0&&<>
+                      <Row label="Cache hit" value={`${Math.round(m.redis.keyspace_hits/(m.redis.keyspace_hits+m.redis.keyspace_misses)*100)}%`} cls="text-emerald-400"/>
+                      <MetricBar pct={m.redis.keyspace_hits/(m.redis.keyspace_hits+m.redis.keyspace_misses)*100} color="bg-emerald-500/70"/>
+                    </>}
+                  </Block>
+                )}
+              </div>
+            );
+          })()}
           {/* ─ GROUP DM MEMBERS ─ */}
           {activeView==='dms' && activeGroupDm && (() => {
             const gc = groupConvs.find(g => g.id === activeGroupDm);
