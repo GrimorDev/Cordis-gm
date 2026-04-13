@@ -684,6 +684,66 @@ export const steamApi = {
   disconnect:  () => req<{ok:boolean}>('DELETE', '/steam/disconnect'),
 };
 
+// ── YouTube ────────────────────────────────────────────────────────────────
+export interface YouTubeData {
+  connected: boolean; show_on_profile: boolean;
+  channel_id?: string | null;
+  display_name?: string | null;
+  channel_banner?: string | null;
+  subscriber_count?: number | null;
+  latest_video_id?: string | null;
+  latest_video_title?: string | null;
+  latest_video_thumb?: string | null;
+  is_live?: boolean;
+  live_title?: string | null;
+  live_viewers?: number | null;
+}
+
+// ── Kick ───────────────────────────────────────────────────────────────────
+export interface KickData {
+  connected: boolean; show_on_profile: boolean;
+  username?: string | null;
+  display_name?: string | null;
+  profile_pic?: string | null;
+  is_live?: boolean;
+  live_title?: string | null;
+  live_viewers?: number | null;
+  live_category?: string | null;
+}
+
+// ── Epic Games ─────────────────────────────────────────────────────────────
+export interface EpicData {
+  connected: boolean; show_on_profile: boolean;
+  display_name?: string | null;
+  fortnite_wins?: number | null;
+  fortnite_kd?: number | null;
+  fortnite_matches?: number | null;
+}
+
+export const youtubeApi = {
+  connect:     () => req<{ url: string }>('GET', '/youtube/connect'),
+  status:      () => req<YouTubeData>('GET', '/youtube/status'),
+  userPublic:  (userId: string) => req<YouTubeData>('GET', `/youtube/user/${userId}`),
+  setSettings: (d: { show_on_profile: boolean }) => req<{ok:boolean}>('PUT', '/youtube/settings', d),
+  disconnect:  () => req<{ok:boolean}>('DELETE', '/youtube/disconnect'),
+};
+
+export const kickApi = {
+  connect:     (username: string) => req<KickData>('POST', '/kick/connect', { username }),
+  status:      () => req<KickData>('GET', '/kick/status'),
+  userPublic:  (userId: string) => req<KickData>('GET', `/kick/user/${userId}`),
+  setSettings: (d: { show_on_profile: boolean }) => req<{ok:boolean}>('PUT', '/kick/settings', d),
+  disconnect:  () => req<{ok:boolean}>('DELETE', '/kick/disconnect'),
+};
+
+export const epicApi = {
+  connect:     (display_name: string) => req<EpicData>('POST', '/epicgames/connect', { display_name }),
+  status:      () => req<EpicData>('GET', '/epicgames/status'),
+  userPublic:  (userId: string) => req<EpicData>('GET', `/epicgames/user/${userId}`),
+  setSettings: (d: { show_on_profile: boolean }) => req<{ok:boolean}>('PUT', '/epicgames/settings', d),
+  disconnect:  () => req<{ok:boolean}>('DELETE', '/epicgames/disconnect'),
+};
+
 export const adminApi = {
   stats: () => req<AdminStats>('GET', '/admin/stats'),
   overview: () => req<AdminOverview>('GET', '/admin/overview'),
