@@ -15,6 +15,13 @@ const FRONTEND_URL  = (process.env.FRONTEND_URL || (process.env.CORS_ORIGIN || '
 console.log('[Kick] CLIENT_ID configured:', !!CLIENT_ID);
 console.log('[Kick] REDIRECT_URI =', JSON.stringify(REDIRECT_URI));
 
+// ── PKCE helpers ──────────────────────────────────────────────────────
+function generatePKCE() {
+  const verifier  = crypto.randomBytes(32).toString('base64url');
+  const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+  return { verifier, challenge };
+}
+
 // ── Fetch Kick channel info using access token ────────────────────────
 async function fetchKickChannel(accessToken: string): Promise<{
   username: string;
@@ -26,40 +33,41 @@ async function fetchKickChannel(accessToken: string): Promise<{
   live_category: string | null;
 } | null> {
   try {
-    // Get authenticated user info
-    const r = await fetch('https://kick.com/api/v2/user', {
+    // Kick public API v1 — get authenticated user
+    const r = await fetch('https://api.kick.com/public/v1/users', {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: 'application/json',
-        'User-Agent': 'Cordyn/1.0',
       },
       signal: AbortSignal.timeout(8000),
     });
     if (!r.ok) {
-      console.error('[Kick] user API error:', r.status);
+      console.error('[Kick] users API error:', r.status, await r.text().catch(() => ''));
       return null;
     }
     const data: any = await r.json();
-    const username    = (data?.username || data?.slug || null) as string | null;
-    const displayName = (data?.name || username || null) as string | null;
-    const profilePic  = (data?.profile_pic || null) as string | null;
+    // API returns { data: { user_id, name, bio, ... } }
+    const u = data?.data;
+    const username    = (u?.slug || u?.name || null) as string | null;
+    const displayName = (u?.name || username  || null) as string | null;
+    const profilePic  = (u?.profile_picture   || null) as string | null;
     if (!username) return null;
 
-    // Fetch channel live status via public API
+    // Fetch channel live status
     let isLive = false, liveTitle: string | null = null, liveViewers = 0, liveCategory: string | null = null;
     try {
-      const chR = await fetch(`https://kick.com/api/v2/channels/${username}`, {
-        headers: { Accept: 'application/json', 'User-Agent': 'Cordyn/1.0' },
+      const chR = await fetch(`https://api.kick.com/public/v1/channels?broadcaster_user_id=${u?.user_id}`, {
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
         signal: AbortSignal.timeout(6000),
       });
       if (chR.ok) {
-        const ch: any = await chR.json();
-        const ls = ch?.livestream;
-        if (ls) {
+        const chData: any = await chR.json();
+        const ch = chData?.data?.[0];
+        if (ch?.livestream) {
           isLive       = true;
-          liveTitle    = ls.session_title || null;
-          liveViewers  = ls.viewers       || 0;
-          liveCategory = ls.categories?.[0]?.name || ls.category?.name || null;
+          liveTitle    = ch.livestream.session_title || null;
+          liveViewers  = ch.livestream.viewers       || 0;
+          liveCategory = ch.livestream.category?.name || null;
         }
       }
     } catch { /* non-fatal */ }
@@ -72,20 +80,27 @@ async function fetchKickChannel(accessToken: string): Promise<{
   }
 }
 
-// GET /api/kick/connect — returns Kick OAuth URL (auth required)
+// GET /api/kick/connect — returns Kick OAuth URL with PKCE (auth required)
 router.get('/connect', authMiddleware, async (req: AuthRequest, res: Response) => {
   if (!CLIENT_ID) return res.status(503).json({ error: 'Kick nie skonfigurowane' });
+
+  const { verifier, challenge } = generatePKCE();
   const nonce = crypto.randomBytes(16).toString('hex');
-  await redis.setex(`oauth:state:kick:${nonce}`, 600, req.user!.id);
   const state = `${req.user!.id}:${nonce}`;
+
+  // Store verifier + userId in Redis for callback verification
+  await redis.setex(`oauth:state:kick:${nonce}`, 600, JSON.stringify({ userId: req.user!.id, verifier }));
+
   const params = new URLSearchParams({
-    response_type: 'code',
-    client_id:     CLIENT_ID,
-    redirect_uri:  REDIRECT_URI,
-    scope:         'user:read channel:read',
+    response_type:         'code',
+    client_id:             CLIENT_ID,
+    redirect_uri:          REDIRECT_URI,
+    scope:                 'user:read channel:read',
     state,
+    code_challenge:        challenge,
+    code_challenge_method: 'S256',
   });
-  return res.json({ url: `https://kick.com/oauth2/authorize?${params}` });
+  return res.json({ url: `https://id.kick.com/oauth/authorize?${params}` });
 });
 
 // GET /api/kick/callback — OAuth callback
@@ -95,22 +110,25 @@ router.get('/callback', async (req: Request, res: Response) => {
 
   const [userId, nonce] = state.split(':');
   if (!userId || !nonce) return res.redirect(`${FRONTEND_URL}?kick=error`);
-  const storedUid = await redis.get(`oauth:state:kick:${nonce}`);
-  if (!storedUid || storedUid !== userId) return res.redirect(`${FRONTEND_URL}?kick=error`);
+
+  const stored = await redis.get(`oauth:state:kick:${nonce}`);
+  if (!stored) return res.redirect(`${FRONTEND_URL}?kick=error`);
+  const { userId: storedUid, verifier } = JSON.parse(stored);
+  if (storedUid !== userId) return res.redirect(`${FRONTEND_URL}?kick=error`);
   await redis.del(`oauth:state:kick:${nonce}`);
 
   try {
-    const body = new URLSearchParams({
-      grant_type:    'authorization_code',
-      code,
-      client_id:     CLIENT_ID,
-      client_secret: CLIENT_SECRET,
-      redirect_uri:  REDIRECT_URI,
-    });
-    const r = await fetch('https://kick.com/oauth2/token', {
+    const r = await fetch('https://id.kick.com/oauth/token', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grant_type:    'authorization_code',
+        client_id:     CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        redirect_uri:  REDIRECT_URI,
+        code,
+        code_verifier: verifier,
+      }),
     });
     if (!r.ok) {
       console.error('[Kick] token exchange failed:', r.status, await r.text().catch(() => ''));

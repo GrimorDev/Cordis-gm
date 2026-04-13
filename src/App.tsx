@@ -7441,6 +7441,17 @@ export default function App() {
       addToast('Błąd połączenia YouTube', 'error');
       window.history.replaceState({}, '', window.location.pathname);
     }
+    const ki = p.get('kick');
+    if (ki === 'connected') {
+      addToast('Kick połączono pomyślnie! 🟢', 'success');
+      window.history.replaceState({}, '', window.location.pathname);
+      kickApi.status().then(setOwnKick).catch(()=>{});
+      setActiveView('settings');
+      setTimeout(() => (window as any).__cordisGoToSettingsTab?.('connections'), 300);
+    } else if (ki === 'error') {
+      addToast('Błąd połączenia Kick', 'error');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
