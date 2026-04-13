@@ -85,7 +85,7 @@ router.get('/connect', authMiddleware, async (req: AuthRequest, res: Response) =
     scope:         'user:read channel:read',
     state,
   });
-  return res.json({ url: `https://id.kick.com/oauth2/authorize?${params}` });
+  return res.json({ url: `https://kick.com/oauth2/authorize?${params}` });
 });
 
 // GET /api/kick/callback — OAuth callback
@@ -107,7 +107,7 @@ router.get('/callback', async (req: Request, res: Response) => {
       client_secret: CLIENT_SECRET,
       redirect_uri:  REDIRECT_URI,
     });
-    const r = await fetch('https://id.kick.com/oauth2/token', {
+    const r = await fetch('https://kick.com/oauth2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
