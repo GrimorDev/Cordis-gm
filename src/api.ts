@@ -721,8 +721,7 @@ export interface EpicData {
 }
 
 export const youtubeApi = {
-  // No OAuth — user provides @handle or youtube.com URL; backend fetches public data via API key
-  connect:     (channel_input: string) => req<YouTubeData>('POST', '/youtube/connect', { channel_input }),
+  connect:     () => req<{ url: string }>('GET', '/youtube/connect'),
   status:      () => req<YouTubeData>('GET', '/youtube/status'),
   userPublic:  (userId: string) => req<YouTubeData>('GET', `/youtube/user/${userId}`),
   setSettings: (d: { show_on_profile: boolean }) => req<{ok:boolean}>('PUT', '/youtube/settings', d),
@@ -730,7 +729,7 @@ export const youtubeApi = {
 };
 
 export const kickApi = {
-  connect:     (username: string) => req<KickData>('POST', '/kick/connect', { username }),
+  connect:     () => req<{ url: string }>('GET', '/kick/connect'),
   status:      () => req<KickData>('GET', '/kick/status'),
   userPublic:  (userId: string) => req<KickData>('GET', `/kick/user/${userId}`),
   setSettings: (d: { show_on_profile: boolean }) => req<{ok:boolean}>('PUT', '/kick/settings', d),
