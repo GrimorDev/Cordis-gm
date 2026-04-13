@@ -145,8 +145,9 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api/spotify',    spotifyRoutes);
 app.use('/api/steam',      steamRoutes);
 app.use('/api/twitch',     twitchRoutes);
-app.use('/api/youtube',    youtubeRoutes);
-app.use('/api/kick',       kickRoutes);
+app.use('/api/youtube',         youtubeRoutes);
+app.use('/api/auth/youtube',    youtubeRoutes); // alias — matches Google OAuth redirect URI /api/auth/youtube/callback
+app.use('/api/kick',            kickRoutes);
 app.use('/api/epicgames',  epicgamesRoutes);
 app.use('/api/users/notes', notesRoutes);
 app.use('/api/polls',   pollsRoutes);
