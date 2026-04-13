@@ -188,25 +188,27 @@ router.get('/callback', async (req: Request, res: Response) => {
     const tokens: any = await r.json();
     const expiry = new Date(Date.now() + (tokens.expires_in || 3600) * 1000);
 
-    // Fetch YouTube channel
-    const ch = await fetchChannelInfo(tokens.access_token);
-
+    // Save tokens first (so user is "connected" even if channel fetch fails)
     await query(
-      `UPDATE users SET
-         youtube_access_token=$1, youtube_refresh_token=$2, youtube_token_expires=$3,
-         youtube_channel_id=$4, youtube_display_name=$5, youtube_channel_banner=$6,
-         youtube_subscriber_count=$7, youtube_latest_video_id=$8, youtube_latest_video_title=$9,
-         youtube_latest_video_thumb=$10, youtube_is_live=$11, youtube_live_title=$12,
-         youtube_live_viewers=$13, youtube_show_on_profile=TRUE
-       WHERE id=$14`,
-      [
-        tokens.access_token, tokens.refresh_token || null, expiry,
-        ch?.channel_id || null, ch?.display_name || null, ch?.channel_banner || null,
-        ch?.subscriber_count || 0, ch?.latest_video_id || null, ch?.latest_video_title || null,
-        ch?.latest_video_thumb || null, ch?.is_live || false, ch?.live_title || null,
-        ch?.live_viewers || 0, userId,
-      ]
+      `UPDATE users SET youtube_access_token=$1, youtube_refresh_token=$2,
+         youtube_token_expires=$3, youtube_show_on_profile=TRUE WHERE id=$4`,
+      [tokens.access_token, tokens.refresh_token || null, expiry, userId]
     );
+
+    // Try to fetch YouTube channel info (requires YouTube Data API v3 to be enabled)
+    const ch = await fetchChannelInfo(tokens.access_token);
+    if (ch) {
+      await query(
+        `UPDATE users SET
+           youtube_channel_id=$1, youtube_display_name=$2, youtube_channel_banner=$3,
+           youtube_subscriber_count=$4, youtube_latest_video_id=$5, youtube_latest_video_title=$6,
+           youtube_latest_video_thumb=$7, youtube_is_live=$8, youtube_live_title=$9, youtube_live_viewers=$10
+         WHERE id=$11`,
+        [ch.channel_id, ch.display_name, ch.channel_banner, ch.subscriber_count,
+         ch.latest_video_id, ch.latest_video_title, ch.latest_video_thumb,
+         ch.is_live, ch.live_title, ch.live_viewers, userId]
+      );
+    }
     return res.redirect(`${FRONTEND_URL}?youtube=connected`);
   } catch (e) {
     console.error('[YouTube] callback error:', e);
@@ -218,15 +220,55 @@ router.get('/callback', async (req: Request, res: Response) => {
 router.get('/status', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { rows } = await query(
-      `SELECT youtube_channel_id, youtube_display_name, youtube_channel_banner,
+      `SELECT youtube_access_token, youtube_channel_id, youtube_display_name, youtube_channel_banner,
               youtube_subscriber_count, youtube_latest_video_id, youtube_latest_video_title,
               youtube_latest_video_thumb, youtube_is_live, youtube_live_title,
               youtube_live_viewers, youtube_show_on_profile
        FROM users WHERE id=$1`, [req.user!.id]
     );
     const row = rows[0];
+    const hasToken = !!row?.youtube_access_token;
+
+    // If we have a token but no channel_id, try to fetch channel info now
+    if (hasToken && !row?.youtube_channel_id) {
+      const token = await getValidAccessToken(req.user!.id);
+      if (token) {
+        const ch = await fetchChannelInfo(token);
+        if (ch) {
+          await query(
+            `UPDATE users SET youtube_channel_id=$1, youtube_display_name=$2, youtube_channel_banner=$3,
+               youtube_subscriber_count=$4, youtube_latest_video_id=$5, youtube_latest_video_title=$6,
+               youtube_latest_video_thumb=$7, youtube_is_live=$8, youtube_live_title=$9, youtube_live_viewers=$10
+             WHERE id=$11`,
+            [ch.channel_id, ch.display_name, ch.channel_banner, ch.subscriber_count,
+             ch.latest_video_id, ch.latest_video_title, ch.latest_video_thumb,
+             ch.is_live, ch.live_title, ch.live_viewers, req.user!.id]
+          );
+          return res.json({
+            connected: true,
+            show_on_profile: row?.youtube_show_on_profile !== false,
+            channel_id: ch.channel_id, display_name: ch.display_name,
+            channel_banner: ch.channel_banner, subscriber_count: ch.subscriber_count,
+            latest_video_id: ch.latest_video_id, latest_video_title: ch.latest_video_title,
+            latest_video_thumb: ch.latest_video_thumb, is_live: ch.is_live,
+            live_title: ch.live_title, live_viewers: ch.live_viewers,
+          });
+        }
+      }
+      // Token exists but channel fetch failed (e.g. YouTube Data API not enabled)
+      // Still return connected:true so user sees it's linked, with a note
+      return res.json({
+        connected: true,
+        show_on_profile: row?.youtube_show_on_profile !== false,
+        channel_id: null, display_name: 'YouTube (brak danych kanału)',
+        channel_banner: null, subscriber_count: 0,
+        latest_video_id: null, latest_video_title: null, latest_video_thumb: null,
+        is_live: false, live_title: null, live_viewers: 0,
+      });
+    }
+
     return res.json({
-      connected:          !!row?.youtube_channel_id,
+      connected:          hasToken,
       show_on_profile:    row?.youtube_show_on_profile !== false,
       channel_id:         row?.youtube_channel_id    || null,
       display_name:       row?.youtube_display_name  || null,
