@@ -1,9 +1,17 @@
 import { Router, Response, NextFunction } from 'express';
 import { body, validationResult } from 'express-validator';
+import os from 'os';
 import { query } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { deleteFromR2, r2Enabled } from '../services/r2';
+
+// ── Simple in-process API request counter ────────────────────────────────────
+let _apiRequestsTotal = 0;
+let _apiRequestsLast  = 0;  // snapshot at last /system/info call
+let _apiRequestsRate  = 0;  // req/s since last call
+let _lastInfoCallAt   = Date.now();
+export function countRequest() { _apiRequestsTotal++; }
 
 const router = Router();
 
@@ -465,6 +473,27 @@ router.post('/users/:userId/set-admin',
   }
 );
 
+// ── GET /api/admin/admins — list all users with admin access ──────────
+router.get('/admins', authMiddleware, async (_req: AuthRequest, res: Response) => {
+  try {
+    const { rows } = await query(
+      `SELECT u.id, u.username, u.email, u.avatar_url, u.status, u.created_at, u.last_active_at,
+              u.is_admin,
+              COALESCE(json_agg(DISTINCT jsonb_build_object('name', gb.name, 'label', gb.label, 'color', gb.color)) FILTER (WHERE gb.id IS NOT NULL), '[]') AS badges
+       FROM users u
+       LEFT JOIN user_badges ub ON ub.user_id = u.id
+       LEFT JOIN global_badges gb ON gb.id = ub.badge_id
+       WHERE u.is_admin = true OR EXISTS (
+         SELECT 1 FROM user_badges ub2 JOIN global_badges gb2 ON gb2.id=ub2.badge_id
+         WHERE ub2.user_id=u.id AND gb2.name='developer'
+       )
+       GROUP BY u.id
+       ORDER BY u.is_admin DESC, u.created_at ASC`
+    );
+    return res.json(rows);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
 // ── GET /api/admin/users/:userId/bans ─────────────────────────────────
 router.get('/users/:userId/bans', async (req: AuthRequest, res: Response) => {
   try {
@@ -584,7 +613,25 @@ router.post('/broadcast',
 router.get('/system/info', async (_req, res: Response) => {
   try {
     const mem = process.memoryUsage();
-    const [dbRes, redisRes] = await Promise.allSettled([
+
+    // CPU load (os.loadavg = 1/5/15 min; normalise by core count → %)
+    const cpus = os.cpus();
+    const loadAvg1 = os.loadavg()[0];
+    const cpuLoadPercent = Math.min(99, Math.round((loadAvg1 / Math.max(1, cpus.length)) * 100));
+
+    // OS RAM
+    const osTotalMb = Math.round(os.totalmem() / 1024 / 1024);
+    const osFreeMb  = Math.round(os.freemem()  / 1024 / 1024);
+    const osUsedMb  = osTotalMb - osFreeMb;
+
+    // API request rate since last call
+    const now = Date.now();
+    const elapsed = (now - _lastInfoCallAt) / 1000 || 1;
+    _apiRequestsRate = Math.round((_apiRequestsTotal - _apiRequestsLast) / elapsed * 10) / 10;
+    _apiRequestsLast = _apiRequestsTotal;
+    _lastInfoCallAt  = now;
+
+    const [dbRes, redisRes, usersRes, voiceRes] = await Promise.allSettled([
       query(`SELECT
         pg_size_pretty(pg_database_size(current_database())) as db_size,
         (SELECT COUNT(*)::int FROM pg_stat_activity WHERE state='active') as active_connections,
@@ -595,17 +642,43 @@ router.get('/system/info', async (_req, res: Response) => {
         const info = await redis.info();
         const lines = info.split('\r\n');
         const get = (k: string) => lines.find(l => l.startsWith(k + ':'))?.split(':').slice(1).join(':').trim() || null;
+        // Also get connected socket count from Redis keyspace
+        const socketKeys = await redis.keys('socket:*');
         return {
           version:                   get('redis_version'),
           uptime_seconds:            parseInt(get('uptime_in_seconds') || '0'),
           connected_clients:         parseInt(get('connected_clients') || '0'),
           used_memory_human:         get('used_memory_human'),
+          used_memory_bytes:         parseInt(get('used_memory') || '0'),
           total_commands_processed:  parseInt(get('total_commands_processed') || '0'),
           keyspace_hits:             parseInt(get('keyspace_hits') || '0'),
           keyspace_misses:           parseInt(get('keyspace_misses') || '0'),
+          socket_count:              socketKeys.length,
         };
       })(),
+      query(`SELECT
+        COUNT(*)::int                                         AS total,
+        COUNT(CASE WHEN status NOT IN ('offline') THEN 1 END)::int AS online,
+        COUNT(CASE WHEN status = 'offline'        THEN 1 END)::int AS offline,
+        COUNT(CASE WHEN status = 'dnd'            THEN 1 END)::int AS dnd,
+        COUNT(CASE WHEN status = 'idle'           THEN 1 END)::int AS idle
+      FROM users`),
+      // Count users currently in any voice channel via Redis
+      (async () => {
+        const { redis } = await import('../redis/client');
+        const keys = await redis.keys('voice:channel:*');
+        let total = 0;
+        for (const k of keys) {
+          const count = await redis.scard(k);
+          total += count;
+        }
+        return { total };
+      })(),
     ]);
+
+    const userStats = usersRes.status === 'fulfilled' ? usersRes.value.rows[0] : null;
+    const voiceStats = voiceRes.status === 'fulfilled' ? voiceRes.value : { total: 0 };
+
     return res.json({
       node: {
         version:        process.version,
@@ -617,10 +690,33 @@ router.get('/system/info', async (_req, res: Response) => {
           external:  Math.round(mem.external  / 1024 / 1024),
         },
       },
+      os: {
+        platform:        os.platform(),
+        arch:            os.arch(),
+        cpu_model:       cpus[0]?.model ?? 'Unknown',
+        cpu_cores:       cpus.length,
+        cpu_load_percent: cpuLoadPercent,
+        total_mem_mb:    osTotalMb,
+        free_mem_mb:     osFreeMb,
+        used_mem_mb:     osUsedMb,
+        mem_percent:     Math.round((osUsedMb / osTotalMb) * 100),
+        load_avg:        os.loadavg().map(v => Math.round(v * 100) / 100),
+      },
+      api: {
+        requests_total:  _apiRequestsTotal,
+        requests_per_sec: _apiRequestsRate,
+      },
+      users: userStats
+        ? { total: userStats.total, online: userStats.online, offline: userStats.offline, dnd: userStats.dnd, idle: userStats.idle }
+        : null,
+      voice: { active_users: voiceStats.total },
       postgres: dbRes.status === 'fulfilled' ? dbRes.value.rows[0] : null,
       redis:    redisRes.status === 'fulfilled' ? redisRes.value : null,
     });
-  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+  } catch (e) {
+    console.error('[system/info]', e);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

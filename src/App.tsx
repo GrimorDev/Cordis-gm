@@ -3917,7 +3917,7 @@ function StorageTab({ addToast }: { addToast: (m:string,t?:any)=>void }) {
 }
 
 // ─── Admin Panel component ────────────────────────────────────────────────────
-type AdminTab = 'dashboard'|'users'|'servers'|'badges'|'storage'|'audit'|'broadcast'|'system';
+type AdminTab = 'dashboard'|'users'|'servers'|'badges'|'storage'|'audit'|'broadcast'|'system'|'admins';
 interface AdminPanelProps {
   currentUser: import('./api').UserProfile | null;
   overview: import('./api').AdminOverview | null;
@@ -4175,7 +4175,30 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
     { id:'audit',      label:'Dziennik adm.',     icon: <History size={14}/> },
     { id:'broadcast',  label:'Ogłoszenia',        icon: <Megaphone size={14}/> },
     { id:'system',     label:'System',            icon: <Database size={14}/> },
+    { id:'admins',     label:'Administratorzy',   icon: <ShieldCheck size={14}/> },
   ];
+
+  // ── Right metrics panel state ──
+  const [metrics, setMetrics] = React.useState<import('./api').AdminSystemInfo|null>(null);
+  const [metricsLoading, setMetricsLoading] = React.useState(false);
+  const [adminsList, setAdminsList] = React.useState<import('./api').AdminAdminUser[]>([]);
+  const [adminsLoading, setAdminsLoading] = React.useState(false);
+
+  // Auto-refresh metrics every 10 s
+  React.useEffect(() => {
+    const load = () => { setMetricsLoading(true); adminApi.systemInfo().then(setMetrics).catch(()=>{}).finally(()=>setMetricsLoading(false)); };
+    load();
+    const t = setInterval(load, 10_000);
+    return () => clearInterval(t);
+  }, []);
+
+  React.useEffect(() => {
+    if (tab === 'admins' && adminsList.length === 0) {
+      setAdminsLoading(true);
+      adminApi.admins().then(setAdminsList).catch(()=>{}).finally(()=>setAdminsLoading(false));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   const fmtUptime = (s: number) => {
     const d = Math.floor(s/86400), h = Math.floor((s%86400)/3600), m = Math.floor((s%3600)/60);
@@ -4823,6 +4846,58 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
             </div>
           )}
 
+          {/* ── Administratorzy ── */}
+          {tab==='admins'&&(
+            <div className="max-w-3xl mx-auto space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-bold text-white">Administratorzy</h2>
+                <button onClick={()=>{ setAdminsLoading(true); adminApi.admins().then(setAdminsList).catch(()=>{}).finally(()=>setAdminsLoading(false)); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 hover:text-white rounded-xl transition-all">
+                  <Activity size={11}/> Odśwież
+                </button>
+              </div>
+              {adminsLoading && adminsList.length===0 ? (
+                <div className="flex justify-center py-12"><Loader2 size={20} className="animate-spin text-zinc-600"/></div>
+              ) : (
+                <div className="space-y-2">
+                  {adminsList.map(a=>(
+                    <div key={a.id} className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 flex items-center gap-4 hover:border-white/[0.1] transition-all">
+                      <div className="relative shrink-0">
+                        <img src={a.avatar_url||`https://ui-avatars.com/api/?name=${a.username}&background=6366f1&color=fff&size=40`} alt={a.username} className="w-10 h-10 rounded-xl object-cover"/>
+                        <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#0d0d18] ${a.status==='online'?'bg-emerald-400':a.status==='idle'?'bg-amber-400':a.status==='dnd'?'bg-rose-500':'bg-zinc-600'}`}/>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-white text-sm">{a.username}</span>
+                          {a.is_admin && <span className="text-[9px] font-bold bg-violet-500/15 text-violet-300 border border-violet-500/30 rounded-full px-2 py-0.5">ADMIN</span>}
+                          {a.badges.map(b=>(
+                            <span key={b.name} className="text-[9px] font-bold rounded-full px-2 py-0.5 border" style={{background:`${b.color}15`,color:b.color,borderColor:`${b.color}40`}}>{b.label}</span>
+                          ))}
+                        </div>
+                        <p className="text-xs text-zinc-500 truncate">{a.email}</p>
+                        {a.last_active_at && <p className="text-[10px] text-zinc-600 mt-0.5">Ostatnia aktywność: {new Date(a.last_active_at).toLocaleString('pl-PL')}</p>}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[10px] text-zinc-600">od {new Date(a.created_at).toLocaleDateString('pl-PL')}</span>
+                        {a.id !== currentUser?.id && a.is_admin && (
+                          <button onClick={async()=>{
+                            try { await adminApi.users.setAdmin(a.id, false); setAdminsList(p=>p.filter(x=>x.id!==a.id||x.badges.some(b=>b.name==='developer'))); addToast({ type:'success', message:`Cofnięto uprawnienia admina dla ${a.username}` }); }
+                            catch { addToast({ type:'error', message:'Błąd' }); }
+                          }} className="p-1.5 rounded-lg text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all" title="Cofnij uprawnienia admina">
+                            <ShieldOff size={13}/>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {adminsList.length===0&&!adminsLoading&&(
+                    <div className="text-center py-12 text-zinc-600"><ShieldCheck size={32} className="mx-auto mb-2 opacity-30"/><p className="text-sm">Brak administratorów</p></div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ── System ── */}
           {tab==='system'&&(
             <div className="max-w-2xl mx-auto space-y-4">
@@ -4909,6 +4984,112 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
           )}
 
         </div>
+
+        {/* ── RIGHT METRICS PANEL ─────────────────────────────── */}
+        {(()=>{
+          const m = metrics;
+          const fmtMb = (v:number) => v>=1024?`${(v/1024).toFixed(1)} GB`:`${v} MB`;
+          const MetricBar = ({pct,color}:{pct:number,color:string})=>(
+            <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden mt-1.5">
+              <div className={`h-full rounded-full transition-all duration-700 ${color}`} style={{width:`${Math.min(100,Math.max(0,pct))}%`}}/>
+            </div>
+          );
+          const Block = ({title,icon,children}:{title:string,icon:React.ReactNode,children:React.ReactNode})=>(
+            <div className="bg-white/[0.035] border border-white/[0.06] rounded-xl p-3 space-y-2.5">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                {icon}{title}
+              </div>
+              {children}
+            </div>
+          );
+          const Row = ({label,value,cls}:{label:string,value:React.ReactNode,cls?:string})=>(
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-zinc-500 truncate">{label}</span>
+              <span className={`text-[11px] font-bold shrink-0 ${cls||'text-zinc-200'}`}>{value}</span>
+            </div>
+          );
+          return (
+            <div className="w-60 shrink-0 border-l border-white/[0.05] overflow-y-auto custom-scrollbar p-3 space-y-2.5 bg-[#0a0a14]">
+              <div className="flex items-center justify-between px-1 pt-1 pb-0.5">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">Live metryki</span>
+                {metricsLoading && <Loader2 size={9} className="animate-spin text-zinc-700"/>}
+              </div>
+
+              {/* Users online/offline */}
+              <Block title="Użytkownicy" icon={<Users size={10}/>}>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[
+                    {label:'Online', val:m?.users?.online??'-', cls:'text-emerald-400', dot:'bg-emerald-400'},
+                    {label:'Idle',   val:m?.users?.idle??'-',   cls:'text-amber-400',   dot:'bg-amber-400'},
+                    {label:'DND',    val:m?.users?.dnd??'-',    cls:'text-rose-400',     dot:'bg-rose-500'},
+                    {label:'Offline',val:m?.users?.offline??'-',cls:'text-zinc-500',    dot:'bg-zinc-600'},
+                  ].map(s=>(
+                    <div key={s.label} className="bg-white/[0.03] rounded-lg px-2 py-1.5 flex items-center gap-1.5">
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.dot}`}/>
+                      <div>
+                        <div className={`text-sm font-bold leading-none ${s.cls}`}>{s.val}</div>
+                        <div className="text-[9px] text-zinc-600 mt-0.5">{s.label}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {m?.users && <Row label="Łącznie" value={m.users.total} cls="text-zinc-300"/>}
+              </Block>
+
+              {/* CPU */}
+              <Block title="CPU serwera" icon={<Activity size={10}/>}>
+                <Row label="Obciążenie" value={m?`${m.os?.cpu_load_percent??0}%`:'-'} cls={m?.os?.cpu_load_percent&&m.os.cpu_load_percent>70?'text-rose-400':m?.os?.cpu_load_percent&&m.os.cpu_load_percent>40?'text-amber-400':'text-emerald-400'}/>
+                <MetricBar pct={m?.os?.cpu_load_percent??0} color={m?.os?.cpu_load_percent&&m.os!.cpu_load_percent>70?'bg-rose-500':m?.os?.cpu_load_percent&&m.os!.cpu_load_percent>40?'bg-amber-500':'bg-emerald-500'}/>
+                {m?.os && <>
+                  <Row label="Rdzenie" value={m.os.cpu_cores} cls="text-zinc-400"/>
+                  <Row label="Load avg" value={m.os.load_avg?.map(v=>v.toFixed(2)).join(' / ')} cls="text-zinc-400"/>
+                </>}
+              </Block>
+
+              {/* RAM serwera */}
+              <Block title="RAM serwera" icon={<Database size={10}/>}>
+                <Row label="Używane" value={m?fmtMb(m.os?.used_mem_mb??0):'-'} cls="text-violet-400"/>
+                <Row label="Dostępne" value={m?fmtMb(m.os?.free_mem_mb??0):'-'} cls="text-zinc-400"/>
+                <Row label="Łącznie" value={m?fmtMb(m.os?.total_mem_mb??0):'-'} cls="text-zinc-500"/>
+                <MetricBar pct={m?.os?.mem_percent??0} color={m?.os?.mem_percent&&m.os!.mem_percent>80?'bg-rose-500':m?.os?.mem_percent&&m.os!.mem_percent>60?'bg-amber-500':'bg-violet-500'}/>
+              </Block>
+
+              {/* Node.js */}
+              <Block title="Node.js" icon={<Code2 size={10}/>}>
+                <Row label="Wersja" value={m?.node.version??'-'} cls="text-emerald-400"/>
+                <Row label="Heap" value={m?`${m.node.memory.heapUsed}/${m.node.memory.heapTotal} MB`:'-'} cls="text-indigo-400"/>
+                <MetricBar pct={m?(m.node.memory.heapUsed/Math.max(1,m.node.memory.heapTotal))*100:0} color="bg-indigo-500"/>
+                <Row label="Uptime" value={m?fmtUptime(m.node.uptime_seconds):'-'} cls="text-zinc-300"/>
+              </Block>
+
+              {/* API */}
+              <Block title="Statystyki API" icon={<Zap size={10}/>}>
+                <Row label="Req/s" value={m?.api?`${m.api.requests_per_sec}`:'-'} cls="text-amber-400"/>
+                <Row label="Łącznie" value={m?.api?.requests_total.toLocaleString()??'-'} cls="text-zinc-300"/>
+                {m?.postgres && <Row label="PG połącz." value={m.postgres.active_connections} cls="text-blue-400"/>}
+              </Block>
+
+              {/* Voice */}
+              <Block title="Voice" icon={<Volume2 size={10}/>}>
+                <Row label="Aktywni użytkownicy" value={m?.voice?.active_users??'-'} cls="text-sky-400"/>
+              </Block>
+
+              {/* Redis */}
+              {m?.redis && (
+                <Block title="Redis" icon={<Server size={10}/>}>
+                  <Row label="Klienci" value={m.redis.connected_clients} cls="text-rose-400"/>
+                  <Row label="Pamięć" value={m.redis.used_memory_human??'-'} cls="text-orange-400"/>
+                  {(m.redis.keyspace_hits+m.redis.keyspace_misses)>0&&(
+                    <>
+                      <Row label="Cache hit" value={`${Math.round(m.redis.keyspace_hits/(m.redis.keyspace_hits+m.redis.keyspace_misses)*100)}%`} cls="text-emerald-400"/>
+                      <MetricBar pct={m.redis.keyspace_hits/(m.redis.keyspace_hits+m.redis.keyspace_misses)*100} color="bg-emerald-500/70"/>
+                    </>
+                  )}
+                </Block>
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
