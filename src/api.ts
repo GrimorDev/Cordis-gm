@@ -598,8 +598,17 @@ export interface AdminAuditEntry {
 }
 export interface AdminSystemInfo {
   node: { version: string; uptime_seconds: number; memory: { rss: number; heapUsed: number; heapTotal: number; external: number } };
+  os: { platform: string; arch: string; cpu_model: string; cpu_cores: number; cpu_load_percent: number; total_mem_mb: number; free_mem_mb: number; used_mem_mb: number; mem_percent: number; load_avg: number[] } | null;
+  api: { requests_total: number; requests_per_sec: number } | null;
+  users: { total: number; online: number; offline: number; dnd: number; idle: number } | null;
+  voice: { active_users: number } | null;
   postgres: { db_size: string; active_connections: number; pg_version: string } | null;
-  redis: { version: string | null; uptime_seconds: number; connected_clients: number; used_memory_human: string | null; total_commands_processed: number; keyspace_hits: number; keyspace_misses: number } | null;
+  redis: { version: string | null; uptime_seconds: number; connected_clients: number; used_memory_human: string | null; used_memory_bytes: number; total_commands_processed: number; keyspace_hits: number; keyspace_misses: number; socket_count: number } | null;
+}
+export interface AdminAdminUser {
+  id: string; username: string; email: string; avatar_url: string | null;
+  status: string; is_admin: boolean; created_at: string; last_active_at: string | null;
+  badges: { name: string; label: string; color: string }[];
 }
 // ── Games (RAWG) ───────────────────────────────────────────────────────────
 export const gamesApi = {
@@ -710,6 +719,7 @@ export const adminApi = {
   auditLog:      (page = 1) => req<{ logs: AdminAuditEntry[]; total: number }>('GET', `/admin/audit-log?page=${page}`),
   broadcast:     (data: { message: string; type?: 'info'|'warning'|'success'; server_id?: string }) => req<{ ok: boolean }>('POST', '/admin/broadcast', data),
   systemInfo:    () => req<AdminSystemInfo>('GET', '/admin/system/info'),
+  admins:        () => req<AdminAdminUser[]>('GET', '/admin/admins'),
   storage: {
     stats:     () => req<AdminStorageStats>('GET', '/admin/storage'),
     users:     (page = 1, q = '') => req<{ users: StorageUser[]; total: number }>('GET', `/admin/storage/users?page=${page}&limit=50${q ? `&q=${encodeURIComponent(q)}` : ''}`),

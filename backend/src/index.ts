@@ -116,6 +116,11 @@ app.use('/api/', apiLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 
+// Count every API request for admin metrics panel
+import('./routes/admin').then(m => {
+  app.use('/api/', (_req, _res, next) => { m.countRequest(); next(); });
+}).catch(() => {});
+
 // Static uploads
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
