@@ -6790,6 +6790,7 @@ export default function App() {
   const [ownKick, setOwnKick]                 = useState<KickData|null>(null);
   const [ownEpic, setOwnEpic]                 = useState<EpicData|null>(null);
   // Connection input states
+  const [youtubeConnectInput, setYoutubeConnectInput] = useState('');
   const [kickConnectUsername, setKickConnectUsername] = useState('');
   const [epicConnectName, setEpicConnectName]         = useState('');
   // Real-time activities: userId → data (null = not active)
@@ -17642,12 +17643,24 @@ export default function App() {
                             <p className="text-sm font-semibold text-white">YouTube</p>
                             {ownYoutube?.connected
                               ? <p className="text-xs text-zinc-500">{ownYoutube.display_name}{ownYoutube.subscriber_count != null ? ` · ${fmtSubsConn(ownYoutube.subscriber_count)} sub.` : ''}</p>
-                              : <p className="text-xs text-zinc-500">Nie połączono</p>}
+                              : <p className="text-xs text-zinc-500">Podaj @handle lub URL kanału</p>}
                           </div>
-                          {ownYoutube?.connected
-                            ? <button onClick={async()=>{ try { await youtubeApi.disconnect(); setOwnYoutube(null); addToast('YouTube odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
-                            : <button onClick={async()=>{ try { const r = await youtubeApi.connect(); await openOAuth(r.url, 'youtube'); } catch(e:any){ addToast(e.message||'Błąd YouTube','error'); } }} className="text-xs text-[#FF0000] flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-red-500/30 hover:bg-red-500/10">Połącz</button>}
+                          {ownYoutube?.connected &&
+                            <button onClick={async()=>{ try { await youtubeApi.disconnect(); setOwnYoutube(null); addToast('YouTube odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>}
                         </div>
+                        {!ownYoutube?.connected && (
+                          <div className="flex gap-2 mb-3">
+                            <input
+                              value={youtubeConnectInput}
+                              onChange={e=>setYoutubeConnectInput(e.target.value)}
+                              placeholder="@TwojeKanaly lub youtube.com/@..."
+                              className="flex-1 bg-white/[0.05] border border-white/[0.07] rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 outline-none focus:border-red-500/40 transition-colors"
+                              onKeyDown={async e=>{ if(e.key==='Enter'&&youtubeConnectInput.trim()){ try { const r=await youtubeApi.connect(youtubeConnectInput.trim()); setOwnYoutube(r); setYoutubeConnectInput(''); addToast(`Połączono z ${r.display_name||'YouTube'}!`,'success'); } catch(err:any){ addToast(err.message||'Nie znaleziono kanału','error'); } } }}
+                            />
+                            <button onClick={async()=>{ if(!youtubeConnectInput.trim())return; try { const r=await youtubeApi.connect(youtubeConnectInput.trim()); setOwnYoutube(r); setYoutubeConnectInput(''); addToast(`Połączono z ${r.display_name||'YouTube'}!`,'success'); } catch(err:any){ addToast(err.message||'Nie znaleziono kanału','error'); } }}
+                              className="text-xs text-[#FF0000] px-3 py-2 rounded-xl border border-red-500/30 hover:bg-red-500/10 transition-all whitespace-nowrap">Połącz</button>
+                          </div>
+                        )}
                         {ownYoutube?.connected && (
                           <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
                             <div>
