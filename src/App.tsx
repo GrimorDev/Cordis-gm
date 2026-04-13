@@ -6787,6 +6787,8 @@ export default function App() {
   const [adminAssignBadgeId, setAdminAssignBadgeId] = useState('');
   const [adminMetrics, setAdminMetrics]       = useState<import('./api').AdminSystemInfo|null>(null);
   const [adminMetricsLoading, setAdminMetricsLoading] = useState(false);
+  const [showSrvListModal, setShowSrvListModal] = useState(false);
+  const [srvListSearch, setSrvListSearch]      = useState('');
   // ── DnD ──────────────────────────────────────────────────────────
   const [activeDragId,   setActiveDragId]     = useState<string|null>(null);
   const [activeDragType, setActiveDragType]   = useState<'category'|'channel'|null>(null);
@@ -10699,49 +10701,57 @@ export default function App() {
               );
             })}
           </div>
-          {/* Server tabs slider with ◀ ▶ arrows */}
+          {/* Server icon-only strip — icons only, hover expands name label */}
           <div className="hidden md:flex items-center h-full min-w-0 flex-1 relative">
-            {/* ◀ scroll left */}
-            <button onClick={() => srvTabsRef.current && (srvTabsRef.current.scrollLeft -= 160)}
-              className="w-6 h-full flex items-center justify-center text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.05] transition-all shrink-0 border-r border-white/[0.05]">
-              <ChevronLeft size={13}/>
-            </button>
-            {/* scrollable tab strip */}
-            <div ref={srvTabsRef} className="flex items-center h-full overflow-x-auto scrollbar-hide min-w-0 flex-1">
+            {/* scrollable icon strip — smooth scroll */}
+            <div ref={srvTabsRef}
+              className="flex items-center h-full gap-0.5 overflow-x-auto scrollbar-hide min-w-0 flex-1 px-1"
+              style={{scrollBehavior:'smooth'}}>
               {serverList.map(srv => {
                 const isActive = activeServer===srv.id&&activeView==='servers';
                 return (
-                  <button key={srv.id}
+                  <motion.button key={srv.id}
                     onClick={() => { if(activeServer===srv.id&&activeView==='servers') return; const sameServer=activeServer===srv.id; setActiveServer(srv.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); setProfileViewId(null); if(sameServer) setServerReloadKey(k=>k+1); }}
                     onContextMenu={e => { e.preventDefault(); setSrvContextMenu({ x: e.clientX, y: e.clientY, srv }); }}
-                    className={`flex items-center gap-2 h-full px-3 text-sm font-medium transition-all duration-200 border-r border-white/[0.05] whitespace-nowrap relative group shrink-0 ${isActive?'text-white bg-black/20':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'}`}>
-                    {isActive&&<motion.span layoutId="nav-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"/>}
-                    <span className={`relative w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden transition-all duration-200 ${isActive?'bg-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.3)]':'bg-zinc-800'} ${srv.is_official?'ring-2 ring-amber-400/80 ring-offset-[2px] ring-offset-transparent':''}`}>
-                      {srv.icon_url ? <img src={staticUrl(srv.icon_url)} className="w-full h-full object-cover" alt=""/> : srv.name.charAt(0).toUpperCase()}
+                    title={maskName(srv.name)}
+                    whileHover="hovered"
+                    initial="rest"
+                    animate="rest"
+                    className={`relative h-8 flex items-center gap-0 rounded-xl shrink-0 overflow-hidden transition-all duration-200 cursor-pointer border ${isActive?'border-indigo-500/40 bg-indigo-500/10 shadow-[0_0_10px_rgba(99,102,241,0.15)]':'border-white/[0.04] bg-white/[0.03] hover:bg-white/[0.07] hover:border-white/[0.09]'}`}>
+                    {/* Active indicator bar */}
+                    {isActive&&<motion.span layoutId="nav-srv-indicator" className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.7)]"/>}
+                    {/* Icon */}
+                    <span className={`w-8 h-8 flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden rounded-xl relative ${srv.is_official?'ring-1 ring-amber-400/60 ring-inset':''}`}>
+                      {srv.icon_url ? <img src={staticUrl(srv.icon_url)} className="w-full h-full object-cover" alt=""/> : <span className={`w-full h-full flex items-center justify-center rounded-xl ${isActive?'bg-indigo-600':'bg-zinc-700/80'}`}>{srv.name.charAt(0).toUpperCase()}</span>}
+                      {srv.is_official&&<BadgeCheck size={8} className="absolute bottom-0.5 right-0.5 text-amber-400 drop-shadow-sm"/>}
                     </span>
-                    <span className="max-w-[90px] truncate">{maskName(srv.name)}</span>
-                    {srv.is_official&&(
-                      <BadgeCheck size={13} className="shrink-0 text-amber-400" title="Oficjalny serwer Cordyn"/>
-                    )}
-                  </button>
+                    {/* Name label — slides in on hover */}
+                    <motion.span
+                      variants={{ rest:{width:0,opacity:0,marginRight:0}, hovered:{width:'auto',opacity:1,marginRight:6} }}
+                      transition={{duration:0.18,ease:[0.16,1,0.3,1]}}
+                      className={`text-xs font-semibold whitespace-nowrap overflow-hidden ml-1.5 ${isActive?'text-white':'text-zinc-300'}`}>
+                      {maskName(srv.name)}
+                    </motion.span>
+                  </motion.button>
                 );
               })}
             </div>
-            {/* ▶ scroll right */}
-            <button onClick={() => srvTabsRef.current && (srvTabsRef.current.scrollLeft += 160)}
-              className="w-6 h-full flex items-center justify-center text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.05] transition-all shrink-0 border-r border-white/[0.05]">
-              <ChevronRight size={13}/>
-            </button>
           </div>
+          {/* Server list modal button */}
+          <button onClick={()=>{ setSrvListSearch(''); setShowSrvListModal(true); }}
+            title="Lista moich serwerów"
+            className="hidden md:flex items-center justify-center w-8 h-full text-zinc-600 hover:text-indigo-400 hover:bg-indigo-500/10 transition-all duration-200 border-r border-white/[0.05] shrink-0">
+            <Layers size={14}/>
+          </button>
           {/* + button always visible */}
           <button onClick={() => setCreateSrvOpen(true)} title="Utwórz serwer"
-            className="hidden md:flex items-center justify-center w-9 h-full text-zinc-600 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all duration-200 border-r border-white/[0.05] shrink-0">
+            className="hidden md:flex items-center justify-center w-8 h-full text-zinc-600 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all duration-200 border-r border-white/[0.05] shrink-0">
             <Plus size={15}/>
           </button>
           {/* Compass — discover public servers */}
           <button onClick={()=>{ setDiscoveryCategory('all'); setDiscoveryQ(''); setDiscoveryLoading(true); discoverApi.list('').then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false)); setShowDiscovery(true); }}
             title="Odkryj serwery"
-            className="hidden md:flex items-center justify-center w-9 h-full text-zinc-600 hover:text-violet-400 hover:bg-violet-500/10 transition-all duration-200 border-r border-white/[0.05] shrink-0">
+            className="hidden md:flex items-center justify-center w-8 h-full text-zinc-600 hover:text-violet-400 hover:bg-violet-500/10 transition-all duration-200 border-r border-white/[0.05] shrink-0">
             <Compass size={15}/>
           </button>
         </div>
@@ -18832,6 +18842,80 @@ export default function App() {
               })()}
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── My Servers List Modal ────────────────────────────────── */}
+      <AnimatePresence>
+        {showSrvListModal&&(
+          <>
+            <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.15}}
+              className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm"
+              onClick={()=>setShowSrvListModal(false)}/>
+            <motion.div initial={{opacity:0,scale:0.95,y:-8}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.95,y:-8}}
+              transition={{duration:0.18,ease:[0.16,1,0.3,1]}}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[81] w-[420px] max-h-[70vh] bg-[#0d0d1a] border border-white/[0.08] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] shrink-0">
+                <div className="flex items-center gap-2">
+                  <Layers size={15} className="text-indigo-400"/>
+                  <span className="text-sm font-bold text-white">Moje serwery</span>
+                  <span className="text-[11px] text-zinc-500 bg-white/[0.06] rounded-full px-2 py-0.5">{serverList.length}</span>
+                </div>
+                <button onClick={()=>setShowSrvListModal(false)} className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.07] transition-colors">
+                  <X size={14}/>
+                </button>
+              </div>
+              {/* Search */}
+              <div className="px-3 pt-3 pb-2 shrink-0">
+                <div className="relative">
+                  <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600"/>
+                  <input autoFocus value={srvListSearch} onChange={e=>setSrvListSearch(e.target.value)}
+                    placeholder="Szukaj serwera..." onKeyDown={e=>e.key==='Escape'&&setShowSrvListModal(false)}
+                    className="w-full bg-white/[0.05] border border-white/[0.07] rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-zinc-600 outline-none focus:border-indigo-500/40 transition-colors"/>
+                </div>
+              </div>
+              {/* Server list */}
+              <div className="overflow-y-auto custom-scrollbar flex-1 px-2 pb-3">
+                {serverList
+                  .filter(s=>!srvListSearch||s.name.toLowerCase().includes(srvListSearch.toLowerCase()))
+                  .map(s=>{
+                    const isActive=activeServer===s.id&&activeView==='servers';
+                    return (
+                      <motion.button key={s.id} whileHover={{x:2}} transition={{duration:0.12}}
+                        onClick={()=>{ const same=activeServer===s.id; setActiveServer(s.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); setProfileViewId(null); setShowSrvListModal(false); if(same) setServerReloadKey(k=>k+1); }}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-150 text-left group ${isActive?'bg-indigo-500/15 border border-indigo-500/25':'hover:bg-white/[0.05] border border-transparent'}`}>
+                        <span className={`w-9 h-9 shrink-0 rounded-xl overflow-hidden flex items-center justify-center text-sm font-bold text-white ${isActive?'ring-2 ring-indigo-500/50':'ring-1 ring-white/[0.06]'} ${s.is_official?'ring-amber-400/50':''}`}>
+                          {s.icon_url ? <img src={staticUrl(s.icon_url)} className="w-full h-full object-cover" alt=""/> : <span className="w-full h-full flex items-center justify-center bg-zinc-700">{s.name.charAt(0).toUpperCase()}</span>}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-sm font-semibold truncate ${isActive?'text-indigo-300':'text-zinc-200 group-hover:text-white transition-colors'}`}>{maskName(s.name)}</span>
+                            {s.is_official&&<BadgeCheck size={12} className="text-amber-400 shrink-0"/>}
+                          </div>
+                          {(s as any).description && <span className="text-[11px] text-zinc-600 truncate block">{(s as any).description}</span>}
+                        </div>
+                        {isActive&&<span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0"/>}
+                      </motion.button>
+                    );
+                  })}
+                {serverList.filter(s=>!srvListSearch||s.name.toLowerCase().includes(srvListSearch.toLowerCase())).length===0&&(
+                  <div className="text-center py-8 text-zinc-600 text-sm">Brak wyników</div>
+                )}
+              </div>
+              {/* Footer */}
+              <div className="px-3 py-2.5 border-t border-white/[0.05] shrink-0 flex items-center gap-2">
+                <button onClick={()=>{ setShowSrvListModal(false); setCreateSrvOpen(true); }}
+                  className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-emerald-400 transition-colors px-2 py-1.5 rounded-lg hover:bg-emerald-500/10">
+                  <Plus size={12}/>Utwórz serwer
+                </button>
+                <button onClick={()=>{ setShowSrvListModal(false); setDiscoveryCategory('all'); setDiscoveryQ(''); setDiscoveryLoading(true); discoverApi.list('').then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false)); setShowDiscovery(true); }}
+                  className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-violet-400 transition-colors px-2 py-1.5 rounded-lg hover:bg-violet-500/10">
+                  <Compass size={12}/>Odkryj serwery
+                </button>
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 
