@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import {
   auth, users, serversApi, channelsApi, messagesApi, dmsApi, friendsApi, forumApi, adminApi,
-  gamesApi, spotifyApi, twitchApi, steamApi, twoFactorApi,
+  gamesApi, spotifyApi, twitchApi, steamApi, youtubeApi, kickApi, epicApi, twoFactorApi,
   emojisApi, notesApi, pollsApi, automationsApi, dmPinApi, pushApi,
   uploadFile, setToken, clearToken, getToken,
   type UserProfile, type ServerData, type ServerFull, type ServerRole,
@@ -37,6 +37,7 @@ import {
   type ServerMember, type ForumPost, type ForumReply, type ServerBan,
   type Badge, type AdminStats, type AdminUser, type AdminServer, type AdminOverview,
   type FavoriteGame, type SpotifyData, type SpotifyTrack, type SpotifyJamSession, type SpotifyVoiceDj, type TwitchData, type TwitchStream, type SteamData, type SteamGame,
+  type YouTubeData, type KickData, type EpicData,
   type TwoFactorStatus, type LoginResult, ApiError,
   type ServerEmoji, type PollData, type ServerAutomation, type AutomationTrigger, type AutomationAction, type AutomationActionType,
   STATIC_BASE, API_BASE,
@@ -95,6 +96,24 @@ const SteamIcon = ({ size = 14, className = '' }: { size?: number; className?: s
     <path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.029 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.454 1.012H7.54zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.252 0-2.265-1.014-2.265-2.265z"/>
   </svg>
 );
+function YouTubeIcon({size=16,className=''}:{size?:number,className?:string}) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-label="YouTube">
+    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+  </svg>;
+}
+function KickIcon({size=16,className=''}:{size?:number,className?:string}) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-label="Kick">
+    <path d="M2 2h4l4 6 4-6h4v20h-4V9l-4 6-4-6v13H2V2z"/>
+  </svg>;
+}
+function EpicIcon({size=16,className=''}:{size?:number,className?:string}) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-label="Epic Games">
+    <path d="M4 2h16v3H8v4h10v3H8v4h12v3H4V2z"/>
+  </svg>;
+}
+
+// ─── Subscriber count formatter ──────────────────────────────────────────────
+function fmtSubsConn(n: number): string { if (n >= 1_000_000) return (n/1_000_000).toFixed(1)+'M'; if (n >= 1_000) return (n/1_000).toFixed(0)+'K'; return String(n); }
 
 // ─── Glass constants ──────────────────────────────────────────────────────────
 const gp = 'glass-panel';
@@ -5037,7 +5056,9 @@ function mergeSpotifyLive(
 
 // ─── ProfilePage ──────────────────────────────────────────────────────────────
 function ProfilePage({
-  viewUserId, profileData, games, spotify, ownSpotify, twitch, ownTwitch, steam, ownSteam, loading,
+  viewUserId, profileData, games, spotify, ownSpotify, twitch, ownTwitch, steam, ownSteam,
+  youtube, ownYoutube, kick, ownKick, epic, ownEpic,
+  loading,
   currentUser, editProf, setEditProf, profBannerFile, profBannerPrev,
   onBack, onOpenDm, onCall,
   handleAvatarUpload, handleBannerSelect, handleSaveProfile,
@@ -5056,6 +5077,9 @@ function ProfilePage({
   spotify: SpotifyData|null; ownSpotify: SpotifyData|null;
   twitch: TwitchData|null; ownTwitch: TwitchData|null;
   steam: SteamData|null; ownSteam: SteamData|null;
+  youtube: YouTubeData|null; ownYoutube: YouTubeData|null;
+  kick: KickData|null; ownKick: KickData|null;
+  epic: EpicData|null; ownEpic: EpicData|null;
   steamGameStartedAt?: number | null;
   liveSpotifyTrack?: {name:string;artists:string;album_cover:string|null;external_url:string|null;duration_ms?:number|null;progress_ms?:number|null}|null;
   loading: boolean;
@@ -5125,9 +5149,13 @@ function ProfilePage({
   };
 
   // For own profile: prefer full spotify data (with tracks) from userPublic, fall back to status-only
-  const spotifyToShow = isOwn ? (spotify || ownSpotify) : spotify;
-  const twitchToShow  = isOwn ? (twitch || ownTwitch)   : twitch;
-  const steamToShow   = isOwn ? (steam  || ownSteam)    : steam;
+  const spotifyToShow  = isOwn ? (spotify  || ownSpotify)  : spotify;
+  const twitchToShow   = isOwn ? (twitch   || ownTwitch)   : twitch;
+  const steamToShow    = isOwn ? (steam    || ownSteam)    : steam;
+  const youtubeToShow  = isOwn ? (youtube  || ownYoutube)  : youtube;
+  const kickToShow     = isOwn ? (kick     || ownKick)     : kick;
+  const epicToShow     = isOwn ? (epic     || ownEpic)     : epic;
+  const fmtSubs = fmtSubsConn;
 
   const bannerSrc = isOwn
     ? (profBannerPrev || editProf?.banner_url || null)
@@ -5619,7 +5647,6 @@ function ProfilePage({
                     <SteamIcon size={13} className="text-zinc-400"/> Steam
                   </h3>
                 </div>
-
                 {isOwn && ownSteam?.connected ? (
                   <div className="flex flex-col gap-3">
                     {steamToShow?.current_game && (
@@ -5665,6 +5692,150 @@ function ProfilePage({
                     )}
                   </div>
                 ) : null}
+              </div>
+              )}
+
+              {/* YouTube section */}
+              {((isOwn && ownYoutube?.connected) || (youtubeToShow?.connected && youtubeToShow?.show_on_profile)) && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                    <YouTubeIcon size={13} className="text-[#FF0000]"/> YouTube
+                  </h3>
+                </div>
+                {(() => {
+                  const yt = isOwn ? (youtubeToShow || ownYoutube) : youtubeToShow;
+                  if (!yt?.connected) return null;
+                  const channelUrl = yt.channel_id
+                    ? (yt.channel_id.startsWith('UC') ? `https://youtube.com/channel/${yt.channel_id}` : `https://youtube.com/@${yt.channel_id}`)
+                    : null;
+                  return (
+                    <div className="flex flex-col gap-2">
+                      {yt.channel_banner && (
+                        <div className="relative w-full h-14 rounded-xl overflow-hidden mb-1">
+                          <img src={yt.channel_banner} alt="" className="absolute inset-0 w-full h-full object-cover opacity-40 blur-sm scale-105"/>
+                          <div className="absolute inset-0 bg-black/40"/>
+                          <div className="absolute inset-0 flex items-center px-3 gap-2">
+                            <YouTubeIcon size={18} className="text-[#FF0000] shrink-0"/>
+                            <span className="text-sm font-semibold text-white truncate">{yt.display_name}</span>
+                            {yt.subscriber_count != null && (
+                              <span className="text-xs text-zinc-300 ml-auto shrink-0">{fmtSubs(yt.subscriber_count)} sub.</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {!yt.channel_banner && (
+                        <div className="flex items-center gap-2 bg-red-500/5 border border-red-500/10 rounded-xl px-3.5 py-2.5">
+                          <YouTubeIcon size={15} className="text-[#FF0000] shrink-0"/>
+                          <span className="text-sm text-white truncate">{yt.display_name}</span>
+                          {yt.subscriber_count != null && (
+                            <span className="text-xs text-zinc-500 ml-auto shrink-0">{fmtSubs(yt.subscriber_count)} sub.</span>
+                          )}
+                        </div>
+                      )}
+                      {yt.is_live && (
+                        <div className="bg-red-900/20 border border-red-500/20 rounded-xl px-3 py-2 flex items-center gap-2">
+                          <span className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold shrink-0">NA ŻYWO</span>
+                          <span className="text-xs text-white truncate">{yt.live_title || 'Stream na żywo'}</span>
+                          {yt.live_viewers != null && <span className="text-xs text-zinc-500 ml-auto shrink-0">{yt.live_viewers.toLocaleString()} widzów</span>}
+                        </div>
+                      )}
+                      {!yt.is_live && yt.latest_video_id && (
+                        <a href={`https://youtube.com/watch?v=${yt.latest_video_id}`} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-2.5 bg-white/[0.03] border border-white/[0.06] rounded-xl p-2 hover:bg-white/[0.05] transition-all group">
+                          {yt.latest_video_thumb && (
+                            <img src={yt.latest_video_thumb} alt="" className="w-16 h-9 rounded-lg object-cover shrink-0"/>
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-0.5">Ostatni film</p>
+                            <p className="text-xs text-white truncate group-hover:text-red-300 transition-colors">{yt.latest_video_title}</p>
+                          </div>
+                        </a>
+                      )}
+                      {channelUrl && (
+                        <a href={channelUrl} target="_blank" rel="noopener noreferrer"
+                          className="text-[11px] text-zinc-600 hover:text-[#FF0000] transition-colors text-center">
+                          Otwórz kanał →
+                        </a>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+              )}
+
+              {/* Kick section */}
+              {((isOwn && ownKick?.connected) || (kickToShow?.connected && kickToShow?.show_on_profile)) && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                    <KickIcon size={13} className="text-[#53fc18]"/> Kick
+                  </h3>
+                </div>
+                {(() => {
+                  const k = isOwn ? (kickToShow || ownKick) : kickToShow;
+                  if (!k?.connected) return null;
+                  return (
+                    <div className="flex flex-col gap-2">
+                      <a href={`https://kick.com/${k.username}`} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-2 bg-[#53fc18]/5 border border-[#53fc18]/10 rounded-xl px-3.5 py-2.5 hover:bg-[#53fc18]/10 transition-all">
+                        {k.profile_pic && <img src={k.profile_pic} alt="" className="w-7 h-7 rounded-full object-cover shrink-0"/>}
+                        <span className="text-sm text-[#53fc18] font-medium truncate">{k.display_name || k.username}</span>
+                      </a>
+                      {k.is_live && (
+                        <div className="bg-[#53fc18]/10 border border-[#53fc18]/20 rounded-xl px-3 py-2 flex items-center gap-2">
+                          <span className="text-xs bg-[#53fc18] text-black px-1.5 py-0.5 rounded-full font-bold shrink-0">NA ŻYWO</span>
+                          <span className="text-xs text-white truncate">{k.live_title || ''}</span>
+                          {k.live_viewers != null && <span className="text-xs text-zinc-500 ml-auto shrink-0">{k.live_viewers.toLocaleString()} widzów</span>}
+                        </div>
+                      )}
+                      {k.is_live && k.live_category && (
+                        <p className="text-[11px] text-zinc-500 px-1">{k.live_category}</p>
+                      )}
+                      {!k.is_live && <p className="text-xs text-zinc-600 px-1">Offline</p>}
+                    </div>
+                  );
+                })()}
+              </div>
+              )}
+
+              {/* Epic Games section */}
+              {((isOwn && ownEpic?.connected) || (epicToShow?.connected && epicToShow?.show_on_profile)) && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                    <EpicIcon size={13} className="text-zinc-300"/> Epic Games
+                  </h3>
+                </div>
+                {(() => {
+                  const ep = isOwn ? (epicToShow || ownEpic) : epicToShow;
+                  if (!ep?.connected) return null;
+                  const hasStats = (ep.fortnite_matches ?? 0) > 0;
+                  return (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2 bg-white/[0.03] border border-white/[0.08] rounded-xl px-3.5 py-2.5">
+                        <EpicIcon size={15} className="text-zinc-300 shrink-0"/>
+                        <span className="text-sm text-white font-medium truncate">{ep.display_name}</span>
+                      </div>
+                      {hasStats && (
+                        <div className="grid grid-cols-3 gap-1.5">
+                          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-2 py-2 text-center">
+                            <p className="text-base font-bold text-white">{(ep.fortnite_wins ?? 0).toLocaleString()}</p>
+                            <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Zwycięstwa</p>
+                          </div>
+                          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-2 py-2 text-center">
+                            <p className="text-base font-bold text-white">{(ep.fortnite_kd ?? 0).toFixed(2)}</p>
+                            <p className="text-[10px] text-zinc-500 uppercase tracking-widest">K/D</p>
+                          </div>
+                          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-2 py-2 text-center">
+                            <p className="text-base font-bold text-white">{(ep.fortnite_matches ?? 0).toLocaleString()}</p>
+                            <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Mecze</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
               )}
 
@@ -6607,11 +6778,20 @@ export default function App() {
   const [profileViewedJam, setProfileViewedJam] = useState<{ jam_id: string; host: any; members: any[] } | null>(null);
   const [profileTwitch, setProfileTwitch]     = useState<TwitchData|null>(null);
   const [profileSteam, setProfileSteam]       = useState<SteamData|null>(null);
+  const [profileYoutube, setProfileYoutube]   = useState<YouTubeData|null>(null);
+  const [profileKick, setProfileKick]         = useState<KickData|null>(null);
+  const [profileEpic, setProfileEpic]         = useState<EpicData|null>(null);
   const [profileLoading, setProfileLoading]   = useState(false);
   // Own connection statuses (loaded when viewing own profile)
   const [ownSpotify, setOwnSpotify]           = useState<SpotifyData|null>(null);
   const [ownTwitch, setOwnTwitch]             = useState<TwitchData|null>(null);
   const [ownSteam, setOwnSteam]               = useState<SteamData|null>(null);
+  const [ownYoutube, setOwnYoutube]           = useState<YouTubeData|null>(null);
+  const [ownKick, setOwnKick]                 = useState<KickData|null>(null);
+  const [ownEpic, setOwnEpic]                 = useState<EpicData|null>(null);
+  // Connection input states
+  const [kickConnectUsername, setKickConnectUsername] = useState('');
+  const [epicConnectName, setEpicConnectName]         = useState('');
   // Real-time activities: userId → data (null = not active)
   const [userActivities, setUserActivities]   = useState<Map<string, {name:string;artists:string;album_cover:string|null;external_url:string|null;duration_ms?:number|null;progress_ms?:number|null}|null>>(new Map());
   const [userTwitchActivities, setUserTwitchActivities] = useState<Map<string, TwitchStream|null>>(new Map());
@@ -7249,6 +7429,17 @@ export default function App() {
       addToast('Błąd połączenia Steam', 'error');
       window.history.replaceState({}, '', window.location.pathname);
     }
+    const yt = p.get('youtube');
+    if (yt === 'connected') {
+      addToast('YouTube połączono pomyślnie! 📺', 'success');
+      window.history.replaceState({}, '', window.location.pathname);
+      youtubeApi.status().then(setOwnYoutube).catch(()=>{});
+      setActiveView('settings');
+      setTimeout(() => (window as any).__cordisGoToSettingsTab?.('connections'), 300);
+    } else if (yt === 'error') {
+      addToast('Błąd połączenia YouTube', 'error');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
@@ -7392,6 +7583,9 @@ export default function App() {
       spotifyApi.status().then(setOwnSpotify).catch(() => {});
       twitchApi.status().then(setOwnTwitch).catch(() => {});
       steamApi.status().then(setOwnSteam).catch(() => {});
+      youtubeApi.status().then(setOwnYoutube).catch(() => {});
+      kickApi.status().then(setOwnKick).catch(() => {});
+      epicApi.status().then(setOwnEpic).catch(() => {});
       spotifyApi.jamActive().then(setMyJam).catch(() => {});
       // Load channel notification prefs from DB
       channelPrefsApi.list().then(prefs => {
@@ -9421,7 +9615,7 @@ export default function App() {
     }
   };
   // ── OAuth helper: open in system browser (Tauri) or navigate (web) ──
-  const openOAuth = async (url: string, service: 'spotify' | 'twitch' | 'steam') => {
+  const openOAuth = async (url: string, service: 'spotify' | 'twitch' | 'steam' | 'youtube') => {
     if (isTauri) {
       try {
         const { open } = await import('@tauri-apps/plugin-shell');
@@ -9441,6 +9635,9 @@ export default function App() {
           } else if (service === 'twitch') {
             const s = await twitchApi.status();
             if (s.connected) { clearInterval(poll); setOwnTwitch(s); addToast('Twitch połączono! 🎮', 'success'); return; }
+          } else if (service === 'youtube') {
+            const s = await youtubeApi.status();
+            if (s.connected) { clearInterval(poll); setOwnYoutube(s); addToast('YouTube połączono! 📺', 'success'); return; }
           } else {
             const s = await steamApi.status();
             if (s.connected) { clearInterval(poll); setOwnSteam(s); addToast('Steam połączono! 🎮', 'success'); return; }
@@ -9979,19 +10176,26 @@ export default function App() {
   const openProfilePage = async (userId: string) => {
     setProfileViewId(userId);
     setProfilePageData(null); setProfileGames([]); setProfileSpotify(null); setProfileTwitch(null); setProfileSteam(null); setProfileViewedJam(null);
+    setProfileYoutube(null); setProfileKick(null); setProfileEpic(null);
     setProfileLoading(true);
-    const [prof, games, spotify, twitch, steam] = await Promise.allSettled([
+    const [prof, games, spotify, twitch, steam, youtube, kick, epic] = await Promise.allSettled([
       users.get(userId),
       gamesApi.getUser(userId),
       spotifyApi.userPublic(userId),
       twitchApi.userPublic(userId),
       steamApi.userPublic(userId),
+      youtubeApi.userPublic(userId),
+      kickApi.userPublic(userId),
+      epicApi.userPublic(userId),
     ]);
     if (prof.status === 'fulfilled')    setProfilePageData(prof.value);
     if (games.status === 'fulfilled')   setProfileGames(games.value);
     if (spotify.status === 'fulfilled') setProfileSpotify(spotify.value);
     if (twitch.status === 'fulfilled')  setProfileTwitch(twitch.value);
     if (steam.status === 'fulfilled')   setProfileSteam(steam.value);
+    if (youtube.status === 'fulfilled') setProfileYoutube(youtube.value);
+    if (kick.status === 'fulfilled')    setProfileKick(kick.value);
+    if (epic.status === 'fulfilled')    setProfileEpic(epic.value);
     setProfileLoading(false);
     // Load friend's JAM status if not own profile
     if (userId !== currentUser?.id) {
@@ -10003,6 +10207,9 @@ export default function App() {
       spotifyApi.status().then(setOwnSpotify).catch(()=>{});
       twitchApi.status().then(setOwnTwitch).catch(()=>{});
       steamApi.status().then(setOwnSteam).catch(()=>{});
+      youtubeApi.status().then(setOwnYoutube).catch(()=>{});
+      kickApi.status().then(setOwnKick).catch(()=>{});
+      epicApi.status().then(setOwnEpic).catch(()=>{});
       spotifyApi.jamActive().then(setMyJam).catch(()=>{});
     }
     // Load user note for other users
@@ -12142,6 +12349,12 @@ export default function App() {
               ownTwitch={ownTwitch}
               steam={profileSteam}
               ownSteam={ownSteam}
+              youtube={profileYoutube}
+              ownYoutube={ownYoutube}
+              kick={profileKick}
+              ownKick={ownKick}
+              epic={profileEpic}
+              ownEpic={ownEpic}
               steamGameStartedAt={profileViewId ? (steamGameStartRef.current.get(profileViewId) ?? null) : null}
               liveSpotifyTrack={profileViewId ? (userActivities.get(profileViewId) ?? null) : null}
               loading={profileLoading}
@@ -17414,6 +17627,120 @@ export default function App() {
                             <button onClick={async()=>{ const v=!ownSteam.show_on_profile; await steamApi.setSettings({show_on_profile:v}); setOwnSteam(p=>p?{...p,show_on_profile:v}:p); }}
                               className={`relative w-11 h-6 rounded-full transition-all ${ownSteam.show_on_profile?'bg-blue-500':'bg-white/[0.1]'}`}>
                               <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${ownSteam.show_on_profile?'left-[26px]':'left-1'}`}/>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* YouTube */}
+                      <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-8 h-8 bg-red-500/15 rounded-xl flex items-center justify-center">
+                            <YouTubeIcon size={16} className="text-[#FF0000]"/>
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-white">YouTube</p>
+                            {ownYoutube?.connected
+                              ? <p className="text-xs text-zinc-500">{ownYoutube.display_name}{ownYoutube.subscriber_count != null ? ` · ${fmtSubsConn(ownYoutube.subscriber_count)} sub.` : ''}</p>
+                              : <p className="text-xs text-zinc-500">Nie połączono</p>}
+                          </div>
+                          {ownYoutube?.connected
+                            ? <button onClick={async()=>{ try { await youtubeApi.disconnect(); setOwnYoutube(null); addToast('YouTube odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
+                            : <button onClick={async()=>{ try { const r = await youtubeApi.connect(); await openOAuth(r.url, 'youtube'); } catch(e:any){ addToast(e.message||'Błąd YouTube','error'); } }} className="text-xs text-[#FF0000] flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-red-500/30 hover:bg-red-500/10">Połącz</button>}
+                        </div>
+                        {ownYoutube?.connected && (
+                          <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
+                            <div>
+                              <p className="text-sm text-white">Wyświetlaj w profilu</p>
+                              <p className="text-xs text-zinc-500 mt-0.5">Inni widzą Twój kanał YouTube</p>
+                            </div>
+                            <button onClick={async()=>{ const v=!ownYoutube.show_on_profile; await youtubeApi.setSettings({show_on_profile:v}); setOwnYoutube(p=>p?{...p,show_on_profile:v}:p); }}
+                              className={`relative w-11 h-6 rounded-full transition-all ${ownYoutube.show_on_profile?'bg-[#FF0000]':'bg-white/[0.1]'}`}>
+                              <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${ownYoutube.show_on_profile?'left-[26px]':'left-1'}`}/>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Kick */}
+                      <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-8 h-8 bg-[#53fc18]/10 rounded-xl flex items-center justify-center">
+                            <KickIcon size={16} className="text-[#53fc18]"/>
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-white">Kick</p>
+                            {ownKick?.connected
+                              ? <p className="text-xs text-zinc-500">Połączono jako {ownKick.display_name || ownKick.username}{ownKick.is_live ? ' · 🔴 NA ŻYWO' : ''}</p>
+                              : <p className="text-xs text-zinc-500">Nie połączono</p>}
+                          </div>
+                          {ownKick?.connected && (
+                            <button onClick={async()=>{ try { await kickApi.disconnect(); setOwnKick(null); addToast('Kick odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
+                          )}
+                        </div>
+                        {!ownKick?.connected && (
+                          <div className="flex gap-2 mb-3">
+                            <input
+                              value={kickConnectUsername}
+                              onChange={e=>setKickConnectUsername(e.target.value)}
+                              placeholder="Nazwa użytkownika Kick"
+                              className="flex-1 bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-[#53fc18]/40 transition-all"
+                              onKeyDown={async e=>{ if(e.key==='Enter' && kickConnectUsername.trim()){ try { const r=await kickApi.connect(kickConnectUsername.trim()); setOwnKick(r); setKickConnectUsername(''); addToast('Kick połączono','success'); } catch(err:any){ addToast(err.message||'Błąd Kick','error'); } } }}
+                            />
+                            <button onClick={async()=>{ if(!kickConnectUsername.trim())return; try { const r=await kickApi.connect(kickConnectUsername.trim()); setOwnKick(r); setKickConnectUsername(''); addToast('Kick połączono','success'); } catch(err:any){ addToast(err.message||'Błąd Kick','error'); } }} className="text-xs text-[#53fc18] px-3 py-2 rounded-xl border border-[#53fc18]/30 hover:bg-[#53fc18]/10 transition-all">Połącz</button>
+                          </div>
+                        )}
+                        {ownKick?.connected && (
+                          <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
+                            <div>
+                              <p className="text-sm text-white">Wyświetlaj w profilu</p>
+                              <p className="text-xs text-zinc-500 mt-0.5">Inni widzą kiedy streamujesz na Kick</p>
+                            </div>
+                            <button onClick={async()=>{ const v=!ownKick.show_on_profile; await kickApi.setSettings({show_on_profile:v}); setOwnKick(p=>p?{...p,show_on_profile:v}:p); }}
+                              className={`relative w-11 h-6 rounded-full transition-all ${ownKick.show_on_profile?'bg-[#53fc18]':'bg-white/[0.1]'}`}>
+                              <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${ownKick.show_on_profile?'left-[26px]':'left-1'}`}/>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Epic Games */}
+                      <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-8 h-8 bg-white/[0.06] rounded-xl flex items-center justify-center">
+                            <EpicIcon size={16} className="text-zinc-300"/>
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-white">Epic Games</p>
+                            {ownEpic?.connected
+                              ? <p className="text-xs text-zinc-500">Połączono jako {ownEpic.display_name}{(ownEpic.fortnite_matches ?? 0) > 0 ? ` · ${(ownEpic.fortnite_wins??0)} wygranych` : ''}</p>
+                              : <p className="text-xs text-zinc-500">Nie połączono</p>}
+                          </div>
+                          {ownEpic?.connected && (
+                            <button onClick={async()=>{ try { await epicApi.disconnect(); setOwnEpic(null); addToast('Epic Games odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
+                          )}
+                        </div>
+                        {!ownEpic?.connected && (
+                          <div className="flex gap-2 mb-3">
+                            <input
+                              value={epicConnectName}
+                              onChange={e=>setEpicConnectName(e.target.value)}
+                              placeholder="Epic display name"
+                              className="flex-1 bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-white/20 transition-all"
+                              onKeyDown={async e=>{ if(e.key==='Enter' && epicConnectName.trim()){ try { const r=await epicApi.connect(epicConnectName.trim()); setOwnEpic(r); setEpicConnectName(''); addToast('Epic Games połączono','success'); } catch(err:any){ addToast(err.message||'Błąd Epic','error'); } } }}
+                            />
+                            <button onClick={async()=>{ if(!epicConnectName.trim())return; try { const r=await epicApi.connect(epicConnectName.trim()); setOwnEpic(r); setEpicConnectName(''); addToast('Epic Games połączono','success'); } catch(err:any){ addToast(err.message||'Błąd Epic','error'); } }} className="text-xs text-zinc-300 px-3 py-2 rounded-xl border border-white/[0.1] hover:bg-white/[0.06] transition-all">Połącz</button>
+                          </div>
+                        )}
+                        {ownEpic?.connected && (
+                          <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
+                            <div>
+                              <p className="text-sm text-white">Wyświetlaj w profilu</p>
+                              <p className="text-xs text-zinc-500 mt-0.5">Inni widzą Twoje konto Epic / statystyki Fortnite</p>
+                            </div>
+                            <button onClick={async()=>{ const v=!ownEpic.show_on_profile; await epicApi.setSettings({show_on_profile:v}); setOwnEpic(p=>p?{...p,show_on_profile:v}:p); }}
+                              className={`relative w-11 h-6 rounded-full transition-all ${ownEpic.show_on_profile?'bg-zinc-400':'bg-white/[0.1]'}`}>
+                              <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${ownEpic.show_on_profile?'left-[26px]':'left-1'}`}/>
                             </button>
                           </div>
                         )}
