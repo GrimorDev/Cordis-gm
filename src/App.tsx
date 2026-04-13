@@ -9616,7 +9616,7 @@ export default function App() {
     }
   };
   // ── OAuth helper: open in system browser (Tauri) or navigate (web) ──
-  const openOAuth = async (url: string, service: 'spotify' | 'twitch' | 'steam' | 'youtube') => {
+  const openOAuth = async (url: string, service: 'spotify' | 'twitch' | 'steam' | 'youtube' | 'kick') => {
     if (isTauri) {
       try {
         const { open } = await import('@tauri-apps/plugin-shell');
@@ -9639,6 +9639,9 @@ export default function App() {
           } else if (service === 'youtube') {
             const s = await youtubeApi.status();
             if (s.connected) { clearInterval(poll); setOwnYoutube(s); addToast('YouTube połączono! 📺', 'success'); return; }
+          } else if (service === 'kick') {
+            const s = await kickApi.status();
+            if (s.connected) { clearInterval(poll); setOwnKick(s); addToast('Kick połączono! 🟢', 'success'); return; }
           } else {
             const s = await steamApi.status();
             if (s.connected) { clearInterval(poll); setOwnSteam(s); addToast('Steam połączono! 🎮', 'success'); return; }
@@ -17643,24 +17646,12 @@ export default function App() {
                             <p className="text-sm font-semibold text-white">YouTube</p>
                             {ownYoutube?.connected
                               ? <p className="text-xs text-zinc-500">{ownYoutube.display_name}{ownYoutube.subscriber_count != null ? ` · ${fmtSubsConn(ownYoutube.subscriber_count)} sub.` : ''}</p>
-                              : <p className="text-xs text-zinc-500">Podaj @handle lub URL kanału</p>}
+                              : <p className="text-xs text-zinc-500">Nie połączono</p>}
                           </div>
-                          {ownYoutube?.connected &&
-                            <button onClick={async()=>{ try { await youtubeApi.disconnect(); setOwnYoutube(null); addToast('YouTube odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>}
+                          {ownYoutube?.connected
+                            ? <button onClick={async()=>{ try { await youtubeApi.disconnect(); setOwnYoutube(null); addToast('YouTube odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
+                            : <button onClick={async()=>{ try { const r = await youtubeApi.connect(); await openOAuth(r.url, 'youtube'); } catch(e:any){ addToast(e.message||'Błąd YouTube','error'); } }} className="text-xs text-[#FF0000] flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-red-500/30 hover:bg-red-500/10">Połącz</button>}
                         </div>
-                        {!ownYoutube?.connected && (
-                          <div className="flex gap-2 mb-3">
-                            <input
-                              value={youtubeConnectInput}
-                              onChange={e=>setYoutubeConnectInput(e.target.value)}
-                              placeholder="@TwojeKanaly lub youtube.com/@..."
-                              className="flex-1 bg-white/[0.05] border border-white/[0.07] rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 outline-none focus:border-red-500/40 transition-colors"
-                              onKeyDown={async e=>{ if(e.key==='Enter'&&youtubeConnectInput.trim()){ try { const r=await youtubeApi.connect(youtubeConnectInput.trim()); setOwnYoutube(r); setYoutubeConnectInput(''); addToast(`Połączono z ${r.display_name||'YouTube'}!`,'success'); } catch(err:any){ addToast(err.message||'Nie znaleziono kanału','error'); } } }}
-                            />
-                            <button onClick={async()=>{ if(!youtubeConnectInput.trim())return; try { const r=await youtubeApi.connect(youtubeConnectInput.trim()); setOwnYoutube(r); setYoutubeConnectInput(''); addToast(`Połączono z ${r.display_name||'YouTube'}!`,'success'); } catch(err:any){ addToast(err.message||'Nie znaleziono kanału','error'); } }}
-                              className="text-xs text-[#FF0000] px-3 py-2 rounded-xl border border-red-500/30 hover:bg-red-500/10 transition-all whitespace-nowrap">Połącz</button>
-                          </div>
-                        )}
                         {ownYoutube?.connected && (
                           <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
                             <div>
@@ -17687,22 +17678,10 @@ export default function App() {
                               ? <p className="text-xs text-zinc-500">Połączono jako {ownKick.display_name || ownKick.username}{ownKick.is_live ? ' · 🔴 NA ŻYWO' : ''}</p>
                               : <p className="text-xs text-zinc-500">Nie połączono</p>}
                           </div>
-                          {ownKick?.connected && (
-                            <button onClick={async()=>{ try { await kickApi.disconnect(); setOwnKick(null); addToast('Kick odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
-                          )}
+                          {ownKick?.connected
+                            ? <button onClick={async()=>{ try { await kickApi.disconnect(); setOwnKick(null); addToast('Kick odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
+                            : <button onClick={async()=>{ try { const r = await kickApi.connect(); await openOAuth(r.url, 'kick'); } catch(e:any){ addToast(e.message||'Błąd Kick','error'); } }} className="text-xs text-[#53fc18] flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-[#53fc18]/30 hover:bg-[#53fc18]/10">Połącz</button>}
                         </div>
-                        {!ownKick?.connected && (
-                          <div className="flex gap-2 mb-3">
-                            <input
-                              value={kickConnectUsername}
-                              onChange={e=>setKickConnectUsername(e.target.value)}
-                              placeholder="Nazwa użytkownika Kick"
-                              className="flex-1 bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-[#53fc18]/40 transition-all"
-                              onKeyDown={async e=>{ if(e.key==='Enter' && kickConnectUsername.trim()){ try { const r=await kickApi.connect(kickConnectUsername.trim()); setOwnKick(r); setKickConnectUsername(''); addToast('Kick połączono','success'); } catch(err:any){ addToast(err.message||'Błąd Kick','error'); } } }}
-                            />
-                            <button onClick={async()=>{ if(!kickConnectUsername.trim())return; try { const r=await kickApi.connect(kickConnectUsername.trim()); setOwnKick(r); setKickConnectUsername(''); addToast('Kick połączono','success'); } catch(err:any){ addToast(err.message||'Błąd Kick','error'); } }} className="text-xs text-[#53fc18] px-3 py-2 rounded-xl border border-[#53fc18]/30 hover:bg-[#53fc18]/10 transition-all">Połącz</button>
-                          </div>
-                        )}
                         {ownKick?.connected && (
                           <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
                             <div>
