@@ -108,7 +108,11 @@ router.get('/callback', async (req: Request, res: Response) => {
   const { code, state, error } = req.query as Record<string, string>;
   if (error || !code || !state) return res.redirect(`${FRONTEND_URL}?kick=error`);
 
-  const [userId, nonce] = state.split(':');
+  // state = "<userId>:<nonce>" — userId is UUID (has dashes, no colons), nonce is hex
+  const colonIdx = state.indexOf(':');
+  if (colonIdx < 0) return res.redirect(`${FRONTEND_URL}?kick=error`);
+  const userId = state.slice(0, colonIdx);
+  const nonce  = state.slice(colonIdx + 1);
   if (!userId || !nonce) return res.redirect(`${FRONTEND_URL}?kick=error`);
 
   const stored = await redis.get(`oauth:state:kick:${nonce}`);
@@ -118,23 +122,29 @@ router.get('/callback', async (req: Request, res: Response) => {
   await redis.del(`oauth:state:kick:${nonce}`);
 
   try {
-    const r = await fetch('https://id.kick.com/oauth/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        grant_type:    'authorization_code',
-        client_id:     CLIENT_ID,
-        client_secret: CLIENT_SECRET,
-        redirect_uri:  REDIRECT_URI,
-        code,
-        code_verifier: verifier,
-      }),
-    });
-    if (!r.ok) {
-      console.error('[Kick] token exchange failed:', r.status, await r.text().catch(() => ''));
+    // Try JSON body first (Kick OAuth 2.1 / PKCE), fall back to form-encoded
+    let tokens: any = null;
+    for (const [ct, body] of [
+      ['application/json', JSON.stringify({
+        grant_type: 'authorization_code', client_id: CLIENT_ID, client_secret: CLIENT_SECRET,
+        redirect_uri: REDIRECT_URI, code, code_verifier: verifier,
+      })],
+      ['application/x-www-form-urlencoded', new URLSearchParams({
+        grant_type: 'authorization_code', client_id: CLIENT_ID, client_secret: CLIENT_SECRET,
+        redirect_uri: REDIRECT_URI, code, code_verifier: verifier,
+      }).toString()],
+    ] as [string, string][]) {
+      const r = await fetch('https://id.kick.com/oauth/token', {
+        method: 'POST', headers: { 'Content-Type': ct, Accept: 'application/json' }, body,
+      });
+      const txt = await r.text();
+      console.log(`[Kick] token exchange (${ct}) status=${r.status} body=${txt.slice(0,300)}`);
+      if (r.ok) { try { tokens = JSON.parse(txt); } catch { /* not JSON */ } break; }
+    }
+    if (!tokens?.access_token) {
+      console.error('[Kick] token exchange: no access_token after both attempts');
       return res.redirect(`${FRONTEND_URL}?kick=error`);
     }
-    const tokens: any = await r.json();
     const ch = await fetchKickChannel(tokens.access_token);
 
     await query(
