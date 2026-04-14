@@ -145,20 +145,25 @@ router.get('/callback', async (req: Request, res: Response) => {
       console.error('[Kick] token exchange: no access_token after both attempts');
       return res.redirect(`${FRONTEND_URL}?kick=error`);
     }
-    const ch = await fetchKickChannel(tokens.access_token);
 
+    // Save token first so user is "connected" even if channel fetch fails
     await query(
-      `UPDATE users SET
-         kick_username=$1, kick_display_name=$2, kick_profile_pic=$3,
-         kick_is_live=$4, kick_live_title=$5, kick_live_viewers=$6,
-         kick_live_category=$7, kick_show_on_profile=TRUE
-       WHERE id=$8`,
-      [
-        ch?.username || null, ch?.display_name || null, ch?.profile_pic || null,
-        ch?.is_live || false, ch?.live_title || null, ch?.live_viewers || 0,
-        ch?.live_category || null, userId,
-      ]
+      `UPDATE users SET kick_access_token=$1, kick_show_on_profile=TRUE WHERE id=$2`,
+      [tokens.access_token, userId]
     );
+
+    const ch = await fetchKickChannel(tokens.access_token);
+    if (ch) {
+      await query(
+        `UPDATE users SET
+           kick_username=$1, kick_display_name=$2, kick_profile_pic=$3,
+           kick_is_live=$4, kick_live_title=$5, kick_live_viewers=$6,
+           kick_live_category=$7
+         WHERE id=$8`,
+        [ch.username, ch.display_name, ch.profile_pic,
+         ch.is_live, ch.live_title, ch.live_viewers, ch.live_category, userId]
+      );
+    }
     return res.redirect(`${FRONTEND_URL}?kick=connected`);
   } catch (e) {
     console.error('[Kick] callback error:', e);
@@ -170,13 +175,44 @@ router.get('/callback', async (req: Request, res: Response) => {
 router.get('/status', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { rows } = await query(
-      `SELECT kick_username, kick_display_name, kick_profile_pic, kick_is_live,
+      `SELECT kick_access_token, kick_username, kick_display_name, kick_profile_pic, kick_is_live,
               kick_live_title, kick_live_viewers, kick_live_category, kick_show_on_profile
        FROM users WHERE id=$1`, [req.user!.id]
     );
     const row = rows[0];
+    const hasToken = !!row?.kick_access_token;
+
+    // Token exists but channel info missing — retry fetching from Kick API
+    if (hasToken && !row?.kick_username) {
+      const ch = await fetchKickChannel(row.kick_access_token);
+      if (ch) {
+        await query(
+          `UPDATE users SET kick_username=$1, kick_display_name=$2, kick_profile_pic=$3,
+             kick_is_live=$4, kick_live_title=$5, kick_live_viewers=$6, kick_live_category=$7
+           WHERE id=$8`,
+          [ch.username, ch.display_name, ch.profile_pic,
+           ch.is_live, ch.live_title, ch.live_viewers, ch.live_category, req.user!.id]
+        );
+        return res.json({
+          connected: true,
+          show_on_profile: row?.kick_show_on_profile !== false,
+          username: ch.username, display_name: ch.display_name,
+          profile_pic: ch.profile_pic, is_live: ch.is_live,
+          live_title: ch.live_title, live_viewers: ch.live_viewers, live_category: ch.live_category,
+        });
+      }
+      // Token exists but Kick API failed — still show connected with no channel info
+      return res.json({
+        connected: true,
+        show_on_profile: row?.kick_show_on_profile !== false,
+        username: null, display_name: 'Kick (brak danych kanału)',
+        profile_pic: null, is_live: false,
+        live_title: null, live_viewers: 0, live_category: null,
+      });
+    }
+
     return res.json({
-      connected:     !!row?.kick_username,
+      connected:     hasToken,
       show_on_profile: row?.kick_show_on_profile !== false,
       username:      row?.kick_username      || null,
       display_name:  row?.kick_display_name  || null,
@@ -227,8 +263,9 @@ router.put('/settings', authMiddleware, async (req: AuthRequest, res: Response) 
 router.delete('/disconnect', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     await query(
-      `UPDATE users SET kick_username=NULL, kick_display_name=NULL, kick_profile_pic=NULL,
-         kick_is_live=FALSE, kick_live_title=NULL, kick_live_viewers=0, kick_live_category=NULL
+      `UPDATE users SET kick_access_token=NULL, kick_username=NULL, kick_display_name=NULL,
+         kick_profile_pic=NULL, kick_is_live=FALSE, kick_live_title=NULL,
+         kick_live_viewers=0, kick_live_category=NULL
        WHERE id=$1`, [req.user!.id]
     );
     return res.json({ ok: true });
