@@ -623,7 +623,21 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
   const [twoFaCode, setTwoFaCode] = useState('');
   const [twoFaType, setTwoFaType] = useState<'totp' | 'backup'>('totp');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [rememberMe, setRememberMe] = useState(!!savedCreds || true);
+  const [rememberMe, setRememberMe] = useState(true);
+
+  // Try to pre-fill from the browser's native credential store (WebView2, Chrome, Edge)
+  // Falls back to localStorage already applied in useState above
+  React.useEffect(() => {
+    if (savedCreds || !('credentials' in navigator)) return;
+    (navigator.credentials as any).get({ password: true, mediation: 'optional' })
+      .then((cred: any) => {
+        if (cred?.id) {
+          setForm(f => ({ ...f, login: cred.id, password: cred.password || f.password }));
+        }
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Direct .exe download URL — use env override or resolve from GitHub Releases API
   const [desktopUrl, setDesktopUrl] = useState(import.meta.env.VITE_DESKTOP_DOWNLOAD_URL || '');
@@ -721,6 +735,13 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
             sessionStorage.setItem('cordyn_token', res.token);
           }
         }
+        // Also save to browser/WebView2 native credential store for OS-level autocomplete
+        try {
+          if ('credentials' in navigator && 'PasswordCredential' in window) {
+            const cred = new (window as any).PasswordCredential({ id: form.login, password: form.password });
+            navigator.credentials.store(cred).catch(() => {});
+          }
+        } catch { /* unsupported in this environment */ }
         onAuth(res.user, res.token, false);
       }
     } catch (err) {
