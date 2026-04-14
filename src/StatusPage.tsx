@@ -342,6 +342,13 @@ export default function StatusPage() {
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // The main app sets overflow:hidden on body (to prevent chat scrollbars).
+  // Reset it for this standalone page so the status page can scroll normally.
+  useEffect(() => {
+    document.body.style.overflow = 'auto';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
   const fetchStatus = useCallback(async () => {
     try {
       setError(null);
