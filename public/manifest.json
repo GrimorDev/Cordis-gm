@@ -1,6 +1,6 @@
 {
-  "name": "Cordis",
-  "short_name": "Cordis",
+  "name": "Cordyn",
+  "short_name": "Cordyn",
   "description": "Platforma komunikacji dla graczy i twórców",
   "start_url": "/",
   "display": "standalone",
@@ -15,7 +15,7 @@
       "purpose": "any maskable"
     },
     {
-      "src": "/cordyn_logo.png",
+      "src": "/cordyn.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
