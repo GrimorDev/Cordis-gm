@@ -2307,7 +2307,7 @@ export default function DeveloperPortal() {
             className="mobile-menu-btn">
             {sidebarOpen ? <XIcon /> : <MenuIcon />}
           </button>
-          <div style={{ width: 26, height: 26, borderRadius: 6, background: 'linear-gradient(135deg,#6366f1,#818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 13, color: '#fff' }}>C</div>
+          <img src="/cordyn.png" alt="Cordyn" style={{ width: 26, height: 26, borderRadius: 6, objectFit: 'contain' }}/>
           <span style={{ fontSize: 14, fontWeight: 700, color: '#f4f4f5' }}>Cordyn</span>
           <span style={{ color: '#27272a', fontSize: 15 }}>/</span>
           <span style={{ fontSize: 13, color: '#52525b' }}>Developer Portal</span>

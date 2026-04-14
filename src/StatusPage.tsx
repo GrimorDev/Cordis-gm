@@ -428,8 +428,8 @@ export default function StatusPage() {
       <nav className="border-b border-zinc-800/60 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <a href="/" className="flex items-center gap-3 group">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:shadow-indigo-500/40 transition-shadow">
-              <span className="text-white font-black text-sm">C</span>
+            <div className="w-8 h-8 rounded-xl overflow-hidden shadow-lg shadow-indigo-500/20 group-hover:shadow-indigo-500/40 transition-shadow shrink-0">
+              <img src="/cordyn.png" alt="Cordyn" className="w-full h-full object-contain"/>
             </div>
             <div>
               <span className="text-white font-bold text-lg tracking-tight">Cordyn</span>
@@ -625,8 +625,8 @@ export default function StatusPage() {
       <footer className="border-t border-zinc-800/40 mt-16">
         <div className="max-w-4xl mx-auto px-6 py-8 flex items-center justify-between">
           <div className="flex items-center gap-2 text-zinc-500 text-sm">
-            <div className="w-5 h-5 rounded-md bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
-              <span className="text-white font-black text-[10px]">C</span>
+            <div className="w-5 h-5 rounded-md overflow-hidden shrink-0">
+              <img src="/cordyn.png" alt="Cordyn" className="w-full h-full object-contain"/>
             </div>
             <span>Powered by Cordyn</span>
           </div>
