@@ -102,13 +102,14 @@ function YouTubeIcon({size=16,className=''}:{size?:number,className?:string}) {
   </svg>;
 }
 function KickIcon({size=16,className=''}:{size?:number,className?:string}) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-label="Kick">
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" fillRule="evenodd" className={className} aria-label="Kick">
     <path d="M10.987 0H3.43L0 3.43v17.14L3.43 24h17.14L24 20.57V3.43L20.57 0H10.987zm.88 18.164-4.1-4.1L5.88 16V8l1.892 1.936 4.1-4.1L18.12 12l-6.253 6.164z"/>
   </svg>;
 }
 function EpicIcon({size=16,className=''}:{size?:number,className?:string}) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-label="Epic Games">
-    <path d="M4 2h16v3H8v4h10v3H8v4h12v3H4V2z"/>
+    {/* Epic Games "E" lettermark — bold E with balanced bar heights */}
+    <path d="M4 4h16v3.5H8.5v3h9.5v3H8.5v3h11.5v3.5H4V4z"/>
   </svg>;
 }
 
