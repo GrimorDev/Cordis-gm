@@ -103,7 +103,7 @@ function YouTubeIcon({size=16,className=''}:{size?:number,className?:string}) {
 }
 function KickIcon({size=16,className=''}:{size?:number,className?:string}) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-label="Kick">
-    <path d="M2 2h4l4 6 4-6h4v20h-4V9l-4 6-4-6v13H2V2z"/>
+    <path d="M10.987 0H3.43L0 3.43v17.14L3.43 24h17.14L24 20.57V3.43L20.57 0H10.987zm.88 18.164-4.1-4.1L5.88 16V8l1.892 1.936 4.1-4.1L18.12 12l-6.253 6.164z"/>
   </svg>;
 }
 function EpicIcon({size=16,className=''}:{size?:number,className?:string}) {

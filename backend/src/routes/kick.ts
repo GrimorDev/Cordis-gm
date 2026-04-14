@@ -46,8 +46,9 @@ async function fetchKickChannel(accessToken: string): Promise<{
       return null;
     }
     const data: any = await r.json();
-    // API returns { data: { user_id, name, bio, ... } }
-    const u = data?.data;
+    // API may return { data: {...} } or { data: [{...}] } depending on version
+    const u = Array.isArray(data?.data) ? data.data[0] : data?.data;
+    console.log('[Kick] users API response data:', JSON.stringify(u)?.slice(0, 200));
     const username    = (u?.slug || u?.name || null) as string | null;
     const displayName = (u?.name || username  || null) as string | null;
     const profilePic  = (u?.profile_picture   || null) as string | null;
