@@ -445,7 +445,8 @@ DO $$ BEGIN ALTER TABLE users ADD COLUMN youtube_live_title TEXT; EXCEPTION WHEN
 DO $$ BEGIN ALTER TABLE users ADD COLUMN youtube_live_viewers INT DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN youtube_show_on_profile BOOLEAN DEFAULT TRUE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 
--- ── Kick connection (public API / username-based) ─────────────────────────────
+-- ── Kick connection (OAuth 2.1 + PKCE) ───────────────────────────────────────
+DO $$ BEGIN ALTER TABLE users ADD COLUMN kick_access_token TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN kick_username VARCHAR(255); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN kick_display_name VARCHAR(255); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE users ADD COLUMN kick_profile_pic TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
