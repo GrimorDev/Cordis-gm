@@ -14637,8 +14637,8 @@ export default function App() {
 
           {/* ─ MEMBERS ONLINE / OFFLINE ─ */}
           {activeView==='servers'&&members.length>0&&(()=>{
-            const online  = members.filter(m=>m.status==='online'||m.status==='idle'||m.status==='dnd');
-            const offline = members.filter(m=>m.status==='offline'||!m.status);
+            const online  = members.filter(m=>m.is_bot||m.status==='online'||m.status==='idle'||m.status==='dnd');
+            const offline = members.filter(m=>!m.is_bot&&(m.status==='offline'||!m.status));
 
             // Group online by primary role
             const roleGroupMap = new Map<string,{role:{id:string;name:string;color:string};list:typeof online}>();
@@ -14674,7 +14674,7 @@ export default function App() {
                         {maskName(m.username)}
                       </p>
                       {isOwner&&<Crown size={11} className={`${opacity?'text-amber-400/50':'text-amber-400'} shrink-0`}/>}
-                      {m.is_bot&&<span className={`text-[9px] font-bold px-1 py-0.5 rounded border ${opacity?'border-violet-500/20 text-violet-500/60 bg-violet-500/5 opacity-50':'border-violet-500/40 text-violet-400 bg-violet-500/10'} leading-none select-none shrink-0`}>APP</span>}
+                      {m.is_bot&&<span className={`text-[9px] font-bold px-1 py-0.5 rounded border ${opacity?'border-violet-500/20 text-violet-500/60 bg-violet-500/5 opacity-50':'border-violet-500/40 text-violet-400 bg-violet-500/10'} leading-none select-none shrink-0`}>BOT</span>}
                       {(m as any).active_tag&&<span className={opacity?'opacity-50':''}><TagBadge tag={(m as any).active_tag} color={(m as any).active_tag_server_id?(serverTagColorMap[(m as any).active_tag_server_id]??null):null} icon={(m as any).active_tag_server_id?(serverTagIconMap[(m as any).active_tag_server_id]??null):null} serverInfo={(m as any).active_tag_server_id?(serverList.find(s=>s.id===(m as any).active_tag_server_id)??null):null}/></span>}
                       {m.badges?.map((b:any)=>{const BIcon=getBadgeIcon(b.name);return <BIcon key={b.id} size={11} style={{color:opacity?b.color+'80':b.color}} title={b.label} className={`shrink-0 ${opacity?'opacity-50':''}`}/>;  })}
                     </div>
