@@ -115,7 +115,7 @@ services:
       - backend-uploads:/app/uploads
     depends_on:
       pgbouncer:
-        condition: service_healthy
+        condition: service_started
       redis:
         condition: service_healthy
     deploy:
@@ -175,12 +175,11 @@ services:
           cpus: "0.1"
           memory: 32M
     healthcheck:
-      # nc (netcat) is available via busybox in Alpine — just checks TCP port
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 5432 || exit 1"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER:-cordis} || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 30s
+      retries: 15
+      start_period: 60s
 
   # ── PostgreSQL (tuned for high concurrency) ───────────────────────
   postgres:
