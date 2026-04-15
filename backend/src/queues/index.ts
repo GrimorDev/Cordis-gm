@@ -9,7 +9,7 @@
  * push notifications, and email — so these never block the HTTP response.
  */
 
-import { Queue, Worker, QueueEvents } from 'bullmq';
+import { Queue, QueueEvents } from 'bullmq';
 import { config } from '../config';
 
 const connection = {

@@ -17,6 +17,7 @@ import { initSocket } from './socket';
 import { startSpotifyPoller } from './services/spotifyPoller';
 import statusRoutes from './routes/status';
 import { startHealthChecker } from './services/healthChecker';
+import cluster from 'cluster';
 import { register, httpRequestDuration, wsConnections } from './metrics';
 
 // Routes
@@ -260,12 +261,9 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 });
 
 // ── BullMQ workers — start only once per server instance ─────────────
-// In cluster mode the PRIMARY starts workers before forking HTTP workers.
-// In single-process mode (CLUSTER_WORKERS=1 / dev) they start here.
-// cluster.isWorker is false when running directly (non-cluster mode).
-import cluster from 'cluster';
+// In cluster mode workers have CLUSTER_WORKER set; primary does not.
+// In single-process mode (dev / CLUSTER_WORKERS=1) this always runs.
 if (!cluster.isWorker) {
-  // Dynamic import so TypeScript compiles workers independently
   import('./workers/notificationWorker').catch((e) =>
     console.warn('[workers] BullMQ workers not started:', e.message)
   );
