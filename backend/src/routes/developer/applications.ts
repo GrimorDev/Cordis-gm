@@ -116,6 +116,16 @@ router.patch('/:appId', authMiddleware,
         values
       );
       if (!rows.length) return res.status(404).json({ error: 'Application not found' });
+      // If the app name changed and there's a bot, update the bot username + custom_status
+      if (changed.name && rows[0].bot_user_id) {
+        const baseName = (changed.name as string).toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').slice(0, 24) || 'bot';
+        const suffix = crypto.randomBytes(3).toString('hex');
+        const newBotUsername = `${baseName}_${suffix}`;
+        await query(
+          `UPDATE users SET username = $1, custom_status = $2 WHERE id = $3`,
+          [newBotUsername, `Bot for ${changed.name}`, rows[0].bot_user_id]
+        );
+      }
       auditLog(req.params.appId, req.user!.id, 'app_updated', changed, getIp(req));
       res.json({ ...rows[0], client_secret: undefined, webhook_secret: undefined });
     } catch (err) {

@@ -26,11 +26,10 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     if (!app) return res.status(404).json({ error: 'Application not found' });
     if (app.bot_user_id) return res.status(409).json({ error: 'Bot already exists for this application' });
 
-    // Create bot user (username = app name, is_bot = true)
-    const botUsername = app.name.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 30) + '_bot';
-    // Ensure uniqueness
+    // Create bot user (username = sanitized app name + short hex suffix for uniqueness)
+    const baseName = app.name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').slice(0, 24) || 'bot';
     const suffix = crypto.randomBytes(3).toString('hex');
-    const uniqueUsername = `${botUsername}_${suffix}`;
+    const uniqueUsername = `${baseName}_${suffix}`;
 
     const dummyEmail = `bot_${app.id}@bots.cordyn.internal`;
     const dummyHash = await (await import('bcryptjs')).hash(crypto.randomBytes(32).toString('hex'), 8);

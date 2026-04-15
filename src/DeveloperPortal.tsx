@@ -2032,7 +2032,7 @@ function DocsTab({ app }: DocsTabProps) {
       </div>
 
       {/* Content area */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px', minWidth: 0 }}>
+      <div style={{ flex: 1, overflow: 'auto', padding: '24px 32px', minWidth: 0 }}>
         {/* Language tabs */}
         <div style={{
           display: 'flex', gap: 2, marginBottom: 24, flexWrap: 'wrap',
@@ -2338,7 +2338,7 @@ export default function DeveloperPortal() {
               </p>
             </div>
             {/* Docs content — takes remaining height */}
-            <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+            <div style={{ flex: 1, overflow: 'auto', display: 'flex' }}>
               <DocsTab app={selectedApp || { client_id: 'TWÓJ_CLIENT_ID', rate_limit_tier: 'free' } as any} />
             </div>
           </div>
