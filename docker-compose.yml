@@ -1,7 +1,7 @@
 version: "3.9"
 
 # ═══════════════════════════════════════════════════════════════════
-#  Cordyn – Docker Compose Stack
+#  Cordis – Docker Compose Stack  (100k-ready)
 #  Deploy via Portainer as a new Stack from GitHub repository
 #  Repository: https://github.com/GrimorDev/Cordis-gm
 #
@@ -16,11 +16,14 @@ version: "3.9"
 #    R2_ACCESS_KEY_ID     – z CF Dashboard → R2 → Manage R2 API Tokens
 #    R2_SECRET_ACCESS_KEY – j.w.
 #    R2_PUBLIC_URL        – własna domena CDN (zostaw puste = proxy przez backend)
+#
+#  Monitoring (opcjonalne, dostępne na porcie 9090/3001):
+#    GF_SECURITY_ADMIN_PASSWORD – hasło Grafana (domyślnie: cordis_grafana)
 # ═══════════════════════════════════════════════════════════════════
 
 services:
 
-  # ── Frontend (React + Nginx) ─────────────────────────────────────
+  # ── Frontend (React + Nginx, tuned for 100k) ─────────────────────
   frontend:
     build:
       context: .
@@ -29,7 +32,6 @@ services:
         VITE_API_URL: /api
         VITE_SOCKET_URL: ""
         VITE_VAPID_PUBLIC_KEY: "BLW91bYO5prQrQtHpsE_6dJQVi3jQvGmD5MJbj8oRQ6aesobJm4GLzBTq_DyEfsFoi5yLJeGenO-27FoOe8w06I"
-    # NOTE: no 'image:' tag — Portainer builds locally from Dockerfile (not from registry)
     container_name: cordis-frontend
     restart: unless-stopped
     ports:
@@ -40,6 +42,14 @@ services:
     networks:
       - default
       - proxy
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 256M
+        reservations:
+          cpus: "0.25"
+          memory: 64M
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health.txt || exit 1"]
       interval: 30s
@@ -47,18 +57,18 @@ services:
       start_period: 30s
       retries: 5
 
-  # ── Backend (Node.js API + Socket.IO) ────────────────────────────
+  # ── Backend (Node.js API + Socket.IO, cluster mode) ───────────────
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    # NOTE: no 'image:' tag — Portainer builds locally from Dockerfile (not from registry)
     container_name: cordis-backend
     restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: 4000
-      POSTGRES_HOST: postgres
+      # Connect through PgBouncer (transaction-mode connection pooler)
+      POSTGRES_HOST: pgbouncer
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-cordis}
       POSTGRES_USER: ${POSTGRES_USER:-cordis}
@@ -71,19 +81,19 @@ services:
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change_me_refresh_secret_32chars}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-30d}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
-      # FRONTEND_URL — URL do którego wraca redirect po OAuth (Spotify/Twitch/Steam)
-      # Ustaw w Portainer np. https://cordyn.pl (bez trailing slash!)
       FRONTEND_URL: ${FRONTEND_URL:-}
-      UPLOAD_MAX_SIZE: "52428800"   # 50MB — hardcoded, nie zmieniaj przez Portainer
+      UPLOAD_MAX_SIZE: "52428800"
+      # Cluster: number of worker processes (defaults to CPU count)
+      # Override in Portainer if you want to pin to a specific number
+      CLUSTER_WORKERS: ${CLUSTER_WORKERS:-0}
+      # Node.js heap — leave ~20% RAM headroom for OS + Redis on the same host
+      # Adjust NODE_MAX_OLD_SPACE to ~70% of available RAM if running dedicated
+      NODE_OPTIONS: "--max-old-space-size=${NODE_MAX_OLD_SPACE:-2048}"
       # ── Cloudflare R2 ────────────────────────────────────────────────
-      # Endpoint i bucket zahardkodowane (stałe dla projektu)
       R2_ENDPOINT: "https://f33e20b4cd126676f4659f7838db83cd.r2.cloudflarestorage.com"
       R2_BUCKET: "cordyn"
-      # Te dwie zmienne ustaw w Portainer → Stack → Environment:
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
-      # Publiczny URL bucketu — zostaw puste = pliki przez /api/files/ proxy (zalecane)
-      # Ustaw tylko jeśli masz własną domenę CDN np. https://cdn.cordyn.pl
       R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
       STORAGE_FREE_QUOTA: ${STORAGE_FREE_QUOTA:-52428800}
       STORAGE_PREMIUM_QUOTA: ${STORAGE_PREMIUM_QUOTA:-629145600}
@@ -104,10 +114,18 @@ services:
     volumes:
       - backend-uploads:/app/uploads
     depends_on:
-      postgres:
+      pgbouncer:
         condition: service_healthy
       redis:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 3G
+        reservations:
+          cpus: "0.5"
+          memory: 256M
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:4000/health || exit 1"]
       interval: 15s
@@ -115,7 +133,53 @@ services:
       retries: 10
       start_period: 60s
 
-  # ── PostgreSQL ────────────────────────────────────────────────────
+  # ── PgBouncer (connection pooler — sits between backend and PG) ───
+  # Transaction-mode pooling: each query uses a DB connection, releases it
+  # immediately. 5000 app connections → ~50 real PostgreSQL connections.
+  pgbouncer:
+    image: bitnami/pgbouncer:1.23.1
+    container_name: cordis-pgbouncer
+    restart: unless-stopped
+    environment:
+      POSTGRESQL_HOST: postgres
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_DATABASE: ${POSTGRES_DB:-cordis}
+      POSTGRESQL_USERNAME: ${POSTGRES_USER:-cordis}
+      POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD:-cordis_secret}
+      PGBOUNCER_DATABASE: ${POSTGRES_DB:-cordis}
+      PGBOUNCER_POOL_MODE: transaction
+      # Max simultaneous client connections to PgBouncer
+      PGBOUNCER_MAX_CLIENT_CONN: 5000
+      # Real PG connections per user+db pool
+      PGBOUNCER_DEFAULT_POOL_SIZE: 50
+      PGBOUNCER_MIN_POOL_SIZE: 5
+      PGBOUNCER_RESERVE_POOL_SIZE: 10
+      PGBOUNCER_RESERVE_POOL_TIMEOUT: 5
+      PGBOUNCER_SERVER_IDLE_TIMEOUT: 600
+      PGBOUNCER_CLIENT_IDLE_TIMEOUT: 60
+      PGBOUNCER_PORT: 5432
+      # Reduce log noise in production
+      PGBOUNCER_LOG_CONNECTIONS: 0
+      PGBOUNCER_LOG_DISCONNECTIONS: 0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+        reservations:
+          cpus: "0.1"
+          memory: 32M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER:-cordis}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── PostgreSQL (tuned for high concurrency) ───────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: cordis-postgres
@@ -125,19 +189,45 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-cordis}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cordis_secret}
       PGDATA: /var/lib/postgresql/data/pgdata
+    # PostgreSQL performance tuning via command-line flags.
+    # Sized for a server with 4–8 GB RAM dedicated to PG.
+    # Adjust shared_buffers to 25% of total RAM.
+    command: >
+      postgres
+      -c shared_buffers=512MB
+      -c effective_cache_size=2GB
+      -c work_mem=16MB
+      -c maintenance_work_mem=128MB
+      -c max_connections=100
+      -c wal_buffers=16MB
+      -c checkpoint_completion_target=0.9
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c max_wal_size=2GB
+      -c min_wal_size=256MB
+      -c log_min_duration_statement=500
+      -c idle_in_transaction_session_timeout=30000
+      -c statement_timeout=60000
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
       - ./postgres/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 4G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
     healthcheck:
-      # Najprostszy check - czy postgres odpowiada na porcie 5432
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER:-cordis}"]
       interval: 10s
       timeout: 5s
       retries: 15
       start_period: 60s
 
-  # ── Redis ─────────────────────────────────────────────────────────
+  # ── Redis (tuned for high throughput + hit rate) ──────────────────
   redis:
     image: redis:7-alpine
     container_name: cordis-redis
@@ -147,18 +237,165 @@ services:
       --requirepass ${REDIS_PASSWORD:-redis_secret}
       --appendonly yes
       --appendfsync everysec
-      --maxmemory 256mb
+      --maxmemory 512mb
       --maxmemory-policy allkeys-lru
+      --hz 20
+      --activerehashing yes
+      --lazyfree-lazy-eviction yes
+      --lazyfree-lazy-expire yes
+      --tcp-backlog 511
+      --timeout 0
+      --tcp-keepalive 300
+      --save 3600 1 300 100 60 10000
     volumes:
       - redis-data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 640M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
     healthcheck:
-      # docker-compose interpoluje ${REDIS_PASSWORD:-redis_secret} w czasie parsowania
-      # więc hasło trafia literalnie do komendy - nie potrzeba ekspansji shellowej
       test: ["CMD-SHELL", "redis-cli -a '${REDIS_PASSWORD:-redis_secret}' ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 15s
+
+  # ── Prometheus (metrics collection) ──────────────────────────────
+  # Scrapes Node.js /metrics, Redis exporter, Postgres exporter, node-exporter.
+  #
+  # SECURITY: NO public port — Prometheus has no built-in auth.
+  # Access via SSH tunnel:
+  #   ssh -L 9090:localhost:9090 user@cordyn.pl
+  #   then open http://localhost:9090 in browser
+  #
+  # If you want to set PROMETHEUS_PORT in Portainer env, expose it only
+  # on loopback: "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    container_name: cordis-prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    # Bind to localhost only — NOT reachable from the internet
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    depends_on:
+      - backend
+      - redis
+      - postgres
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/healthy || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ── Grafana (dashboards) ──────────────────────────────────────────
+  # SECURITY: bound to localhost only. Access via SSH tunnel:
+  #   ssh -L 3001:localhost:3001 user@cordyn.pl
+  #   then open http://localhost:3001 in browser
+  #   login: admin / GF_SECURITY_ADMIN_PASSWORD (set in Portainer env)
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: cordis-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-cordis_grafana}
+      GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s:%(http_port)s/grafana/"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      # Disable telemetry
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+    # Bind to localhost only — NOT reachable from the internet
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3001}:3000"
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ── Redis Exporter (Prometheus metrics for Redis) ─────────────────
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    container_name: cordis-redis-exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: redis://redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_secret}
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 32M
+
+  # ── PostgreSQL Exporter (Prometheus metrics for PostgreSQL) ───────
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: cordis-postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-cordis}:${POSTGRES_PASSWORD:-cordis_secret}@postgres:5432/${POSTGRES_DB:-cordis}?sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 32M
+
+  # ── Node Exporter (host OS metrics: CPU, RAM, disk, network) ──────
+  node-exporter:
+    image: prom/node-exporter:v1.8.0
+    container_name: cordis-node-exporter
+    restart: unless-stopped
+    command:
+      - "--path.rootfs=/host"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    volumes:
+      - /:/host:ro,rslave
+    pid: host
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 32M
 
 # ── Networks ──────────────────────────────────────────────────────────
 networks:
@@ -172,4 +409,8 @@ volumes:
   redis-data:
     driver: local
   backend-uploads:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
     driver: local

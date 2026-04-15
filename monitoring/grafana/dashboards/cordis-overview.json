@@ -1,0 +1,87 @@
+{
+  "title": "Cordis – System Overview",
+  "uid": "cordis-overview",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Active WebSocket Connections",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "targets": [{ "expr": "sum(cordis_websocket_connections_total)", "legendFormat": "WS connections" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [
+        { "color": "green", "value": 0 },
+        { "color": "yellow", "value": 50000 },
+        { "color": "red", "value": 90000 }
+      ]}}}
+    },
+    {
+      "id": 2, "type": "stat", "title": "Node.js Heap Used",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "targets": [{ "expr": "sum(nodejs_heap_size_used_bytes) / 1024 / 1024", "legendFormat": "Heap MB" }],
+      "fieldConfig": { "defaults": { "unit": "MB", "thresholds": { "steps": [
+        { "color": "green", "value": 0 },
+        { "color": "yellow", "value": 1500 },
+        { "color": "red", "value": 2500 }
+      ]}}}
+    },
+    {
+      "id": 3, "type": "stat", "title": "Redis Cache Hit Rate",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "targets": [{ "expr": "rate(cordis_redis_cache_hits_total[5m]) / (rate(cordis_redis_cache_hits_total[5m]) + rate(cordis_redis_cache_misses_total[5m])) * 100", "legendFormat": "Hit %" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "thresholds": { "steps": [
+        { "color": "red", "value": 0 },
+        { "color": "yellow", "value": 60 },
+        { "color": "green", "value": 80 }
+      ]}}}
+    },
+    {
+      "id": 4, "type": "stat", "title": "PG Pool Waiting",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "targets": [{ "expr": "sum(cordis_pg_pool_waiting)", "legendFormat": "Waiting" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [
+        { "color": "green", "value": 0 },
+        { "color": "yellow", "value": 5 },
+        { "color": "red", "value": 20 }
+      ]}}}
+    },
+    {
+      "id": 5, "type": "timeseries", "title": "HTTP Request Rate (req/s)",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [{ "expr": "sum(rate(cordis_http_request_duration_seconds_count[1m]))", "legendFormat": "req/s" }]
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "HTTP P99 Latency",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [{ "expr": "histogram_quantile(0.99, sum(rate(cordis_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P99" },
+                  { "expr": "histogram_quantile(0.95, sum(rate(cordis_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P95" }],
+      "fieldConfig": { "defaults": { "unit": "s" }}
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "Redis Memory Used",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "targets": [{ "expr": "redis_memory_used_bytes / 1024 / 1024", "legendFormat": "MB used" },
+                  { "expr": "redis_maxmemory_bytes / 1024 / 1024", "legendFormat": "MB limit" }],
+      "fieldConfig": { "defaults": { "unit": "MB" }}
+    },
+    {
+      "id": 8, "type": "timeseries", "title": "BullMQ Queue Depth",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "targets": [{ "expr": "cordis_queue_depth", "legendFormat": "{{queue}}" }]
+    },
+    {
+      "id": 9, "type": "timeseries", "title": "Host CPU Usage",
+      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
+      "targets": [{ "expr": "100 - (avg(rate(node_cpu_seconds_total{mode='idle'}[1m])) * 100)", "legendFormat": "CPU %" }],
+      "fieldConfig": { "defaults": { "unit": "percent", "max": 100 }}
+    },
+    {
+      "id": 10, "type": "timeseries", "title": "Host RAM Usage",
+      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
+      "targets": [{ "expr": "(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / 1024 / 1024 / 1024", "legendFormat": "RAM used GB" },
+                  { "expr": "node_memory_MemTotal_bytes / 1024 / 1024 / 1024", "legendFormat": "RAM total GB" }],
+      "fieldConfig": { "defaults": { "unit": "GB" }}
+    }
+  ]
+}

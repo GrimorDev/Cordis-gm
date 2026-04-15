@@ -352,3 +352,95 @@ ALTER TABLE server_tags ADD COLUMN IF NOT EXISTS color         VARCHAR(32);
 ALTER TABLE server_tags ADD COLUMN IF NOT EXISTS icon          VARCHAR(32);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_status VARCHAR(20) DEFAULT 'online';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS card_effect VARCHAR(30) DEFAULT 'none';
+
+-- ════════════════════════════════════════════════════════════════════
+--  Performance Indexes (100k-scale hardening)
+--  All are IF NOT EXISTS — safe to re-run on existing databases.
+-- ════════════════════════════════════════════════════════════════════
+
+-- ── Messages: the hottest table ──────────────────────────────────────
+-- Primary read pattern: "latest N messages in channel X" → composite beats
+-- two separate indexes because PG can scan only this index for the full query.
+CREATE INDEX IF NOT EXISTS idx_messages_channel_time
+    ON messages (channel_id, created_at DESC);
+
+-- Reply threading: fetch a single message by id (UUID PK already covers this,
+-- but the covering index below also helps the reply JOIN).
+CREATE INDEX IF NOT EXISTS idx_messages_reply
+    ON messages (reply_to_id)
+    WHERE reply_to_id IS NOT NULL;
+
+-- Sender lookup (admin moderation, user message history)
+CREATE INDEX IF NOT EXISTS idx_messages_sender_time
+    ON messages (sender_id, created_at DESC);
+
+-- ── DM Messages ───────────────────────────────────────────────────────
+-- "Last N messages in DM conversation X" — same pattern as channel messages.
+CREATE INDEX IF NOT EXISTS idx_dm_messages_conv_time
+    ON dm_messages (conversation_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_dm_messages_reply
+    ON dm_messages (reply_to_id)
+    WHERE reply_to_id IS NOT NULL;
+
+-- ── Friends ───────────────────────────────────────────────────────────
+-- Partial index: only pending requests need fast lookup (accepted/blocked
+-- are much rarer queries and still use the full FK index).
+CREATE INDEX IF NOT EXISTS idx_friends_pending_addr
+    ON friends (addressee_id)
+    WHERE status = 'pending';
+
+CREATE INDEX IF NOT EXISTS idx_friends_accepted
+    ON friends (requester_id, addressee_id)
+    WHERE status = 'accepted';
+
+-- ── Server members ────────────────────────────────────────────────────
+-- "All members of server X with their roles" — extremely common query
+CREATE INDEX IF NOT EXISTS idx_server_members_server_role
+    ON server_members (server_id, role_name);
+
+-- ── Notifications (if table exists) ──────────────────────────────────
+-- Created by migrate.ts — guard with DO block so init.sql is safe.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_name = 'notifications') THEN
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+             ON notifications (user_id, created_at DESC)
+             WHERE is_read = false';
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_notifications_user_time
+             ON notifications (user_id, created_at DESC)';
+  END IF;
+END $$;
+
+-- ── Push subscriptions ────────────────────────────────────────────────
+-- Already has idx_push_user — no additional index needed.
+
+-- ── Poll votes ────────────────────────────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_poll_votes_poll
+    ON poll_votes (poll_id, option_id);
+
+-- ── Server activity ───────────────────────────────────────────────────
+-- Already has idx_server_activity(server_id, created_at DESC).
+-- Add partial index for fast "recent activity" widget (last 24 h).
+CREATE INDEX IF NOT EXISTS idx_server_activity_recent
+    ON server_activity (server_id, created_at DESC)
+    WHERE created_at > NOW() - INTERVAL '7 days';
+
+-- ── Users ─────────────────────────────────────────────────────────────
+-- Status filter: find all online users efficiently
+CREATE INDEX IF NOT EXISTS idx_users_status
+    ON users (status)
+    WHERE status != 'offline';
+
+-- ── Automations ───────────────────────────────────────────────────────
+-- Already has idx_automations_trigger(server_id, trigger_type) WHERE enabled.
+
+-- ────────────────────────────────────────────────────────────────────
+--  ANALYZE after bulk index creation so the planner uses them immediately
+-- ────────────────────────────────────────────────────────────────────
+ANALYZE messages;
+ANALYZE dm_messages;
+ANALYZE friends;
+ANALYZE server_members;
+ANALYZE users;

@@ -17,6 +17,7 @@ import { initSocket } from './socket';
 import { startSpotifyPoller } from './services/spotifyPoller';
 import statusRoutes from './routes/status';
 import { startHealthChecker } from './services/healthChecker';
+import { register, httpRequestDuration, wsConnections } from './metrics';
 
 // Routes
 import authRoutes from './routes/auth';
@@ -70,6 +71,20 @@ app.use(cors({
 }));
 app.use(morgan(config.nodeEnv === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '10mb' }));
+
+// ── Prometheus HTTP duration instrumentation ──────────────────────────
+app.use((req, res, next) => {
+  const end = httpRequestDuration.startTimer();
+  res.on('finish', () => {
+    // Normalise dynamic segments so cardinality stays bounded
+    // e.g. /api/users/abc-123 → /api/users/:id
+    const route = req.route?.path ?? req.path
+      .replace(/\/[0-9a-f-]{36}/gi, '/:id')   // UUIDs
+      .replace(/\/\d+/g, '/:n');               // plain numbers
+    end({ method: req.method, route, status_code: String(res.statusCode) });
+  });
+  next();
+});
 app.use(express.urlencoded({ extended: true }));
 
 // Rate limiting helpers
@@ -222,6 +237,17 @@ app.get('/health', (_req, res) => {
   });
 });
 
+// Prometheus metrics endpoint — scraped by Prometheus every 15 s
+// Only accessible from within Docker network (not exposed to public via nginx)
+app.get('/metrics', async (_req, res) => {
+  try {
+    res.set('Content-Type', register.contentType);
+    res.end(await register.metrics());
+  } catch (err) {
+    res.status(500).end(String(err));
+  }
+});
+
 // 404
 app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });
@@ -232,6 +258,18 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   console.error('Unhandled error:', err);
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
+
+// ── BullMQ workers — start only once per server instance ─────────────
+// In cluster mode the PRIMARY starts workers before forking HTTP workers.
+// In single-process mode (CLUSTER_WORKERS=1 / dev) they start here.
+// cluster.isWorker is false when running directly (non-cluster mode).
+import cluster from 'cluster';
+if (!cluster.isWorker) {
+  // Dynamic import so TypeScript compiles workers independently
+  import('./workers/notificationWorker').catch((e) =>
+    console.warn('[workers] BullMQ workers not started:', e.message)
+  );
+}
 
 // ── Socket.IO ────────────────────────────────────────────────────────
 const io = initSocket(httpServer);

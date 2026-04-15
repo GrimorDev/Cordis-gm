@@ -7,7 +7,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "db:migrate": "tsx src/db/migrate.ts"
+    "db:migrate": "tsx src/db/migrate.ts",
+    "start:cluster": "node dist/cluster.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1014.0",
@@ -32,7 +33,9 @@
     "rate-limit-redis": "^4.3.1",
     "socket.io": "^4.7.4",
     "uuid": "^9.0.1",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "bullmq": "^5.12.0",
+    "prom-client": "^15.1.3"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

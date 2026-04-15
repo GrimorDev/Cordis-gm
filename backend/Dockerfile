@@ -35,4 +35,7 @@ EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
   CMD curl -f http://localhost:4000/health || exit 1
 
-CMD ["node", "dist/index.js"]
+# cluster.js forks one worker per CPU (or CLUSTER_WORKERS env var).
+# BullMQ workers run only in the primary process.
+# Set CLUSTER_WORKERS=1 to disable clustering (e.g. for debugging).
+CMD ["node", "dist/cluster.js"]

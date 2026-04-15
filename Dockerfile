@@ -30,6 +30,9 @@ FROM nginx:1.25-alpine
 
 RUN rm /etc/nginx/conf.d/default.conf
 
+# Replace default global nginx.conf (worker_connections, keepalive, rate-limit zones)
+COPY nginx-main.conf /etc/nginx/nginx.conf
+# Server block
 COPY nginx.conf /etc/nginx/conf.d/cordis.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 

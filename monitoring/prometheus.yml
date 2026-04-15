@@ -1,0 +1,50 @@
+global:
+  scrape_interval:     15s   # Every 15 s is fine for 100k-user monitoring
+  evaluation_interval: 15s
+  external_labels:
+    app: cordis
+
+# ── Alerting ──────────────────────────────────────────────────────────
+# Uncomment and configure if you add Alertmanager
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ['alertmanager:9093']
+
+# ── Alert rules ───────────────────────────────────────────────────────
+rule_files:
+  - "/etc/prometheus/rules/*.yml"
+
+# ── Scrape configurations ─────────────────────────────────────────────
+scrape_configs:
+
+  # Prometheus self-monitoring
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Node.js backend — exposes /metrics via prom-client
+  # In cluster mode each worker serves its own metrics; Prometheus aggregates.
+  - job_name: cordis_backend
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['backend:4000']
+    scrape_interval: 15s
+
+  # Redis — via redis_exporter sidecar
+  - job_name: redis
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 15s
+
+  # PostgreSQL — via postgres_exporter sidecar
+  - job_name: postgres
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 30s
+
+  # Host OS — via node_exporter (CPU, RAM, disk, network)
+  - job_name: node
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s

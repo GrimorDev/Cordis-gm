@@ -13,6 +13,7 @@ import { query } from '../db/pool';
 import { JwtPayload, ServerToClientEvents, ClientToServerEvents } from '../types';
 import { runAutomations } from '../services/automations';
 import { musicStates, MusicBotState } from '../routes/bots';
+import { wsConnections } from '../metrics';
 
 interface SocketData {
   user: {
@@ -90,6 +91,7 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
   io.on('connection', async (socket) => {
     const user = (socket.data as SocketData).user;
     console.log(`Socket connected: ${user.username} (${socket.id})`);
+    wsConnections.inc();
 
     // ── Anti-flood: disconnect sockets that send too many events ─────
     let eventCount = 0;
@@ -104,7 +106,10 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
         socket.disconnect(true);
       }
     });
-    socket.on('disconnect', () => clearInterval(floodTimer));
+    socket.on('disconnect', () => {
+      clearInterval(floodTimer);
+      wsConnections.dec();
+    });
 
     // ── Typing throttle: 1 broadcast per 2 s per channel per user ────
     const typingLastSent = new Map<string, number>();
