@@ -1,0 +1,126 @@
+version: "3.9"
+
+# ═══════════════════════════════════════════════════════════════════
+#  Cordis – Monitoring Stack (osobny stack w Portainerze)
+#
+#  Dodaj jako drugi Stack w Portainerze:
+#    Repository: https://github.com/GrimorDev/Cordis-gm
+#    Compose path: monitoring/docker-compose.yml
+#
+#  Dostęp przez SSH tunnel (NIE są wystawione publicznie):
+#    ssh -L 9090:localhost:9090 -L 3001:localhost:3001 user@cordyn.pl
+#    Grafana:    http://localhost:3001  (admin / GF_SECURITY_ADMIN_PASSWORD)
+#    Prometheus: http://localhost:9090
+#
+#  Wymagane env vars (Portainer → Stack → Environment):
+#    GF_SECURITY_ADMIN_PASSWORD – hasło do Grafany
+#    REDIS_PASSWORD             – to samo co w głównym stacku
+#    POSTGRES_USER              – to samo co w głównym stacku
+#    POSTGRES_PASSWORD          – to samo co w głównym stacku
+#    POSTGRES_DB                – to samo co w głównym stacku
+# ═══════════════════════════════════════════════════════════════════
+
+services:
+
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    container_name: cordis-prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/healthy || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: cordis-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-cordis_grafana}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3001}:3000"
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    container_name: cordis-redis-exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: redis://cordis-redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_secret}
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 32M
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: cordis-postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-cordis}:${POSTGRES_PASSWORD:-cordis_secret}@cordis-postgres:5432/${POSTGRES_DB:-cordis}?sslmode=disable"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 32M
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.0
+    container_name: cordis-node-exporter
+    restart: unless-stopped
+    command:
+      - "--path.rootfs=/host"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    volumes:
+      - /:/host:ro,rslave
+    pid: host
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 32M
+
+volumes:
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local

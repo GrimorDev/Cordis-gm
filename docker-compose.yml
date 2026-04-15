@@ -266,136 +266,9 @@ services:
       retries: 10
       start_period: 15s
 
-  # ── Prometheus (metrics collection) ──────────────────────────────
-  # Scrapes Node.js /metrics, Redis exporter, Postgres exporter, node-exporter.
-  #
-  # SECURITY: NO public port — Prometheus has no built-in auth.
-  # Access via SSH tunnel:
-  #   ssh -L 9090:localhost:9090 user@cordyn.pl
-  #   then open http://localhost:9090 in browser
-  #
-  # If you want to set PROMETHEUS_PORT in Portainer env, expose it only
-  # on loopback: "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
-  prometheus:
-    image: prom/prometheus:v2.51.2
-    container_name: cordis-prometheus
-    restart: unless-stopped
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--storage.tsdb.retention.time=30d"
-      - "--web.enable-lifecycle"
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus-data:/prometheus
-    # Bind to localhost only — NOT reachable from the internet
-    ports:
-      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
-    depends_on:
-      - backend
-      - redis
-      - postgres
-    deploy:
-      resources:
-        limits:
-          cpus: "1"
-          memory: 512M
-        reservations:
-          cpus: "0.1"
-          memory: 128M
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/healthy || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  # ── Grafana (dashboards) ──────────────────────────────────────────
-  # SECURITY: bound to localhost only. Access via SSH tunnel:
-  #   ssh -L 3001:localhost:3001 user@cordyn.pl
-  #   then open http://localhost:3001 in browser
-  #   login: admin / GF_SECURITY_ADMIN_PASSWORD (set in Portainer env)
-  grafana:
-    image: grafana/grafana:10.4.2
-    container_name: cordis-grafana
-    restart: unless-stopped
-    environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-cordis_grafana}
-      GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s:%(http_port)s/grafana/"
-      GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_ANALYTICS_REPORTING_ENABLED: "false"
-      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
-    # Bind to localhost only — NOT reachable from the internet
-    ports:
-      - "127.0.0.1:${GRAFANA_PORT:-3001}:3000"
-    depends_on:
-      - prometheus
-    deploy:
-      resources:
-        limits:
-          cpus: "1"
-          memory: 256M
-        reservations:
-          cpus: "0.1"
-          memory: 64M
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  # ── Redis Exporter (Prometheus metrics for Redis) ─────────────────
-  redis-exporter:
-    image: oliver006/redis_exporter:v1.62.0
-    container_name: cordis-redis-exporter
-    restart: unless-stopped
-    environment:
-      REDIS_ADDR: redis://redis:6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_secret}
-    deploy:
-      resources:
-        limits:
-          cpus: "0.25"
-          memory: 32M
-
-  # ── PostgreSQL Exporter (Prometheus metrics for PostgreSQL) ───────
-  postgres-exporter:
-    image: prometheuscommunity/postgres-exporter:v0.15.0
-    container_name: cordis-postgres-exporter
-    restart: unless-stopped
-    environment:
-      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-cordis}:${POSTGRES_PASSWORD:-cordis_secret}@postgres:5432/${POSTGRES_DB:-cordis}?sslmode=disable"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          cpus: "0.25"
-          memory: 32M
-
-  # ── Node Exporter (host OS metrics: CPU, RAM, disk, network) ──────
-  node-exporter:
-    image: prom/node-exporter:v1.8.0
-    container_name: cordis-node-exporter
-    restart: unless-stopped
-    command:
-      - "--path.rootfs=/host"
-      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
-    volumes:
-      - /:/host:ro,rslave
-    pid: host
-    deploy:
-      resources:
-        limits:
-          cpus: "0.25"
-          memory: 32M
+  # Monitoring (Prometheus + Grafana) is in a separate stack:
+  # monitoring/docker-compose.yml — add as a second Portainer stack when needed.
+  # The backend exposes GET /metrics (prom-client) on the internal Docker network.
 
 # ── Networks ──────────────────────────────────────────────────────────
 networks:
@@ -410,7 +283,4 @@ volumes:
     driver: local
   backend-uploads:
     driver: local
-  prometheus-data:
-    driver: local
-  grafana-data:
-    driver: local
+  # prometheus-data and grafana-data are defined in monitoring/docker-compose.yml
