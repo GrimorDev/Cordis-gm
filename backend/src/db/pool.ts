@@ -7,7 +7,8 @@ export const pool = new Pool({
   database: config.db.database,
   user: config.db.user,
   password: config.db.password,
-  max: 20,
+  // 10 connections per worker process (cluster mode: N workers × 10 < PG max_connections=200)
+  max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
 });
