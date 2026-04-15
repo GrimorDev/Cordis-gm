@@ -2007,7 +2007,7 @@ function DocsTab({ app }: DocsTabProps) {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100%', minHeight: 500 }}>
+    <div style={{ display: 'flex', height: '100%', width: '100%', minHeight: 500 }}>
       {/* Left nav */}
       <div style={{ width: 200, flexShrink: 0, borderRight: '1px solid #1c1c1f' }}>
         <div style={{ padding: '8px 0' }}>
