@@ -137,7 +137,9 @@ services:
   # Transaction-mode pooling: each query uses a DB connection, releases it
   # immediately. 5000 app connections → ~50 real PostgreSQL connections.
   pgbouncer:
-    image: bitnami/pgbouncer:latest
+    build:
+      context: ./pgbouncer
+      dockerfile: Dockerfile
     container_name: cordis-pgbouncer
     restart: unless-stopped
     environment:
