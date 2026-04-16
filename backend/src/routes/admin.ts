@@ -2,6 +2,7 @@ import { Router, Response, NextFunction } from 'express';
 import { body, validationResult } from 'express-validator';
 import os from 'os';
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 import { query } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
@@ -924,7 +925,6 @@ perfRouter.get('/perf/stream', async (req: AuthRequest, res: Response) => {
   // Validate one-time in-memory token
   const perfEntry = _consumePerfToken(token);
   if (!perfEntry) return res.status(401).json({ error: 'Token invalid or expired' });
-  const jwtToken = perfEntry.jwt;
 
   const vus      = Math.min(10000, Math.max(1,  parseInt(String(req.query.vus      || '50'))));
   const duration = Math.min(600,  Math.max(5,  parseInt(String(req.query.duration || '30'))));
@@ -940,7 +940,22 @@ perfRouter.get('/perf/stream', async (req: AuthRequest, res: Response) => {
     try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch {}
   };
 
-  // Auto-detect first available text channel
+  // ── Build VU JWT pool from real users in DB ──────────────────────────────
+  // Each VU gets its own short-lived token so rate-limiting is spread across
+  // all users — no single account gets throttled by the test.
+  let vuTokens: string[] = [];
+  try {
+    const { rows: userRows } = await query(
+      `SELECT id FROM users ORDER BY created_at LIMIT 200`
+    );
+    vuTokens = userRows.map(row =>
+      jwt.sign({ userId: row.id }, config.jwt.secret, { expiresIn: duration + 120 })
+    );
+  } catch {}
+  // Fallback: if DB query failed or no users, use initiator's token
+  if (vuTokens.length === 0) vuTokens = [perfEntry.jwt];
+
+  // ── Auto-detect first available text channel ─────────────────────────────
   let channelId = String(req.query.channel_id || '');
   let serverId  = String(req.query.server_id  || '');
   try {
@@ -953,6 +968,7 @@ perfRouter.get('/perf/stream', async (req: AuthRequest, res: Response) => {
   } catch {}
 
   send('log', { msg: `🚀 Start: ${vus} VU × ${duration}s | kanał: ${channelId?'✓':'–'} | serwer: ${serverId?'✓':'–'}`, level: 'info' });
+  send('log', { msg: `🔑 Pula tokenów VU: ${vuTokens.length} unikalnych użytkowników (rate limit rozłożony)`, level: 'info' });
   send('log', { msg: `Endpointy: GET /messages, /servers/:id, /notifications/unread-count, /users/me`, level: 'info' });
   send('log', { msg: `─────────────────────────────────────────────────────────────────`, level: 'info' });
 
@@ -961,24 +977,24 @@ perfRouter.get('/perf/stream', async (req: AuthRequest, res: Response) => {
   let errorCount = 0;
   let running = true;
 
-  // Single HTTP request helper (uses require to avoid TS import issues)
-  const doReq = (method: string, path: string): Promise<{latency: number; ok: boolean}> =>
-    new Promise((resolve) => {
-      const start = Date.now();
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const http = require('http');
-      const r = http.request(
-        { hostname: '127.0.0.1', port, path, method, timeout: 5000,
-          headers: { Authorization: `Bearer ${jwtToken}` } },
-        (resp: any) => { resp.resume(); resolve({ latency: Date.now() - start, ok: resp.statusCode < 400 }); }
-      );
-      r.on('error',   () => resolve({ latency: Date.now() - start, ok: false }));
-      r.on('timeout', () => { r.destroy(); resolve({ latency: 5000, ok: false }); });
-      r.end();
-    });
+  // Each VU gets its own JWT (round-robin from pool) and its own doReq closure
+  const vuLoop = async (vuIndex: number) => {
+    const vuJwt = vuTokens[vuIndex % vuTokens.length];
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const http = require('http');
+    const doReq = (method: string, path: string): Promise<{latency: number; ok: boolean}> =>
+      new Promise((resolve) => {
+        const start = Date.now();
+        const r = http.request(
+          { hostname: '127.0.0.1', port, path, method, timeout: 5000,
+            headers: { Authorization: `Bearer ${vuJwt}` } },
+          (resp: any) => { resp.resume(); resolve({ latency: Date.now() - start, ok: resp.statusCode < 400 }); }
+        );
+        r.on('error',   () => resolve({ latency: Date.now() - start, ok: false }));
+        r.on('timeout', () => { r.destroy(); resolve({ latency: 5000, ok: false }); });
+        r.end();
+      });
 
-  // Virtual user loop
-  const vuLoop = async () => {
     while (running) {
       const r = Math.random();
       let result: {latency: number; ok: boolean};
@@ -994,9 +1010,8 @@ perfRouter.get('/perf/stream', async (req: AuthRequest, res: Response) => {
   };
 
   // Stagger VU starts — ramp up over max 10 s regardless of VU count
-  // e.g. 100 VU → 100ms each, 1000 VU → 10ms each, 10000 VU → 1ms each
   const staggerMs = Math.max(1, Math.floor(10_000 / vus));
-  for (let i = 0; i < vus; i++) setTimeout(vuLoop, i * staggerMs);
+  for (let i = 0; i < vus; i++) setTimeout(() => vuLoop(i), i * staggerMs);
 
   let elapsed = 0;
   const tick = setInterval(() => {
