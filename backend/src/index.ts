@@ -120,6 +120,11 @@ const apiLimiter = rateLimit({
   message: { error: 'Too many requests, slow down' },
   keyGenerator: userOrIp,
   store: redisStore('rl:api:'),
+  // Skip rate limiting for internal loopback requests (load tester, health checks)
+  skip: (req) => {
+    const ip = req.socket?.remoteAddress ?? req.ip ?? '';
+    return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+  },
 });
 
 // Auth limiter — still per real IP to protect against credential stuffing
@@ -129,6 +134,22 @@ const authLimiter = rateLimit({
   message: { error: 'Too many auth attempts' },
   keyGenerator: realIp,
   store: redisStore('rl:auth:'),
+});
+
+// ── Emergency rate-limit reset (NOT under /api/ → bypasses apiLimiter) ──────
+// Usage from browser DevTools console:
+//   fetch('/_rl_reset',{method:'POST',headers:{Authorization:'Bearer '+localStorage.getItem('cordis_token')}}).then(r=>r.json()).then(console.log)
+app.post('/_rl_reset', async (req, res) => {
+  const auth = req.headers.authorization ?? '';
+  if (!auth.startsWith('Bearer ')) return res.status(401).json({ error: 'No token' });
+  try {
+    const payload = jwt.verify(auth.slice(7), config.jwt.secret) as { id: string };
+    const key = `rl:api:u:${payload.id}`;
+    await redis.del(key);
+    return res.json({ ok: true, cleared: key });
+  } catch {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
 });
 
 app.use('/api/', apiLimiter);

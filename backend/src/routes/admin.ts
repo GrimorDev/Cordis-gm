@@ -949,7 +949,7 @@ perfRouter.get('/perf/stream', async (req: AuthRequest, res: Response) => {
       `SELECT id FROM users ORDER BY created_at LIMIT 200`
     );
     vuTokens = userRows.map(row =>
-      jwt.sign({ userId: row.id }, config.jwt.secret, { expiresIn: duration + 120 })
+      jwt.sign({ id: row.id }, config.jwt.secret, { expiresIn: duration + 120 })
     );
   } catch {}
   // Fallback: if DB query failed or no users, use initiator's token
