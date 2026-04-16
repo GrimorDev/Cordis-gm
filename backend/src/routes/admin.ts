@@ -1,6 +1,7 @@
 import { Router, Response, NextFunction } from 'express';
 import { body, validationResult } from 'express-validator';
 import os from 'os';
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { query } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
@@ -889,7 +890,6 @@ router.get('/r2/debug', async (_req, res: Response) => {
 // ── POST /api/admin/perf/token — exchange admin JWT for a one-time SSE token ──
 // EventSource cannot send Authorization headers, so we issue a short-lived UUID
 // stored in Redis (60 s TTL, single-use). The SSE endpoint validates it.
-import crypto from 'crypto';
 router.post('/perf/token', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { redis } = await import('../redis/client');
