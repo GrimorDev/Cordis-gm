@@ -884,4 +884,125 @@ router.get('/r2/debug', async (_req, res: Response) => {
   }
 });
 
+// ── GET /api/admin/perf/stream — built-in SSE load tester ──────────────────
+// EventSource cannot send Authorization headers, so JWT is accepted as ?jwt=
+router.get('/perf/stream', async (req: AuthRequest, res: Response) => {
+  const jwtToken = String(req.query.jwt || '') || req.headers.authorization?.replace('Bearer ', '') || '';
+  if (!jwtToken) return res.status(401).end();
+
+  // Manual JWT verification
+  try {
+    const [jwtLib, cfgMod] = await Promise.all([
+      import('jsonwebtoken') as any,
+      import('../config'),
+    ]);
+    const decoded = jwtLib.verify(jwtToken, cfgMod.config.jwt.secret) as { id: string };
+    // Admin check
+    const { rows } = await query('SELECT is_admin FROM users WHERE id=$1', [decoded.id]);
+    if (!rows[0]?.is_admin) {
+      const { rowCount } = await query(
+        `SELECT 1 FROM user_badges ub JOIN global_badges gb ON gb.id=ub.badge_id WHERE ub.user_id=$1 AND gb.name='developer' LIMIT 1`,
+        [decoded.id]
+      );
+      if (!rowCount) return res.status(403).end();
+    }
+  } catch { return res.status(401).end(); }
+
+  const vus      = Math.min(500, Math.max(1,  parseInt(String(req.query.vus      || '50'))));
+  const duration = Math.min(300, Math.max(5,  parseInt(String(req.query.duration || '30'))));
+  const port     = parseInt(process.env.PORT || '4000');
+
+  res.setHeader('Content-Type',  'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.setHeader('Connection',    'keep-alive');
+  res.flushHeaders();
+
+  const send = (event: string, data: any) => {
+    try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch {}
+  };
+
+  // Auto-detect first available text channel
+  let channelId = String(req.query.channel_id || '');
+  let serverId  = String(req.query.server_id  || '');
+  try {
+    if (!channelId || !serverId) {
+      const { rows } = await query(
+        `SELECT c.id as cid, c.server_id as sid FROM channels c WHERE c.type='text' ORDER BY c.created_at LIMIT 1`
+      );
+      if (rows[0]) { channelId = channelId || rows[0].cid; serverId = serverId || rows[0].sid; }
+    }
+  } catch {}
+
+  send('log', { msg: `🚀 Start: ${vus} VU × ${duration}s | kanał: ${channelId?'✓':'–'} | serwer: ${serverId?'✓':'–'}`, level: 'info' });
+  send('log', { msg: `Endpointy: GET /messages, /servers/:id, /notifications/unread-count, /users/me`, level: 'info' });
+  send('log', { msg: `─────────────────────────────────────────────────────────────────`, level: 'info' });
+
+  const winLat: number[] = [];
+  let totalReqs = 0;
+  let errorCount = 0;
+  let running = true;
+
+  // Single HTTP request helper (uses require to avoid TS import issues)
+  const doReq = (method: string, path: string): Promise<{latency: number; ok: boolean}> =>
+    new Promise((resolve) => {
+      const start = Date.now();
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const http = require('http');
+      const r = http.request(
+        { hostname: '127.0.0.1', port, path, method, timeout: 5000,
+          headers: { Authorization: `Bearer ${jwtToken}` } },
+        (resp: any) => { resp.resume(); resolve({ latency: Date.now() - start, ok: resp.statusCode < 400 }); }
+      );
+      r.on('error',   () => resolve({ latency: Date.now() - start, ok: false }));
+      r.on('timeout', () => { r.destroy(); resolve({ latency: 5000, ok: false }); });
+      r.end();
+    });
+
+  // Virtual user loop
+  const vuLoop = async () => {
+    while (running) {
+      const r = Math.random();
+      let result: {latency: number; ok: boolean};
+      if      (r < 0.35 && channelId) result = await doReq('GET', `/api/messages/channel/${channelId}`);
+      else if (r < 0.55 && serverId)  result = await doReq('GET', `/api/servers/${serverId}`);
+      else if (r < 0.75)               result = await doReq('GET', `/api/notifications/unread-count`);
+      else                             result = await doReq('GET', `/api/users/me`);
+      totalReqs++;
+      winLat.push(result.latency);
+      if (!result.ok) errorCount++;
+      await new Promise(r2 => setTimeout(r2, 100 + Math.random() * 400));
+    }
+  };
+
+  // Stagger VU starts by 10 ms each
+  for (let i = 0; i < vus; i++) setTimeout(vuLoop, i * 10);
+
+  let elapsed = 0;
+  const tick = setInterval(() => {
+    elapsed++;
+    const window = winLat.splice(0).sort((a, b) => a - b);
+    const len    = window.length;
+    const p50    = window[Math.floor(len * 0.50)] ?? 0;
+    const p95    = window[Math.floor(len * 0.95)] ?? 0;
+    const p99    = window[Math.floor(len * 0.99)] ?? 0;
+    const errRate = totalReqs > 0 ? Math.round(errorCount / totalReqs * 1000) / 10 : 0;
+    const level   = errRate > 5 ? 'error' : errRate > 1 ? 'warn' : 'ok';
+
+    send('tick', { elapsed, duration, rps: len, p50, p95, p99, error_rate: errRate, total_reqs: totalReqs, errors: errorCount });
+    send('log',  { msg: `[${String(elapsed).padStart(3)}s] ${String(len).padStart(4)} req/s  p50:${String(p50).padStart(5)}ms  p95:${String(p95).padStart(5)}ms  p99:${String(p99).padStart(5)}ms  err:${errRate}%`, level });
+
+    if (elapsed >= duration) {
+      running = false;
+      clearInterval(tick);
+      send('log',  { msg: `─────────────────────────────────────────────────────────────────`, level: 'info' });
+      send('log',  { msg: `✅ Gotowe — łącznie: ${totalReqs} req, błędy: ${errorCount} (${errRate}%)`, level: 'info' });
+      send('done', { total_reqs: totalReqs, errors: errorCount, error_rate: errRate });
+      res.end();
+    }
+  }, 1000);
+
+  req.on('close', () => { running = false; clearInterval(tick); });
+});
+
 export default router;

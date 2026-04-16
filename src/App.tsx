@@ -3958,7 +3958,7 @@ function StorageTab({ addToast }: { addToast: (m:string,t?:any)=>void }) {
 }
 
 // ─── Admin Panel component ────────────────────────────────────────────────────
-type AdminTab = 'dashboard'|'users'|'servers'|'badges'|'storage'|'audit'|'broadcast'|'system'|'admins';
+type AdminTab = 'dashboard'|'users'|'servers'|'badges'|'storage'|'audit'|'broadcast'|'system'|'admins'|'perf';
 interface AdminPanelProps {
   currentUser: import('./api').UserProfile | null;
   overview: import('./api').AdminOverview | null;
@@ -4013,6 +4013,15 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
   // ── system info ──
   const [sysInfo, setSysInfo] = React.useState<import('./api').AdminSystemInfo|null>(null);
   const [sysLoading, setSysLoading] = React.useState(false);
+
+  // ── perf test ──
+  const [perfVus, setPerfVus] = React.useState(50);
+  const [perfDuration, setPerfDuration] = React.useState(30);
+  const [perfRunning, setPerfRunning] = React.useState(false);
+  const [perfLogs, setPerfLogs] = React.useState<Array<{msg:string;level:string}>>([]);
+  const [perfMetrics, setPerfMetrics] = React.useState<{rps:number;p50:number;p95:number;p99:number;error_rate:number;elapsed:number;total_reqs:number}|null>(null);
+  const perfEvtRef = React.useRef<EventSource|null>(null);
+  const perfLogRef = React.useRef<HTMLDivElement|null>(null);
 
   React.useEffect(() => {
     adminApi.overview().then(d => setOverview(d)).catch(()=>{});
@@ -4207,6 +4216,36 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
     } catch {} finally { setSysLoading(false); }
   };
 
+  // ── Perf test ──
+  const startPerfTest = () => {
+    if (perfEvtRef.current) { perfEvtRef.current.close(); perfEvtRef.current = null; }
+    setPerfLogs([]);
+    setPerfMetrics(null);
+    setPerfRunning(true);
+    const token = getToken() || '';
+    const url = `/api/admin/perf/stream?vus=${perfVus}&duration=${perfDuration}&jwt=${encodeURIComponent(token)}`;
+    const es = new EventSource(url);
+    perfEvtRef.current = es;
+    es.addEventListener('log', (e: MessageEvent) => {
+      const d = JSON.parse(e.data);
+      setPerfLogs(prev => { const next = [...prev, d]; return next.slice(-500); });
+      requestAnimationFrame(() => { if (perfLogRef.current) perfLogRef.current.scrollTop = perfLogRef.current.scrollHeight; });
+    });
+    es.addEventListener('tick', (e: MessageEvent) => { setPerfMetrics(JSON.parse(e.data)); });
+    es.addEventListener('done', () => { setPerfRunning(false); es.close(); perfEvtRef.current = null; });
+    es.onerror = () => {
+      setPerfRunning(false);
+      setPerfLogs(prev => [...prev, { msg: '❌ Połączenie SSE zerwane', level: 'error' }]);
+      es.close(); perfEvtRef.current = null;
+    };
+  };
+
+  const stopPerfTest = () => {
+    if (perfEvtRef.current) { perfEvtRef.current.close(); perfEvtRef.current = null; }
+    setPerfRunning(false);
+    setPerfLogs(prev => [...prev, { msg: '⏹ Test zatrzymany ręcznie', level: 'warn' }]);
+  };
+
   const TABS: { id: AdminTab; label: string; icon: React.ReactNode }[] = [
     { id:'dashboard',  label:'Dashboard',        icon: <LayoutDashboard size={14}/> },
     { id:'users',      label:'Użytkownicy',       icon: <Users size={14}/> },
@@ -4217,6 +4256,7 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
     { id:'broadcast',  label:'Ogłoszenia',        icon: <Megaphone size={14}/> },
     { id:'system',     label:'System',            icon: <Database size={14}/> },
     { id:'admins',     label:'Administratorzy',   icon: <ShieldCheck size={14}/> },
+    { id:'perf',       label:'Test Wyd.',         icon: <FlaskConical size={14}/> },
   ];
 
   // ── Admins list state (local to AdminPanel) ──
@@ -4924,6 +4964,121 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                   {adminsList.length===0&&!adminsLoading&&(
                     <div className="text-center py-12 text-zinc-600"><ShieldCheck size={32} className="mx-auto mb-2 opacity-30"/><p className="text-sm">Brak administratorów</p></div>
                   )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Test Wydajnościowy ── */}
+          {tab==='perf'&&(
+            <div className="max-w-3xl mx-auto space-y-4">
+              <h2 className="text-base font-bold text-white flex items-center gap-2"><FlaskConical size={16} className="text-violet-400"/>Test Wydajnościowy</h2>
+
+              {/* Config */}
+              {!perfRunning&&(
+                <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4 space-y-4">
+                  <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Konfiguracja</h3>
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <label className="text-xs text-zinc-500 mb-2 block">Wirtualni użytkownicy: <span className="text-white font-bold">{perfVus}</span></label>
+                      <input type="range" min="1" max="200" step="1" value={perfVus} onChange={e=>setPerfVus(parseInt(e.target.value))} className="w-full accent-violet-500 cursor-pointer"/>
+                      <div className="flex justify-between text-[10px] text-zinc-700 mt-1"><span>1</span><span>50</span><span>100</span><span>150</span><span>200</span></div>
+                    </div>
+                    <div>
+                      <label className="text-xs text-zinc-500 mb-2 block">Czas trwania</label>
+                      <div className="flex gap-2 flex-wrap">
+                        {[15,30,60,120,300].map(d=>(
+                          <button key={d} onClick={()=>setPerfDuration(d)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${perfDuration===d?'bg-violet-500/20 text-violet-300 border-violet-500/40':'bg-white/[0.04] text-zinc-500 hover:text-zinc-200 border-white/[0.07]'}`}>
+                            {d}s
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="pt-2 border-t border-white/[0.06] space-y-2">
+                    <p className="text-[11px] text-zinc-600">Testuje: <span className="text-zinc-500">GET /messages/channel/:id · GET /servers/:id · GET /notifications/unread-count · GET /users/me</span></p>
+                    <button onClick={startPerfTest}
+                      className="flex items-center gap-2 px-4 py-2 bg-violet-500/20 hover:bg-violet-500/30 text-violet-300 border border-violet-500/40 rounded-xl text-sm font-semibold transition-all">
+                      <Activity size={14}/> Uruchom test
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Live stats (during test) */}
+              {perfRunning&&perfMetrics&&(
+                <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4 space-y-3">
+                  <div>
+                    <div className="flex justify-between text-xs mb-1.5">
+                      <span className="text-zinc-500 font-medium">Postęp</span>
+                      <span className="text-zinc-300 font-semibold">{perfMetrics.elapsed}s / {perfDuration}s</span>
+                    </div>
+                    <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                      <div className="h-full bg-violet-500 rounded-full transition-all duration-1000" style={{width:`${Math.min(100,perfMetrics.elapsed/perfDuration*100)}%`}}/>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-4 gap-3">
+                    {[
+                      { label:'req/s', val: perfMetrics.rps, color:'text-emerald-400' },
+                      { label:'p50',   val: `${perfMetrics.p50}ms`, color:'text-indigo-400' },
+                      { label:'p95',   val: `${perfMetrics.p95}ms`, color:'text-amber-400' },
+                      { label:'błędy', val: `${perfMetrics.error_rate}%`, color: perfMetrics.error_rate>5?'text-rose-400':perfMetrics.error_rate>1?'text-amber-400':'text-zinc-400' },
+                    ].map(m=>(
+                      <div key={m.label} className="bg-white/[0.04] rounded-xl p-3 text-center">
+                        <div className={`text-xl font-bold tabular-nums ${m.color}`}>{m.val}</div>
+                        <div className="text-[10px] text-zinc-600 mt-0.5 uppercase tracking-wider">{m.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-zinc-600">{perfMetrics.total_reqs.toLocaleString()} req łącznie · {perfMetrics.errors} błędów</span>
+                    <button onClick={stopPerfTest}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-semibold transition-all">
+                      <Square size={11}/> Stop
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Running but no metrics yet */}
+              {perfRunning&&!perfMetrics&&(
+                <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4 flex items-center gap-3">
+                  <Loader2 size={16} className="animate-spin text-violet-400 shrink-0"/>
+                  <span className="text-sm text-zinc-400">Rozgrzewanie VU ({perfVus} użytkowników)…</span>
+                  <button onClick={stopPerfTest} className="ml-auto flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-semibold transition-all">
+                    <Square size={11}/> Stop
+                  </button>
+                </div>
+              )}
+
+              {/* Console */}
+              {perfLogs.length>0&&(
+                <div className="bg-[#07070f] border border-white/[0.06] rounded-2xl overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.05]">
+                    <span className="text-[10px] font-bold text-zinc-700 uppercase tracking-widest font-mono">Konsola</span>
+                    {!perfRunning&&(
+                      <button onClick={()=>{setPerfLogs([]);setPerfMetrics(null);}} className="text-[10px] text-zinc-700 hover:text-zinc-400 transition-colors">Wyczyść</button>
+                    )}
+                  </div>
+                  <div ref={perfLogRef} className="h-80 overflow-y-auto p-3 font-mono text-[11px] leading-5 space-y-px custom-scrollbar">
+                    {perfLogs.map((l,i)=>(
+                      <div key={i} className={
+                        l.level==='error'?'text-rose-400':
+                        l.level==='warn' ?'text-amber-400':
+                        l.level==='ok'   ?'text-emerald-400':
+                                          'text-cyan-500/80'
+                      }>{l.msg}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Empty state */}
+              {!perfRunning&&perfLogs.length===0&&(
+                <div className="bg-white/[0.02] border border-dashed border-white/[0.07] rounded-2xl p-10 text-center">
+                  <FlaskConical size={32} className="mx-auto mb-3 text-zinc-800"/>
+                  <p className="text-sm text-zinc-600">Skonfiguruj parametry i uruchom test<br/><span className="text-xs text-zinc-700">Wyniki pojawią się w konsoli w czasie rzeczywistym</span></p>
                 </div>
               )}
             </div>
