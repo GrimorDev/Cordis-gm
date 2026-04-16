@@ -1,10 +1,12 @@
 import { Router, Response, NextFunction } from 'express';
 import { body, validationResult } from 'express-validator';
 import os from 'os';
+import jwt from 'jsonwebtoken';
 import { query } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { deleteFromR2, r2Enabled } from '../services/r2';
+import { config } from '../config';
 
 // ── Simple in-process API request counter ────────────────────────────────────
 let _apiRequestsTotal = 0;
@@ -890,14 +892,9 @@ router.get('/perf/stream', async (req: AuthRequest, res: Response) => {
   const jwtToken = String(req.query.jwt || '') || req.headers.authorization?.replace('Bearer ', '') || '';
   if (!jwtToken) return res.status(401).end();
 
-  // Manual JWT verification
+  // Manual JWT verification (static imports used — dynamic import unreliable in SSE handler)
   try {
-    const [jwtLib, cfgMod] = await Promise.all([
-      import('jsonwebtoken') as any,
-      import('../config'),
-    ]);
-    const decoded = jwtLib.verify(jwtToken, cfgMod.config.jwt.secret) as { id: string };
-    // Admin check
+    const decoded = jwt.verify(jwtToken, config.jwt.secret) as { id: string };
     const { rows } = await query('SELECT is_admin FROM users WHERE id=$1', [decoded.id]);
     if (!rows[0]?.is_admin) {
       const { rowCount } = await query(
