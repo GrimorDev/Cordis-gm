@@ -892,18 +892,30 @@ router.get('/perf/stream', async (req: AuthRequest, res: Response) => {
   const jwtToken = String(req.query.jwt || '') || req.headers.authorization?.replace('Bearer ', '') || '';
   if (!jwtToken) return res.status(401).end();
 
-  // Manual JWT verification (static imports used — dynamic import unreliable in SSE handler)
+  // Manual JWT verification — EventSource cannot send Authorization header
+  // Use process.env directly to guarantee we get the live value (not a stale module-load snapshot)
+  let perfUserId: string;
   try {
-    const decoded = jwt.verify(jwtToken, config.jwt.secret) as { id: string };
-    const { rows } = await query('SELECT is_admin FROM users WHERE id=$1', [decoded.id]);
+    const secret = process.env.JWT_SECRET || config.jwt.secret;
+    const decoded = jwt.verify(jwtToken, secret) as { id: string };
+    perfUserId = decoded.id;
+  } catch (err: any) {
+    console.error('[perf/stream] JWT verify error:', err?.message);
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+  try {
+    const { rows } = await query('SELECT is_admin FROM users WHERE id=$1', [perfUserId]);
     if (!rows[0]?.is_admin) {
       const { rowCount } = await query(
         `SELECT 1 FROM user_badges ub JOIN global_badges gb ON gb.id=ub.badge_id WHERE ub.user_id=$1 AND gb.name='developer' LIMIT 1`,
-        [decoded.id]
+        [perfUserId]
       );
-      if (!rowCount) return res.status(403).end();
+      if (!rowCount) return res.status(403).json({ error: 'Forbidden' });
     }
-  } catch { return res.status(401).end(); }
+  } catch (err: any) {
+    console.error('[perf/stream] admin check error:', err?.message);
+    return res.status(500).json({ error: 'DB error' });
+  }
 
   const vus      = Math.min(500, Math.max(1,  parseInt(String(req.query.vus      || '50'))));
   const duration = Math.min(300, Math.max(5,  parseInt(String(req.query.duration || '30'))));
