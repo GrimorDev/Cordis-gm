@@ -894,7 +894,9 @@ router.post('/perf/token', authMiddleware, adminMiddleware, async (req: AuthRequ
   try {
     const { redis } = await import('../redis/client');
     const token = crypto.randomUUID();
-    await redis.setex(`perf:token:${token}`, 60, req.user!.id);
+    // Store both userId and the original JWT so SSE handler can make authenticated internal requests
+    const bearerJwt = (req.headers.authorization || '').replace('Bearer ', '');
+    await redis.setex(`perf:token:${token}`, 60, JSON.stringify({ userId: req.user!.id, jwt: bearerJwt }));
     return res.json({ token });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -904,11 +906,14 @@ router.get('/perf/stream', async (req: AuthRequest, res: Response) => {
   const token = String(req.query.token || '');
   if (!token) return res.status(401).json({ error: 'Missing token' });
 
-  // Validate one-time token from Redis
+  // Validate one-time token from Redis and extract stored JWT for internal requests
+  let jwtToken = '';
   try {
     const { redis } = await import('../redis/client');
-    const userId = await redis.get(`perf:token:${token}`);
-    if (!userId) return res.status(401).json({ error: 'Token invalid or expired' });
+    const raw = await redis.get(`perf:token:${token}`);
+    if (!raw) return res.status(401).json({ error: 'Token invalid or expired' });
+    const parsed = JSON.parse(raw) as { userId: string; jwt: string };
+    jwtToken = parsed.jwt;
     await redis.del(`perf:token:${token}`); // single-use
   } catch (err: any) {
     console.error('[perf/stream] token check error:', err?.message);
