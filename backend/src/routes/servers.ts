@@ -6,6 +6,7 @@ import { joinLimiter, inviteCreateLimiter } from '../middleware/userRateLimits';
 import { AuthRequest } from '../types';
 import crypto from 'crypto';
 import { runAutomations } from '../services/automations';
+import { getServerMembersCache, setServerMembersCache, invalidateServerMembersCache } from '../redis/client';
 
 const router = Router();
 
@@ -315,6 +316,7 @@ router.post('/:id/leave', authMiddleware, async (req: AuthRequest, res: Response
     if (server.owner_id === req.user!.id) return res.status(400).json({ error: 'Owner cannot leave – delete the server instead' });
     const { rows: [u] } = await query('SELECT username FROM users WHERE id=$1', [req.user!.id]);
     await query('DELETE FROM server_members WHERE server_id = $1 AND user_id = $2', [req.params.id, req.user!.id]);
+    await invalidateServerMembersCache(req.params.id);
     const { rows: [act] } = await query(
       `INSERT INTO server_activity (server_id, type, username, icon, text) VALUES ($1,'member_leave',$2,'🚪',$3) RETURNING id, type, icon, text, created_at as time`,
       [req.params.id, u?.username, `**${u?.username}** opuścił/a serwer`]
@@ -353,6 +355,9 @@ router.get('/:id/members', authMiddleware, async (req: AuthRequest, res: Respons
     if (!(await isMember(req.params.id, req.user!.id))) {
       return res.status(403).json({ error: 'No access' });
     }
+    const cached = await getServerMembersCache<any[]>(req.params.id);
+    if (cached !== null) return res.json(cached);
+
     const { rows } = await query(
       `SELECT u.id, u.username, u.avatar_url, u.status, u.custom_status, u.avatar_effect, u.banner_preset,
               u.is_bot, u.active_tag_server_id, st.tag as active_tag, st.color as active_tag_color, st.icon as active_tag_icon,
@@ -379,6 +384,7 @@ router.get('/:id/members', authMiddleware, async (req: AuthRequest, res: Respons
       ...m,
       roles: mr.filter((r: any) => r.user_id === m.id),
     }));
+    await setServerMembersCache(req.params.id, result);
     return res.json(result);
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -429,6 +435,7 @@ router.put('/:id/members/:userId/roles', authMiddleware, async (req: AuthRequest
         }
       }
       await client.query('COMMIT');
+      await invalidateServerMembersCache(req.params.id);
       // Notify the affected user their permissions may have changed
       const io = req.app.get('io');
       if (io) io.to(`user:${req.params.userId}`).emit('permissions_updated', { server_id: req.params.id });
@@ -511,6 +518,7 @@ router.delete('/:id/members/:userId', authMiddleware, async (req: AuthRequest, r
       `DELETE FROM server_members WHERE server_id = $1 AND user_id = $2`,
       [req.params.id, req.params.userId]
     );
+    await invalidateServerMembersCache(req.params.id);
     const io = req.app.get('io');
     if (io) {
       io.to(`server:${req.params.id}`).emit('member_left', { server_id: req.params.id, user_id: req.params.userId });
@@ -566,6 +574,7 @@ router.post('/:id/bans/:userId', authMiddleware, async (req: AuthRequest, res: R
        ON CONFLICT (server_id, user_id) DO UPDATE SET reason=EXCLUDED.reason, banned_by=EXCLUDED.banned_by, created_at=NOW()`,
       [req.params.id, req.params.userId, req.user!.id, reason || null]
     );
+    await invalidateServerMembersCache(req.params.id);
     const io = req.app.get('io');
     if (io) {
       io.to(`server:${req.params.id}`).emit('member_left', { server_id: req.params.id, user_id: req.params.userId });
@@ -779,6 +788,7 @@ router.post('/join/:code', authMiddleware, joinLimiter, async (req: AuthRequest,
         [invite.server_id, req.user!.id, memberRole.id]
       );
     }
+    await invalidateServerMembersCache(invite.server_id);
     const [{ rows: [server] }, { rows: [u] }] = await Promise.all([
       query(`SELECT * FROM servers WHERE id = $1`, [invite.server_id]),
       query(`SELECT id, username, avatar_url, status FROM users WHERE id=$1`, [req.user!.id]),
@@ -1029,6 +1039,7 @@ router.post('/:id/join-public', authMiddleware, joinLimiter, async (req: AuthReq
     if (memberRole) {
       await query(`INSERT INTO member_roles (server_id, user_id, role_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [serverId, userId, memberRole.id]).catch(() => {});
     }
+    await invalidateServerMembersCache(serverId);
     const { rows: [u] } = await query(`SELECT id, username, avatar_url, status FROM users WHERE id=$1`, [userId]);
     const io = req.app.get('io');
     if (io) {

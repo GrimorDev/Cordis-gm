@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { query } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
+import { getNotifCount, setNotifCount, invalidateNotifCount } from '../redis/client';
 
 const router = Router();
 
@@ -29,10 +30,13 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 // GET /api/notifications/unread-count — badge counter
 router.get('/unread-count', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    const cached = await getNotifCount(req.user!.id);
+    if (cached !== null) return res.json({ count: cached });
     const { rows: [row] } = await query(
       `SELECT COUNT(*)::int AS count FROM notifications WHERE user_id = $1 AND is_read = FALSE`,
       [req.user!.id]
     );
+    await setNotifCount(req.user!.id, row.count);
     return res.json({ count: row.count });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -44,6 +48,7 @@ router.put('/read', authMiddleware, async (req: AuthRequest, res: Response) => {
       `UPDATE notifications SET is_read = TRUE WHERE user_id = $1 AND is_read = FALSE`,
       [req.user!.id]
     );
+    await invalidateNotifCount(req.user!.id);
     return res.json({ ok: true });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -55,6 +60,7 @@ router.put('/:id/read', authMiddleware, async (req: AuthRequest, res: Response) 
       `UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2`,
       [req.params.id, req.user!.id]
     );
+    await invalidateNotifCount(req.user!.id);
     return res.json({ ok: true });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -66,6 +72,7 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
       `DELETE FROM notifications WHERE id = $1 AND user_id = $2`,
       [req.params.id, req.user!.id]
     );
+    await invalidateNotifCount(req.user!.id);
     return res.json({ ok: true });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });

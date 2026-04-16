@@ -6,6 +6,7 @@ import { msgLimiter } from '../middleware/messageLimiter';
 import { AuthRequest } from '../types';
 import { sendPushToUser } from '../services/push';
 import { deleteFromR2 } from '../services/r2';
+import { getDmListCache, setDmListCache, invalidateDmListCache } from '../redis/client';
 
 const router = Router();
 
@@ -72,20 +73,24 @@ router.get('/conversations', authMiddleware, async (req: AuthRequest, res: Respo
     ORDER BY last_message_at DESC NULLS LAST`;
 
   try {
+    const cached = await getDmListCache<any[]>(userId);
+    if (cached !== null) return res.json(cached);
     // Strategy 1: is_group column (requires migration)
-    const { rows } = await query(buildSQL('is_group_col'), [userId]);
-    return res.json(rows);
-  } catch (err: any) {
-    if (err?.code === '42703') {
-      // 42703 = undefined_column — is_group column doesn't exist yet.
-      // Strategy 2: filter by participant count (≤2 = 1-on-1 DM, safe without migration)
-      try {
+    try {
+      const { rows } = await query(buildSQL('is_group_col'), [userId]);
+      await setDmListCache(userId, rows);
+      return res.json(rows);
+    } catch (err: any) {
+      if (err?.code === '42703') {
+        // 42703 = undefined_column — is_group column doesn't exist yet.
+        // Strategy 2: filter by participant count (≤2 = 1-on-1 DM, safe without migration)
         const { rows } = await query(buildSQL('participant_count'), [userId]);
+        await setDmListCache(userId, rows);
         return res.json(rows);
-      } catch { return res.status(500).json({ error: 'Internal server error' }); }
+      }
+      throw err;
     }
-    return res.status(500).json({ error: 'Internal server error' });
-  }
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
 // GET /api/dms/:userId/messages
@@ -166,6 +171,11 @@ router.post('/:userId/messages', authMiddleware, msgLimiter,
          WHERE dm.id=$1`,
         [msg.id]
       );
+      // Invalidate DM list cache for both participants so "last message" updates immediately
+      await Promise.all([
+        invalidateDmListCache(req.user!.id),
+        invalidateDmListCache(req.params.userId),
+      ]);
       const io = req.app.get('io');
       if (io) {
         io.to(`user:${req.params.userId}`).emit('new_dm', full);
@@ -220,6 +230,10 @@ router.post('/:userId/system-message', authMiddleware, async (req: AuthRequest, 
       [conversationId, req.user!.id, content.trim()]
     );
     const full = { ...msg, sender_id: '__system__', sender_username: 'System', sender_avatar: null };
+    await Promise.all([
+      invalidateDmListCache(req.user!.id),
+      invalidateDmListCache(req.params.userId),
+    ]);
     const io = req.app.get('io');
     if (io) {
       io.to(`user:${req.params.userId}`).emit('new_dm', full);
