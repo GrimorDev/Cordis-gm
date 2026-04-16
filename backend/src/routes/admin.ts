@@ -886,35 +886,33 @@ router.get('/r2/debug', async (_req, res: Response) => {
   }
 });
 
-// ── GET /api/admin/perf/stream — built-in SSE load tester ──────────────────
-// EventSource cannot send Authorization headers, so JWT is accepted as ?jwt=
-router.get('/perf/stream', async (req: AuthRequest, res: Response) => {
-  const jwtToken = String(req.query.jwt || '') || req.headers.authorization?.replace('Bearer ', '') || '';
-  if (!jwtToken) return res.status(401).end();
+// ── POST /api/admin/perf/token — exchange admin JWT for a one-time SSE token ──
+// EventSource cannot send Authorization headers, so we issue a short-lived UUID
+// stored in Redis (60 s TTL, single-use). The SSE endpoint validates it.
+import crypto from 'crypto';
+router.post('/perf/token', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { redis } = await import('../redis/client');
+    const token = crypto.randomUUID();
+    await redis.setex(`perf:token:${token}`, 60, req.user!.id);
+    return res.json({ token });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
 
-  // Manual JWT verification — EventSource cannot send Authorization header
-  // Use process.env directly to guarantee we get the live value (not a stale module-load snapshot)
-  let perfUserId: string;
+// ── GET /api/admin/perf/stream — built-in SSE load tester ──────────────────
+router.get('/perf/stream', async (req: AuthRequest, res: Response) => {
+  const token = String(req.query.token || '');
+  if (!token) return res.status(401).json({ error: 'Missing token' });
+
+  // Validate one-time token from Redis
   try {
-    const secret = process.env.JWT_SECRET || config.jwt.secret;
-    const decoded = jwt.verify(jwtToken, secret) as { id: string };
-    perfUserId = decoded.id;
+    const { redis } = await import('../redis/client');
+    const userId = await redis.get(`perf:token:${token}`);
+    if (!userId) return res.status(401).json({ error: 'Token invalid or expired' });
+    await redis.del(`perf:token:${token}`); // single-use
   } catch (err: any) {
-    console.error('[perf/stream] JWT verify error:', err?.message);
-    return res.status(401).json({ error: 'Invalid token' });
-  }
-  try {
-    const { rows } = await query('SELECT is_admin FROM users WHERE id=$1', [perfUserId]);
-    if (!rows[0]?.is_admin) {
-      const { rowCount } = await query(
-        `SELECT 1 FROM user_badges ub JOIN global_badges gb ON gb.id=ub.badge_id WHERE ub.user_id=$1 AND gb.name='developer' LIMIT 1`,
-        [perfUserId]
-      );
-      if (!rowCount) return res.status(403).json({ error: 'Forbidden' });
-    }
-  } catch (err: any) {
-    console.error('[perf/stream] admin check error:', err?.message);
-    return res.status(500).json({ error: 'DB error' });
+    console.error('[perf/stream] token check error:', err?.message);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 
   const vus      = Math.min(500, Math.max(1,  parseInt(String(req.query.vus      || '50'))));

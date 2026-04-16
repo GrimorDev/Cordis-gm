@@ -4217,13 +4217,27 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
   };
 
   // ── Perf test ──
-  const startPerfTest = () => {
+  const startPerfTest = async () => {
     if (perfEvtRef.current) { perfEvtRef.current.close(); perfEvtRef.current = null; }
     setPerfLogs([]);
     setPerfMetrics(null);
     setPerfRunning(true);
-    const token = getToken() || '';
-    const url = `/api/admin/perf/stream?vus=${perfVus}&duration=${perfDuration}&jwt=${encodeURIComponent(token)}`;
+    // Exchange admin JWT for a one-time SSE token (EventSource can't send Authorization headers)
+    let sseToken: string;
+    try {
+      const r = await fetch('/api/admin/perf/token', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken() || ''}` },
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      sseToken = d.token;
+    } catch (e: any) {
+      setPerfRunning(false);
+      setPerfLogs([{ msg: `❌ Nie udało się uzyskać tokena SSE: ${e?.message}`, level: 'error' }]);
+      return;
+    }
+    const url = `/api/admin/perf/stream?vus=${perfVus}&duration=${perfDuration}&token=${encodeURIComponent(sseToken)}`;
     const es = new EventSource(url);
     perfEvtRef.current = es;
     es.addEventListener('log', (e: MessageEvent) => {
