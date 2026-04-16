@@ -30,7 +30,7 @@ import dmsRoutes from './routes/dms';
 import friendsRoutes from './routes/friends';
 import uploadRoutes from './routes/upload';
 import ogRoutes from './routes/og';
-import adminRoutes from './routes/admin';
+import adminRoutes, { perfRouter } from './routes/admin';
 import gamesRoutes from './routes/games';
 import notificationsRoutes from './routes/notifications';
 import spotifyRoutes    from './routes/spotify';
@@ -155,6 +155,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/files',  filesRoutes);   // R2 pre-signed URL proxy
 
 app.use('/api/og', ogRoutes);
+app.use('/api/admin', perfRouter);   // SSE stream — no auth middleware (uses one-time token)
 app.use('/api/admin',         adminRoutes);
 app.use('/api/games',         gamesRoutes);
 app.use('/api/notifications', notificationsRoutes);

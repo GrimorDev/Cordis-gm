@@ -2,7 +2,6 @@ import { Router, Response, NextFunction } from 'express';
 import { body, validationResult } from 'express-validator';
 import os from 'os';
 import crypto from 'crypto';
-import jwt from 'jsonwebtoken';
 import { query } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
@@ -15,6 +14,25 @@ let _apiRequestsLast  = 0;  // snapshot at last /system/info call
 let _apiRequestsRate  = 0;  // req/s since last call
 let _lastInfoCallAt   = Date.now();
 export function countRequest() { _apiRequestsTotal++; }
+
+// ── In-memory one-time perf tokens (60 s TTL, single-use) ───────────────────
+// Using Map instead of Redis so POST and GET always hit the same process memory.
+interface PerfToken { userId: string; jwt: string; expiresAt: number; }
+const _perfTokens = new Map<string, PerfToken>();
+function _createPerfToken(userId: string, bearerJwt: string): string {
+  const token = crypto.randomUUID();
+  _perfTokens.set(token, { userId, jwt: bearerJwt, expiresAt: Date.now() + 60_000 });
+  // Auto-cleanup after 65 s
+  setTimeout(() => _perfTokens.delete(token), 65_000);
+  return token;
+}
+function _consumePerfToken(token: string): PerfToken | null {
+  const entry = _perfTokens.get(token);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) { _perfTokens.delete(token); return null; }
+  _perfTokens.delete(token); // single-use
+  return entry;
+}
 
 const router = Router();
 
@@ -889,36 +907,24 @@ router.get('/r2/debug', async (_req, res: Response) => {
 
 // ── POST /api/admin/perf/token — exchange admin JWT for a one-time SSE token ──
 // EventSource cannot send Authorization headers, so we issue a short-lived UUID
-// stored in Redis (60 s TTL, single-use). The SSE endpoint validates it.
-router.post('/perf/token', authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const { redis } = await import('../redis/client');
-    const token = crypto.randomUUID();
-    // Store both userId and the original JWT so SSE handler can make authenticated internal requests
-    const bearerJwt = (req.headers.authorization || '').replace('Bearer ', '');
-    await redis.setex(`perf:token:${token}`, 60, JSON.stringify({ userId: req.user!.id, jwt: bearerJwt }));
-    return res.json({ token });
-  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+// stored in-process (60 s TTL, single-use). The SSE endpoint validates it.
+router.post('/perf/token', authMiddleware, adminMiddleware, (req: AuthRequest, res: Response) => {
+  const bearerJwt = (req.headers.authorization || '').replace('Bearer ', '');
+  const token = _createPerfToken(String(req.user!.id), bearerJwt);
+  return res.json({ token });
 });
 
 // ── GET /api/admin/perf/stream — built-in SSE load tester ──────────────────
-router.get('/perf/stream', async (req: AuthRequest, res: Response) => {
+// IMPORTANT: mounted on perfRouter (no global auth middleware) — uses one-time token instead.
+export const perfRouter = Router();
+perfRouter.get('/perf/stream', async (req: AuthRequest, res: Response) => {
   const token = String(req.query.token || '');
   if (!token) return res.status(401).json({ error: 'Missing token' });
 
-  // Validate one-time token from Redis and extract stored JWT for internal requests
-  let jwtToken = '';
-  try {
-    const { redis } = await import('../redis/client');
-    const raw = await redis.get(`perf:token:${token}`);
-    if (!raw) return res.status(401).json({ error: 'Token invalid or expired' });
-    const parsed = JSON.parse(raw) as { userId: string; jwt: string };
-    jwtToken = parsed.jwt;
-    await redis.del(`perf:token:${token}`); // single-use
-  } catch (err: any) {
-    console.error('[perf/stream] token check error:', err?.message);
-    return res.status(500).json({ error: 'Internal server error' });
-  }
+  // Validate one-time in-memory token
+  const perfEntry = _consumePerfToken(token);
+  if (!perfEntry) return res.status(401).json({ error: 'Token invalid or expired' });
+  const jwtToken = perfEntry.jwt;
 
   const vus      = Math.min(500, Math.max(1,  parseInt(String(req.query.vus      || '50'))));
   const duration = Math.min(300, Math.max(5,  parseInt(String(req.query.duration || '30'))));
