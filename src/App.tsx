@@ -4994,9 +4994,17 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                   <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Konfiguracja</h3>
                   <div className="grid grid-cols-2 gap-6">
                     <div>
-                      <label className="text-xs text-zinc-500 mb-2 block">Wirtualni użytkownicy: <span className="text-white font-bold">{perfVus}</span></label>
-                      <input type="range" min="1" max="200" step="1" value={perfVus} onChange={e=>setPerfVus(parseInt(e.target.value))} className="w-full accent-violet-500 cursor-pointer"/>
-                      <div className="flex justify-between text-[10px] text-zinc-700 mt-1"><span>1</span><span>50</span><span>100</span><span>150</span><span>200</span></div>
+                      <label className="text-xs text-zinc-500 mb-2 block">Wirtualni użytkownicy: <span className="text-white font-bold">{perfVus.toLocaleString()}</span></label>
+                      <input type="range" min="1" max="10000" step="1" value={perfVus} onChange={e=>setPerfVus(parseInt(e.target.value))} className="w-full accent-violet-500 cursor-pointer"/>
+                      <div className="flex justify-between text-[10px] text-zinc-700 mt-1"><span>1</span><span>500</span><span>1k</span><span>5k</span><span>10k</span></div>
+                      <div className="flex gap-1.5 mt-2 flex-wrap">
+                        {[50,100,250,500,1000,2500,5000,10000].map(v=>(
+                          <button key={v} onClick={()=>setPerfVus(v)}
+                            className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${perfVus===v?'bg-violet-500/20 text-violet-300 border-violet-500/40':'bg-white/[0.03] text-zinc-600 hover:text-zinc-300 border-white/[0.06]'}`}>
+                            {v>=1000?`${v/1000}k`:v}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     <div>
                       <label className="text-xs text-zinc-500 mb-2 block">Czas trwania</label>

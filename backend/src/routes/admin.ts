@@ -926,8 +926,8 @@ perfRouter.get('/perf/stream', async (req: AuthRequest, res: Response) => {
   if (!perfEntry) return res.status(401).json({ error: 'Token invalid or expired' });
   const jwtToken = perfEntry.jwt;
 
-  const vus      = Math.min(500, Math.max(1,  parseInt(String(req.query.vus      || '50'))));
-  const duration = Math.min(300, Math.max(5,  parseInt(String(req.query.duration || '30'))));
+  const vus      = Math.min(10000, Math.max(1,  parseInt(String(req.query.vus      || '50'))));
+  const duration = Math.min(600,  Math.max(5,  parseInt(String(req.query.duration || '30'))));
   const port     = parseInt(process.env.PORT || '4000');
 
   res.setHeader('Content-Type',  'text/event-stream');
@@ -993,8 +993,10 @@ perfRouter.get('/perf/stream', async (req: AuthRequest, res: Response) => {
     }
   };
 
-  // Stagger VU starts by 10 ms each
-  for (let i = 0; i < vus; i++) setTimeout(vuLoop, i * 10);
+  // Stagger VU starts — ramp up over max 10 s regardless of VU count
+  // e.g. 100 VU → 100ms each, 1000 VU → 10ms each, 10000 VU → 1ms each
+  const staggerMs = Math.max(1, Math.floor(10_000 / vus));
+  for (let i = 0; i < vus; i++) setTimeout(vuLoop, i * staggerMs);
 
   let elapsed = 0;
   const tick = setInterval(() => {
