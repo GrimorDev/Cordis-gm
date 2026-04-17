@@ -23,7 +23,7 @@ import {
   HardDrive, PieChart, Trash, History,
   Bookmark, BookmarkCheck, Timer, Square, ImageIcon,
   Keyboard, Radio, Compass, CalendarPlus, Mic2,
-  Home, BookOpen, TrendingUp, Layers,
+  Home, BookOpen, TrendingUp, Layers, SmilePlus,
   type LucideIcon
 } from 'lucide-react';
 import {
@@ -6993,6 +6993,7 @@ export default function App() {
   const [sendError, setSendError]             = useState('');
   const [replyTo, setReplyTo]                 = useState<MessageFull|DmMessageFull|null>(null);
   const [msgMenuId, setMsgMenuId]             = useState<string|null>(null);
+  const [msgCtxMenu, setMsgCtxMenu]           = useState<{x:number;y:number;msg:MessageFull|DmMessageFull}|null>(null);
   const [editingMsgId, setEditingMsgId]       = useState<string|null>(null);
   const [editingMsgContent, setEditingMsgContent] = useState('');
   const [attachFile, setAttachFile]           = useState<File|null>(null);
@@ -13756,7 +13757,17 @@ export default function App() {
                         <motion.div
                           initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: Math.min(idx * 0.01, 0.06), type: 'spring', stiffness: 340, damping: 28 }}
-                          className={`relative flex ${showChatAvatars?'gap-2.5':'gap-0'} group ${compactMessages || isGrouped ? 'mb-0.5' : 'mb-1.5'} ${isGrouped ? 'mt-0' : ''} ${isOwn?'flex-row-reverse':'flex-row'} ${mentionsMe?'rounded-xl bg-amber-400/5 border-l-2 border-amber-400/60 pl-2 -ml-2':''}`}>
+                          className={`relative flex ${showChatAvatars?'gap-2.5':'gap-0'} group ${compactMessages || isGrouped ? 'mb-0.5' : 'mb-1.5'} ${isGrouped ? 'mt-0' : ''} ${isOwn?'flex-row-reverse':'flex-row'} ${mentionsMe?'rounded-xl bg-amber-400/5 border-l-2 border-amber-400/60 pl-2 -ml-2':''}`}
+                          onContextMenu={e=>{
+                            if(editingMsgId===msg.id) return;
+                            if((msg as any).deleted||msg.content==='__deleted__') return;
+                            e.preventDefault();
+                            setMsgMenuId(null);
+                            const menuW=220, menuH=360;
+                            const x=Math.min(e.clientX, window.innerWidth-menuW-8);
+                            const y=Math.min(e.clientY, window.innerHeight-menuH-8);
+                            setMsgCtxMenu({x,y,msg});
+                          }}>
 
                           {/* Avatar */}
                           {(()=>{
@@ -15485,6 +15496,114 @@ export default function App() {
             </motion.div>
           </>
         );
+      })()}
+
+      {/* ── Message context menu (right-click on message) ──────────────── */}
+      {msgCtxMenu&&(()=>{
+        const m = msgCtxMenu.msg;
+        const isMsgOwn = m.sender_id === currentUser?.id;
+        const isDeleted = (m as any).deleted || m.content === '__deleted__';
+        const isPinned  = !!(m as any).pinned;
+        const isServer  = activeView === 'servers';
+        const isDm      = activeView === 'dms';
+        const close = () => setMsgCtxMenu(null);
+
+        const ctxBtn = (icon: React.ReactNode, label: string, onClick: ()=>void, danger=false) => (
+          <button key={label} onClick={()=>{onClick();close();}}
+            className={`w-full flex items-center gap-2.5 px-3 py-[7px] text-[13px] font-medium rounded-lg transition-colors ${danger?'text-rose-400 hover:bg-rose-500/10 hover:text-rose-300':'text-zinc-300 hover:bg-white/[0.07] hover:text-white'}`}>
+            <span className="w-4 h-4 flex items-center justify-center shrink-0 opacity-70">{icon}</span>
+            {label}
+          </button>
+        );
+        const sep = <div className="w-full h-px bg-white/[0.06] my-1"/>;
+
+        const quickReactions = ['❤️','😂','👍','✅'];
+
+        return (<>
+          <div className="fixed inset-0 z-[98]" onClick={close} onContextMenu={e=>{e.preventDefault();close();}}/>
+          <motion.div
+            initial={{opacity:0,scale:0.95,y:-4}} animate={{opacity:1,scale:1,y:0}}
+            transition={{duration:0.1}}
+            style={{position:'fixed',left:msgCtxMenu.x,top:msgCtxMenu.y,zIndex:99}}
+            className="bg-[#111118] border border-white/[0.09] rounded-2xl shadow-2xl shadow-black/70 w-[220px] py-1.5 overflow-hidden"
+            onClick={e=>e.stopPropagation()}>
+
+            {/* Quick reactions — tylko serwery */}
+            {isServer && !isDeleted && (
+              <>
+                <div className="flex items-center gap-1 px-2 py-1.5">
+                  {quickReactions.map(em=>(
+                    <button key={em} onMouseDown={e=>{e.preventDefault();toggleReaction(m.id,em,e);close();}}
+                      className="flex-1 h-8 flex items-center justify-center text-base hover:bg-white/[0.08] rounded-xl transition-all hover:scale-110 active:scale-95"
+                      title={em}>{em}</button>
+                  ))}
+                  <button onClick={()=>{close();/* otwiera emoji picker */}}
+                    className="flex-1 h-8 flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.08] rounded-xl transition-colors"
+                    title="Dodaj reakcję"><SmilePlus size={14}/></button>
+                </div>
+                {sep}
+              </>
+            )}
+
+            <div className="px-1.5 flex flex-col">
+              {/* Edytuj — własna wiadomość, serwer */}
+              {isMsgOwn && isServer && !isDeleted &&
+                ctxBtn(<Edit3 size={13}/>, 'Edytuj wiadomość', ()=>startEditMsg(m))
+              }
+              {/* Odpowiedz */}
+              {!isDeleted && ctxBtn(<Reply size={13}/>, 'Odpowiedz', ()=>setReplyTo(m))}
+              {/* Kopiuj tekst */}
+              {!isDeleted && ctxBtn(<Copy size={13}/>, 'Kopiuj tekst', ()=>{
+                try{navigator.clipboard.writeText(m.content);}catch{}
+                addToast('Skopiowano tekst','success');
+              })}
+              {/* Kopiuj link */}
+              {ctxBtn(<Link2 size={13}/>, 'Kopiuj link do wiadomości', ()=>{
+                const base=window.location.origin;
+                const link=isServer
+                  ?`${base}/channels/${activeServer}/${activeChannel}?msg=${m.id}`
+                  :`${base}/dm/${activeDm?.id}?msg=${m.id}`;
+                try{navigator.clipboard.writeText(link);}catch{}
+                addToast('Skopiowano link','success');
+              })}
+              {/* Kopiuj ID */}
+              {ctxBtn(<Hash size={13}/>, 'Kopiuj ID wiadomości', ()=>{
+                try{navigator.clipboard.writeText(m.id);}catch{}
+                addToast('Skopiowano ID','success');
+              })}
+
+              {sep}
+
+              {/* Przypnij — serwer z uprawnieniami */}
+              {isServer && canPinMessages && (activeCh as any)?.type==='text' && !isDeleted && (
+                ctxBtn(<Pin size={13}/>, isPinned?'Odepnij wiadomość':'Przypnij wiadomość',
+                  ()=>handlePinMessage(m.id,!isPinned),
+                  false)
+              )}
+              {/* Przypnij DM */}
+              {isDm && !isDeleted && ctxBtn(<Pin size={13}/>, isPinned?'Odepnij wiadomość':'Przypnij wiadomość', async()=>{
+                try{
+                  await dmPinApi.pin(m.id);
+                  const np=!isPinned;
+                  setDmMsgs(p=>p.map(x=>x.id===m.id?{...x,pinned:np}:x));
+                  if(np) setDmPinnedMsgs(p=>[m as DmMessageFull,...p.filter(x=>x.id!==m.id)]);
+                  else setDmPinnedMsgs(p=>p.filter(x=>x.id!==m.id));
+                }catch{}
+              })}
+
+              {/* Usuń — separator + czerwone */}
+              {(isMsgOwn||(isServer&&canManageMessages))&&(<>
+                {sep}
+                {ctxBtn(<Trash2 size={13}/>, 'Usuń wiadomość', ()=>
+                  confirmAction('Usunąć wiadomość?',()=>{
+                    if(isServer) messagesApi.delete(m.id).catch(console.error);
+                    else dmsApi.deleteMessage(m.id).catch(console.error);
+                  })
+                , true)}
+              </>)}
+            </div>
+          </motion.div>
+        </>);
       })()}
 
       {/* Channel context menu (right-click on channel) */}
