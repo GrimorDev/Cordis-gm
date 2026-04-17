@@ -639,18 +639,40 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Direct .exe download URL — use env override or resolve from GitHub Releases API
+  // OS detection — used to show correct download button
+  const userOs: 'windows' | 'macos' | 'other' = React.useMemo(() => {
+    const ua = navigator.userAgent;
+    if (/Windows/i.test(ua)) return 'windows';
+    if (/Mac|iPhone|iPad|iPod/i.test(ua)) return 'macos';
+    return 'other';
+  }, []);
+
+  // Download URLs — resolved from GitHub Releases API
   const [desktopUrl, setDesktopUrl] = useState(import.meta.env.VITE_DESKTOP_DOWNLOAD_URL || '');
+  const [macUrl,     setMacUrl]     = useState('');
   React.useEffect(() => {
-    if (desktopUrl) return; // already set via env var
     fetch('https://api.github.com/repos/GrimorDev/Cordis-gm/releases/latest')
       .then(r => r.ok ? r.json() : Promise.reject())
       .then((data: { assets?: { name: string; browser_download_url: string }[] }) => {
         const exe = data.assets?.find(a => a.name.endsWith('.exe'));
-        if (exe) setDesktopUrl(exe.browser_download_url);
+        const dmg = data.assets?.find(a => a.name.endsWith('.dmg'));
+        if (exe && !desktopUrl) setDesktopUrl(exe.browser_download_url);
+        if (dmg) setMacUrl(dmg.browser_download_url);
       })
-      .catch(() => setDesktopUrl('https://github.com/GrimorDev/Cordis-gm/releases/latest'));
+      .catch(() => {
+        const fallback = 'https://github.com/GrimorDev/Cordis-gm/releases/latest';
+        if (!desktopUrl) setDesktopUrl(fallback);
+        setMacUrl(fallback);
+      });
   }, []);
+
+  // Returns OS-appropriate download URL + label
+  const osDownload = React.useMemo(() => {
+    if (userOs === 'macos') return { url: macUrl,     label: 'Pobierz na macOS',   loading: !macUrl };
+    if (userOs === 'windows') return { url: desktopUrl, label: 'Pobierz na Windows', loading: !desktopUrl };
+    // Other OS — prefer Windows, show generic label
+    return { url: desktopUrl || macUrl, label: 'Pobierz aplikację', loading: !desktopUrl && !macUrl };
+  }, [userOs, desktopUrl, macUrl]);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
 
@@ -1146,12 +1168,11 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                 className="px-8 py-4 rounded-2xl text-base font-semibold text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.1] transition-all hover:-translate-y-0.5">
                 Zaloguj się
               </button>
-              <a href={desktopUrl || '#'}
-                {...(desktopUrl ? { download: true } : {})}
-                className={`flex items-center gap-2.5 px-8 py-4 rounded-2xl text-base font-semibold transition-all hover:-translate-y-0.5 group border ${desktopUrl ? 'text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border-white/[0.1] cursor-pointer' : 'text-zinc-600 bg-white/[0.02] border-white/[0.05] cursor-wait pointer-events-none'}`}>
-                {desktopUrl ? <Monitor size={18} className="text-zinc-400 group-hover:text-indigo-400 transition-colors"/> : <Loader2 size={18} className="animate-spin text-zinc-600"/>}
-                <span>Pobierz na Windows</span>
-                {desktopUrl && <Download size={14} className="text-zinc-600 group-hover:text-indigo-400 transition-colors"/>}
+              <a href={osDownload.url || '#'}
+                className={`flex items-center gap-2.5 px-8 py-4 rounded-2xl text-base font-semibold transition-all hover:-translate-y-0.5 group border ${!osDownload.loading ? 'text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border-white/[0.1] cursor-pointer' : 'text-zinc-600 bg-white/[0.02] border-white/[0.05] cursor-wait pointer-events-none'}`}>
+                {osDownload.loading ? <Loader2 size={18} className="animate-spin text-zinc-600"/> : <Monitor size={18} className="text-zinc-400 group-hover:text-indigo-400 transition-colors"/>}
+                <span>{osDownload.label}</span>
+                {!osDownload.loading && <Download size={14} className="text-zinc-600 group-hover:text-indigo-400 transition-colors"/>}
               </a>
             </motion.div>
 
@@ -1443,11 +1464,11 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                       className="px-8 py-4 rounded-2xl text-base font-semibold text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.1] transition-all hover:-translate-y-0.5">
                       Mam już konto
                     </button>
-                    <a href={desktopUrl || '#'}
-                      className="flex items-center gap-2.5 px-8 py-4 rounded-2xl text-base font-semibold text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.1] transition-all hover:-translate-y-0.5 group">
-                      <Monitor size={18} className="text-zinc-400 group-hover:text-indigo-400 transition-colors"/>
-                      <span>Pobierz na Windows</span>
-                      <Download size={14} className="text-zinc-600 group-hover:text-indigo-400 transition-colors"/>
+                    <a href={osDownload.url || '#'}
+                      className={`flex items-center gap-2.5 px-8 py-4 rounded-2xl text-base font-semibold transition-all hover:-translate-y-0.5 group border ${!osDownload.loading ? 'text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border-white/[0.1] cursor-pointer' : 'text-zinc-600 bg-white/[0.02] border-white/[0.05] cursor-wait pointer-events-none'}`}>
+                      {osDownload.loading ? <Loader2 size={18} className="animate-spin text-zinc-600"/> : <Monitor size={18} className="text-zinc-400 group-hover:text-indigo-400 transition-colors"/>}
+                      <span>{osDownload.label}</span>
+                      {!osDownload.loading && <Download size={14} className="text-zinc-600 group-hover:text-indigo-400 transition-colors"/>}
                     </a>
                   </div>
                 </div>
@@ -1722,12 +1743,11 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
 
               {/* Desktop app download link */}
               <div className="mt-5 pt-4 border-t border-white/[0.06]">
-                <a href={desktopUrl || '#'}
-                  {...(desktopUrl ? { download: true } : {})}
-                  className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-xs font-medium border transition-all group ${desktopUrl ? 'text-zinc-500 hover:text-zinc-300 bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.05] hover:border-white/[0.1] cursor-pointer' : 'text-zinc-700 bg-white/[0.02] border-white/[0.03] cursor-wait pointer-events-none'}`}>
-                  {desktopUrl ? <Monitor size={13} className="group-hover:text-indigo-400 transition-colors"/> : <Loader2 size={13} className="animate-spin"/>}
-                  Pobierz aplikację Cordyn na Windows
-                  {desktopUrl && <Download size={12} className="group-hover:text-indigo-400 transition-colors"/>}
+                <a href={osDownload.url || '#'}
+                  className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-xs font-medium border transition-all group ${!osDownload.loading ? 'text-zinc-500 hover:text-zinc-300 bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.05] hover:border-white/[0.1] cursor-pointer' : 'text-zinc-700 bg-white/[0.02] border-white/[0.03] cursor-wait pointer-events-none'}`}>
+                  {osDownload.loading ? <Loader2 size={13} className="animate-spin"/> : <Monitor size={13} className="group-hover:text-indigo-400 transition-colors"/>}
+                  {osDownload.loading ? 'Ładowanie…' : `Pobierz aplikację Cordyn — ${userOs === 'macos' ? 'macOS' : userOs === 'windows' ? 'Windows' : 'Desktop'}`}
+                  {!osDownload.loading && <Download size={12} className="group-hover:text-indigo-400 transition-colors"/>}
                 </a>
               </div>
             </motion.div>
@@ -11182,6 +11202,16 @@ export default function App() {
         </div>
         {/* Right col */}
         <div className="flex items-center justify-end gap-1.5 pr-1">
+          {/* Download button — only in web browser, not in Tauri desktop app */}
+          {!isTauri && !osDownload.loading && osDownload.url && (
+            <a href={osDownload.url}
+              title={osDownload.label}
+              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-zinc-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-indigo-500/30 transition-all group shrink-0">
+              <Monitor size={12} className="group-hover:text-indigo-400 transition-colors shrink-0"/>
+              <span className="hidden lg:inline">{osDownload.label}</span>
+              <Download size={11} className="group-hover:text-indigo-400 transition-colors shrink-0"/>
+            </a>
+          )}
           <div className="relative group hidden sm:block">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-zinc-400 transition-colors"/>
             <input ref={searchInputRef} placeholder="Szukaj w wiadomościach..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
