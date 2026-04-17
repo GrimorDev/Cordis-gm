@@ -127,16 +127,18 @@ jobs:
       - name: Add Rust targets
         run: rustup target add ${{ matrix.rust_targets }}
 
-      # 3 — Cargo cache (saves ~5-10 min per run)
+      # 3 — Cargo cache (only registry + git, NOT src-tauri/target)
+      # Cargo.lock is not committed → hashFiles always returns the same value →
+      # src-tauri/target would be restored from an old build with the wrong embedded version.
+      # Caching ~/.cargo/registry + ~/.cargo/git still saves ~3-5 min on dep downloads.
       - name: Cache Cargo
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            src-tauri/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('src-tauri/Cargo.toml') }}
+          restore-keys: ${{ runner.os }}-cargo-registry-
 
       # 4 — Node.js + pnpm
       - uses: actions/setup-node@v4
