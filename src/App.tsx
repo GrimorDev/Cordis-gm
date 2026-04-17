@@ -6877,6 +6877,35 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
 const _inviteCodeFromUrl = (() => { const m = window.location.pathname.match(/^\/join\/([a-f0-9]+)$/i); return m ? m[1] : null; })();
 
 export default function App() {
+  // OS detection + download URLs (used in the app header download button)
+  const userOs: 'windows' | 'macos' | 'other' = React.useMemo(() => {
+    const ua = navigator.userAgent;
+    if (/Windows/i.test(ua)) return 'windows';
+    if (/Mac|iPhone|iPad|iPod/i.test(ua)) return 'macos';
+    return 'other';
+  }, []);
+  const [appDesktopUrl, setAppDesktopUrl] = useState('');
+  const [appMacUrl,     setAppMacUrl]     = useState('');
+  React.useEffect(() => {
+    fetch('https://api.github.com/repos/GrimorDev/Cordis-gm/releases/latest')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then((data: { assets?: { name: string; browser_download_url: string }[] }) => {
+        const exe = data.assets?.find(a => a.name.endsWith('.exe'));
+        const dmg = data.assets?.find(a => a.name.endsWith('.dmg'));
+        if (exe) setAppDesktopUrl(exe.browser_download_url);
+        if (dmg) setAppMacUrl(dmg.browser_download_url);
+      })
+      .catch(() => {
+        const fb = 'https://github.com/GrimorDev/Cordis-gm/releases/latest';
+        setAppDesktopUrl(fb); setAppMacUrl(fb);
+      });
+  }, []);
+  const appOsDownload = React.useMemo(() => {
+    if (userOs === 'macos')   return { url: appMacUrl,     label: 'Pobierz na macOS',   ready: !!appMacUrl };
+    if (userOs === 'windows') return { url: appDesktopUrl, label: 'Pobierz na Windows', ready: !!appDesktopUrl };
+    return { url: appDesktopUrl || appMacUrl, label: 'Pobierz aplikację', ready: !!(appDesktopUrl || appMacUrl) };
+  }, [userOs, appDesktopUrl, appMacUrl]);
+
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authLoading, setAuthLoading]         = useState(true);
   const [pendingInvite, setPendingInvite]     = useState<InviteInfo | null>(null);
@@ -11203,12 +11232,12 @@ export default function App() {
         {/* Right col */}
         <div className="flex items-center justify-end gap-1.5 pr-1">
           {/* Download button — only in web browser, not in Tauri desktop app */}
-          {!isTauri && !osDownload.loading && osDownload.url && (
-            <a href={osDownload.url}
-              title={osDownload.label}
+          {!isTauri && appOsDownload.ready && (
+            <a href={appOsDownload.url}
+              title={appOsDownload.label}
               className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-zinc-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-indigo-500/30 transition-all group shrink-0">
               <Monitor size={12} className="group-hover:text-indigo-400 transition-colors shrink-0"/>
-              <span className="hidden lg:inline">{osDownload.label}</span>
+              <span className="hidden lg:inline">{appOsDownload.label}</span>
               <Download size={11} className="group-hover:text-indigo-400 transition-colors shrink-0"/>
             </a>
           )}
