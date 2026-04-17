@@ -53,8 +53,11 @@ jobs:
           echo "tag=v$NEW"      >> $GITHUB_OUTPUT
           echo "New version: $NEW"
 
-      - name: Patch tauri.conf.json
+      - name: Patch tauri.conf.json + Cargo.toml
         run: |
+          NEW="${{ steps.ver.outputs.version }}"
+
+          # Patch tauri.conf.json (source of truth for Tauri app version)
           python3 -c "
           import json
           with open('src-tauri/tauri.conf.json') as f:
@@ -65,11 +68,17 @@ jobs:
               f.write('\n')
           "
 
+          # Patch Cargo.toml so Cargo.lock stays consistent and tauri-build embeds the right version
+          sed -i "0,/^version = \"[^\"]*\"/{s/^version = \"[^\"]*\"/version = \"$NEW\"/}" src-tauri/Cargo.toml
+
+          echo "tauri.conf.json version: $(python3 -c \"import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])\")"
+          echo "Cargo.toml version: $(grep '^version' src-tauri/Cargo.toml | head -1)"
+
       - name: Commit, tag & push
         run: |
           git config user.name  'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add src-tauri/tauri.conf.json
+          git add src-tauri/tauri.conf.json src-tauri/Cargo.toml
           git commit -m "chore: bump version to ${{ steps.ver.outputs.version }}"
           git tag ${{ steps.ver.outputs.tag }}
           git push origin HEAD:main
@@ -240,9 +249,9 @@ jobs:
           REPO="https://github.com/GrimorDev/Cordis-gm"
           PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-          # Windows signature — prefer .exe.sig, fallback to .nsis.zip.sig
-          WIN_SIG_FILE=$(find dist/windows -name "*.exe.sig" | head -1)
-          [ -z "$WIN_SIG_FILE" ] && WIN_SIG_FILE=$(find dist/windows -name "*.nsis.zip.sig" | head -1)
+          # Windows updater artifact is .nsis.zip — prefer that sig; fall back to .exe.sig
+          WIN_SIG_FILE=$(find dist/windows -name "*.nsis.zip.sig" | head -1)
+          [ -z "$WIN_SIG_FILE" ] && WIN_SIG_FILE=$(find dist/windows -name "*.exe.sig" | head -1)
           WIN_SIG=""
           WIN_URL=""
           if [ -n "$WIN_SIG_FILE" ]; then
