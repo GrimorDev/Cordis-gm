@@ -12,9 +12,11 @@ on:
         required: false
         default: ''
 
-# Only one release at a time — cancel stale runs on rapid pushes
+# Only one release at a time — cancel stale runs on rapid pushes.
+# IMPORTANT: bot's "chore: bump version" commits use a separate group ("noop")
+# so they don't accidentally cancel the build that they just triggered.
 concurrency:
-  group: release
+  group: ${{ startsWith(github.event.head_commit.message, 'chore: bump version') && 'noop' || 'release' }}
   cancel-in-progress: true
 
 permissions:
