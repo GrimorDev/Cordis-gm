@@ -261,26 +261,24 @@ jobs:
             MAC_URL="$REPO/releases/download/$TAG/$MAC_FILE"
           fi
 
-          # Pass values as env vars to Python — avoids heredoc-in-subshell syntax errors
-          export WIN_SIG WIN_URL MAC_SIG MAC_URL VERSION PUB_DATE
-          python3 -c "
-import json, os
-d = {
-  'version':  os.environ['VERSION'],
-  'notes':    'Zaktualizowano Cordyn do wersji ' + os.environ['VERSION'] + '.',
-  'pub_date': os.environ['PUB_DATE'],
-  'platforms': {}
-}
-if os.environ.get('WIN_SIG'):
-    d['platforms']['windows-x86_64'] = {
-        'url': os.environ['WIN_URL'], 'signature': os.environ['WIN_SIG']
-    }
-if os.environ.get('MAC_SIG'):
-    d['platforms']['darwin-universal'] = {
-        'url': os.environ['MAC_URL'], 'signature': os.environ['MAC_SIG']
-    }
-print(json.dumps(d, indent=2, ensure_ascii=False))
-" > latest.json
+          # Use jq (available on all ubuntu runners) — no Python/heredoc indentation issues
+          jq -n \
+            --arg version  "$VERSION" \
+            --arg pub_date "$PUB_DATE" \
+            --arg win_sig  "$WIN_SIG" \
+            --arg win_url  "$WIN_URL" \
+            --arg mac_sig  "$MAC_SIG" \
+            --arg mac_url  "$MAC_URL" \
+            '{
+              version:  $version,
+              notes:    ("Zaktualizowano Cordyn do wersji " + $version + "."),
+              pub_date: $pub_date,
+              platforms: (
+                {}
+                | if $win_sig != "" then . + {"windows-x86_64": {url: $win_url, signature: $win_sig}} else . end
+                | if $mac_sig != "" then . + {"darwin-universal": {url: $mac_url, signature: $mac_sig}} else . end
+              )
+            }' > latest.json
 
           echo "=== latest.json ==="
           cat latest.json
