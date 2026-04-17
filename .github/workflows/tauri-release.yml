@@ -241,43 +241,46 @@ jobs:
           PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
           # Windows signature — prefer .exe.sig, fallback to .nsis.zip.sig
-          WIN_SIG_FILE=$(find dist/windows -name "*.exe.sig"      | head -1)
+          WIN_SIG_FILE=$(find dist/windows -name "*.exe.sig" | head -1)
           [ -z "$WIN_SIG_FILE" ] && WIN_SIG_FILE=$(find dist/windows -name "*.nsis.zip.sig" | head -1)
-          WIN_SIG=$(cat "$WIN_SIG_FILE" 2>/dev/null | tr -d '\n' || echo "")
-          WIN_FILE=$(basename "$WIN_SIG_FILE" .sig)
-          WIN_URL="$REPO/releases/download/$TAG/$WIN_FILE"
+          WIN_SIG=""
+          WIN_URL=""
+          if [ -n "$WIN_SIG_FILE" ]; then
+            WIN_SIG=$(cat "$WIN_SIG_FILE" | tr -d '\n')
+            WIN_FILE=$(basename "$WIN_SIG_FILE" .sig)
+            WIN_URL="$REPO/releases/download/$TAG/$WIN_FILE"
+          fi
 
           # macOS signature
           MAC_SIG_FILE=$(find dist/macos -name "*.dmg.sig" | head -1)
-          MAC_SIG=$(cat "$MAC_SIG_FILE" 2>/dev/null | tr -d '\n' || echo "")
-          MAC_FILE=$(basename "$MAC_SIG_FILE" .sig)
-          MAC_URL="$REPO/releases/download/$TAG/$MAC_FILE"
+          MAC_SIG=""
+          MAC_URL=""
+          if [ -n "$MAC_SIG_FILE" ]; then
+            MAC_SIG=$(cat "$MAC_SIG_FILE" | tr -d '\n')
+            MAC_FILE=$(basename "$MAC_SIG_FILE" .sig)
+            MAC_URL="$REPO/releases/download/$TAG/$MAC_FILE"
+          fi
 
-          python3 - <<PYEOF
-          import json
-
-          d = {
-            "version": "$VERSION",
-            "notes":   "Zaktualizowano Cordyn do wersji $VERSION.",
-            "pub_date": "$PUB_DATE",
-            "platforms": {}
-          }
-
-          win_sig = """$WIN_SIG""".strip()
-          mac_sig = """$MAC_SIG""".strip()
-
-          if win_sig:
-            d["platforms"]["windows-x86_64"] = {
-              "url": "$WIN_URL", "signature": win_sig
-            }
-          if mac_sig:
-            d["platforms"]["darwin-universal"] = {
-              "url": "$MAC_URL", "signature": mac_sig
-            }
-
-          print(json.dumps(d, indent=2, ensure_ascii=False))
-          PYEOF
-          ) > latest.json
+          # Pass values as env vars to Python — avoids heredoc-in-subshell syntax errors
+          export WIN_SIG WIN_URL MAC_SIG MAC_URL VERSION PUB_DATE
+          python3 -c "
+import json, os
+d = {
+  'version':  os.environ['VERSION'],
+  'notes':    'Zaktualizowano Cordyn do wersji ' + os.environ['VERSION'] + '.',
+  'pub_date': os.environ['PUB_DATE'],
+  'platforms': {}
+}
+if os.environ.get('WIN_SIG'):
+    d['platforms']['windows-x86_64'] = {
+        'url': os.environ['WIN_URL'], 'signature': os.environ['WIN_SIG']
+    }
+if os.environ.get('MAC_SIG'):
+    d['platforms']['darwin-universal'] = {
+        'url': os.environ['MAC_URL'], 'signature': os.environ['MAC_SIG']
+    }
+print(json.dumps(d, indent=2, ensure_ascii=False))
+" > latest.json
 
           echo "=== latest.json ==="
           cat latest.json
