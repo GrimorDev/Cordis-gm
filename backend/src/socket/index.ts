@@ -219,6 +219,27 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
       });
     });
 
+    // ── DM typing indicators ─────────────────────────────────────────
+    socket.on('dm_typing_start', (targetUserId: string) => {
+      if (!targetUserId) return;
+      const key = `dm:${user.id}:${targetUserId}`;
+      const now = Date.now();
+      if ((now - (typingLastSent.get(key) ?? 0)) < 2000) return;
+      typingLastSent.set(key, now);
+      socket.to(`user:${targetUserId}`).emit('dm_user_typing', {
+        user_id: user.id,
+        username: user.username,
+      });
+    });
+
+    socket.on('dm_typing_stop', (targetUserId: string) => {
+      if (!targetUserId) return;
+      typingLastSent.delete(`dm:${user.id}:${targetUserId}`);
+      socket.to(`user:${targetUserId}`).emit('dm_user_stop_typing', {
+        user_id: user.id,
+      });
+    });
+
     // ── Voice channels ───────────────────────────────────────────────
     socket.on('voice_join', async (channelId) => {
       // ── User-limit check ──────────────────────────────────────────────

@@ -8227,9 +8227,8 @@ export default function App() {
         setServerActivity(p => [act, ...p].slice(0, 50));
       }
     });
-    // Typing indicators (server channels only)
+    // Typing indicators — server channels
     sock.on('user_typing', ({user_id, username, channel_id}: any) => {
-      // Ignore typing events if not in server view or wrong channel
       if (activeViewRef.current !== 'servers') return;
       if (channel_id !== prevChRef.current) return;
       clearTimeout(typingTimersRef.current[user_id]);
@@ -8238,6 +8237,19 @@ export default function App() {
         setTypingUsers(p => { const n={...p}; delete n[user_id]; return n; }), 3500);
     });
     sock.on('user_stop_typing', ({user_id}: any) => {
+      clearTimeout(typingTimersRef.current[user_id]);
+      setTypingUsers(p => { const n={...p}; delete n[user_id]; return n; });
+    });
+    // Typing indicators — DMs
+    sock.on('dm_user_typing', ({user_id, username}: any) => {
+      if (activeViewRef.current !== 'dms') return;
+      if (user_id !== activeDmUserIdRef.current) return;
+      clearTimeout(typingTimersRef.current[user_id]);
+      setTypingUsers(p => ({...p, [user_id]: username}));
+      typingTimersRef.current[user_id] = setTimeout(() =>
+        setTypingUsers(p => { const n={...p}; delete n[user_id]; return n; }), 3500);
+    });
+    sock.on('dm_user_stop_typing', ({user_id}: any) => {
       clearTimeout(typingTimersRef.current[user_id]);
       setTypingUsers(p => { const n={...p}; delete n[user_id]; return n; });
     });
@@ -8949,6 +8961,7 @@ export default function App() {
   useEffect(() => {
     if (!activeDmUserId) return;
     setDmMsgs([]); setMsgsLoading(true); setSearchQuery('');
+    setTypingUsers({});
     dmsApi.messages(activeDmUserId).then(setDmMsgs).catch(console.error).finally(()=>setMsgsLoading(false));
     users.get(activeDmUserId).then(setDmPartnerProfile).catch(console.error);
     setReplyTo(null);
@@ -14511,14 +14524,25 @@ export default function App() {
                             if (slashMatch && activeView==='servers') { setSlashQuery(slashMatch[1]); setSlashSel(0); }
                             else setSlashQuery(null);
                             // Typing indicator
-                            if(activeChannel&&activeView==='servers'&&currentUser?.privacy_typing_visible!==false){
-                              if(v.trim()){
-                                getSocket()?.emit('typing_start',activeChannel);
-                                if(typingEmitTimerRef.current) clearTimeout(typingEmitTimerRef.current);
-                                typingEmitTimerRef.current=setTimeout(()=>getSocket()?.emit('typing_stop',activeChannel),2000);
-                              } else {
-                                if(typingEmitTimerRef.current){clearTimeout(typingEmitTimerRef.current);typingEmitTimerRef.current=null;}
-                                getSocket()?.emit('typing_stop',activeChannel);
+                            if(currentUser?.privacy_typing_visible!==false){
+                              if(activeChannel&&activeView==='servers'){
+                                if(v.trim()){
+                                  getSocket()?.emit('typing_start',activeChannel);
+                                  if(typingEmitTimerRef.current) clearTimeout(typingEmitTimerRef.current);
+                                  typingEmitTimerRef.current=setTimeout(()=>getSocket()?.emit('typing_stop',activeChannel),2000);
+                                } else {
+                                  if(typingEmitTimerRef.current){clearTimeout(typingEmitTimerRef.current);typingEmitTimerRef.current=null;}
+                                  getSocket()?.emit('typing_stop',activeChannel);
+                                }
+                              } else if(activeDmUserId&&activeView==='dms'){
+                                if(v.trim()){
+                                  getSocket()?.emit('dm_typing_start',activeDmUserId);
+                                  if(typingEmitTimerRef.current) clearTimeout(typingEmitTimerRef.current);
+                                  typingEmitTimerRef.current=setTimeout(()=>getSocket()?.emit('dm_typing_stop',activeDmUserId),2000);
+                                } else {
+                                  if(typingEmitTimerRef.current){clearTimeout(typingEmitTimerRef.current);typingEmitTimerRef.current=null;}
+                                  getSocket()?.emit('dm_typing_stop',activeDmUserId);
+                                }
                               }
                             }
                           }}
