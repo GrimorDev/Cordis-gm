@@ -144,6 +144,9 @@ export interface ServerToClientEvents {
   group_call_participant_joined: (data: any) => void;
   group_call_participant_left: (data: any) => void;
   group_call_ended: (data: { group_id: string }) => void;
+  // DM typing
+  dm_user_typing: (data: { user_id: string; username: string }) => void;
+  dm_user_stop_typing: (data: { user_id: string }) => void;
 }
 
 export interface ClientToServerEvents {
@@ -153,6 +156,8 @@ export interface ClientToServerEvents {
   join_server_room: (server_id: string) => void;
   typing_start: (channel_id: string) => void;
   typing_stop: (channel_id: string) => void;
+  dm_typing_start: (target_user_id: string) => void;
+  dm_typing_stop: (target_user_id: string) => void;
   voice_join: (channel_id: string) => void;
   voice_leave: (channel_id: string) => void;
   call_invite: (data: { to_user_id: string; type: 'voice' | 'video' }) => void;
