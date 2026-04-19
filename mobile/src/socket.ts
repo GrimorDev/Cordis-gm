@@ -1,10 +1,8 @@
 import { io, Socket } from 'socket.io-client';
-import * as SecureStore from 'expo-secure-store';
-import { API_URL } from './api';
+import { storage } from './storage';
+import { SOCKET_URL } from './config';
 
 let socket: Socket | null = null;
-
-const SOCKET_URL = API_URL.replace('/api', '');
 
 export function getSocket(): Socket | null {
   return socket;
@@ -13,7 +11,7 @@ export function getSocket(): Socket | null {
 export async function connectSocket(): Promise<Socket> {
   if (socket?.connected) return socket;
 
-  const token = await SecureStore.getItemAsync('cordyn_token');
+  const token = await storage.getItemAsync('cordyn_token');
   if (!token) throw new Error('No token');
 
   socket = io(SOCKET_URL, {

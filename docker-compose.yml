@@ -39,6 +39,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+      mobile:
+        condition: service_healthy
     networks:
       - default
       - proxy
@@ -56,6 +58,30 @@ services:
       timeout: 10s
       start_period: 30s
       retries: 5
+
+  # ── Mobile PWA (Expo web export, served at /app/) ────────────────
+  mobile:
+    build:
+      context: ./mobile
+      dockerfile: Dockerfile
+    container_name: cordis-mobile
+    restart: unless-stopped
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 64M
+        reservations:
+          cpus: "0.05"
+          memory: 16M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health.txt || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
 
   # ── Backend (Node.js API + Socket.IO, cluster mode) ───────────────
   backend:

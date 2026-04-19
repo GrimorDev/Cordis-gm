@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
   statusRowBorder: { borderBottomWidth: 1, borderBottomColor: C.border },
   statusLabel: { flex: 1, color: C.text, fontSize: 15 },
   aboutInput: { color: C.text, fontSize: 15, padding: 14, minHeight: 80, textAlignVertical: 'top' },
-  aboutText: { color: currentUser => currentUser ? C.text : C.textMuted, fontSize: 15, padding: 14, lineHeight: 22 },
+  aboutText: { color: C.text, fontSize: 15, padding: 14, lineHeight: 22 },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14 },
   infoRowBorder: { borderTopWidth: 1, borderTopColor: C.border },
   infoLabel: { color: C.textMuted, fontSize: 14 },

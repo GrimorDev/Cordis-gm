@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import * as SecureStore from 'expo-secure-store';
+import { storage } from '../src/storage';
 import { useStore } from '../src/store';
 import { authApi } from '../src/api';
 import { connectSocket } from '../src/socket';
@@ -15,14 +15,14 @@ export default function RootLayout() {
   useEffect(() => {
     (async () => {
       try {
-        const token = await SecureStore.getItemAsync('cordyn_token');
+        const token = await storage.getItemAsync('cordyn_token');
         if (token) {
           const user = await authApi.me();
           await setAuth(token, user);
           await connectSocket();
         }
       } catch {
-        await SecureStore.deleteItemAsync('cordyn_token');
+        await storage.deleteItemAsync('cordyn_token');
       } finally {
         setReady(true);
       }

@@ -1,9 +1,9 @@
-import * as SecureStore from 'expo-secure-store';
-
-export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://your-vps-domain.com/api';
+import { storage } from './storage';
+export { API_URL } from './config';
+import { API_URL } from './config';
 
 async function getToken(): Promise<string | null> {
-  return SecureStore.getItemAsync('cordyn_token');
+  return storage.getItemAsync('cordyn_token');
 }
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -112,17 +112,17 @@ export interface FriendRequest {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export const authApi = {
-  login: (username: string, password: string) =>
+  login:    (username: string, password: string) =>
     req<{ token: string; user: User }>('POST', '/auth/login', { username, password }),
   register: (username: string, password: string) =>
     req<{ token: string; user: User }>('POST', '/auth/register', { username, password }),
-  me: () => req<User>('GET', '/auth/me'),
-  logout: () => req<{ ok: boolean }>('POST', '/auth/logout'),
+  me:       () => req<User>('GET', '/auth/me'),
+  logout:   () => req<{ ok: boolean }>('POST', '/auth/logout'),
 };
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 export const usersApi = {
-  updateMe: (data: Partial<{ username: string; about_me: string; preferred_status: string }>) =>
+  updateMe:     (data: Partial<{ username: string; about_me: string; preferred_status: string }>) =>
     req<User>('PUT', '/users/me', data),
   updateStatus: (status: string) =>
     req<{ ok: boolean }>('PUT', '/users/me/status', { status }),
@@ -131,10 +131,10 @@ export const usersApi = {
 
 // ── Servers ───────────────────────────────────────────────────────────────────
 export const serversApi = {
-  list: () => req<Server[]>('GET', '/servers'),
-  get: (id: string) => req<Server>('GET', `/servers/${id}`),
-  create: (name: string) => req<Server>('POST', '/servers', { name }),
-  join: (code: string) => req<Server>('POST', '/servers/join', { code }),
+  list:  () => req<Server[]>('GET', '/servers'),
+  get:   (id: string) => req<Server>('GET', `/servers/${id}`),
+  create:(name: string) => req<Server>('POST', '/servers', { name }),
+  join:  (code: string) => req<Server>('POST', '/servers/join', { code }),
   leave: (id: string) => req<{ ok: boolean }>('POST', `/servers/${id}/leave`),
 };
 
@@ -145,15 +145,13 @@ export const channelsApi = {
 
 // ── Messages ──────────────────────────────────────────────────────────────────
 export const messagesApi = {
-  list: (channelId: string, before?: string) =>
+  list:   (channelId: string, before?: string) =>
     req<Message[]>('GET', `/messages/channel/${channelId}${before ? `?before=${before}` : ''}`),
-  send: (channelId: string, content: string, replyToId?: string) =>
+  send:   (channelId: string, content: string, replyToId?: string) =>
     req<Message>('POST', `/messages/channel/${channelId}`, { content, reply_to_id: replyToId }),
-  edit: (id: string, content: string) =>
-    req<Message>('PUT', `/messages/${id}`, { content }),
-  delete: (id: string) =>
-    req<{ ok: boolean }>('DELETE', `/messages/${id}`),
-  react: (id: string, emoji: string) =>
+  edit:   (id: string, content: string) => req<Message>('PUT', `/messages/${id}`, { content }),
+  delete: (id: string) => req<{ ok: boolean }>('DELETE', `/messages/${id}`),
+  react:  (id: string, emoji: string) =>
     req<{ ok: boolean }>('POST', `/messages/${id}/react`, { emoji }),
 };
 
@@ -168,10 +166,10 @@ export const dmsApi = {
 
 // ── Friends ───────────────────────────────────────────────────────────────────
 export const friendsApi = {
-  list: () => req<Friend[]>('GET', '/friends'),
-  requests: () => req<FriendRequest[]>('GET', '/friends/requests'),
-  send: (username: string) => req<{ ok: boolean }>('POST', '/friends/request', { username }),
-  accept: (id: string) => req<{ ok: boolean }>('POST', `/friends/${id}/accept`),
-  reject: (id: string) => req<{ ok: boolean }>('DELETE', `/friends/requests/${id}`),
-  remove: (id: string) => req<{ ok: boolean }>('DELETE', `/friends/${id}`),
+  list:    () => req<Friend[]>('GET', '/friends'),
+  requests:() => req<FriendRequest[]>('GET', '/friends/requests'),
+  send:    (username: string) => req<{ ok: boolean }>('POST', '/friends/request', { username }),
+  accept:  (id: string) => req<{ ok: boolean }>('POST', `/friends/${id}/accept`),
+  reject:  (id: string) => req<{ ok: boolean }>('DELETE', `/friends/requests/${id}`),
+  remove:  (id: string) => req<{ ok: boolean }>('DELETE', `/friends/${id}`),
 };

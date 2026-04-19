@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pobierz Cordyn Mobile</title>
+  <link rel="icon" href="/cordyn.ico" />
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #09090b;
+      color: #fafafa;
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 20px;
+      padding: 40px 32px;
+      max-width: 420px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,.6);
+    }
+
+    .logo {
+      width: 72px;
+      height: 72px;
+      border-radius: 18px;
+      margin: 0 auto 20px;
+      background: #6366f1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+    }
+
+    h1 {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      color: #71717a;
+      font-size: 14px;
+      margin-bottom: 32px;
+    }
+
+    .qr-wrap {
+      background: #fff;
+      border-radius: 16px;
+      padding: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+
+    #qr-canvas { display: block; }
+
+    .url-box {
+      background: #27272a;
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #a1a1aa;
+      word-break: break-all;
+      margin-bottom: 24px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .url-box:hover { background: #3f3f46; }
+
+    .steps {
+      text-align: left;
+      margin-bottom: 28px;
+    }
+
+    .steps h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: #71717a;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 12px;
+    }
+
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 10px;
+      font-size: 14px;
+      color: #d4d4d8;
+    }
+
+    .step-num {
+      min-width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #6366f1;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1px;
+    }
+
+    .open-btn {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .open-btn:hover { background: #4f46e5; }
+    .open-btn:active { transform: scale(0.98); }
+
+    .copy-toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #22c55e;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      opacity: 0;
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+    }
+    .copy-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">📱</div>
+    <h1>Cordyn Mobile</h1>
+    <p class="subtitle">Aplikacja Progressive Web App — działa bez instalacji</p>
+
+    <div class="qr-wrap">
+      <canvas id="qr-canvas"></canvas>
+    </div>
+
+    <div class="url-box" id="app-url" onclick="copyUrl()" title="Kliknij aby skopiować">
+      Ładowanie…
+    </div>
+
+    <div class="steps">
+      <h2>Jak zainstalować?</h2>
+      <div class="step">
+        <span class="step-num">1</span>
+        <span>Zeskanuj kod QR aparatem telefonu</span>
+      </div>
+      <div class="step">
+        <span class="step-num">2</span>
+        <span>Otwórz link w przeglądarce (Safari / Chrome)</span>
+      </div>
+      <div class="step">
+        <span class="step-num">3</span>
+        <span>Dodaj do ekranu głównego: <strong>Udostępnij → Dodaj do ekranu</strong> (iOS) lub baner „Zainstaluj" (Android)</span>
+      </div>
+    </div>
+
+    <a id="open-link" href="#" class="open-btn">Otwórz aplikację →</a>
+  </div>
+
+  <div class="copy-toast" id="toast">Skopiowano!</div>
+
+  <script>
+    const appUrl = window.location.origin + '/app/';
+
+    document.getElementById('app-url').textContent = appUrl;
+    document.getElementById('open-link').href = appUrl;
+
+    QRCode.toCanvas(document.getElementById('qr-canvas'), appUrl, {
+      width: 220,
+      margin: 1,
+      color: { dark: '#09090b', light: '#ffffff' },
+      errorCorrectionLevel: 'M',
+    }, function (err) {
+      if (err) console.error('QR error:', err);
+    });
+
+    function copyUrl() {
+      navigator.clipboard.writeText(appUrl).then(() => {
+        const t = document.getElementById('toast');
+        t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), 2000);
+      }).catch(() => {});
+    }
+  </script>
+</body>
+</html>
