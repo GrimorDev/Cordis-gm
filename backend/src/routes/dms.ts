@@ -10,20 +10,28 @@ import { getDmListCache, setDmListCache, invalidateDmListCache } from '../redis/
 
 const router = Router();
 
+const FIND_CONVO_SQL = `
+  SELECT dp1.conversation_id FROM dm_participants dp1
+  INNER JOIN dm_participants dp2 ON dp2.conversation_id = dp1.conversation_id AND dp2.user_id = $2
+  WHERE dp1.user_id = $1
+    AND (SELECT COUNT(*) FROM dm_participants WHERE conversation_id = dp1.conversation_id) = 2
+  ORDER BY (SELECT MAX(created_at) FROM dm_messages WHERE conversation_id=dp1.conversation_id) DESC NULLS LAST
+  LIMIT 1`;
+
 async function getOrCreateConversation(userId1: string, userId2: string): Promise<string> {
-  const { rows } = await query(
-    `SELECT dp1.conversation_id FROM dm_participants dp1
-     INNER JOIN dm_participants dp2 ON dp2.conversation_id = dp1.conversation_id AND dp2.user_id = $2
-     WHERE dp1.user_id = $1
-       AND (SELECT COUNT(*) FROM dm_participants WHERE conversation_id = dp1.conversation_id) = 2
-     ORDER BY (SELECT MAX(created_at) FROM dm_messages WHERE conversation_id=dp1.conversation_id) DESC NULLS LAST
-     LIMIT 1`,
-    [userId1, userId2]
-  );
+  const { rows } = await query(FIND_CONVO_SQL, [userId1, userId2]);
   if (rows[0]) return rows[0].conversation_id;
+
   const client = await getClient();
   try {
-    await client.query('BEGIN');
+    // SERIALIZABLE prevents two concurrent requests creating duplicate conversations
+    await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+    // Re-check inside transaction to handle race condition
+    const { rows: recheck } = await client.query(FIND_CONVO_SQL, [userId1, userId2]);
+    if (recheck[0]) {
+      await client.query('COMMIT');
+      return recheck[0].conversation_id;
+    }
     const { rows: [conv] } = await client.query('INSERT INTO dm_conversations DEFAULT VALUES RETURNING id');
     await client.query(
       'INSERT INTO dm_participants (conversation_id, user_id) VALUES ($1,$2),($1,$3)',
@@ -31,8 +39,13 @@ async function getOrCreateConversation(userId1: string, userId2: string): Promis
     );
     await client.query('COMMIT');
     return conv.id;
-  } catch (err) {
+  } catch (err: any) {
     await client.query('ROLLBACK');
+    // On serialization failure (concurrent duplicate), retry once with a fresh read
+    if (err?.code === '40001') {
+      const { rows: retry } = await query(FIND_CONVO_SQL, [userId1, userId2]);
+      if (retry[0]) return retry[0].conversation_id;
+    }
     throw err;
   } finally { client.release(); }
 }
@@ -187,7 +200,7 @@ router.post('/:userId/messages', authMiddleware, msgLimiter,
         icon: full.sender_avatar || '/cordyn_logo.png',
         url: `/dm/${req.user!.id}`,
         tag: `dm-${req.user!.id}`,
-      }).catch(() => {});
+      }).catch((e: any) => console.warn(`[push] DM failed for ${req.params.userId}:`, e?.message));
       return res.status(201).json(full);
     } catch { return res.status(500).json({ error: 'Internal server error' }); }
   }

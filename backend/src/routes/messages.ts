@@ -96,7 +96,7 @@ const MSG_JOIN = (serverIdParam: string, channelIdParam: string) => `
 
 // GET /api/messages/channel/:channelId
 router.get('/channel/:channelId', authMiddleware, async (req: AuthRequest, res: Response) => {
-  const limit = Math.min(parseInt(String(req.query.limit || '50')), 100);
+  const limit = Math.max(1, Math.min(parseInt(String(req.query.limit || '50')) || 50, 100));
   const before = req.query.before as string | undefined;
   try {
     const access = await resolveChannelAccess(req.params.channelId, req.user!.id);
@@ -261,7 +261,7 @@ router.post('/channel/:channelId', authMiddleware, msgLimiter,
               icon: '/cordyn_logo.png',
               url: `/servers/${ch.server_id}/${req.params.channelId}`,
               tag: `everyone-${req.params.channelId}`,
-            }).catch(() => {});
+            }).catch((e: any) => console.warn(`[push] @everyone failed for ${m.user_id}:`, e?.message));
           }
         }
       }
@@ -308,7 +308,7 @@ router.post('/channel/:channelId', authMiddleware, msgLimiter,
               icon: '/cordyn_logo.png',
               url: `/servers/${ch.server_id}/${req.params.channelId}`,
               tag: `mention-${msg.id}`,
-            }).catch(() => {});
+            }).catch((e: any) => console.warn(`[push] mention failed for ${mentioned.id}:`, e?.message));
           }
         }
       }

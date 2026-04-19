@@ -510,6 +510,11 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
       const cs = groupCalls.get(group_id);
       if (!cs) return;
       cs.pending.delete(user.id);
+      // If nobody joined and nobody is pending, clean up the orphaned call
+      if (cs.participants.size === 0 && cs.pending.size === 0) {
+        groupCalls.delete(group_id);
+        return;
+      }
       const statePayload = { group_id, participants: [...cs.participants], pending: [...cs.pending] };
       for (const uid of cs.participants) {
         io.to(`user:${uid}`).emit('group_call_state', statePayload);
@@ -693,11 +698,20 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
 
       // Clean up stream watches on disconnect
       for (const [key, map] of streamWatchers.entries()) {
+        const [channelId, streamerId] = key.split(':');
+        // Case 1: disconnecting user was a WATCHER
         if (map.has(String(user.id))) {
           map.delete(String(user.id));
-          const [channelId, streamerId] = key.split(':');
           const watchers = [...map.entries()].map(([id, username]) => ({ id, username }));
           io.to(`voice:${channelId}`).emit('stream_watchers_update' as any, { streamer_id: streamerId, watchers });
+        }
+        // Case 2: disconnecting user was the STREAMER — clean up their key entirely
+        if (streamerId === String(user.id)) {
+          streamWatchers.delete(key);
+        }
+        // Case 3: remove empty inner maps to prevent accumulation
+        else if (map.size === 0) {
+          streamWatchers.delete(key);
         }
       }
 
