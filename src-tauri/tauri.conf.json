@@ -47,11 +47,7 @@
     "createUpdaterArtifacts": true,
     "macOS": {
       "entitlements": "./Entitlements.plist",
-      "infoPlist": {
-        "NSMicrophoneUsageDescription": "Cordyn potrzebuje dost\u0119pu do mikrofonu, aby korzysta\u0107 z kana\u0142\u00f3w g\u0142osowych i rozm\u00f3w.",
-        "NSCameraUsageDescription": "Cordyn potrzebuje dost\u0119pu do kamery, aby korzysta\u0107 z rozm\u00f3w wideo.",
-        "NSBluetoothAlwaysUsageDescription": "Cordyn mo\u017ce korzysta\u0107 z urz\u0105dze\u0144 Bluetooth (s\u0142uchawki, g\u0142o\u015bniki) do rozm\u00f3w g\u0142osowych."
-      }
+      "infoPlist": "./Info.plist"
     }
   },
   "plugins": {
