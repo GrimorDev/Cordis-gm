@@ -60,10 +60,12 @@ services:
       retries: 5
 
   # ── Mobile PWA (Expo web export, served at /app/) ────────────────
+  # Image built by GitHub Actions → ghcr.io (no local build on VPS).
+  # FIRST-TIME SETUP (one time only after first Actions run):
+  #   github.com/GrimorDev → Packages → cordis-mobile → Package settings
+  #   → Change visibility → Public  → then redeploy this stack.
   mobile:
-    build:
-      context: ./mobile
-      dockerfile: Dockerfile
+    image: ghcr.io/grimordev/cordis-mobile:latest
     container_name: cordis-mobile
     restart: unless-stopped
     networks:
