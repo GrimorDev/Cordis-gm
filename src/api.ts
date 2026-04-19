@@ -545,7 +545,7 @@ export interface AdminStats {
 }
 export interface AdminUser {
   id: string; username: string; avatar_url?: string | null;
-  status: string; is_admin: boolean; created_at: string;
+  status: string; is_admin: boolean; is_bot?: boolean; created_at: string;
   badges: Badge[];
   server_count?: number; message_count?: number;
 }

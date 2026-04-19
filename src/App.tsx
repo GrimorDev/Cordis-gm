@@ -4501,111 +4501,128 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                   </div>
                 )}
               </div>
-              {/* User detail slide-over */}
+              {/* User detail — MODAL (replaces the squishing side panel) */}
               {(userDetailData || userDetailLoading) && (
-                <div className="w-72 shrink-0 bg-white/[0.03] border border-white/[0.06] rounded-2xl flex flex-col overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
-                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Profil użytkownika</span>
-                    <button onClick={()=>{ setUserDetailData(null); setEditUserForm(null); }} className="text-zinc-600 hover:text-white transition-colors"><X size={13}/></button>
-                  </div>
-                  {userDetailLoading ? (
-                    <div className="flex justify-center py-12"><Loader2 size={18} className="animate-spin text-zinc-600"/></div>
-                  ) : userDetailData && (
-                    <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
-                      {/* Header */}
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl overflow-hidden bg-zinc-800 shrink-0">
-                          {userDetailData.user.avatar_url ? <img src={staticUrl(userDetailData.user.avatar_url)} className="w-full h-full object-cover" alt=""/> : <div className="w-full h-full flex items-center justify-center text-sm font-bold text-zinc-400">{userDetailData.user.username[0]}</div>}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-bold text-white truncate">{userDetailData.user.username}</div>
-                          <div className="text-xs text-zinc-500 truncate">{userDetailData.user.email}</div>
-                        </div>
-                      </div>
-                      {/* Stats row */}
-                      <div className="grid grid-cols-3 gap-2">
-                        {[
-                          { label:'Wiad.', val: userDetailData.user.message_count },
-                          { label:'Serwery', val: userDetailData.servers.length },
-                          { label:'DM', val: userDetailData.user.dm_count },
-                        ].map(s=>(
-                          <div key={s.label} className="bg-white/[0.04] rounded-xl p-2 text-center">
-                            <div className="text-sm font-bold text-white">{s.val}</div>
-                            <div className="text-[10px] text-zinc-600">{s.label}</div>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[80] p-4"
+                  onClick={()=>{ setUserDetailData(null); setEditUserForm(null); }}>
+                  <motion.div initial={{opacity:0,scale:0.96,y:8}} animate={{opacity:1,scale:1,y:0}} transition={{duration:0.15}}
+                    className="bg-[#13131f] border border-white/[0.09] rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden max-h-[85vh]"
+                    onClick={e=>e.stopPropagation()}>
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/[0.07] shrink-0">
+                      <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Profil użytkownika</span>
+                      <button onClick={()=>{ setUserDetailData(null); setEditUserForm(null); }}
+                        className="text-zinc-600 hover:text-white transition-colors"><X size={14}/></button>
+                    </div>
+                    {userDetailLoading ? (
+                      <div className="flex justify-center py-16"><Loader2 size={20} className="animate-spin text-zinc-600"/></div>
+                    ) : userDetailData && (
+                      <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4">
+                        {/* Header */}
+                        <div className="flex items-center gap-3.5">
+                          <div className="w-14 h-14 rounded-2xl overflow-hidden bg-zinc-800 shrink-0">
+                            {userDetailData.user.avatar_url
+                              ? <img src={staticUrl(userDetailData.user.avatar_url)} className="w-full h-full object-cover" alt=""/>
+                              : <div className="w-full h-full flex items-center justify-center text-lg font-bold text-zinc-400">{userDetailData.user.username[0]}</div>}
                           </div>
-                        ))}
-                      </div>
-                      {/* Bio */}
-                      {userDetailData.user.bio && (
-                        <p className="text-xs text-zinc-400 bg-white/[0.03] rounded-xl px-3 py-2">{userDetailData.user.bio}</p>
-                      )}
-                      {/* Edit form */}
-                      {editUserForm ? (
-                        <div className="space-y-2">
-                          <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Edytuj profil</div>
-                          <input value={editUserForm.username} onChange={e=>setEditUserForm(f=>f?({...f,username:e.target.value}):f)}
-                            placeholder="Nazwa użytkownika" className={`${gi2} w-full px-3 py-2 text-sm`}/>
-                          <input value={editUserForm.email} onChange={e=>setEditUserForm(f=>f?({...f,email:e.target.value}):f)}
-                            placeholder="Email" className={`${gi2} w-full px-3 py-2 text-sm`}/>
-                          <div className="flex gap-2">
-                            <button onClick={handleEditUser} disabled={editUserLoading}
-                              className="flex-1 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 text-white py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1">
-                              {editUserLoading&&<Loader2 size={10} className="animate-spin"/>} Zapisz
-                            </button>
-                            <button onClick={()=>setEditUserForm(null)} className="flex-1 bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 py-1.5 rounded-xl text-xs transition-colors">Anuluj</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button onClick={()=>setEditUserForm({ username: userDetailData.user.username, email: userDetailData.user.email })}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-xs bg-white/[0.04] hover:bg-indigo-500/15 hover:text-indigo-300 text-zinc-400 rounded-xl transition-colors">
-                          <Edit3 size={11}/> Edytuj profil
-                        </button>
-                      )}
-                      {/* Servers */}
-                      {userDetailData.servers.length > 0 && (
-                        <div>
-                          <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Serwery ({userDetailData.servers.length})</div>
-                          <div className="space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar">
-                            {userDetailData.servers.map(s=>(
-                              <div key={s.id} className="flex items-center gap-2 px-2 py-1.5 bg-white/[0.03] rounded-lg">
-                                <div className="w-5 h-5 rounded-md overflow-hidden bg-zinc-800 shrink-0">
-                                  {s.icon_url ? <img src={staticUrl(s.icon_url)} className="w-full h-full object-cover" alt=""/> : <div className="w-full h-full flex items-center justify-center text-[9px] font-bold text-zinc-500">{s.name[0]}</div>}
-                                </div>
-                                <span className="text-xs text-zinc-300 truncate flex-1">{s.name}</span>
-                                <span className="text-[9px] text-zinc-600 shrink-0">{s.role_name}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-base font-bold text-white truncate">{userDetailData.user.username}</div>
+                            <div className="text-xs text-zinc-500 truncate">{userDetailData.user.email}</div>
+                            {userDetailData.user.badges?.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1.5">
+                                {userDetailData.user.badges.map(b=>(
+                                  <span key={b.id} style={{color:b.color,borderColor:`${b.color}40`,background:`${b.color}15`}}
+                                    className="text-[9px] font-bold border rounded-full px-1.5 py-0.5 leading-none">{b.icon} {b.label}</span>
+                                ))}
                               </div>
-                            ))}
+                            )}
                           </div>
                         </div>
-                      )}
-                      {/* Sessions */}
-                      {userDetailData.sessions.length > 0 && (
-                        <div>
-                          <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Ostatnie sesje</div>
-                          <div className="space-y-1.5">
-                            {userDetailData.sessions.slice(0,4).map((s,i)=>(
-                              <div key={i} className="px-2 py-1.5 bg-white/[0.03] rounded-lg">
-                                <div className="text-xs font-mono text-zinc-300">{s.ip_address || '—'}</div>
-                                <div className="text-[9px] text-zinc-600 mt-0.5">{s.last_seen_at ? new Date(s.last_seen_at).toLocaleString('pl') : '—'}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {/* Ban history */}
-                      {userDetailData.bans.filter(b=>b.is_active).length > 0 && (
-                        <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2">
-                          <div className="text-xs font-bold text-rose-300 mb-1">Aktywny ban</div>
-                          {userDetailData.bans.filter(b=>b.is_active).map(b=>(
-                            <div key={b.id} className="text-xs text-rose-400/80">
-                              <span className="font-semibold">{b.ban_type}</span>{b.reason&&` — ${b.reason}`}
-                              {b.banned_until&&<span className="text-rose-500/60 ml-1">do {new Date(b.banned_until).toLocaleDateString('pl')}</span>}
+                        {/* Stats */}
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { label:'Wiad.', val: userDetailData.user.message_count },
+                            { label:'Serwery', val: userDetailData.servers.length },
+                            { label:'DM', val: userDetailData.user.dm_count },
+                          ].map(s=>(
+                            <div key={s.label} className="bg-white/[0.04] rounded-xl p-3 text-center">
+                              <div className="text-base font-bold text-white">{s.val}</div>
+                              <div className="text-[10px] text-zinc-600 mt-0.5">{s.label}</div>
                             </div>
                           ))}
                         </div>
-                      )}
-                    </div>
-                  )}
+                        {/* Bio */}
+                        {userDetailData.user.bio && (
+                          <p className="text-xs text-zinc-400 bg-white/[0.03] rounded-xl px-3 py-2 leading-relaxed">{userDetailData.user.bio}</p>
+                        )}
+                        {/* Edit form */}
+                        {editUserForm ? (
+                          <div className="space-y-2">
+                            <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Edytuj profil</div>
+                            <input value={editUserForm.username} onChange={e=>setEditUserForm(f=>f?({...f,username:e.target.value}):f)}
+                              placeholder="Nazwa użytkownika" className={`${gi2} w-full px-3 py-2 text-sm`}/>
+                            <input value={editUserForm.email} onChange={e=>setEditUserForm(f=>f?({...f,email:e.target.value}):f)}
+                              placeholder="Email" className={`${gi2} w-full px-3 py-2 text-sm`}/>
+                            <div className="flex gap-2">
+                              <button onClick={handleEditUser} disabled={editUserLoading}
+                                className="flex-1 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 text-white py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5">
+                                {editUserLoading&&<Loader2 size={11} className="animate-spin"/>} Zapisz
+                              </button>
+                              <button onClick={()=>setEditUserForm(null)} className="flex-1 bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 py-2 rounded-xl text-xs transition-colors">Anuluj</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button onClick={()=>setEditUserForm({ username: userDetailData.user.username, email: userDetailData.user.email })}
+                            className="w-full flex items-center gap-2 px-3 py-2.5 text-xs bg-white/[0.04] hover:bg-indigo-500/15 hover:text-indigo-300 text-zinc-400 rounded-xl transition-colors">
+                            <Edit3 size={12}/> Edytuj profil
+                          </button>
+                        )}
+                        {/* Servers */}
+                        {userDetailData.servers.length > 0 && (
+                          <div>
+                            <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Serwery ({userDetailData.servers.length})</div>
+                            <div className="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar">
+                              {userDetailData.servers.map(s=>(
+                                <div key={s.id} className="flex items-center gap-2 px-3 py-2 bg-white/[0.03] rounded-xl">
+                                  <div className="w-6 h-6 rounded-lg overflow-hidden bg-zinc-800 shrink-0">
+                                    {s.icon_url ? <img src={staticUrl(s.icon_url)} className="w-full h-full object-cover" alt=""/> : <div className="w-full h-full flex items-center justify-center text-[9px] font-bold text-zinc-500">{s.name[0]}</div>}
+                                  </div>
+                                  <span className="text-xs text-zinc-300 truncate flex-1">{s.name}</span>
+                                  <span className="text-[10px] text-zinc-600 shrink-0">{s.role_name}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {/* Sessions */}
+                        {userDetailData.sessions.length > 0 && (
+                          <div>
+                            <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Ostatnie sesje</div>
+                            <div className="space-y-1.5">
+                              {userDetailData.sessions.slice(0,4).map((s,i)=>(
+                                <div key={i} className="px-3 py-2 bg-white/[0.03] rounded-xl">
+                                  <div className="text-xs font-mono text-zinc-300">{s.ip_address || '—'}</div>
+                                  <div className="text-[10px] text-zinc-600 mt-0.5">{s.last_seen_at ? new Date(s.last_seen_at).toLocaleString('pl') : '—'}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {/* Active ban */}
+                        {userDetailData.bans.filter(b=>b.is_active).length > 0 && (
+                          <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2.5">
+                            <div className="text-xs font-bold text-rose-300 mb-1">Aktywny ban</div>
+                            {userDetailData.bans.filter(b=>b.is_active).map(b=>(
+                              <div key={b.id} className="text-xs text-rose-400/80">
+                                <span className="font-semibold">{b.ban_type}</span>{b.reason&&` — ${b.reason}`}
+                                {b.banned_until&&<span className="text-rose-500/60 ml-1">do {new Date(b.banned_until).toLocaleDateString('pl')}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </motion.div>
                 </div>
               )}
               {/* Ban dialog */}

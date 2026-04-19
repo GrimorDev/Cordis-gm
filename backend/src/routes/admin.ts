@@ -239,7 +239,7 @@ router.get('/users/search', async (req: AuthRequest, res: Response) => {
                  FROM user_badges ub INNER JOIN global_badges gb ON gb.id = ub.badge_id WHERE ub.user_id = u.id),
                 '[]'::json
               ) as badges
-       FROM users u WHERE u.username ILIKE $1 LIMIT 20`,
+       FROM users u WHERE u.username ILIKE $1 AND u.is_bot = false LIMIT 20`,
       [`${q}%`]
     );
     return res.json(rows);
@@ -301,7 +301,7 @@ router.get('/users', async (req: AuthRequest, res: Response) => {
   try {
     const [usersRes, totalRes] = await Promise.all([
       query(
-        `SELECT u.id, u.username, u.avatar_url, u.status, u.is_admin, u.created_at,
+        `SELECT u.id, u.username, u.avatar_url, u.status, u.is_admin, u.is_bot, u.created_at,
                 COUNT(DISTINCT sm.server_id)::int as server_count,
                 (SELECT COUNT(*)::int FROM messages WHERE sender_id=u.id) as message_count,
                 COALESCE(
@@ -310,11 +310,12 @@ router.get('/users', async (req: AuthRequest, res: Response) => {
                   '[]'::json
                 ) as badges
          FROM users u LEFT JOIN server_members sm ON sm.user_id=u.id
+         WHERE u.is_bot = false
          GROUP BY u.id ORDER BY u.created_at DESC
          LIMIT $1 OFFSET $2`,
         [limit, offset]
       ),
-      query('SELECT COUNT(*)::int as n FROM users'),
+      query('SELECT COUNT(*)::int as n FROM users WHERE is_bot = false'),
     ]);
     return res.json({ users: usersRes.rows, total: totalRes.rows[0].n });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
