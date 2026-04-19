@@ -2937,6 +2937,15 @@ function ServerSettingsPage({
 }: ServerSettingsPageProps) {
   const [memberQ, setMemberQ] = React.useState('');
   const [isPublicLocal, setIsPublicLocal] = React.useState(!!(serverFull as any).is_public);
+  const [discCat, setDiscCat] = React.useState<string>((serverFull as any).discovery_category || '');
+  const DISC_CATS_OPT = [
+    { key:'',              label:'Brak kategorii' },
+    { key:'gaming',        label:'🎮  Gracze' },
+    { key:'music',         label:'🎵  Muzyka' },
+    { key:'entertainment', label:'🎬  Rozrywka' },
+    { key:'education',     label:'📚  Edukacja' },
+    { key:'science',       label:'🔬  Nauka i tech' },
+  ];
   const filteredMembers = memberQ.trim()
     ? members.filter(m => m.username.toLowerCase().includes(memberQ.toLowerCase()))
     : members;
@@ -2952,7 +2961,7 @@ function ServerSettingsPage({
     canManageServer && { id: 'tag' as const, label: 'Tag serwera', icon: <Hash size={14}/> },
     canManageServer && { id: 'events' as const, label: 'Eventy', icon: <CalendarPlus size={14}/> },
     canManageServer && { id: 'onboarding' as const, label: 'Onboarding', icon: <UserPlus size={14}/> },
-    canManageServer && { id: 'discovery' as const, label: 'Odkrywalność', icon: <Compass size={14}/> },
+    canManageServer && { id: 'discovery' as const, label: 'Publikacja', icon: <Compass size={14}/> },
   ].filter(Boolean) as { id: typeof tab; label: string; icon: React.ReactNode }[];
 
   return (
@@ -3578,17 +3587,7 @@ function ServerSettingsPage({
           )}
 
           {/* ── Discovery tab ───────────────────────────────────────── */}
-          {tab === 'discovery' && (()=>{
-            const DISC_CATS_OPT = [
-              { key:'',              label:'Brak kategorii' },
-              { key:'gaming',        label:'🎮  Gracze' },
-              { key:'music',         label:'🎵  Muzyka' },
-              { key:'entertainment', label:'🎬  Rozrywka' },
-              { key:'education',     label:'📚  Edukacja' },
-              { key:'science',       label:'🔬  Nauka i tech' },
-            ];
-            const [discCat, setDiscCat] = React.useState<string>((serverFull as any).discovery_category || '');
-            return (
+          {tab === 'discovery' && (
             <div className="flex flex-col gap-4 max-w-2xl mx-auto">
               <div>
                 <h3 className="text-sm font-bold text-white mb-0.5">Publiczne wyszukiwanie</h3>
@@ -3645,8 +3644,7 @@ function ServerSettingsPage({
                 Zapisz ustawienia
               </button>
             </div>
-            );
-          })()}
+          )}
 
         </div>
       </div>
@@ -16450,7 +16448,7 @@ export default function App() {
                     if (stab==='events' && activeServer) eventsApi.list(activeServer).then(setServerEvents).catch(()=>{});
                   }}
                     className={`px-4 py-3 text-sm font-semibold transition-all border-b-2 -mb-px shrink-0 ${srvSettTab===stab?'border-indigo-500 text-white':'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
-                    {stab==='tag'?'Tag':stab==='events'?'Eventy':stab==='onboarding'?'Onboarding':stab==='discovery'?'Odkrywalność':t(`serverSettings.${stab}`)}
+                    {stab==='tag'?'Tag':stab==='events'?'Eventy':stab==='onboarding'?'Onboarding':stab==='discovery'?'Publikacja':t(`serverSettings.${stab}`)}
                   </button>
                 ))}
               </div>
