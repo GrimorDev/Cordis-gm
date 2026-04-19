@@ -1,10 +1,6 @@
+web/node_modules
+web/.vite
 node_modules
 .expo
 dist
-.expo-shared
 *.log
-npm-debug.log*
-.env
-.env.*
-android
-ios

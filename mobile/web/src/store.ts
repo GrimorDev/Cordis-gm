@@ -1,0 +1,130 @@
+import { create } from 'zustand';
+import type { User, Server, Channel, Message, DmConversation, DmMessage, Friend, FriendRequest } from './api';
+
+interface AppStore {
+  token: string | null;
+  currentUser: User | null;
+  isAuthenticated: boolean;
+  setAuth: (token: string, user: User) => void;
+  clearAuth: () => void;
+  setCurrentUser: (user: User) => void;
+
+  servers: Server[];
+  setServers: (s: Server[]) => void;
+  addServer: (s: Server) => void;
+  removeServer: (id: string) => void;
+
+  channels: Channel[];
+  setChannels: (c: Channel[]) => void;
+
+  activeServer: Server | null;
+  setActiveServer: (s: Server | null) => void;
+  activeChannel: Channel | null;
+  setActiveChannel: (c: Channel | null) => void;
+
+  messages: Record<string, Message[]>;
+  setMessages: (channelId: string, msgs: Message[]) => void;
+  prependMessages: (channelId: string, msgs: Message[]) => void;
+  addMessage: (channelId: string, msg: Message) => void;
+  updateMessage: (channelId: string, msg: Message) => void;
+  removeMessage: (channelId: string, id: string) => void;
+
+  dmConversations: DmConversation[];
+  setDmConversations: (c: DmConversation[]) => void;
+  dmMessages: Record<string, DmMessage[]>;
+  setDmMessages: (userId: string, msgs: DmMessage[]) => void;
+  addDmMessage: (userId: string, msg: DmMessage) => void;
+
+  friends: Friend[];
+  setFriends: (f: Friend[]) => void;
+  friendRequests: FriendRequest[];
+  setFriendRequests: (r: FriendRequest[]) => void;
+
+  typingUsers: Record<string, string[]>;
+  setTyping: (channelId: string, usernames: string[]) => void;
+
+  userStatuses: Record<string, string>;
+  setUserStatus: (userId: string, status: string) => void;
+}
+
+export const useStore = create<AppStore>((set) => ({
+  token: null,
+  currentUser: null,
+  isAuthenticated: false,
+
+  setAuth: (token, user) => {
+    localStorage.setItem('cordyn_token', token);
+    set({ token, currentUser: user, isAuthenticated: true });
+  },
+  clearAuth: () => {
+    localStorage.removeItem('cordyn_token');
+    set({
+      token: null,
+      currentUser: null,
+      isAuthenticated: false,
+      servers: [],
+      channels: [],
+      messages: {},
+      dmConversations: [],
+      friends: [],
+      friendRequests: [],
+    });
+  },
+  setCurrentUser: (user) => set({ currentUser: user }),
+
+  servers: [],
+  setServers: (servers) => set({ servers }),
+  addServer: (s) => set((st) => ({ servers: [...st.servers, s] })),
+  removeServer: (id) => set((st) => ({ servers: st.servers.filter((s) => s.id !== id) })),
+
+  channels: [],
+  setChannels: (channels) => set({ channels }),
+
+  activeServer: null,
+  setActiveServer: (s) => set({ activeServer: s, activeChannel: null, channels: [] }),
+  activeChannel: null,
+  setActiveChannel: (c) => set({ activeChannel: c }),
+
+  messages: {},
+  setMessages: (channelId, msgs) =>
+    set((st) => ({ messages: { ...st.messages, [channelId]: msgs } })),
+  prependMessages: (channelId, msgs) =>
+    set((st) => ({ messages: { ...st.messages, [channelId]: [...msgs, ...(st.messages[channelId] ?? [])] } })),
+  addMessage: (channelId, msg) =>
+    set((st) => ({ messages: { ...st.messages, [channelId]: [...(st.messages[channelId] ?? []), msg] } })),
+  updateMessage: (channelId, msg) =>
+    set((st) => ({
+      messages: {
+        ...st.messages,
+        [channelId]: (st.messages[channelId] ?? []).map((m) => (m.id === msg.id ? msg : m)),
+      },
+    })),
+  removeMessage: (channelId, id) =>
+    set((st) => ({
+      messages: {
+        ...st.messages,
+        [channelId]: (st.messages[channelId] ?? []).filter((m) => m.id !== id),
+      },
+    })),
+
+  dmConversations: [],
+  setDmConversations: (c) => set({ dmConversations: c }),
+  dmMessages: {},
+  setDmMessages: (userId, msgs) =>
+    set((st) => ({ dmMessages: { ...st.dmMessages, [userId]: msgs } })),
+  addDmMessage: (userId, msg) =>
+    set((st) => ({ dmMessages: { ...st.dmMessages, [userId]: [...(st.dmMessages[userId] ?? []), msg] } })),
+
+  friends: [],
+  setFriends: (f) => set({ friends: f }),
+  friendRequests: [],
+  setFriendRequests: (r) => set({ friendRequests: r }),
+
+  typingUsers: {},
+  setTyping: (channelId, usernames) =>
+    set((st) => ({ typingUsers: { ...st.typingUsers, [channelId]: usernames } })),
+
+  userStatuses: {},
+  setUserStatus: (userId, status) =>
+    set((st) => ({ userStatuses: { ...st.userStatuses, [userId]: status } })),
+}));

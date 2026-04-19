@@ -59,13 +59,12 @@ services:
       start_period: 30s
       retries: 5
 
-  # ── Mobile PWA (Expo web export, served at /app/) ────────────────
-  # Image built by GitHub Actions → ghcr.io (no local build on VPS).
-  # FIRST-TIME SETUP (one time only after first Actions run):
-  #   github.com/GrimorDev → Packages → cordis-mobile → Package settings
-  #   → Change visibility → Public  → then redeploy this stack.
+  # ── Mobile PWA (Vite + React, served at /app/) ───────────────────
+  # Built locally with Vite — fast (~30s), no Expo/Metro, works on any VPS.
   mobile:
-    image: ghcr.io/grimordev/cordis-web:mobile
+    build:
+      context: ./mobile
+      dockerfile: Dockerfile
     container_name: cordis-mobile
     restart: unless-stopped
     networks:
