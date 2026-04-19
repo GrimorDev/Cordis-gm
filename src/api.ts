@@ -993,13 +993,19 @@ export const eventsApi = {
 // ── Server Discovery ──────────────────────────────────────────────────────────
 export interface DiscoverServer {
   id: string; name: string; description: string | null;
-  discovery_description: string | null; icon_url: string | null;
-  banner_url: string | null; accent_color: string | null;
+  discovery_description: string | null; discovery_category: string | null;
+  icon_url: string | null; banner_url: string | null; accent_color: string | null;
   member_count: number; online_count: number; is_official: boolean;
 }
 export const discoverApi = {
-  list: (q?: string) => req<DiscoverServer[]>('GET', `/servers/discover/list${q ? `?q=${encodeURIComponent(q)}` : ''}`),
-  setDiscovery: (serverId: string, d: { is_public: boolean; discovery_description?: string }) =>
+  list: (q?: string, category?: string) => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (category && category !== 'all' && category !== 'trending') params.set('category', category);
+    const qs = params.toString();
+    return req<DiscoverServer[]>('GET', `/servers/discover/list${qs ? `?${qs}` : ''}`);
+  },
+  setDiscovery: (serverId: string, d: { is_public?: boolean; discovery_description?: string; discovery_category?: string | null }) =>
     req<{ ok: boolean }>('PATCH', `/servers/${serverId}/discovery`, d),
 };
 

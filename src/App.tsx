@@ -3578,12 +3578,23 @@ function ServerSettingsPage({
           )}
 
           {/* ── Discovery tab ───────────────────────────────────────── */}
-          {tab === 'discovery' && (
+          {tab === 'discovery' && (()=>{
+            const DISC_CATS_OPT = [
+              { key:'',              label:'Brak kategorii' },
+              { key:'gaming',        label:'🎮  Gracze' },
+              { key:'music',         label:'🎵  Muzyka' },
+              { key:'entertainment', label:'🎬  Rozrywka' },
+              { key:'education',     label:'📚  Edukacja' },
+              { key:'science',       label:'🔬  Nauka i tech' },
+            ];
+            const [discCat, setDiscCat] = React.useState<string>((serverFull as any).discovery_category || '');
+            return (
             <div className="flex flex-col gap-4 max-w-2xl mx-auto">
               <div>
                 <h3 className="text-sm font-bold text-white mb-0.5">Publiczne wyszukiwanie</h3>
                 <p className="text-xs text-zinc-500">Zdecyduj, czy Twój serwer ma być widoczny w katalogu publicznych serwerów. Domyślnie każdy serwer jest prywatny.</p>
               </div>
+              {/* Toggle publiczny */}
               <div className="flex items-center justify-between p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
                 <div>
                   <p className="text-sm font-semibold text-white">Serwer publiczny</p>
@@ -3600,23 +3611,42 @@ function ServerSettingsPage({
                   <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${isPublicLocal?'translate-x-5':'translate-x-0'}`}/>
                 </button>
               </div>
+              {/* Kategoria */}
+              <div>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Kategoria serwera</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {DISC_CATS_OPT.map(opt=>(
+                    <button key={opt.key} onClick={()=>setDiscCat(opt.key)}
+                      className={`px-3 py-2.5 rounded-xl text-sm font-medium border transition-all text-left ${discCat===opt.key?'bg-indigo-500/20 border-indigo-500/50 text-indigo-300':'bg-white/[0.03] border-white/[0.07] text-zinc-400 hover:border-white/[0.15] hover:text-zinc-200'}`}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Opis */}
               <div>
                 <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Opis w katalogu serwerów</label>
                 <textarea defaultValue={(serverFull as any).discovery_description||''} id="disc-desc-ssp" rows={4}
                   className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 resize-none"
                   placeholder="Opisz swój serwer dla przyszłych członków..."/>
-                <button onClick={async()=>{
-                  const desc = (document.getElementById('disc-desc-ssp') as HTMLTextAreaElement)?.value;
-                  try {
-                    await discoverApi.setDiscovery(serverFull.id,{is_public:isPublicLocal, discovery_description:desc});
-                    addToast?.('Opis zapisany!','success');
-                  } catch(e:any){ addToast?.(e.message||'Błąd','error'); }
-                }} className="mt-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">
-                  Zapisz opis
-                </button>
               </div>
+              {/* Zapis */}
+              <button onClick={async()=>{
+                const desc = (document.getElementById('disc-desc-ssp') as HTMLTextAreaElement)?.value;
+                try {
+                  await discoverApi.setDiscovery(serverFull.id,{
+                    is_public: isPublicLocal,
+                    discovery_description: desc,
+                    discovery_category: discCat || null,
+                  });
+                  addToast?.('Ustawienia odkrywalności zapisane!','success');
+                } catch(e:any){ addToast?.(e.message||'Błąd','error'); }
+              }} className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">
+                Zapisz ustawienia
+              </button>
             </div>
-          )}
+            );
+          })()}
 
         </div>
       </div>
@@ -19671,22 +19701,23 @@ export default function App() {
       <AnimatePresence>
         {showDiscovery && (()=>{
           const DISC_CATS = [
-            { key:'all',          label:'Strona główna',   icon:<Home size={15}/>,       kw:[] },
-            { key:'gaming',       label:'Gracze',          icon:<Gamepad2 size={15}/>,   kw:['gra','game','gaming','cs','minecraft','fps','rpg','mmo','esport'] },
-            { key:'music',        label:'Muzyka',          icon:<Music size={15}/>,      kw:['muzyk','music','rap','hip','rock','dj','spotify','beats'] },
-            { key:'entertainment',label:'Rozrywka',        icon:<Film size={15}/>,       kw:['rozrywk','fun','meme','entertainment','anime','film','serial','stream'] },
-            { key:'education',    label:'Edukacja',        icon:<BookOpen size={15}/>,   kw:['nauka','edu','learn','uni','school','programm','kod','code'] },
-            { key:'science',      label:'Nauka i tech',    icon:<FlaskConical size={15}/>,kw:['tech','nauka','science','ai','ml','dev','python','linux'] },
-            { key:'trending',     label:'Na czasie',       icon:<TrendingUp size={15}/>, kw:[] },
+            { key:'all',          label:'Strona główna',   icon:<Home size={15}/> },
+            { key:'gaming',       label:'Gracze',          icon:<Gamepad2 size={15}/> },
+            { key:'music',        label:'Muzyka',          icon:<Music size={15}/> },
+            { key:'entertainment',label:'Rozrywka',        icon:<Film size={15}/> },
+            { key:'education',    label:'Edukacja',        icon:<BookOpen size={15}/> },
+            { key:'science',      label:'Nauka i tech',    icon:<FlaskConical size={15}/> },
+            { key:'trending',     label:'Na czasie',       icon:<TrendingUp size={15}/> },
           ];
-          const catKw = DISC_CATS.find(c=>c.key===discoveryCategory)?.kw??[];
-          const filtered = discoveryList.filter(s => {
-            const haystack = `${s.name} ${s.description??''} ${s.discovery_description??''}`.toLowerCase();
-            if (discoveryCategory==='all') return true;
-            if (discoveryCategory==='trending') return s.online_count > 0;
-            return catKw.some(kw=>haystack.includes(kw));
-          });
-          const doSearch = (q:string) => { setDiscoveryLoading(true); discoverApi.list(q).then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false)); };
+          // Backend filters by category (except 'all' and 'trending' which are client-side)
+          const filtered = discoveryCategory==='trending'
+            ? discoveryList.filter(s=>s.online_count>0)
+            : discoveryList;
+          const doSearch = (q:string, cat?:string) => {
+            setDiscoveryLoading(true);
+            const activeCat = cat ?? discoveryCategory;
+            discoverApi.list(q, activeCat).then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false));
+          };
           return (
           <motion.div key="discovery-fs" initial={{opacity:0,y:24}} animate={{opacity:1,y:0}} exit={{opacity:0,y:24}} transition={{duration:0.22}}
             className="fixed inset-0 z-[200] bg-[#0d0d18] flex flex-col">
@@ -19726,7 +19757,7 @@ export default function App() {
                 <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 px-3 py-2">Kategorie</p>
                 {DISC_CATS.map(cat=>(
                   <button key={cat.key}
-                    onClick={()=>setDiscoveryCategory(cat.key)}
+                    onClick={()=>{ setDiscoveryCategory(cat.key); doSearch(discoveryQ, cat.key); }}
                     className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-all text-left ${discoveryCategory===cat.key?'bg-indigo-500/15 text-indigo-300 font-semibold':'text-zinc-400 hover:text-white hover:bg-white/[0.05]'}`}>
                     <span className={discoveryCategory===cat.key?'text-indigo-400':'text-zinc-600'}>{cat.icon}</span>
                     {cat.label}

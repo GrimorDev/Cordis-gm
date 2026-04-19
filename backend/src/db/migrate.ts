@@ -742,8 +742,9 @@ CREATE TABLE IF NOT EXISTS server_events (
 );
 
 -- ── Server Discovery ──────────────────────────────────────────────────────────
-DO $$ BEGIN ALTER TABLE servers ADD COLUMN is_public            BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
-DO $$ BEGIN ALTER TABLE servers ADD COLUMN discovery_description TEXT;  EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE servers ADD COLUMN is_public             BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE servers ADD COLUMN discovery_description  TEXT;                 EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE servers ADD COLUMN discovery_category     VARCHAR(64);          EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 
 -- ── Server Onboarding ─────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS server_onboarding (

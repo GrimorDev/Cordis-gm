@@ -927,22 +927,29 @@ router.delete('/:id/tag', authMiddleware, async (req: AuthRequest, res: Response
 // ── Server Discovery ──────────────────────────────────────────────────────────
 // GET /api/servers/discover/list
 router.get('/discover/list', authMiddleware, async (req: AuthRequest, res: Response) => {
-  const q = (req.query.q as string || '').toLowerCase();
+  const q        = (req.query.q        as string || '').toLowerCase();
+  const category = (req.query.category as string || '').toLowerCase();
+  const VALID_CATS = ['gaming','music','entertainment','education','science','trending'];
+  const catFilter = category && VALID_CATS.includes(category);
   try {
+    const params: string[] = [];
+    let paramIdx = 1;
+    let whereExtra = '';
+    if (q) { params.push(q); whereExtra += ` AND (LOWER(s.name) LIKE '%' || $${paramIdx} || '%' OR LOWER(COALESCE(s.discovery_description,'')) LIKE '%' || $${paramIdx} || '%')`; paramIdx++; }
+    if (catFilter) { params.push(category); whereExtra += ` AND s.discovery_category = $${paramIdx}`; paramIdx++; }
     const { rows } = await query(
-      `SELECT s.id, s.name, s.description, s.discovery_description,
+      `SELECT s.id, s.name, s.description, s.discovery_description, s.discovery_category,
               s.icon_url, s.banner_url, s.accent_color, s.is_official,
               COUNT(sm.user_id)::int AS member_count,
               COUNT(CASE WHEN u.status NOT IN ('offline') THEN 1 END)::int AS online_count
        FROM servers s
        LEFT JOIN server_members sm ON sm.server_id = s.id
        LEFT JOIN users u ON u.id = sm.user_id
-       WHERE s.is_public = true
-         ${q ? `AND (LOWER(s.name) LIKE '%' || $1 || '%' OR LOWER(s.description) LIKE '%' || $1 || '%' OR LOWER(COALESCE(s.discovery_description,'')) LIKE '%' || $1 || '%')` : ''}
+       WHERE s.is_public = true${whereExtra}
        GROUP BY s.id
        ORDER BY member_count DESC
        LIMIT 100`,
-      q ? [q] : []
+      params
     );
     return res.json(rows);
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
@@ -954,10 +961,16 @@ router.patch('/:id/discovery', authMiddleware, async (req: AuthRequest, res: Res
     if (!(await isAuthorized(req.params.id, req.user!.id, 'manage_server'))) {
       return res.status(403).json({ error: 'Not authorized' });
     }
-    const { is_public, discovery_description } = req.body;
+    const { is_public, discovery_description, discovery_category } = req.body;
+    const VALID_CATS = ['gaming','music','entertainment','education','science','trending',null,''];
+    const cat = VALID_CATS.includes(discovery_category) ? (discovery_category || null) : null;
     await query(
-      `UPDATE servers SET is_public = COALESCE($1, is_public), discovery_description = COALESCE($2, discovery_description) WHERE id = $3`,
-      [is_public, discovery_description, req.params.id]
+      `UPDATE servers SET
+         is_public             = COALESCE($1, is_public),
+         discovery_description = COALESCE($2, discovery_description),
+         discovery_category    = CASE WHEN $3::text IS NOT NULL THEN $3 ELSE discovery_category END
+       WHERE id = $4`,
+      [is_public ?? null, discovery_description ?? null, cat, req.params.id]
     );
     return res.json({ ok: true });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
