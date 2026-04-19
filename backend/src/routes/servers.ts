@@ -998,6 +998,8 @@ router.put('/:id/onboarding', authMiddleware, async (req: AuthRequest, res: Resp
       return res.status(403).json({ error: 'Not authorized' });
     }
     const { enabled, rules_text, welcome_text, assign_role_id } = req.body;
+    // assign_role_id: use explicit value (including null to clear), fall back to existing only when key absent
+    const hasRole = 'assign_role_id' in req.body;
     await query(
       `INSERT INTO server_onboarding (server_id, enabled, rules_text, welcome_text, assign_role_id)
        VALUES ($1, COALESCE($2, false), $3, $4, $5)
@@ -1005,9 +1007,9 @@ router.put('/:id/onboarding', authMiddleware, async (req: AuthRequest, res: Resp
          enabled = COALESCE($2, server_onboarding.enabled),
          rules_text = COALESCE($3, server_onboarding.rules_text),
          welcome_text = COALESCE($4, server_onboarding.welcome_text),
-         assign_role_id = COALESCE($5, server_onboarding.assign_role_id),
+         assign_role_id = CASE WHEN $6 THEN $5 ELSE server_onboarding.assign_role_id END,
          updated_at = NOW()`,
-      [req.params.id, enabled, rules_text, welcome_text, assign_role_id]
+      [req.params.id, enabled, rules_text, welcome_text, assign_role_id ?? null, hasRole]
     );
     return res.json({ ok: true });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
@@ -1026,7 +1028,7 @@ router.post('/:id/onboarding/complete', authMiddleware, async (req: AuthRequest,
     const ob = await query(`SELECT assign_role_id FROM server_onboarding WHERE server_id = $1`, [serverId]);
     if (ob.rows[0]?.assign_role_id) {
       await query(
-        `INSERT INTO server_member_roles (server_id, user_id, role_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+        `INSERT INTO member_roles (server_id, user_id, role_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
         [serverId, userId, ob.rows[0].assign_role_id]
       ).catch(() => {});
     }
