@@ -1,7 +1,7 @@
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Emitter, Manager,
+    Manager,
 };
 
 // ── WASAPI loopback state ────────────────────────────────────────────────────
@@ -151,7 +151,7 @@ fn stop_audio_loopback(state: tauri::State<LoopbackState>) {
 /// Request macOS microphone + camera permissions via a JS getUserMedia call.
 /// Called once on startup so macOS shows the permission dialog on first launch.
 #[tauri::command]
-async fn request_media_permissions(window: tauri::Window) -> Result<(), String> {
+async fn request_media_permissions(window: tauri::WebviewWindow) -> Result<(), String> {
     // Trigger a brief getUserMedia so macOS shows the system permission prompt.
     // The call is expected to fail (no real stream needed) — we only need the
     // prompt to fire so the user can grant access in System Settings.
@@ -159,8 +159,8 @@ async fn request_media_permissions(window: tauri::Window) -> Result<(), String> 
         (function() {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
             navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-                .then(s => s.getTracks().forEach(t => t.stop()))
-                .catch(() => {});
+                .then(function(s){ s.getTracks().forEach(function(t){ t.stop(); }); })
+                .catch(function(){});
         })();
     "#;
     window.eval(js).map_err(|e| e.to_string())
