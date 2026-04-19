@@ -2940,11 +2940,11 @@ function ServerSettingsPage({
   const [discCat, setDiscCat] = React.useState<string>((serverFull as any).discovery_category || '');
   const DISC_CATS_OPT = [
     { key:'',              label:'Brak kategorii' },
-    { key:'gaming',        label:'🎮  Gracze' },
-    { key:'music',         label:'🎵  Muzyka' },
-    { key:'entertainment', label:'🎬  Rozrywka' },
-    { key:'education',     label:'📚  Edukacja' },
-    { key:'science',       label:'🔬  Nauka i tech' },
+    { key:'gaming',        label:'Gracze' },
+    { key:'music',         label:'Muzyka' },
+    { key:'entertainment', label:'Rozrywka' },
+    { key:'education',     label:'Edukacja' },
+    { key:'science',       label:'Nauka i tech' },
   ];
   const filteredMembers = memberQ.trim()
     ? members.filter(m => m.username.toLowerCase().includes(memberQ.toLowerCase()))
