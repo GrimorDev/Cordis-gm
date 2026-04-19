@@ -46,6 +46,15 @@
     ],
     "experiments": {
       "baseUrl": "/app"
-    }
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "7dbdc4c2-5cc6-4d85-8a1a-e7510fe8b9ad"
+      }
+    },
+    "owner": "grimordev"
   }
 }

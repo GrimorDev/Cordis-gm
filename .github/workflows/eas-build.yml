@@ -1,0 +1,49 @@
+name: EAS Build — Android APK
+
+# Builds a native Android .apk on Expo's servers after every push to mobile/.
+# The finished APK is available at expo.dev with a QR code for direct install.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - '!mobile/web/**'
+      - '.github/workflows/eas-build.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: eas-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm install --legacy-peer-deps
+
+      - name: Build Android APK (preview)
+        working-directory: mobile
+        # --no-wait: triggers the build on Expo's servers and exits immediately.
+        # Build takes ~10-20 min. Check https://expo.dev for status + QR code.
+        run: eas build --platform android --profile preview --non-interactive --no-wait
