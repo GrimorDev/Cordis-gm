@@ -1,0 +1,168 @@
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
+import { format, isToday, isYesterday } from 'date-fns';
+import { pl } from 'date-fns/locale';
+import { UserAvatar } from './UserAvatar';
+import { C } from '../theme';
+import type { Message } from '../api';
+
+interface Props {
+  msg: Message;
+  isOwn: boolean;
+  showHeader: boolean;
+  onReply: (msg: Message) => void;
+  onDelete?: (id: string) => void;
+  onReact?: (id: string, emoji: string) => void;
+}
+
+function fmtTime(dateStr: string) {
+  const d = new Date(dateStr);
+  if (isToday(d)) return format(d, 'HH:mm');
+  if (isYesterday(d)) return `Wczoraj ${format(d, 'HH:mm')}`;
+  return format(d, 'd MMM HH:mm', { locale: pl });
+}
+
+const QUICK_EMOJIS = ['❤️', '😂', '👍', '😮', '😢'];
+
+export function MessageBubble({ msg, isOwn, showHeader, onReply, onDelete, onReact }: Props) {
+  const [menuVisible, setMenuVisible] = useState(false);
+
+  const handleLongPress = () => setMenuVisible(true);
+
+  const handleCopy = async () => {
+    await Clipboard.setStringAsync(msg.content);
+    setMenuVisible(false);
+  };
+
+  const handleDelete = () => {
+    setMenuVisible(false);
+    Alert.alert('Usuń wiadomość', 'Na pewno chcesz usunąć tę wiadomość?', [
+      { text: 'Anuluj', style: 'cancel' },
+      { text: 'Usuń', style: 'destructive', onPress: () => onDelete?.(msg.id) },
+    ]);
+  };
+
+  return (
+    <View style={styles.wrapper}>
+      {showHeader && (
+        <View style={styles.header}>
+          <UserAvatar url={msg.sender_avatar} username={msg.sender_username} size={36} />
+          <View style={styles.headerText}>
+            <Text style={styles.username}>{msg.sender_username}</Text>
+            <Text style={styles.time}>{fmtTime(msg.created_at)}</Text>
+          </View>
+        </View>
+      )}
+
+      {msg.reply_to_id && (
+        <View style={styles.replyBar}>
+          <Ionicons name="return-up-forward" size={12} color={C.textMuted} />
+          <Text style={styles.replyText} numberOfLines={1}>
+            <Text style={styles.replyUsername}>{msg.reply_to_username ?? '?'}: </Text>
+            {msg.reply_to_content ?? '…'}
+          </Text>
+        </View>
+      )}
+
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onLongPress={handleLongPress}
+        style={[styles.bubble, showHeader ? styles.bubbleWithHeader : styles.bubbleNoHeader]}
+      >
+        <Text style={styles.content}>{msg.content}</Text>
+        {msg.is_edited && <Text style={styles.edited}>(edytowano)</Text>}
+      </TouchableOpacity>
+
+      {msg.reactions && msg.reactions.length > 0 && (
+        <View style={styles.reactions}>
+          {msg.reactions.map((r) => (
+            <TouchableOpacity
+              key={r.emoji}
+              style={[styles.reactionChip, r.reacted && styles.reactionOwn]}
+              onPress={() => onReact?.(msg.id, r.emoji)}
+            >
+              <Text style={styles.reactionEmoji}>{r.emoji}</Text>
+              <Text style={styles.reactionCount}>{r.count}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {/* Context menu */}
+      {menuVisible && (
+        <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setMenuVisible(false)}>
+          <View style={styles.menu}>
+            {/* Quick reactions */}
+            <View style={styles.quickReactions}>
+              {QUICK_EMOJIS.map((e) => (
+                <TouchableOpacity key={e} style={styles.quickEmoji}
+                  onPress={() => { onReact?.(msg.id, e); setMenuVisible(false); }}>
+                  <Text style={{ fontSize: 22 }}>{e}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.menuDivider} />
+            <TouchableOpacity style={styles.menuItem} onPress={() => { onReply(msg); setMenuVisible(false); }}>
+              <Ionicons name="return-up-forward-outline" size={16} color={C.text} />
+              <Text style={styles.menuLabel}>Odpowiedz</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={handleCopy}>
+              <Ionicons name="copy-outline" size={16} color={C.text} />
+              <Text style={styles.menuLabel}>Kopiuj tekst</Text>
+            </TouchableOpacity>
+            {isOwn && onDelete && (
+              <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
+                <Ionicons name="trash-outline" size={16} color={C.danger} />
+                <Text style={[styles.menuLabel, { color: C.danger }]}>Usuń</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrapper: { paddingHorizontal: 12, marginBottom: 2 },
+  header: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 12 },
+  headerText: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  username: { color: C.text, fontWeight: '600', fontSize: 14 },
+  time: { color: C.textMuted, fontSize: 11 },
+  replyBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingLeft: 46, paddingBottom: 2,
+  },
+  replyText: { color: C.textMuted, fontSize: 12, flex: 1 },
+  replyUsername: { color: C.textSub, fontWeight: '600' },
+  bubble: { paddingLeft: 46 },
+  bubbleWithHeader: { paddingTop: 2 },
+  bubbleNoHeader: { paddingTop: 0 },
+  content: { color: C.text, fontSize: 15, lineHeight: 22 },
+  edited: { color: C.textMuted, fontSize: 11, marginTop: 2 },
+  reactions: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, paddingLeft: 46, marginTop: 4 },
+  reactionChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: C.bgCard, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3,
+    borderWidth: 1, borderColor: C.border,
+  },
+  reactionOwn: { borderColor: C.accent, backgroundColor: 'rgba(99,102,241,0.15)' },
+  reactionEmoji: { fontSize: 14 },
+  reactionCount: { color: C.textSub, fontSize: 12 },
+  menuOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    zIndex: 100, justifyContent: 'center', alignItems: 'center',
+  },
+  menu: {
+    backgroundColor: C.bgElevated, borderRadius: 16, padding: 8, minWidth: 220,
+    borderWidth: 1, borderColor: C.border,
+    shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 12,
+  },
+  quickReactions: { flexDirection: 'row', justifyContent: 'space-around', padding: 8 },
+  quickEmoji: { padding: 4 },
+  menuDivider: { height: 1, backgroundColor: C.border, marginVertical: 4 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingHorizontal: 12 },
+  menuLabel: { color: C.text, fontSize: 15 },
+});
