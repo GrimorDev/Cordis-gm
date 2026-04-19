@@ -65,7 +65,7 @@ services:
   #   github.com/GrimorDev → Packages → cordis-mobile → Package settings
   #   → Change visibility → Public  → then redeploy this stack.
   mobile:
-    image: ghcr.io/grimordev/cordis-mobile:latest
+    image: ghcr.io/grimordev/cordis-web:mobile
     container_name: cordis-mobile
     restart: unless-stopped
     networks:

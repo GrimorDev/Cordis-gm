@@ -48,5 +48,5 @@ jobs:
           cache-from: type=gha
           cache-to:   type=gha,mode=max
           tags: |
-            ghcr.io/grimordev/cordis-mobile:latest
-            ghcr.io/grimordev/cordis-mobile:${{ github.sha }}
+            ghcr.io/grimordev/cordis-web:mobile
+            ghcr.io/grimordev/cordis-web:mobile-${{ github.sha }}
