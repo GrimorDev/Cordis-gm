@@ -1,17 +1,20 @@
 # ── Stage 1: Build Expo web export ───────────────────────────────────────────
 FROM node:20-alpine AS builder
 
+# Native build tools required by some npm postinstall scripts (react-native-screens etc.)
+RUN apk add --no-cache python3 make g++ git
+
 WORKDIR /app
 
-# Install deps first (layer-cached)
+# Install deps (layer-cached); postinstall scripts must run for some RN packages
 COPY package.json ./
-RUN npm install --legacy-peer-deps --ignore-scripts
+RUN npm install --legacy-peer-deps
 
-# Create placeholder icon so expo export doesn't fail (real icon can be added to repo later)
+# Create placeholder icon (real icon can be added to assets/ in the repo later)
 RUN mkdir -p assets && \
     node -e "require('fs').writeFileSync('assets/icon.png', Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==','base64'))"
 
-# Copy rest of source
+# Copy rest of source (after npm install for better layer caching)
 COPY . .
 
 # Build static web export
@@ -20,7 +23,10 @@ COPY . .
 ENV CI=1
 ENV EXPO_NO_TELEMETRY=1
 ENV EXPO_NO_DOTENV=1
-RUN npx expo export --platform web 2>&1
+# Give Metro bundler enough heap on constrained build hosts
+ENV NODE_OPTIONS="--max-old-space-size=3072"
+
+RUN npx expo export --platform web
 
 # ── Stage 2: Serve with nginx ─────────────────────────────────────────────────
 FROM nginx:alpine
