@@ -148,6 +148,24 @@ fn stop_audio_loopback(state: tauri::State<LoopbackState>) {
     }
 }
 
+/// Request macOS microphone + camera permissions via a JS getUserMedia call.
+/// Called once on startup so macOS shows the permission dialog on first launch.
+#[tauri::command]
+async fn request_media_permissions(window: tauri::Window) -> Result<(), String> {
+    // Trigger a brief getUserMedia so macOS shows the system permission prompt.
+    // The call is expected to fail (no real stream needed) — we only need the
+    // prompt to fire so the user can grant access in System Settings.
+    let js = r#"
+        (function() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+            navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+                .then(s => s.getTracks().forEach(t => t.stop()))
+                .catch(() => {});
+        })();
+    "#;
+    window.eval(js).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -239,6 +257,7 @@ pub fn run() {
             window_quit,
             start_audio_loopback,
             stop_audio_loopback,
+            request_media_permissions,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

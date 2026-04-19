@@ -8016,6 +8016,16 @@ export default function App() {
     }).catch(() => {});
   }, [isAuthenticated]);
 
+  // ── macOS: request microphone/camera permissions on first login ──────
+  useEffect(() => {
+    if (!isTauri || !isAuthenticated) return;
+    const isMac = navigator.userAgent.toLowerCase().includes('mac');
+    if (!isMac) return;
+    import('@tauri-apps/api/core').then(({ invoke }) => {
+      invoke('request_media_permissions').catch(() => {});
+    }).catch(() => {});
+  }, [isAuthenticated]);
+
   // ── Autostart: odczytaj stan przy starcie ────────────────────────────
   useEffect(() => {
     if (!isTauri) return;

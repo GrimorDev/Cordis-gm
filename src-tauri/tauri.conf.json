@@ -44,7 +44,15 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": true,
+    "macOS": {
+      "entitlements": "./Entitlements.plist",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Cordyn potrzebuje dostępu do mikrofonu, aby korzystać z kanałów głosowych i rozmów.",
+        "NSCameraUsageDescription": "Cordyn potrzebuje dostępu do kamery, aby korzystać z rozmów wideo.",
+        "NSBluetoothAlwaysUsageDescription": "Cordyn może korzystać z urządzeń Bluetooth (słuchawki, głośniki) do rozmów głosowych."
+      }
+    }
   },
   "plugins": {
     "updater": {
