@@ -8127,14 +8127,13 @@ export default function App() {
       } else {
         setChannelMsgs(p => [...p, msg as MessageFull]);
         if (!isOwnMsg) {
-          // Mention alert sound
+          // Mention alert sound — always plays (even in Focus Mode)
           const myUsername = currentUserRef.current?.username;
           if (myUsername && new RegExp(`!${myUsername}(?:[^a-zA-Z0-9_]|$)`,'i').test(msg.content || '')) {
             playMentionAlert();
-          } else if (document.hidden) {
-            playNotifSound();
-          } else {
-            playMessageReceived();
+          } else if (!focusModeRef.current) {
+            if (document.hidden) playNotifSound();
+            else playMessageReceived();
           }
         }
       }
@@ -8184,7 +8183,7 @@ export default function App() {
           msg.sender_username
         );
         setUnreadDms(p => ({ ...p, [msg.sender_id]: (p[msg.sender_id] || 0) + 1 }));
-        playDmNotification();
+        if (!focusModeRef.current) playDmNotification();
         // Desktop push notification when window is not focused (Tauri)
         if (isTauri && !isWindowFocused.current) {
           import('@tauri-apps/plugin-notification').then(async ({ isPermissionGranted, sendNotification }) => {
@@ -8838,7 +8837,7 @@ export default function App() {
           msg.sender_username
         );
         setUnreadGroupDms(p => ({ ...p, [gid]: (p[gid] || 0) + 1 }));
-        playDmNotification();
+        if (!focusModeRef.current) playDmNotification();
         if (isTauri && !isWindowFocused.current) {
           import('@tauri-apps/plugin-notification').then(async ({ isPermissionGranted, sendNotification }) => {
             if (!await isPermissionGranted()) return;
