@@ -11551,8 +11551,14 @@ export default function App() {
             </button>
           )}
           {/* Focus Mode toggle */}
-          <button onClick={() => setFocusMode(v => !v)}
-            title={focusMode ? 'Focus Mode włączony — dźwięki wyciszone (kliknij aby wyłączyć)' : 'Włącz Focus Mode (wycisza dźwięki powiadomień)'}
+          <button onClick={() => {
+            setFocusMode(v => {
+              const next = !v;
+              addToast(next ? '🌙 Focus Mode włączony — dźwięki wyciszone' : '🔔 Focus Mode wyłączony', 'info');
+              return next;
+            });
+          }}
+            title={focusMode ? 'Focus Mode włączony — kliknij aby wyłączyć' : 'Focus Mode — wycisza dźwięki powiadomień'}
             className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all ${focusMode ? 'text-amber-400 bg-amber-500/15 shadow-[0_0_10px_rgba(245,158,11,0.2)]' : 'text-zinc-500 hover:text-amber-400 hover:bg-amber-500/10'}`}>
             <Moon size={15}/>
           </button>
@@ -19643,16 +19649,12 @@ export default function App() {
       {/* BRB Timer Modal removed — duration is now handled via status picker submenu */}
 
       {/* ── Saved Messages Panel ─────────────────────────────────────────── */}
-      <AnimatePresence>
-        {bookmarksOpen && ReactDOM.createPortal(
-          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.18}}
-            className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-            onClick={() => setBookmarksOpen(false)}>
-            <motion.div initial={{scale:0.96,y:10}} animate={{scale:1,y:0}} exit={{scale:0.96,y:10}}
-              transition={{type:'spring',stiffness:380,damping:30}}
-              className="w-full max-w-3xl bg-[#0f0f1a] border border-white/[0.1] rounded-2xl shadow-2xl flex overflow-hidden"
-              style={{height:'min(82vh, 680px)'}}
-              onClick={e=>e.stopPropagation()}>
+      {bookmarksOpen && (
+        <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setBookmarksOpen(false)}>
+          <div className="w-full max-w-3xl bg-[#0f0f1a] border border-white/[0.1] rounded-2xl shadow-2xl flex overflow-hidden"
+            style={{height:'min(82vh, 680px)'}}
+            onClick={e=>e.stopPropagation()}>
 
               {/* Left sidebar — folders */}
               <div className="w-52 border-r border-white/[0.07] flex flex-col shrink-0">
@@ -19797,11 +19799,9 @@ export default function App() {
                   })()}
                 </div>
               </div>
-            </motion.div>
-          </motion.div>,
-          document.body
-        )}
-      </AnimatePresence>
+          </div>
+        </div>
+      )}
 
       {/* ── Thread Panel ──────────────────────────────────────────────────── */}
       <AnimatePresence>
