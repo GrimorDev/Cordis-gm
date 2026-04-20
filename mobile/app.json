@@ -4,6 +4,7 @@
     "slug": "cordyn",
     "version": "1.0.0",
     "orientation": "portrait",
+    "newArchEnabled": false,
     "icon": "./assets/icon.png",
     "scheme": "cordyn",
     "userInterfaceStyle": "dark",
@@ -47,10 +48,11 @@
         "expo-build-properties",
         {
           "android": {
-            "kotlinVersion": "1.9.23",
+            "kotlinVersion": "2.0.0",
             "compileSdkVersion": 35,
-            "targetSdkVersion": 34,
-            "buildToolsVersion": "35.0.0"
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0",
+            "ndkVersion": "26.1.10909125"
           }
         }
       ]
