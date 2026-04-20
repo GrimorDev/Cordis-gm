@@ -695,6 +695,21 @@ CREATE TABLE IF NOT EXISTS message_bookmarks (
 );
 CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON message_bookmarks(user_id, created_at DESC);
 
+-- ── Bookmark folders ───────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS bookmark_folders (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name       VARCHAR(50) NOT NULL,
+  color      VARCHAR(20) DEFAULT 'indigo',
+  icon       VARCHAR(10) DEFAULT '📁',
+  position   INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_bookmark_folders_user ON bookmark_folders(user_id, position);
+-- Add folder_id + note to existing message_bookmarks
+DO $$ BEGIN ALTER TABLE message_bookmarks ADD COLUMN folder_id UUID REFERENCES bookmark_folders(id) ON DELETE SET NULL; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE message_bookmarks ADD COLUMN note TEXT DEFAULT ''; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
 -- ── Channel background ─────────────────────────────────────────────────────
 DO $$ BEGIN ALTER TABLE channels ADD COLUMN background_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE channels ADD COLUMN background_gradient TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;

@@ -1020,3 +1020,20 @@ export const onboardingApi = {
     req<{ ok: boolean }>('PUT', `/servers/${serverId}/onboarding`, d),
   complete: (serverId: string) => req<{ ok: boolean }>('POST', `/servers/${serverId}/onboarding/complete`),
 };
+
+// ── Bookmarks ──────────────────────────────────────────────────────────────
+export interface BookmarkFolder { id: string; name: string; icon: string; color: string; position: number; created_at: string; }
+export interface BookmarkEntry { id: string; message_id: string|null; dm_message_id: string|null; folder_id: string|null; note: string; created_at: string; message: { id: string; content: string; created_at: string; attachment_url: string|null; author: { id: string; username: string; avatar_url: string|null }; channel_id?: string; dm_id?: string; } | null; }
+export const bookmarksApi = {
+  list:          (folder_id?: string) => req<BookmarkEntry[]>('GET', `/bookmarks${folder_id ? `?folder_id=${folder_id}` : ''}`),
+  add:           (d: { message_id?: string; dm_message_id?: string; folder_id?: string }) => req<{ id: string; folder_id: string|null }>('POST', '/bookmarks', d),
+  remove:        (d: { message_id?: string; dm_message_id?: string }) => req<{ ok: boolean }>('DELETE', '/bookmarks', d),
+  removeById:    (id: string) => req<{ ok: boolean }>('DELETE', `/bookmarks/${id}`),
+  moveToFolder:  (id: string, folder_id: string|null) => req<{ ok: boolean }>('PUT', `/bookmarks/${id}/folder`, { folder_id }),
+  folders:       {
+    list:   ()                                                    => req<BookmarkFolder[]>('GET', '/bookmarks/folders'),
+    create: (d: { name: string; icon?: string; color?: string }) => req<BookmarkFolder>('POST', '/bookmarks/folders', d),
+    update: (id: string, d: { name?: string; icon?: string; color?: string }) => req<BookmarkFolder>('PUT', `/bookmarks/folders/${id}`, d),
+    delete: (id: string)                                          => req<{ ok: boolean }>('DELETE', `/bookmarks/folders/${id}`),
+  },
+};

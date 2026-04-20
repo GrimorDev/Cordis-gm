@@ -21,7 +21,7 @@ import {
   Star, Flame, Trophy, Rocket, Gem, Swords, Heart,
   FileAudio, FileVideo, FileCode2, FileArchive, FileImage, File, ChevronUp,
   HardDrive, PieChart, Trash, History,
-  Bookmark, BookmarkCheck, Timer, Square, ImageIcon,
+  Bookmark, BookmarkCheck, Timer, Square, ImageIcon, Moon,
   Keyboard, Radio, Compass, CalendarPlus, Mic2,
   Home, BookOpen, TrendingUp, Layers, SmilePlus,
   type LucideIcon
@@ -29,8 +29,9 @@ import {
 import {
   auth, users, serversApi, channelsApi, messagesApi, dmsApi, friendsApi, forumApi, adminApi,
   gamesApi, spotifyApi, twitchApi, steamApi, youtubeApi, kickApi, epicApi, twoFactorApi,
-  emojisApi, notesApi, pollsApi, automationsApi, dmPinApi, pushApi,
+  emojisApi, notesApi, pollsApi, automationsApi, dmPinApi, pushApi, bookmarksApi,
   uploadFile, setToken, clearToken, getToken,
+  type BookmarkEntry, type BookmarkFolder,
   type UserProfile, type ServerData, type ServerFull, type ServerRole,
   type ChannelData, type MessageFull, type DmConversation,
   type DmMessageFull, type FriendEntry, type FriendRequest,
@@ -7018,9 +7019,24 @@ export default function App() {
   const [flyingEmojis, setFlyingEmojis] = useState<{id:number;emoji:string;x:number;y:number}[]>([]);
   const flyIdRef = useRef(0);
   // ── Bookmarks ─────────────────────────────────────────────────────────────
-  const [bookmarks,       setBookmarks]       = useState<any[]>([]);
+  const [bookmarks,       setBookmarks]       = useState<BookmarkEntry[]>([]);
   const [bookmarksOpen,   setBookmarksOpen]   = useState(false);
   const [bookmarkedIds,   setBookmarkedIds]   = useState<Set<string>>(new Set());
+  const [bookmarkFolders, setBookmarkFolders] = useState<BookmarkFolder[]>([]);
+  const [activeBmFolder,  setActiveBmFolder]  = useState<string>('all');
+  const [bmNewFolderName, setBmNewFolderName] = useState('');
+  const [bmAddingFolder,  setBmAddingFolder]  = useState(false);
+  // ── Focus Mode — silences all notification sounds except @mentions ─────────
+  const [focusMode,       setFocusMode]       = useState(() => localStorage.getItem('cordyn_focus_mode') === '1');
+  const focusModeRef = useRef(false);
+  focusModeRef.current = focusMode; // sync ref on every render (safe read in callbacks)
+  // ── Custom notification sounds (per server / per channel) ─────────────────
+  const [serverSounds,    setServerSounds]    = useState<Record<string,string>>(() => { try { return JSON.parse(localStorage.getItem('cordyn_server_sounds')||'{}'); } catch { return {}; } });
+  const [chCustomSounds,  setChCustomSounds]  = useState<Record<string,string>>(() => { try { return JSON.parse(localStorage.getItem('cordyn_ch_sounds')||'{}'); } catch { return {}; } });
+  const serverSoundsRef   = useRef<Record<string,string>>({});
+  const chCustomSoundsRef = useRef<Record<string,string>>({});
+  serverSoundsRef.current   = serverSounds;   // sync refs
+  chCustomSoundsRef.current = chCustomSounds;
   // ── Thread panel ──────────────────────────────────────────────────────────
   const [threadRootId,    setThreadRootId]    = useState<string|null>(null);
   const [threadMessages,  setThreadMessages]  = useState<any[]>([]);
@@ -8091,9 +8107,13 @@ export default function App() {
       if (chId && chId !== prevChRef.current) {
         // Message in a channel we're not viewing — increment unread count
         setUnreadChs(p => ({ ...p, [chId]: (p[chId] || 0) + 1 }));
-        // Play notification sound for messages from others
-        if (!isOwnMsg) {
-          playNotifSound();
+        // Play notification sound for messages from others (skip if Focus Mode is on)
+        if (!isOwnMsg && !focusModeRef.current) {
+          const cSnd = chCustomSoundsRef.current[chId];
+          const sSnd = serverSoundsRef.current[serverFullRef.current?.id || ''];
+          if (cSnd) playCustomSound(cSnd);
+          else if (sSnd) playCustomSound(sSnd);
+          else playNotifSound();
           // Desktop push notification when window is not focused (Tauri)
           if (isTauri && !isWindowFocused.current) {
             import('@tauri-apps/plugin-notification').then(async ({ isPermissionGranted, sendNotification }) => {
@@ -9059,6 +9079,53 @@ export default function App() {
       o.start(); o.stop(ctx.currentTime + 0.25);
     } catch { /* ignore — may be blocked in some contexts */ }
   };
+
+  // ── Persist Focus Mode + custom sounds ────────────────────────────────────
+  useEffect(() => { localStorage.setItem('cordyn_focus_mode', focusMode ? '1' : '0'); }, [focusMode]);
+  useEffect(() => { localStorage.setItem('cordyn_server_sounds', JSON.stringify(serverSounds)); }, [serverSounds]);
+  useEffect(() => { localStorage.setItem('cordyn_ch_sounds', JSON.stringify(chCustomSounds)); }, [chCustomSounds]);
+
+  // ── Load bookmarks + folders when the panel opens ─────────────────────────
+  useEffect(() => {
+    if (!bookmarksOpen) return;
+    bookmarksApi.list()
+      .then(bms => {
+        setBookmarks(Array.isArray(bms) ? bms : []);
+        setBookmarkedIds(new Set(bms.map(b => b.message_id || b.dm_message_id || '')));
+      }).catch(() => {});
+    bookmarksApi.folders.list()
+      .then(flds => setBookmarkFolders(Array.isArray(flds) ? flds : []))
+      .catch(() => {});
+  }, [bookmarksOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Custom sound helper ────────────────────────────────────────────────────
+  const playCustomSound = (url: string) => {
+    try { const a = new Audio(url); a.volume = 0.45; a.play().catch(() => {}); } catch {}
+  };
+
+  // ── Smooth scroll with momentum (physics-based inertia on mouse wheel) ─────
+  useEffect(() => {
+    const el = msgScrollRef.current;
+    if (!el) return;
+    let velocity = 0;
+    let rafId = 0;
+    const friction = 0.85;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      cancelAnimationFrame(rafId);
+      velocity += e.deltaY * 0.55;
+      velocity = Math.max(-90, Math.min(90, velocity));
+      const step = () => {
+        velocity *= friction;
+        el.scrollTop += velocity;
+        if (Math.abs(velocity) > 0.8) rafId = requestAnimationFrame(step);
+        else velocity = 0;
+      };
+      rafId = requestAnimationFrame(step);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => { el.removeEventListener('wheel', onWheel); cancelAnimationFrame(rafId); };
+  }, [activeChannel, activeDmUserId, activeView]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const scrollToBottom = (smooth = false) => {
     const el = msgScrollRef.current;
@@ -11381,46 +11448,87 @@ export default function App() {
                       </div>
                     ) : (
                       <div className="divide-y divide-white/[0.04]">
-                        {notifications.map(notif => (
-                          <button key={notif.id} onClick={() => {
-                            // Navigate to server+channel
-                            if (notif.server_id) {
-                              const sameServer = activeServer === notif.server_id;
-                              setActiveView('servers');
-                              setActiveServer(notif.server_id);
-                              setServerFull(null);
-                              if (notif.channel_id) setActiveChannel(notif.channel_id);
-                              if (sameServer) setServerReloadKey(k => k + 1);
+                        {(() => {
+                          // Group notifications by server_id + channel_id
+                          const groupMap = new Map<string, typeof notifications>();
+                          notifications.forEach(n => {
+                            const key = n.server_id && n.channel_id ? `${n.server_id}::${n.channel_id}` : n.id;
+                            const arr = groupMap.get(key) || [];
+                            arr.push(n);
+                            groupMap.set(key, arr);
+                          });
+                          return Array.from(groupMap.entries()).map(([key, items]) => {
+                            const hasUnread = items.some(n => !n.read);
+                            const unreadCnt = items.filter(n => !n.read).length;
+                            const navigateAndRead = () => {
+                              const n = items[0];
+                              if (n.server_id) {
+                                const sameServer = activeServer === n.server_id;
+                                setActiveView('servers');
+                                setActiveServer(n.server_id);
+                                setServerFull(null);
+                                if (n.channel_id) setActiveChannel(n.channel_id);
+                                if (sameServer) setServerReloadKey(k => k + 1);
+                              }
+                              setNotifications(p => p.map(n => items.find(i=>i.id===n.id) ? {...n,read:true} : n));
+                              setNotifOpen(false);
+                            };
+                            if (items.length === 1) {
+                              const notif = items[0];
+                              return (
+                                <button key={key} onClick={navigateAndRead}
+                                  className={`w-full text-left px-4 py-3 hover:bg-white/[0.04] transition-colors group ${!notif.read?'bg-indigo-500/[0.04]':''}`}>
+                                  <div className="flex items-start gap-3">
+                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${notif.type==='everyone'?'bg-amber-500/15':'bg-indigo-500/15'}`}>
+                                      {notif.type==='everyone'
+                                        ? <Megaphone size={15} className="text-amber-400"/>
+                                        : <AtSign size={15} className="text-indigo-400"/>}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-xs font-semibold text-white">{notif.from_username}</span>
+                                        <span className="text-xs text-zinc-500">{notif.type==='everyone' ? 'użył @everyone na' : 'wspomniał(-a) o Tobie na'}</span>
+                                        <span className="text-xs font-medium text-indigo-400 truncate">{notif.server_name}</span>
+                                      </div>
+                                      <p className="text-[11px] text-zinc-500 mt-0.5 truncate">#{notif.channel_name}</p>
+                                      {notif.content&&<p className="text-xs text-zinc-400 mt-1 line-clamp-2 break-words">{notif.content}</p>}
+                                      <p className="text-[10px] text-zinc-600 mt-1">{fmtTime(notif.created_at)}</p>
+                                    </div>
+                                    {!notif.read&&<div className="w-2 h-2 rounded-full bg-indigo-500 shrink-0 mt-2"/>}
+                                  </div>
+                                </button>
+                              );
                             }
-                            // Mark as read
-                            setNotifications(p => p.map(n => n.id===notif.id ? {...n,read:true} : n));
-                            setNotifOpen(false);
-                          }}
-                          className={`w-full text-left px-4 py-3 hover:bg-white/[0.04] transition-colors group ${!notif.read?'bg-indigo-500/[0.04]':''}`}>
-                            <div className="flex items-start gap-3">
-                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${notif.type==='everyone'?'bg-amber-500/15':'bg-indigo-500/15'}`}>
-                                {notif.type==='everyone'
-                                  ? <Megaphone size={15} className="text-amber-400"/>
-                                  : <AtSign size={15} className="text-indigo-400"/>}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="text-xs font-semibold text-white">{notif.from_username}</span>
-                                  <span className="text-xs text-zinc-500">
-                                    {notif.type==='everyone' ? 'użył @everyone na' : 'wspomniał(-a) o Tobie na'}
-                                  </span>
-                                  <span className="text-xs font-medium text-indigo-400 truncate">{notif.server_name}</span>
+                            // Grouped: multiple mentions in same channel
+                            const first = items[0];
+                            return (
+                              <button key={key} onClick={navigateAndRead}
+                                className={`w-full text-left px-4 py-3 hover:bg-white/[0.04] transition-colors group ${hasUnread?'bg-indigo-500/[0.04]':''}`}>
+                                <div className="flex items-start gap-3">
+                                  <div className="relative w-8 h-8 rounded-xl bg-indigo-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                                    <AtSign size={15} className="text-indigo-400"/>
+                                    {unreadCnt > 0 && (
+                                      <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-rose-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5 shadow">
+                                        {unreadCnt}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-xs font-semibold text-indigo-400">#{first.channel_name}</span>
+                                      <span className="text-[10px] text-zinc-600">·</span>
+                                      <span className="text-[11px] text-zinc-500 truncate">{first.server_name}</span>
+                                    </div>
+                                    <p className="text-[11px] text-zinc-500 mt-0.5">{items.length} wzmianek</p>
+                                    {first.content&&<p className="text-xs text-zinc-400 mt-1 line-clamp-1 break-words">{first.content}</p>}
+                                    <p className="text-[10px] text-zinc-600 mt-1">{fmtTime(first.created_at)}</p>
+                                  </div>
+                                  {hasUnread&&<div className="w-2 h-2 rounded-full bg-indigo-500 shrink-0 mt-2"/>}
                                 </div>
-                                <p className="text-[11px] text-zinc-500 mt-0.5 truncate">{notif.channel_name}</p>
-                                {notif.content&&(
-                                  <p className="text-xs text-zinc-400 mt-1 line-clamp-2 break-words">{notif.content}</p>
-                                )}
-                                <p className="text-[10px] text-zinc-600 mt-1">{fmtTime(notif.created_at)}</p>
-                              </div>
-                              {!notif.read&&<div className="w-2 h-2 rounded-full bg-indigo-500 shrink-0 mt-2"/>}
-                            </div>
-                          </button>
-                        ))}
+                              </button>
+                            );
+                          });
+                        })()}
                       </div>
                     )}
                   </div>
@@ -11442,6 +11550,18 @@ export default function App() {
               <LayoutDashboard size={15}/>
             </button>
           )}
+          {/* Focus Mode toggle */}
+          <button onClick={() => setFocusMode(v => !v)}
+            title={focusMode ? 'Focus Mode włączony — dźwięki wyciszone (kliknij aby wyłączyć)' : 'Włącz Focus Mode (wycisza dźwięki powiadomień)'}
+            className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all ${focusMode ? 'text-amber-400 bg-amber-500/15 shadow-[0_0_10px_rgba(245,158,11,0.2)]' : 'text-zinc-500 hover:text-amber-400 hover:bg-amber-500/10'}`}>
+            <Moon size={15}/>
+          </button>
+          {/* Saved Messages */}
+          <button onClick={() => setBookmarksOpen(true)}
+            title="Zapisane wiadomości"
+            className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-indigo-400 hover:bg-indigo-500/10 transition-all">
+            <Bookmark size={15}/>
+          </button>
           <button onClick={() => { setAppSettTab('account'); setAppSettOpen(true); }} title="Ustawienia"
             className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all">
             <Settings size={15}/>
@@ -15670,6 +15790,27 @@ export default function App() {
                 }catch{}
               })}
 
+              {/* Zapisz wiadomość */}
+              {!isDeleted && ctxBtn(
+                bookmarkedIds.has(m.id) ? <BookmarkCheck size={13}/> : <Bookmark size={13}/>,
+                bookmarkedIds.has(m.id) ? 'Usuń z zapisanych' : 'Zapisz wiadomość',
+                async () => {
+                  const isChannel = activeView === 'servers';
+                  if (bookmarkedIds.has(m.id)) {
+                    const body = isChannel ? { message_id: m.id } : { dm_message_id: m.id };
+                    await bookmarksApi.remove(body).catch(() => {});
+                    setBookmarkedIds(p => { const n = new Set(p); n.delete(m.id); return n; });
+                    setBookmarks(p => p.filter(b => b.message_id !== m.id && b.dm_message_id !== m.id));
+                    addToast('Usunięto z zapisanych', 'success');
+                  } else {
+                    const body = isChannel ? { message_id: m.id } : { dm_message_id: m.id };
+                    await bookmarksApi.add(body).catch(() => {});
+                    setBookmarkedIds(p => new Set([...p, m.id]));
+                    addToast('Zapisano wiadomość', 'success');
+                  }
+                }
+              )}
+
               {/* Usuń — separator + czerwone */}
               {(isMsgOwn||(isServer&&canManageMessages))&&(<>
                 {sep}
@@ -15799,6 +15940,41 @@ export default function App() {
                     </button>
                   ))}
                 </div>
+              )}
+
+              {/* Custom notification sound for this channel */}
+              {ctxRow(
+                chCustomSounds[ch.id] ? <FileAudio size={13} className="text-indigo-400"/> : <FileAudio size={13}/>,
+                chCustomSounds[ch.id] ? 'Zmień dźwięk powiadomień' : 'Własny dźwięk powiadomień',
+                () => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = 'audio/mpeg,audio/ogg,audio/wav,audio/mp4';
+                  input.onchange = () => {
+                    const file = input.files?.[0];
+                    if (!file) return;
+                    if (file.size > 512_000) { addToast('Plik musi być mniejszy niż 512 KB','error'); return; }
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      const url = reader.result as string;
+                      setChCustomSounds(p => ({ ...p, [ch.id]: url }));
+                      addToast(`Dźwięk dla #${ch.name} ustawiony ✓`, 'success');
+                      // Preview
+                      try { const a = new Audio(url); a.volume = 0.4; a.play().catch(()=>{}); } catch {}
+                    };
+                    reader.readAsDataURL(file);
+                  };
+                  input.click();
+                  setChCtxMenu(null);
+                }
+              )}
+              {chCustomSounds[ch.id] && ctxRow(
+                <X size={13}/>, 'Usuń własny dźwięk',
+                () => {
+                  setChCustomSounds(p => { const n={...p}; delete n[ch.id]; return n; });
+                  addToast('Dźwięk usunięty','success');
+                  setChCtxMenu(null);
+                }
               )}
 
               {sep()}
@@ -19466,7 +19642,166 @@ export default function App() {
 
       {/* BRB Timer Modal removed — duration is now handled via status picker submenu */}
 
-      {/* Bookmarks panel removed */}
+      {/* ── Saved Messages Panel ─────────────────────────────────────────── */}
+      <AnimatePresence>
+        {bookmarksOpen && ReactDOM.createPortal(
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.18}}
+            className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setBookmarksOpen(false)}>
+            <motion.div initial={{scale:0.96,y:10}} animate={{scale:1,y:0}} exit={{scale:0.96,y:10}}
+              transition={{type:'spring',stiffness:380,damping:30}}
+              className="w-full max-w-3xl bg-[#0f0f1a] border border-white/[0.1] rounded-2xl shadow-2xl flex overflow-hidden"
+              style={{height:'min(82vh, 680px)'}}
+              onClick={e=>e.stopPropagation()}>
+
+              {/* Left sidebar — folders */}
+              <div className="w-52 border-r border-white/[0.07] flex flex-col shrink-0">
+                <div className="px-4 py-4 border-b border-white/[0.07]">
+                  <div className="flex items-center gap-2">
+                    <Bookmark size={14} className="text-indigo-400"/>
+                    <span className="text-sm font-semibold text-white">Zapisane</span>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto py-2" style={{scrollbarWidth:'thin',scrollbarColor:'#3f3f46 transparent'}}>
+                  {/* All */}
+                  <button onClick={() => setActiveBmFolder('all')}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors rounded-lg mx-1 ${activeBmFolder==='all'?'text-white bg-white/[0.08]':'text-zinc-400 hover:text-white hover:bg-white/[0.04]'}`}>
+                    <span className="text-base leading-none">📌</span>
+                    <span className="flex-1 text-left truncate">Wszystkie</span>
+                    <span className="text-[10px] text-zinc-600 shrink-0">{bookmarks.length}</span>
+                  </button>
+                  {/* User-created folders */}
+                  {bookmarkFolders.map(f => (
+                    <button key={f.id} onClick={() => setActiveBmFolder(f.id)}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors rounded-lg mx-1 group ${activeBmFolder===f.id?'text-white bg-white/[0.08]':'text-zinc-400 hover:text-white hover:bg-white/[0.04]'}`}>
+                      <span className="text-base leading-none">{f.icon}</span>
+                      <span className="flex-1 text-left truncate">{f.name}</span>
+                      <span className="text-[10px] text-zinc-600 shrink-0">
+                        {bookmarks.filter(b => b.folder_id === f.id).length}
+                      </span>
+                      <button onClick={async e => {
+                        e.stopPropagation();
+                        if (!confirm(`Usunąć folder "${f.name}"?`)) return;
+                        await bookmarksApi.folders.delete(f.id).catch(() => {});
+                        setBookmarkFolders(p => p.filter(x => x.id !== f.id));
+                        setBookmarks(p => p.map(b => b.folder_id === f.id ? {...b, folder_id: null} : b));
+                        if (activeBmFolder === f.id) setActiveBmFolder('all');
+                      }} className="opacity-0 group-hover:opacity-100 w-4 h-4 flex items-center justify-center text-zinc-600 hover:text-rose-400 transition-all shrink-0 ml-1">
+                        <X size={10}/>
+                      </button>
+                    </button>
+                  ))}
+                </div>
+                {/* New folder */}
+                <div className="p-3 border-t border-white/[0.07]">
+                  {bmAddingFolder ? (
+                    <div className="flex gap-1">
+                      <input autoFocus value={bmNewFolderName} onChange={e => setBmNewFolderName(e.target.value)}
+                        onKeyDown={async e => {
+                          if (e.key === 'Enter' && bmNewFolderName.trim()) {
+                            const f = await bookmarksApi.folders.create({ name: bmNewFolderName.trim(), icon: '📁' }).catch(() => null);
+                            if (f) { setBookmarkFolders(p => [...p, f]); setActiveBmFolder(f.id); }
+                            setBmNewFolderName(''); setBmAddingFolder(false);
+                          }
+                          if (e.key === 'Escape') { setBmAddingFolder(false); setBmNewFolderName(''); }
+                        }}
+                        placeholder="Nazwa folderu…"
+                        className="flex-1 bg-white/[0.06] border border-white/[0.1] rounded-lg px-2 py-1.5 text-xs text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 min-w-0"/>
+                      <button onClick={() => { setBmAddingFolder(false); setBmNewFolderName(''); }}
+                        className="w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-zinc-300 shrink-0">
+                        <X size={12}/>
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setBmAddingFolder(true)}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-zinc-500 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-colors">
+                      <Plus size={12}/>Nowy folder
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Right — bookmarks list */}
+              <div className="flex-1 flex flex-col min-w-0">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.07] shrink-0">
+                  <div className="flex items-center gap-2">
+                    {activeBmFolder !== 'all' && (
+                      <span className="text-base">{bookmarkFolders.find(f=>f.id===activeBmFolder)?.icon||'📁'}</span>
+                    )}
+                    <span className="text-sm font-semibold text-white">
+                      {activeBmFolder === 'all' ? 'Wszystkie zapisane' : bookmarkFolders.find(f=>f.id===activeBmFolder)?.name || ''}
+                    </span>
+                  </div>
+                  <button onClick={() => setBookmarksOpen(false)} className="text-zinc-500 hover:text-white transition-colors">
+                    <X size={16}/>
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto" style={{scrollbarWidth:'thin',scrollbarColor:'#3f3f46 transparent'}}>
+                  {(() => {
+                    const filtered = bookmarks.filter(b =>
+                      activeBmFolder === 'all' ? true : b.folder_id === activeBmFolder
+                    );
+                    if (!filtered.length) return (
+                      <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-8">
+                        <div className="w-14 h-14 rounded-2xl bg-white/[0.04] flex items-center justify-center">
+                          <Bookmark size={24} className="text-zinc-700"/>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-zinc-400">Brak zapisanych wiadomości</p>
+                          <p className="text-xs text-zinc-600 mt-1">Kliknij prawym przyciskiem na wiadomość i wybierz „Zapisz wiadomość"</p>
+                        </div>
+                      </div>
+                    );
+                    return filtered.map(bm => (
+                      <div key={bm.id} className="px-5 py-3.5 border-b border-white/[0.04] hover:bg-white/[0.02] group relative transition-colors">
+                        <div className="flex items-start gap-3">
+                          {bm.message?.author?.avatar_url && (
+                            <img src={bm.message.author.avatar_url} className="w-8 h-8 rounded-full shrink-0 mt-0.5 object-cover"/>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-sm font-semibold text-white leading-none">{bm.message?.author?.username || '?'}</span>
+                              <span className="text-[10px] text-zinc-600">{bm.created_at ? fmtTime(bm.created_at) : ''}</span>
+                            </div>
+                            <p className="text-sm text-zinc-300 break-words line-clamp-3 leading-relaxed">
+                              {bm.message?.content || (bm.message?.attachment_url ? '📎 Załącznik' : '—')}
+                            </p>
+                          </div>
+                          <button onClick={async () => {
+                            await bookmarksApi.removeById(bm.id).catch(() => {});
+                            setBookmarks(p => p.filter(b => b.id !== bm.id));
+                            setBookmarkedIds(p => { const n=new Set(p); n.delete(bm.message_id||bm.dm_message_id||''); return n; });
+                          }}
+                            className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 flex items-center justify-center transition-all shrink-0 mt-0.5">
+                            <Trash2 size={13}/>
+                          </button>
+                        </div>
+                        {/* Folder tags */}
+                        {bookmarkFolders.length > 0 && (
+                          <div className="mt-2.5 ml-11 flex gap-1 flex-wrap">
+                            {bookmarkFolders.map(f => (
+                              <button key={f.id} onClick={async () => {
+                                const newFid = bm.folder_id === f.id ? null : f.id;
+                                await bookmarksApi.moveToFolder(bm.id, newFid).catch(() => {});
+                                setBookmarks(p => p.map(b => b.id===bm.id ? {...b, folder_id: newFid} : b));
+                              }}
+                                className={`text-[10px] px-2 py-0.5 rounded-full border transition-all leading-none ${bm.folder_id===f.id?'bg-indigo-500/20 border-indigo-500/40 text-indigo-300':'border-white/[0.08] text-zinc-600 hover:text-zinc-300 hover:border-white/20'}`}>
+                                {f.icon} {f.name}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>,
+          document.body
+        )}
+      </AnimatePresence>
 
       {/* ── Thread Panel ──────────────────────────────────────────────────── */}
       <AnimatePresence>
