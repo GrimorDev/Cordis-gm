@@ -1,14 +1,65 @@
 /**
  * TitleBar — custom frameless window chrome for the Tauri desktop app.
  *
- * Only rendered when running inside Tauri (`window.__TAURI__` is present).
- * The `data-tauri-drag-region` attribute lets users drag the window by
- * clicking anywhere on the bar that is NOT a button.
+ * Only rendered when running inside Tauri (`window.__TAURI_INTERNALS__` is present).
+ *
+ * macOS:  titleBarStyle "Overlay" gives native traffic lights (red/yellow/green).
+ *         We render a thin drag region with left padding so content clears the
+ *         traffic lights — NO custom window control buttons.
+ *
+ * Windows / Linux: full custom titlebar with minimize / maximize / close buttons
+ *         positioned on the right side (Windows convention).
+ *
+ * The `data-tauri-drag-region` attribute lets users drag the window by clicking
+ * anywhere on the bar that is NOT a button.
  */
 import type { CSSProperties } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 
+// Detect macOS at module level (navigator.platform is deprecated but widely
+// supported and does not require an async Tauri plugin call).
+const isMacOS =
+  typeof navigator !== 'undefined' &&
+  (/Mac/i.test(navigator.platform) || navigator.userAgent.includes('Mac OS'));
+
 export function TitleBar() {
+  // ── macOS ────────────────────────────────────────────────────────────────
+  // Native traffic-light buttons are shown by Tauri at the top-left.
+  // We only need a drag region + right-side label. No custom control buttons.
+  if (isMacOS) {
+    return (
+      <div
+        data-tauri-drag-region
+        style={{
+          height: 28,
+          minHeight: 28,
+          background: '#0a0a14',
+          display: 'flex',
+          alignItems: 'center',
+          flexShrink: 0,
+          // The whole bar is draggable; buttons inside override this.
+          WebkitAppRegion: 'drag' as CSSProperties['WebkitAppRegion'],
+          userSelect: 'none',
+          // Traffic lights occupy roughly the first 75 px on the left.
+          paddingLeft: 80,
+        }}
+      >
+        <span
+          style={{
+            color: '#475569',
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+          }}
+        >
+          Cordyn
+        </span>
+      </div>
+    );
+  }
+
+  // ── Windows / Linux ───────────────────────────────────────────────────────
   const btn = (
     label: string,
     title: string,

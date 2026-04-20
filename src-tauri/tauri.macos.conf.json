@@ -1,0 +1,23 @@
+{
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Cordyn",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "visible": true,
+        "resizable": true,
+        "center": true,
+        "fullscreen": false,
+        "backgroundColor": "#09090b",
+        "dragDropEnabled": false
+      }
+    ]
+  }
+}
