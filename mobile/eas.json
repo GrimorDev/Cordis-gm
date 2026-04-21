@@ -9,8 +9,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://YOUR_VPS_DOMAIN_OR_IP/api",
-        "EXPO_PUBLIC_SOCKET_URL": "https://YOUR_VPS_DOMAIN_OR_IP"
+        "EXPO_PUBLIC_API_URL": "https://cordyn.pl/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://cordyn.pl/"
       }
     },
     "production": {
@@ -18,8 +18,8 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://YOUR_VPS_DOMAIN_OR_IP/api",
-        "EXPO_PUBLIC_SOCKET_URL": "https://YOUR_VPS_DOMAIN_OR_IP"
+        "EXPO_PUBLIC_API_URL": "https://cordyn.pl/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://cordyn.pl/"
       }
     }
   }
