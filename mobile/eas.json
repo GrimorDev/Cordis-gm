@@ -10,7 +10,7 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://cordyn.pl/api",
-        "EXPO_PUBLIC_SOCKET_URL": "https://cordyn.pl/"
+        "EXPO_PUBLIC_SOCKET_URL": "https://cordyn.pl"
       }
     },
     "production": {
@@ -19,7 +19,7 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://cordyn.pl/api",
-        "EXPO_PUBLIC_SOCKET_URL": "https://cordyn.pl/"
+        "EXPO_PUBLIC_SOCKET_URL": "https://cordyn.pl"
       }
     }
   }
