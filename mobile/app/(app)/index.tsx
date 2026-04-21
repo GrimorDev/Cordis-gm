@@ -22,25 +22,37 @@ export default function ServersScreen() {
   const [joinCode, setJoinCode] = useState('');
   const [joinLoading, setJoinLoading] = useState(false);
   const [showChannels, setShowChannels] = useState(false);
+  const [channelsLoading, setChannelsLoading] = useState(false);
+  const [serversLoading, setServersLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
       const list = await serversApi.list();
       setServers(list);
-    } catch { /* ignore */ }
+    } catch (e: any) {
+      Alert.alert('Błąd', 'Nie udało się załadować serwerów: ' + (e.message ?? ''));
+    } finally {
+      setServersLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, []);
 
   const openServer = async (srv: Server) => {
     setActiveServer(srv);
+    setChannels([]);
     setShowChannels(true);
+    setChannelsLoading(true);
     try {
       const chs = await channelsApi.list(srv.id);
       setChannels(chs);
-      // Join socket room
-      getSocket()?.emit('join_server' as any, srv.id);
-    } catch { /* ignore */ }
+      // Join socket server room so we receive channel events
+      getSocket()?.emit('join_server_room' as any, srv.id);
+    } catch (e: any) {
+      Alert.alert('Błąd', 'Nie udało się załadować kanałów: ' + (e.message ?? ''));
+    } finally {
+      setChannelsLoading(false);
+    }
   };
 
   const handleJoin = async () => {
@@ -108,7 +120,13 @@ export default function ServersScreen() {
           }
           ListEmptyComponent={
             <View style={styles.empty}>
-              <ActivityIndicator color={C.accent} />
+              {channelsLoading
+                ? <ActivityIndicator color={C.accent} />
+                : <>
+                    <Ionicons name="chatbubble-outline" size={40} color={C.textMuted} />
+                    <Text style={styles.emptyText}>Brak kanałów tekstowych</Text>
+                  </>
+              }
             </View>
           }
         />
@@ -145,9 +163,14 @@ export default function ServersScreen() {
         )}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Ionicons name="server-outline" size={48} color={C.textMuted} />
-            <Text style={styles.emptyText}>Brak serwerów</Text>
-            <Text style={styles.emptySubtext}>Dołącz do serwera używając kodu zaproszenia</Text>
+            {serversLoading
+              ? <ActivityIndicator color={C.accent} size="large" />
+              : <>
+                  <Ionicons name="server-outline" size={48} color={C.textMuted} />
+                  <Text style={styles.emptyText}>Brak serwerów</Text>
+                  <Text style={styles.emptySubtext}>Dołącz do serwera używając kodu zaproszenia</Text>
+                </>
+            }
           </View>
         }
       />

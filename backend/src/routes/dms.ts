@@ -5,6 +5,7 @@ import { authMiddleware } from '../middleware/auth';
 import { msgLimiter } from '../middleware/messageLimiter';
 import { AuthRequest } from '../types';
 import { sendPushToUser } from '../services/push';
+import { sendDmPush } from '../services/expoPush';
 import { deleteFromR2 } from '../services/r2';
 import { getDmListCache, setDmListCache, invalidateDmListCache } from '../redis/client';
 
@@ -201,6 +202,12 @@ router.post('/:userId/messages', authMiddleware, msgLimiter,
         url: `/dm/${req.user!.id}`,
         tag: `dm-${req.user!.id}`,
       }).catch((e: any) => console.warn(`[push] DM failed for ${req.params.userId}:`, e?.message));
+      // Expo mobile push
+      sendDmPush(
+        req.params.userId,
+        req.user!.username,
+        (req.body.content || '').trim() || '📎 Załącznik',
+      ).catch(() => {});
       return res.status(201).json(full);
     } catch { return res.status(500).json({ error: 'Internal server error' }); }
   }

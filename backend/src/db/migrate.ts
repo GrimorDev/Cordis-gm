@@ -962,6 +962,17 @@ DO $$ BEGIN
   ALTER TABLE developer_applications ADD COLUMN webhook_secret TEXT;
 EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 
+-- ── Expo Push Tokens (mobile push notifications) ──────────────────────────────
+CREATE TABLE IF NOT EXISTS expo_push_tokens (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token      TEXT NOT NULL,
+  platform   VARCHAR(10) DEFAULT 'android',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(token)
+);
+CREATE INDEX IF NOT EXISTS idx_expo_push_tokens_user ON expo_push_tokens(user_id);
+
 -- ── Admin Audit Log ───────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS admin_audit_log (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -3,36 +3,65 @@ import { Tabs, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useStore } from '../../src/store';
 import { getSocket, connectSocket } from '../../src/socket';
+import { registerForPushNotifications } from '../../src/notifications';
 import { C } from '../../src/theme';
 
 export default function AppLayout() {
-  const { isAuthenticated, addMessage, addDmMessage, setUserStatus, currentUser, dmConversations } = useStore();
+  const { isAuthenticated, addMessage, addDmMessage, setUserStatus, currentUser } = useStore();
 
-  // Socket event listeners
+  // Socket event listeners — attach after socket connects (handles cold start & reconnect)
   useEffect(() => {
-    let sock = getSocket();
-    if (!sock) return;
+    if (!currentUser) return;
 
     const onNewMessage = (msg: any) => {
       addMessage(msg.channel_id, msg);
     };
     const onNewDm = (msg: any) => {
-      const otherId = msg.sender_id === currentUser?.id ? msg.receiver_id : msg.sender_id;
+      // otherId = the person we're talking to (not us)
+      const otherId = msg.sender_id === currentUser.id ? msg.receiver_id : msg.sender_id;
       addDmMessage(otherId, msg);
     };
     const onUserStatus = ({ user_id, status }: any) => {
       setUserStatus(user_id, status);
     };
 
-    sock.on('new_message', onNewMessage);
-    sock.on('new_dm', onNewDm);
-    sock.on('user_status', onUserStatus);
+    const attach = (sock: ReturnType<typeof getSocket>) => {
+      if (!sock) return;
+      sock.on('new_message', onNewMessage);
+      sock.on('new_dm', onNewDm);
+      sock.on('user_status', onUserStatus);
+    };
 
-    return () => {
+    const detach = () => {
+      const sock = getSocket();
       sock?.off('new_message', onNewMessage);
       sock?.off('new_dm', onNewDm);
       sock?.off('user_status', onUserStatus);
     };
+
+    const existing = getSocket();
+    if (existing) {
+      // Socket already exists (normal case after login / token restore)
+      attach(existing);
+      return detach;
+    }
+
+    // Socket not yet initialized — connect first, then attach
+    let cancelled = false;
+    connectSocket()
+      .then(sock => { if (!cancelled) attach(sock); })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      detach();
+    };
+  }, [currentUser?.id]);
+
+  // Register push token once when user is authenticated
+  useEffect(() => {
+    if (!currentUser) return;
+    registerForPushNotifications().catch(() => {});
   }, [currentUser?.id]);
 
   if (!isAuthenticated) return <Redirect href="/(auth)/login" />;

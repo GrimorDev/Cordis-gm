@@ -22,3 +22,11 @@ export const SOCKET_URL: string = (() => {
   }
   return process.env.EXPO_PUBLIC_SOCKET_URL ?? API_URL.replace(/\/api$/, '');
 })();
+
+/** Base URL for static assets (avatars, uploads) — strips /api suffix. */
+export const STATIC_BASE: string = (() => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  return API_URL.replace(/\/api$/, '');
+})();

@@ -8,6 +8,7 @@ import { C, STATUS_COLOR } from '../../src/theme';
 import { authApi, usersApi } from '../../src/api';
 import { useStore } from '../../src/store';
 import { disconnectSocket } from '../../src/socket';
+import { unregisterPushNotifications } from '../../src/notifications';
 
 const STATUS_OPTIONS = [
   { key: 'online', label: 'Online', icon: 'ellipse' as const },
@@ -50,6 +51,7 @@ export default function ProfileScreen() {
       { text: 'Anuluj', style: 'cancel' },
       { text: 'Wyloguj', style: 'destructive', onPress: async () => {
         try { await authApi.logout(); } catch { }
+        await unregisterPushNotifications().catch(() => {});
         disconnectSocket();
         await clearAuth();
         router.replace('/(auth)/login');
@@ -70,7 +72,9 @@ export default function ProfileScreen() {
         <UserAvatar url={currentUser.avatar_url} username={currentUser.username} size={88} status={currentStatus} showStatus />
         <Text style={styles.username}>{currentUser.username}</Text>
         <Text style={styles.joinDate}>
-          Konto od {new Date(currentUser.created_at).toLocaleDateString('pl-PL', { year: 'numeric', month: 'long' })}
+          {currentUser.created_at
+            ? `Konto od ${new Date(currentUser.created_at).toLocaleDateString('pl-PL', { year: 'numeric', month: 'long' })}`
+            : ''}
         </Text>
       </View>
 

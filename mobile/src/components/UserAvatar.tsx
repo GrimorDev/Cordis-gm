@@ -2,6 +2,14 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { C, STATUS_COLOR } from '../theme';
+import { STATIC_BASE } from '../config';
+
+/** Converts a relative path (/uploads/...) to a full URL. */
+function resolveUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${STATIC_BASE}${url}`;
+}
 
 interface Props {
   url?: string | null;
@@ -17,14 +25,16 @@ function initials(name: string) {
 
 export function UserAvatar({ url, username, size = 40, status, showStatus = false }: Props) {
   const dotSize = Math.max(10, size * 0.28);
+  const resolvedUrl = resolveUrl(url);
 
   return (
     <View style={{ width: size, height: size }}>
-      {url ? (
+      {resolvedUrl ? (
         <Image
-          source={{ uri: url }}
+          source={{ uri: resolvedUrl }}
           style={{ width: size, height: size, borderRadius: size / 2 }}
           contentFit="cover"
+          cachePolicy="memory-disk"
         />
       ) : (
         <View style={[styles.placeholder, { width: size, height: size, borderRadius: size / 2 }]}>

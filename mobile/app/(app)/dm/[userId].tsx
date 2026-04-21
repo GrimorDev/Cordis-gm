@@ -4,6 +4,13 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { UserAvatar } from '../../../src/components/UserAvatar';
+import { STATIC_BASE } from '../../../src/config';
+
+function resolveAvatar(url: string | undefined | null): string | null {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${STATIC_BASE}${url}`;
+}
 import { MessageInput } from '../../../src/components/MessageInput';
 import { C } from '../../../src/theme';
 import { dmsApi } from '../../../src/api';
@@ -42,6 +49,13 @@ export default function DmChatScreen() {
   useEffect(() => {
     load();
     const sock = getSocket();
+
+    // Local new_dm listener for this conversation — updates messages immediately
+    const onNewDm = (msg: any) => {
+      const otherId = msg.sender_id === currentUser?.id ? msg.receiver_id : msg.sender_id;
+      if (otherId !== userId && msg.sender_id !== userId) return;
+      addDmMessage(userId, msg);
+    };
     const onTyping = ({ user_id }: any) => {
       if (user_id !== userId) return;
       setIsTyping(true);
@@ -52,9 +66,11 @@ export default function DmChatScreen() {
       if (user_id !== userId) return;
       setIsTyping(false);
     };
+    sock?.on('new_dm', onNewDm);
     sock?.on('dm_user_typing', onTyping);
     sock?.on('dm_user_stop_typing', onStopTyping);
     return () => {
+      sock?.off('new_dm', onNewDm);
       sock?.off('dm_user_typing', onTyping);
       sock?.off('dm_user_stop_typing', onStopTyping);
     };
@@ -88,7 +104,7 @@ export default function DmChatScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
           <Ionicons name="chevron-back" size={22} color={C.text} />
         </TouchableOpacity>
-        <UserAvatar url={avatar || null} username={username} size={36} status={status} showStatus />
+        <UserAvatar url={resolveAvatar(avatar)} username={username} size={36} status={status} showStatus />
         <View style={styles.headerInfo}>
           <Text style={styles.title}>{username}</Text>
           <Text style={styles.statusText}>{status}</Text>
@@ -115,7 +131,7 @@ export default function DmChatScreen() {
               <View style={[styles.msgWrapper, isOwn && styles.msgOwn]}>
                 {showHeader && !isOwn && (
                   <View style={styles.msgHeader}>
-                    <UserAvatar url={item.sender_avatar} username={item.sender_username} size={32} />
+                    <UserAvatar url={resolveAvatar(item.sender_avatar)} username={item.sender_username} size={32} />
                     <Text style={styles.msgUsername}>{item.sender_username}</Text>
                     <Text style={styles.msgTime}>{fmtTime(item.created_at)}</Text>
                   </View>

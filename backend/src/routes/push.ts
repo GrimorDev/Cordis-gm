@@ -4,6 +4,8 @@ import { query } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
 
+const EXPO_TOKEN_PATTERN = /^ExponentPushToken\[.+\]$|^ExpoPushToken\[.+\]$/;
+
 const router = Router();
 
 // POST /push/subscribe - save push subscription
@@ -58,6 +60,46 @@ router.delete('/subscribe', authMiddleware, async (req: AuthRequest, res: Respon
   } catch (err) {
     console.error('DELETE /push/subscribe error:', err);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── Expo Push Token routes ────────────────────────────────────────────────────
+
+// POST /push/expo-token  — register an Expo push token for this user
+router.post('/expo-token', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { token, platform } = req.body as { token?: string; platform?: string };
+
+  if (!token || !EXPO_TOKEN_PATTERN.test(token)) {
+    return res.status(400).json({ error: 'Invalid or missing Expo push token' });
+  }
+
+  try {
+    await query(
+      `INSERT INTO expo_push_tokens (user_id, token, platform)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (token) DO UPDATE SET user_id = EXCLUDED.user_id, platform = EXCLUDED.platform`,
+      [req.user!.id, token, platform ?? 'android']
+    );
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('POST /push/expo-token error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /push/expo-token  — unregister Expo push token on logout
+router.delete('/expo-token', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { token } = req.body as { token?: string };
+  try {
+    if (token) {
+      await query('DELETE FROM expo_push_tokens WHERE user_id = $1 AND token = $2', [req.user!.id, token]);
+    } else {
+      await query('DELETE FROM expo_push_tokens WHERE user_id = $1', [req.user!.id]);
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('DELETE /push/expo-token error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
