@@ -7435,6 +7435,7 @@ export default function App() {
   const statusPickerRef                        = useRef<HTMLDivElement>(null);
   const voiceBarRef                            = useRef<HTMLDivElement>(null);
   const notifBellRef                           = useRef<HTMLDivElement>(null);
+  const moreMenuRef                            = useRef<HTMLDivElement>(null);
 
   // App Settings
   const [appSettOpen, setAppSettOpen]         = useState(false);
@@ -7504,6 +7505,7 @@ export default function App() {
   const [pingChs, setPingChs]                 = useState<Record<string, number>>({});
   const [notifications, setNotifications]     = useState<NotificationEntry[]>([]);
   const [notifOpen, setNotifOpen]             = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen]       = useState(false);
   const [mentionQuery, setMentionQuery]       = useState<string | null>(null);
   const [mentionSel, setMentionSel]           = useState<number>(0);
 
@@ -9408,6 +9410,18 @@ export default function App() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [notifOpen]);
+
+  // ── Close more-menu on outside click ─────────────────────────────
+  useEffect(() => {
+    if (!moreMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setMoreMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [moreMenuOpen]);
 
   // ── Tauri: file drag-and-drop via OS (dragDropEnabled:false lets HTML5 work,
   //    but as extra safety we also listen to Tauri's file-drop events) ─────────
@@ -11380,35 +11394,16 @@ export default function App() {
           </button>
         </div>
         {/* Center col — Cordyn, always truly centered in the nav */}
-        <div className="flex items-center justify-center pointer-events-none select-none px-4 gap-1.5">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="shrink-0" aria-hidden>
-            <circle cx="12" cy="12" r="10" fill="url(#brand-grad-icon)"/>
-            <path d="M8 12a4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-            <circle cx="16" cy="12" r="1.5" fill="white"/>
-            <defs>
-              <linearGradient id="brand-grad-icon" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="#818cf8"/>
-                <stop offset="100%" stopColor="#38bdf8"/>
-              </linearGradient>
-            </defs>
-          </svg>
+        <div className="flex items-center justify-center pointer-events-none select-none px-4">
           <span className="brand-gradient font-bold tracking-tight text-sm">Cordyn</span>
         </div>
-        {/* Right col */}
-        <div className="flex items-center justify-end gap-1.5 pr-1">
-          {/* Download button — only in web browser, not in Tauri desktop app */}
-          {!isTauri && appOsDownload.ready && (
-            <a href={appOsDownload.url}
-              title={appOsDownload.label}
-              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-zinc-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-indigo-500/30 transition-all group shrink-0">
-              <Monitor size={12} className="group-hover:text-indigo-400 transition-colors shrink-0"/>
-              <span className="hidden lg:inline">{appOsDownload.label}</span>
-              <Download size={11} className="group-hover:text-indigo-400 transition-colors shrink-0"/>
-            </a>
-          )}
+        {/* Right col — search · bell · ⋯more · avatar */}
+        <div className="flex items-center justify-end gap-1 pr-1">
+
+          {/* Search */}
           <div className="relative group hidden sm:block">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-zinc-400 transition-colors"/>
-            <input ref={searchInputRef} placeholder="Szukaj w wiadomościach..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-indigo-400 transition-colors pointer-events-none"/>
+            <input ref={searchInputRef} placeholder="Szukaj…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
               onKeyDown={e => {
                 if (e.key === 'Escape') { setSearchQuery(''); (e.target as HTMLInputElement).blur(); }
                 else if (e.key === 'Enter') {
@@ -11418,36 +11413,25 @@ export default function App() {
                   else setSearchResultIdx(i => (i + 1) % searchMatches.length);
                 }
               }}
-              className="bg-white/[0.05] border border-white/[0.07] text-white placeholder-zinc-600 outline-none focus:border-indigo-500/40 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] rounded-xl pl-8 pr-14 py-1.5 text-xs w-44 focus:w-64 transition-all duration-300"/>
-            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-zinc-600 font-mono hidden lg:flex items-center gap-0.5"><span className="border border-zinc-700 rounded px-1 py-0.5">Ctrl</span><span className="border border-zinc-700 rounded px-1 py-0.5">F</span></span>
+              className="bg-white/[0.05] border border-white/[0.07] text-white placeholder-zinc-600 outline-none focus:border-indigo-500/40 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] rounded-xl pl-7 pr-2 py-1.5 text-xs w-32 focus:w-52 transition-all duration-300"/>
           </div>
-          {/* 🎥 Stream mode toggle */}
-          <button onClick={() => { setIsStreamMode(v => { const next=!v; if(!next) setStreamRevealedConvs(new Set()); return next; }); }}
-            title={isStreamMode ? 'Wyłącz tryb streamu' : 'Tryb streamu — ukryj nicki i serwery'}
-            className={`relative w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-200 ${isStreamMode ? 'bg-red-500/20 text-red-400 shadow-[0_0_10px_rgba(239,68,68,0.3)]' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]'}`}>
-            <Video size={15}/>
-            {isStreamMode && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_6px_rgba(239,68,68,0.8)]"/>}
-          </button>
-          {/* 🔔 Notification bell with dropdown panel */}
+
+          {/* Notification bell */}
           <div className="relative" ref={notifBellRef}>
             <button onClick={() => {
               setNotifOpen(p => !p);
               if (!notifOpen) {
-                // Request notification permission on first open
                 if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
                   Notification.requestPermission().catch(() => {});
                 }
               }
-            }} className="relative w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all">
+            }} className={`relative w-8 h-8 flex items-center justify-center rounded-xl transition-all ${notifOpen ? 'bg-indigo-500/20 text-indigo-300' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]'}`}>
               <Bell size={15}/>
-              {(()=>{
-                const unreadCount = notifications.filter(n=>!n.read).length;
-                return unreadCount > 0 ? (
-                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-rose-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5 leading-none shadow-[0_0_6px_rgba(239,68,68,0.5)]">
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </span>
-                ) : null;
-              })()}
+              {(()=>{ const u = notifications.filter(n=>!n.read).length; return u>0 ? (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-rose-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5 leading-none shadow-[0_0_6px_rgba(239,68,68,0.5)]">
+                  {u>99?'99+':u}
+                </span>
+              ) : null; })()}
             </button>
             <AnimatePresence>
               {notifOpen&&(
@@ -11455,7 +11439,6 @@ export default function App() {
                   transition={{duration:0.15,ease:'easeOut'}}
                   className="absolute right-0 top-full mt-2 w-96 max-h-[480px] flex flex-col z-50 rounded-2xl border border-white/[0.1] shadow-2xl shadow-black/60 overflow-hidden"
                   style={{background:'rgba(13,13,24,0.98)',backdropFilter:'blur(24px)'}}>
-                  {/* Header */}
                   <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07] shrink-0">
                     <div className="flex items-center gap-2">
                       <Bell size={14} className="text-indigo-400"/>
@@ -11471,7 +11454,6 @@ export default function App() {
                       {t('notif.markAllRead')}
                     </button>
                   </div>
-                  {/* Notifications list */}
                   <div className="overflow-y-auto flex-1" style={{scrollbarWidth:'thin',scrollbarColor:'#3f3f46 transparent'}}>
                     {notifications.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-12 gap-3 text-center px-6">
@@ -11486,7 +11468,6 @@ export default function App() {
                     ) : (
                       <div className="divide-y divide-white/[0.04]">
                         {(() => {
-                          // Group notifications by server_id + channel_id
                           const groupMap = new Map<string, typeof notifications>();
                           notifications.forEach(n => {
                             const key = n.server_id && n.channel_id ? `${n.server_id}::${n.channel_id}` : n.id;
@@ -11517,9 +11498,7 @@ export default function App() {
                                   className={`w-full text-left px-4 py-3 hover:bg-white/[0.04] transition-colors group ${!notif.read?'bg-indigo-500/[0.04]':''}`}>
                                   <div className="flex items-start gap-3">
                                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${notif.type==='everyone'?'bg-amber-500/15':'bg-indigo-500/15'}`}>
-                                      {notif.type==='everyone'
-                                        ? <Megaphone size={15} className="text-amber-400"/>
-                                        : <AtSign size={15} className="text-indigo-400"/>}
+                                      {notif.type==='everyone' ? <Megaphone size={15} className="text-amber-400"/> : <AtSign size={15} className="text-indigo-400"/>}
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -11536,7 +11515,6 @@ export default function App() {
                                 </button>
                               );
                             }
-                            // Grouped: multiple mentions in same channel
                             const first = items[0];
                             return (
                               <button key={key} onClick={navigateAndRead}
@@ -11545,9 +11523,7 @@ export default function App() {
                                   <div className="relative w-8 h-8 rounded-xl bg-indigo-500/15 flex items-center justify-center shrink-0 mt-0.5">
                                     <AtSign size={15} className="text-indigo-400"/>
                                     {unreadCnt > 0 && (
-                                      <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-rose-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5 shadow">
-                                        {unreadCnt}
-                                      </span>
+                                      <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-rose-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5 shadow">{unreadCnt}</span>
                                     )}
                                   </div>
                                   <div className="flex-1 min-w-0">
@@ -11571,45 +11547,114 @@ export default function App() {
                   </div>
                   {notifications.length > 0&&(
                     <div className="px-4 py-2 border-t border-white/[0.06] shrink-0">
-                      <button onClick={() => setNotifications([])}
-                        className="w-full text-center text-[11px] text-zinc-600 hover:text-rose-400 transition-colors py-1">
-                        Wyczyść wszystkie
-                      </button>
+                      <button onClick={() => setNotifications([])} className="w-full text-center text-[11px] text-zinc-600 hover:text-rose-400 transition-colors py-1">Wyczyść wszystkie</button>
                     </div>
                   )}
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-          {(currentUser?.badges?.some(b=>b.name==='developer')||currentUser?.is_admin)&&(
-            <button onClick={()=>{setPrevView(activeView==='admin'?prevView:(activeView as 'servers'|'dms'|'friends'));setActiveView('admin');setAdminTab('dashboard');setShowCallPanel(false);setProfileViewId(null);}} title="Panel admina"
-              className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-violet-400 hover:bg-violet-500/10 transition-all">
-              <LayoutDashboard size={15}/>
+
+          {/* ⋯ More menu — consolidates secondary actions */}
+          <div className="relative" ref={moreMenuRef}>
+            <button onClick={() => setMoreMenuOpen(p => !p)}
+              title="Więcej opcji"
+              className={`relative w-8 h-8 flex items-center justify-center rounded-xl transition-all ${moreMenuOpen ? 'bg-white/[0.10] text-white' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]'}`}>
+              <MoreHorizontal size={16}/>
+              {/* Dot when any secondary feature is active */}
+              {(isStreamMode || focusMode) && (
+                <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_4px_rgba(251,191,36,0.8)]"/>
+              )}
             </button>
-          )}
-          {/* Focus Mode toggle */}
-          <button onClick={() => {
-            setFocusMode(v => {
-              const next = !v;
-              addToast(next ? '🌙 Focus Mode włączony — dźwięki wyciszone' : '🔔 Focus Mode wyłączony', 'info');
-              return next;
-            });
-          }}
-            title={focusMode ? 'Focus Mode włączony — kliknij aby wyłączyć' : 'Focus Mode — wycisza dźwięki powiadomień'}
-            className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all ${focusMode ? 'text-amber-400 bg-amber-500/15 shadow-[0_0_10px_rgba(245,158,11,0.2)]' : 'text-zinc-500 hover:text-amber-400 hover:bg-amber-500/10'}`}>
-            <Moon size={15}/>
-          </button>
-          {/* Saved Messages */}
-          <button onClick={() => setBookmarksOpen(true)}
-            title="Zapisane wiadomości"
-            className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-indigo-400 hover:bg-indigo-500/10 transition-all">
-            <Bookmark size={15}/>
-          </button>
-          <button onClick={() => { setAppSettTab('account'); setAppSettOpen(true); }} title="Ustawienia"
-            className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all">
-            <Settings size={15}/>
-          </button>
-          <button onClick={openOwnProfile} className="w-7 h-7 rounded-full border-2 border-white/[0.08] overflow-hidden hover:border-indigo-500/50 transition-all shrink-0 shadow-sm">
+            <AnimatePresence>
+              {moreMenuOpen && (
+                <motion.div
+                  initial={{opacity:0,scale:0.95,y:-4}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.95,y:-4}}
+                  transition={{duration:0.12,ease:[0.16,1,0.3,1]}}
+                  className="absolute right-0 top-full mt-2 w-56 z-50 rounded-2xl border border-white/[0.1] shadow-2xl shadow-black/60 py-1.5 overflow-hidden"
+                  style={{background:'rgba(13,11,26,0.98)',backdropFilter:'blur(24px)'}}>
+
+                  {/* Settings */}
+                  <button onClick={() => { setMoreMenuOpen(false); setAppSettTab('account'); setAppSettOpen(true); }}
+                    className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
+                    <div className="w-7 h-7 rounded-lg bg-white/[0.05] flex items-center justify-center shrink-0">
+                      <Settings size={13} className="text-zinc-400"/>
+                    </div>
+                    <span>Ustawienia</span>
+                  </button>
+
+                  {/* Bookmarks */}
+                  <button onClick={() => { setMoreMenuOpen(false); setBookmarksOpen(true); }}
+                    className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
+                    <div className="w-7 h-7 rounded-lg bg-white/[0.05] flex items-center justify-center shrink-0">
+                      <Bookmark size={13} className="text-indigo-400"/>
+                    </div>
+                    <span>Zapisane</span>
+                  </button>
+
+                  <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
+
+                  {/* Focus Mode */}
+                  <button onClick={() => {
+                    setMoreMenuOpen(false);
+                    setFocusMode(v => {
+                      const next = !v;
+                      addToast(next ? '🌙 Focus Mode włączony — dźwięki wyciszone' : '🔔 Focus Mode wyłączony', 'info');
+                      return next;
+                    });
+                  }} className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-sm transition-colors text-left ${focusMode ? 'text-amber-300 hover:bg-amber-500/10' : 'text-zinc-300 hover:bg-white/[0.06] hover:text-white'}`}>
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${focusMode ? 'bg-amber-500/20' : 'bg-white/[0.05]'}`}>
+                      <Moon size={13} className={focusMode ? 'text-amber-400' : 'text-zinc-400'}/>
+                    </div>
+                    <span>Focus Mode</span>
+                    {focusMode && <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 leading-none">ON</span>}
+                  </button>
+
+                  {/* Stream Mode */}
+                  <button onClick={() => { setMoreMenuOpen(false); setIsStreamMode(v => { const next=!v; if(!next) setStreamRevealedConvs(new Set()); return next; }); }}
+                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-sm transition-colors text-left ${isStreamMode ? 'text-red-300 hover:bg-red-500/10' : 'text-zinc-300 hover:bg-white/[0.06] hover:text-white'}`}>
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${isStreamMode ? 'bg-red-500/20' : 'bg-white/[0.05]'}`}>
+                      <Video size={13} className={isStreamMode ? 'text-red-400' : 'text-zinc-400'}/>
+                    </div>
+                    <span>Tryb streamu</span>
+                    {isStreamMode && <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 leading-none">ON</span>}
+                  </button>
+
+                  {/* Admin panel — only for admins/devs */}
+                  {(currentUser?.badges?.some(b=>b.name==='developer')||currentUser?.is_admin) && (
+                    <>
+                      <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
+                      <button onClick={() => { setMoreMenuOpen(false); setPrevView(activeView==='admin'?prevView:(activeView as 'servers'|'dms'|'friends')); setActiveView('admin'); setAdminTab('dashboard'); setShowCallPanel(false); setProfileViewId(null); }}
+                        className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-violet-500/10 hover:text-violet-300 transition-colors text-left">
+                        <div className="w-7 h-7 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
+                          <LayoutDashboard size={13} className="text-violet-400"/>
+                        </div>
+                        <span>Panel admina</span>
+                      </button>
+                    </>
+                  )}
+
+                  {/* Download — only in web */}
+                  {!isTauri && appOsDownload.ready && (
+                    <>
+                      <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
+                      <a href={appOsDownload.url}
+                        onClick={() => setMoreMenuOpen(false)}
+                        className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-indigo-500/10 hover:text-indigo-300 transition-colors">
+                        <div className="w-7 h-7 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
+                          <Download size={13} className="text-indigo-400"/>
+                        </div>
+                        <span>{appOsDownload.label}</span>
+                      </a>
+                    </>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Avatar — own profile */}
+          <button onClick={openOwnProfile} className="w-7 h-7 rounded-full border-2 border-white/[0.08] overflow-hidden hover:border-indigo-500/50 transition-all shrink-0 shadow-sm ml-0.5">
             <img src={streamerMode ? 'https://api.dicebear.com/7.x/initials/svg?seed=S&backgroundColor=6366f1&fontColor=ffffff' : (currentUser ? ava(currentUser) : '')} alt="" className="w-full h-full object-cover"/>
           </button>
         </div>
