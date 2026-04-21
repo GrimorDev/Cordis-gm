@@ -113,7 +113,7 @@ export interface FriendRequest {
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export const authApi = {
   login:    (username: string, password: string) =>
-    req<{ token: string; user: User }>('POST', '/auth/login', { username, password }),
+    req<{ token: string; user: User }>('POST', '/auth/login', { login: username, password }),
   register: (username: string, password: string) =>
     req<{ token: string; user: User }>('POST', '/auth/register', { username, password }),
   me:       () => req<User>('GET', '/auth/me'),
