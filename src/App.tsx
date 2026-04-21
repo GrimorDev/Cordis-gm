@@ -11341,9 +11341,9 @@ export default function App() {
                     whileHover="hovered"
                     initial="rest"
                     animate="rest"
-                    className={`relative h-8 flex items-center gap-0 rounded-xl shrink-0 overflow-hidden transition-all duration-200 cursor-pointer border ${isActive?'border-indigo-500/40 bg-indigo-500/10 shadow-[0_0_10px_rgba(99,102,241,0.15)]':'border-white/[0.04] bg-white/[0.03] hover:bg-white/[0.07] hover:border-white/[0.09]'}`}>
-                    {/* Active indicator bar */}
-                    {isActive&&<motion.span layoutId="nav-srv-indicator" className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.7)]"/>}
+                    className={`relative h-8 flex items-center gap-0 rounded-xl shrink-0 overflow-hidden transition-all duration-200 cursor-pointer border ${isActive?'border-indigo-500/50 bg-indigo-500/15 shadow-[0_0_16px_rgba(99,102,241,0.25)]':'border-white/[0.04] bg-white/[0.03] hover:bg-indigo-500/10 hover:border-indigo-500/20 hover:shadow-[0_0_10px_rgba(99,102,241,0.12)]'}`}>
+                    {/* Active indicator bar — gradient */}
+                    {isActive&&<motion.span layoutId="nav-srv-indicator" className="absolute bottom-0 left-0 right-0 h-[2px] shadow-[0_0_8px_rgba(99,102,241,0.8)]" style={{background:'linear-gradient(90deg,#818cf8,#a78bfa)'}}/>}
                     {/* Icon */}
                     <span className={`w-8 h-8 flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden rounded-xl relative ${srv.is_official?'ring-1 ring-amber-400/60 ring-inset':''}`}>
                       {srv.icon_url ? <img src={staticUrl(srv.icon_url)} className="w-full h-full object-cover" alt=""/> : <span className={`w-full h-full flex items-center justify-center rounded-xl ${isActive?'bg-indigo-600':'bg-zinc-700/80'}`}>{srv.name.charAt(0).toUpperCase()}</span>}
@@ -11380,8 +11380,19 @@ export default function App() {
           </button>
         </div>
         {/* Center col — Cordyn, always truly centered in the nav */}
-        <div className="flex items-center justify-center pointer-events-none select-none px-4">
-          <span className="text-white font-bold tracking-tight text-sm">Cordyn</span>
+        <div className="flex items-center justify-center pointer-events-none select-none px-4 gap-1.5">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="shrink-0" aria-hidden>
+            <circle cx="12" cy="12" r="10" fill="url(#brand-grad-icon)"/>
+            <path d="M8 12a4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+            <circle cx="16" cy="12" r="1.5" fill="white"/>
+            <defs>
+              <linearGradient id="brand-grad-icon" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stopColor="#818cf8"/>
+                <stop offset="100%" stopColor="#38bdf8"/>
+              </linearGradient>
+            </defs>
+          </svg>
+          <span className="brand-gradient font-bold tracking-tight text-sm">Cordyn</span>
         </div>
         {/* Right col */}
         <div className="flex items-center justify-end gap-1.5 pr-1">
@@ -11732,7 +11743,7 @@ export default function App() {
                           <button
                             onClick={()=>{setActiveChannel(ch.id);setIsMobileOpen(false);setSrvSettOpen(false);setProfileViewId(null);if(activeViewRef.current==='admin')setActiveView('servers');}}
                             onContextMenu={e=>{e.preventDefault();setChCtxMenu({x:e.clientX,y:e.clientY,ch});}}
-                            className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${isAct?'bg-indigo-500/15 text-white border border-indigo-500/25':ping>0?'text-white hover:bg-white/[0.06] border border-amber-500/20 bg-amber-500/5':unread>0?'text-white hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${isAct?'bg-indigo-500/15 text-white border border-indigo-500/25 shadow-[inset_3px_0_0_#818cf8]':ping>0?'text-white hover:bg-white/[0.06] border border-amber-500/20 bg-amber-500/5':unread>0?'text-white hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
                             <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
                               <ChIcon size={16} className={`shrink-0 ${isAct?'text-indigo-400':ping>0?'text-amber-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
                               <span className={`text-sm truncate ${(unread>0||ping>0)&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
@@ -11814,7 +11825,7 @@ export default function App() {
                               onContextMenu={e=>{ e.preventDefault(); setChCtxMenu({x:e.clientX,y:e.clientY,ch}); }}
                               className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${
                                 isAct
-                                  ? 'bg-indigo-500/15 text-white border border-indigo-500/25'
+                                  ? 'bg-indigo-500/15 text-white border border-indigo-500/25 shadow-[inset_3px_0_0_#818cf8]'
                                   : ping > 0
                                     ? 'text-white hover:bg-white/[0.06] border border-amber-500/20 bg-amber-500/5'
                                     : unread > 0
@@ -11956,7 +11967,7 @@ export default function App() {
                       }
                     }}
                     onContextMenu={e=>{ e.preventDefault(); setGroupCtxMenu({ x: e.clientX, y: Math.min(e.clientY, window.innerHeight - 160), gc }); }}
-                    className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/15 text-white border border-indigo-500/25':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
+                    className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/15 text-white border border-indigo-500/25 shadow-[inset_3px_0_0_#818cf8]':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
                     <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 flex items-center justify-center shrink-0 overflow-hidden">
                       {gc.icon_url
                         ? <img src={staticUrl(gc.icon_url)} className="w-full h-full object-cover" alt=""/>
@@ -11980,7 +11991,7 @@ export default function App() {
                 return (
                   <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setActiveGroupDm(null); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); setProfileViewId(null); }}
                     onContextMenu={e => { e.preventDefault(); const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setDmCtxMenu({ x: e.clientX, y: Math.min(e.clientY, window.innerHeight - 300), dm }); }}
-                    className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/15 text-white border border-indigo-500/25':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
+                    className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/15 text-white border border-indigo-500/25 shadow-[inset_3px_0_0_#818cf8]':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
                     <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava({avatar_url:dm.other_avatar,username:dm.other_username})}")`} as React.CSSProperties}
                       onClick={e=>{ e.stopPropagation(); showHoverCard(dm.other_user_id, e); }}>
                       <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className={`w-10 h-10 rounded-2xl object-cover av-eff-${(dm as any).other_avatar_effect||'none'} cursor-pointer hover:opacity-80 transition-opacity`} alt=""/>
@@ -12758,7 +12769,7 @@ export default function App() {
                     {voiceChatMsgs.map(msg => (
                       <div key={msg.id} className={`flex gap-2 ${msg.sender_id===currentUser?.id?'flex-row-reverse':''}`}>
                         <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} className="w-6 h-6 rounded-lg object-cover shrink-0 self-start mt-0.5" alt=""/>
-                        <div className={`max-w-[85%] px-2.5 py-1.5 rounded-xl text-xs msg-md ${msg.sender_id===currentUser?.id?'bg-indigo-600/80 text-white':'bg-white/[0.08] text-zinc-200'}`}
+                        <div className={`max-w-[85%] px-2.5 py-1.5 rounded-xl text-xs msg-md ${msg.sender_id===currentUser?.id?'bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-sm shadow-indigo-500/20':'glass-bubble text-zinc-200'}`}
                           dangerouslySetInnerHTML={{__html:renderMsgHTML(msg.content)}}/>
                       </div>
                     ))}
@@ -13916,7 +13927,7 @@ export default function App() {
                                     );
                                   }
                                   return (
-                                    <div className={`px-3 py-2 rounded-2xl text-sm msg-md ${isMe ? 'bg-indigo-600/80 text-white' : 'bg-white/[0.08] text-zinc-200'}`}
+                                    <div className={`px-3 py-2 rounded-2xl text-sm msg-md ${isMe ? 'bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-md shadow-indigo-500/20' : 'glass-bubble text-zinc-200'}`}
                                       dangerouslySetInnerHTML={{__html: renderMsgHTML(c)}}/>
                                   );
                                 })()}
@@ -13973,9 +13984,9 @@ export default function App() {
                         <React.Fragment key={msg.id}>
                           {showSep&&(
                             <div className="flex items-center gap-3 my-4">
-                              <div className="flex-1 h-px bg-white/[0.07]"/>
-                              <span className="text-xs font-semibold text-zinc-600 uppercase tracking-widest shrink-0">{sepLabel}</span>
-                              <div className="flex-1 h-px bg-white/[0.07]"/>
+                              <div className="flex-1 h-px" style={{background:'linear-gradient(90deg,transparent,rgba(139,92,246,0.15),transparent)'}}/>
+                              <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest shrink-0 px-2 py-0.5 rounded-full border border-white/[0.04] bg-white/[0.02]">{sepLabel}</span>
+                              <div className="flex-1 h-px" style={{background:'linear-gradient(90deg,transparent,rgba(139,92,246,0.15),transparent)'}}/>
                             </div>
                           )}
                           <div className="flex items-center justify-center my-3">
@@ -13992,9 +14003,9 @@ export default function App() {
                       <React.Fragment key={msg.id}>
                         {showSep&&(
                           <div className="flex items-center gap-3 my-4">
-                            <div className="flex-1 h-px bg-white/[0.07]"/>
-                            <span className="text-xs font-semibold text-zinc-600 uppercase tracking-widest shrink-0">{sepLabel}</span>
-                            <div className="flex-1 h-px bg-white/[0.07]"/>
+                            <div className="flex-1 h-px" style={{background:'linear-gradient(90deg,transparent,rgba(139,92,246,0.15),transparent)'}}/>
+                            <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest shrink-0 px-2 py-0.5 rounded-full border border-white/[0.04] bg-white/[0.02]">{sepLabel}</span>
+                            <div className="flex-1 h-px" style={{background:'linear-gradient(90deg,transparent,rgba(139,92,246,0.15),transparent)'}}/>
                           </div>
                         )}
                         {/* ── BUBBLE MESSAGE ───────────────────────── */}
@@ -14649,7 +14660,7 @@ export default function App() {
                           </motion.div>
                         )}
                       </AnimatePresence>
-                      <div className={`flex items-center gap-3 bg-white/[0.06] border border-white/[0.08] rounded-2xl px-4 py-3.5 hover:border-white/[0.12] focus-within:border-indigo-500/40 focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] transition-all duration-200 ${slowmodeLeft > 0 && activeView === 'servers' ? 'opacity-40 pointer-events-none' : ''}`}>
+                      <div className={`flex items-center gap-3 bg-white/[0.06] border border-white/[0.08] rounded-2xl px-4 py-3.5 hover:border-indigo-500/20 focus-within:border-indigo-500/50 focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.12),0_0_20px_rgba(99,102,241,0.08)] transition-all duration-200 ${slowmodeLeft > 0 && activeView === 'servers' ? 'opacity-40 pointer-events-none' : ''}`}>
                         <input type="file" ref={attachRef} onChange={handleAttach} accept="*/*" multiple className="hidden"/>
                         {/* Plus menu — Discord-style */}
                         <div className="relative shrink-0">
@@ -14816,7 +14827,7 @@ export default function App() {
                           {showEmojiPicker && <EmojiPicker onSelect={insertEmoji} onClose={() => setShowEmojiPicker(false)} serverEmojis={activeView==='servers'&&activeServer ? (serverEmojis.get(activeServer)||[]) : []}/>}
                         </div>
                         <button type="submit" disabled={(!msgInput.trim()&&!attachFile&&!attachFiles.length)||sending}
-                          className="w-8 h-8 rounded-xl bg-indigo-500 hover:bg-indigo-400 disabled:opacity-25 disabled:cursor-not-allowed flex items-center justify-center text-white transition-all duration-150 active:scale-90 shrink-0 shadow-lg shadow-indigo-500/25">
+                          className="w-8 h-8 rounded-xl send-btn disabled:opacity-25 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex items-center justify-center text-white shrink-0">
                           {sending?<Loader2 size={14} className="animate-spin"/>:<Send size={14}/>}
                         </button>
                       </div>
