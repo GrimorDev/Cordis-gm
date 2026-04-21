@@ -9173,18 +9173,6 @@ export default function App() {
     }
   }, [channelMsgs, dmMsgs]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Search navigation ────────────────────────────────────────────
-  useEffect(() => { setSearchResultIdx(0); }, [searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (!searchMatches.length) return;
-    const id = searchMatches[searchResultIdx];
-    if (!id) return;
-    requestAnimationFrame(() => {
-      const el = document.querySelector(`[data-msg-id="${id}"]`);
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
-  }, [searchResultIdx, searchMatches]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // ── Sync refs ───────────────────────────────────────────────────
   useEffect(() => { currentUserRef.current    = currentUser;    }, [currentUser]);
   useEffect(() => { activeCallRef.current     = activeCall;     }, [activeCall]);
@@ -11092,7 +11080,19 @@ export default function App() {
   const searchMatchSet  = useMemo(() => new Set(searchMatches), [searchMatches]);
   const currentSearchId = searchMatches[searchResultIdx] ?? null;
 
-  // Highlight matching text in search results
+  // ── Search navigation effects (must be after searchMatches declaration) ────
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setSearchResultIdx(0); }, [searchQuery]);
+  useEffect(() => {
+    if (!searchMatches.length) return;
+    const id = searchMatches[searchResultIdx];
+    if (!id) return;
+    requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-msg-id="${id}"]`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }, [searchResultIdx, searchMatches]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Returns status label + color class for non-online statuses (idle, dnd)
   const statusLabel = (s: string | undefined) => {
     if (s === 'idle') return { text: t('status.idle'), cls: 'text-amber-400' };
