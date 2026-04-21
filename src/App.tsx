@@ -11036,6 +11036,29 @@ export default function App() {
     }
   };
 
+  // ── Search computed values — MUST be before early returns (hooks rules) ──
+  const allMessages = activeView === 'servers' ? channelMsgs : dmMsgs;
+  // Always show all messages — search navigates + highlights, never hides
+  const messages = allMessages;
+  const searchMatches = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [] as string[];
+    return allMessages.filter(m => m.content?.toLowerCase().includes(q)).map(m => m.id);
+  }, [allMessages, searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+  const searchMatchSet  = useMemo(() => new Set(searchMatches), [searchMatches]);
+  const currentSearchId = searchMatches[searchResultIdx] ?? null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setSearchResultIdx(0); }, [searchQuery]);
+  useEffect(() => {
+    if (!searchMatches.length) return;
+    const id = searchMatches[searchResultIdx];
+    if (!id) return;
+    requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-msg-id="${id}"]`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }, [searchResultIdx, searchMatches]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ──────────────────────────────────────────────────────────────────
   if (authLoading) return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#09090b', overflow: 'hidden' }}>
@@ -11068,30 +11091,6 @@ export default function App() {
   const canPinMessages         = hasAdminPerm || myPerms.includes('pin_messages');
   const incoming = friendReqs.filter(r => r.direction === 'incoming');
   const outgoing = friendReqs.filter(r => r.direction === 'outgoing');
-  const allMessages = activeView === 'servers' ? channelMsgs : dmMsgs;
-  // Always show all messages — search navigates + highlights, never hides
-  const messages = allMessages;
-  // IDs of messages matching the current search query (order = chronological)
-  const searchMatches = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return [] as string[];
-    return allMessages.filter(m => m.content?.toLowerCase().includes(q)).map(m => m.id);
-  }, [allMessages, searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
-  const searchMatchSet  = useMemo(() => new Set(searchMatches), [searchMatches]);
-  const currentSearchId = searchMatches[searchResultIdx] ?? null;
-
-  // ── Search navigation effects (must be after searchMatches declaration) ────
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { setSearchResultIdx(0); }, [searchQuery]);
-  useEffect(() => {
-    if (!searchMatches.length) return;
-    const id = searchMatches[searchResultIdx];
-    if (!id) return;
-    requestAnimationFrame(() => {
-      const el = document.querySelector(`[data-msg-id="${id}"]`);
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
-  }, [searchResultIdx, searchMatches]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Returns status label + color class for non-online statuses (idle, dnd)
   const statusLabel = (s: string | undefined) => {
