@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
+  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Image,
 } from 'react-native';
 import { router } from 'expo-router';
 import { C } from '../../src/theme';
@@ -43,9 +43,11 @@ export default function LoginScreen() {
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         {/* Logo */}
         <View style={styles.logoArea}>
-          <View style={styles.logoCircle}>
-            <Text style={styles.logoText}>C</Text>
-          </View>
+          <Image
+            source={require('../../assets/icon.png')}
+            style={styles.logoImg}
+            resizeMode="contain"
+          />
           <Text style={styles.appName}>Cordyn</Text>
           <Text style={styles.tagline}>Twoja społeczność, Twoje miejsce</Text>
         </View>
@@ -107,11 +109,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: C.bg },
   container: { flexGrow: 1, justifyContent: 'center', padding: 24 },
   logoArea: { alignItems: 'center', marginBottom: 40 },
-  logoCircle: {
-    width: 72, height: 72, borderRadius: 36,
-    backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center', marginBottom: 16,
-  },
-  logoText: { color: '#fff', fontSize: 36, fontWeight: '800' },
+  logoImg: { width: 88, height: 88, borderRadius: 22, marginBottom: 16 },
   appName: { color: C.text, fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
   tagline: { color: C.textMuted, fontSize: 13, marginTop: 6 },
   card: {

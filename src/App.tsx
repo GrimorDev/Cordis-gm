@@ -7043,6 +7043,7 @@ export default function App() {
   const [threadInput,     setThreadInput]     = useState('');
   const [threadSending,   setThreadSending]   = useState(false);
   const [searchQuery, setSearchQuery]         = useState('');
+  const [searchResultIdx, setSearchResultIdx] = useState(0);
   const searchInputRef                        = useRef<HTMLInputElement>(null);
   const settContentRef                        = useRef<HTMLDivElement>(null);
   const [activeSettSection, setActiveSettSection] = useState<string>('');
@@ -9172,6 +9173,18 @@ export default function App() {
     }
   }, [channelMsgs, dmMsgs]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Search navigation ────────────────────────────────────────────
+  useEffect(() => { setSearchResultIdx(0); }, [searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!searchMatches.length) return;
+    const id = searchMatches[searchResultIdx];
+    if (!id) return;
+    requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-msg-id="${id}"]`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }, [searchResultIdx, searchMatches]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Sync refs ───────────────────────────────────────────────────
   useEffect(() => { currentUserRef.current    = currentUser;    }, [currentUser]);
   useEffect(() => { activeCallRef.current     = activeCall;     }, [activeCall]);
@@ -11068,9 +11081,16 @@ export default function App() {
   const incoming = friendReqs.filter(r => r.direction === 'incoming');
   const outgoing = friendReqs.filter(r => r.direction === 'outgoing');
   const allMessages = activeView === 'servers' ? channelMsgs : dmMsgs;
-  const messages = searchQuery.trim()
-    ? allMessages.filter(m => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
-    : allMessages;
+  // Always show all messages — search navigates + highlights, never hides
+  const messages = allMessages;
+  // IDs of messages matching the current search query (order = chronological)
+  const searchMatches = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [] as string[];
+    return allMessages.filter(m => m.content?.toLowerCase().includes(q)).map(m => m.id);
+  }, [allMessages, searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+  const searchMatchSet  = useMemo(() => new Set(searchMatches), [searchMatches]);
+  const currentSearchId = searchMatches[searchResultIdx] ?? null;
 
   // Highlight matching text in search results
   // Returns status label + color class for non-online statuses (idle, dnd)
@@ -11379,7 +11399,15 @@ export default function App() {
           <div className="relative group hidden sm:block">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-zinc-400 transition-colors"/>
             <input ref={searchInputRef} placeholder="Szukaj w wiadomościach..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Escape') { setSearchQuery(''); (e.target as HTMLInputElement).blur(); } }}
+              onKeyDown={e => {
+                if (e.key === 'Escape') { setSearchQuery(''); (e.target as HTMLInputElement).blur(); }
+                else if (e.key === 'Enter') {
+                  if (!searchMatches.length) return;
+                  e.preventDefault();
+                  if (e.shiftKey) setSearchResultIdx(i => (i - 1 + searchMatches.length) % searchMatches.length);
+                  else setSearchResultIdx(i => (i + 1) % searchMatches.length);
+                }
+              }}
               className="bg-white/[0.05] border border-white/[0.07] text-white placeholder-zinc-600 outline-none focus:border-indigo-500/40 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] rounded-xl pl-8 pr-14 py-1.5 text-xs w-44 focus:w-64 transition-all duration-300"/>
             <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-zinc-600 font-mono hidden lg:flex items-center gap-0.5"><span className="border border-zinc-700 rounded px-1 py-0.5">Ctrl</span><span className="border border-zinc-700 rounded px-1 py-0.5">F</span></span>
           </div>
@@ -13754,6 +13782,38 @@ export default function App() {
                     <ChevronDown size={14}/> Nowe wiadomości
                   </button>
                 )}
+                {/* Search navigation bar */}
+                {searchQuery.trim() && searchMatches.length > 0 && (
+                  <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-[#18182a]/95 border border-indigo-500/30 shadow-2xl shadow-black/40 backdrop-blur-md text-xs text-zinc-300 select-none">
+                    <Search size={12} className="text-indigo-400 shrink-0"/>
+                    <span className="text-zinc-400">„<span className="text-white font-medium">{searchQuery}</span>"</span>
+                    <span className="text-indigo-400 font-semibold tabular-nums">{searchResultIdx + 1}/{searchMatches.length}</span>
+                    <div className="flex gap-0.5 ml-1">
+                      <button
+                        onClick={() => setSearchResultIdx(i => (i - 1 + searchMatches.length) % searchMatches.length)}
+                        className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/[0.10] text-zinc-400 hover:text-white transition-colors"
+                        title="Poprzedni wynik (Shift+Enter)">
+                        <ChevronUp size={13}/>
+                      </button>
+                      <button
+                        onClick={() => setSearchResultIdx(i => (i + 1) % searchMatches.length)}
+                        className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-white/[0.10] text-zinc-400 hover:text-white transition-colors"
+                        title="Następny wynik (Enter)">
+                        <ChevronDown size={13}/>
+                      </button>
+                    </div>
+                    <button onClick={() => setSearchQuery('')} className="w-5 h-5 flex items-center justify-center rounded-md hover:bg-white/[0.10] text-zinc-600 hover:text-zinc-300 transition-colors ml-0.5">
+                      <X size={11}/>
+                    </button>
+                  </div>
+                )}
+                {searchQuery.trim() && searchMatches.length === 0 && (
+                  <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-[#18182a]/95 border border-zinc-700/40 shadow-2xl shadow-black/40 backdrop-blur-md text-xs text-zinc-500 select-none">
+                    <Search size={12} className="shrink-0"/>
+                    <span>Brak wyników dla „<span className="text-zinc-400">{searchQuery}</span>"</span>
+                    <button onClick={() => setSearchQuery('')} className="w-5 h-5 flex items-center justify-center rounded-md hover:bg-white/[0.10] text-zinc-600 hover:text-zinc-300 transition-colors ml-0.5"><X size={11}/></button>
+                  </div>
+                )}
               {/* Messages */}
               <div ref={msgScrollRef} className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-5 custom-scrollbar flex flex-col"
                 style={activeCh?.background_url ? {
@@ -13869,13 +13929,6 @@ export default function App() {
                       </>
                     );
                   })()}
-                  {searchQuery.trim()&&(
-                    <div className="flex items-center gap-2 px-3 py-2 mb-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-300">
-                      <Search size={12} className="shrink-0"/>
-                      <span>Wyniki wyszukiwania: <strong className="text-white">„{searchQuery}"</strong> — {messages.length} {messages.length===1?'wiadomość':messages.length<5?'wiadomości':'wiadomości'}</span>
-                      <button onClick={()=>setSearchQuery('')} className="ml-auto text-indigo-400 hover:text-white transition-colors"><X size={12}/></button>
-                    </div>
-                  )}
                   {!activeGroupDm && !msgsLoading&&!searchQuery.trim()&&<div className="text-center py-8 mb-3">
                     {activeView==='dms'&&activeDm ? (
                       <>
@@ -13946,11 +13999,15 @@ export default function App() {
                           </div>
                         )}
                         {/* ── BUBBLE MESSAGE ───────────────────────── */}
-                        {(()=>{ const mentionsMe = !!currentUser?.username && new RegExp(`!${currentUser.username}(?:[^a-zA-Z0-9_]|$)`,'i').test(msg.content); return (
+                        {(()=>{ const mentionsMe = !!currentUser?.username && new RegExp(`!${currentUser.username}(?:[^a-zA-Z0-9_]|$)`,'i').test(msg.content);
+                        const isSearchMatch = searchMatchSet.has(msg.id);
+                        const isCurrentMatch = currentSearchId === msg.id;
+                        return (
                         <motion.div
+                          data-msg-id={msg.id}
                           initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: Math.min(idx * 0.01, 0.06), type: 'spring', stiffness: 340, damping: 28 }}
-                          className={`relative flex ${showChatAvatars?'gap-2.5':'gap-0'} group ${compactMessages || isGrouped ? 'mb-0.5' : 'mb-1.5'} ${isGrouped ? 'mt-0' : ''} ${isOwn?'flex-row-reverse':'flex-row'} ${mentionsMe?'rounded-xl bg-amber-400/5 border-l-2 border-amber-400/60 pl-2 -ml-2':''}`}
+                          className={`relative flex ${showChatAvatars?'gap-2.5':'gap-0'} group ${compactMessages || isGrouped ? 'mb-0.5' : 'mb-1.5'} ${isGrouped ? 'mt-0' : ''} ${isOwn?'flex-row-reverse':'flex-row'} ${mentionsMe?'rounded-xl bg-amber-400/5 border-l-2 border-amber-400/60 pl-2 -ml-2':''} ${isCurrentMatch?'rounded-xl outline outline-2 outline-indigo-500/60 bg-indigo-500/[0.07] -mx-1 px-1':''}  ${isSearchMatch&&!isCurrentMatch?'rounded-xl bg-indigo-500/[0.04]':''}`}
                           onContextMenu={e=>{
                             if(editingMsgId===msg.id) return;
                             if((msg as any).deleted||msg.content==='__deleted__') return;

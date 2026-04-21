@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
+  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Image,
 } from 'react-native';
 import { router } from 'expo-router';
 import { C } from '../../src/theme';
@@ -43,9 +43,11 @@ export default function RegisterScreen() {
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={styles.logoArea}>
-          <View style={styles.logoCircle}>
-            <Text style={styles.logoText}>C</Text>
-          </View>
+          <Image
+            source={require('../../assets/icon.png')}
+            style={styles.logoImg}
+            resizeMode="contain"
+          />
           <Text style={styles.appName}>Cordyn</Text>
         </View>
 
@@ -93,8 +95,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: C.bg },
   container: { flexGrow: 1, justifyContent: 'center', padding: 24 },
   logoArea: { alignItems: 'center', marginBottom: 32 },
-  logoCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  logoText: { color: '#fff', fontSize: 30, fontWeight: '800' },
+  logoImg: { width: 80, height: 80, borderRadius: 20, marginBottom: 12 },
   appName: { color: C.text, fontSize: 26, fontWeight: '800' },
   card: { backgroundColor: C.bgCard, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: C.border },
   title: { color: C.text, fontSize: 22, fontWeight: '700', marginBottom: 20 },
