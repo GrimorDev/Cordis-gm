@@ -206,6 +206,36 @@ router.put('/me', authMiddleware,
   }
 );
 
+// PUT /api/users/me/password — change password (requires current password)
+router.put(
+  '/me/password',
+  authMiddleware,
+  [
+    body('current_password').notEmpty().withMessage('Obecne hasło jest wymagane'),
+    body('new_password').isLength({ min: 8 }).withMessage('Nowe hasło musi mieć co najmniej 8 znaków'),
+  ],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0]?.msg ?? 'Validation error' });
+
+    try {
+      const { current_password, new_password } = req.body;
+      const { rows } = await query('SELECT password_hash FROM users WHERE id=$1', [req.user!.id]);
+      if (!rows[0]) return res.status(404).json({ error: 'User not found' });
+
+      const valid = await bcrypt.compare(current_password, rows[0].password_hash);
+      if (!valid) return res.status(401).json({ error: 'Nieprawidłowe obecne hasło' });
+
+      const hash = await bcrypt.hash(new_password, 12);
+      await query('UPDATE users SET password_hash=$1, updated_at=NOW() WHERE id=$2', [hash, req.user!.id]);
+
+      return res.json({ ok: true });
+    } catch {
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
 // PUT /api/users/me/status
 router.put('/me/status', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { status, duration_ms } = req.body;

@@ -122,25 +122,31 @@ export const authApi = {
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 export const usersApi = {
-  updateMe:     (data: Partial<{ username: string; about_me: string; preferred_status: string }>) =>
+  updateMe:      (data: Partial<{ username: string; about_me: string; preferred_status: string; bio: string }>) =>
     req<User>('PUT', '/users/me', data),
-  updateStatus: (status: string) =>
+  updateStatus:  (status: string) =>
     req<{ ok: boolean }>('PUT', '/users/me/status', { status }),
-  get: (id: string) => req<User>('GET', `/users/${id}`),
+  changePassword:(current: string, newPass: string) =>
+    req<{ ok: boolean }>('PUT', '/users/me/password', { current_password: current, new_password: newPass }),
+  get:           (id: string) => req<User>('GET', `/users/${id}`),
 };
 
 // ── Servers ───────────────────────────────────────────────────────────────────
 export const serversApi = {
-  list:  () => req<Server[]>('GET', '/servers'),
-  get:   (id: string) => req<Server>('GET', `/servers/${id}`),
-  create:(name: string) => req<Server>('POST', '/servers', { name }),
-  join:  (code: string) => req<Server>('POST', '/servers/join', { code }),
-  leave: (id: string) => req<{ ok: boolean }>('POST', `/servers/${id}/leave`),
+  list:        () => req<Server[]>('GET', '/servers'),
+  get:         (id: string) => req<Server>('GET', `/servers/${id}`),
+  create:      (name: string, description?: string) => req<Server>('POST', '/servers', { name, description }),
+  join:        (code: string) => req<Server>('POST', '/servers/join', { code }),
+  leave:       (id: string) => req<{ ok: boolean }>('POST', `/servers/${id}/leave`),
+  members:     (id: string) => req<{ id: string; username: string; avatar_url: string | null; status: string; role_name: string }[]>('GET', `/servers/${id}/members`),
+  generateInvite: (id: string) => req<{ code: string; url: string }>('POST', `/servers/${id}/invite`),
 };
 
 // ── Channels ──────────────────────────────────────────────────────────────────
 export const channelsApi = {
-  list: (serverId: string) => req<Channel[]>('GET', `/channels?server_id=${serverId}`),
+  list: (serverId: string) => req<Channel[]>('GET', `/channels/server/${serverId}`),
+  create: (serverId: string, name: string, type: 'text' | 'voice' = 'text') =>
+    req<Channel>('POST', '/channels', { server_id: serverId, name, type }),
 };
 
 // ── Messages ──────────────────────────────────────────────────────────────────
