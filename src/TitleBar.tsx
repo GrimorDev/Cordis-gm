@@ -13,6 +13,7 @@
  * The `data-tauri-drag-region` attribute lets users drag the window by clicking
  * anywhere on the bar that is NOT a button.
  */
+import React from 'react';
 import type { CSSProperties } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -22,28 +23,83 @@ const isMacOS =
   typeof navigator !== 'undefined' &&
   (/Mac/i.test(navigator.platform) || navigator.userAgent.includes('Mac OS'));
 
+// Shared hover state hook for traffic-light dots
+function useDotHover() {
+  const [hover, setHover] = React.useState(false);
+  return { hover, onMouseEnter: () => setHover(true), onMouseLeave: () => setHover(false) };
+}
+
 export function TitleBar() {
+  const [groupHover, setGroupHover] = React.useState(false);
+
   // ── macOS ────────────────────────────────────────────────────────────────
-  // Native traffic-light buttons are shown by Tauri at the top-left.
-  // We only need a drag region + right-side label. No custom control buttons.
+  // `decorations: false` in tauri.conf.json removes native traffic lights on macOS.
+  // We render custom macOS-style dots (close/minimize/fullscreen) on the left.
   if (isMacOS) {
+    const dot = (
+      cmd: string,
+      bg: string,
+      symbol: string,
+      title: string,
+    ) => (
+      <button
+        title={title}
+        onClick={(e) => { e.stopPropagation(); invoke(cmd).catch(() => {}); }}
+        style={{
+          width: 12,
+          height: 12,
+          borderRadius: '50%',
+          backgroundColor: bg,
+          border: 'none',
+          cursor: 'pointer',
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          WebkitAppRegion: 'no-drag' as CSSProperties['WebkitAppRegion'],
+          fontSize: 7,
+          color: 'rgba(0,0,0,0.6)',
+          fontWeight: 900,
+          lineHeight: 1,
+          transition: 'filter 0.1s',
+          padding: 0,
+        }}
+        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.filter = 'brightness(0.85)'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.filter = ''; }}
+      >
+        {groupHover ? symbol : ''}
+      </button>
+    );
+
     return (
       <div
         data-tauri-drag-region
+        onMouseEnter={() => setGroupHover(true)}
+        onMouseLeave={() => setGroupHover(false)}
         style={{
-          height: 28,
-          minHeight: 28,
-          background: '#0a0a14',
+          height: 32,
+          minHeight: 32,
+          background: '#090912',
           display: 'flex',
           alignItems: 'center',
           flexShrink: 0,
-          // The whole bar is draggable; buttons inside override this.
           WebkitAppRegion: 'drag' as CSSProperties['WebkitAppRegion'],
           userSelect: 'none',
-          // Traffic lights occupy roughly the first 75 px on the left.
-          paddingLeft: 80,
+          paddingLeft: 12,
+          paddingRight: 12,
+          gap: 0,
+          justifyContent: 'space-between',
+          borderBottom: '1px solid rgba(255,255,255,0.05)',
         }}
       >
+        {/* Traffic lights — left side (macOS convention) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, WebkitAppRegion: 'no-drag' as CSSProperties['WebkitAppRegion'] }}>
+          {dot('window_close',    '#ff5f57', '✕', 'Zamknij')}
+          {dot('window_minimize', '#ffbd2e', '−', 'Minimalizuj')}
+          {dot('window_maximize', '#28c840', '⛶', 'Pełny ekran')}
+        </div>
+
+        {/* Centered app name */}
         <span
           style={{
             color: '#475569',
@@ -51,10 +107,17 @@ export function TitleBar() {
             fontWeight: 600,
             letterSpacing: '0.08em',
             textTransform: 'uppercase',
+            position: 'absolute',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            pointerEvents: 'none',
           }}
         >
           Cordyn
         </span>
+
+        {/* Spacer to balance left dots */}
+        <div style={{ width: 42 }} />
       </div>
     );
   }

@@ -510,7 +510,7 @@ function TenorGifPicker({ onSelect, onClose }: { onSelect: (url: string) => void
               <button key={gif.id} onClick={() => { onSelect(gif.url); onClose(); }}
                 style={{breakInside:'avoid', display:'block', marginBottom:'6px', width:'100%'}}
                 className="rounded-xl overflow-hidden hover:opacity-80 active:scale-95 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/40">
-                <img src={gif.preview} alt="" className="w-full h-auto rounded-xl block" loading="lazy"/>
+                <img src={gif.preview} alt="" className="w-full h-auto rounded-xl block" loading="lazy" decoding="async"/>
               </button>
             ))}
           </div>
@@ -1881,11 +1881,11 @@ function LinkPreview({ url, show }: { url: string; show: boolean }) {
     <a href={url} target="_blank" rel="noopener noreferrer" className="link-prev">
       {ytId ? (
         <div className="link-prev-yt">
-          <img src={`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`} alt="" className="w-full h-full object-cover"/>
+          <img src={`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async"/>
           <div className="link-prev-yt-play">▶</div>
         </div>
       ) : data.image ? (
-        <img src={data.image} alt="" className="link-prev-img"/>
+        <img src={data.image} alt="" className="link-prev-img" loading="lazy" decoding="async"/>
       ) : null}
       <div className="link-prev-body">
         {data.site_name && <p className="link-prev-site">{data.site_name}</p>}
@@ -8404,6 +8404,11 @@ export default function App() {
     sock.on('call_rejected', () => {
       stopRing();
       playCallEnded();
+      // Send "missed call" system message so it appears in both parties' DM history
+      const rejectedUserId = activeCallRef.current?.userId;
+      if (rejectedUserId) {
+        dmsApi.sendSystem(rejectedUserId, 'Połączenie nieodebrane').catch(() => {});
+      }
       setActiveCall(null); setShowCallPanel(false);
       autoToast('Połączenie odrzucone', 'error');
     });
@@ -10831,7 +10836,7 @@ export default function App() {
     if (curCall?.userId) {
       endCall(curCall.userId);
       stopRing(); stopIncomingRing(); playCallEnded();
-      dmsApi.sendSystem(curCall.userId, `📞 Rozmowa zakończona · ${fmtDur(callDurationRef.current)}`).catch(() => {});
+      dmsApi.sendSystem(curCall.userId, `Rozmowa głosowa zakończona · ${fmtDur(callDurationRef.current)}`).catch(() => {});
       cleanupWebRTC();
       setActiveCall(null); setShowCallPanel(false); setCallDuration(0);
     }
@@ -10864,9 +10869,8 @@ export default function App() {
     }
     if (activeCall?.userId) {
       const dur = callDurationRef.current;
-      const icon = activeCall.type === 'dm_video' ? '📹' : '📞';
       const typeName = activeCall.type === 'dm_video' ? 'wideo' : 'głosowa';
-      const content = `${icon} Rozmowa ${typeName} zakończona · ${fmtDur(dur)}`;
+      const content = `Rozmowa ${typeName} zakończona · ${fmtDur(dur)}`;
       endCall(activeCall.userId);
       stopRing();
       stopIncomingRing();
@@ -13958,7 +13962,7 @@ export default function App() {
                                 {msg.attachment_url && (() => {
                                   const isImg = /\.(png|jpg|jpeg|gif|webp|svg)(\?|$)/i.test(msg.attachment_url) || msg.attachment_url.startsWith('data:image');
                                   return isImg
-                                    ? <img src={staticUrl(msg.attachment_url)} className="max-w-xs max-h-64 rounded-2xl object-cover mb-1 cursor-pointer" onClick={()=>setLightboxSrc(staticUrl(msg.attachment_url))} alt=""/>
+                                    ? <img src={staticUrl(msg.attachment_url)} className="max-w-xs max-h-64 rounded-2xl object-cover mb-1 cursor-pointer" onClick={()=>setLightboxSrc(staticUrl(msg.attachment_url))} alt="" loading="lazy" decoding="async"/>
                                     : <a href={staticUrl(msg.attachment_url)} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.06] border border-white/[0.08] text-xs text-indigo-300 hover:text-indigo-200 mb-1"><Paperclip size={11}/> Załącznik</a>;
                                 })()}
                                 {msg.content && (() => {
@@ -13967,7 +13971,7 @@ export default function App() {
                                     return (
                                       <div className="max-w-[260px] rounded-2xl overflow-hidden shadow-lg cursor-zoom-in hover:opacity-90 transition-opacity mb-1"
                                         onClick={()=>setLightboxSrc(c)}>
-                                        <img src={c} alt="GIF" className="w-full h-auto rounded-2xl" loading="lazy"/>
+                                        <img src={c} alt="GIF" className="w-full h-auto rounded-2xl" loading="lazy" decoding="async"/>
                                       </div>
                                     );
                                   }
@@ -14023,8 +14027,14 @@ export default function App() {
                       && !(prevMsg as any).deleted
                       && (new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime()) < 5 * 60 * 1000;
                     const sepLabel = dateSepLabel(msg.created_at);
-                    // System message (call ended, etc.)
+                    // System message (call ended, missed call, etc.)
                     if (msg.sender_id === '__system__') {
+                      // Strip legacy emojis if present
+                      const rawContent = msg.content.replace(/^[📞📹]\s*/u, '');
+                      const isMissed = /nieodebrane|odrzucone/i.test(rawContent);
+                      const isVideo  = /wideo/i.test(rawContent);
+                      const SysIcon  = isMissed ? PhoneMissed : isVideo ? Video : Phone;
+                      const iconColor = isMissed ? 'text-rose-400' : isVideo ? 'text-violet-400' : 'text-emerald-400';
                       return (
                         <React.Fragment key={msg.id}>
                           {showSep&&(
@@ -14035,9 +14045,9 @@ export default function App() {
                             </div>
                           )}
                           <div className="flex items-center justify-center my-3">
-                            <div className="px-4 py-2 bg-white/[0.04] border border-white/[0.06] rounded-full text-xs text-zinc-500 flex items-center gap-2">
-                              <Phone size={11} className="shrink-0 text-rose-400"/>
-                              <span>{msg.content}</span>
+                            <div className={`px-4 py-2 border rounded-full text-xs flex items-center gap-2 ${isMissed ? 'bg-rose-500/[0.06] border-rose-500/20 text-rose-300' : 'bg-white/[0.04] border-white/[0.06] text-zinc-500'}`}>
+                              <SysIcon size={11} className={`shrink-0 ${iconColor}`}/>
+                              <span>{rawContent}</span>
                               <span className="text-zinc-700">{fmtTime(msg.created_at)}</span>
                             </div>
                           </div>
@@ -14284,7 +14294,7 @@ export default function App() {
                                 return (
                                   <div className="max-w-[280px] rounded-2xl overflow-hidden shadow-lg cursor-zoom-in hover:opacity-90 transition-opacity"
                                     onClick={()=>setLightboxSrc(c)}>
-                                    <img src={c} alt="GIF" className="w-full h-auto rounded-2xl" loading="lazy"/>
+                                    <img src={c} alt="GIF" className="w-full h-auto rounded-2xl" loading="lazy" decoding="async"/>
                                   </div>
                                 );
                               }
@@ -14336,6 +14346,7 @@ export default function App() {
                                             <img key={idx} src={staticUrl(u)} alt="" onClick={()=>setLightboxSrc(staticUrl(u))}
                                               className={`rounded-xl object-cover cursor-zoom-in hover:opacity-90 transition-opacity shadow-lg w-full ${count===3&&idx===2?'col-span-2':''}`}
                                               style={{height: `${h}px`}}
+                                              loading="lazy" decoding="async"
                                               onError={e=>{(e.currentTarget as HTMLImageElement).style.display='none';}}/>
                                           ))}
                                         </div>
@@ -14345,6 +14356,7 @@ export default function App() {
                                   return getFileRenderType(url) === 'image' ? (
                                     <img src={staticUrl(url)} alt="attachment" className="rounded-2xl max-h-64 object-contain cursor-zoom-in hover:opacity-90 transition-opacity shadow-lg"
                                       onClick={()=>setLightboxSrc(staticUrl(url))}
+                                      loading="lazy" decoding="async"
                                       onError={e=>{const t=e.currentTarget;t.onerror=null;t.style.display='none';const p=document.createElement('div');p.className='flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.04] text-zinc-500 text-xs';p.innerHTML='<span>🖼️ Obraz niedostępny</span>';t.parentElement?.appendChild(p);}}/>
                                   ) : (
                                     <AttachmentRenderer url={url} staticUrl={staticUrl} addToast={addToast}/>
@@ -15361,9 +15373,13 @@ export default function App() {
               return nonMedia.length > 0;
             });
 
-            // Calls: system messages with 📞 or 📹
+            // Calls: system messages that are call-related
+            // Match both legacy emoji format and new text-only format
             const callItems = dmMsgs.filter(m =>
-              m.content.includes('📞') || m.content.includes('📹')
+              m.sender_id === '__system__' && (
+                m.content.includes('📞') || m.content.includes('📹') ||
+                /rozmowa (głosowa|wideo)|połączenie nieodebrane/i.test(m.content)
+              )
             );
 
             const DM_TABS: { id: 'profile'|'media'|'links'|'calls'|'pinned'; label: string; icon: React.ReactNode; count?: number }[] = [
@@ -15563,30 +15579,47 @@ export default function App() {
                           </div>
                         ) : (
                           [...callItems].reverse().map(m => {
-                            const isVideo = m.content.includes('📹');
-                            const sentByMe = m.sender_id === currentUser?.id;
-                            // Extract duration if present e.g. "Rozmowa zakończona · 2m 15s"
-                            const durMatch = m.content.match(/·\s*(.+)$/);
+                            const raw    = m.content.replace(/^[📞📹]\s*/u, '');
+                            const isVideo  = /wideo/i.test(raw) || m.content.includes('📹');
+                            const isMissed = /nieodebrane|odrzucone/i.test(raw);
+                            // sender_id of system message = person who ended/initiated the call tracking
+                            // "me" sent system msg → I was the one who hung up (outgoing direction)
+                            const outgoing = m.sender_id === currentUser?.id;
+                            const durMatch = raw.match(/·\s*(.+)$/);
                             const dur = durMatch ? durMatch[1].trim() : null;
-                            // Missed = very short or "Połączenie nieodebrane"
-                            const missed = m.content.toLowerCase().includes('nieodebrane') || m.content.toLowerCase().includes('odrzucone');
+
+                            // Icon selection
+                            const CallIcon = isMissed ? PhoneMissed
+                              : isVideo    ? Video
+                              : outgoing   ? PhoneIncoming  // rotated = outgoing
+                              : PhoneIncoming;
+
+                            const iconBg = isMissed ? 'bg-rose-500/10'
+                              : outgoing  ? 'bg-indigo-500/10'
+                              : 'bg-emerald-500/10';
+                            const iconColor = isMissed ? 'text-rose-400'
+                              : isVideo   ? 'text-violet-400'
+                              : outgoing  ? 'text-indigo-400'
+                              : 'text-emerald-400';
+
+                            const label = isMissed ? 'Nieodebrane'
+                              : isVideo   ? (outgoing ? 'Rozmowa wideo — wychodzące' : 'Rozmowa wideo — przychodzące')
+                              : outgoing  ? 'Rozmowa głosowa — wychodzące'
+                              : 'Rozmowa głosowa — przychodzące';
+
                             return (
                               <div key={m.id}
                                 className="flex items-center gap-2.5 bg-white/[0.03] hover:bg-white/[0.05] border border-white/[0.05] rounded-xl px-3 py-2.5 transition-all">
-                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0
-                                  ${missed ? 'bg-rose-500/10' : sentByMe ? 'bg-indigo-500/10' : 'bg-emerald-500/10'}`}>
-                                  {missed
-                                    ? <PhoneMissed size={14} className="text-rose-400"/>
-                                    : isVideo
-                                      ? <Video size={14} className={sentByMe ? 'text-indigo-400' : 'text-emerald-400'}/>
-                                      : sentByMe
-                                        ? <PhoneIncoming size={14} className="text-indigo-400" style={{transform:'scaleX(-1)'}}/>
-                                        : <PhoneIncoming size={14} className="text-emerald-400"/>
-                                  }
+                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
+                                  <CallIcon
+                                    size={14}
+                                    className={iconColor}
+                                    style={outgoing && !isMissed && !isVideo ? {transform:'scaleX(-1)'} : undefined}
+                                  />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className={`text-[12px] font-semibold leading-tight ${missed ? 'text-rose-400' : 'text-zinc-300'}`}>
-                                    {missed ? 'Nieodebrane' : isVideo ? 'Rozmowa wideo' : 'Rozmowa głosowa'}
+                                  <p className={`text-[12px] font-semibold leading-tight ${isMissed ? 'text-rose-400' : 'text-zinc-300'}`}>
+                                    {label}
                                   </p>
                                   <p className="text-[10px] text-zinc-600 mt-0.5">
                                     {fmtDate(m.created_at,{day:'numeric',month:'short',year:'numeric'})}
@@ -15594,8 +15627,8 @@ export default function App() {
                                     {fmtTime(m.created_at)}
                                   </p>
                                 </div>
-                                {dur && !missed && (
-                                  <span className="text-[10px] text-zinc-600 shrink-0">{dur}</span>
+                                {dur && !isMissed && (
+                                  <span className="text-[10px] text-zinc-600 shrink-0 font-mono">{dur}</span>
                                 )}
                               </div>
                             );
@@ -18725,7 +18758,7 @@ export default function App() {
                         </div>
                         <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                           <span className="text-sm text-zinc-400">Platforma</span>
-                          <span className="text-sm text-zinc-300">Windows (Desktop)</span>
+                          <span className="text-sm text-zinc-300">{userOs === 'macos' ? 'macOS (Desktop)' : 'Windows (Desktop)'}</span>
                         </div>
                         <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                           <span className="text-sm text-zinc-400">Deweloper</span>
