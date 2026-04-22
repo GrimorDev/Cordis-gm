@@ -145,7 +145,7 @@ router.get('/:userId/messages', authMiddleware, async (req: AuthRequest, res: Re
     sql += ` ORDER BY dm.created_at DESC LIMIT ${limit}`;
     const { rows } = await query(sql, params);
     const result = rows.map((r: any) =>
-      r.is_system ? { ...r, sender_id: '__system__', sender_username: 'System', sender_avatar: null } : r
+      r.is_system ? { ...r, initiator_id: r.sender_id, sender_id: '__system__', sender_username: 'System', sender_avatar: null } : r
     );
     return res.json(result.reverse());
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
@@ -249,7 +249,7 @@ router.post('/:userId/system-message', authMiddleware, async (req: AuthRequest, 
       'INSERT INTO dm_messages (conversation_id,sender_id,content,is_system) VALUES ($1,$2,$3,true) RETURNING *',
       [conversationId, req.user!.id, content.trim()]
     );
-    const full = { ...msg, sender_id: '__system__', sender_username: 'System', sender_avatar: null };
+    const full = { ...msg, initiator_id: msg.sender_id, sender_id: '__system__', sender_username: 'System', sender_avatar: null };
     await Promise.all([
       invalidateDmListCache(req.user!.id),
       invalidateDmListCache(req.params.userId),

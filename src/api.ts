@@ -173,6 +173,8 @@ export interface DmMessageFull {
   sender_tag_color?: string | null;
   sender_tag_icon?: string | null;
   sender_tag_server_id?: string | null;
+  /** For system messages (sender_id === '__system__'), the real user who triggered the event */
+  initiator_id?: string | null;
 }
 export interface FriendEntry {
   id: string; username: string; avatar_url?: string | null;

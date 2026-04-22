@@ -7361,6 +7361,8 @@ export default function App() {
   const currentUserRef      = useRef(currentUser);
   const activeCallRef       = useRef(activeCall);
   const activeDmUserIdRef   = useRef(activeDmUserId);
+  const incomingCallRef     = useRef(incomingCall);
+  const callConnectedRef    = useRef(false); // true after call_accepted (WebRTC established)
   const activeGroupDmRef    = useRef<string|null>(null);
   const activeViewRef       = useRef(activeView);
   const activeServerRef     = useRef(activeServer);
@@ -8396,6 +8398,7 @@ export default function App() {
     sock.on('call_accepted', ({ from_user_id }: any) => {
       stopRing();
       playCallAccepted();
+      callConnectedRef.current = true; // WebRTC handshake started — call is "live"
       autoToast('Połączenie zaakceptowane', 'success');
       // Caller initiates WebRTC after recipient accepts — pass remoteUserId directly
       // to avoid race condition where activeCallRef is not yet synced via useEffect
@@ -8404,7 +8407,9 @@ export default function App() {
     sock.on('call_rejected', () => {
       stopRing();
       playCallEnded();
-      // Send "missed call" system message so it appears in both parties' DM history
+      callConnectedRef.current = false;
+      // Send "missed call" system message so it appears in both parties' DM history.
+      // The caller sends this so initiator_id = caller (me) — correctly tagged as outgoing.
       const rejectedUserId = activeCallRef.current?.userId;
       if (rejectedUserId) {
         dmsApi.sendSystem(rejectedUserId, 'Połączenie nieodebrane').catch(() => {});
@@ -8413,13 +8418,16 @@ export default function App() {
       autoToast('Połączenie odrzucone', 'error');
     });
     sock.on('call_ended', () => {
-      // System message is sent by the person who hangs up via dmsApi.sendSystem
-      // and arrives here via new_dm socket — no local insertion needed
+      // If we were still in incoming state (caller cancelled before we answered)
+      // clear the incoming call overlay and treat it as a missed call on our side.
+      const wasIncomingPending = !!incomingCallRef.current;
       stopIncomingRing();
       stopRing();
       playCallEnded();
+      setIncomingCall(null);
       setActiveCall(null); setShowCallPanel(false); setCallDuration(0);
-      autoToast('Rozmowa zakończona', 'info');
+      callConnectedRef.current = false;
+      autoToast(wasIncomingPending ? 'Połączenie nieodebrane' : 'Rozmowa zakończona', 'info');
     });
     // ── Admin broadcast ─────────────────────────────────────────────
     sock.on('admin_broadcast' as any, ({ message, type }: { message: string; type: 'info'|'warning'|'success' }) => {
@@ -9183,6 +9191,7 @@ export default function App() {
   // ── Sync refs ───────────────────────────────────────────────────
   useEffect(() => { currentUserRef.current    = currentUser;    }, [currentUser]);
   useEffect(() => { activeCallRef.current     = activeCall;     }, [activeCall]);
+  useEffect(() => { incomingCallRef.current   = incomingCall;   }, [incomingCall]);
   useEffect(() => { activeDmUserIdRef.current = activeDmUserId; }, [activeDmUserId]);
   useEffect(() => { activeGroupDmRef.current  = activeGroupDm;  }, [activeGroupDm]);
   useEffect(() => { activeViewRef.current     = activeView;     }, [activeView]);
@@ -10869,12 +10878,18 @@ export default function App() {
     }
     if (activeCall?.userId) {
       const dur = callDurationRef.current;
+      const wasConnected = callConnectedRef.current;
       const typeName = activeCall.type === 'dm_video' ? 'wideo' : 'głosowa';
-      const content = `Rozmowa ${typeName} zakończona · ${fmtDur(dur)}`;
+      // If the call was never accepted (caller cancelled before callee answered)
+      // send "Połączenie nieodebrane" instead of "Rozmowa zakończona · 0:00"
+      const content = wasConnected
+        ? `Rozmowa ${typeName} zakończona · ${fmtDur(dur)}`
+        : 'Połączenie nieodebrane';
       endCall(activeCall.userId);
       stopRing();
       stopIncomingRing();
       playCallEnded();
+      callConnectedRef.current = false;
       // Persist system message to DB (will come back via new_dm socket to both parties)
       dmsApi.sendSystem(activeCall.userId, content).catch(console.error);
     }
@@ -10893,6 +10908,7 @@ export default function App() {
       setActiveCall(null); setShowCallPanel(false);
     }
     primePlaybackContext();
+    callConnectedRef.current = false; // reset connection flag for new call
     await acquireMic(selMic || undefined);
     sendCallInvite(userId, type);
     startRing();
@@ -15582,17 +15598,18 @@ export default function App() {
                             const raw    = m.content.replace(/^[📞📹]\s*/u, '');
                             const isVideo  = /wideo/i.test(raw) || m.content.includes('📹');
                             const isMissed = /nieodebrane|odrzucone/i.test(raw);
-                            // sender_id of system message = person who ended/initiated the call tracking
-                            // "me" sent system msg → I was the one who hung up (outgoing direction)
-                            const outgoing = m.sender_id === currentUser?.id;
+                            // initiator_id = real user who sent the system message (i.e. the caller).
+                            // If initiator_id === me → I made the call → outgoing for me.
+                            // Falls back to sender_id check for legacy messages without initiator_id.
+                            const callerId = (m as any).initiator_id ?? m.sender_id;
+                            const outgoing = callerId === currentUser?.id;
                             const durMatch = raw.match(/·\s*(.+)$/);
                             const dur = durMatch ? durMatch[1].trim() : null;
 
                             // Icon selection
                             const CallIcon = isMissed ? PhoneMissed
                               : isVideo    ? Video
-                              : outgoing   ? PhoneIncoming  // rotated = outgoing
-                              : PhoneIncoming;
+                              : PhoneIncoming; // rotated via CSS for outgoing
 
                             const iconBg = isMissed ? 'bg-rose-500/10'
                               : outgoing  ? 'bg-indigo-500/10'
@@ -15602,7 +15619,8 @@ export default function App() {
                               : outgoing  ? 'text-indigo-400'
                               : 'text-emerald-400';
 
-                            const label = isMissed ? 'Nieodebrane'
+                            const label = isMissed
+                              ? (outgoing ? 'Nieodebrane — wychodzące' : 'Nieodebrane — przychodzące')
                               : isVideo   ? (outgoing ? 'Rozmowa wideo — wychodzące' : 'Rozmowa wideo — przychodzące')
                               : outgoing  ? 'Rozmowa głosowa — wychodzące'
                               : 'Rozmowa głosowa — przychodzące';
@@ -15614,7 +15632,7 @@ export default function App() {
                                   <CallIcon
                                     size={14}
                                     className={iconColor}
-                                    style={outgoing && !isMissed && !isVideo ? {transform:'scaleX(-1)'} : undefined}
+                                    style={outgoing && !isMissed ? {transform:'scaleX(-1) rotate(-30deg)'} : undefined}
                                   />
                                 </div>
                                 <div className="flex-1 min-w-0">
@@ -19490,6 +19508,7 @@ export default function App() {
                 }
                 // Acquire mic before notifying caller — ensures localStreamRef is set when offer arrives
                 primePlaybackContext();
+                callConnectedRef.current = true; // callee accepted — call is live
                 await acquireMic(selMic || undefined);
                 acceptCall(incomingCall.conversation_id, incomingCall.from.id);
                 setActiveCall({type: incomingCall.type==='video'?'dm_video':'dm_voice', userId: incomingCall.from.id, username: incomingCall.from.username, avatarUrl: incomingCall.from.avatar_url, isMuted:false,isDeafened:false,isCameraOn:false,isScreenSharing:false});
