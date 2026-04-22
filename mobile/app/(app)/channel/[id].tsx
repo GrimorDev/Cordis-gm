@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { View, FlatList, StyleSheet, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, FlatList, StyleSheet, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,7 +14,10 @@ import type { Message } from '../../../src/api';
 export default function ChannelScreen() {
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
   const insets = useSafeAreaInsets();
-  const { messages, setMessages, prependMessages, addMessage, updateMessage, removeMessage, currentUser, setTyping, typingUsers } = useStore();
+  const {
+    messages, setMessages, prependMessages, addMessage, updateMessage, removeMessage,
+    currentUser, setTyping, typingUsers, activeServer,
+  } = useStore();
   const msgs = messages[id] ?? [];
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -37,18 +40,21 @@ export default function ChannelScreen() {
     getSocket()?.emit('join_channel', id);
 
     const sock = getSocket();
+    const onNew = (msg: any) => { if (msg.channel_id === id) addMessage(id, msg); };
     const onUpdate = (msg: any) => { if (msg.channel_id === id) updateMessage(id, msg); };
     const onDelete = ({ id: msgId }: any) => removeMessage(id, msgId);
     const onTyping = ({ username }: any) => {
       setTyping(id, [...(typingUsers[id] ?? []).filter(u => u !== username), username]);
       setTimeout(() => setTyping(id, (typingUsers[id] ?? []).filter(u => u !== username)), 3500);
     };
+    sock?.on('new_message', onNew);
     sock?.on('message_updated', onUpdate);
     sock?.on('message_deleted', onDelete);
     sock?.on('user_typing', onTyping);
 
     return () => {
       getSocket()?.emit('leave_channel', id);
+      sock?.off('new_message', onNew);
       sock?.off('message_updated', onUpdate);
       sock?.off('message_deleted', onDelete);
       sock?.off('user_typing', onTyping);
@@ -84,11 +90,21 @@ export default function ChannelScreen() {
     catch { /* ignore */ }
   };
 
+  const handleEdit = async (msgId: string, newContent: string) => {
+    try {
+      const updated = await messagesApi.edit(msgId, newContent);
+      updateMessage(id, updated);
+    } catch (e: any) {
+      Alert.alert('Błąd', e.message ?? 'Nie udało się edytować wiadomości');
+    }
+  };
+
   const handleReact = async (msgId: string, emoji: string) => {
     try { await messagesApi.react(msgId, emoji); }
     catch { /* ignore */ }
   };
 
+  const isOwner = currentUser?.id === activeServer?.owner_id;
   const typing = typingUsers[id] ?? [];
 
   return (
@@ -100,6 +116,25 @@ export default function ChannelScreen() {
         </TouchableOpacity>
         <Ionicons name="hash-outline" size={18} color={C.textMuted} />
         <Text style={styles.title} numberOfLines={1}>{name}</Text>
+        {/* Header right actions */}
+        <View style={styles.headerRight}>
+          {isOwner && activeServer && (
+            <TouchableOpacity
+              style={styles.headerBtn}
+              onPress={() => router.push({ pathname: '/(app)/server-settings/[serverId]', params: { serverId: activeServer.id } } as any)}
+            >
+              <Ionicons name="settings-outline" size={19} color={C.textSub} />
+            </TouchableOpacity>
+          )}
+          {activeServer && (
+            <TouchableOpacity
+              style={styles.headerBtn}
+              onPress={() => router.push({ pathname: '/(app)/member-list/[serverId]', params: { serverId: activeServer.id } } as any)}
+            >
+              <Ionicons name="people-outline" size={19} color={C.textSub} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {loading ? (
@@ -128,7 +163,13 @@ export default function ChannelScreen() {
                 showHeader={showHeader}
                 onReply={setReplyTo}
                 onDelete={handleDelete}
+                onEdit={handleEdit}
                 onReact={handleReact}
+                onAvatarPress={(uid) => {
+                  if (uid !== currentUser?.id) {
+                    router.push({ pathname: '/(app)/user-profile/[userId]', params: { userId: uid } } as any);
+                  }
+                }}
               />
             );
           }}
@@ -158,9 +199,18 @@ export default function ChannelScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: C.bg },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border },
+  header: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 12, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: C.border,
+  },
   back: { padding: 4 },
   title: { color: C.text, fontSize: 17, fontWeight: '700', flex: 1 },
+  headerRight: { flexDirection: 'row', gap: 6 },
+  headerBtn: {
+    padding: 7, borderRadius: 10,
+    backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border,
+  },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   typingBar: { paddingHorizontal: 16, paddingBottom: 4 },
   typingText: { color: C.textMuted, fontSize: 12 },

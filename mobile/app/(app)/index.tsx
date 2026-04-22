@@ -23,7 +23,7 @@ function resolveUrl(url: string | null | undefined): string | null {
 // ── Server List ───────────────────────────────────────────────────────────────
 export default function ServersScreen() {
   const insets = useSafeAreaInsets();
-  const { servers, setServers, activeServer, setActiveServer, channels, setChannels, addServer } = useStore();
+  const { servers, setServers, activeServer, setActiveServer, channels, setChannels, addServer, currentUser } = useStore();
   const [refreshing, setRefreshing] = useState(false);
   const [serversLoading, setServersLoading] = useState(true);
   const [channelsLoading, setChannelsLoading] = useState(false);
@@ -125,15 +125,9 @@ export default function ServersScreen() {
 
   // ── Channel list view ──────────────────────────────────────────────────────
   if (showChannels && activeServer) {
-    const textChannels = channels.filter(c => c.type === 'text');
-    const voiceChannels = channels.filter(c => c.type === 'voice');
-    const announcementChannels = channels.filter(c => c.type === 'announcement');
+    const isOwner = currentUser?.id === activeServer.owner_id;
 
     // Group by category
-    const categories = Array.from(
-      new Set(channels.map(c => c.category_id ?? null))
-    );
-
     const grouped: { catId: string | null; catName: string | null; channels: Channel[] }[] = [];
     const catMap = new Map<string | null, { catId: string | null; catName: string | null; channels: Channel[] }>();
 
@@ -160,12 +154,28 @@ export default function ServersScreen() {
               <Text style={styles.chSubtitle} numberOfLines={1}>{activeServer.description}</Text>
             ) : null}
           </View>
-          <TouchableOpacity
-            style={styles.serverMenuBtn}
-            onPress={() => setActionServer(activeServer)}
-          >
-            <Ionicons name="ellipsis-vertical" size={20} color={C.textMuted} />
-          </TouchableOpacity>
+          <View style={styles.chHeaderRight}>
+            <TouchableOpacity
+              style={styles.chHeaderBtn}
+              onPress={() => router.push({ pathname: '/(app)/member-list/[serverId]', params: { serverId: activeServer.id } } as any)}
+            >
+              <Ionicons name="people-outline" size={19} color={C.textSub} />
+            </TouchableOpacity>
+            {isOwner && (
+              <TouchableOpacity
+                style={styles.chHeaderBtn}
+                onPress={() => router.push({ pathname: '/(app)/server-settings/[serverId]', params: { serverId: activeServer.id } } as any)}
+              >
+                <Ionicons name="settings-outline" size={19} color={C.textSub} />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.serverMenuBtn}
+              onPress={() => setActionServer(activeServer)}
+            >
+              <Ionicons name="ellipsis-vertical" size={20} color={C.textMuted} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {channelsLoading ? (
@@ -197,13 +207,22 @@ export default function ServersScreen() {
 
                   if (isVoice) {
                     return (
-                      <View key={ch.id} style={[styles.channelRow, styles.channelRowVoice]}>
+                      <TouchableOpacity
+                        key={ch.id}
+                        style={[styles.channelRow, styles.channelRowVoice]}
+                        onPress={() => Alert.alert(
+                          'Kanał głosowy',
+                          'Kanały głosowe wymagają aplikacji desktopowej.',
+                          [{ text: 'OK' }],
+                        )}
+                        activeOpacity={0.7}
+                      >
                         <Ionicons name={icon} size={18} color={C.textMuted} />
                         <Text style={[styles.channelName, { color: C.textMuted }]}>{ch.name}</Text>
                         <View style={styles.voiceBadge}>
                           <Text style={styles.voiceBadgeText}>Wkrótce</Text>
                         </View>
-                      </View>
+                      </TouchableOpacity>
                     );
                   }
 
@@ -469,6 +488,11 @@ const styles = StyleSheet.create({
   backBtn: { padding: 4 },
   chTitle: { color: C.text, fontSize: 16, fontWeight: '700' },
   chSubtitle: { color: C.textMuted, fontSize: 11, marginTop: 1 },
+  chHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  chHeaderBtn: {
+    padding: 7, borderRadius: 10,
+    backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border,
+  },
   serverMenuBtn: { padding: 6 },
 
   // Category & channels

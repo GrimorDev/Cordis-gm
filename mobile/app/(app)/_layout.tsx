@@ -5,9 +5,13 @@ import { useStore } from '../../src/store';
 import { getSocket, connectSocket } from '../../src/socket';
 import { registerForPushNotifications } from '../../src/notifications';
 import { C } from '../../src/theme';
+import * as Notifications from 'expo-notifications';
 
 export default function AppLayout() {
-  const { isAuthenticated, addMessage, addDmMessage, setUserStatus, currentUser } = useStore();
+  const {
+    isAuthenticated, addMessage, addDmMessage, setUserStatus, currentUser,
+    updateMessage, removeMessage, updateDmMessage, removeDmMessage,
+  } = useStore();
 
   // Socket event listeners — attach after socket connects (handles cold start & reconnect)
   useEffect(() => {
@@ -24,12 +28,43 @@ export default function AppLayout() {
     const onUserStatus = ({ user_id, status }: any) => {
       setUserStatus(user_id, status);
     };
+    const onMessageUpdated = (msg: any) => {
+      updateMessage(msg.channel_id, msg);
+    };
+    const onMessageDeleted = ({ id, channel_id }: any) => {
+      removeMessage(channel_id, id);
+    };
+    const onDmMessageUpdated = (msg: any) => {
+      if (!currentUser) return;
+      const otherId = msg.sender_id === currentUser.id ? msg.receiver_id : msg.sender_id;
+      updateDmMessage(otherId, msg);
+    };
+    const onDmMessageDeleted = ({ id, sender_id, receiver_id }: any) => {
+      if (!currentUser) return;
+      const otherId = sender_id === currentUser.id ? receiver_id : sender_id;
+      removeDmMessage(otherId, id);
+    };
+    const onCallInvite = ({ from, type }: any) => {
+      Notifications.scheduleNotificationAsync({
+        content: {
+          title: type === 'video' ? '📹 Połączenie wideo' : '📞 Połączenie głosowe',
+          body: `${from?.username ?? 'Ktoś'} dzwoni do Ciebie`,
+          sound: true,
+        },
+        trigger: null,
+      });
+    };
 
     const attach = (sock: ReturnType<typeof getSocket>) => {
       if (!sock) return;
       sock.on('new_message', onNewMessage);
       sock.on('new_dm', onNewDm);
       sock.on('user_status', onUserStatus);
+      sock.on('message_updated', onMessageUpdated);
+      sock.on('message_deleted', onMessageDeleted);
+      sock.on('dm_message_updated', onDmMessageUpdated);
+      sock.on('dm_message_deleted', onDmMessageDeleted);
+      sock.on('call_invite', onCallInvite);
     };
 
     const detach = () => {
@@ -37,6 +72,11 @@ export default function AppLayout() {
       sock?.off('new_message', onNewMessage);
       sock?.off('new_dm', onNewDm);
       sock?.off('user_status', onUserStatus);
+      sock?.off('message_updated', onMessageUpdated);
+      sock?.off('message_deleted', onMessageDeleted);
+      sock?.off('dm_message_updated', onDmMessageUpdated);
+      sock?.off('dm_message_deleted', onDmMessageDeleted);
+      sock?.off('call_invite', onCallInvite);
     };
 
     const existing = getSocket();
@@ -117,6 +157,9 @@ export default function AppLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
         }}
       />
+      <Tabs.Screen name="user-profile/[userId]" options={{ href: null }} />
+      <Tabs.Screen name="server-settings/[serverId]" options={{ href: null }} />
+      <Tabs.Screen name="member-list/[serverId]" options={{ href: null }} />
     </Tabs>
   );
 }

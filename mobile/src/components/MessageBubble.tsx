@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { format, isToday, isYesterday } from 'date-fns';
@@ -15,6 +15,8 @@ interface Props {
   onReply: (msg: Message) => void;
   onDelete?: (id: string) => void;
   onReact?: (id: string, emoji: string) => void;
+  onEdit?: (id: string, newContent: string) => void;
+  onAvatarPress?: (userId: string) => void;
 }
 
 function fmtTime(dateStr: string) {
@@ -26,8 +28,10 @@ function fmtTime(dateStr: string) {
 
 const QUICK_EMOJIS = ['❤️', '😂', '👍', '😮', '😢'];
 
-export function MessageBubble({ msg, isOwn, showHeader, onReply, onDelete, onReact }: Props) {
+export function MessageBubble({ msg, isOwn, showHeader, onReply, onDelete, onReact, onEdit, onAvatarPress }: Props) {
   const [menuVisible, setMenuVisible] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editText, setEditText] = useState(msg.content);
 
   const handleLongPress = () => setMenuVisible(true);
 
@@ -44,11 +48,35 @@ export function MessageBubble({ msg, isOwn, showHeader, onReply, onDelete, onRea
     ]);
   };
 
+  const handleEditPress = () => {
+    setEditText(msg.content);
+    setEditMode(true);
+    setMenuVisible(false);
+  };
+
+  const handleEditSave = () => {
+    const trimmed = editText.trim();
+    if (trimmed && trimmed !== msg.content) {
+      onEdit?.(msg.id, trimmed);
+    }
+    setEditMode(false);
+  };
+
+  const handleEditCancel = () => {
+    setEditText(msg.content);
+    setEditMode(false);
+  };
+
   return (
     <View style={styles.wrapper}>
       {showHeader && (
         <View style={styles.header}>
-          <UserAvatar url={msg.sender_avatar} username={msg.sender_username} size={36} />
+          <TouchableOpacity
+            onPress={() => onAvatarPress?.(msg.sender_id)}
+            disabled={!onAvatarPress}
+          >
+            <UserAvatar url={msg.sender_avatar} username={msg.sender_username} size={36} />
+          </TouchableOpacity>
           <View style={styles.headerText}>
             <Text style={styles.username}>{msg.sender_username}</Text>
             <Text style={styles.time}>{fmtTime(msg.created_at)}</Text>
@@ -66,14 +94,40 @@ export function MessageBubble({ msg, isOwn, showHeader, onReply, onDelete, onRea
         </View>
       )}
 
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onLongPress={handleLongPress}
-        style={[styles.bubble, showHeader ? styles.bubbleWithHeader : styles.bubbleNoHeader]}
-      >
-        <Text style={styles.content}>{msg.content}</Text>
-        {msg.is_edited && <Text style={styles.edited}>(edytowano)</Text>}
-      </TouchableOpacity>
+      {editMode ? (
+        <View style={[styles.bubble, showHeader ? styles.bubbleWithHeader : styles.bubbleNoHeader, styles.editContainer]}>
+          <TextInput
+            style={styles.editInput}
+            value={editText}
+            onChangeText={setEditText}
+            multiline
+            autoFocus
+            maxLength={2000}
+            placeholderTextColor={C.textMuted}
+          />
+          <View style={styles.editActions}>
+            <TouchableOpacity style={styles.editCancelBtn} onPress={handleEditCancel}>
+              <Text style={styles.editCancelText}>Anuluj</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.editSaveBtn, !editText.trim() && styles.editSaveBtnDisabled]}
+              onPress={handleEditSave}
+              disabled={!editText.trim()}
+            >
+              <Text style={styles.editSaveText}>Zapisz</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onLongPress={handleLongPress}
+          style={[styles.bubble, showHeader ? styles.bubbleWithHeader : styles.bubbleNoHeader]}
+        >
+          <Text style={styles.content}>{msg.content}</Text>
+          {msg.is_edited && <Text style={styles.edited}>(edytowano)</Text>}
+        </TouchableOpacity>
+      )}
 
       {msg.reactions && msg.reactions.length > 0 && (
         <View style={styles.reactions}>
@@ -108,6 +162,12 @@ export function MessageBubble({ msg, isOwn, showHeader, onReply, onDelete, onRea
               <Ionicons name="return-up-forward-outline" size={16} color={C.text} />
               <Text style={styles.menuLabel}>Odpowiedz</Text>
             </TouchableOpacity>
+            {isOwn && onEdit && (
+              <TouchableOpacity style={styles.menuItem} onPress={handleEditPress}>
+                <Ionicons name="pencil-outline" size={16} color={C.text} />
+                <Text style={styles.menuLabel}>Edytuj</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={styles.menuItem} onPress={handleCopy}>
               <Ionicons name="copy-outline" size={16} color={C.text} />
               <Text style={styles.menuLabel}>Kopiuj tekst</Text>
@@ -151,6 +211,26 @@ const styles = StyleSheet.create({
   reactionOwn: { borderColor: C.accent, backgroundColor: 'rgba(99,102,241,0.15)' },
   reactionEmoji: { fontSize: 14 },
   reactionCount: { color: C.textSub, fontSize: 12 },
+  // Inline edit
+  editContainer: { paddingRight: 0 },
+  editInput: {
+    color: C.text, fontSize: 15, lineHeight: 22,
+    backgroundColor: C.bgInput, borderRadius: 10, borderWidth: 1, borderColor: C.borderFocus,
+    paddingHorizontal: 10, paddingVertical: 8, marginRight: 0,
+  },
+  editActions: { flexDirection: 'row', gap: 8, marginTop: 6 },
+  editCancelBtn: {
+    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8,
+    backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border,
+  },
+  editCancelText: { color: C.textSub, fontSize: 13, fontWeight: '600' },
+  editSaveBtn: {
+    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8,
+    backgroundColor: C.accent,
+  },
+  editSaveBtnDisabled: { opacity: 0.45 },
+  editSaveText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  // Context menu overlay
   menuOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     zIndex: 100, justifyContent: 'center', alignItems: 'center',

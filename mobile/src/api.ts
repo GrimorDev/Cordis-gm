@@ -120,6 +120,23 @@ export const authApi = {
   logout:   () => req<{ ok: boolean }>('POST', '/auth/logout'),
 };
 
+export interface ServerMember {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+  status: string;
+  role_name: string;
+  role_color?: string | null;
+}
+
+export interface ServerBan {
+  user_id: string;
+  username: string;
+  avatar_url: string | null;
+  reason: string | null;
+  banned_at: string;
+}
+
 // ── Users ─────────────────────────────────────────────────────────────────────
 export const usersApi = {
   updateMe:      (data: Partial<{ username: string; about_me: string; preferred_status: string; bio: string }>) =>
@@ -129,6 +146,17 @@ export const usersApi = {
   changePassword:(current: string, newPass: string) =>
     req<{ ok: boolean }>('PUT', '/users/me/password', { current_password: current, new_password: newPass }),
   get:           (id: string) => req<User>('GET', `/users/${id}`),
+  updateAvatar:  async (formData: FormData): Promise<User> => {
+    const token = await getToken();
+    const res = await fetch(`${API_URL}/users/me/avatar`, {
+      method: 'PUT',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+    return data as User;
+  },
 };
 
 // ── Servers ───────────────────────────────────────────────────────────────────
@@ -138,8 +166,20 @@ export const serversApi = {
   create:      (name: string, description?: string) => req<Server>('POST', '/servers', { name, description }),
   join:        (code: string) => req<Server>('POST', '/servers/join', { code }),
   leave:       (id: string) => req<{ ok: boolean }>('POST', `/servers/${id}/leave`),
-  members:     (id: string) => req<{ id: string; username: string; avatar_url: string | null; status: string; role_name: string }[]>('GET', `/servers/${id}/members`),
+  members:     (id: string) => req<ServerMember[]>('GET', `/servers/${id}/members`),
   generateInvite: (id: string) => req<{ code: string; url: string }>('POST', `/servers/${id}/invite`),
+  update:      (id: string, data: { name?: string; description?: string }) =>
+    req<Server>('PUT', `/servers/${id}`, data),
+  delete:      (id: string) => req<{ ok: boolean }>('DELETE', `/servers/${id}`),
+  kick:        (serverId: string, userId: string) =>
+    req<{ ok: boolean }>('POST', `/servers/${serverId}/kick`, { user_id: userId }),
+  ban:         (serverId: string, userId: string, reason?: string) =>
+    req<{ ok: boolean }>('POST', `/servers/${serverId}/ban`, { user_id: userId, reason }),
+  getBans:     (serverId: string) => req<ServerBan[]>('GET', `/servers/${serverId}/bans`),
+  unban:       (serverId: string, userId: string) =>
+    req<{ ok: boolean }>('DELETE', `/servers/${serverId}/bans/${userId}`),
+  getRoles:    (serverId: string) =>
+    req<{ id: string; name: string; color: string; permissions: number }[]>('GET', `/servers/${serverId}/roles`),
 };
 
 // ── Channels ──────────────────────────────────────────────────────────────────
@@ -147,6 +187,9 @@ export const channelsApi = {
   list: (serverId: string) => req<Channel[]>('GET', `/channels/server/${serverId}`),
   create: (serverId: string, name: string, type: 'text' | 'voice' = 'text') =>
     req<Channel>('POST', '/channels', { server_id: serverId, name, type }),
+  update: (id: string, data: { name?: string; position?: number }) =>
+    req<Channel>('PUT', `/channels/${id}`, data),
+  delete: (id: string) => req<{ ok: boolean }>('DELETE', `/channels/${id}`),
 };
 
 // ── Messages ──────────────────────────────────────────────────────────────────
@@ -168,6 +211,10 @@ export const dmsApi = {
     req<DmMessage[]>('GET', `/dms/${userId}/messages${before ? `?before=${before}` : ''}`),
   send: (userId: string, content: string) =>
     req<DmMessage>('POST', `/dms/${userId}/messages`, { content }),
+  editMessage: (id: string, content: string) =>
+    req<DmMessage>('PUT', `/dms/messages/${id}`, { content }),
+  deleteMessage: (id: string) =>
+    req<{ ok: boolean }>('DELETE', `/dms/messages/${id}`),
 };
 
 // ── Friends ───────────────────────────────────────────────────────────────────

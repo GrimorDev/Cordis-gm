@@ -35,6 +35,8 @@ interface AppStore {
   dmMessages: Record<string, DmMessage[]>;
   setDmMessages: (userId: string, msgs: DmMessage[]) => void;
   addDmMessage: (userId: string, msg: DmMessage) => void;
+  updateDmMessage: (userId: string, msg: DmMessage) => void;
+  removeDmMessage: (userId: string, id: string) => void;
 
   friends: Friend[];
   setFriends: (f: Friend[]) => void;
@@ -106,6 +108,20 @@ export const useStore = create<AppStore>((set) => ({
     set((st) => ({ dmMessages: { ...st.dmMessages, [userId]: msgs } })),
   addDmMessage: (userId, msg) =>
     set((st) => ({ dmMessages: { ...st.dmMessages, [userId]: [...(st.dmMessages[userId] ?? []), msg] } })),
+  updateDmMessage: (userId, msg) =>
+    set((st) => ({
+      dmMessages: {
+        ...st.dmMessages,
+        [userId]: (st.dmMessages[userId] ?? []).map((m) => (m.id === msg.id ? msg : m)),
+      },
+    })),
+  removeDmMessage: (userId, id) =>
+    set((st) => ({
+      dmMessages: {
+        ...st.dmMessages,
+        [userId]: (st.dmMessages[userId] ?? []).filter((m) => m.id !== id),
+      },
+    })),
 
   friends: [],
   setFriends: (f) => set({ friends: f }),
