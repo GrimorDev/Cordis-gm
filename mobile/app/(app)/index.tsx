@@ -580,7 +580,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 14,
     borderBottomWidth: 1, borderBottomColor: C.border,
   },
-  headerTitle: { color: C.text, fontSize: 22, fontWeight: '800' },
+  headerTitle: { color: C.text, fontSize: 22, fontWeight: '800', letterSpacing: -0.3 },
   headerActions: { flexDirection: 'row', gap: 8 },
   headerBtn: {
     width: 36, height: 36, borderRadius: 10,
@@ -592,8 +592,10 @@ const styles = StyleSheet.create({
   // Server card
   serverCard: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
-    backgroundColor: C.bgCard, borderRadius: 16, padding: 14,
+    backgroundColor: C.bgCard, borderRadius: 18, padding: 14,
     borderWidth: 1, borderColor: C.border,
+    shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
   serverInfo: { flex: 1 },
   serverName: { color: C.text, fontSize: 16, fontWeight: '700' },
@@ -605,9 +607,10 @@ const styles = StyleSheet.create({
   // Empty state
   empty: { alignItems: 'center', paddingVertical: 60, gap: 12 },
   emptyIcon: {
-    width: 72, height: 72, borderRadius: 22,
-    backgroundColor: C.bgCard, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: C.border,
+    width: 80, height: 80, borderRadius: 26,
+    backgroundColor: 'rgba(99,102,241,0.12)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(99,102,241,0.25)',
   },
   emptyTitle: { color: C.text, fontSize: 18, fontWeight: '700' },
   emptySubtext: { color: C.textMuted, fontSize: 14, textAlign: 'center', paddingHorizontal: 32, lineHeight: 20 },
@@ -640,19 +643,22 @@ const styles = StyleSheet.create({
   // Category
   catHeader: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 16, paddingTop: 18, paddingBottom: 4,
+    paddingHorizontal: 16, paddingTop: 20, paddingBottom: 6,
   },
-  catLabel: { color: C.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 0.8 },
+  catLabel: { color: C.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase' },
 
   // Channel rows
   channelRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 7, paddingHorizontal: 12,
-    marginHorizontal: 8, borderRadius: 10,
+    paddingVertical: 8, paddingHorizontal: 12,
+    marginHorizontal: 8, marginVertical: 1, borderRadius: 12,
   },
-  channelRowUnread: { backgroundColor: C.bgCard },
+  channelRowUnread: {
+    backgroundColor: C.bgCard,
+    borderWidth: 1, borderColor: 'rgba(99,102,241,0.15)',
+  },
   channelIconWrap: {
-    width: 28, height: 28, borderRadius: 8,
+    width: 30, height: 30, borderRadius: 9,
     alignItems: 'center', justifyContent: 'center',
   },
   channelName: { color: C.textSub, fontSize: 14, flex: 1, fontWeight: '500' },

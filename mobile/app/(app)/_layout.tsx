@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { Tabs, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,23 +9,90 @@ import { registerForPushNotifications } from '../../src/notifications';
 import { C } from '../../src/theme';
 import * as Notifications from 'expo-notifications';
 
-function TabIcon({ name, focused, color }: { name: string; focused: boolean; color: string }) {
+const TAB_DEFS = [
+  { name: 'index',   icon: 'server',        label: 'Serwery'    },
+  { name: 'dms',     icon: 'chatbubbles',   label: 'Wiadomości' },
+  { name: 'friends', icon: 'people',        label: 'Znajomi'    },
+  { name: 'profile', icon: 'person-circle', label: 'Profil'     },
+];
+
+function TabItem({ tab, focused, badge, onPress }: {
+  tab: typeof TAB_DEFS[0];
+  focused: boolean;
+  badge?: number;
+  onPress: () => void;
+}) {
+  const anim = useRef(new Animated.Value(focused ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.spring(anim, {
+      toValue: focused ? 1 : 0,
+      useNativeDriver: true,
+      damping: 14,
+      stiffness: 200,
+    }).start();
+  }, [focused]);
+
+  const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1] });
+  const iconColor = focused ? C.accentLight : C.textMuted;
+
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-      <Ionicons name={(focused ? name : `${name}-outline`) as any} size={24} color={color} />
-      {focused && (
-        <View style={{
-          position: 'absolute', bottom: -6,
-          width: 4, height: 4, borderRadius: 2,
-          backgroundColor: color,
-        }} />
-      )}
+    <TouchableOpacity style={styles.tabItem} onPress={onPress} activeOpacity={0.75}>
+      {focused && <View style={styles.tabPillBg} />}
+
+      <Animated.View style={[styles.tabIconWrap, { transform: [{ scale }] }]}>
+        <Ionicons
+          name={(focused ? tab.icon : `${tab.icon}-outline`) as any}
+          size={22}
+          color={iconColor}
+        />
+        {(badge ?? 0) > 0 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{badge! > 99 ? '99+' : badge}</Text>
+          </View>
+        )}
+      </Animated.View>
+
+      <Text style={[styles.tabLabel, { color: iconColor, opacity: focused ? 1 : 0.55 }]}>
+        {tab.label}
+      </Text>
+
+      {focused && <View style={styles.activeDot} />}
+    </TouchableOpacity>
+  );
+}
+
+function TabBar({ state, navigation }: any) {
+  const insets = useSafeAreaInsets();
+  const { dmConversations } = useStore();
+  const totalUnread = dmConversations.reduce((s, c) => s + (c.unread_count ?? 0), 0);
+
+  return (
+    <View style={[styles.tabBar, { paddingBottom: insets.bottom, height: 58 + insets.bottom }]}>
+      {TAB_DEFS.map((tab) => {
+        const route = state.routes.find((r: any) => r.name === tab.name);
+        if (!route) return null;
+        const routeIndex = state.routes.indexOf(route);
+        const focused = state.index === routeIndex;
+
+        return (
+          <TabItem
+            key={tab.name}
+            tab={tab}
+            focused={focused}
+            badge={tab.name === 'dms' ? totalUnread : undefined}
+            onPress={() => {
+              const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+              if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
+            }}
+          />
+        );
+      })}
     </View>
   );
 }
 
 export default function AppLayout() {
-  const insets = useSafeAreaInsets();
   const {
     isAuthenticated, addMessage, addDmMessage, setUserStatus, currentUser,
     updateMessage, removeMessage, updateDmMessage, removeDmMessage,
@@ -120,67 +187,81 @@ export default function AppLayout() {
 
   return (
     <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: C.bgCard,
-          borderTopColor: C.border,
-          borderTopWidth: 1,
-          height: 56 + insets.bottom,
-          paddingBottom: insets.bottom,
-          paddingTop: 8,
-          elevation: 20,
-          shadowColor: '#000',
-          shadowOpacity: 0.4,
-          shadowRadius: 12,
-        },
-        tabBarActiveTintColor: C.accent,
-        tabBarInactiveTintColor: C.textMuted,
-        tabBarShowLabel: true,
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginTop: 2 },
-      }}
+      tabBar={(props) => <TabBar {...props} />}
+      screenOptions={{ headerShown: false }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Serwery',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon name="server" focused={focused} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen name="channel/[id]" options={{ href: null }} />
-      <Tabs.Screen
-        name="dms"
-        options={{
-          title: 'Wiadomości',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon name="chatbubbles" focused={focused} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen name="dm/[userId]" options={{ href: null }} />
-      <Tabs.Screen
-        name="friends"
-        options={{
-          title: 'Znajomi',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon name="people" focused={focused} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profil',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon name="person-circle" focused={focused} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen name="user-profile/[userId]" options={{ href: null }} />
-      <Tabs.Screen name="server-settings/[serverId]" options={{ href: null }} />
-      <Tabs.Screen name="member-list/[serverId]" options={{ href: null }} />
+      <Tabs.Screen name="index"                   options={{ title: 'Serwery'     }} />
+      <Tabs.Screen name="channel/[id]"            options={{ href: null           }} />
+      <Tabs.Screen name="dms"                     options={{ title: 'Wiadomości'  }} />
+      <Tabs.Screen name="dm/[userId]"             options={{ href: null           }} />
+      <Tabs.Screen name="friends"                 options={{ title: 'Znajomi'     }} />
+      <Tabs.Screen name="profile"                 options={{ title: 'Profil'      }} />
+      <Tabs.Screen name="user-profile/[userId]"   options={{ href: null           }} />
+      <Tabs.Screen name="server-settings/[serverId]" options={{ href: null        }} />
+      <Tabs.Screen name="member-list/[serverId]"  options={{ href: null           }} />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: C.bgCard,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+    paddingTop: 6,
+    elevation: 30,
+    shadowColor: '#000',
+    shadowOpacity: 0.6,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: -6 },
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    position: 'relative',
+    paddingVertical: 4,
+  },
+  tabPillBg: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 6,
+    right: 6,
+    borderRadius: 14,
+    backgroundColor: C.accentMuted,
+  },
+  tabIconWrap: {
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: -5,
+    right: -9,
+    backgroundColor: C.danger,
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 2,
+    borderColor: C.bgCard,
+  },
+  badgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
+  tabLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.1,
+  },
+  activeDot: {
+    position: 'absolute',
+    bottom: 1,
+    width: 20,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: C.accent,
+  },
+});
