@@ -359,17 +359,18 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: C.bg },
   header: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 12, paddingVertical: 12,
+    paddingHorizontal: 12, paddingVertical: 11,
     borderBottomWidth: 1, borderBottomColor: C.border,
+    backgroundColor: C.bgCard,
   },
   back: { padding: 4 },
   headerInfo: { flex: 1 },
   headerBtn: {
-    padding: 8, borderRadius: 10,
-    backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border,
+    padding: 8, borderRadius: 11,
+    backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border,
   },
   title: { color: C.text, fontSize: 16, fontWeight: '700' },
-  statusText: { color: C.textMuted, fontSize: 12, textTransform: 'capitalize' },
+  statusText: { color: C.textMuted, fontSize: 11, textTransform: 'capitalize', marginTop: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   // System message pill
   systemPill: {

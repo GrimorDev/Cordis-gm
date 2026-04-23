@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import {
   View, TextInput, TouchableOpacity, StyleSheet, Text,
-  Image, ActivityIndicator, Alert,
+  Image, ActivityIndicator, Alert, Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -43,9 +43,10 @@ export function MessageInput({
   const [sending, setSending] = useState(false);
   const [pendingImage, setPendingImage] = useState<{ uri: string; mimeType: string; fileName: string } | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [focused, setFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
-  // Hard ref guard — blocks concurrent taps even before React state flushes
   const isSendingRef = useRef(false);
+  const sendAnim = useRef(new Animated.Value(1)).current;
 
   const handlePickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -71,6 +72,12 @@ export function MessageInput({
     if (!trimmed && !pendingImage) return;
     if (sending || uploadingImage || isSendingRef.current) return;
 
+    // Button press animation
+    Animated.sequence([
+      Animated.timing(sendAnim, { toValue: 0.88, duration: 60, useNativeDriver: true }),
+      Animated.spring(sendAnim, { toValue: 1, useNativeDriver: true, damping: 12, stiffness: 200 }),
+    ]).start();
+
     isSendingRef.current = true;
     setSending(true);
     try {
@@ -80,14 +87,12 @@ export function MessageInput({
         attachmentUrl = await uploadAttachment(pendingImage.uri, pendingImage.mimeType, pendingImage.fileName);
         setUploadingImage(false);
       }
-      const content = trimmed || (attachmentUrl ? '' : '');
       setText('');
       setPendingImage(null);
-      await onSend(content, attachmentUrl);
+      await onSend(trimmed, attachmentUrl);
     } catch (e: any) {
       setUploadingImage(false);
       Alert.alert('Błąd', e.message ?? 'Nie udało się wysłać wiadomości');
-      // restore
       setText(text);
     } finally {
       isSendingRef.current = false;
@@ -99,14 +104,16 @@ export function MessageInput({
 
   return (
     <View style={styles.wrapper}>
+      {/* Reply bar */}
       {replyTo && (
         <View style={styles.replyBar}>
-          <Ionicons name="return-up-forward" size={14} color={C.accent} />
+          <Ionicons name="return-up-forward" size={14} color={C.accentLight} />
           <Text style={styles.replyText} numberOfLines={1}>
-            Odpowiedź do <Text style={styles.replyName}>{replyTo.sender_username}</Text>: {replyTo.content}
+            <Text style={styles.replyName}>{replyTo.sender_username}: </Text>
+            {replyTo.content || '📎 Załącznik'}
           </Text>
-          <TouchableOpacity onPress={onClearReply}>
-            <Ionicons name="close" size={16} color={C.textMuted} />
+          <TouchableOpacity onPress={onClearReply} style={styles.replyClose}>
+            <Ionicons name="close" size={14} color={C.textMuted} />
           </TouchableOpacity>
         </View>
       )}
@@ -114,22 +121,24 @@ export function MessageInput({
       {/* Image preview */}
       {pendingImage && (
         <View style={styles.imagePreviewRow}>
-          <Image source={{ uri: pendingImage.uri }} style={styles.imagePreview} />
-          {uploadingImage && (
-            <View style={styles.imageUploadOverlay}>
-              <ActivityIndicator color="#fff" size="small" />
-            </View>
-          )}
+          <View style={styles.imagePreviewCard}>
+            <Image source={{ uri: pendingImage.uri }} style={styles.imagePreview} />
+            {uploadingImage && (
+              <View style={styles.imageUploadOverlay}>
+                <ActivityIndicator color="#fff" size="small" />
+              </View>
+            )}
+          </View>
           <TouchableOpacity style={styles.imageRemoveBtn} onPress={() => setPendingImage(null)}>
-            <Ionicons name="close-circle" size={20} color={C.danger} />
+            <Ionicons name="close-circle" size={22} color={C.danger} />
           </TouchableOpacity>
         </View>
       )}
 
-      <View style={styles.row}>
-        {/* Attachment picker */}
+      {/* Input row */}
+      <View style={[styles.row, focused && styles.rowFocused]}>
         <TouchableOpacity style={styles.attachBtn} onPress={handlePickImage}>
-          <Ionicons name="image-outline" size={20} color={C.textMuted} />
+          <Ionicons name="image-outline" size={19} color={focused ? C.textSub : C.textMuted} />
         </TouchableOpacity>
 
         <TextInput
@@ -143,18 +152,22 @@ export function MessageInput({
           maxLength={2000}
           returnKeyType="default"
           blurOnSubmit={false}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
         />
 
-        <TouchableOpacity
-          style={[styles.sendBtn, !canSend && styles.sendDisabled]}
-          onPress={handleSend}
-          disabled={!canSend}
-        >
-          {sending || uploadingImage
-            ? <ActivityIndicator color="#fff" size="small" />
-            : <Ionicons name="send" size={18} color={canSend ? '#fff' : C.textMuted} />
-          }
-        </TouchableOpacity>
+        <Animated.View style={{ transform: [{ scale: sendAnim }] }}>
+          <TouchableOpacity
+            style={[styles.sendBtn, !canSend && styles.sendDisabled]}
+            onPress={handleSend}
+            disabled={!canSend}
+          >
+            {sending || uploadingImage
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Ionicons name="send" size={16} color={canSend ? '#fff' : C.textMuted} />
+            }
+          </TouchableOpacity>
+        </Animated.View>
       </View>
     </View>
   );
@@ -162,52 +175,110 @@ export function MessageInput({
 
 const styles = StyleSheet.create({
   wrapper: {
-    borderTopWidth: 1, borderTopColor: C.border,
-    backgroundColor: C.bg, paddingHorizontal: 12, paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+    backgroundColor: C.bg,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
+
   replyBar: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: C.bgCard, borderRadius: 8, padding: 8, marginBottom: 6,
-    borderLeftWidth: 3, borderLeftColor: C.accent,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: C.accentMuted,
+    borderRadius: 10,
+    padding: 9,
+    marginBottom: 7,
+    borderLeftWidth: 3,
+    borderLeftColor: C.accent,
+    borderWidth: 1,
+    borderColor: C.borderAccent,
   },
-  replyText: { flex: 1, color: C.textMuted, fontSize: 12 },
-  replyName: { color: C.text, fontWeight: '600' },
+  replyText: { flex: 1, color: C.textSub, fontSize: 12.5 },
+  replyName: { color: C.accentLight, fontWeight: '700' },
+  replyClose: { padding: 2 },
 
   // Image preview
   imagePreviewRow: {
-    marginBottom: 8, position: 'relative', alignSelf: 'flex-start',
+    marginBottom: 8,
+    position: 'relative',
+    alignSelf: 'flex-start',
+  },
+  imagePreviewCard: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: C.border,
   },
   imagePreview: {
-    width: 120, height: 90, borderRadius: 10,
+    width: 110,
+    height: 85,
     backgroundColor: C.bgCard,
   },
   imageUploadOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   imageRemoveBtn: {
-    position: 'absolute', top: -6, right: -6,
-    backgroundColor: C.bg, borderRadius: 12,
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: C.bg,
+    borderRadius: 12,
   },
 
-  row: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  // Input row
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    backgroundColor: C.bgCard,
+    borderRadius: 22,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+    borderWidth: 1.5,
+    borderColor: C.border,
+  },
+  rowFocused: {
+    borderColor: C.borderFocus,
+    backgroundColor: C.bgElevated,
+  },
   attachBtn: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: C.bgCard, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: C.border,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 2,
   },
   input: {
-    flex: 1, color: C.text, fontSize: 15,
-    backgroundColor: C.bgInput, borderRadius: 22,
-    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10,
-    maxHeight: 120, borderWidth: 1, borderColor: C.border,
+    flex: 1,
+    color: C.text,
+    fontSize: 15,
+    paddingHorizontal: 2,
+    paddingTop: 8,
+    paddingBottom: 8,
+    maxHeight: 120,
+    lineHeight: 20,
   },
   sendBtn: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: C.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: C.accent,
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  sendDisabled: { backgroundColor: C.bgCard },
+  sendDisabled: {
+    backgroundColor: C.bgElevated,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
 });

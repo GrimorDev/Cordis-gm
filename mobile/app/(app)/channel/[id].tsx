@@ -247,15 +247,15 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: C.bg },
   header: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: 12, paddingVertical: 12,
+    paddingHorizontal: 12, paddingVertical: 11,
     borderBottomWidth: 1, borderBottomColor: C.border,
     backgroundColor: C.bgCard,
   },
   back: { padding: 4 },
-  title: { color: C.text, fontSize: 17, fontWeight: '700', flex: 1 },
+  title: { color: C.text, fontSize: 16, fontWeight: '700', flex: 1 },
   headerRight: { flexDirection: 'row', gap: 6 },
   headerBtn: {
-    padding: 7, borderRadius: 10,
+    padding: 8, borderRadius: 11,
     backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border,
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
@@ -286,8 +286,11 @@ const styles = StyleSheet.create({
   emptySubtext: { color: C.textMuted, fontSize: 13, marginTop: 4 },
 
   // Typing
-  typingBar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingBottom: 4 },
-  typingDots: { flexDirection: 'row', gap: 3 },
-  dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: C.textMuted },
+  typingBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 16, paddingBottom: 5, paddingTop: 2,
+  },
+  typingDots: { flexDirection: 'row', gap: 4 },
+  dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: C.accent + 'aa' },
   typingText: { color: C.textMuted, fontSize: 12 },
 });
