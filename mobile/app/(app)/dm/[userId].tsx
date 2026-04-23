@@ -95,6 +95,7 @@ export default function DmChatScreen() {
 
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const remoteTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sendingRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -158,8 +159,14 @@ export default function DmChatScreen() {
   };
 
   const handleSend = async (text: string, attachmentUrl?: string) => {
-    const msg = await dmsApi.send(userId, text, attachmentUrl);
-    addDmMessage(userId, msg);
+    if (sendingRef.current) return;
+    sendingRef.current = true;
+    try {
+      const msg = await dmsApi.send(userId, text, attachmentUrl);
+      addDmMessage(userId, msg);
+    } finally {
+      sendingRef.current = false;
+    }
   };
 
   const handleTyping = () => {

@@ -44,6 +44,8 @@ export function MessageInput({
   const [pendingImage, setPendingImage] = useState<{ uri: string; mimeType: string; fileName: string } | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const inputRef = useRef<TextInput>(null);
+  // Hard ref guard — blocks concurrent taps even before React state flushes
+  const isSendingRef = useRef(false);
 
   const handlePickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -67,8 +69,9 @@ export function MessageInput({
   const handleSend = async () => {
     const trimmed = text.trim();
     if (!trimmed && !pendingImage) return;
-    if (sending || uploadingImage) return;
+    if (sending || uploadingImage || isSendingRef.current) return;
 
+    isSendingRef.current = true;
     setSending(true);
     try {
       let attachmentUrl: string | undefined;
@@ -87,6 +90,7 @@ export function MessageInput({
       // restore
       setText(text);
     } finally {
+      isSendingRef.current = false;
       setSending(false);
     }
   };

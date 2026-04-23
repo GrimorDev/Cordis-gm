@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { View, FlatList, StyleSheet, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import {
+  View, FlatList, StyleSheet, Text, TouchableOpacity,
+  ActivityIndicator, Alert,
+} from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +14,14 @@ import { useStore } from '../../../src/store';
 import { getSocket } from '../../../src/socket';
 import type { Message } from '../../../src/api';
 
+// Translate backend error codes to Polish
+function friendlyError(msg: string): string {
+  if (msg === 'No access' || msg === 'Brak dostępu') {
+    return 'Nie masz dostępu do tego kanału.\nMoże być prywatny lub wymaga specjalnych uprawnień.';
+  }
+  return msg;
+}
+
 export default function ChannelScreen() {
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
   const insets = useSafeAreaInsets();
@@ -19,21 +30,25 @@ export default function ChannelScreen() {
     currentUser, setTyping, typingUsers, activeServer,
   } = useStore();
   const msgs = messages[id] ?? [];
+
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
-  const listRef = useRef<FlatList>(null);
+
+  // Guard against double-sends
+  const sendingRef = useRef(false);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
+    if (!id) return;
     setLoading(true);
     setError(null);
     try {
       const list = await messagesApi.list(id);
       setMessages(id, list);
     } catch (e: any) {
-      setError(e.message ?? 'Nie udało się załadować wiadomości');
+      setError(friendlyError(e.message ?? 'Nie udało się załadować wiadomości'));
     } finally {
       setLoading(false);
     }
@@ -41,26 +56,19 @@ export default function ChannelScreen() {
 
   useEffect(() => {
     load();
-    getSocket()?.emit('join_channel', id);
-
     const sock = getSocket();
-    const onNew = (msg: any) => { if (msg.channel_id === id) addMessage(id, msg); };
-    const onUpdate = (msg: any) => { if (msg.channel_id === id) updateMessage(id, msg); };
-    const onDelete = ({ id: msgId }: any) => removeMessage(id, msgId);
+    // NOTE: new_message, message_updated, message_deleted are handled GLOBALLY in _layout.tsx
+    // to avoid double-add. We only handle channel-specific events here.
+    sock?.emit('join_channel', id);
+
     const onTyping = ({ username }: any) => {
       setTyping(id, [...(typingUsers[id] ?? []).filter(u => u !== username), username]);
       setTimeout(() => setTyping(id, (typingUsers[id] ?? []).filter(u => u !== username)), 3500);
     };
-    sock?.on('new_message', onNew);
-    sock?.on('message_updated', onUpdate);
-    sock?.on('message_deleted', onDelete);
     sock?.on('user_typing', onTyping);
 
     return () => {
       getSocket()?.emit('leave_channel', id);
-      sock?.off('new_message', onNew);
-      sock?.off('message_updated', onUpdate);
-      sock?.off('message_deleted', onDelete);
       sock?.off('user_typing', onTyping);
     };
   }, [id]);
@@ -77,8 +85,15 @@ export default function ChannelScreen() {
   };
 
   const handleSend = async (text: string, attachmentUrl?: string) => {
-    await messagesApi.send(id, text, replyTo?.id, attachmentUrl);
-    setReplyTo(null);
+    // Hard guard — prevents any double-send even if state hasn't flushed
+    if (sendingRef.current) return;
+    sendingRef.current = true;
+    try {
+      await messagesApi.send(id, text, replyTo?.id, attachmentUrl);
+      setReplyTo(null);
+    } finally {
+      sendingRef.current = false;
+    }
   };
 
   const handleTyping = () => {
@@ -124,7 +139,6 @@ export default function ChannelScreen() {
         </TouchableOpacity>
         <Ionicons name="chatbox-outline" size={18} color={C.textMuted} />
         <Text style={styles.title} numberOfLines={1}>{name}</Text>
-        {/* Header right actions */}
         <View style={styles.headerRight}>
           {isOwner && activeServer && (
             <TouchableOpacity
@@ -151,15 +165,26 @@ export default function ChannelScreen() {
         </View>
       ) : error ? (
         <View style={styles.center}>
-          <Ionicons name="warning-outline" size={36} color={C.danger} style={{ marginBottom: 10 }} />
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={load}>
-            <Text style={styles.retryText}>Spróbuj ponownie</Text>
-          </TouchableOpacity>
+          <View style={styles.errorBox}>
+            <View style={styles.errorIcon}>
+              <Ionicons name="lock-closed" size={32} color={C.textMuted} />
+            </View>
+            <Text style={styles.errorTitle}>Brak dostępu</Text>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity style={styles.retryBtn} onPress={load}>
+              <Ionicons name="refresh-outline" size={16} color="#fff" />
+              <Text style={styles.retryText}>Spróbuj ponownie</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : msgs.length === 0 ? (
+        <View style={styles.center}>
+          <Ionicons name="chatbox-outline" size={48} color={C.textMuted} />
+          <Text style={styles.emptyText}>Brak wiadomości</Text>
+          <Text style={styles.emptySubtext}>Napisz pierwszą wiadomość!</Text>
         </View>
       ) : (
         <FlatList
-          ref={listRef}
           data={[...msgs].reverse()}
           keyExtractor={(m) => m.id}
           inverted
@@ -196,6 +221,9 @@ export default function ChannelScreen() {
 
       {typing.length > 0 && (
         <View style={styles.typingBar}>
+          <View style={styles.typingDots}>
+            <View style={styles.dot} /><View style={styles.dot} /><View style={styles.dot} />
+          </View>
           <Text style={styles.typingText}>
             {typing.slice(0, 2).join(', ')} {typing.length === 1 ? 'pisze…' : 'piszą…'}
           </Text>
@@ -221,21 +249,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingHorizontal: 12, paddingVertical: 12,
     borderBottomWidth: 1, borderBottomColor: C.border,
+    backgroundColor: C.bgCard,
   },
   back: { padding: 4 },
   title: { color: C.text, fontSize: 17, fontWeight: '700', flex: 1 },
   headerRight: { flexDirection: 'row', gap: 6 },
   headerBtn: {
     padding: 7, borderRadius: 10,
-    backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border,
+    backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border,
   },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4 },
-  errorText: { color: C.textSub, fontSize: 15, textAlign: 'center', paddingHorizontal: 24 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+
+  // Error state
+  errorBox: {
+    alignItems: 'center', gap: 12,
+    backgroundColor: C.bgCard, borderRadius: 20,
+    borderWidth: 1, borderColor: C.border,
+    padding: 32, width: '100%',
+  },
+  errorIcon: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: C.bgElevated, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: C.border,
+  },
+  errorTitle: { color: C.text, fontSize: 18, fontWeight: '700' },
+  errorText: { color: C.textMuted, fontSize: 14, textAlign: 'center', lineHeight: 20 },
   retryBtn: {
-    marginTop: 12, paddingHorizontal: 20, paddingVertical: 10,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: 4, paddingHorizontal: 20, paddingVertical: 10,
     backgroundColor: C.accent, borderRadius: 10,
   },
   retryText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  typingBar: { paddingHorizontal: 16, paddingBottom: 4 },
+
+  // Empty state
+  emptyText: { color: C.textSub, fontSize: 17, fontWeight: '700', marginTop: 12 },
+  emptySubtext: { color: C.textMuted, fontSize: 13, marginTop: 4 },
+
+  // Typing
+  typingBar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingBottom: 4 },
+  typingDots: { flexDirection: 'row', gap: 3 },
+  dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: C.textMuted },
   typingText: { color: C.textMuted, fontSize: 12 },
 });

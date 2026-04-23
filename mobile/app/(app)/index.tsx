@@ -47,6 +47,7 @@ export default function ServersScreen() {
   const [channelsLoading, setChannelsLoading] = useState(false);
   const [showChannels, setShowChannels] = useState(false);
   const [collapsedCats, setCollapsedCats] = useState<Set<string | null>>(new Set());
+  const [activeVoice, setActiveVoice] = useState<{ channelId: string; channelName: string } | null>(null);
 
   // Modals
   const [modal, setModal] = useState<'none' | 'create' | 'join'>('none');
@@ -145,6 +146,23 @@ export default function ServersScreen() {
       await Share.share({ message: `Dołącz do "${srv.name}" na Cordyn! Kod: ${code}` });
     } catch (e: any) {
       Alert.alert('Błąd', e.message ?? 'Nie udało się wygenerować zaproszenia');
+    }
+  };
+
+  const handleJoinVoice = (ch: Channel) => {
+    if (activeVoice?.channelId === ch.id) return; // already in this channel
+    if (activeVoice) {
+      // Leave previous voice channel first
+      getSocket()?.emit('voice_leave', { channel_id: activeVoice.channelId });
+    }
+    getSocket()?.emit('voice_join', { channel_id: ch.id });
+    setActiveVoice({ channelId: ch.id, channelName: ch.name });
+  };
+
+  const handleLeaveVoice = () => {
+    if (activeVoice) {
+      getSocket()?.emit('voice_leave', { channel_id: activeVoice.channelId });
+      setActiveVoice(null);
     }
   };
 
@@ -249,36 +267,33 @@ export default function ServersScreen() {
                   {!isCollapsed && group.channels.map(ch => {
                     const isVoice = ch.type === 'voice';
                     const vUsers = voiceUsers[ch.id] ?? [];
+                    const isInThisVoice = activeVoice?.channelId === ch.id;
 
                     if (isVoice) {
                       return (
                         <View key={ch.id}>
                           <TouchableOpacity
-                            style={styles.channelRow}
-                            onPress={() => {
-                              if (vUsers.length > 0) {
-                                Alert.alert(
-                                  `#${ch.name}`,
-                                  `W kanale: ${vUsers.map(u => u.username).join(', ')}`,
-                                  [{ text: 'OK' }],
-                                );
-                              } else {
-                                Alert.alert('Kanał głosowy', 'Kanały głosowe dostępne na desktopie.', [{ text: 'OK' }]);
-                              }
-                            }}
+                            style={[styles.channelRow, isInThisVoice && styles.channelRowActive]}
+                            onPress={() => handleJoinVoice(ch)}
                             activeOpacity={0.7}
                           >
-                            <View style={[styles.channelIconWrap, { backgroundColor: vUsers.length > 0 ? '#22c55e22' : C.bgInput }]}>
+                            <View style={[styles.channelIconWrap, {
+                              backgroundColor: isInThisVoice ? '#22c55e33' : vUsers.length > 0 ? '#22c55e22' : C.bgInput,
+                            }]}>
                               <Ionicons
-                                name={channelIcon(ch.type)}
+                                name={isInThisVoice ? 'mic' : channelIcon(ch.type)}
                                 size={15}
-                                color={vUsers.length > 0 ? '#22c55e' : C.textMuted}
+                                color={isInThisVoice || vUsers.length > 0 ? '#22c55e' : C.textMuted}
                               />
                             </View>
-                            <Text style={[styles.channelName, vUsers.length > 0 && { color: '#22c55e' }]}>
+                            <Text style={[styles.channelName, (isInThisVoice || vUsers.length > 0) && { color: '#22c55e', fontWeight: '600' }]}>
                               {ch.name}
                             </Text>
-                            {vUsers.length > 0 && (
+                            {isInThisVoice ? (
+                              <View style={styles.voiceConnectedBadge}>
+                                <Text style={styles.voiceConnectedText}>Połączony</Text>
+                              </View>
+                            ) : vUsers.length > 0 && (
                               <View style={styles.voiceCountBadge}>
                                 <Ionicons name="person" size={10} color="#22c55e" />
                                 <Text style={styles.voiceCountText}>{vUsers.length}</Text>
@@ -334,6 +349,24 @@ export default function ServersScreen() {
               );
             })}
           </ScrollView>
+        )}
+
+        {/* Active voice channel bar */}
+        {activeVoice && (
+          <View style={styles.voiceBar}>
+            <View style={styles.voiceBarLeft}>
+              <View style={styles.voicePulse}>
+                <Ionicons name="mic" size={14} color="#22c55e" />
+              </View>
+              <View>
+                <Text style={styles.voiceBarTitle}>Połączony z głosowym</Text>
+                <Text style={styles.voiceBarChannel}>#{activeVoice.channelName}</Text>
+              </View>
+            </View>
+            <TouchableOpacity style={styles.voiceLeaveBtn} onPress={handleLeaveVoice}>
+              <Ionicons name="call" size={16} color="#fff" />
+            </TouchableOpacity>
+          </View>
         )}
 
         <ServerActionSheet
@@ -629,14 +662,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
   },
   unreadBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  channelRowActive: { backgroundColor: 'rgba(34,197,94,0.08)' },
   voiceCountBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
     backgroundColor: 'rgba(34,197,94,0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8,
   },
   voiceCountText: { color: '#22c55e', fontSize: 11, fontWeight: '700' },
+  voiceConnectedBadge: {
+    backgroundColor: 'rgba(34,197,94,0.2)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8,
+    borderWidth: 1, borderColor: '#22c55e55',
+  },
+  voiceConnectedText: { color: '#22c55e', fontSize: 11, fontWeight: '700' },
   voicePresenceRow: { flexDirection: 'row', flexWrap: 'wrap', paddingLeft: 52, paddingBottom: 4, gap: 8 },
   voicePresenceUser: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   voicePresenceUsername: { color: C.textMuted, fontSize: 11, maxWidth: 72 },
+  // Voice bar at bottom of channel list
+  voiceBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: '#0f1a12', borderTopWidth: 1, borderTopColor: '#22c55e44',
+    paddingHorizontal: 16, paddingVertical: 10,
+  },
+  voiceBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  voicePulse: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: '#22c55e22', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#22c55e55',
+  },
+  voiceBarTitle: { color: '#22c55e', fontSize: 12, fontWeight: '700' },
+  voiceBarChannel: { color: C.textMuted, fontSize: 11 },
+  voiceLeaveBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: C.danger, alignItems: 'center', justifyContent: 'center',
+  },
 
   // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
