@@ -122,7 +122,7 @@ export default function ChannelScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
           <Ionicons name="chevron-back" size={22} color={C.text} />
         </TouchableOpacity>
-        <Ionicons name="hash-outline" size={18} color={C.textMuted} />
+        <Ionicons name="chatbox-outline" size={18} color={C.textMuted} />
         <Text style={styles.title} numberOfLines={1}>{name}</Text>
         {/* Header right actions */}
         <View style={styles.headerRight}>

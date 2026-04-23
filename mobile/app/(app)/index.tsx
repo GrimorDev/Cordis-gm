@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   RefreshControl, TextInput, Modal, ActivityIndicator, Alert,
-  ScrollView, Animated, Share,
+  ScrollView, Share, Animated, LayoutAnimation, Platform, UIManager,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,19 +15,38 @@ import { useStore } from '../../src/store';
 import { getSocket } from '../../src/socket';
 import type { Server, Channel } from '../../src/api';
 
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 function resolveUrl(url: string | null | undefined): string | null {
   if (!url) return null;
   return url.startsWith('http') ? url : `${STATIC_BASE}${url}`;
 }
 
-// ── Server List ───────────────────────────────────────────────────────────────
+type ChannelIconName = 'chatbox' | 'chatbox-outline' | 'mic' | 'mic-outline' | 'megaphone' | 'megaphone-outline' | 'albums' | 'albums-outline';
+
+function channelIcon(type: string, focused = false): ChannelIconName {
+  if (type === 'voice') return focused ? 'mic' : 'mic-outline';
+  if (type === 'announcement') return focused ? 'megaphone' : 'megaphone-outline';
+  if (type === 'forum') return focused ? 'albums' : 'albums-outline';
+  return focused ? 'chatbox' : 'chatbox-outline';
+}
+
+// ── Main screen ────────────────────────────────────────────────────────────────
 export default function ServersScreen() {
   const insets = useSafeAreaInsets();
-  const { servers, setServers, activeServer, setActiveServer, channels, setChannels, addServer, currentUser, voiceUsers } = useStore();
+  const {
+    servers, setServers, activeServer, setActiveServer,
+    channels, setChannels, addServer, currentUser, voiceUsers,
+  } = useStore();
+
   const [refreshing, setRefreshing] = useState(false);
   const [serversLoading, setServersLoading] = useState(true);
   const [channelsLoading, setChannelsLoading] = useState(false);
   const [showChannels, setShowChannels] = useState(false);
+  const [collapsedCats, setCollapsedCats] = useState<Set<string | null>>(new Set());
 
   // Modals
   const [modal, setModal] = useState<'none' | 'create' | 'join'>('none');
@@ -35,8 +54,6 @@ export default function ServersScreen() {
   const [createName, setCreateName] = useState('');
   const [createDesc, setCreateDesc] = useState('');
   const [modalLoading, setModalLoading] = useState(false);
-
-  // Server action sheet
   const [actionServer, setActionServer] = useState<Server | null>(null);
 
   const load = useCallback(async () => {
@@ -53,12 +70,15 @@ export default function ServersScreen() {
   useEffect(() => { load(); }, []);
 
   const openServer = async (srv: Server) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setActiveServer(srv);
     setChannels([]);
     setShowChannels(true);
     setChannelsLoading(true);
+    setCollapsedCats(new Set());
     try {
       const chs = await channelsApi.list(srv.id);
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setChannels(chs);
       getSocket()?.emit('join_server_room' as any, srv.id);
     } catch (e: any) {
@@ -100,16 +120,21 @@ export default function ServersScreen() {
   const handleLeave = (srv: Server) => {
     Alert.alert('Opuść serwer', `Czy na pewno chcesz opuścić "${srv.name}"?`, [
       { text: 'Anuluj', style: 'cancel' },
-      { text: 'Opuść', style: 'destructive', onPress: async () => {
-        try {
-          await serversApi.leave(srv.id);
-          setServers(servers.filter(s => s.id !== srv.id));
-          setActionServer(null);
-          if (activeServer?.id === srv.id) setShowChannels(false);
-        } catch (e: any) {
-          Alert.alert('Błąd', e.message ?? 'Nie udało się opuścić serwera');
-        }
-      }},
+      {
+        text: 'Opuść', style: 'destructive', onPress: async () => {
+          try {
+            await serversApi.leave(srv.id);
+            setServers(servers.filter(s => s.id !== srv.id));
+            setActionServer(null);
+            if (activeServer?.id === srv.id) {
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setShowChannels(false);
+            }
+          } catch (e: any) {
+            Alert.alert('Błąd', e.message ?? 'Nie udało się opuścić serwera');
+          }
+        },
+      },
     ]);
   };
 
@@ -117,24 +142,34 @@ export default function ServersScreen() {
     try {
       const { code } = await serversApi.generateInvite(srv.id);
       setActionServer(null);
-      await Share.share({ message: `Dołącz do serwera "${srv.name}" na Cordyn!\nKod: ${code}` });
+      await Share.share({ message: `Dołącz do "${srv.name}" na Cordyn! Kod: ${code}` });
     } catch (e: any) {
       Alert.alert('Błąd', e.message ?? 'Nie udało się wygenerować zaproszenia');
     }
+  };
+
+  const toggleCategory = (catId: string | null) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setCollapsedCats(prev => {
+      const next = new Set(prev);
+      const key = catId ?? '__null__';
+      if (next.has(key as any)) next.delete(key as any);
+      else next.add(key as any);
+      return next;
+    });
   };
 
   // ── Channel list view ──────────────────────────────────────────────────────
   if (showChannels && activeServer) {
     const isOwner = currentUser?.id === activeServer.owner_id;
 
-    // Group by category
     const grouped: { catId: string | null; catName: string | null; channels: Channel[] }[] = [];
-    const catMap = new Map<string | null, { catId: string | null; catName: string | null; channels: Channel[] }>();
+    const catMap = new Map<string, { catId: string | null; catName: string | null; channels: Channel[] }>();
 
     for (const ch of channels) {
-      const key = ch.category_id ?? null;
+      const key = ch.category_id ?? '__null__';
       if (!catMap.has(key)) {
-        catMap.set(key, { catId: key, catName: ch.category_name ?? null, channels: [] });
+        catMap.set(key, { catId: ch.category_id ?? null, catName: ch.category_name ?? null, channels: [] });
       }
       catMap.get(key)!.channels.push(ch);
     }
@@ -144,11 +179,14 @@ export default function ServersScreen() {
       <View style={[styles.flex, { paddingTop: insets.top }]}>
         {/* Header */}
         <View style={styles.chHeader}>
-          <TouchableOpacity onPress={() => setShowChannels(false)} style={styles.backBtn}>
+          <TouchableOpacity onPress={() => {
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setShowChannels(false);
+          }} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={22} color={C.text} />
           </TouchableOpacity>
-          <UserAvatar url={resolveUrl(activeServer.icon_url)} username={activeServer.name} size={32} />
-          <View style={{ flex: 1 }}>
+          <UserAvatar url={resolveUrl(activeServer.icon_url)} username={activeServer.name} size={30} />
+          <View style={{ flex: 1, marginLeft: 6 }}>
             <Text style={styles.chTitle} numberOfLines={1}>{activeServer.name}</Text>
             {activeServer.description ? (
               <Text style={styles.chSubtitle} numberOfLines={1}>{activeServer.description}</Text>
@@ -169,10 +207,7 @@ export default function ServersScreen() {
                 <Ionicons name="settings-outline" size={19} color={C.textSub} />
               </TouchableOpacity>
             )}
-            <TouchableOpacity
-              style={styles.serverMenuBtn}
-              onPress={() => setActionServer(activeServer)}
-            >
+            <TouchableOpacity style={styles.serverMenuBtn} onPress={() => setActionServer(activeServer)}>
               <Ionicons name="ellipsis-vertical" size={20} color={C.textMuted} />
             </TouchableOpacity>
           </View>
@@ -185,90 +220,122 @@ export default function ServersScreen() {
           </View>
         ) : channels.length === 0 ? (
           <View style={styles.centerFlex}>
-            <Ionicons name="chatbubble-outline" size={44} color={C.textMuted} />
+            <Ionicons name="chatbox-outline" size={44} color={C.textMuted} />
             <Text style={styles.emptyText}>Brak kanałów</Text>
           </View>
         ) : (
-          <ScrollView contentContainerStyle={{ paddingVertical: 8 }}>
-            {grouped.map(group => (
-              <View key={group.catId ?? '__no_cat'}>
-                {group.catName && (
-                  <View style={styles.catHeader}>
-                    <Text style={styles.catLabel}>{group.catName.toUpperCase()}</Text>
-                  </View>
-                )}
-                {group.channels.map(ch => {
-                  const isText = ch.type === 'text';
-                  const isAnnouncement = ch.type === 'announcement';
-                  const isVoice = ch.type === 'voice';
-                  const icon = isVoice ? 'volume-medium-outline'
-                    : isAnnouncement ? 'megaphone-outline'
-                    : 'hash-outline';
+          <ScrollView contentContainerStyle={{ paddingBottom: 20 }} showsVerticalScrollIndicator={false}>
+            {grouped.map(group => {
+              const isCollapsed = collapsedCats.has((group.catId ?? '__null__') as any);
+              return (
+                <View key={group.catId ?? '__null__'}>
+                  {/* Category header */}
+                  {group.catName && (
+                    <TouchableOpacity
+                      style={styles.catHeader}
+                      onPress={() => toggleCategory(group.catId)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={isCollapsed ? 'chevron-forward' : 'chevron-down'}
+                        size={12}
+                        color={C.textMuted}
+                      />
+                      <Text style={styles.catLabel}>{group.catName.toUpperCase()}</Text>
+                    </TouchableOpacity>
+                  )}
 
-                  if (isVoice) {
+                  {/* Channels in this category */}
+                  {!isCollapsed && group.channels.map(ch => {
+                    const isVoice = ch.type === 'voice';
                     const vUsers = voiceUsers[ch.id] ?? [];
-                    return (
-                      <View key={ch.id}>
-                        <TouchableOpacity
-                          style={styles.channelRow}
-                          onPress={() => {
-                            if (vUsers.length > 0) {
-                              Alert.alert(
-                                `#${ch.name}`,
-                                `W kanale: ${vUsers.map(u => u.username).join(', ')}`,
-                                [{ text: 'OK' }],
-                              );
-                            } else {
-                              Alert.alert('Kanał głosowy', 'Kanały głosowe są dostępne w aplikacji desktopowej.', [{ text: 'OK' }]);
-                            }
-                          }}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name={icon} size={18} color={vUsers.length > 0 ? '#22c55e' : C.textMuted} />
-                          <Text style={[styles.channelName, vUsers.length > 0 && { color: C.textSub }]}>{ch.name}</Text>
+
+                    if (isVoice) {
+                      return (
+                        <View key={ch.id}>
+                          <TouchableOpacity
+                            style={styles.channelRow}
+                            onPress={() => {
+                              if (vUsers.length > 0) {
+                                Alert.alert(
+                                  `#${ch.name}`,
+                                  `W kanale: ${vUsers.map(u => u.username).join(', ')}`,
+                                  [{ text: 'OK' }],
+                                );
+                              } else {
+                                Alert.alert('Kanał głosowy', 'Kanały głosowe dostępne na desktopie.', [{ text: 'OK' }]);
+                              }
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <View style={[styles.channelIconWrap, { backgroundColor: vUsers.length > 0 ? '#22c55e22' : C.bgInput }]}>
+                              <Ionicons
+                                name={channelIcon(ch.type)}
+                                size={15}
+                                color={vUsers.length > 0 ? '#22c55e' : C.textMuted}
+                              />
+                            </View>
+                            <Text style={[styles.channelName, vUsers.length > 0 && { color: '#22c55e' }]}>
+                              {ch.name}
+                            </Text>
+                            {vUsers.length > 0 && (
+                              <View style={styles.voiceCountBadge}>
+                                <Ionicons name="person" size={10} color="#22c55e" />
+                                <Text style={styles.voiceCountText}>{vUsers.length}</Text>
+                              </View>
+                            )}
+                          </TouchableOpacity>
                           {vUsers.length > 0 && (
-                            <View style={styles.voiceCountBadge}>
-                              <Ionicons name="person" size={10} color="#22c55e" />
-                              <Text style={styles.voiceCountText}>{vUsers.length}</Text>
+                            <View style={styles.voicePresenceRow}>
+                              {vUsers.map(u => (
+                                <TouchableOpacity
+                                  key={u.id}
+                                  style={styles.voicePresenceUser}
+                                  onPress={() => router.push({ pathname: '/(app)/user-profile/[userId]', params: { userId: u.id } } as any)}
+                                >
+                                  <UserAvatar url={u.avatar_url} username={u.username} size={18} />
+                                  <Text style={styles.voicePresenceUsername} numberOfLines={1}>{u.username}</Text>
+                                </TouchableOpacity>
+                              ))}
                             </View>
                           )}
-                        </TouchableOpacity>
-                        {vUsers.length > 0 && (
-                          <View style={styles.voicePresenceRow}>
-                            {vUsers.map(u => (
-                              <TouchableOpacity
-                                key={u.id}
-                                style={styles.voicePresenceUser}
-                                onPress={() => router.push({ pathname: '/(app)/user-profile/[userId]', params: { userId: u.id } } as any)}
-                              >
-                                <UserAvatar url={u.avatar_url} username={u.username} size={20} />
-                                <Text style={styles.voicePresenceUsername} numberOfLines={1}>{u.username}</Text>
-                              </TouchableOpacity>
-                            ))}
+                        </View>
+                      );
+                    }
+
+                    const unread = (ch as any).unread_count ?? 0;
+
+                    return (
+                      <TouchableOpacity
+                        key={ch.id}
+                        style={[styles.channelRow, unread > 0 && styles.channelRowUnread]}
+                        onPress={() => router.push({
+                          pathname: '/(app)/channel/[id]',
+                          params: { id: ch.id, name: ch.name, serverId: activeServer.id },
+                        })}
+                        activeOpacity={0.7}
+                      >
+                        <View style={[styles.channelIconWrap, { backgroundColor: C.accent + '22' }]}>
+                          <Ionicons name={channelIcon(ch.type)} size={15} color={C.accent} />
+                        </View>
+                        <Text style={[styles.channelName, unread > 0 && { color: C.text, fontWeight: '700' }]}>
+                          {ch.name}
+                        </Text>
+                        {unread > 0 && (
+                          <View style={styles.unreadBadge}>
+                            <Text style={styles.unreadBadgeText}>{unread > 99 ? '99+' : unread}</Text>
                           </View>
                         )}
-                      </View>
+                        <Ionicons name="chevron-forward" size={13} color={C.textMuted} />
+                      </TouchableOpacity>
                     );
-                  }
-
-                  return (
-                    <TouchableOpacity
-                      key={ch.id}
-                      style={styles.channelRow}
-                      onPress={() => router.push({ pathname: '/(app)/channel/[id]', params: { id: ch.id, name: ch.name, serverId: activeServer.id } })}
-                    >
-                      <Ionicons name={icon} size={18} color={C.accent} />
-                      <Text style={styles.channelName}>{ch.name}</Text>
-                      <Ionicons name="chevron-forward" size={14} color={C.textMuted} />
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            ))}
+                  })}
+                </View>
+              );
+            })}
           </ScrollView>
         )}
 
-        {/* Server action sheet */}
         <ServerActionSheet
           server={actionServer}
           onClose={() => setActionServer(null)}
@@ -310,11 +377,9 @@ export default function ServersScreen() {
             style={styles.serverCard}
             onPress={() => openServer(item)}
             onLongPress={() => setActionServer(item)}
-            activeOpacity={0.8}
+            activeOpacity={0.75}
           >
-            <View style={styles.serverIconWrap}>
-              <UserAvatar url={resolveUrl(item.icon_url)} username={item.name} size={52} />
-            </View>
+            <UserAvatar url={resolveUrl(item.icon_url)} username={item.name} size={50} />
             <View style={styles.serverInfo}>
               <Text style={styles.serverName} numberOfLines={1}>{item.name}</Text>
               {item.description ? (
@@ -322,12 +387,12 @@ export default function ServersScreen() {
               ) : null}
               {item.member_count != null && (
                 <View style={styles.memberCountRow}>
-                  <View style={[styles.statusDot, { backgroundColor: C.success }]} />
+                  <View style={[styles.statusDot, { backgroundColor: '#22c55e' }]} />
                   <Text style={styles.memberCount}>{item.member_count} członków</Text>
                 </View>
               )}
             </View>
-            <Ionicons name="chevron-forward" size={18} color={C.textMuted} />
+            <Ionicons name="chevron-forward" size={16} color={C.textMuted} />
           </TouchableOpacity>
         )}
         ListEmptyComponent={
@@ -340,15 +405,15 @@ export default function ServersScreen() {
                     <Ionicons name="server-outline" size={36} color={C.accent} />
                   </View>
                   <Text style={styles.emptyTitle}>Brak serwerów</Text>
-                  <Text style={styles.emptySubtext}>Stwórz własny serwer lub dołącz do istniejącego kodem zaproszenia</Text>
+                  <Text style={styles.emptySubtext}>Stwórz własny lub dołącz przez kod zaproszenia</Text>
                   <View style={styles.emptyBtns}>
                     <TouchableOpacity style={styles.emptyBtn} onPress={() => setModal('create')}>
                       <Ionicons name="add-circle-outline" size={16} color="#fff" />
-                      <Text style={styles.emptyBtnText}>Stwórz serwer</Text>
+                      <Text style={styles.emptyBtnText}>Stwórz</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.emptyBtn, styles.emptyBtnSecondary]} onPress={() => setModal('join')}>
                       <Ionicons name="link-outline" size={16} color={C.textSub} />
-                      <Text style={[styles.emptyBtnText, { color: C.textSub }]}>Dołącz kodem</Text>
+                      <Text style={[styles.emptyBtnText, { color: C.textSub }]}>Dołącz</Text>
                     </TouchableOpacity>
                   </View>
                 </>
@@ -358,7 +423,6 @@ export default function ServersScreen() {
         }
       />
 
-      {/* Server action sheet */}
       <ServerActionSheet
         server={actionServer}
         onClose={() => setActionServer(null)}
@@ -387,7 +451,7 @@ export default function ServersScreen() {
               style={[styles.input, styles.inputMulti]}
               value={createDesc}
               onChangeText={setCreateDesc}
-              placeholder="Krótki opis serwera…"
+              placeholder="Krótki opis…"
               placeholderTextColor={C.textMuted}
               multiline
               maxLength={300}
@@ -440,17 +504,14 @@ export default function ServersScreen() {
   );
 }
 
-// ── Server Action Sheet ─────────────────────────────────────────────────────
-function ServerActionSheet({
-  server, onClose, onLeave, onInvite,
-}: {
+// ── Server Action Sheet ────────────────────────────────────────────────────────
+function ServerActionSheet({ server, onClose, onLeave, onInvite }: {
   server: Server | null;
   onClose: () => void;
   onLeave: (s: Server) => void;
   onInvite: (s: Server) => void;
 }) {
   if (!server) return null;
-
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
@@ -478,18 +539,29 @@ function ActionRow({ icon, label, color, onPress }: { icon: string; label: strin
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: C.bg },
   centerFlex: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  loadingText: { color: C.textMuted, fontSize: 14, marginTop: 8 },
+  loadingText: { color: C.textMuted, fontSize: 14 },
 
-  // Header
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.border },
-  headerTitle: { color: C.text, fontSize: 20, fontWeight: '700' },
+  // Server list header
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: C.border,
+  },
+  headerTitle: { color: C.text, fontSize: 22, fontWeight: '800' },
   headerActions: { flexDirection: 'row', gap: 8 },
-  headerBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: C.bgCard, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.border },
+  headerBtn: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: C.bgCard, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: C.border,
+  },
   headerBtnAccent: { backgroundColor: C.accent, borderColor: C.accent },
 
   // Server card
-  serverCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.bgCard, borderRadius: 18, padding: 14, borderWidth: 1, borderColor: C.border },
-  serverIconWrap: { borderRadius: 14, overflow: 'hidden' },
+  serverCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    backgroundColor: C.bgCard, borderRadius: 16, padding: 14,
+    borderWidth: 1, borderColor: C.border,
+  },
   serverInfo: { flex: 1 },
   serverName: { color: C.text, fontSize: 16, fontWeight: '700' },
   serverDesc: { color: C.textMuted, fontSize: 12, marginTop: 2 },
@@ -499,53 +571,96 @@ const styles = StyleSheet.create({
 
   // Empty state
   empty: { alignItems: 'center', paddingVertical: 60, gap: 12 },
-  emptyIcon: { width: 72, height: 72, borderRadius: 22, backgroundColor: C.bgCard, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.border },
+  emptyIcon: {
+    width: 72, height: 72, borderRadius: 22,
+    backgroundColor: C.bgCard, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: C.border,
+  },
   emptyTitle: { color: C.text, fontSize: 18, fontWeight: '700' },
   emptySubtext: { color: C.textMuted, fontSize: 14, textAlign: 'center', paddingHorizontal: 32, lineHeight: 20 },
   emptyBtns: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  emptyBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.accent, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10 },
+  emptyBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: C.accent, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 11,
+  },
   emptyBtnSecondary: { backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border },
   emptyBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   emptyText: { color: C.textMuted, fontSize: 15 },
 
   // Channel list header
-  chHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border },
+  chHeader: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 12, paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: C.border,
+    gap: 8,
+  },
   backBtn: { padding: 4 },
-  chTitle: { color: C.text, fontSize: 16, fontWeight: '700' },
+  chTitle: { color: C.text, fontSize: 15, fontWeight: '700' },
   chSubtitle: { color: C.textMuted, fontSize: 11, marginTop: 1 },
-  chHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  chHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   chHeaderBtn: {
     padding: 7, borderRadius: 10,
     backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border,
   },
   serverMenuBtn: { padding: 6 },
 
-  // Category & channels
-  catHeader: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4 },
+  // Category
+  catHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 16, paddingTop: 18, paddingBottom: 4,
+  },
   catLabel: { color: C.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 0.8 },
-  channelRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, paddingHorizontal: 16, marginHorizontal: 8, borderRadius: 10 },
-  channelRowVoice: { opacity: 0.5 },
-  channelName: { color: C.textSub, fontSize: 15, flex: 1, fontWeight: '500' },
-  voiceCountBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(34,197,94,0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
+
+  // Channel rows
+  channelRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 7, paddingHorizontal: 12,
+    marginHorizontal: 8, borderRadius: 10,
+  },
+  channelRowUnread: { backgroundColor: C.bgCard },
+  channelIconWrap: {
+    width: 28, height: 28, borderRadius: 8,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  channelName: { color: C.textSub, fontSize: 14, flex: 1, fontWeight: '500' },
+  unreadBadge: {
+    backgroundColor: C.danger, borderRadius: 10,
+    minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 5,
+  },
+  unreadBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  voiceCountBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: 'rgba(34,197,94,0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8,
+  },
   voiceCountText: { color: '#22c55e', fontSize: 11, fontWeight: '700' },
-  voicePresenceRow: { flexDirection: 'row', flexWrap: 'wrap', paddingLeft: 50, paddingBottom: 6, gap: 8 },
-  voicePresenceUser: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  voicePresenceUsername: { color: C.textMuted, fontSize: 12, maxWidth: 80 },
+  voicePresenceRow: { flexDirection: 'row', flexWrap: 'wrap', paddingLeft: 52, paddingBottom: 4, gap: 8 },
+  voicePresenceUser: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  voicePresenceUsername: { color: C.textMuted, fontSize: 11, maxWidth: 72 },
 
   // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  modalCard: { backgroundColor: C.bgCard, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 12, borderTopWidth: 1, borderColor: C.border },
+  modalCard: {
+    backgroundColor: C.bgCard, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 24, gap: 12, borderTopWidth: 1, borderColor: C.border,
+  },
   modalDragBar: { width: 36, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: 'center', marginBottom: 8 },
   modalTitle: { color: C.text, fontSize: 18, fontWeight: '700' },
   modalLabel: { color: C.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: -4 },
-  input: { backgroundColor: C.bgInput, borderWidth: 1, borderColor: C.border, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, color: C.text, fontSize: 15 },
+  input: {
+    backgroundColor: C.bgInput, borderWidth: 1, borderColor: C.border,
+    borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, color: C.text, fontSize: 15,
+  },
   inputMulti: { height: 80, textAlignVertical: 'top', paddingTop: 12 },
   modalBtn: { backgroundColor: C.accent, borderRadius: 14, paddingVertical: 15, alignItems: 'center', marginTop: 4 },
   modalBtnDisabled: { opacity: 0.45 },
   modalBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 
   // Action sheet
-  actionSheet: { backgroundColor: C.bgCard, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 24, borderTopWidth: 1, borderColor: C.border },
+  actionSheet: {
+    backgroundColor: C.bgCard, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingBottom: 24, borderTopWidth: 1, borderColor: C.border,
+  },
   actionSheetTitle: { color: C.text, fontSize: 16, fontWeight: '700', textAlign: 'center', paddingVertical: 16, paddingHorizontal: 20 },
   actionDivider: { height: 1, backgroundColor: C.border, marginHorizontal: 16 },
   actionRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, paddingHorizontal: 20 },

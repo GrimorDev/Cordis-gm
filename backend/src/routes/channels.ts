@@ -117,6 +117,11 @@ router.get('/server/:serverId', authMiddleware, async (req: AuthRequest, res: Re
       ...cat,
       channels: channels.filter((c: any) => c.category_id === cat.id),
     }));
+    // Include uncategorized channels so mobile clients that parse the flat structure work correctly
+    const uncategorized = channels.filter((c: any) => !c.category_id);
+    if (uncategorized.length > 0) {
+      result.push({ id: null, name: null, position: -1, channels: uncategorized } as any);
+    }
     return res.json(result);
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });

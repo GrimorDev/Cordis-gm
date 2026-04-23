@@ -190,7 +190,31 @@ export const serversApi = {
 
 // ── Channels ──────────────────────────────────────────────────────────────────
 export const channelsApi = {
-  list: (serverId: string) => req<Channel[]>('GET', `/channels/server/${serverId}`),
+  /**
+   * The backend returns a category-grouped structure:
+   *   [ { id, name, channels: [ Channel, ... ] } ]
+   * This function flattens it into a plain Channel[] with category_id / category_name set.
+   */
+  list: async (serverId: string): Promise<Channel[]> => {
+    const raw = await req<{ id: string | null; name: string | null; channels: any[] }[]>(
+      'GET', `/channels/server/${serverId}`
+    );
+    const result: Channel[] = [];
+    for (const cat of raw ?? []) {
+      for (const ch of cat.channels ?? []) {
+        result.push({
+          id: ch.id,
+          server_id: ch.server_id ?? serverId,
+          name: ch.name,
+          type: ch.type ?? 'text',
+          position: ch.position ?? 0,
+          category_id: cat.id ?? null,
+          category_name: cat.name ?? null,
+        });
+      }
+    }
+    return result;
+  },
   create: (serverId: string, name: string, type: 'text' | 'voice' = 'text') =>
     req<Channel>('POST', '/channels', { server_id: serverId, name, type }),
   update: (id: string, data: { name?: string; position?: number }) =>
