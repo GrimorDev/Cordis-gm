@@ -66,6 +66,7 @@ export interface Message {
   reply_to_content?: string | null;
   reply_to_username?: string | null;
   reactions?: { emoji: string; count: number; reacted: boolean }[];
+  attachment_url?: string | null;
 }
 
 export interface DmConversation {
@@ -90,6 +91,11 @@ export interface DmMessage {
   content: string;
   created_at: string;
   is_edited?: boolean;
+  attachment_url?: string | null;
+  reply_to_id?: string | null;
+  reply_to_content?: string | null;
+  reply_to_username?: string | null;
+  initiator_id?: string | null; // for system messages
 }
 
 export interface Friend {
@@ -196,8 +202,8 @@ export const channelsApi = {
 export const messagesApi = {
   list:   (channelId: string, before?: string) =>
     req<Message[]>('GET', `/messages/channel/${channelId}${before ? `?before=${before}` : ''}`),
-  send:   (channelId: string, content: string, replyToId?: string) =>
-    req<Message>('POST', `/messages/channel/${channelId}`, { content, reply_to_id: replyToId }),
+  send:   (channelId: string, content: string, replyToId?: string, attachmentUrl?: string) =>
+    req<Message>('POST', `/messages/channel/${channelId}`, { content, reply_to_id: replyToId, attachment_url: attachmentUrl }),
   edit:   (id: string, content: string) => req<Message>('PUT', `/messages/${id}`, { content }),
   delete: (id: string) => req<{ ok: boolean }>('DELETE', `/messages/${id}`),
   react:  (id: string, emoji: string) =>
@@ -209,8 +215,8 @@ export const dmsApi = {
   conversations: () => req<DmConversation[]>('GET', '/dms/conversations'),
   messages: (userId: string, before?: string) =>
     req<DmMessage[]>('GET', `/dms/${userId}/messages${before ? `?before=${before}` : ''}`),
-  send: (userId: string, content: string) =>
-    req<DmMessage>('POST', `/dms/${userId}/messages`, { content }),
+  send: (userId: string, content: string, attachmentUrl?: string) =>
+    req<DmMessage>('POST', `/dms/${userId}/messages`, { content, attachment_url: attachmentUrl }),
   editMessage: (id: string, content: string) =>
     req<DmMessage>('PUT', `/dms/messages/${id}`, { content }),
   deleteMessage: (id: string) =>

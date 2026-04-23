@@ -23,7 +23,7 @@ function resolveUrl(url: string | null | undefined): string | null {
 // ── Server List ───────────────────────────────────────────────────────────────
 export default function ServersScreen() {
   const insets = useSafeAreaInsets();
-  const { servers, setServers, activeServer, setActiveServer, channels, setChannels, addServer, currentUser } = useStore();
+  const { servers, setServers, activeServer, setActiveServer, channels, setChannels, addServer, currentUser, voiceUsers } = useStore();
   const [refreshing, setRefreshing] = useState(false);
   const [serversLoading, setServersLoading] = useState(true);
   const [channelsLoading, setChannelsLoading] = useState(false);
@@ -206,23 +206,48 @@ export default function ServersScreen() {
                     : 'hash-outline';
 
                   if (isVoice) {
+                    const vUsers = voiceUsers[ch.id] ?? [];
                     return (
-                      <TouchableOpacity
-                        key={ch.id}
-                        style={[styles.channelRow, styles.channelRowVoice]}
-                        onPress={() => Alert.alert(
-                          'Kanał głosowy',
-                          'Kanały głosowe wymagają aplikacji desktopowej.',
-                          [{ text: 'OK' }],
+                      <View key={ch.id}>
+                        <TouchableOpacity
+                          style={styles.channelRow}
+                          onPress={() => {
+                            if (vUsers.length > 0) {
+                              Alert.alert(
+                                `#${ch.name}`,
+                                `W kanale: ${vUsers.map(u => u.username).join(', ')}`,
+                                [{ text: 'OK' }],
+                              );
+                            } else {
+                              Alert.alert('Kanał głosowy', 'Kanały głosowe są dostępne w aplikacji desktopowej.', [{ text: 'OK' }]);
+                            }
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name={icon} size={18} color={vUsers.length > 0 ? '#22c55e' : C.textMuted} />
+                          <Text style={[styles.channelName, vUsers.length > 0 && { color: C.textSub }]}>{ch.name}</Text>
+                          {vUsers.length > 0 && (
+                            <View style={styles.voiceCountBadge}>
+                              <Ionicons name="person" size={10} color="#22c55e" />
+                              <Text style={styles.voiceCountText}>{vUsers.length}</Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                        {vUsers.length > 0 && (
+                          <View style={styles.voicePresenceRow}>
+                            {vUsers.map(u => (
+                              <TouchableOpacity
+                                key={u.id}
+                                style={styles.voicePresenceUser}
+                                onPress={() => router.push({ pathname: '/(app)/user-profile/[userId]', params: { userId: u.id } } as any)}
+                              >
+                                <UserAvatar url={u.avatar_url} username={u.username} size={20} />
+                                <Text style={styles.voicePresenceUsername} numberOfLines={1}>{u.username}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
                         )}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name={icon} size={18} color={C.textMuted} />
-                        <Text style={[styles.channelName, { color: C.textMuted }]}>{ch.name}</Text>
-                        <View style={styles.voiceBadge}>
-                          <Text style={styles.voiceBadgeText}>Wkrótce</Text>
-                        </View>
-                      </TouchableOpacity>
+                      </View>
                     );
                   }
 
@@ -501,8 +526,11 @@ const styles = StyleSheet.create({
   channelRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, paddingHorizontal: 16, marginHorizontal: 8, borderRadius: 10 },
   channelRowVoice: { opacity: 0.5 },
   channelName: { color: C.textSub, fontSize: 15, flex: 1, fontWeight: '500' },
-  voiceBadge: { backgroundColor: C.bgElevated, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
-  voiceBadgeText: { color: C.textMuted, fontSize: 11 },
+  voiceCountBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(34,197,94,0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
+  voiceCountText: { color: '#22c55e', fontSize: 11, fontWeight: '700' },
+  voicePresenceRow: { flexDirection: 'row', flexWrap: 'wrap', paddingLeft: 50, paddingBottom: 6, gap: 8 },
+  voicePresenceUser: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  voicePresenceUsername: { color: C.textMuted, fontSize: 12, maxWidth: 80 },
 
   // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },

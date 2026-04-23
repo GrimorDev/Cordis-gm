@@ -11,6 +11,7 @@ export default function AppLayout() {
   const {
     isAuthenticated, addMessage, addDmMessage, setUserStatus, currentUser,
     updateMessage, removeMessage, updateDmMessage, removeDmMessage,
+    addVoiceUser, removeVoiceUser,
   } = useStore();
 
   // Socket event listeners — attach after socket connects (handles cold start & reconnect)
@@ -44,6 +45,12 @@ export default function AppLayout() {
       const otherId = sender_id === currentUser.id ? receiver_id : sender_id;
       removeDmMessage(otherId, id);
     };
+    const onVoiceUserJoined = ({ channel_id, user }: any) => {
+      addVoiceUser(channel_id, user);
+    };
+    const onVoiceUserLeft = ({ channel_id, user_id }: any) => {
+      removeVoiceUser(channel_id, user_id);
+    };
     const onCallInvite = ({ from, type }: any) => {
       Notifications.scheduleNotificationAsync({
         content: {
@@ -65,6 +72,8 @@ export default function AppLayout() {
       sock.on('dm_message_updated', onDmMessageUpdated);
       sock.on('dm_message_deleted', onDmMessageDeleted);
       sock.on('call_invite', onCallInvite);
+      sock.on('voice_user_joined', onVoiceUserJoined);
+      sock.on('voice_user_left', onVoiceUserLeft);
     };
 
     const detach = () => {
@@ -77,6 +86,8 @@ export default function AppLayout() {
       sock?.off('dm_message_updated', onDmMessageUpdated);
       sock?.off('dm_message_deleted', onDmMessageDeleted);
       sock?.off('call_invite', onCallInvite);
+      sock?.off('voice_user_joined', onVoiceUserJoined);
+      sock?.off('voice_user_left', onVoiceUserLeft);
     };
 
     const existing = getSocket();

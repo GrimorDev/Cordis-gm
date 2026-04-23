@@ -21,16 +21,20 @@ export default function ChannelScreen() {
   const msgs = messages[id] ?? [];
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const listRef = useRef<FlatList>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const list = await messagesApi.list(id);
       setMessages(id, list);
-    } catch { /* ignore */ } finally {
+    } catch (e: any) {
+      setError(e.message ?? 'Nie udało się załadować wiadomości');
+    } finally {
       setLoading(false);
     }
   }, [id]);
@@ -72,8 +76,8 @@ export default function ChannelScreen() {
     }
   };
 
-  const handleSend = async (text: string) => {
-    await messagesApi.send(id, text, replyTo?.id);
+  const handleSend = async (text: string, attachmentUrl?: string) => {
+    await messagesApi.send(id, text, replyTo?.id, attachmentUrl);
     setReplyTo(null);
   };
 
@@ -86,8 +90,12 @@ export default function ChannelScreen() {
   };
 
   const handleDelete = async (msgId: string) => {
-    try { await messagesApi.delete(msgId); }
-    catch { /* ignore */ }
+    try {
+      await messagesApi.delete(msgId);
+      removeMessage(id, msgId);
+    } catch (e: any) {
+      Alert.alert('Błąd', e.message ?? 'Nie udało się usunąć wiadomości');
+    }
   };
 
   const handleEdit = async (msgId: string, newContent: string) => {
@@ -141,6 +149,14 @@ export default function ChannelScreen() {
         <View style={styles.center}>
           <ActivityIndicator color={C.accent} size="large" />
         </View>
+      ) : error ? (
+        <View style={styles.center}>
+          <Ionicons name="warning-outline" size={36} color={C.danger} style={{ marginBottom: 10 }} />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={load}>
+            <Text style={styles.retryText}>Spróbuj ponownie</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <FlatList
           ref={listRef}
@@ -156,15 +172,17 @@ export default function ChannelScreen() {
             const prev = reversedMsgs[index + 1];
             const showHeader = !prev || prev.sender_id !== item.sender_id ||
               (new Date(item.created_at).getTime() - new Date(prev.created_at).getTime()) > 5 * 60_000;
+            const isSysMsg = item.sender_id === '__system__';
             return (
               <MessageBubble
                 msg={item}
                 isOwn={item.sender_id === currentUser?.id}
-                showHeader={showHeader}
+                showHeader={showHeader && !isSysMsg}
                 onReply={setReplyTo}
-                onDelete={handleDelete}
-                onEdit={handleEdit}
-                onReact={handleReact}
+                onDelete={isSysMsg ? undefined : handleDelete}
+                onEdit={isSysMsg ? undefined : handleEdit}
+                onReact={isSysMsg ? undefined : handleReact}
+                isSystem={isSysMsg}
                 onAvatarPress={(uid) => {
                   if (uid !== currentUser?.id) {
                     router.push({ pathname: '/(app)/user-profile/[userId]', params: { userId: uid } } as any);
@@ -211,7 +229,13 @@ const styles = StyleSheet.create({
     padding: 7, borderRadius: 10,
     backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border,
   },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  errorText: { color: C.textSub, fontSize: 15, textAlign: 'center', paddingHorizontal: 24 },
+  retryBtn: {
+    marginTop: 12, paddingHorizontal: 20, paddingVertical: 10,
+    backgroundColor: C.accent, borderRadius: 10,
+  },
+  retryText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   typingBar: { paddingHorizontal: 16, paddingBottom: 4 },
   typingText: { color: C.textMuted, fontSize: 12 },
 });

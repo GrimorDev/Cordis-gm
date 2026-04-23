@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, TextInput } from 'react-native';
+import {
+  View, Text, StyleSheet, TouchableOpacity, Alert,
+  TextInput, Modal, Image, Pressable, Dimensions,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { format, isToday, isYesterday } from 'date-fns';
@@ -7,6 +10,8 @@ import { pl } from 'date-fns/locale';
 import { UserAvatar } from './UserAvatar';
 import { C } from '../theme';
 import type { Message } from '../api';
+
+const { width: SCREEN_W } = Dimensions.get('window');
 
 interface Props {
   msg: Message;
@@ -17,6 +22,8 @@ interface Props {
   onReact?: (id: string, emoji: string) => void;
   onEdit?: (id: string, newContent: string) => void;
   onAvatarPress?: (userId: string) => void;
+  /** If true, render as a system/call message pill instead of normal bubble */
+  isSystem?: boolean;
 }
 
 function fmtTime(dateStr: string) {
@@ -26,12 +33,51 @@ function fmtTime(dateStr: string) {
   return format(d, 'd MMM HH:mm', { locale: pl });
 }
 
-const QUICK_EMOJIS = ['❤️', '😂', '👍', '😮', '😢'];
+const QUICK_EMOJIS = ['❤️', '😂', '👍', '😮', '😢', '🔥'];
 
-export function MessageBubble({ msg, isOwn, showHeader, onReply, onDelete, onReact, onEdit, onAvatarPress }: Props) {
+/** Detect if content looks like a system/call message */
+function isCallMessage(content: string) {
+  return (
+    content.startsWith('Rozmowa głosowa') ||
+    content.startsWith('Rozmowa wideo') ||
+    content === 'Połączenie nieodebrane' ||
+    content.startsWith('Połączenie')
+  );
+}
+
+function callIcon(content: string): string {
+  if (content.includes('wideo')) return 'videocam';
+  if (content === 'Połączenie nieodebrane') return 'call';
+  return 'call';
+}
+
+function callColor(content: string): string {
+  if (content === 'Połączenie nieodebrane') return C.danger;
+  return '#22c55e';
+}
+
+export function MessageBubble({
+  msg, isOwn, showHeader, onReply, onDelete, onReact, onEdit, onAvatarPress, isSystem,
+}: Props) {
   const [menuVisible, setMenuVisible] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editText, setEditText] = useState(msg.content);
+  const [lightboxVisible, setLightboxVisible] = useState(false);
+
+  // ── System / call message pill ───────────────────────────────────────────────
+  if (isSystem || isCallMessage(msg.content)) {
+    const color = callColor(msg.content);
+    const icon = callIcon(msg.content);
+    return (
+      <View style={styles.systemRow}>
+        <View style={[styles.systemPill, { borderColor: color + '55' }]}>
+          <Ionicons name={icon as any} size={13} color={color} />
+          <Text style={[styles.systemText, { color }]}>{msg.content}</Text>
+          <Text style={styles.systemTime}>{fmtTime(msg.created_at)}</Text>
+        </View>
+      </View>
+    );
+  }
 
   const handleLongPress = () => setMenuVisible(true);
 
@@ -69,11 +115,13 @@ export function MessageBubble({ msg, isOwn, showHeader, onReply, onDelete, onRea
 
   return (
     <View style={styles.wrapper}>
+      {/* Header row (avatar + username + time) */}
       {showHeader && (
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => onAvatarPress?.(msg.sender_id)}
             disabled={!onAvatarPress}
+            activeOpacity={0.7}
           >
             <UserAvatar url={msg.sender_avatar} username={msg.sender_username} size={36} />
           </TouchableOpacity>
@@ -84,6 +132,7 @@ export function MessageBubble({ msg, isOwn, showHeader, onReply, onDelete, onRea
         </View>
       )}
 
+      {/* Reply bar */}
       {msg.reply_to_id && (
         <View style={styles.replyBar}>
           <Ionicons name="return-up-forward" size={12} color={C.textMuted} />
@@ -94,6 +143,7 @@ export function MessageBubble({ msg, isOwn, showHeader, onReply, onDelete, onRea
         </View>
       )}
 
+      {/* Message bubble / edit mode */}
       {editMode ? (
         <View style={[styles.bubble, showHeader ? styles.bubbleWithHeader : styles.bubbleNoHeader, styles.editContainer]}>
           <TextInput
@@ -124,11 +174,29 @@ export function MessageBubble({ msg, isOwn, showHeader, onReply, onDelete, onRea
           onLongPress={handleLongPress}
           style={[styles.bubble, showHeader ? styles.bubbleWithHeader : styles.bubbleNoHeader]}
         >
-          <Text style={styles.content}>{msg.content}</Text>
+          {msg.content ? (
+            <Text style={styles.content}>{msg.content}</Text>
+          ) : null}
           {msg.is_edited && <Text style={styles.edited}>(edytowano)</Text>}
+
+          {/* Image attachment */}
+          {msg.attachment_url && (
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => setLightboxVisible(true)}
+              style={styles.attachmentContainer}
+            >
+              <Image
+                source={{ uri: msg.attachment_url }}
+                style={styles.attachmentImage}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
+          )}
         </TouchableOpacity>
       )}
 
+      {/* Reactions */}
       {msg.reactions && msg.reactions.length > 0 && (
         <View style={styles.reactions}>
           {msg.reactions.map((r) => (
@@ -144,42 +212,77 @@ export function MessageBubble({ msg, isOwn, showHeader, onReply, onDelete, onRea
         </View>
       )}
 
-      {/* Context menu */}
-      {menuVisible && (
-        <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setMenuVisible(false)}>
-          <View style={styles.menu}>
+      {/* ── Context menu (Modal, so it's not clipped by FlatList) ── */}
+      <Modal
+        visible={menuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMenuVisible(false)}
+        statusBarTranslucent
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setMenuVisible(false)}>
+          <Pressable style={styles.menu} onPress={(e) => e.stopPropagation()}>
             {/* Quick reactions */}
             <View style={styles.quickReactions}>
               {QUICK_EMOJIS.map((e) => (
-                <TouchableOpacity key={e} style={styles.quickEmoji}
-                  onPress={() => { onReact?.(msg.id, e); setMenuVisible(false); }}>
-                  <Text style={{ fontSize: 22 }}>{e}</Text>
+                <TouchableOpacity
+                  key={e}
+                  style={styles.quickEmoji}
+                  onPress={() => { onReact?.(msg.id, e); setMenuVisible(false); }}
+                >
+                  <Text style={{ fontSize: 24 }}>{e}</Text>
                 </TouchableOpacity>
               ))}
             </View>
             <View style={styles.menuDivider} />
+
             <TouchableOpacity style={styles.menuItem} onPress={() => { onReply(msg); setMenuVisible(false); }}>
-              <Ionicons name="return-up-forward-outline" size={16} color={C.text} />
+              <Ionicons name="return-up-forward-outline" size={18} color={C.text} />
               <Text style={styles.menuLabel}>Odpowiedz</Text>
             </TouchableOpacity>
+
             {isOwn && onEdit && (
               <TouchableOpacity style={styles.menuItem} onPress={handleEditPress}>
-                <Ionicons name="pencil-outline" size={16} color={C.text} />
+                <Ionicons name="pencil-outline" size={18} color={C.text} />
                 <Text style={styles.menuLabel}>Edytuj</Text>
               </TouchableOpacity>
             )}
+
             <TouchableOpacity style={styles.menuItem} onPress={handleCopy}>
-              <Ionicons name="copy-outline" size={16} color={C.text} />
+              <Ionicons name="copy-outline" size={18} color={C.text} />
               <Text style={styles.menuLabel}>Kopiuj tekst</Text>
             </TouchableOpacity>
+
             {isOwn && onDelete && (
               <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
-                <Ionicons name="trash-outline" size={16} color={C.danger} />
+                <Ionicons name="trash-outline" size={18} color={C.danger} />
                 <Text style={[styles.menuLabel, { color: C.danger }]}>Usuń</Text>
               </TouchableOpacity>
             )}
-          </View>
-        </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── Image lightbox ── */}
+      {msg.attachment_url && (
+        <Modal
+          visible={lightboxVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setLightboxVisible(false)}
+          statusBarTranslucent
+        >
+          <Pressable style={styles.lightboxOverlay} onPress={() => setLightboxVisible(false)}>
+            <Image
+              source={{ uri: msg.attachment_url }}
+              style={styles.lightboxImage}
+              resizeMode="contain"
+            />
+            <TouchableOpacity style={styles.lightboxClose} onPress={() => setLightboxVisible(false)}>
+              <Ionicons name="close" size={26} color="#fff" />
+            </TouchableOpacity>
+          </Pressable>
+        </Modal>
       )}
     </View>
   );
@@ -187,21 +290,45 @@ export function MessageBubble({ msg, isOwn, showHeader, onReply, onDelete, onRea
 
 const styles = StyleSheet.create({
   wrapper: { paddingHorizontal: 12, marginBottom: 2 },
+
+  // System / call message
+  systemRow: { alignItems: 'center', marginVertical: 8 },
+  systemPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: C.bgCard, borderRadius: 20, borderWidth: 1,
+    paddingHorizontal: 14, paddingVertical: 6,
+  },
+  systemText: { fontSize: 13, fontWeight: '500' },
+  systemTime: { color: C.textMuted, fontSize: 11, marginLeft: 4 },
+
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 12 },
   headerText: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   username: { color: C.text, fontWeight: '600', fontSize: 14 },
   time: { color: C.textMuted, fontSize: 11 },
+
   replyBar: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingLeft: 46, paddingBottom: 2,
   },
   replyText: { color: C.textMuted, fontSize: 12, flex: 1 },
   replyUsername: { color: C.textSub, fontWeight: '600' },
+
   bubble: { paddingLeft: 46 },
   bubbleWithHeader: { paddingTop: 2 },
   bubbleNoHeader: { paddingTop: 0 },
+
   content: { color: C.text, fontSize: 15, lineHeight: 22 },
   edited: { color: C.textMuted, fontSize: 11, marginTop: 2 },
+
+  // Attachment
+  attachmentContainer: { marginTop: 6, borderRadius: 12, overflow: 'hidden' },
+  attachmentImage: {
+    width: SCREEN_W - 80,
+    height: (SCREEN_W - 80) * 0.6,
+    borderRadius: 12,
+    backgroundColor: C.bgCard,
+  },
+
   reactions: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, paddingLeft: 46, marginTop: 4 },
   reactionChip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
@@ -211,12 +338,13 @@ const styles = StyleSheet.create({
   reactionOwn: { borderColor: C.accent, backgroundColor: 'rgba(99,102,241,0.15)' },
   reactionEmoji: { fontSize: 14 },
   reactionCount: { color: C.textSub, fontSize: 12 },
+
   // Inline edit
   editContainer: { paddingRight: 0 },
   editInput: {
     color: C.text, fontSize: 15, lineHeight: 22,
     backgroundColor: C.bgInput, borderRadius: 10, borderWidth: 1, borderColor: C.borderFocus,
-    paddingHorizontal: 10, paddingVertical: 8, marginRight: 0,
+    paddingHorizontal: 10, paddingVertical: 8,
   },
   editActions: { flexDirection: 'row', gap: 8, marginTop: 6 },
   editCancelBtn: {
@@ -224,25 +352,38 @@ const styles = StyleSheet.create({
     backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border,
   },
   editCancelText: { color: C.textSub, fontSize: 13, fontWeight: '600' },
-  editSaveBtn: {
-    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8,
-    backgroundColor: C.accent,
-  },
+  editSaveBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, backgroundColor: C.accent },
   editSaveBtnDisabled: { opacity: 0.45 },
   editSaveText: { color: '#fff', fontSize: 13, fontWeight: '600' },
-  // Context menu overlay
-  menuOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    zIndex: 100, justifyContent: 'center', alignItems: 'center',
+
+  // Context menu Modal
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center', alignItems: 'center',
   },
   menu: {
-    backgroundColor: C.bgElevated, borderRadius: 16, padding: 8, minWidth: 220,
+    backgroundColor: C.bgElevated, borderRadius: 18, padding: 8,
+    minWidth: 240, maxWidth: SCREEN_W - 48,
     borderWidth: 1, borderColor: C.border,
-    shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 12,
+    shadowColor: '#000', shadowOpacity: 0.6, shadowRadius: 16, elevation: 12,
   },
-  quickReactions: { flexDirection: 'row', justifyContent: 'space-around', padding: 8 },
+  quickReactions: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 8, paddingHorizontal: 4 },
   quickEmoji: { padding: 4 },
   menuDivider: { height: 1, backgroundColor: C.border, marginVertical: 4 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingHorizontal: 12 },
-  menuLabel: { color: C.text, fontSize: 15 },
+  menuItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10,
+  },
+  menuLabel: { color: C.text, fontSize: 15, fontWeight: '500' },
+
+  // Lightbox
+  lightboxOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.92)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  lightboxImage: { width: SCREEN_W, height: SCREEN_W * 1.2 },
+  lightboxClose: {
+    position: 'absolute', top: 48, right: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, padding: 6,
+  },
 });

@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { storage } from './storage';
 import type { User, Server, Channel, Message, DmConversation, DmMessage, Friend, FriendRequest } from './api';
 
+type VoiceUser = { id: string; username: string; avatar_url: string | null };
+
 interface AppStore {
   token: string | null;
   currentUser: User | null;
@@ -48,6 +50,12 @@ interface AppStore {
 
   userStatuses: Record<string, string>;
   setUserStatus: (userId: string, status: string) => void;
+
+  /** Voice channel presence: channelId → users currently connected */
+  voiceUsers: Record<string, VoiceUser[]>;
+  addVoiceUser: (channelId: string, user: VoiceUser) => void;
+  removeVoiceUser: (channelId: string, userId: string) => void;
+  setVoiceUsers: (channelId: string, users: VoiceUser[]) => void;
 }
 
 export const useStore = create<AppStore>((set) => ({
@@ -65,6 +73,7 @@ export const useStore = create<AppStore>((set) => ({
       token: null, currentUser: null, isAuthenticated: false,
       servers: [], channels: [], messages: {},
       dmConversations: [], friends: [], friendRequests: [],
+      voiceUsers: {},
     });
   },
   setCurrentUser: (user) => set({ currentUser: user }),
@@ -135,4 +144,25 @@ export const useStore = create<AppStore>((set) => ({
   userStatuses: {},
   setUserStatus: (userId, status) =>
     set((st) => ({ userStatuses: { ...st.userStatuses, [userId]: status } })),
+
+  voiceUsers: {},
+  addVoiceUser: (channelId, user) =>
+    set((st) => ({
+      voiceUsers: {
+        ...st.voiceUsers,
+        [channelId]: [
+          ...(st.voiceUsers[channelId] ?? []).filter((u) => u.id !== user.id),
+          user,
+        ],
+      },
+    })),
+  removeVoiceUser: (channelId, userId) =>
+    set((st) => ({
+      voiceUsers: {
+        ...st.voiceUsers,
+        [channelId]: (st.voiceUsers[channelId] ?? []).filter((u) => u.id !== userId),
+      },
+    })),
+  setVoiceUsers: (channelId, users) =>
+    set((st) => ({ voiceUsers: { ...st.voiceUsers, [channelId]: users } })),
 }));

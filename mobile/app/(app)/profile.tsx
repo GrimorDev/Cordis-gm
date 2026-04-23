@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, TextInput,
-  Alert, ScrollView, Modal, Platform,
+  Alert, ScrollView, Modal, Platform, ActivityIndicator,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -29,6 +30,7 @@ export default function ProfileScreen() {
 
   const [sheet, setSheet] = useState<Sheet>('none');
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // Bio edit
   const [aboutMe, setAboutMe] = useState(currentUser?.about_me ?? '');
@@ -45,6 +47,40 @@ export default function ProfileScreen() {
   if (!currentUser) return null;
 
   const currentStatus = currentUser.preferred_status ?? currentUser.status ?? 'online';
+
+  const handleAvatarUpload = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Brak uprawnień', 'Musisz przyznać dostęp do galerii, aby zmienić avatar.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    const asset = result.assets[0];
+    const formData = new FormData();
+    formData.append('avatar', {
+      uri: asset.uri,
+      type: asset.mimeType ?? 'image/jpeg',
+      name: asset.fileName ?? 'avatar.jpg',
+    } as any);
+
+    setUploadingAvatar(true);
+    try {
+      const updated = await usersApi.updateAvatar(formData);
+      setCurrentUser(updated);
+      Alert.alert('Gotowe', 'Avatar został zaktualizowany!');
+    } catch (e: any) {
+      Alert.alert('Błąd', e.message ?? 'Nie udało się zmienić avatara.');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const handleStatusChange = async (status: string) => {
     try {
@@ -115,15 +151,26 @@ export default function ProfileScreen() {
 
         {/* Avatar + username hero */}
         <View style={styles.hero}>
-          <View style={styles.avatarRing}>
-            <UserAvatar
-              url={currentUser.avatar_url}
-              username={currentUser.username}
-              size={84}
-              status={currentStatus}
-              showStatus
-            />
-          </View>
+          <TouchableOpacity onPress={handleAvatarUpload} activeOpacity={0.8} style={styles.avatarWrap}>
+            <View style={styles.avatarRing}>
+              <UserAvatar
+                url={currentUser.avatar_url}
+                username={currentUser.username}
+                size={84}
+                status={currentStatus}
+                showStatus
+              />
+            </View>
+            {uploadingAvatar ? (
+              <View style={styles.avatarEditOverlay}>
+                <ActivityIndicator color="#fff" size="small" />
+              </View>
+            ) : (
+              <View style={styles.avatarEditBtn}>
+                <Ionicons name="camera" size={14} color="#fff" />
+              </View>
+            )}
+          </TouchableOpacity>
           <Text style={styles.username}>{currentUser.username}</Text>
           {currentUser.is_admin && (
             <View style={styles.adminBadge}>
@@ -345,7 +392,19 @@ const styles = StyleSheet.create({
 
   // Hero
   hero: { alignItems: 'center', paddingVertical: 28, gap: 8 },
+  avatarWrap: { position: 'relative' },
   avatarRing: { padding: 3, borderRadius: 48, borderWidth: 2, borderColor: C.accent + '55' },
+  avatarEditBtn: {
+    position: 'absolute', bottom: 4, right: 4,
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: C.bg,
+  },
+  avatarEditOverlay: {
+    position: 'absolute', top: 3, left: 3, right: 3, bottom: 3,
+    borderRadius: 44, backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center', justifyContent: 'center',
+  },
   username: { color: C.text, fontSize: 22, fontWeight: '800', letterSpacing: -0.3 },
   adminBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.warning + '22', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12, borderWidth: 1, borderColor: C.warning + '44' },
   adminBadgeText: { color: C.warning, fontSize: 11, fontWeight: '700' },

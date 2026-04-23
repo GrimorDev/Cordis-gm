@@ -53,9 +53,10 @@ function dmToMsg(dm: DmMessage): Message {
     created_at: dm.created_at,
     updated_at: null,
     is_edited: dm.is_edited,
-    reply_to_id: (dm as any).reply_to_id ?? null,
-    reply_to_content: (dm as any).reply_to_content ?? null,
-    reply_to_username: (dm as any).reply_to_username ?? null,
+    reply_to_id: dm.reply_to_id ?? null,
+    reply_to_content: dm.reply_to_content ?? null,
+    reply_to_username: dm.reply_to_username ?? null,
+    attachment_url: dm.attachment_url ?? null,
     reactions: (dm as any).reactions ?? [],
   };
 }
@@ -156,8 +157,8 @@ export default function DmChatScreen() {
     } finally { setLoadingMore(false); }
   };
 
-  const handleSend = async (text: string) => {
-    const msg = await dmsApi.send(userId, text);
+  const handleSend = async (text: string, attachmentUrl?: string) => {
+    const msg = await dmsApi.send(userId, text, attachmentUrl);
     addDmMessage(userId, msg);
   };
 
