@@ -4,10 +4,44 @@ import {
   KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Image,
 } from 'react-native';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { C } from '../../src/theme';
 import { authApi } from '../../src/api';
 import { useStore } from '../../src/store';
 import { connectSocket } from '../../src/socket';
+
+function FocusInput({
+  value, onChangeText, placeholder, secureTextEntry, returnKeyType, onSubmitEditing,
+}: {
+  value: string; onChangeText: (t: string) => void; placeholder: string;
+  secureTextEntry?: boolean; returnKeyType?: any; onSubmitEditing?: () => void;
+}) {
+  const [focused, setFocused] = useState(false);
+  const [showPass, setShowPass] = useState(false);
+  return (
+    <View style={[styles.inputWrap, focused && styles.inputWrapFocused]}>
+      <TextInput
+        style={styles.input}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={C.textMuted}
+        autoCapitalize="none"
+        autoCorrect={false}
+        secureTextEntry={secureTextEntry && !showPass}
+        returnKeyType={returnKeyType ?? 'next'}
+        onSubmitEditing={onSubmitEditing}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+      />
+      {secureTextEntry && (
+        <TouchableOpacity onPress={() => setShowPass(p => !p)} style={styles.eyeBtn}>
+          <Ionicons name={showPass ? 'eye-off-outline' : 'eye-outline'} size={18} color={C.textMuted} />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
 
 export default function RegisterScreen() {
   const [username, setUsername] = useState('');
@@ -22,7 +56,7 @@ export default function RegisterScreen() {
     if (password.length < 6) { setError('Hasło musi mieć min. 6 znaków.'); return; }
     if (password !== confirm) { setError('Hasła się nie zgadzają.'); return; }
     if (!/^[a-zA-Z0-9_]{2,32}$/.test(username)) {
-      setError('Nazwa: 2-32 znaki, tylko litery, cyfry i _');
+      setError('Nazwa: 2–32 znaki, tylko litery, cyfry i _');
       return;
     }
     setLoading(true);
@@ -42,48 +76,66 @@ export default function RegisterScreen() {
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        {/* Logo */}
         <View style={styles.logoArea}>
-          <Image
-            source={require('../../assets/icon.png')}
-            style={styles.logoImg}
-            resizeMode="contain"
-          />
+          <View style={styles.logoRing}>
+            <Image source={require('../../assets/icon.png')} style={styles.logoImg} resizeMode="contain" />
+          </View>
           <Text style={styles.appName}>Cordyn</Text>
+          <Text style={styles.tagline}>Dołącz do społeczności</Text>
         </View>
 
+        {/* Card */}
         <View style={styles.card}>
           <Text style={styles.title}>Utwórz konto</Text>
+          <Text style={styles.subtitle}>Bezpłatnie, na zawsze</Text>
 
-          {(['username', 'password', 'confirm'] as const).map((field) => (
-            <View key={field} style={styles.field}>
-              <Text style={styles.label}>
-                {field === 'username' ? 'NAZWA UŻYTKOWNIKA' : field === 'password' ? 'HASŁO' : 'POTWIERDŹ HASŁO'}
-              </Text>
-              <TextInput
-                style={styles.input}
-                value={field === 'username' ? username : field === 'password' ? password : confirm}
-                onChangeText={field === 'username' ? setUsername : field === 'password' ? setPassword : setConfirm}
-                placeholder={field === 'username' ? 'nazwa_użytkownika' : '••••••••'}
-                placeholderTextColor={C.textMuted}
-                autoCapitalize="none"
-                autoCorrect={false}
-                secureTextEntry={field !== 'username'}
-                returnKeyType={field === 'confirm' ? 'go' : 'next'}
-                onSubmitEditing={field === 'confirm' ? handleRegister : undefined}
-              />
+          <View style={styles.field}>
+            <Text style={styles.label}>NAZWA UŻYTKOWNIKA</Text>
+            <FocusInput value={username} onChangeText={setUsername} placeholder="nazwa_użytkownika" />
+            <Text style={styles.hint}>Tylko litery, cyfry i _ (2–32 znaki)</Text>
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.label}>HASŁO</Text>
+            <FocusInput value={password} onChangeText={setPassword} placeholder="••••••••" secureTextEntry />
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.label}>POTWIERDŹ HASŁO</Text>
+            <FocusInput
+              value={confirm}
+              onChangeText={setConfirm}
+              placeholder="••••••••"
+              secureTextEntry
+              returnKeyType="go"
+              onSubmitEditing={handleRegister}
+            />
+          </View>
+
+          {error ? (
+            <View style={styles.errorBox}>
+              <Ionicons name="alert-circle-outline" size={15} color={C.danger} />
+              <Text style={styles.errorText}>{error}</Text>
             </View>
-          ))}
+          ) : null}
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-
-          <TouchableOpacity style={styles.btn} onPress={handleRegister} disabled={loading}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Zarejestruj się</Text>}
+          <TouchableOpacity
+            style={[styles.btn, loading && styles.btnDisabled]}
+            onPress={handleRegister}
+            disabled={loading}
+            activeOpacity={0.88}
+          >
+            {loading
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.btnText}>Zarejestruj się</Text>
+            }
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity onPress={() => router.back()} style={styles.switchRow}>
           <Text style={styles.switchText}>
-            Masz już konto? <Text style={styles.switchLink}>Zaloguj się</Text>
+            Masz już konto? <Text style={styles.switchLink}>Zaloguj się →</Text>
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -93,19 +145,57 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: C.bg },
-  container: { flexGrow: 1, justifyContent: 'center', padding: 24 },
+  container: { flexGrow: 1, justifyContent: 'center', padding: 24, paddingBottom: 48 },
+
   logoArea: { alignItems: 'center', marginBottom: 32 },
-  logoImg: { width: 80, height: 80, borderRadius: 20, marginBottom: 12 },
-  appName: { color: C.text, fontSize: 26, fontWeight: '800' },
-  card: { backgroundColor: C.bgCard, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: C.border },
-  title: { color: C.text, fontSize: 22, fontWeight: '700', marginBottom: 20 },
+  logoRing: {
+    width: 88, height: 88, borderRadius: 26,
+    backgroundColor: C.accentMuted, borderWidth: 2, borderColor: C.borderAccent,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 14,
+    shadowColor: C.accent, shadowOpacity: 0.3, shadowRadius: 16, elevation: 6,
+  },
+  logoImg: { width: 68, height: 68, borderRadius: 18 },
+  appName: { color: C.text, fontSize: 28, fontWeight: '900', letterSpacing: -0.5 },
+  tagline: { color: C.textMuted, fontSize: 13, marginTop: 5 },
+
+  card: {
+    backgroundColor: C.bgCard, borderRadius: 24, padding: 24,
+    borderWidth: 1, borderColor: C.border,
+    shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 24, elevation: 8,
+  },
+  title: { color: C.text, fontSize: 22, fontWeight: '800', letterSpacing: -0.3, marginBottom: 3 },
+  subtitle: { color: C.textMuted, fontSize: 13, marginBottom: 20 },
+
   field: { marginBottom: 14 },
-  label: { color: C.textMuted, fontSize: 11, fontWeight: '600', letterSpacing: 0.8, marginBottom: 6 },
-  input: { backgroundColor: C.bgInput, borderWidth: 1, borderColor: C.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, color: C.text, fontSize: 15 },
-  error: { color: C.danger, fontSize: 13, marginBottom: 12, textAlign: 'center' },
-  btn: { backgroundColor: C.accent, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4 },
-  btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  switchRow: { marginTop: 20, alignItems: 'center' },
+  label: { color: C.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginBottom: 6 },
+  hint: { color: C.textMuted, fontSize: 11, marginTop: 5 },
+
+  inputWrap: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: C.bgInput, borderWidth: 1.5, borderColor: C.border,
+    borderRadius: 14, paddingHorizontal: 14,
+  },
+  inputWrapFocused: { borderColor: C.borderFocus, backgroundColor: C.bgElevated },
+  input: { flex: 1, color: C.text, fontSize: 15, paddingVertical: 13 },
+  eyeBtn: { padding: 4 },
+
+  errorBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    backgroundColor: C.dangerMuted, borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12,
+    borderWidth: 1, borderColor: C.danger + '33',
+  },
+  errorText: { color: C.danger, fontSize: 13, flex: 1 },
+
+  btn: {
+    backgroundColor: C.accent, borderRadius: 14, paddingVertical: 15,
+    alignItems: 'center', marginTop: 4,
+    shadowColor: C.accent, shadowOpacity: 0.35, shadowRadius: 12, elevation: 6,
+  },
+  btnDisabled: { opacity: 0.6 },
+  btnText: { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 0.2 },
+
+  switchRow: { marginTop: 22, alignItems: 'center' },
   switchText: { color: C.textMuted, fontSize: 14 },
-  switchLink: { color: C.accent, fontWeight: '600' },
+  switchLink: { color: C.accentLight, fontWeight: '700' },
 });

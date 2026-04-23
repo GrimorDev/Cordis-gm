@@ -1,12 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  ActivityIndicator, Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,20 +9,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usersApi, friendsApi, type User } from '../../../src/api';
 import { useStore } from '../../../src/store';
 import { UserAvatar } from '../../../src/components/UserAvatar';
-import { C, STATUS_COLOR } from '../../../src/theme';
-
-const STATUS_LABEL: Record<string, string> = {
-  online: 'Online',
-  idle: 'Nieaktywny',
-  dnd: 'Nie przeszkadzać',
-  offline: 'Offline',
-};
+import { C, STATUS_COLOR, STATUS_LABEL } from '../../../src/theme';
 
 export default function UserProfileScreen() {
-  const { userId, username } = useLocalSearchParams<{ userId: string; username?: string }>();
+  const { userId } = useLocalSearchParams<{ userId: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { currentUser, friends } = useStore();
+  const { currentUser, friends, userStatuses } = useStore();
 
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,8 +26,7 @@ export default function UserProfileScreen() {
 
   useEffect(() => {
     if (!userId) return;
-    usersApi
-      .get(userId)
+    usersApi.get(userId)
       .then(setUser)
       .catch(() => Alert.alert('Błąd', 'Nie udało się załadować profilu.'))
       .finally(() => setLoading(false));
@@ -50,21 +37,20 @@ export default function UserProfileScreen() {
     setSending(true);
     try {
       await friendsApi.send(user.username);
-      Alert.alert('Gotowe', 'Zaproszenie do znajomych wysłane!');
+      Alert.alert('Wysłano!', 'Zaproszenie do znajomych wysłane.');
     } catch (e: any) {
       Alert.alert('Błąd', e.message ?? 'Nie udało się wysłać zaproszenia.');
-    } finally {
-      setSending(false);
-    }
+    } finally { setSending(false); }
   };
 
   const handleSendDm = () => {
-    router.push({ pathname: '/(app)/dm/[userId]', params: { userId } });
+    if (!user) return;
+    router.push({ pathname: '/(app)/dm/[userId]', params: { userId, username: user.username, avatar: user.avatar_url ?? '' } });
   };
 
   if (loading) {
     return (
-      <View style={styles.centered}>
+      <View style={[styles.center, { paddingTop: insets.top }]}>
         <ActivityIndicator color={C.accent} size="large" />
       </View>
     );
@@ -72,75 +58,113 @@ export default function UserProfileScreen() {
 
   if (!user) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>Nie znaleziono użytkownika.</Text>
+      <View style={[styles.center, { paddingTop: insets.top }]}>
+        <Ionicons name="person-outline" size={48} color={C.textMuted} />
+        <Text style={styles.errorText}>Nie znaleziono użytkownika</Text>
       </View>
     );
   }
 
-  const status = user.preferred_status ?? user.status ?? 'offline';
+  const status = userStatuses[userId] ?? user.preferred_status ?? user.status ?? 'offline';
+  const statusColor = STATUS_COLOR[status] ?? C.offline;
+  const joinDateStr = new Date(user.created_at).toLocaleDateString('pl-PL', { year: 'numeric', month: 'long', day: 'numeric' });
 
   return (
-    <View style={styles.root}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      {/* Header bar */}
+      <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color={C.text} />
+          <Ionicons name="chevron-back" size={22} color={C.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{user.username}</Text>
+        <Text style={styles.headerTitle} numberOfLines={1}>{user.username}</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Avatar + Status section */}
-        <View style={styles.avatarSection}>
-          <UserAvatar
-            url={user.avatar_url}
-            username={user.username}
-            size={80}
-            status={status}
-            showStatus
-          />
-          <View style={styles.nameRow}>
-            <Text style={styles.username}>{user.username}</Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+        {/* Profile card */}
+        <View style={styles.profileCard}>
+          {/* Banner */}
+          <View style={[styles.banner, { backgroundColor: statusColor + '28' }]}>
+            <View style={[styles.bannerStripe, { backgroundColor: statusColor + '44' }]} />
+          </View>
+
+          {/* Avatar overlapping banner */}
+          <View style={styles.avatarArea}>
+            <View style={[styles.avatarRing, { borderColor: statusColor + '66' }]}>
+              <UserAvatar url={user.avatar_url} username={user.username} size={80} status={status} showStatus />
+            </View>
             {user.is_admin && (
-              <Ionicons name="shield-checkmark" size={18} color={C.accent} style={{ marginLeft: 6 }} />
+              <View style={styles.adminBadge}>
+                <Ionicons name="shield-checkmark" size={12} color={C.warning} />
+                <Text style={styles.adminText}>Admin</Text>
+              </View>
             )}
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: STATUS_COLOR[status] ?? C.offline }]}>
-            <Text style={styles.statusLabel}>{STATUS_LABEL[status] ?? status}</Text>
+
+          {/* Name & status */}
+          <View style={styles.nameSection}>
+            <Text style={styles.displayName}>{user.username}</Text>
+            <View style={[styles.statusPill, { backgroundColor: statusColor + '20', borderColor: statusColor + '50' }]}>
+              <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+              <Text style={[styles.statusText, { color: statusColor }]}>
+                {STATUS_LABEL[status] ?? 'Offline'}
+              </Text>
+            </View>
           </View>
-          <Text style={styles.joinDate}>
-            Dołączył: {new Date(user.created_at).toLocaleDateString('pl-PL')}
-          </Text>
+
+          {/* About me */}
+          {user.about_me ? (
+            <View style={styles.aboutSection}>
+              <Text style={styles.aboutLabel}>O MNIE</Text>
+              <Text style={styles.aboutText}>{user.about_me}</Text>
+            </View>
+          ) : null}
+
+          {/* Member since */}
+          <View style={styles.infoSection}>
+            <View style={styles.infoRow}>
+              <Ionicons name="calendar-outline" size={14} color={C.textMuted} />
+              <Text style={styles.infoLabel}>Dołączył</Text>
+              <Text style={styles.infoValue}>{joinDateStr}</Text>
+            </View>
+            <View style={[styles.infoRow, styles.infoRowBorder]}>
+              <Ionicons name="id-card-outline" size={14} color={C.textMuted} />
+              <Text style={styles.infoLabel}>ID</Text>
+              <Text style={styles.infoValue} selectable>{user.id.slice(0, 8)}…</Text>
+            </View>
+          </View>
         </View>
 
-        {/* About me */}
-        {!!user.about_me && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>O mnie</Text>
-            <Text style={styles.cardBody}>{user.about_me}</Text>
-          </View>
-        )}
-
-        {/* Actions */}
+        {/* Action buttons (not for self) */}
         {!isSelf && (
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.btnPrimary} onPress={handleSendDm}>
-              <Ionicons name="chatbubble-outline" size={18} color="#fff" />
-              <Text style={styles.btnText}>Wyślij wiadomość</Text>
+            <TouchableOpacity style={styles.btnPrimary} onPress={handleSendDm} activeOpacity={0.85}>
+              <Ionicons name="chatbubble" size={18} color="#fff" />
+              <Text style={styles.btnPrimaryText}>Wyślij wiadomość</Text>
             </TouchableOpacity>
+
             {!isFriend && (
               <TouchableOpacity
-                style={[styles.btnSecondary, sending && styles.btnDisabled]}
+                style={[styles.btnSecondary, sending && { opacity: 0.55 }]}
                 onPress={handleSendFriendRequest}
                 disabled={sending}
+                activeOpacity={0.85}
               >
-                <Ionicons name="person-add-outline" size={18} color={C.text} />
-                <Text style={styles.btnTextSecondary}>
+                {sending
+                  ? <ActivityIndicator color={C.accentLight} size="small" />
+                  : <Ionicons name="person-add-outline" size={18} color={C.accentLight} />
+                }
+                <Text style={styles.btnSecondaryText}>
                   {sending ? 'Wysyłanie…' : 'Dodaj do znajomych'}
                 </Text>
               </TouchableOpacity>
+            )}
+
+            {isFriend && (
+              <View style={styles.friendBadge}>
+                <Ionicons name="people" size={16} color={C.success} />
+                <Text style={styles.friendBadgeText}>Już jesteście znajomymi</Text>
+              </View>
             )}
           </View>
         )}
@@ -150,131 +174,108 @@ export default function UserProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: C.bg,
-  },
-  centered: {
-    flex: 1,
-    backgroundColor: C.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  errorText: {
-    color: C.textSub,
-    fontSize: 16,
-  },
+  root: { flex: 1, backgroundColor: C.bg },
+  center: { flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  errorText: { color: C.textSub, fontSize: 16, fontWeight: '600' },
+
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 12, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: C.border,
     backgroundColor: C.bgCard,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
   },
-  backBtn: {
-    width: 40,
-    alignItems: 'flex-start',
-  },
-  headerTitle: {
-    color: C.text,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  scroll: {
-    padding: 20,
-    gap: 16,
-  },
-  avatarSection: {
-    alignItems: 'center',
-    paddingVertical: 24,
+  backBtn: { width: 40, alignItems: 'flex-start', padding: 4 },
+  headerTitle: { color: C.text, fontSize: 17, fontWeight: '700', flex: 1, textAlign: 'center' },
+
+  // Profile card
+  profileCard: {
+    margin: 16,
     backgroundColor: C.bgCard,
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: C.border,
+    overflow: 'hidden',
   },
-  nameRow: {
+  banner: {
+    height: 90,
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+  },
+  bannerStripe: { height: 2 },
+  avatarArea: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 14,
+    alignItems: 'flex-end',
+    gap: 12,
+    paddingHorizontal: 20,
+    marginTop: -44,
+    marginBottom: 12,
   },
-  username: {
-    color: C.text,
-    fontSize: 22,
-    fontWeight: '700',
+  avatarRing: {
+    padding: 3, borderRadius: 50, borderWidth: 3, backgroundColor: C.bgCard,
   },
-  statusBadge: {
-    marginTop: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+  adminBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: C.warningMuted, paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: 10, borderWidth: 1, borderColor: C.warning + '44',
+    marginBottom: 4,
   },
-  statusLabel: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
+  adminText: { color: C.warning, fontSize: 11, fontWeight: '800' },
+
+  nameSection: { paddingHorizontal: 20, gap: 8, marginBottom: 16 },
+  displayName: { color: C.text, fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
+  statusPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 12, borderWidth: 1,
   },
-  joinDate: {
-    marginTop: 8,
-    color: C.textMuted,
-    fontSize: 13,
+  statusDot: { width: 7, height: 7, borderRadius: 4 },
+  statusText: { fontSize: 12, fontWeight: '600' },
+
+  aboutSection: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 16,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
   },
-  card: {
-    backgroundColor: C.bgCard,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: C.border,
-    padding: 16,
-  },
-  cardTitle: {
-    color: C.textSub,
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
+  aboutLabel: {
+    color: C.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 1.2,
     marginBottom: 8,
   },
-  cardBody: {
-    color: C.text,
-    fontSize: 15,
-    lineHeight: 22,
+  aboutText: { color: C.text, fontSize: 14, lineHeight: 22 },
+
+  infoSection: {
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+    paddingHorizontal: 20,
+    paddingVertical: 4,
   },
-  actions: {
-    gap: 10,
+  infoRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingVertical: 11,
   },
+  infoRowBorder: { borderTopWidth: 1, borderTopColor: C.border },
+  infoLabel: { color: C.textMuted, fontSize: 13, flex: 1 },
+  infoValue: { color: C.textSub, fontSize: 13, fontWeight: '500' },
+
+  // Actions
+  actions: { marginHorizontal: 16, gap: 10 },
   btnPrimary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: C.accent,
-    borderRadius: 12,
-    paddingVertical: 14,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: C.accent, borderRadius: 16, paddingVertical: 15,
+    shadowColor: C.accent, shadowOpacity: 0.35, shadowRadius: 12, elevation: 6,
   },
+  btnPrimaryText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   btnSecondary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: C.bgElevated,
-    borderRadius: 12,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: C.border,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: C.accentMuted, borderRadius: 16, paddingVertical: 15,
+    borderWidth: 1, borderColor: C.borderAccent,
   },
-  btnDisabled: {
-    opacity: 0.5,
+  btnSecondaryText: { color: C.accentLight, fontSize: 16, fontWeight: '700' },
+  friendBadge: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: C.successMuted, borderRadius: 16, paddingVertical: 13,
+    borderWidth: 1, borderColor: C.success + '33',
   },
-  btnText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  btnTextSecondary: {
-    color: C.text,
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  friendBadgeText: { color: C.success, fontSize: 15, fontWeight: '600' },
 });
