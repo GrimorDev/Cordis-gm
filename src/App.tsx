@@ -7292,7 +7292,7 @@ export default function App() {
 
   // ── Server header dropdown ───────────────────────────────────────
   const [srvDropOpen, setSrvDropOpen]         = useState(false);
-  const [bannerHovered, setBannerHovered]     = useState(false);
+  const [bannerExpanded, setBannerExpanded]   = useState(false);
 
   // ── Create Category ──────────────────────────────────────────────
   const [catCreateOpen, setCatCreateOpen]     = useState(false);
@@ -11368,29 +11368,19 @@ export default function App() {
               {serverList.map(srv => {
                 const isActive = activeServer===srv.id&&activeView==='servers';
                 return (
-                  <motion.button key={srv.id}
-                    onClick={() => { if(activeServer===srv.id&&activeView==='servers') return; const sameServer=activeServer===srv.id; setActiveServer(srv.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); setProfileViewId(null); if(sameServer) setServerReloadKey(k=>k+1); }}
+                  <button key={srv.id}
+                    onClick={() => { if(activeServer===srv.id&&activeView==='servers') return; const sameServer=activeServer===srv.id; setActiveServer(srv.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); setProfileViewId(null); setBannerExpanded(false); if(sameServer) setServerReloadKey(k=>k+1); }}
                     onContextMenu={e => { e.preventDefault(); setSrvContextMenu({ x: e.clientX, y: e.clientY, srv }); }}
                     title={maskName(srv.name)}
-                    whileHover="hovered"
-                    initial="rest"
-                    animate="rest"
-                    className={`relative h-8 flex items-center gap-0 rounded-xl shrink-0 overflow-hidden transition-all duration-200 cursor-pointer border ${isActive?'border-indigo-500/50 bg-indigo-500/15 shadow-[0_0_16px_rgba(99,102,241,0.25)]':'border-white/[0.04] bg-white/[0.03] hover:bg-indigo-500/10 hover:border-indigo-500/20 hover:shadow-[0_0_10px_rgba(99,102,241,0.12)]'}`}>
+                    className={`relative w-8 h-8 flex items-center justify-center rounded-xl shrink-0 overflow-hidden transition-all duration-150 cursor-pointer border ${isActive?'border-indigo-500/50 bg-indigo-500/15 shadow-[0_0_16px_rgba(99,102,241,0.25)]':'border-white/[0.04] bg-white/[0.03] hover:bg-indigo-500/10 hover:border-indigo-500/20 hover:shadow-[0_0_10px_rgba(99,102,241,0.12)]'}`}>
                     {/* Active indicator bar — gradient */}
-                    {isActive&&<motion.span layoutId="nav-srv-indicator" className="absolute bottom-0 left-0 right-0 h-[2px] shadow-[0_0_8px_rgba(99,102,241,0.8)]" style={{background:'linear-gradient(90deg,#818cf8,#a78bfa)'}}/>}
+                    {isActive&&<span className="absolute bottom-0 left-0 right-0 h-[2px] shadow-[0_0_8px_rgba(99,102,241,0.8)]" style={{background:'linear-gradient(90deg,#818cf8,#a78bfa)'}}/>}
                     {/* Icon */}
                     <span className={`w-8 h-8 flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden rounded-xl relative ${srv.is_official?'ring-1 ring-amber-400/60 ring-inset':''}`}>
                       {srv.icon_url ? <img src={staticUrl(srv.icon_url)} className="w-full h-full object-cover" alt=""/> : <span className={`w-full h-full flex items-center justify-center rounded-xl ${isActive?'bg-indigo-600':'bg-zinc-700/80'}`}>{srv.name.charAt(0).toUpperCase()}</span>}
                       {srv.is_official&&<BadgeCheck size={8} className="absolute bottom-0.5 right-0.5 text-amber-400 drop-shadow-sm"/>}
                     </span>
-                    {/* Name label — slides in on hover */}
-                    <motion.span
-                      variants={{ rest:{width:0,opacity:0,marginRight:0}, hovered:{width:'auto',opacity:1,marginRight:6} }}
-                      transition={{duration:0.18,ease:[0.16,1,0.3,1]}}
-                      className={`text-xs font-semibold whitespace-nowrap overflow-hidden ml-1.5 ${isActive?'text-white':'text-zinc-300'}`}>
-                      {maskName(srv.name)}
-                    </motion.span>
-                  </motion.button>
+                  </button>
                 );
               })}
             </div>
@@ -13270,43 +13260,51 @@ export default function App() {
             />
           ) : (
             <>
-              {/* Server banner — expands on hover to show server details */}
+              {/* Server banner — expands on click to show server details */}
               {activeView==='servers' && serverFull?.banner_url && (
                 <motion.div
-                  className="shrink-0 relative overflow-hidden cursor-pointer"
+                  className="shrink-0 relative overflow-hidden cursor-pointer group"
                   initial={{ height: 80 }}
-                  animate={{ height: bannerHovered ? 200 : 80 }}
-                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                  onMouseEnter={() => setBannerHovered(true)}
-                  onMouseLeave={() => setBannerHovered(false)}
+                  animate={{ height: bannerExpanded ? 200 : 80 }}
+                  transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
+                  onClick={() => setBannerExpanded(v => !v)}
                 >
                   <img src={staticUrl(serverFull.banner_url)} className="w-full h-full object-cover" alt=""
-                    style={{ transition: 'transform 0.35s ease', transform: bannerHovered ? 'scale(1.04)' : 'scale(1)' }}/>
-                  {/* Gradient overlay — deeper on hover */}
+                    style={{ transition: 'transform 0.38s ease', transform: bannerExpanded ? 'scale(1.04)' : 'scale(1)' }}/>
+                  {/* Gradient overlay */}
                   <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/10 to-black/70"
-                    style={{ opacity: bannerHovered ? 1 : 0.85, transition: 'opacity 0.35s ease' }}/>
+                    style={{ opacity: bannerExpanded ? 1 : 0.85, transition: 'opacity 0.38s ease' }}/>
+                  {/* Expand hint — shown when collapsed */}
+                  {!bannerExpanded && (
+                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                      <div className="bg-black/50 rounded-lg px-2 py-0.5 flex items-center gap-1">
+                        <ChevronDown size={11} className="text-white/70"/>
+                        <span className="text-white/70 text-[10px] font-medium">rozwiń</span>
+                      </div>
+                    </div>
+                  )}
                   {/* Bottom info row — always visible */}
                   <div className="absolute bottom-0 left-0 right-0 px-5 pb-3 flex items-end gap-3">
                     <motion.div
                       initial={{ width: 28, height: 28 }}
-                      animate={{ width: bannerHovered ? 52 : 28, height: bannerHovered ? 52 : 28 }}
-                      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                      animate={{ width: bannerExpanded ? 52 : 28, height: bannerExpanded ? 52 : 28 }}
+                      transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
                       className="rounded-xl overflow-hidden border-2 border-white/25 shadow-lg shrink-0 flex items-center justify-center bg-indigo-600">
                       {serverFull.icon_url
                         ? <img src={staticUrl(serverFull.icon_url)} className="w-full h-full object-cover" alt=""/>
-                        : <span className="text-white font-bold" style={{ fontSize: bannerHovered ? 20 : 12 }}>{serverFull.name?.[0]?.toUpperCase()}</span>
+                        : <span className="text-white font-bold" style={{ fontSize: bannerExpanded ? 20 : 12 }}>{serverFull.name?.[0]?.toUpperCase()}</span>
                       }
                     </motion.div>
                     <div className="flex-1 min-w-0 pb-0.5">
                       <motion.p
                         initial={{ fontSize: 13 }}
-                        animate={{ fontSize: bannerHovered ? 18 : 13 }}
-                        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                        animate={{ fontSize: bannerExpanded ? 18 : 13 }}
+                        transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
                         className="font-bold text-white drop-shadow truncate leading-tight">
                         {serverFull.name}
                       </motion.p>
                       <AnimatePresence>
-                        {bannerHovered && (
+                        {bannerExpanded && (
                           <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }}
                             transition={{ duration: 0.2, delay: 0.1 }}
                             className="flex items-center gap-3 mt-1">
@@ -13322,6 +13320,12 @@ export default function App() {
                         )}
                       </AnimatePresence>
                     </div>
+                    {/* Collapse indicator when expanded */}
+                    {bannerExpanded && (
+                      <div className="shrink-0 mb-1">
+                        <ChevronUp size={14} className="text-white/60"/>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}
