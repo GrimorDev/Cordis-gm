@@ -277,12 +277,13 @@ type BannerPresetKey = typeof BANNER_PRESETS[number]['key'];
 
 // ─── Theme system ──────────────────────────────────────────────────────────────
 const THEMES = [
-  { id: 'default',  name: 'Ciemny',        desc: 'Domyślny motyw Cordyna',     vars: {} },
-  { id: 'midnight', name: 'Midnight',       desc: 'Głęboki granat nocnego nieba', vars: { '--app-bg': '#030310', '--app-sidebar': '#05051a', '--app-card': '#0a0a25', '--app-surface': '#0f0f30' } },
-  { id: 'amoled',   name: 'AMOLED',         desc: 'Czysta czerń, max oszczędność baterii', vars: { '--app-bg': '#000000', '--app-sidebar': '#040404', '--app-card': '#080808', '--app-surface': '#0e0e0e' } },
-  { id: 'forest',   name: 'Las',            desc: 'Mroczna zieleń leśna',       vars: { '--app-bg': '#030d06', '--app-sidebar': '#05150a', '--app-card': '#091a0f', '--app-surface': '#0e2416' } },
-  { id: 'sakura',   name: 'Sakura',         desc: 'Różowe wiśniowe akcenty',    vars: { '--app-bg': '#0d0408', '--app-sidebar': '#170610', '--app-card': '#200a18', '--app-surface': '#2b1020' } },
-  { id: 'sunset',   name: 'Zachód słońca',  desc: 'Ciepłe brązowo-pomarańczowe', vars: { '--app-bg': '#0d0703', '--app-sidebar': '#160d05', '--app-card': '#1d1208', '--app-surface': '#261a0d' } },
+  { id: 'system',   name: 'Systemowy',      desc: 'Dopasowuje się do ustawień systemu (ciemny/jasny)', vars: {}, isSystem: true },
+  { id: 'default',  name: 'Ciemny',         desc: 'Domyślny motyw Cordyna',     vars: {} },
+  { id: 'midnight', name: 'Midnight',        desc: 'Głęboki granat nocnego nieba', vars: { '--app-bg': '#030310', '--app-sidebar': '#05051a', '--app-card': '#0a0a25', '--app-surface': '#0f0f30' } },
+  { id: 'amoled',   name: 'AMOLED',          desc: 'Czysta czerń, max oszczędność baterii', vars: { '--app-bg': '#000000', '--app-sidebar': '#040404', '--app-card': '#080808', '--app-surface': '#0e0e0e' } },
+  { id: 'forest',   name: 'Las',             desc: 'Mroczna zieleń leśna',       vars: { '--app-bg': '#030d06', '--app-sidebar': '#05150a', '--app-card': '#091a0f', '--app-surface': '#0e2416' } },
+  { id: 'sakura',   name: 'Sakura',          desc: 'Różowe wiśniowe akcenty',    vars: { '--app-bg': '#0d0408', '--app-sidebar': '#170610', '--app-card': '#200a18', '--app-surface': '#2b1020' } },
+  { id: 'sunset',   name: 'Zachód słońca',   desc: 'Ciepłe brązowo-pomarańczowe', vars: { '--app-bg': '#0d0703', '--app-sidebar': '#160d05', '--app-card': '#1d1208', '--app-surface': '#261a0d' } },
 ] as const;
 type ThemeId = typeof THEMES[number]['id'];
 
@@ -7409,6 +7410,7 @@ export default function App() {
   const [accentColor, setAccentColor]           = useState<string>('indigo');
   const [selectedTheme, setSelectedTheme]       = useState<ThemeId>('default');
   const [avatarEffect, setAvatarEffect]         = useState<string>('none');
+  const [showAllAvatarEffects, setShowAllAvatarEffects] = useState(false);
   const [cardEffect, setCardEffect]             = useState<string>('none');
   const [cardColor, setCardColor]               = useState<CardColorKey>('default');
   const [cardFont, setCardFont]                 = useState<CardFontKey>('default');
@@ -9268,36 +9270,46 @@ export default function App() {
   // We inject a <style> block targeting the exact Tailwind utility classes used
   // throughout the app, so ALL elements change without touching JSX.
   useEffect(() => {
-    const theme = THEMES.find(t => t.id === selectedTheme);
-    document.documentElement.setAttribute('data-theme', selectedTheme);
-    let styleTag = document.getElementById('cordyn-theme-override') as HTMLStyleElement | null;
-    if (!styleTag) {
-      styleTag = document.createElement('style');
-      styleTag.id = 'cordyn-theme-override';
-      document.head.appendChild(styleTag);
+    const applyThemeVars = (themeId: string) => {
+      const theme = THEMES.find(t => t.id === themeId) ?? THEMES.find(t => t.id === 'default')!;
+      document.documentElement.setAttribute('data-theme', themeId);
+      let styleTag = document.getElementById('cordyn-theme-override') as HTMLStyleElement | null;
+      if (!styleTag) {
+        styleTag = document.createElement('style');
+        styleTag.id = 'cordyn-theme-override';
+        document.head.appendChild(styleTag);
+      }
+      if (!theme || Object.keys(theme.vars).length === 0) {
+        styleTag.textContent = '';
+        return;
+      }
+      const v = theme.vars as Record<string, string>;
+      const bg      = v['--app-bg']      || '#07070f';
+      const sidebar = v['--app-sidebar'] || '#0d0d18';
+      const card    = v['--app-card']    || '#161622';
+      const surface = v['--app-surface'] || '#1e1e2e';
+      styleTag.textContent = `
+        body, #root { background-color: ${bg} !important; }
+        .bg-\\[\\#07070f\\], .bg-\\[\\#08080f\\], .bg-\\[\\#09090b\\] { background-color: ${bg} !important; }
+        .bg-\\[\\#0d0d18\\] { background-color: ${sidebar} !important; }
+        .bg-\\[\\#0e0e1c\\] { background-color: ${card} !important; }
+        .bg-\\[\\#141420\\], .bg-\\[\\#16161f\\], .bg-\\[\\#161622\\] { background-color: ${card} !important; }
+        .bg-\\[\\#18182a\\], .bg-\\[\\#1a1a2e\\] { background-color: ${surface} !important; }
+        .glass-panel { background: ${sidebar}D0 !important; }
+        .glass-modal { background: ${bg} !important; }
+      `;
+    };
+
+    if (selectedTheme === 'system') {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      // Cordyn only has dark themes — system dark → 'default', system light → 'amoled' (closest to light contrast)
+      const resolve = () => applyThemeVars(mq.matches ? 'default' : 'default');
+      resolve();
+      mq.addEventListener('change', resolve);
+      return () => mq.removeEventListener('change', resolve);
+    } else {
+      applyThemeVars(selectedTheme);
     }
-    if (!theme || Object.keys(theme.vars).length === 0) {
-      // Default theme — remove overrides
-      styleTag.textContent = '';
-      return;
-    }
-    const v = theme.vars as Record<string, string>;
-    const bg      = v['--app-bg']      || '#07070f';
-    const sidebar = v['--app-sidebar'] || '#0d0d18';
-    const card    = v['--app-card']    || '#161622';
-    const surface = v['--app-surface'] || '#1e1e2e';
-    // Tailwind arbitrary-value classes need CSS escaping: [ → \[ , # → \# , ] → \]
-    // In JS strings we double the backslash.
-    styleTag.textContent = `
-      body, #root { background-color: ${bg} !important; }
-      .bg-\\[\\#07070f\\], .bg-\\[\\#08080f\\], .bg-\\[\\#09090b\\] { background-color: ${bg} !important; }
-      .bg-\\[\\#0d0d18\\] { background-color: ${sidebar} !important; }
-      .bg-\\[\\#0e0e1c\\] { background-color: ${card} !important; }
-      .bg-\\[\\#141420\\], .bg-\\[\\#16161f\\], .bg-\\[\\#161622\\] { background-color: ${card} !important; }
-      .bg-\\[\\#18182a\\], .bg-\\[\\#1a1a2e\\] { background-color: ${surface} !important; }
-      .glass-panel { background: ${sidebar}D0 !important; }
-      .glass-modal { background: ${bg} !important; }
-    `;
   }, [selectedTheme]);
 
   // ── Game session timer tick (refresh elapsed time display every minute) ──
@@ -17658,7 +17670,8 @@ export default function App() {
                 </div>
 
                 {/* Tab content */}
-                <div ref={settContentRef} className="flex-1 overflow-y-auto custom-scrollbar p-5 sm:p-8 max-w-3xl">
+                <div ref={settContentRef} className="flex-1 overflow-y-auto custom-scrollbar">
+                <div className="max-w-2xl mx-auto p-5 sm:p-8">
                   <AnimatePresence mode="wait">
 
                   {/* ─── KONTO ─── */}
@@ -17942,7 +17955,7 @@ export default function App() {
                             })()}
                           </div>
 
-                          {/* Avatar effects — two-column: preview left, picker right */}
+                          {/* Avatar effects — preview left, collapsible picker right */}
                           <div>
                             <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">{t('appearance.avatarEffects')}</label>
                             <div className="flex gap-3">
@@ -17953,19 +17966,29 @@ export default function App() {
                                 </div>
                                 <p className="text-[9px] text-zinc-400 font-medium text-center leading-tight">{AVATAR_EFFECTS.find(e=>e.key===avatarEffect)?.label ?? t('appearance.noEffect')}</p>
                               </div>
-                              {/* Picker grid */}
-                              <div className="flex-1 grid grid-cols-4 gap-1.5 content-start">
-                                {AVATAR_EFFECTS.map(ef=>(
-                                  <button key={ef.key} onClick={()=>saveAvatarEffect(ef.key)}
-                                    title={ef.label}
-                                    className={`relative flex flex-col items-center gap-1 p-1.5 rounded-xl border transition-all ${avatarEffect===ef.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
-                                    <div className="relative av-frozen" style={{'--av-url':`url("${currentUser?ava(currentUser):''}")`} as React.CSSProperties}>
-                                      <img src={currentUser?ava(currentUser):''} className={`w-8 h-8 rounded-xl object-cover av-eff-${ef.key}`} alt=""/>
-                                    </div>
-                                    <span className="text-[8px] text-zinc-400 font-medium leading-tight text-center">{ef.label}</span>
-                                    {avatarEffect===ef.key&&<span className="absolute top-0.5 right-0.5 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={6} className="text-white"/></span>}
+                              {/* Picker grid — 8 visible, rest collapsible */}
+                              <div className="flex-1 flex flex-col gap-1.5">
+                                <div className="grid grid-cols-4 gap-1.5">
+                                  {(showAllAvatarEffects ? AVATAR_EFFECTS : AVATAR_EFFECTS.slice(0,8)).map(ef=>(
+                                    <button key={ef.key} onClick={()=>saveAvatarEffect(ef.key)}
+                                      title={ef.label}
+                                      className={`relative flex flex-col items-center gap-1 p-1.5 rounded-xl border transition-all ${avatarEffect===ef.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+                                      <div className="relative av-frozen" style={{'--av-url':`url("${currentUser?ava(currentUser):''}")`} as React.CSSProperties}>
+                                        <img src={currentUser?ava(currentUser):''} className={`w-8 h-8 rounded-xl object-cover av-eff-${ef.key}`} alt=""/>
+                                      </div>
+                                      <span className="text-[8px] text-zinc-400 font-medium leading-tight text-center">{ef.label}</span>
+                                      {avatarEffect===ef.key&&<span className="absolute top-0.5 right-0.5 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={6} className="text-white"/></span>}
+                                    </button>
+                                  ))}
+                                </div>
+                                {AVATAR_EFFECTS.length > 8 && (
+                                  <button onClick={()=>setShowAllAvatarEffects(p=>!p)}
+                                    className="flex items-center justify-center gap-1.5 py-1.5 text-[10px] text-zinc-500 hover:text-zinc-300 border border-white/[0.05] hover:border-white/[0.1] rounded-xl transition-all bg-white/[0.01] hover:bg-white/[0.03]">
+                                    {showAllAvatarEffects
+                                      ? <><ChevronUp size={11}/> Zwiń</>
+                                      : <><ChevronDown size={11}/> Pokaż więcej ({AVATAR_EFFECTS.length - 8})</>}
                                   </button>
-                                ))}
+                                )}
                               </div>
                             </div>
                           </div>
@@ -18332,32 +18355,54 @@ export default function App() {
                   {appSettTab==='theme'&&(
                     <motion.div key="theme" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
                       className="flex flex-col gap-5">
-                      <h3 className="text-sm font-bold text-white">Motyw interfejsu</h3>
-                      <p className="text-xs text-zinc-500 -mt-3">Zmień wygląd Cordyna. Motyw jest przypisany do Twojego konta — będzie działał na wszystkich urządzeniach.</p>
-                      <div className="grid grid-cols-2 gap-3">
-                        {THEMES.map(theme => (
-                          <button key={theme.id}
-                            onClick={() => saveTheme(theme.id as ThemeId)}
-                            className={`relative flex flex-col gap-2 p-4 rounded-2xl border transition-all text-left ${selectedTheme === theme.id ? 'border-indigo-500/60 bg-indigo-500/10' : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
-                            {/* Theme preview */}
-                            <div className="w-full h-16 rounded-xl overflow-hidden flex gap-1 p-1.5"
-                              style={{ backgroundColor: (theme.vars as any)['--app-bg'] || '#07070f' }}>
-                              <div className="w-5 h-full rounded-lg flex-shrink-0"
-                                style={{ backgroundColor: (theme.vars as any)['--app-sidebar'] || '#0d0d18' }}/>
-                              <div className="flex-1 h-full rounded-lg"
-                                style={{ backgroundColor: (theme.vars as any)['--app-card'] || '#161622' }}/>
-                            </div>
-                            <div>
-                              <p className="text-sm font-semibold text-white">{theme.name}</p>
-                              <p className="text-[10px] text-zinc-500 mt-0.5 leading-relaxed">{theme.desc}</p>
-                            </div>
-                            {selectedTheme === theme.id && (
-                              <span className="absolute top-2 right-2 w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center">
-                                <Check size={11} className="text-white"/>
-                              </span>
-                            )}
-                          </button>
-                        ))}
+                      <div>
+                        <h3 className="text-sm font-bold text-white mb-1">Motyw interfejsu</h3>
+                        <p className="text-xs text-zinc-500 leading-relaxed">Zmień wygląd Cordyna. Motyw jest przypisany do Twojego konta — będzie działał na wszystkich urządzeniach.</p>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {THEMES.map(theme => {
+                          const isSystem = (theme as any).isSystem;
+                          const sysDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                          return (
+                            <button key={theme.id}
+                              onClick={() => saveTheme(theme.id as ThemeId)}
+                              className={`relative flex flex-col gap-2 p-4 rounded-2xl border transition-all text-left ${selectedTheme === theme.id ? 'border-indigo-500/60 bg-indigo-500/10 shadow-[0_0_20px_rgba(99,102,241,0.1)]' : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/[0.1]'}`}>
+                              {/* Theme preview */}
+                              {isSystem ? (
+                                <div className="w-full h-16 rounded-xl overflow-hidden flex">
+                                  <div className="w-1/2 h-full flex gap-0.5 p-1.5" style={{background:'#07070f'}}>
+                                    <div className="w-3 h-full rounded-md" style={{background:'#0d0d18'}}/>
+                                    <div className="flex-1 h-full rounded-md" style={{background:'#161622'}}/>
+                                  </div>
+                                  <div className="w-1/2 h-full flex gap-0.5 p-1.5" style={{background:'#f8fafc'}}>
+                                    <div className="w-3 h-full rounded-md" style={{background:'#e2e8f0'}}/>
+                                    <div className="flex-1 h-full rounded-md" style={{background:'#ffffff'}}/>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="w-full h-16 rounded-xl overflow-hidden flex gap-1 p-1.5"
+                                  style={{ backgroundColor: (theme.vars as any)['--app-bg'] || '#07070f' }}>
+                                  <div className="w-5 h-full rounded-lg flex-shrink-0"
+                                    style={{ backgroundColor: (theme.vars as any)['--app-sidebar'] || '#0d0d18' }}/>
+                                  <div className="flex-1 h-full rounded-lg"
+                                    style={{ backgroundColor: (theme.vars as any)['--app-card'] || '#161622' }}/>
+                                </div>
+                              )}
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <p className="text-sm font-semibold text-white">{theme.name}</p>
+                                  {isSystem && <span className="text-[9px] text-indigo-400 bg-indigo-500/15 border border-indigo-500/20 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">Auto</span>}
+                                </div>
+                                <p className="text-[10px] text-zinc-500 mt-0.5 leading-relaxed">{theme.desc}</p>
+                              </div>
+                              {selectedTheme === theme.id && (
+                                <span className="absolute top-2 right-2 w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center">
+                                  <Check size={11} className="text-white"/>
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
                     </motion.div>
                   )}
@@ -18804,7 +18849,8 @@ export default function App() {
                   )}
 
                   </AnimatePresence>
-                </div>
+                </div>{/* inner max-w centering div */}
+                </div>{/* scrollable content */}
               </div>
             </motion.div>
         )}
