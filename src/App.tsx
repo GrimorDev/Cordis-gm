@@ -6984,7 +6984,9 @@ export default function App() {
   const [globalTabs, setGlobalTabs]           = useState<GlobalTabInfo[]>(() => { try { return JSON.parse(localStorage.getItem('cordyn_gtabs')||'[]'); } catch { return []; } });
   const [pinnedTabKeys, setPinnedTabKeys]     = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('cordyn_ptabs')||'[]'); } catch { return []; } });
   const [tabContextMenu, setTabContextMenu]   = useState<{key:string;x:number;y:number}|null>(null);
+  const [tabBarOpen, setTabBarOpen]           = useState<boolean>(() => { try { return localStorage.getItem('cordyn_tabbar') !== '0'; } catch { return true; } });
   const pendingTabChannelRef                  = useRef<string|null>(null);
+  const tabScrollRef                          = useRef<HTMLDivElement>(null);
   const [activeDmUserId, setActiveDmUserId]   = useState('');
   const [isMobileOpen, setIsMobileOpen]       = useState(false);
   const [activeView, setActiveView]           = useState<'servers'|'dms'|'friends'|'admin'>('dms');
@@ -13432,152 +13434,181 @@ export default function App() {
               )}
               {/* ── GLOBAL CHANNEL / DM TAB BAR ────────────────────────── */}
               {globalTabs.length > 0 && (()=>{
-                // Pinned tabs first, then others in open order
                 const ordered = [
-                  ...pinnedTabKeys.filter(k => globalTabs.some(t=>t.key===k)).map(k=>globalTabs.find(t=>t.key===k)!),
-                  ...globalTabs.filter(t => !pinnedTabKeys.includes(t.key)),
+                  ...pinnedTabKeys.filter(k=>globalTabs.some(t=>t.key===k)).map(k=>globalTabs.find(t=>t.key===k)!),
+                  ...globalTabs.filter(t=>!pinnedTabKeys.includes(t.key)),
                 ];
+                const scrollBy = (dir: number) => {
+                  tabScrollRef.current?.scrollBy({left: dir * 180, behavior:'smooth'});
+                };
                 return (
-                  <div className="shrink-0 border-b border-white/[0.05] relative" style={{background:'rgba(255,255,255,0.012)'}}>
-                    <div className="flex overflow-x-auto" style={{scrollbarWidth:'none',msOverflowStyle:'none'} as React.CSSProperties}>
-                      {ordered.map(tab => {
-                        const isPinned = pinnedTabKeys.includes(tab.key);
-                        // Determine if this tab is currently active
-                        const isAct =
-                          tab.kind==='ch'  ? (activeView==='servers' && activeServer===tab.serverId && activeChannel===tab.channelId) :
-                          tab.kind==='dm'  ? (activeView==='dms' && !activeGroupDm && activeDmUserId===tab.userId) :
-                          /* gdm */          (activeView==='dms' && activeGroupDm===tab.groupId);
-                        // Unread badge
-                        const ping  = tab.kind==='ch' ? ((pingChs as any)[tab.channelId!]||0) : 0;
-                        const unread= tab.kind==='ch'  ? ((unreadChs as any)[tab.channelId!]||0)
-                                    : tab.kind==='dm'  ? (unreadDms[tab.userId!]||0)
-                                    : (unreadGroupDms[tab.groupId!]||0);
-                        // Fresh name/avatar from live state if possible
-                        const liveDm = tab.kind==='dm' ? dmConvs.find(d=>d.other_user_id===tab.userId) : null;
-                        const liveGc = tab.kind==='gdm' ? groupConvs.find(g=>g.id===tab.groupId) : null;
-                        const displayName = liveDm?.other_username ?? liveGc?.name ?? tab.name;
-                        const srv = tab.kind==='ch' ? serverList.find(s=>s.id===tab.serverId) : null;
-
-                        return (
-                          <div key={tab.key}
-                            className={`group/tab relative flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 shrink-0 cursor-pointer select-none border-r border-white/[0.04] transition-all duration-100 ${
-                              isAct ? 'bg-indigo-500/10 text-white' : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04]'
-                            }`}
-                            style={{minWidth:72, maxWidth:148}}
-                            onClick={()=>switchToTab(tab)}
-                            onContextMenu={e=>{e.preventDefault();setTabContextMenu({key:tab.key,x:e.clientX,y:e.clientY});}}>
-
-                            {/* Active underline */}
-                            {isAct&&<div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-400 rounded-t-full"/>}
-
-                            {/* Icon area */}
-                            {tab.kind==='ch' ? (
-                              <div className="relative shrink-0">
-                                {/* Tiny server favicon */}
-                                {srv?.icon_url
-                                  ? <img src={staticUrl(srv.icon_url)} className="w-4 h-4 rounded-md object-cover" alt=""/>
-                                  : <div className="w-4 h-4 rounded-md bg-indigo-600 flex items-center justify-center">
-                                      <span className="text-[7px] font-bold text-white leading-none">{(srv?.name||tab.serverName||'?')[0]?.toUpperCase()}</span>
-                                    </div>
-                                }
-                                {/* Channel type badge */}
-                                <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full flex items-center justify-center ${
-                                  tab.chType==='announcement' ? 'bg-amber-500/90' : tab.chType==='forum' ? 'bg-emerald-500/90' : 'bg-indigo-500/90'
-                                }`}>
-                                  {tab.chType==='announcement'
-                                    ? <Megaphone size={6} className="text-white"/>
-                                    : tab.chType==='forum'
-                                      ? <MessageSquare size={6} className="text-white"/>
-                                      : <Hash size={6} className="text-white"/>
-                                  }
-                                </div>
-                              </div>
-                            ) : tab.kind==='dm' ? (
-                              <div className="relative shrink-0">
-                                <img src={ava({avatar_url:liveDm?.other_avatar??tab.userAvatar??null,username:displayName})} className="w-4 h-4 rounded-full object-cover" alt=""/>
-                                <StatusBadge status={liveDm?.other_status??tab.userStatus??'offline'} size={5} className="absolute -bottom-0.5 -right-0.5"/>
-                              </div>
-                            ) : (
-                              <div className="w-4 h-4 rounded-md bg-indigo-500/20 flex items-center justify-center shrink-0 overflow-hidden">
-                                {liveGc?.icon_url||tab.groupIcon
-                                  ? <img src={staticUrl(liveGc?.icon_url||tab.groupIcon!)} className="w-full h-full object-cover" alt=""/>
-                                  : <Users size={8} className="text-indigo-400"/>
-                                }
-                              </div>
-                            )}
-
-                            {/* Label */}
-                            <span className={`text-[11px] truncate flex-1 min-w-0 ${isAct?'font-semibold':unread>0||ping>0?'font-medium text-white/90':'font-medium'}`}>
-                              {displayName}
-                            </span>
-
-                            {/* Unread / ping badge */}
-                            {ping > 0 && !isAct && (
-                              <span className="shrink-0 min-w-[14px] h-[14px] bg-amber-500 rounded-full text-[8px] font-bold text-white flex items-center justify-center px-0.5 shadow-[0_0_6px_rgba(245,158,11,0.5)]">
-                                {ping > 9 ? '9+' : ping}
-                              </span>
-                            )}
-                            {unread > 0 && !ping && !isAct && (
-                              <span className="shrink-0 min-w-[14px] h-[14px] bg-rose-500 rounded-full text-[8px] font-bold text-white flex items-center justify-center px-0.5">
-                                {unread > 99 ? '99+' : unread}
-                              </span>
-                            )}
-
-                            {/* Pin indicator */}
-                            {isPinned && <Pin size={8} className={`shrink-0 ${isAct?'text-indigo-400':'text-zinc-600'}`}/>}
-
-                            {/* Close button */}
-                            <button
-                              onClick={e=>{
-                                e.stopPropagation();
-                                closeGlobalTab(tab.key);
-                                if (isAct) {
-                                  const rem = ordered.filter(t=>t.key!==tab.key);
-                                  if (rem.length) switchToTab(rem[rem.length-1]);
-                                }
-                              }}
-                              className="w-3.5 h-3.5 rounded flex items-center justify-center opacity-0 group-hover/tab:opacity-100 hover:bg-white/20 transition-all shrink-0 ml-0.5">
-                              <X size={8}/>
-                            </button>
-                          </div>
-                        );
-                      })}
+                  <div className="shrink-0 border-b border-white/[0.05]" style={{background:'rgba(255,255,255,0.012)'}}>
+                    {/* Toggle row */}
+                    <div className="flex items-center justify-between px-2 py-0.5 border-b border-white/[0.04]">
+                      <span className="text-[9px] font-bold text-zinc-700 uppercase tracking-widest select-none">Otwarte zakładki</span>
+                      <button
+                        onClick={()=>{ const v=!tabBarOpen; setTabBarOpen(v); try{localStorage.setItem('cordyn_tabbar',v?'1':'0')}catch{} }}
+                        className="flex items-center gap-1 text-[9px] text-zinc-600 hover:text-zinc-400 transition-colors px-1.5 py-0.5 rounded-md hover:bg-white/[0.04]">
+                        {tabBarOpen ? <><ChevronUp size={9}/> zwiń</> : <><ChevronDown size={9}/> rozwiń ({ordered.length})</>}
+                      </button>
                     </div>
 
-                    {/* Tab context menu */}
+                    {/* Collapsible tab list with Framer Motion */}
+                    <AnimatePresence initial={false}>
+                      {tabBarOpen && (
+                        <motion.div
+                          key="tabbar-body"
+                          initial={{height:0,opacity:0}}
+                          animate={{height:'auto',opacity:1}}
+                          exit={{height:0,opacity:0}}
+                          transition={{duration:0.22,ease:[0.16,1,0.3,1]}}
+                          style={{overflow:'hidden'}}>
+                          <div className="flex items-stretch relative">
+                            {/* Left scroll arrow */}
+                            <button onClick={()=>scrollBy(-1)}
+                              className="shrink-0 w-7 flex items-center justify-center text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors border-r border-white/[0.04]">
+                              <ChevronLeft size={13}/>
+                            </button>
+
+                            {/* Scrollable track */}
+                            <div
+                              ref={tabScrollRef}
+                              className="flex flex-1 overflow-x-auto overflow-y-hidden"
+                              style={{scrollbarWidth:'none',msOverflowStyle:'none'} as React.CSSProperties}
+                              onWheel={e=>{ e.preventDefault(); tabScrollRef.current!.scrollLeft += e.deltaY + e.deltaX; }}
+                            >
+                              {ordered.map(tab => {
+                                const isPinned = pinnedTabKeys.includes(tab.key);
+                                const isAct =
+                                  tab.kind==='ch'  ? (activeView==='servers' && activeServer===tab.serverId && activeChannel===tab.channelId) :
+                                  tab.kind==='dm'  ? (activeView==='dms' && !activeGroupDm && activeDmUserId===tab.userId) :
+                                                     (activeView==='dms' && activeGroupDm===tab.groupId);
+                                const ping   = tab.kind==='ch' ? ((pingChs as any)[tab.channelId!]||0) : 0;
+                                const unread = tab.kind==='ch'  ? ((unreadChs as any)[tab.channelId!]||0)
+                                             : tab.kind==='dm'  ? (unreadDms[tab.userId!]||0)
+                                             : (unreadGroupDms[tab.groupId!]||0);
+                                const liveDm = tab.kind==='dm'  ? dmConvs.find(d=>d.other_user_id===tab.userId) : null;
+                                const liveGc = tab.kind==='gdm' ? groupConvs.find(g=>g.id===tab.groupId) : null;
+                                const displayName = liveDm?.other_username ?? liveGc?.name ?? tab.name;
+                                const srv = tab.kind==='ch' ? serverList.find(s=>s.id===tab.serverId) : null;
+
+                                return (
+                                  <div key={tab.key}
+                                    className={`group/tab relative flex items-center gap-1.5 pl-2.5 pr-2 shrink-0 cursor-pointer select-none border-r border-white/[0.04] transition-colors duration-100 ${
+                                      isAct ? 'bg-indigo-500/10 text-white' : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.05]'
+                                    }`}
+                                    style={{minWidth:76, maxWidth:152, height:34}}
+                                    onClick={()=>switchToTab(tab)}
+                                    onContextMenu={e=>{e.preventDefault();setTabContextMenu({key:tab.key,x:e.clientX,y:e.clientY});}}>
+
+                                    {/* Active underline */}
+                                    {isAct&&<div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-400 rounded-t-full"/>}
+
+                                    {/* Icon */}
+                                    {tab.kind==='ch' ? (
+                                      <div className="relative shrink-0">
+                                        {srv?.icon_url
+                                          ? <img src={staticUrl(srv.icon_url)} className="w-4 h-4 rounded-[5px] object-cover" alt=""/>
+                                          : <div className="w-4 h-4 rounded-[5px] bg-indigo-600/80 flex items-center justify-center">
+                                              <span className="text-[7px] font-bold text-white leading-none">{(srv?.name||tab.serverName||'?')[0]?.toUpperCase()}</span>
+                                            </div>
+                                        }
+                                        <div className={`absolute -bottom-0.5 -right-0.5 w-[10px] h-[10px] rounded-full flex items-center justify-center border border-black/30 ${
+                                          tab.chType==='announcement'?'bg-amber-500':tab.chType==='forum'?'bg-emerald-500':'bg-indigo-500'
+                                        }`}>
+                                          {tab.chType==='announcement'?<Megaphone size={5} className="text-white"/>:tab.chType==='forum'?<MessageSquare size={5} className="text-white"/>:<Hash size={5} className="text-white"/>}
+                                        </div>
+                                      </div>
+                                    ) : tab.kind==='dm' ? (
+                                      <div className="relative shrink-0">
+                                        <img src={ava({avatar_url:liveDm?.other_avatar??tab.userAvatar??null,username:displayName})} className="w-4 h-4 rounded-full object-cover" alt=""/>
+                                        <StatusBadge status={liveDm?.other_status??tab.userStatus??'offline'} size={5} className="absolute -bottom-0.5 -right-0.5"/>
+                                      </div>
+                                    ) : (
+                                      <div className="w-4 h-4 rounded-[5px] bg-indigo-500/20 flex items-center justify-center shrink-0 overflow-hidden">
+                                        {liveGc?.icon_url||tab.groupIcon
+                                          ? <img src={staticUrl(liveGc?.icon_url||tab.groupIcon!)} className="w-full h-full object-cover" alt=""/>
+                                          : <Users size={8} className="text-indigo-400"/>}
+                                      </div>
+                                    )}
+
+                                    {/* Label */}
+                                    <span className={`text-[11px] truncate flex-1 min-w-0 leading-none ${isAct?'font-semibold':unread>0||ping>0?'font-medium text-white/90':'font-medium'}`}>
+                                      {displayName}
+                                    </span>
+
+                                    {/* Badges */}
+                                    {ping > 0 && !isAct && (
+                                      <span className="shrink-0 min-w-[14px] h-[14px] bg-amber-500 rounded-full text-[8px] font-bold text-white flex items-center justify-center px-0.5 shadow-[0_0_5px_rgba(245,158,11,0.5)]">{ping>9?'9+':ping}</span>
+                                    )}
+                                    {unread > 0 && !ping && !isAct && (
+                                      <span className="shrink-0 min-w-[14px] h-[14px] bg-rose-500 rounded-full text-[8px] font-bold text-white flex items-center justify-center px-0.5">{unread>99?'99+':unread}</span>
+                                    )}
+
+                                    {/* Pin icon OR close button */}
+                                    {isPinned ? (
+                                      <Pin size={8} className={`shrink-0 ${isAct?'text-indigo-400':'text-zinc-600'}`}/>
+                                    ) : (
+                                      <button
+                                        onClick={e=>{
+                                          e.stopPropagation();
+                                          closeGlobalTab(tab.key);
+                                          if (isAct) { const rem=ordered.filter(t=>t.key!==tab.key); if(rem.length)switchToTab(rem[rem.length-1]); }
+                                        }}
+                                        className="w-3.5 h-3.5 rounded flex items-center justify-center opacity-0 group-hover/tab:opacity-60 hover:!opacity-100 hover:bg-white/20 transition-all shrink-0">
+                                        <X size={8}/>
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            {/* Right scroll arrow */}
+                            <button onClick={()=>scrollBy(1)}
+                              className="shrink-0 w-7 flex items-center justify-center text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors border-l border-white/[0.04]">
+                              <ChevronRight size={13}/>
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Context menu */}
                     {tabContextMenu&&(
                       <>
                         <div className="fixed inset-0 z-40" onClick={()=>setTabContextMenu(null)}/>
-                        <div className="fixed z-50 bg-[#1a1a2e] border border-white/[0.08] rounded-xl shadow-2xl py-1 min-w-[170px] overflow-hidden"
-                          style={{left:tabContextMenu.x, top:tabContextMenu.y}}>
+                        <div className="fixed z-50 bg-[#1a1a2e] border border-white/[0.08] rounded-xl shadow-2xl py-1 min-w-[178px] overflow-hidden"
+                          style={{left:tabContextMenu.x,top:tabContextMenu.y}}>
                           <button onClick={()=>{togglePinGlobalTab(tabContextMenu.key);setTabContextMenu(null);}}
                             className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-300 hover:bg-white/[0.06] transition-colors">
                             <Pin size={12} className="text-indigo-400"/>
                             {pinnedTabKeys.includes(tabContextMenu.key)?'Odepnij zakładkę':'Przypnij zakładkę'}
                           </button>
-                          <button onClick={()=>{
-                            const tab = globalTabs.find(t=>t.key===tabContextMenu.key);
-                            closeGlobalTab(tabContextMenu.key);
-                            if (tab && ordered.find(t=>t.key===tabContextMenu.key) && (
-                              (tab.kind==='ch'&&activeView==='servers'&&activeServer===tab.serverId&&activeChannel===tab.channelId)||
-                              (tab.kind==='dm'&&activeView==='dms'&&activeDmUserId===tab.userId)||
-                              (tab.kind==='gdm'&&activeView==='dms'&&activeGroupDm===tab.groupId)
-                            )) {
-                              const rem = ordered.filter(t=>t.key!==tabContextMenu.key);
-                              if (rem.length) switchToTab(rem[rem.length-1]);
-                            }
-                            setTabContextMenu(null);
-                          }}
-                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-400 hover:bg-white/[0.06] transition-colors">
-                            <X size={12}/> Zamknij zakładkę
-                          </button>
+                          {!pinnedTabKeys.includes(tabContextMenu.key) && (
+                            <button onClick={()=>{
+                              const tab=globalTabs.find(t=>t.key===tabContextMenu.key);
+                              const wasActive = tab && ((tab.kind==='ch'&&activeView==='servers'&&activeServer===tab.serverId&&activeChannel===tab.channelId)||(tab.kind==='dm'&&activeView==='dms'&&activeDmUserId===tab.userId)||(tab.kind==='gdm'&&activeView==='dms'&&activeGroupDm===tab.groupId));
+                              closeGlobalTab(tabContextMenu.key);
+                              if(wasActive){const o2=ordered.filter(t=>t.key!==tabContextMenu.key);if(o2.length)switchToTab(o2[o2.length-1]);}
+                              setTabContextMenu(null);
+                            }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-400 hover:bg-white/[0.06] transition-colors">
+                              <X size={12}/> Zamknij zakładkę
+                            </button>
+                          )}
+                          {pinnedTabKeys.includes(tabContextMenu.key) && (
+                            <div className="px-3 py-2 text-xs text-zinc-600 flex items-center gap-2">
+                              <Lock size={10}/> Odepnij aby zamknąć
+                            </div>
+                          )}
                           <div className="my-1 border-t border-white/[0.06]"/>
                           <button onClick={()=>{
                             ordered.filter(t=>!pinnedTabKeys.includes(t.key)&&t.key!==tabContextMenu.key).forEach(t=>closeGlobalTab(t.key));
                             setTabContextMenu(null);
                           }}
                             className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-500 hover:bg-white/[0.06] transition-colors">
-                            <X size={12}/> Zamknij pozostałe
+                            <X size={12}/> Zamknij nieprzypięte
                           </button>
                         </div>
                       </>
