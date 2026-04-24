@@ -388,13 +388,12 @@ router.delete('/sessions', authMiddleware, async (req: AuthRequest, res: Respons
 // GET /api/auth/me
 router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { rows } = await query(
-      `SELECT u.id, u.username, u.email, u.avatar_url, u.banner_url, u.banner_color, u.bio, u.custom_status, u.status, u.preferred_status,
+    const BASE_SQL = `SELECT u.id, u.username, u.email, u.avatar_url, u.banner_url, u.banner_color, u.bio, u.custom_status, u.status, u.preferred_status,
               u.accent_color, u.compact_messages, u.voice_noise_cancel,
               u.font_size, u.show_timestamps, u.show_chat_avatars, u.message_animations, u.show_link_previews,
               u.privacy_status_visible, u.privacy_typing_visible, u.privacy_read_receipts,
               u.privacy_friend_requests, u.privacy_dm_from_strangers, u.avatar_effect, u.card_effect, u.card_color, u.card_font, u.is_admin,
-              u.active_tag_server_id, st.tag as active_tag, u.theme_id, u.banner_preset, u.tab_limit,
+              u.active_tag_server_id, st.tag as active_tag, u.theme_id, u.banner_preset,
               u.created_at,
               COALESCE(
                 (SELECT json_agg(json_build_object('id', gb.id, 'name', gb.name, 'label', gb.label, 'color', gb.color, 'icon', gb.icon) ORDER BY gb.position)
@@ -403,11 +402,18 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
               ) as badges
        FROM users u
        LEFT JOIN server_tags st ON st.server_id = u.active_tag_server_id
-       WHERE u.id = $1`,
-      [req.user!.id]
-    );
-    if (!rows[0]) return res.status(404).json({ error: 'User not found' });
-    return res.json(rows[0]);
+       WHERE u.id = $1`;
+    let row: any;
+    try {
+      const { rows } = await query(BASE_SQL.replace('u.banner_preset,', 'u.banner_preset, u.tab_limit,'), [req.user!.id]);
+      row = rows[0];
+    } catch {
+      // tab_limit column may not exist on older DB — fall back to query without it
+      const { rows } = await query(BASE_SQL, [req.user!.id]);
+      row = rows[0] ? { ...rows[0], tab_limit: 20 } : null;
+    }
+    if (!row) return res.status(404).json({ error: 'User not found' });
+    return res.json(row);
   } catch (err) {
     return res.status(500).json({ error: 'Internal server error' });
   }

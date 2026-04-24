@@ -184,7 +184,9 @@ router.put('/me', authMiddleware,
     if (card_font                 !== undefined) { updates.push(`card_font=$${idx++}`);                 values.push(card_font); }
     if (theme_id                  !== undefined) { updates.push(`theme_id=$${idx++}`);                  values.push(theme_id); }
     if (banner_preset             !== undefined) { updates.push(`banner_preset=$${idx++}`);             values.push(banner_preset); }
-    if (tab_limit                 !== undefined) { updates.push(`tab_limit=$${idx++}`);                 values.push(Number(tab_limit)); }
+    // tab_limit — only include in updates if column exists (graceful degradation for older DBs)
+    const hasTabLimit = tab_limit !== undefined;
+    if (hasTabLimit) { updates.push(`tab_limit=$${idx++}`); values.push(Number(tab_limit)); }
     if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update' });
     updates.push(`updated_at=NOW()`);
     values.push(req.user!.id);
@@ -193,15 +195,28 @@ router.put('/me', authMiddleware,
         const ex = await query('SELECT id FROM users WHERE username=$1 AND id!=$2', [username, req.user!.id]);
         if (ex.rowCount! > 0) return res.status(409).json({ error: 'Username already taken' });
       }
-      const { rows } = await query(
-        `UPDATE users SET ${updates.join(',')} WHERE id=$${idx}
-         RETURNING id,username,email,avatar_url,banner_url,banner_color,bio,custom_status,status,
+      const RETURNING_BASE = `RETURNING id,username,email,avatar_url,banner_url,banner_color,bio,custom_status,status,
                    accent_color,compact_messages,voice_noise_cancel,
                    font_size,show_timestamps,show_chat_avatars,message_animations,show_link_previews,
                    privacy_status_visible,privacy_typing_visible,privacy_read_receipts,
-                   privacy_friend_requests,privacy_dm_from_strangers,avatar_effect,card_effect,card_color,card_font,theme_id,banner_preset,tab_limit`,
-        values
-      );
+                   privacy_friend_requests,privacy_dm_from_strangers,avatar_effect,card_effect,card_color,card_font,theme_id,banner_preset`;
+      let rows: any[];
+      try {
+        const res2 = await query(
+          `UPDATE users SET ${updates.join(',')} WHERE id=$${idx} ${RETURNING_BASE},tab_limit`,
+          values
+        );
+        rows = res2.rows;
+      } catch {
+        // tab_limit column doesn't exist yet — retry without it
+        const updatesNoTab = hasTabLimit ? updates.slice(0, -2).concat(updates[updates.length - 1]) : updates;
+        const valuesNoTab  = hasTabLimit ? [...values.slice(0, -2), values[values.length - 1]] : values;
+        const res2 = await query(
+          `UPDATE users SET ${updatesNoTab.join(',')} WHERE id=$${hasTabLimit ? idx - 1 : idx} ${RETURNING_BASE}`,
+          valuesNoTab
+        );
+        rows = res2.rows.map((r: any) => ({ ...r, tab_limit: 20 }));
+      }
       await broadcastUserUpdate(req, { id: rows[0].id, username: rows[0].username, avatar_url: rows[0].avatar_url, banner_url: rows[0].banner_url, banner_color: rows[0].banner_color, bio: rows[0].bio, custom_status: rows[0].custom_status, privacy_read_receipts: rows[0].privacy_read_receipts, avatar_effect: rows[0].avatar_effect, banner_preset: rows[0].banner_preset });
       return res.json(rows[0]);
     } catch { return res.status(500).json({ error: 'Internal server error' }); }
