@@ -17574,30 +17574,31 @@ export default function App() {
       {/* ── APP SETTINGS ────────────────────────────────────────────────── */}
       <AnimatePresence>
         {appSettOpen&&currentUser&&(
-          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={()=>setAppSettOpen(false)}>
-            <motion.div initial={{scale:0.96,opacity:0,y:12}} animate={{scale:1,opacity:1,y:0}} exit={{scale:0.96,opacity:0,y:12}}
-              transition={{duration:0.25,ease:[0.16,1,0.3,1]}}
-              onClick={e=>e.stopPropagation()} className={`${gm} w-full max-w-3xl h-[88vh] flex flex-col overflow-hidden`}>
+          <motion.div initial={{opacity:0,x:32}} animate={{opacity:1,x:0}} exit={{opacity:0,x:32}}
+            transition={{duration:0.22,ease:[0.16,1,0.3,1]}}
+            className="fixed inset-0 z-50 flex flex-col" style={{background:'#09090f'}}>
 
-              {/* Header */}
-              <div className="flex items-center justify-between px-6 py-5 border-b border-white/[0.06] shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center">
-                    <Settings size={15} className="text-indigo-400"/>
-                  </div>
-                  <div>
-                    <h2 className="text-base font-bold text-white leading-tight">{t('settings.title')}</h2>
-                    <p className="text-xs text-zinc-600">{currentUser.username}</p>
-                  </div>
-                </div>
-                <button onClick={()=>setAppSettOpen(false)} className="text-zinc-600 hover:text-white transition-colors"><X size={18}/></button>
+            {/* ── TOP BAR ── */}
+            <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/[0.06] shrink-0" style={{background:'rgba(255,255,255,0.02)'}}>
+              <button onClick={()=>setAppSettOpen(false)}
+                className="w-8 h-8 rounded-xl flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-all border border-transparent hover:border-white/[0.08]">
+                <X size={17}/>
+              </button>
+              <div className="w-px h-4 bg-white/[0.08]"/>
+              <div className="w-7 h-7 rounded-lg bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center">
+                <Settings size={13} className="text-indigo-400"/>
               </div>
+              <div className="flex items-baseline gap-2">
+                <h2 className="text-sm font-bold text-white">{t('settings.title')}</h2>
+                <span className="text-xs text-zinc-600">·</span>
+                <span className="text-xs text-zinc-500">{currentUser.username}</span>
+              </div>
+            </div>
 
-              {/* Responsive: flex-col on mobile (tab bar on top), flex-row on sm+ (sidebar) */}
-              <div className="flex flex-col sm:flex-row flex-1 min-h-0 overflow-hidden">
-                {/* Sidebar / Tab bar */}
-                <div className="sm:w-52 shrink-0 border-b sm:border-b-0 sm:border-r border-white/[0.06] p-2 sm:p-3 flex sm:flex-col flex-row gap-0.5 overflow-x-auto overflow-y-auto scrollbar-hide">
+            {/* ── BODY: sidebar + content ── */}
+            <div className="flex flex-col sm:flex-row flex-1 min-h-0 overflow-hidden">
+              {/* Sidebar */}
+              <div className="sm:w-56 shrink-0 border-b sm:border-b-0 sm:border-r border-white/[0.06] p-2 sm:p-4 flex sm:flex-col flex-row gap-0.5 overflow-x-auto overflow-y-auto scrollbar-hide" style={{background:'rgba(255,255,255,0.015)'}}>
                   {/* Grupy zakładek — styl Discord */}
                   {([
                     { group: 'KONTO UŻYTKOWNIKA', items: [
@@ -17657,7 +17658,7 @@ export default function App() {
                 </div>
 
                 {/* Tab content */}
-                <div ref={settContentRef} className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6">
+                <div ref={settContentRef} className="flex-1 overflow-y-auto custom-scrollbar p-5 sm:p-8 max-w-3xl">
                   <AnimatePresence mode="wait">
 
                   {/* ─── KONTO ─── */}
@@ -17758,331 +17759,337 @@ export default function App() {
                   {/* ─── WYGLĄD ─── */}
                   {appSettTab==='appearance'&&(
                     <motion.div key="appearance" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
-                      className="flex flex-col gap-6">
+                      className="flex flex-col gap-8">
 
-                      {/* ── SEKCJA: Czat ─────────────────────────────────── */}
-                      <div id="s-chat" className="scroll-mt-4 flex flex-col gap-5">
-                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pb-1.5 border-b border-white/[0.06]">Personalizacja wyglądu</p>
-
-                      {/* Accent color */}
-                      <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">{t('appearance.accentColor')}</label>
-                        <div className="grid grid-cols-5 gap-2">
-                          {([
-                            {key:'indigo',  label:'Indigo',     cls:'bg-indigo-500'},
-                            {key:'violet',  label:'Fioletowy',  cls:'bg-violet-500'},
-                            {key:'pink',    label:'Różowy',     cls:'bg-pink-500'},
-                            {key:'blue',    label:'Niebieski',  cls:'bg-blue-500'},
-                            {key:'emerald', label:'Zielony',    cls:'bg-emerald-500'},
-                            {key:'teal',    label:'Morski',     cls:'bg-teal-500'},
-                            {key:'cyan',    label:'Cyjan',      cls:'bg-cyan-500'},
-                            {key:'amber',   label:'Bursztynowy',cls:'bg-amber-500'},
-                            {key:'orange',  label:'Pomarańcz', cls:'bg-orange-500'},
-                            {key:'rose',    label:'Karmazyn',  cls:'bg-rose-500'},
-                          ] as const).map(c=>(
-                            <button key={c.key} onClick={()=>saveAccentColor(c.key)}
-                              title={c.label}
-                              className={`h-10 rounded-xl ${c.cls} border-2 transition-all hover:scale-105 flex items-center justify-center ${accentColor===c.key?'border-white scale-105':'border-transparent'}`}>
-                              {accentColor===c.key&&<Check size={14} className="text-white"/>}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Message density */}
-                      <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">{t('appearance.msgDensity')}</label>
-                        <div className="flex flex-col gap-2">
-                          {([
-                            {key:false, label:t('appearance.cozy.label'),    desc:t('appearance.cozy.desc')},
-                            {key:true,  label:t('appearance.compact.label'), desc:t('appearance.compact.desc')},
-                          ] as const).map(opt=>(
-                            <button key={String(opt.key)} onClick={()=>saveCompactMessages(opt.key)}
-                              className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm transition-all ${compactMessages===opt.key?'bg-indigo-500/10 border-indigo-500/30 text-white':'bg-white/[0.02] border-white/[0.05] text-zinc-400 hover:text-zinc-300'}`}>
-                              <div className="text-left">
-                                <p className="font-semibold">{opt.label}</p>
-                                <p className="text-xs text-zinc-600 mt-0.5">{opt.desc}</p>
-                              </div>
-                              {compactMessages===opt.key&&<Check size={13} className="text-indigo-400 shrink-0"/>}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Font size */}
-                      <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">{t('appearance.fontSize')}</label>
-                        <div className="flex gap-2">
-                          {([
-                            {key:'small',  label:t('appearance.fontSize.small'),  sample:'Aa'},
-                            {key:'normal', label:t('appearance.fontSize.normal'), sample:'Aa'},
-                            {key:'large',  label:t('appearance.fontSize.large'),  sample:'Aa'},
-                          ] as const).map(opt=>(
-                            <button key={opt.key} onClick={()=>saveFontSize(opt.key)}
-                              className={`flex-1 flex flex-col items-center gap-1.5 py-3 rounded-xl border text-sm transition-all ${fontSize===opt.key?'bg-indigo-500/10 border-indigo-500/30 text-white':'bg-white/[0.02] border-white/[0.05] text-zinc-400 hover:text-zinc-300'}`}>
-                              <span className={`font-bold ${opt.key==='small'?'text-sm':opt.key==='large'?'text-xl':'text-base'}`}>{opt.sample}</span>
-                              <span className="text-[10px]">{opt.label}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Toggle options */}
-                      <div className="flex flex-col gap-2">
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1 block font-bold">{t('appearance.displayOptions')}</label>
-                        {([
-                          {
-                            key: 'show_timestamps' as const,
-                            label: t('appearance.timestamps.label'),
-                            desc: t('appearance.timestamps.desc'),
-                            value: alwaysShowTimestamps,
-                          },
-                          {
-                            key: 'show_chat_avatars' as const,
-                            label: t('appearance.avatars.label'),
-                            desc: t('appearance.avatars.desc'),
-                            value: showChatAvatars,
-                          },
-                          {
-                            key: 'message_animations' as const,
-                            label: t('appearance.animations.label'),
-                            desc: t('appearance.animations.desc'),
-                            value: messageAnimations,
-                          },
-                          {
-                            key: 'show_link_previews' as const,
-                            label: t('appearance.linkPreview.label'),
-                            desc: t('appearance.linkPreview.desc'),
-                            value: showLinkPreviews,
-                          },
-                        ]).map(opt=>(
-                          <div key={opt.key} className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-3 hover:border-white/[0.09] transition-colors">
-                            <div className="flex-1 min-w-0 mr-4">
-                              <p className="text-sm font-medium text-white">{opt.label}</p>
-                              <p className="text-xs text-zinc-600 mt-0.5">{opt.desc}</p>
-                            </div>
-                            <button onClick={()=>saveTogglePref(opt.key,!opt.value)}
-                              className={`w-11 h-6 rounded-full transition-all shrink-0 relative ${opt.value?'bg-indigo-500':'bg-zinc-700'}`}>
-                              <span className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200"
-                                style={{left: opt.value ? 'calc(100% - 1.375rem)' : '0.125rem'}}/>
-                            </button>
+                      {/* ══ SEKCJA 1: Czat i wygląd ══════════════════════════ */}
+                      <div id="s-chat" className="scroll-mt-4">
+                        <div className="flex items-center gap-2 mb-5">
+                          <div className="w-6 h-6 rounded-lg bg-indigo-500/15 border border-indigo-500/20 flex items-center justify-center shrink-0">
+                            <Palette size={12} className="text-indigo-400"/>
                           </div>
-                        ))}
-                      </div>
-
-                      {/* Streamer mode */}
-                      <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">{t('appearance.streamerMode')}</label>
-                        <div className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-3 hover:border-white/[0.09] transition-colors">
-                          <div className="flex-1 min-w-0 mr-4">
-                            <p className="text-sm font-medium text-white">{t('appearance.streamerMode')}</p>
-                            <p className="text-xs text-zinc-600 mt-0.5">{t('appearance.streamerMode.desc')}</p>
-                          </div>
-                          <button onClick={() => setStreamerMode(p => !p)}
-                            className={`w-11 h-6 rounded-full transition-all shrink-0 relative ${streamerMode ? 'bg-indigo-500' : 'bg-zinc-700'}`}>
-                            <span className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200"
-                              style={{left: streamerMode ? 'calc(100% - 1.375rem)' : '0.125rem'}}/>
-                          </button>
+                          <p className="text-sm font-bold text-white">Czat i wygląd</p>
+                          <div className="flex-1 h-px bg-white/[0.06] ml-1"/>
                         </div>
-                      </div>
-                      </div>{/* end s-chat */}
 
-                      {/* ── SEKCJA: Dostępność / Profil ───────────────────── */}
-                      <div id="s-accessibility" className="scroll-mt-4 flex flex-col gap-5">
-                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pb-1.5 border-b border-white/[0.06]">Profil i efekty</p>
-
-                      {/* ── Server tag selection ── */}
-                      <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1 block font-bold">Tag serwera</label>
-                        <p className="text-xs text-zinc-500 mb-3 leading-relaxed">Wybierz tag który pojawi się przy Twoim nicku wszędzie w Cordynie. Tylko serwery z ustawionym tagiem są dostępne.</p>
-                        {(() => {
-                          const taggedServers = serverList.filter(s => serverTagMap[s.id]);
-                          if (taggedServers.length === 0) {
-                            return <p className="text-xs text-zinc-600 italic py-2">Żaden z Twoich serwerów nie ma ustawionego tagu. Poproś admina serwera o ustawienie tagu w ustawieniach serwera.</p>;
-                          }
-                          return (
-                            <div className="flex flex-col gap-2">
-                              <button
-                                onClick={async () => {
-                                  try {
-                                    await serversApi.setActiveTag(null);
-                                    setActiveTagServerId(null);
-                                    setCurrentUser(p => p ? {...p, active_tag_server_id: null, active_tag: null} : p);
-                                    addToast('Tag zdjęty', 'success');
-                                  } catch { addToast('Błąd', 'error'); }
-                                }}
-                                className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${!activeTagServerId ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
-                                <div className="w-8 h-8 bg-zinc-700/80 rounded-lg flex items-center justify-center shrink-0">
-                                  <X size={13} className="text-zinc-400"/>
-                                </div>
-                                <p className="flex-1 text-sm font-medium text-white text-left">Brak tagu</p>
-                                {!activeTagServerId && <Check size={13} className="text-indigo-400 shrink-0"/>}
-                              </button>
-                              {taggedServers.map(s => (
-                                <button key={s.id}
-                                  onClick={async () => {
-                                    try {
-                                      await serversApi.setActiveTag(s.id);
-                                      setActiveTagServerId(s.id);
-                                      setCurrentUser(p => p ? {...p, active_tag_server_id: s.id, active_tag: serverTagMap[s.id] ?? null} : p);
-                                      addToast('Tag aktywowany!', 'success');
-                                    } catch { addToast('Błąd zmiany tagu', 'error'); }
-                                  }}
-                                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${activeTagServerId === s.id ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
-                                  {s.icon_url
-                                    ? <img src={staticUrl(s.icon_url)} className="w-8 h-8 rounded-lg object-cover shrink-0" alt=""/>
-                                    : <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0 text-white font-bold text-sm">{s.name?.[0]?.toUpperCase()}</div>}
-                                  <div className="flex-1 min-w-0 text-left">
-                                    <p className="text-sm font-medium text-white truncate">{s.name}</p>
-                                    <TagBadge tag={serverTagMap[s.id]!} color={serverTagColorMap[s.id] ?? null} icon={serverTagIconMap[s.id] ?? null} serverInfo={s}/>
-                                  </div>
-                                  {activeTagServerId === s.id && <Check size={13} className="text-indigo-400 shrink-0"/>}
+                        <div className="flex flex-col gap-5">
+                          {/* Accent color */}
+                          <div>
+                            <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">{t('appearance.accentColor')}</label>
+                            <div className="grid grid-cols-10 gap-2">
+                              {([
+                                {key:'indigo',  label:'Indigo',     cls:'bg-indigo-500'},
+                                {key:'violet',  label:'Fioletowy',  cls:'bg-violet-500'},
+                                {key:'pink',    label:'Różowy',     cls:'bg-pink-500'},
+                                {key:'blue',    label:'Niebieski',  cls:'bg-blue-500'},
+                                {key:'emerald', label:'Zielony',    cls:'bg-emerald-500'},
+                                {key:'teal',    label:'Morski',     cls:'bg-teal-500'},
+                                {key:'cyan',    label:'Cyjan',      cls:'bg-cyan-500'},
+                                {key:'amber',   label:'Bursztynowy',cls:'bg-amber-500'},
+                                {key:'orange',  label:'Pomarańcz', cls:'bg-orange-500'},
+                                {key:'rose',    label:'Karmazyn',  cls:'bg-rose-500'},
+                              ] as const).map(c=>(
+                                <button key={c.key} onClick={()=>saveAccentColor(c.key)}
+                                  title={c.label}
+                                  className={`h-8 rounded-xl ${c.cls} border-2 transition-all hover:scale-105 flex items-center justify-center ${accentColor===c.key?'border-white scale-105':'border-transparent opacity-70 hover:opacity-100'}`}>
+                                  {accentColor===c.key&&<Check size={12} className="text-white"/>}
                                 </button>
                               ))}
                             </div>
-                          );
-                        })()}
-                      </div>
-
-                      {/* Avatar effects */}
-                      <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">{t('appearance.avatarEffects')}</label>
-                        {/* Live preview */}
-                        <div className="flex items-center gap-4 mb-4 p-3 bg-white/[0.03] rounded-2xl border border-white/[0.06]">
-                          <div className="relative av-frozen shrink-0" style={{'--av-url':`url("${currentUser?ava(currentUser):''}")`} as React.CSSProperties}>
-                            <img src={currentUser?ava(currentUser):''} className={`w-14 h-14 rounded-2xl object-cover av-eff-${avatarEffect}`} alt="podgląd"/>
                           </div>
-                          <div>
-                            <p className="text-sm font-semibold text-white">{AVATAR_EFFECTS.find(e=>e.key===avatarEffect)?.label ?? t('appearance.noEffect')}</p>
-                            <p className="text-xs text-zinc-500 mt-0.5 leading-snug">{AVATAR_EFFECTS.find(e=>e.key===avatarEffect)?.desc}</p>
-                          </div>
-                        </div>
-                        {/* Effect picker */}
-                        <div className="grid grid-cols-5 gap-2">
-                          {AVATAR_EFFECTS.map(ef=>(
-                            <button key={ef.key} onClick={()=>saveAvatarEffect(ef.key)}
-                              title={ef.label}
-                              className={`relative flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${avatarEffect===ef.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
-                              <div className="relative av-frozen" style={{'--av-url':`url("${currentUser?ava(currentUser):''}")`} as React.CSSProperties}>
-                                <img src={currentUser?ava(currentUser):''} className={`w-9 h-9 rounded-xl object-cover av-eff-${ef.key}`} alt=""/>
-                              </div>
-                              <span className="text-[9px] text-zinc-400 font-medium leading-tight text-center">{ef.label}</span>
-                              {avatarEffect===ef.key&&<span className="absolute top-1 right-1 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={7} className="text-white"/></span>}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
 
-                      {/* Card effect picker */}
-                      <div id="s-card-effect" className="scroll-mt-4">
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Efekt karty profilu</label>
-                        <p className="text-xs text-zinc-500 mb-3 leading-relaxed">Animacja którą widzą inni gdy otwierają Twoją kartę profilu.</p>
-                        {/* Live preview toggle */}
-                        <div className="flex items-center justify-between mb-3">
-                          <p className="text-xs text-zinc-400">Podgląd animacji (twoje ustawienie)</p>
-                          <button onClick={() => { const v = !profileCardAnim; setProfileCardAnim(v); localStorage.setItem('cordyn_profile_card_anim', v ? '1' : '0'); }}
-                            className={`w-11 h-6 rounded-full transition-all shrink-0 relative ${profileCardAnim ? 'bg-indigo-500' : 'bg-zinc-700'}`}>
-                            <span className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200"
-                              style={{left: profileCardAnim ? 'calc(100% - 1.375rem)' : '0.125rem'}}/>
-                          </button>
-                        </div>
-                        {/* Effect grid */}
-                        <div className="grid grid-cols-5 gap-2">
-                          {CARD_EFFECTS.map(ef=>(
-                            <button key={ef.key} onClick={()=>saveCardEffect(ef.key)}
-                              title={ef.label}
-                              className={`relative flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all ${cardEffect===ef.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
-                              <div className={`w-9 h-9 rounded-xl bg-[#0f0f1a] border border-white/10 flex items-center justify-center text-[9px] font-bold text-zinc-400 overflow-hidden`}>
-                                <span className="text-[8px] leading-tight text-center px-0.5 break-all">{ef.label}</span>
-                              </div>
-                              <span className="text-[9px] text-zinc-400 font-medium leading-tight text-center">{ef.label}</span>
-                              {cardEffect===ef.key&&<span className="absolute top-1 right-1 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={7} className="text-white"/></span>}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* ─── Live card preview ─────────────────────────────── */}
-                      {(() => {
-                        const pvCcDef = CARD_COLORS.find(c => c.key === cardColor) ?? CARD_COLORS[0];
-                        const pvCfDef = CARD_FONTS.find(f => f.key === cardFont)   ?? CARD_FONTS[0];
-                        const pvBg    = pvCcDef.hex;
-                        const pvLight = !pvCcDef.dark;
-                        const pvBanner = pvCcDef.bannerGrad;
-                        const pvText  = pvLight ? '#1e293b' : '#ffffff';
-                        const pvSub   = pvLight ? '#475569' : '#94a3b8';
-                        const pvBorder= pvLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.08)';
-                        const pvEffLabel = CARD_EFFECTS.find(e=>e.key===cardEffect)?.label ?? 'Brak';
-                        return (
-                          <div>
-                            <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Podgląd karty profilu</label>
-                            <div className="flex justify-center mb-1">
-                              <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-black/60"
-                                style={{ width: 220, backgroundColor: pvBg, fontFamily: pvCfDef.css, fontSize: pvCfDef.size, border: `1px solid ${pvBorder}` }}>
-                                {/* Banner */}
-                                <div className="h-12 relative" style={{ background: pvBanner }}>
-                                  <div className="absolute -bottom-5 left-3">
-                                    <img src={currentUser ? ava(currentUser) : ''}
-                                      className="w-10 h-10 rounded-xl object-cover border-[3px]"
-                                      style={{ borderColor: pvBg }} alt=""/>
-                                  </div>
-                                </div>
-                                {/* Content */}
-                                <div className="pt-7 px-3 pb-3">
-                                  <p className="text-sm font-bold leading-tight" style={{ color: pvText }}>{currentUser?.username ?? 'Użytkownik'}</p>
-                                  <p className="text-[10px] mt-0.5" style={{ color: pvSub }}>online</p>
-                                  {currentUser?.bio && <p className="text-[10px] mt-2 leading-relaxed opacity-70 line-clamp-2" style={{ color: pvSub }}>{currentUser.bio}</p>}
-                                  <div className="mt-2 pt-2 flex items-center gap-1.5" style={{ borderTop: `1px solid ${pvBorder}` }}>
-                                    <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: pvSub }}>Efekt:</span>
-                                    <span className="text-[9px]" style={{ color: pvText }}>{pvEffLabel}</span>
-                                  </div>
-                                </div>
+                          {/* Density + Font size in a 2-col grid */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {/* Message density */}
+                            <div>
+                              <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('appearance.msgDensity')}</label>
+                              <div className="flex flex-col gap-1.5">
+                                {([
+                                  {key:false, label:t('appearance.cozy.label'),    desc:t('appearance.cozy.desc')},
+                                  {key:true,  label:t('appearance.compact.label'), desc:t('appearance.compact.desc')},
+                                ] as const).map(opt=>(
+                                  <button key={String(opt.key)} onClick={()=>saveCompactMessages(opt.key)}
+                                    className={`flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm transition-all ${compactMessages===opt.key?'bg-indigo-500/10 border-indigo-500/30 text-white':'bg-white/[0.02] border-white/[0.05] text-zinc-400 hover:text-zinc-300'}`}>
+                                    <div className="text-left">
+                                      <p className="font-semibold text-xs">{opt.label}</p>
+                                      <p className="text-[10px] text-zinc-600 mt-0.5">{opt.desc}</p>
+                                    </div>
+                                    {compactMessages===opt.key&&<Check size={12} className="text-indigo-400 shrink-0"/>}
+                                  </button>
+                                ))}
                               </div>
                             </div>
-                            <p className="text-[10px] text-zinc-600 text-center mb-4">Tak będzie wyglądać Twoja karta dla innych</p>
-                          </div>
-                        );
-                      })()}
 
-                      {/* Card color picker */}
-                      <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Kolor tła karty profilu</label>
-                        <p className="text-xs text-zinc-500 mb-3 leading-relaxed">Kolor karty który widzą inni użytkownicy na Twoim profilu.</p>
-                        <div className="grid grid-cols-6 gap-2">
-                          {CARD_COLORS.map(cc=>(
-                            <button key={cc.key} onClick={()=>saveCardColor(cc.key as CardColorKey)}
-                              title={cc.label}
-                              className={`relative flex flex-col items-center gap-1 p-1.5 rounded-xl border transition-all ${cardColor===cc.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
-                              <div className="w-8 h-8 rounded-lg border border-white/10 shrink-0"
-                                style={{ background: cc.bannerGrad }}/>
-                              <span className="text-[8px] text-zinc-400 font-medium leading-tight text-center truncate w-full">{cc.label}</span>
-                              {cardColor===cc.key&&<span className="absolute top-0.5 right-0.5 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={6} className="text-white"/></span>}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Card font picker */}
-                      <div>
-                        <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">Czcionka karty profilu</label>
-                        <p className="text-xs text-zinc-500 mb-3 leading-relaxed">Czcionka tekstu na Twojej karcie profilu widoczna dla innych.</p>
-                        <div className="grid grid-cols-6 gap-2">
-                          {CARD_FONTS.map(cf=>(
-                            <button key={cf.key} onClick={()=>saveCardFont(cf.key as CardFontKey)}
-                              title={cf.label}
-                              className={`relative flex flex-col items-center gap-1 p-1.5 rounded-xl border transition-all ${cardFont===cf.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
-                              <div className="w-8 h-8 rounded-lg bg-[#0f0f1a] border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
-                                {/* fixed 12px so all fonts appear at same visual reference size */}
-                                <span style={{ fontFamily: cf.css, fontSize: '12px', color: '#fff', lineHeight: 1 }}>Aa</span>
+                            {/* Font size */}
+                            <div>
+                              <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('appearance.fontSize')}</label>
+                              <div className="flex gap-1.5">
+                                {([
+                                  {key:'small',  label:t('appearance.fontSize.small'),  sample:'Aa'},
+                                  {key:'normal', label:t('appearance.fontSize.normal'), sample:'Aa'},
+                                  {key:'large',  label:t('appearance.fontSize.large'),  sample:'Aa'},
+                                ] as const).map(opt=>(
+                                  <button key={opt.key} onClick={()=>saveFontSize(opt.key)}
+                                    className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl border text-sm transition-all ${fontSize===opt.key?'bg-indigo-500/10 border-indigo-500/30 text-white':'bg-white/[0.02] border-white/[0.05] text-zinc-400 hover:text-zinc-300'}`}>
+                                    <span className={`font-bold ${opt.key==='small'?'text-sm':opt.key==='large'?'text-xl':'text-base'}`}>{opt.sample}</span>
+                                    <span className="text-[9px]">{opt.label}</span>
+                                  </button>
+                                ))}
                               </div>
-                              <span className="text-[8px] text-zinc-400 font-medium leading-tight text-center truncate w-full">{cf.label}</span>
-                              {cardFont===cf.key&&<span className="absolute top-0.5 right-0.5 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={6} className="text-white"/></span>}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                            </div>
+                          </div>
 
+                          {/* Toggles — compact 2-col */}
+                          <div>
+                            <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('appearance.displayOptions')}</label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {([
+                                { key:'show_timestamps'  as const, label:t('appearance.timestamps.label'),  desc:t('appearance.timestamps.desc'),  value:alwaysShowTimestamps },
+                                { key:'show_chat_avatars' as const, label:t('appearance.avatars.label'),     desc:t('appearance.avatars.desc'),     value:showChatAvatars },
+                                { key:'message_animations' as const, label:t('appearance.animations.label'),  desc:t('appearance.animations.desc'),  value:messageAnimations },
+                                { key:'show_link_previews' as const, label:t('appearance.linkPreview.label'), desc:t('appearance.linkPreview.desc'), value:showLinkPreviews },
+                              ]).map(opt=>(
+                                <div key={opt.key} className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-2xl px-3 py-2.5 hover:border-white/[0.09] transition-colors">
+                                  <div className="flex-1 min-w-0 mr-3">
+                                    <p className="text-xs font-medium text-white">{opt.label}</p>
+                                    <p className="text-[10px] text-zinc-600 mt-0.5 leading-tight">{opt.desc}</p>
+                                  </div>
+                                  <button onClick={()=>saveTogglePref(opt.key,!opt.value)}
+                                    className={`w-9 h-5 rounded-full transition-all shrink-0 relative ${opt.value?'bg-indigo-500':'bg-zinc-700'}`}>
+                                    <span className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-200"
+                                      style={{left: opt.value ? 'calc(100% - 1.125rem)' : '0.125rem'}}/>
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Streamer mode */}
+                          <div className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-2xl px-3 py-2.5 hover:border-white/[0.09] transition-colors">
+                            <div className="flex-1 min-w-0 mr-3">
+                              <p className="text-xs font-medium text-white">{t('appearance.streamerMode')}</p>
+                              <p className="text-[10px] text-zinc-600 mt-0.5 leading-tight">{t('appearance.streamerMode.desc')}</p>
+                            </div>
+                            <button onClick={() => setStreamerMode(p => !p)}
+                              className={`w-9 h-5 rounded-full transition-all shrink-0 relative ${streamerMode ? 'bg-indigo-500' : 'bg-zinc-700'}`}>
+                              <span className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-200"
+                                style={{left: streamerMode ? 'calc(100% - 1.125rem)' : '0.125rem'}}/>
+                            </button>
+                          </div>
+                        </div>
+                      </div>{/* end s-chat */}
+
+                      {/* ══ SEKCJA 2: Profil i tożsamość ══════════════════════ */}
+                      <div id="s-accessibility" className="scroll-mt-4">
+                        <div className="flex items-center gap-2 mb-5">
+                          <div className="w-6 h-6 rounded-lg bg-indigo-500/15 border border-indigo-500/20 flex items-center justify-center shrink-0">
+                            <Users size={12} className="text-indigo-400"/>
+                          </div>
+                          <p className="text-sm font-bold text-white">Profil i tożsamość</p>
+                          <div className="flex-1 h-px bg-white/[0.06] ml-1"/>
+                        </div>
+
+                        <div className="flex flex-col gap-5">
+                          {/* Server tag */}
+                          <div>
+                            <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1 block font-bold">Tag serwera</label>
+                            <p className="text-xs text-zinc-500 mb-3 leading-relaxed">Tag pojawia się przy Twoim nicku wszędzie w Cordynie.</p>
+                            {(() => {
+                              const taggedServers = serverList.filter(s => serverTagMap[s.id]);
+                              if (taggedServers.length === 0) {
+                                return <p className="text-xs text-zinc-600 italic p-3 bg-white/[0.02] border border-white/[0.05] rounded-xl">Żaden z Twoich serwerów nie ma ustawionego tagu.</p>;
+                              }
+                              return (
+                                <div className="flex flex-col gap-1.5">
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        await serversApi.setActiveTag(null);
+                                        setActiveTagServerId(null);
+                                        setCurrentUser(p => p ? {...p, active_tag_server_id: null, active_tag: null} : p);
+                                        addToast('Tag zdjęty', 'success');
+                                      } catch { addToast('Błąd', 'error'); }
+                                    }}
+                                    className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${!activeTagServerId ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+                                    <div className="w-7 h-7 bg-zinc-700/80 rounded-lg flex items-center justify-center shrink-0">
+                                      <X size={12} className="text-zinc-400"/>
+                                    </div>
+                                    <p className="flex-1 text-sm font-medium text-white text-left">Brak tagu</p>
+                                    {!activeTagServerId && <Check size={12} className="text-indigo-400 shrink-0"/>}
+                                  </button>
+                                  {taggedServers.map(s => (
+                                    <button key={s.id}
+                                      onClick={async () => {
+                                        try {
+                                          await serversApi.setActiveTag(s.id);
+                                          setActiveTagServerId(s.id);
+                                          setCurrentUser(p => p ? {...p, active_tag_server_id: s.id, active_tag: serverTagMap[s.id] ?? null} : p);
+                                          addToast('Tag aktywowany!', 'success');
+                                        } catch { addToast('Błąd zmiany tagu', 'error'); }
+                                      }}
+                                      className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${activeTagServerId === s.id ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+                                      {s.icon_url
+                                        ? <img src={staticUrl(s.icon_url)} className="w-7 h-7 rounded-lg object-cover shrink-0" alt=""/>
+                                        : <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0 text-white font-bold text-xs">{s.name?.[0]?.toUpperCase()}</div>}
+                                      <div className="flex-1 min-w-0 text-left">
+                                        <p className="text-sm font-medium text-white truncate">{s.name}</p>
+                                        <TagBadge tag={serverTagMap[s.id]!} color={serverTagColorMap[s.id] ?? null} icon={serverTagIconMap[s.id] ?? null} serverInfo={s}/>
+                                      </div>
+                                      {activeTagServerId === s.id && <Check size={12} className="text-indigo-400 shrink-0"/>}
+                                    </button>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+                          </div>
+
+                          {/* Avatar effects — two-column: preview left, picker right */}
+                          <div>
+                            <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 block font-bold">{t('appearance.avatarEffects')}</label>
+                            <div className="flex gap-3">
+                              {/* Live preview column */}
+                              <div className="flex flex-col items-center gap-2 p-3 bg-white/[0.03] rounded-2xl border border-white/[0.06] shrink-0 w-28">
+                                <div className="relative av-frozen" style={{'--av-url':`url("${currentUser?ava(currentUser):''}")`} as React.CSSProperties}>
+                                  <img src={currentUser?ava(currentUser):''} className={`w-14 h-14 rounded-2xl object-cover av-eff-${avatarEffect}`} alt="podgląd"/>
+                                </div>
+                                <p className="text-[9px] text-zinc-400 font-medium text-center leading-tight">{AVATAR_EFFECTS.find(e=>e.key===avatarEffect)?.label ?? t('appearance.noEffect')}</p>
+                              </div>
+                              {/* Picker grid */}
+                              <div className="flex-1 grid grid-cols-4 gap-1.5 content-start">
+                                {AVATAR_EFFECTS.map(ef=>(
+                                  <button key={ef.key} onClick={()=>saveAvatarEffect(ef.key)}
+                                    title={ef.label}
+                                    className={`relative flex flex-col items-center gap-1 p-1.5 rounded-xl border transition-all ${avatarEffect===ef.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+                                    <div className="relative av-frozen" style={{'--av-url':`url("${currentUser?ava(currentUser):''}")`} as React.CSSProperties}>
+                                      <img src={currentUser?ava(currentUser):''} className={`w-8 h-8 rounded-xl object-cover av-eff-${ef.key}`} alt=""/>
+                                    </div>
+                                    <span className="text-[8px] text-zinc-400 font-medium leading-tight text-center">{ef.label}</span>
+                                    {avatarEffect===ef.key&&<span className="absolute top-0.5 right-0.5 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={6} className="text-white"/></span>}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>{/* end s-accessibility */}
+
+                      {/* ══ SEKCJA 3: Karta profilu ════════════════════════════ */}
+                      <div id="s-card-effect" className="scroll-mt-4">
+                        <div className="flex items-center gap-2 mb-5">
+                          <div className="w-6 h-6 rounded-lg bg-indigo-500/15 border border-indigo-500/20 flex items-center justify-center shrink-0">
+                            <Image size={12} className="text-indigo-400"/>
+                          </div>
+                          <p className="text-sm font-bold text-white">Karta profilu</p>
+                          <div className="flex-1 h-px bg-white/[0.06] ml-1"/>
+                        </div>
+
+                        {/* Two-column layout: left = pickers, right = live preview */}
+                        <div className="flex flex-col lg:flex-row gap-5">
+                          {/* Pickers column */}
+                          <div className="flex-1 flex flex-col gap-5">
+                            {/* Card effect picker */}
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <label className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Efekt animacji</label>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-zinc-500">Podgląd</span>
+                                  <button onClick={() => { const v = !profileCardAnim; setProfileCardAnim(v); localStorage.setItem('cordyn_profile_card_anim', v ? '1' : '0'); }}
+                                    className={`w-8 h-4 rounded-full transition-all shrink-0 relative ${profileCardAnim ? 'bg-indigo-500' : 'bg-zinc-700'}`}>
+                                    <span className="absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all duration-200"
+                                      style={{left: profileCardAnim ? 'calc(100% - 0.875rem)' : '0.125rem'}}/>
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-5 gap-1.5">
+                                {CARD_EFFECTS.map(ef=>(
+                                  <button key={ef.key} onClick={()=>saveCardEffect(ef.key)}
+                                    title={ef.label}
+                                    className={`relative flex flex-col items-center gap-1 p-1.5 rounded-xl border transition-all ${cardEffect===ef.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+                                    <div className="w-8 h-8 rounded-xl bg-[#0f0f1a] border border-white/10 flex items-center justify-center overflow-hidden">
+                                      <span className="text-[7px] leading-tight text-center px-0.5 break-all text-zinc-400">{ef.label}</span>
+                                    </div>
+                                    <span className="text-[8px] text-zinc-400 font-medium leading-tight text-center">{ef.label}</span>
+                                    {cardEffect===ef.key&&<span className="absolute top-0.5 right-0.5 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={6} className="text-white"/></span>}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Card color picker */}
+                            <div>
+                              <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">Kolor tła</label>
+                              <div className="grid grid-cols-6 gap-1.5">
+                                {CARD_COLORS.map(cc=>(
+                                  <button key={cc.key} onClick={()=>saveCardColor(cc.key as CardColorKey)}
+                                    title={cc.label}
+                                    className={`relative flex flex-col items-center gap-0.5 p-1.5 rounded-xl border transition-all ${cardColor===cc.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+                                    <div className="w-7 h-7 rounded-lg border border-white/10 shrink-0"
+                                      style={{ background: cc.bannerGrad }}/>
+                                    <span className="text-[7px] text-zinc-400 font-medium leading-tight text-center truncate w-full">{cc.label}</span>
+                                    {cardColor===cc.key&&<span className="absolute top-0.5 right-0.5 w-2.5 h-2.5 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={5} className="text-white"/></span>}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Card font picker */}
+                            <div>
+                              <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">Czcionka</label>
+                              <div className="grid grid-cols-6 gap-1.5">
+                                {CARD_FONTS.map(cf=>(
+                                  <button key={cf.key} onClick={()=>saveCardFont(cf.key as CardFontKey)}
+                                    title={cf.label}
+                                    className={`relative flex flex-col items-center gap-0.5 p-1.5 rounded-xl border transition-all ${cardFont===cf.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+                                    <div className="w-7 h-7 rounded-lg bg-[#0f0f1a] border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+                                      <span style={{ fontFamily: cf.css, fontSize: '12px', color: '#fff', lineHeight: 1 }}>Aa</span>
+                                    </div>
+                                    <span className="text-[7px] text-zinc-400 font-medium leading-tight text-center truncate w-full">{cf.label}</span>
+                                    {cardFont===cf.key&&<span className="absolute top-0.5 right-0.5 w-2.5 h-2.5 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={5} className="text-white"/></span>}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Live preview column — sticky on large screens */}
+                          {(() => {
+                            const pvCcDef = CARD_COLORS.find(c => c.key === cardColor) ?? CARD_COLORS[0];
+                            const pvCfDef = CARD_FONTS.find(f => f.key === cardFont)   ?? CARD_FONTS[0];
+                            const pvBg    = pvCcDef.hex;
+                            const pvLight = !pvCcDef.dark;
+                            const pvBanner = pvCcDef.bannerGrad;
+                            const pvText  = pvLight ? '#1e293b' : '#ffffff';
+                            const pvSub   = pvLight ? '#475569' : '#94a3b8';
+                            const pvBorder= pvLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.08)';
+                            const pvEffLabel = CARD_EFFECTS.find(e=>e.key===cardEffect)?.label ?? 'Brak';
+                            return (
+                              <div className="flex flex-col items-center gap-2 shrink-0">
+                                <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold self-start lg:self-center">Podgląd</p>
+                                <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-black/60"
+                                  style={{ width: 200, backgroundColor: pvBg, fontFamily: pvCfDef.css, fontSize: pvCfDef.size, border: `1px solid ${pvBorder}` }}>
+                                  <div className="h-12 relative" style={{ background: pvBanner }}>
+                                    <div className="absolute -bottom-5 left-3">
+                                      <img src={currentUser ? ava(currentUser) : ''}
+                                        className="w-10 h-10 rounded-xl object-cover border-[3px]"
+                                        style={{ borderColor: pvBg }} alt=""/>
+                                    </div>
+                                  </div>
+                                  <div className="pt-7 px-3 pb-3">
+                                    <p className="text-sm font-bold leading-tight" style={{ color: pvText }}>{currentUser?.username ?? 'Użytkownik'}</p>
+                                    <p className="text-[10px] mt-0.5" style={{ color: pvSub }}>online</p>
+                                    {currentUser?.bio && <p className="text-[10px] mt-2 leading-relaxed opacity-70 line-clamp-2" style={{ color: pvSub }}>{currentUser.bio}</p>}
+                                    <div className="mt-2 pt-2 flex items-center gap-1.5" style={{ borderTop: `1px solid ${pvBorder}` }}>
+                                      <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: pvSub }}>Efekt:</span>
+                                      <span className="text-[9px]" style={{ color: pvText }}>{pvEffLabel}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <p className="text-[9px] text-zinc-600 text-center max-w-[200px] leading-snug">Tak widzą Cię inni użytkownicy</p>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </div>{/* end s-card-effect */}
+
                     </motion.div>
                   )}
 
@@ -18800,7 +18807,6 @@ export default function App() {
                 </div>
               </div>
             </motion.div>
-          </motion.div>
         )}
       </AnimatePresence>
 
