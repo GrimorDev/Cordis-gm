@@ -6962,6 +6962,10 @@ export default function App() {
   const [activeServer, setActiveServer]       = useState('');
   const [serverReloadKey, setServerReloadKey] = useState(0);
   const [activeChannel, setActiveChannel]     = useState('');
+  // Per-server channel tab bar
+  const [openServerTabs, setOpenServerTabs]   = useState<Record<string,string[]>>(() => { try { return JSON.parse(localStorage.getItem('cordyn_open_tabs')||'{}'); } catch { return {}; } });
+  const [pinnedServerTabs, setPinnedServerTabs] = useState<Record<string,string[]>>(() => { try { return JSON.parse(localStorage.getItem('cordyn_pinned_tabs')||'{}'); } catch { return {}; } });
+  const [tabContextMenu, setTabContextMenu]   = useState<{channelId:string;x:number;y:number}|null>(null);
   const [activeDmUserId, setActiveDmUserId]   = useState('');
   const [isMobileOpen, setIsMobileOpen]       = useState(false);
   const [activeView, setActiveView]           = useState<'servers'|'dms'|'friends'|'admin'>('dms');
@@ -9931,6 +9935,36 @@ export default function App() {
     setSelectedTheme(themeId);
     try { await users.updateMe({ theme_id: themeId }); } catch { /* silent */ }
   };
+  // ── Channel tab bar helpers ───────────────────────────────────────────────
+  const openTab = (serverId: string, channelId: string) => {
+    setOpenServerTabs(prev => {
+      const cur = prev[serverId] ?? [];
+      if (cur.includes(channelId)) return prev;
+      // Max 12 non-pinned tabs — drop the oldest non-pinned if over limit
+      const pinned = pinnedServerTabs[serverId] ?? [];
+      const nonPinned = cur.filter(id => !pinned.includes(id));
+      const trimmed = nonPinned.length >= 12 ? nonPinned.slice(1) : nonPinned;
+      const next = { ...prev, [serverId]: [...pinned, ...trimmed, channelId] };
+      try { localStorage.setItem('cordyn_open_tabs', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const closeTab = (serverId: string, channelId: string) => {
+    setOpenServerTabs(prev => {
+      const next = { ...prev, [serverId]: (prev[serverId]??[]).filter(id=>id!==channelId) };
+      try { localStorage.setItem('cordyn_open_tabs', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const togglePinTab = (serverId: string, channelId: string) => {
+    setPinnedServerTabs(prev => {
+      const cur = prev[serverId] ?? [];
+      const next = { ...prev, [serverId]: cur.includes(channelId) ? cur.filter(id=>id!==channelId) : [channelId,...cur] };
+      try { localStorage.setItem('cordyn_pinned_tabs', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
   const saveAvatarEffect = async (effect: string) => {
     const upd = await users.updateMe({ avatar_effect: effect } as any).catch(() => null);
     if (upd) { setCurrentUser(upd); setEditProf({...upd}); setAvatarEffect(effect); addToast('Efekt avatara zmieniony', 'success'); }
@@ -11808,7 +11842,7 @@ export default function App() {
                       return (
                         <div key={ch.id} className="px-2">
                           <button
-                            onClick={()=>{setActiveChannel(ch.id);setIsMobileOpen(false);setSrvSettOpen(false);setProfileViewId(null);if(activeViewRef.current==='admin')setActiveView('servers');}}
+                            onClick={()=>{setActiveChannel(ch.id);openTab(activeServer,ch.id);setIsMobileOpen(false);setSrvSettOpen(false);setProfileViewId(null);if(activeViewRef.current==='admin')setActiveView('servers');}}
                             onContextMenu={e=>{e.preventDefault();setChCtxMenu({x:e.clientX,y:e.clientY,ch});}}
                             className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${isAct?'bg-indigo-500/15 text-white border border-indigo-500/25 shadow-[inset_3px_0_0_#818cf8]':ping>0?'text-white hover:bg-white/[0.06] border border-amber-500/20 bg-amber-500/5':unread>0?'text-white hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
                             <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
@@ -11888,7 +11922,7 @@ export default function App() {
                           <SortableChannelItem id={ch.id} catId={cat.id} canManage={canManageChannels}>
                           <div className="px-2">
                             <button
-                              onClick={() => { setActiveChannel(ch.id); setIsMobileOpen(false); setSrvSettOpen(false); setProfileViewId(null); if(activeViewRef.current==='admin')setActiveView('servers'); }}
+                              onClick={() => { setActiveChannel(ch.id); openTab(activeServer, ch.id); setIsMobileOpen(false); setSrvSettOpen(false); setProfileViewId(null); if(activeViewRef.current==='admin')setActiveView('servers'); }}
                               onContextMenu={e=>{ e.preventDefault(); setChCtxMenu({x:e.clientX,y:e.clientY,ch}); }}
                               className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${
                                 isAct
@@ -13341,8 +13375,86 @@ export default function App() {
                   </div>
                 </motion.div>
               )}
-              {/* Chat header */}
-              <header className="h-14 border-b border-white/[0.06] flex items-center justify-between px-5 glass-dark border-b border-white/[0.05] z-10 shrink-0 gap-3">
+              {/* ── PER-SERVER CHANNEL TAB BAR ─────────────────────────── */}
+              {activeView==='servers'&&activeServer&&(()=>{
+                const tabs = openServerTabs[activeServer] ?? [];
+                const pinned = pinnedServerTabs[activeServer] ?? [];
+                // ordered: pinned first (in pin order), then others in open order
+                const orderedTabs = [
+                  ...pinned.filter(id=>tabs.includes(id)),
+                  ...tabs.filter(id=>!pinned.includes(id)),
+                ];
+                if (orderedTabs.length === 0) return null;
+                return (
+                  <div className="shrink-0 border-b border-white/[0.05] relative" style={{background:'rgba(255,255,255,0.015)'}}>
+                    <div className="flex overflow-x-auto scrollbar-hide" style={{scrollbarWidth:'none'}}>
+                      {orderedTabs.map(chId => {
+                        const ch = allChs.find(c=>c.id===chId);
+                        if (!ch) return null;
+                        const isAct = activeChannel === chId;
+                        const isPinned = pinned.includes(chId);
+                        const unread = (unreadChs as any)[chId]||0;
+                        const ping = (pingChs as any)[chId]||0;
+                        const ChIcon = ch.type==='forum'?MessageSquare:ch.type==='announcement'?Megaphone:Hash;
+                        return (
+                          <div key={chId}
+                            className={`group/tab relative flex items-center gap-1.5 px-3 py-2 shrink-0 cursor-pointer select-none border-r border-white/[0.05] transition-colors ${
+                              isAct
+                                ? 'bg-indigo-500/10 text-white'
+                                : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'
+                            }`}
+                            style={{minWidth:80, maxWidth:160}}
+                            onClick={()=>setActiveChannel(chId)}
+                            onContextMenu={e=>{e.preventDefault();setTabContextMenu({channelId:chId,x:e.clientX,y:e.clientY});}}>
+                            {/* Active underline */}
+                            {isAct&&<div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-400 rounded-t-full"/>}
+                            {isPinned&&<Pin size={9} className={`shrink-0 ${isAct?'text-indigo-400':'text-zinc-600'}`}/>}
+                            <ChIcon size={12} className={`shrink-0 ${isAct?'text-indigo-400':ping>0?'text-amber-400':unread>0?'text-indigo-400/60':'text-zinc-600'}`}/>
+                            <span className={`text-[11px] truncate flex-1 ${isAct?'font-semibold':ping>0||unread>0?'font-medium text-white/80':'font-medium'}`} style={{maxWidth:90}}>
+                              {ch.name}
+                            </span>
+                            {(ping>0)&&<span className="w-3.5 h-3.5 bg-amber-500 rounded-full text-[8px] font-bold text-white flex items-center justify-center shrink-0">!</span>}
+                            {/* Close button — hidden for pinned until hovered */}
+                            {!isPinned&&(
+                              <button
+                                onClick={e=>{e.stopPropagation();closeTab(activeServer,chId);if(isAct){const rem=orderedTabs.filter(id=>id!==chId);if(rem.length)setActiveChannel(rem[rem.length-1]);}}}
+                                className="w-3.5 h-3.5 rounded flex items-center justify-center opacity-0 group-hover/tab:opacity-100 hover:bg-white/20 transition-all shrink-0">
+                                <X size={8}/>
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {/* Tab context menu */}
+                    {tabContextMenu&&(
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={()=>setTabContextMenu(null)}/>
+                        <div className="fixed z-50 bg-[#1a1a2e] border border-white/[0.08] rounded-xl shadow-2xl py-1 min-w-[160px] overflow-hidden"
+                          style={{left:tabContextMenu.x,top:tabContextMenu.y}}>
+                          <button onClick={()=>{togglePinTab(activeServer,tabContextMenu.channelId);setTabContextMenu(null);}}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-300 hover:bg-white/[0.06] transition-colors">
+                            <Pin size={12} className="text-indigo-400"/>
+                            {(pinnedServerTabs[activeServer]??[]).includes(tabContextMenu.channelId)?'Odepnij zakładkę':'Przypnij zakładkę'}
+                          </button>
+                          <button onClick={()=>{closeTab(activeServer,tabContextMenu.channelId);if(activeChannel===tabContextMenu.channelId){const rem=(openServerTabs[activeServer]??[]).filter(id=>id!==tabContextMenu.channelId);if(rem.length)setActiveChannel(rem[rem.length-1]);}setTabContextMenu(null);}}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-400 hover:bg-white/[0.06] transition-colors">
+                            <X size={12}/> Zamknij zakładkę
+                          </button>
+                          <div className="my-1 border-t border-white/[0.06]"/>
+                          <button onClick={()=>{const tabs=openServerTabs[activeServer]??[];const pinned=pinnedServerTabs[activeServer]??[];tabs.filter(id=>!pinned.includes(id)&&id!==tabContextMenu.channelId).forEach(id=>closeTab(activeServer,id));setTabContextMenu(null);}}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-500 hover:bg-white/[0.06] transition-colors">
+                            <X size={12}/> Zamknij pozostałe
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* ── CHAT HEADER (improved) ─────────────────────────────────── */}
+              <header className="border-b border-white/[0.05] flex items-center justify-between px-5 glass-dark z-10 shrink-0 gap-3" style={{minHeight:52}}>
                 <div className="flex items-center gap-3 min-w-0">
                   {activeView==='dms' ? (activeGroupDm ? (() => {
                     const gc = groupConvs.find(g=>g.id===activeGroupDm);
@@ -13369,17 +13481,43 @@ export default function App() {
                       </div>
                     </div>
                   ) : <h3 className="font-bold text-white text-sm">Wiadomości</h3>) : (
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-7 h-7 rounded-xl bg-indigo-500/15 flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(99,102,241,0.15)]">
-                        {activeCh?.type==='forum' ? <MessageSquare size={16} className="text-indigo-400"/>
-                         : activeCh?.type==='announcement' ? <Megaphone size={16} className="text-indigo-400"/>
-                         : <Hash size={16} className="text-indigo-400"/>}
+                    activeCh ? (
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* Channel type icon with glow */}
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                          activeCh.type==='announcement'
+                            ? 'bg-amber-500/15 shadow-[0_0_12px_rgba(245,158,11,0.2)]'
+                            : activeCh.type==='forum'
+                              ? 'bg-emerald-500/15 shadow-[0_0_12px_rgba(34,197,94,0.2)]'
+                              : 'bg-indigo-500/15 shadow-[0_0_12px_rgba(99,102,241,0.2)]'
+                        }`}>
+                          {activeCh.type==='forum'
+                            ? <MessageSquare size={16} className="text-emerald-400"/>
+                            : activeCh.type==='announcement'
+                              ? <Megaphone size={16} className="text-amber-400"/>
+                              : <Hash size={16} className="text-indigo-400"/>}
+                        </div>
+                        {/* Name + description stack */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <h3 className="font-bold text-white text-[15px] leading-tight truncate">{activeCh.name}</h3>
+                            {activeCh.is_private&&<Lock size={11} className="text-zinc-600 shrink-0"/>}
+                            {activeCh.slowmode_seconds!=null&&activeCh.slowmode_seconds>0&&(
+                              <div className="flex items-center gap-0.5 text-amber-400/70 text-[10px] font-medium shrink-0">
+                                <Clock size={10}/>{activeCh.slowmode_seconds<60?activeCh.slowmode_seconds+'s':Math.floor(activeCh.slowmode_seconds/60)+'min'}
+                              </div>
+                            )}
+                          </div>
+                          {activeCh.description ? (
+                            <p className="text-xs text-zinc-500 truncate leading-tight mt-0.5 hidden lg:block max-w-sm">{activeCh.description}</p>
+                          ) : (
+                            <p className="text-[10px] text-zinc-700 hidden lg:block leading-tight mt-0.5">
+                              {activeCh.type==='announcement'?'Kanał ogłoszeń':activeCh.type==='forum'?'Kanał forum':'Kanał tekstowy'}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <h3 className="font-bold text-white text-sm truncate">{activeCh?.name||activeChannel}</h3>
-                        {activeCh?.description&&<p className="text-xs text-zinc-500 truncate hidden lg:block">{activeCh.description}</p>}
-                      </div>
-                    </div>
+                    ) : <h3 className="font-bold text-white text-sm">Wybierz kanał</h3>
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
@@ -13427,19 +13565,11 @@ export default function App() {
                   </div>
                   )}
                   {activeView==='servers'&&activeCh?.type==='text'&&(
-                    <>
-                      {activeCh.slowmode_seconds!=null&&activeCh.slowmode_seconds>0&&(
-                        <div title={`Tryb wolny: ${activeCh.slowmode_seconds<60?activeCh.slowmode_seconds+'s':activeCh.slowmode_seconds<3600?Math.floor(activeCh.slowmode_seconds/60)+'min':Math.floor(activeCh.slowmode_seconds/3600)+'h'}`}
-                          className="flex items-center gap-1 text-amber-400/70 px-2 py-1 bg-amber-500/10 rounded-lg text-[11px] font-medium">
-                          <Clock size={11}/>{activeCh.slowmode_seconds<60?activeCh.slowmode_seconds+'s':activeCh.slowmode_seconds<3600?Math.floor(activeCh.slowmode_seconds/60)+'min':Math.floor(activeCh.slowmode_seconds/3600)+'h'}
-                        </div>
-                      )}
-                      <button onClick={async()=>{setShowPinned(v=>{const next=!v;if(next){messagesApi.listPinned(activeChannel!).then(setPinnedMsgs).catch(()=>{});}return next;})} }
-                        title="Przypięte wiadomości"
-                        className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-150 active:scale-95 ${showPinned?'text-amber-400 bg-amber-500/15':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07]'}`}>
-                        <Pin size={14}/>
-                      </button>
-                    </>
+                    <button onClick={async()=>{setShowPinned(v=>{const next=!v;if(next){messagesApi.listPinned(activeChannel!).then(setPinnedMsgs).catch(()=>{});}return next;})} }
+                      title="Przypięte wiadomości"
+                      className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-150 active:scale-95 ${showPinned?'text-amber-400 bg-amber-500/15':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07]'}`}>
+                      <Pin size={14}/>
+                    </button>
                   )}
                   <div className="relative">
                     <button onClick={()=>setShowDmMenu(v=>!v)} className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-150 active:scale-95 ${showDmMenu?'text-white bg-white/[0.1]':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07]'}`}>
