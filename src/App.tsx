@@ -346,6 +346,24 @@ const fmtGameDur = (startMs: number): string => {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Toast = { id: string; msg: string; type: 'info'|'success'|'error'|'warn'; onConfirm?: ()=>void; onClick?: ()=>void; avatar?: string|null; senderName?: string };
+type GlobalTabInfo = {
+  key: string;       // 'ch:serverId:channelId' | 'dm:userId' | 'gdm:groupId'
+  kind: 'ch'|'dm'|'gdm';
+  name: string;      // display label (cached so it shows even off current server)
+  // channel-specific
+  serverId?: string;
+  channelId?: string;
+  chType?: string;   // 'text'|'announcement'|'forum'
+  serverName?: string;
+  serverIcon?: string;
+  // dm-specific
+  userId?: string;
+  userAvatar?: string;
+  userStatus?: string;
+  // gdm-specific
+  groupId?: string;
+  groupIcon?: string;
+};
 type CallState = {
   type: 'voice_channel' | 'dm_voice' | 'dm_video';
   channelId?: string; channelName?: string; serverId?: string;
@@ -6962,10 +6980,11 @@ export default function App() {
   const [activeServer, setActiveServer]       = useState('');
   const [serverReloadKey, setServerReloadKey] = useState(0);
   const [activeChannel, setActiveChannel]     = useState('');
-  // Per-server channel tab bar
-  const [openServerTabs, setOpenServerTabs]   = useState<Record<string,string[]>>(() => { try { return JSON.parse(localStorage.getItem('cordyn_open_tabs')||'{}'); } catch { return {}; } });
-  const [pinnedServerTabs, setPinnedServerTabs] = useState<Record<string,string[]>>(() => { try { return JSON.parse(localStorage.getItem('cordyn_pinned_tabs')||'{}'); } catch { return {}; } });
-  const [tabContextMenu, setTabContextMenu]   = useState<{channelId:string;x:number;y:number}|null>(null);
+  // ── Global tab bar (channels from any server + DMs in one row) ──────────
+  const [globalTabs, setGlobalTabs]           = useState<GlobalTabInfo[]>(() => { try { return JSON.parse(localStorage.getItem('cordyn_gtabs')||'[]'); } catch { return []; } });
+  const [pinnedTabKeys, setPinnedTabKeys]     = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('cordyn_ptabs')||'[]'); } catch { return []; } });
+  const [tabContextMenu, setTabContextMenu]   = useState<{key:string;x:number;y:number}|null>(null);
+  const pendingTabChannelRef                  = useRef<string|null>(null);
   const [activeDmUserId, setActiveDmUserId]   = useState('');
   const [isMobileOpen, setIsMobileOpen]       = useState(false);
   const [activeView, setActiveView]           = useState<'servers'|'dms'|'friends'|'admin'>('dms');
@@ -8999,9 +9018,14 @@ export default function App() {
       emojisApi.list(activeServer).then(emojis => {
         setServerEmojis(p => new Map(p).set(activeServer, emojis));
       }).catch(() => {});
-      // Always auto-select first non-voice channel when switching servers
+      // Auto-select channel: prefer pending (tab click cross-server), else first non-voice
       const first = s.categories.flatMap(c => c.channels).find(ch => ch.type !== 'voice');
-      setActiveChannel(first?.id || '');
+      if (pendingTabChannelRef.current) {
+        setActiveChannel(pendingTabChannelRef.current);
+        pendingTabChannelRef.current = null;
+      } else {
+        setActiveChannel(first?.id || '');
+      }
     }).catch(console.error);
     // Load current voice channel occupants from Redis (initial state)
     channelsApi.voiceUsers(activeServer).then(vu => {
@@ -9935,34 +9959,64 @@ export default function App() {
     setSelectedTheme(themeId);
     try { await users.updateMe({ theme_id: themeId }); } catch { /* silent */ }
   };
-  // ── Channel tab bar helpers ───────────────────────────────────────────────
-  const openTab = (serverId: string, channelId: string) => {
-    setOpenServerTabs(prev => {
-      const cur = prev[serverId] ?? [];
-      if (cur.includes(channelId)) return prev;
-      // Max 12 non-pinned tabs — drop the oldest non-pinned if over limit
-      const pinned = pinnedServerTabs[serverId] ?? [];
-      const nonPinned = cur.filter(id => !pinned.includes(id));
-      const trimmed = nonPinned.length >= 12 ? nonPinned.slice(1) : nonPinned;
-      const next = { ...prev, [serverId]: [...pinned, ...trimmed, channelId] };
-      try { localStorage.setItem('cordyn_open_tabs', JSON.stringify(next)); } catch {}
+  // ── Global tab bar helpers ────────────────────────────────────────────────
+  const MAX_UNPINNED_TABS = 14;
+  const openGlobalTab = (tab: GlobalTabInfo) => {
+    setGlobalTabs(prev => {
+      if (prev.some(t => t.key === tab.key)) {
+        // Update cached info (name, avatar, status might have changed)
+        const updated = prev.map(t => t.key === tab.key ? { ...t, ...tab } : t);
+        try { localStorage.setItem('cordyn_gtabs', JSON.stringify(updated)); } catch {}
+        return updated;
+      }
+      const pinned = pinnedTabKeys; // closure
+      const nonPinned = prev.filter(t => !pinned.includes(t.key));
+      const trimmed = nonPinned.length >= MAX_UNPINNED_TABS ? nonPinned.slice(1) : nonPinned;
+      const next = [...prev.filter(t => pinned.includes(t.key)), ...trimmed, tab];
+      try { localStorage.setItem('cordyn_gtabs', JSON.stringify(next)); } catch {}
       return next;
     });
   };
-  const closeTab = (serverId: string, channelId: string) => {
-    setOpenServerTabs(prev => {
-      const next = { ...prev, [serverId]: (prev[serverId]??[]).filter(id=>id!==channelId) };
-      try { localStorage.setItem('cordyn_open_tabs', JSON.stringify(next)); } catch {}
+  const closeGlobalTab = (key: string) => {
+    setGlobalTabs(prev => {
+      const next = prev.filter(t => t.key !== key);
+      try { localStorage.setItem('cordyn_gtabs', JSON.stringify(next)); } catch {}
+      return next;
+    });
+    setPinnedTabKeys(prev => {
+      const next = prev.filter(k => k !== key);
+      try { localStorage.setItem('cordyn_ptabs', JSON.stringify(next)); } catch {}
       return next;
     });
   };
-  const togglePinTab = (serverId: string, channelId: string) => {
-    setPinnedServerTabs(prev => {
-      const cur = prev[serverId] ?? [];
-      const next = { ...prev, [serverId]: cur.includes(channelId) ? cur.filter(id=>id!==channelId) : [channelId,...cur] };
-      try { localStorage.setItem('cordyn_pinned_tabs', JSON.stringify(next)); } catch {}
+  const togglePinGlobalTab = (key: string) => {
+    setPinnedTabKeys(prev => {
+      const next = prev.includes(key) ? prev.filter(k => k !== key) : [key, ...prev];
+      try { localStorage.setItem('cordyn_ptabs', JSON.stringify(next)); } catch {}
       return next;
     });
+  };
+  const switchToTab = (tab: GlobalTabInfo) => {
+    if (tab.kind === 'ch' && tab.serverId && tab.channelId) {
+      if (activeServer !== tab.serverId) {
+        pendingTabChannelRef.current = tab.channelId;
+        setActiveServer(tab.serverId);
+        setServerFull(null);
+        setActiveView('servers');
+      } else {
+        setActiveChannel(tab.channelId);
+        setActiveView('servers');
+      }
+    } else if (tab.kind === 'dm' && tab.userId) {
+      setActiveDmUserId(tab.userId);
+      setActiveGroupDm(null);
+      setActiveView('dms');
+      setUnreadDms(p => ({ ...p, [tab.userId!]: 0 }));
+    } else if (tab.kind === 'gdm' && tab.groupId) {
+      setActiveGroupDm(tab.groupId);
+      setActiveDmUserId('');
+      setActiveView('dms');
+    }
   };
 
   const saveAvatarEffect = async (effect: string) => {
@@ -11842,7 +11896,7 @@ export default function App() {
                       return (
                         <div key={ch.id} className="px-2">
                           <button
-                            onClick={()=>{setActiveChannel(ch.id);openTab(activeServer,ch.id);setIsMobileOpen(false);setSrvSettOpen(false);setProfileViewId(null);if(activeViewRef.current==='admin')setActiveView('servers');}}
+                            onClick={()=>{setActiveChannel(ch.id);openGlobalTab({key:`ch:${activeServer}:${ch.id}`,kind:'ch',name:ch.name,chType:ch.type,serverId:activeServer,channelId:ch.id,serverName:serverFull?.name,serverIcon:serverFull?.icon_url??undefined});setIsMobileOpen(false);setSrvSettOpen(false);setProfileViewId(null);if(activeViewRef.current==='admin')setActiveView('servers');}}
                             onContextMenu={e=>{e.preventDefault();setChCtxMenu({x:e.clientX,y:e.clientY,ch});}}
                             className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${isAct?'bg-indigo-500/15 text-white border border-indigo-500/25 shadow-[inset_3px_0_0_#818cf8]':ping>0?'text-white hover:bg-white/[0.06] border border-amber-500/20 bg-amber-500/5':unread>0?'text-white hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
                             <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
@@ -11922,7 +11976,7 @@ export default function App() {
                           <SortableChannelItem id={ch.id} catId={cat.id} canManage={canManageChannels}>
                           <div className="px-2">
                             <button
-                              onClick={() => { setActiveChannel(ch.id); openTab(activeServer, ch.id); setIsMobileOpen(false); setSrvSettOpen(false); setProfileViewId(null); if(activeViewRef.current==='admin')setActiveView('servers'); }}
+                              onClick={() => { setActiveChannel(ch.id); openGlobalTab({key:`ch:${activeServer}:${ch.id}`,kind:'ch',name:ch.name,chType:ch.type,serverId:activeServer,channelId:ch.id,serverName:serverFull?.name,serverIcon:serverFull?.icon_url??undefined}); setIsMobileOpen(false); setSrvSettOpen(false); setProfileViewId(null); if(activeViewRef.current==='admin')setActiveView('servers'); }}
                               onContextMenu={e=>{ e.preventDefault(); setChCtxMenu({x:e.clientX,y:e.clientY,ch}); }}
                               className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${
                                 isAct
@@ -12062,6 +12116,7 @@ export default function App() {
                       setActiveGroupDm(gc.id);
                       setActiveDmUserId('');
                       setUnreadGroupDms(p => ({ ...p, [gc.id]: 0 }));
+                      openGlobalTab({key:`gdm:${gc.id}`,kind:'gdm',name:gc.name||'Grupa',groupId:gc.id,groupIcon:gc.icon_url??undefined});
                       if (!groupMessages[gc.id]) {
                         const msgs = await groupDmApi.messages(gc.id).catch(()=>[]);
                         setGroupMessages(p=>({...p,[gc.id]:msgs}));
@@ -12090,7 +12145,7 @@ export default function App() {
                 const unread = unreadDms[dm.other_user_id] || 0;
                 const isActive = activeDmUserId===dm.other_user_id;
                 return (
-                  <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setActiveGroupDm(null); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); setProfileViewId(null); }}
+                  <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setActiveGroupDm(null); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); setProfileViewId(null); openGlobalTab({key:`dm:${dm.other_user_id}`,kind:'dm',name:dm.other_username,userId:dm.other_user_id,userAvatar:dm.other_avatar??undefined,userStatus:dm.other_status}); }}
                     onContextMenu={e => { e.preventDefault(); const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setDmCtxMenu({ x: e.clientX, y: Math.min(e.clientY, window.innerHeight - 300), dm }); }}
                     className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/15 text-white border border-indigo-500/25 shadow-[inset_3px_0_0_#818cf8]':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
                     <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava({avatar_url:dm.other_avatar,username:dm.other_username})}")`} as React.CSSProperties}
@@ -13375,74 +13430,152 @@ export default function App() {
                   </div>
                 </motion.div>
               )}
-              {/* ── PER-SERVER CHANNEL TAB BAR ─────────────────────────── */}
-              {activeView==='servers'&&activeServer&&(()=>{
-                const tabs = openServerTabs[activeServer] ?? [];
-                const pinned = pinnedServerTabs[activeServer] ?? [];
-                // ordered: pinned first (in pin order), then others in open order
-                const orderedTabs = [
-                  ...pinned.filter(id=>tabs.includes(id)),
-                  ...tabs.filter(id=>!pinned.includes(id)),
+              {/* ── GLOBAL CHANNEL / DM TAB BAR ────────────────────────── */}
+              {globalTabs.length > 0 && (()=>{
+                // Pinned tabs first, then others in open order
+                const ordered = [
+                  ...pinnedTabKeys.filter(k => globalTabs.some(t=>t.key===k)).map(k=>globalTabs.find(t=>t.key===k)!),
+                  ...globalTabs.filter(t => !pinnedTabKeys.includes(t.key)),
                 ];
-                if (orderedTabs.length === 0) return null;
                 return (
-                  <div className="shrink-0 border-b border-white/[0.05] relative" style={{background:'rgba(255,255,255,0.015)'}}>
-                    <div className="flex overflow-x-auto scrollbar-hide" style={{scrollbarWidth:'none'}}>
-                      {orderedTabs.map(chId => {
-                        const ch = allChs.find(c=>c.id===chId);
-                        if (!ch) return null;
-                        const isAct = activeChannel === chId;
-                        const isPinned = pinned.includes(chId);
-                        const unread = (unreadChs as any)[chId]||0;
-                        const ping = (pingChs as any)[chId]||0;
-                        const ChIcon = ch.type==='forum'?MessageSquare:ch.type==='announcement'?Megaphone:Hash;
+                  <div className="shrink-0 border-b border-white/[0.05] relative" style={{background:'rgba(255,255,255,0.012)'}}>
+                    <div className="flex overflow-x-auto" style={{scrollbarWidth:'none',msOverflowStyle:'none'} as React.CSSProperties}>
+                      {ordered.map(tab => {
+                        const isPinned = pinnedTabKeys.includes(tab.key);
+                        // Determine if this tab is currently active
+                        const isAct =
+                          tab.kind==='ch'  ? (activeView==='servers' && activeServer===tab.serverId && activeChannel===tab.channelId) :
+                          tab.kind==='dm'  ? (activeView==='dms' && !activeGroupDm && activeDmUserId===tab.userId) :
+                          /* gdm */          (activeView==='dms' && activeGroupDm===tab.groupId);
+                        // Unread badge
+                        const ping  = tab.kind==='ch' ? ((pingChs as any)[tab.channelId!]||0) : 0;
+                        const unread= tab.kind==='ch'  ? ((unreadChs as any)[tab.channelId!]||0)
+                                    : tab.kind==='dm'  ? (unreadDms[tab.userId!]||0)
+                                    : (unreadGroupDms[tab.groupId!]||0);
+                        // Fresh name/avatar from live state if possible
+                        const liveDm = tab.kind==='dm' ? dmConvs.find(d=>d.other_user_id===tab.userId) : null;
+                        const liveGc = tab.kind==='gdm' ? groupConvs.find(g=>g.id===tab.groupId) : null;
+                        const displayName = liveDm?.other_username ?? liveGc?.name ?? tab.name;
+                        const srv = tab.kind==='ch' ? serverList.find(s=>s.id===tab.serverId) : null;
+
                         return (
-                          <div key={chId}
-                            className={`group/tab relative flex items-center gap-1.5 px-3 py-2 shrink-0 cursor-pointer select-none border-r border-white/[0.05] transition-colors ${
-                              isAct
-                                ? 'bg-indigo-500/10 text-white'
-                                : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'
+                          <div key={tab.key}
+                            className={`group/tab relative flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 shrink-0 cursor-pointer select-none border-r border-white/[0.04] transition-all duration-100 ${
+                              isAct ? 'bg-indigo-500/10 text-white' : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04]'
                             }`}
-                            style={{minWidth:80, maxWidth:160}}
-                            onClick={()=>setActiveChannel(chId)}
-                            onContextMenu={e=>{e.preventDefault();setTabContextMenu({channelId:chId,x:e.clientX,y:e.clientY});}}>
+                            style={{minWidth:72, maxWidth:148}}
+                            onClick={()=>switchToTab(tab)}
+                            onContextMenu={e=>{e.preventDefault();setTabContextMenu({key:tab.key,x:e.clientX,y:e.clientY});}}>
+
                             {/* Active underline */}
-                            {isAct&&<div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-400 rounded-t-full"/>}
-                            {isPinned&&<Pin size={9} className={`shrink-0 ${isAct?'text-indigo-400':'text-zinc-600'}`}/>}
-                            <ChIcon size={12} className={`shrink-0 ${isAct?'text-indigo-400':ping>0?'text-amber-400':unread>0?'text-indigo-400/60':'text-zinc-600'}`}/>
-                            <span className={`text-[11px] truncate flex-1 ${isAct?'font-semibold':ping>0||unread>0?'font-medium text-white/80':'font-medium'}`} style={{maxWidth:90}}>
-                              {ch.name}
-                            </span>
-                            {(ping>0)&&<span className="w-3.5 h-3.5 bg-amber-500 rounded-full text-[8px] font-bold text-white flex items-center justify-center shrink-0">!</span>}
-                            {/* Close button — hidden for pinned until hovered */}
-                            {!isPinned&&(
-                              <button
-                                onClick={e=>{e.stopPropagation();closeTab(activeServer,chId);if(isAct){const rem=orderedTabs.filter(id=>id!==chId);if(rem.length)setActiveChannel(rem[rem.length-1]);}}}
-                                className="w-3.5 h-3.5 rounded flex items-center justify-center opacity-0 group-hover/tab:opacity-100 hover:bg-white/20 transition-all shrink-0">
-                                <X size={8}/>
-                              </button>
+                            {isAct&&<div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-400 rounded-t-full"/>}
+
+                            {/* Icon area */}
+                            {tab.kind==='ch' ? (
+                              <div className="relative shrink-0">
+                                {/* Tiny server favicon */}
+                                {srv?.icon_url
+                                  ? <img src={staticUrl(srv.icon_url)} className="w-4 h-4 rounded-md object-cover" alt=""/>
+                                  : <div className="w-4 h-4 rounded-md bg-indigo-600 flex items-center justify-center">
+                                      <span className="text-[7px] font-bold text-white leading-none">{(srv?.name||tab.serverName||'?')[0]?.toUpperCase()}</span>
+                                    </div>
+                                }
+                                {/* Channel type badge */}
+                                <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full flex items-center justify-center ${
+                                  tab.chType==='announcement' ? 'bg-amber-500/90' : tab.chType==='forum' ? 'bg-emerald-500/90' : 'bg-indigo-500/90'
+                                }`}>
+                                  {tab.chType==='announcement'
+                                    ? <Megaphone size={6} className="text-white"/>
+                                    : tab.chType==='forum'
+                                      ? <MessageSquare size={6} className="text-white"/>
+                                      : <Hash size={6} className="text-white"/>
+                                  }
+                                </div>
+                              </div>
+                            ) : tab.kind==='dm' ? (
+                              <div className="relative shrink-0">
+                                <img src={ava({avatar_url:liveDm?.other_avatar??tab.userAvatar??null,username:displayName})} className="w-4 h-4 rounded-full object-cover" alt=""/>
+                                <StatusBadge status={liveDm?.other_status??tab.userStatus??'offline'} size={5} className="absolute -bottom-0.5 -right-0.5"/>
+                              </div>
+                            ) : (
+                              <div className="w-4 h-4 rounded-md bg-indigo-500/20 flex items-center justify-center shrink-0 overflow-hidden">
+                                {liveGc?.icon_url||tab.groupIcon
+                                  ? <img src={staticUrl(liveGc?.icon_url||tab.groupIcon!)} className="w-full h-full object-cover" alt=""/>
+                                  : <Users size={8} className="text-indigo-400"/>
+                                }
+                              </div>
                             )}
+
+                            {/* Label */}
+                            <span className={`text-[11px] truncate flex-1 min-w-0 ${isAct?'font-semibold':unread>0||ping>0?'font-medium text-white/90':'font-medium'}`}>
+                              {displayName}
+                            </span>
+
+                            {/* Unread / ping badge */}
+                            {ping > 0 && !isAct && (
+                              <span className="shrink-0 min-w-[14px] h-[14px] bg-amber-500 rounded-full text-[8px] font-bold text-white flex items-center justify-center px-0.5 shadow-[0_0_6px_rgba(245,158,11,0.5)]">
+                                {ping > 9 ? '9+' : ping}
+                              </span>
+                            )}
+                            {unread > 0 && !ping && !isAct && (
+                              <span className="shrink-0 min-w-[14px] h-[14px] bg-rose-500 rounded-full text-[8px] font-bold text-white flex items-center justify-center px-0.5">
+                                {unread > 99 ? '99+' : unread}
+                              </span>
+                            )}
+
+                            {/* Pin indicator */}
+                            {isPinned && <Pin size={8} className={`shrink-0 ${isAct?'text-indigo-400':'text-zinc-600'}`}/>}
+
+                            {/* Close button */}
+                            <button
+                              onClick={e=>{
+                                e.stopPropagation();
+                                closeGlobalTab(tab.key);
+                                if (isAct) {
+                                  const rem = ordered.filter(t=>t.key!==tab.key);
+                                  if (rem.length) switchToTab(rem[rem.length-1]);
+                                }
+                              }}
+                              className="w-3.5 h-3.5 rounded flex items-center justify-center opacity-0 group-hover/tab:opacity-100 hover:bg-white/20 transition-all shrink-0 ml-0.5">
+                              <X size={8}/>
+                            </button>
                           </div>
                         );
                       })}
                     </div>
+
                     {/* Tab context menu */}
                     {tabContextMenu&&(
                       <>
                         <div className="fixed inset-0 z-40" onClick={()=>setTabContextMenu(null)}/>
-                        <div className="fixed z-50 bg-[#1a1a2e] border border-white/[0.08] rounded-xl shadow-2xl py-1 min-w-[160px] overflow-hidden"
-                          style={{left:tabContextMenu.x,top:tabContextMenu.y}}>
-                          <button onClick={()=>{togglePinTab(activeServer,tabContextMenu.channelId);setTabContextMenu(null);}}
+                        <div className="fixed z-50 bg-[#1a1a2e] border border-white/[0.08] rounded-xl shadow-2xl py-1 min-w-[170px] overflow-hidden"
+                          style={{left:tabContextMenu.x, top:tabContextMenu.y}}>
+                          <button onClick={()=>{togglePinGlobalTab(tabContextMenu.key);setTabContextMenu(null);}}
                             className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-300 hover:bg-white/[0.06] transition-colors">
                             <Pin size={12} className="text-indigo-400"/>
-                            {(pinnedServerTabs[activeServer]??[]).includes(tabContextMenu.channelId)?'Odepnij zakładkę':'Przypnij zakładkę'}
+                            {pinnedTabKeys.includes(tabContextMenu.key)?'Odepnij zakładkę':'Przypnij zakładkę'}
                           </button>
-                          <button onClick={()=>{closeTab(activeServer,tabContextMenu.channelId);if(activeChannel===tabContextMenu.channelId){const rem=(openServerTabs[activeServer]??[]).filter(id=>id!==tabContextMenu.channelId);if(rem.length)setActiveChannel(rem[rem.length-1]);}setTabContextMenu(null);}}
+                          <button onClick={()=>{
+                            const tab = globalTabs.find(t=>t.key===tabContextMenu.key);
+                            closeGlobalTab(tabContextMenu.key);
+                            if (tab && ordered.find(t=>t.key===tabContextMenu.key) && (
+                              (tab.kind==='ch'&&activeView==='servers'&&activeServer===tab.serverId&&activeChannel===tab.channelId)||
+                              (tab.kind==='dm'&&activeView==='dms'&&activeDmUserId===tab.userId)||
+                              (tab.kind==='gdm'&&activeView==='dms'&&activeGroupDm===tab.groupId)
+                            )) {
+                              const rem = ordered.filter(t=>t.key!==tabContextMenu.key);
+                              if (rem.length) switchToTab(rem[rem.length-1]);
+                            }
+                            setTabContextMenu(null);
+                          }}
                             className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-400 hover:bg-white/[0.06] transition-colors">
                             <X size={12}/> Zamknij zakładkę
                           </button>
                           <div className="my-1 border-t border-white/[0.06]"/>
-                          <button onClick={()=>{const tabs=openServerTabs[activeServer]??[];const pinned=pinnedServerTabs[activeServer]??[];tabs.filter(id=>!pinned.includes(id)&&id!==tabContextMenu.channelId).forEach(id=>closeTab(activeServer,id));setTabContextMenu(null);}}
+                          <button onClick={()=>{
+                            ordered.filter(t=>!pinnedTabKeys.includes(t.key)&&t.key!==tabContextMenu.key).forEach(t=>closeGlobalTab(t.key));
+                            setTabContextMenu(null);
+                          }}
                             className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-500 hover:bg-white/[0.06] transition-colors">
                             <X size={12}/> Zamknij pozostałe
                           </button>
