@@ -394,7 +394,7 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
               u.font_size, u.show_timestamps, u.show_chat_avatars, u.message_animations, u.show_link_previews,
               u.privacy_status_visible, u.privacy_typing_visible, u.privacy_read_receipts,
               u.privacy_friend_requests, u.privacy_dm_from_strangers, u.avatar_effect, u.card_effect, u.card_color, u.card_font, u.is_admin,
-              u.active_tag_server_id, st.tag as active_tag, u.theme_id, u.banner_preset,
+              u.active_tag_server_id, st.tag as active_tag, u.theme_id, u.banner_preset, u.tab_limit,
               u.created_at,
               COALESCE(
                 (SELECT json_agg(json_build_object('id', gb.id, 'name', gb.name, 'label', gb.label, 'color', gb.color, 'icon', gb.icon) ORDER BY gb.position)

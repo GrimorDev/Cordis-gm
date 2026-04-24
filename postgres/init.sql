@@ -444,3 +444,6 @@ ANALYZE dm_messages;
 ANALYZE friends;
 ANALYZE server_members;
 ANALYZE users;
+
+-- ── Tab limit preference ──────────────────────────────────────────────
+ALTER TABLE users ADD COLUMN IF NOT EXISTS tab_limit SMALLINT DEFAULT 20;

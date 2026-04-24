@@ -9843,6 +9843,14 @@ export default function App() {
     if (upd) { setCurrentUser(upd); setEditProf({...upd}); addToast('Ustawienia prywatności zapisane', 'success'); }
     else addToast('Błąd zapisu ustawień', 'error');
   };
+  const [tabLimitDraft, setTabLimitDraft] = useState<number>(() => currentUser?.tab_limit ?? 20);
+  // Sync draft when currentUser loads (after login)
+  useEffect(() => { setTabLimitDraft(currentUser?.tab_limit ?? 20); }, [currentUser?.tab_limit]);
+  const saveTabLimit = async (val: number) => {
+    const upd = await users.updateMe({ tab_limit: val }).catch(() => null);
+    if (upd) { setCurrentUser(upd); addToast(`Limit zakładek: ${val}`, 'success'); }
+    else addToast('Błąd zapisu limitu zakładek', 'error');
+  };
 
   // Derived appearance values
   const msgFontCls = fontSize === 'small' ? 'text-xs' : fontSize === 'large' ? 'text-base' : 'text-sm';
@@ -9962,7 +9970,7 @@ export default function App() {
     try { await users.updateMe({ theme_id: themeId }); } catch { /* silent */ }
   };
   // ── Global tab bar helpers ────────────────────────────────────────────────
-  const MAX_UNPINNED_TABS = 14;
+  const MAX_UNPINNED_TABS = currentUser?.tab_limit ?? 20;
   const openGlobalTab = (tab: GlobalTabInfo) => {
     setGlobalTabs(prev => {
       if (prev.some(t => t.key === tab.key)) {
@@ -18468,6 +18476,34 @@ export default function App() {
                   {appSettTab==='privacy'&&(
                     <motion.div key="privacy" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
                       className="flex flex-col gap-6">
+
+                      {/* ── SEKCJA: Zakładki ────────────────────────────── */}
+                      <div className="flex flex-col gap-3">
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pb-1.5 border-b border-white/[0.06]">Interfejs</p>
+                        <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-4 hover:border-white/[0.09] transition-colors">
+                          <div className="flex items-center justify-between mb-3">
+                            <div>
+                              <p className="text-sm font-medium text-white">Limit otwartych zakładek</p>
+                              <p className="text-xs text-zinc-600 mt-0.5">Maksymalna liczba nieprzypętych zakładek (przypięte są poza limitem)</p>
+                            </div>
+                            <span className="text-lg font-bold text-indigo-400 tabular-nums w-8 text-right shrink-0">{tabLimitDraft}</span>
+                          </div>
+                          <input
+                            type="range" min={10} max={30} step={1}
+                            value={tabLimitDraft}
+                            onChange={e => setTabLimitDraft(Number(e.target.value))}
+                            onMouseUp={e => saveTabLimit(Number((e.target as HTMLInputElement).value))}
+                            onTouchEnd={e => saveTabLimit(Number((e.target as HTMLInputElement).value))}
+                            className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-indigo-500"
+                            style={{background:`linear-gradient(to right, #6366f1 ${((tabLimitDraft-10)/20)*100}%, rgba(255,255,255,0.08) ${((tabLimitDraft-10)/20)*100}%)`}}
+                          />
+                          <div className="flex justify-between mt-1.5">
+                            <span className="text-[10px] text-zinc-700">10</span>
+                            <span className="text-[10px] text-zinc-700">20</span>
+                            <span className="text-[10px] text-zinc-700">30</span>
+                          </div>
+                        </div>
+                      </div>
 
                       {/* ── SEKCJA: Status ────────────────────────────────── */}
                       <div id="s-status" className="scroll-mt-4 flex flex-col gap-3">
