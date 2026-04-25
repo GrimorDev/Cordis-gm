@@ -44,8 +44,8 @@ import {
   STATIC_BASE, API_BASE,
   botsApi, AVAILABLE_BOTS,
   type BotDefinition, type InstalledBot, type MusicBotState,
-  channelPrefsApi, mutualServersApi, groupDmApi, eventsApi, discoverApi, onboardingApi,
-  type ChannelPref, type MutualServer, type GroupDmConversation, type ServerEvent,
+  channelPrefsApi, mutualServersApi, mutualFriendsApi, groupDmApi, eventsApi, discoverApi, onboardingApi,
+  type ChannelPref, type MutualServer, type MutualFriend, type GroupDmConversation, type ServerEvent,
   type DiscoverServer, type ServerOnboarding,
 } from './api';
 import {
@@ -7403,8 +7403,12 @@ export default function App() {
   // Channel unread counts (keyed by channel_id)
   const [unreadChs, setUnreadChs]             = useState<Record<string, number>>({});
   // DM partner full profile (for BIO panel)
-  const [dmPartnerProfile, setDmPartnerProfile] = useState<UserProfile | null>(null);
-  const [dmRightTab, setDmRightTab]             = useState<'profile'|'media'|'links'|'calls'|'pinned'>('profile');
+  const [dmPartnerProfile, setDmPartnerProfile]   = useState<UserProfile | null>(null);
+  const [dmRightTab, setDmRightTab]               = useState<'profile'|'media'|'links'|'calls'|'pinned'>('profile');
+  const [dmMutualServers, setDmMutualServers]     = useState<MutualServer[]>([]);
+  const [dmMutualFriends, setDmMutualFriends]     = useState<MutualFriend[]>([]);
+  const [dmMutSrvOpen, setDmMutSrvOpen]           = useState(true);
+  const [dmMutFrdOpen, setDmMutFrdOpen]           = useState(false);
   // Messages loading
   const [msgsLoading, setMsgsLoading]           = useState(false);
 
@@ -9088,10 +9092,14 @@ export default function App() {
     users.get(activeDmUserId).then(setDmPartnerProfile).catch(console.error);
     setReplyTo(null);
     setDmRightTab('profile');
+    setDmMutualServers([]); setDmMutualFriends([]);
     // Mark conversation as read when opening
     dmsApi.markRead(activeDmUserId).catch(() => {});
     // Load pinned DM messages
     dmPinApi.pinned(activeDmUserId).then(setDmPinnedMsgs).catch(() => {});
+    // Load mutual servers + friends for the right panel
+    mutualServersApi.get(activeDmUserId).then(setDmMutualServers).catch(() => {});
+    mutualFriendsApi.get(activeDmUserId).then(setDmMutualFriends).catch(() => {});
   }, [activeDmUserId]);
 
   // ── Call duration timer ─────────────────────────────────────────
@@ -15735,15 +15743,28 @@ export default function App() {
                   }
                 </div>
 
-                {/* Avatar + name */}
+                {/* Avatar + name + badges */}
                 <div className="px-4 pb-3 border-b border-white/[0.07]">
                   <div className="relative inline-block -mt-7 mb-2 av-frozen" style={{'--av-url':`url("${ava(dmPartnerProfile)}")`} as React.CSSProperties}>
                     <img src={ava(dmPartnerProfile)} className={`w-14 h-14 rounded-2xl border-4 border-[#1e1e30] object-cover av-eff-${dmPartnerProfile.avatar_effect||'none'}`} alt=""/>
-                    <StatusBadge status={activeDm.other_status} size={20} className="absolute -bottom-1 -right-1"/>
+                    <StatusBadge status={activeDm.other_status} size={12} className="absolute -bottom-0.5 -right-0.5"/>
                   </div>
                   <h3 className="text-sm font-bold text-white leading-tight">{maskName(dmPartnerProfile.username)}</h3>
                   {activeDm.other_custom_status&&(
                     <p className="text-xs text-zinc-500 mt-0.5 truncate">{activeDm.other_custom_status}</p>
+                  )}
+                  {/* Badges row */}
+                  {(dmPartnerProfile.badges?.length ?? 0) > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {dmPartnerProfile.badges!.map(b => (
+                        <span key={b.id} title={b.label}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wide border"
+                          style={{color:b.color||'#a78bfa',borderColor:(b.color||'#a78bfa')+'33',background:(b.color||'#a78bfa')+'18'}}>
+                          {b.icon && <span className="text-[10px]">{b.icon}</span>}
+                          {b.name}
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </div>
 
@@ -15775,38 +15796,112 @@ export default function App() {
                     {/* ── PROFILE ── */}
                     {dmRightTab==='profile' && (
                       <motion.div key="profile" initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-6}}
-                        transition={{duration:0.15}} className="p-4 flex flex-col gap-3">
-                        {dmPartnerProfile.bio&&(
+                        transition={{duration:0.15}} className="flex flex-col">
+                        <div className="p-4 flex flex-col gap-4 flex-1">
+                          {/* Bio */}
+                          {dmPartnerProfile.bio&&(
+                            <div>
+                              <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5">O mnie</h4>
+                              <p className="text-[12px] text-zinc-400 leading-relaxed">{dmPartnerProfile.bio}</p>
+                            </div>
+                          )}
+                          {/* Joined */}
                           <div>
-                            <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5">O mnie</h4>
-                            <p className="text-[12px] text-zinc-400 leading-relaxed">{dmPartnerProfile.bio}</p>
+                            <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5">Dołączył/a</h4>
+                            <p className="text-[12px] text-zinc-400">{fmtDate(dmPartnerProfile.created_at)}</p>
                           </div>
-                        )}
-                        <div>
-                          <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5">Dołączył/a</h4>
-                          <p className="text-[12px] text-zinc-400">
-                            {fmtDate(dmPartnerProfile.created_at)}
-                          </p>
+
+                          {/* Mutual servers — collapsible */}
+                          {dmMutualServers.length > 0 && (
+                            <div>
+                              <button onClick={()=>setDmMutSrvOpen(p=>!p)}
+                                className="w-full flex items-center justify-between group mb-2">
+                                <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest group-hover:text-zinc-400 transition-colors">
+                                  Wspólne serwery — {dmMutualServers.length}
+                                </h4>
+                                {dmMutSrvOpen ? <ChevronUp size={11} className="text-zinc-600"/> : <ChevronDown size={11} className="text-zinc-600"/>}
+                              </button>
+                              <AnimatePresence initial={false}>
+                                {dmMutSrvOpen && (
+                                  <motion.div key="muts" initial={{height:0,opacity:0}} animate={{height:'auto',opacity:1}}
+                                    exit={{height:0,opacity:0}} transition={{duration:0.18,ease:[0.16,1,0.3,1]}}
+                                    style={{overflow:'hidden'}}>
+                                    <div className="flex flex-col gap-1">
+                                      {dmMutualServers.map(s => (
+                                        <button key={s.id}
+                                          onClick={()=>{ setActiveServer(s.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); }}
+                                          className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-white/[0.06] transition-colors group/srv text-left">
+                                          <div className="w-8 h-8 rounded-xl overflow-hidden shrink-0 border border-white/[0.07]">
+                                            {s.icon_url
+                                              ? <img src={staticUrl(s.icon_url)} className="w-full h-full object-cover" alt=""/>
+                                              : <div className="w-full h-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white">{s.name[0]}</div>
+                                            }
+                                          </div>
+                                          <span className="text-[12px] text-zinc-300 group-hover/srv:text-white transition-colors font-medium truncate">{s.name}</span>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          )}
+
+                          {/* Mutual friends — collapsible */}
+                          {dmMutualFriends.length > 0 && (
+                            <div>
+                              <button onClick={()=>setDmMutFrdOpen(p=>!p)}
+                                className="w-full flex items-center justify-between group mb-2">
+                                <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest group-hover:text-zinc-400 transition-colors">
+                                  Wspólni znajomi — {dmMutualFriends.length}
+                                </h4>
+                                {dmMutFrdOpen ? <ChevronUp size={11} className="text-zinc-600"/> : <ChevronDown size={11} className="text-zinc-600"/>}
+                              </button>
+                              <AnimatePresence initial={false}>
+                                {dmMutFrdOpen && (
+                                  <motion.div key="mutf" initial={{height:0,opacity:0}} animate={{height:'auto',opacity:1}}
+                                    exit={{height:0,opacity:0}} transition={{duration:0.18,ease:[0.16,1,0.3,1]}}
+                                    style={{overflow:'hidden'}}>
+                                    <div className="flex flex-col gap-1">
+                                      {dmMutualFriends.map(f => (
+                                        <button key={f.id}
+                                          onClick={()=>{ setActiveDmUserId(f.id); setActiveView('dms'); setActiveGroupDm(null); }}
+                                          className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-white/[0.06] transition-colors group/frd text-left">
+                                          <div className="relative shrink-0">
+                                            <img src={ava({avatar_url:f.avatar_url,username:f.username})} className="w-7 h-7 rounded-full object-cover" alt=""/>
+                                            <StatusBadge status={f.status} size={8} className="absolute -bottom-0.5 -right-0.5"/>
+                                          </div>
+                                          <span className="text-[12px] text-zinc-300 group-hover/frd:text-white transition-colors font-medium truncate">{maskName(f.username)}</span>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          )}
+
+                          {/* Private note */}
+                          <div>
+                            <label className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5 block">Prywatna notatka</label>
+                            <textarea
+                              value={userNotes.get(dmPartnerProfile.id) || ''}
+                              onChange={e => saveUserNote(dmPartnerProfile.id, e.target.value)}
+                              placeholder="Dodaj notatkę o tej osobie..."
+                              rows={3}
+                              className="w-full text-xs bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2 text-zinc-300 placeholder-zinc-600 resize-none outline-none focus:border-indigo-500/40 transition-all"
+                            />
+                          </div>
                         </div>
-                        {typeof dmPartnerProfile.mutual_friends_count==='number' && dmPartnerProfile.mutual_friends_count > 0 && (
-                          <div>
-                            <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5">Wspólni znajomi</h4>
-                            <p className="text-[12px] text-zinc-400 flex items-center gap-1.5">
-                              <Users size={11} className="text-indigo-400"/>
-                              {dmPartnerProfile.mutual_friends_count} wspólnych znajomych
-                            </p>
-                          </div>
-                        )}
-                        {/* Private note */}
-                        <div>
-                          <label className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5 block">Prywatna notatka</label>
-                          <textarea
-                            value={userNotes.get(dmPartnerProfile.id) || ''}
-                            onChange={e => saveUserNote(dmPartnerProfile.id, e.target.value)}
-                            placeholder="Dodaj notatkę o tej osobie..."
-                            rows={3}
-                            className="w-full text-xs bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2 text-zinc-300 placeholder-zinc-600 resize-none outline-none focus:border-indigo-500/40 transition-all"
-                          />
+
+                        {/* Wyświetl pełny profil — sticky bottom */}
+                        <div className="px-4 py-3 border-t border-white/[0.06] shrink-0">
+                          <button
+                            onClick={()=>openProfilePage(dmPartnerProfile.id)}
+                            className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-white/[0.04] hover:bg-indigo-500/10 border border-white/[0.07] hover:border-indigo-500/30 text-zinc-400 hover:text-indigo-300 text-xs font-semibold transition-all">
+                            <ExternalLink size={12}/>
+                            Wyświetl pełny profil
+                          </button>
                         </div>
                       </motion.div>
                     )}

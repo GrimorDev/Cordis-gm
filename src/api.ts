@@ -951,6 +951,14 @@ export const mutualServersApi = {
   get: (userId: string) => req<MutualServer[]>('GET', `/users/${userId}/mutual-servers`),
 };
 
+export interface MutualFriend {
+  id: string; username: string; avatar_url: string | null;
+  status: string; custom_status?: string | null;
+}
+export const mutualFriendsApi = {
+  get: (userId: string) => req<MutualFriend[]>('GET', `/users/${userId}/mutual-friends`),
+};
+
 // ── Group DMs ─────────────────────────────────────────────────────────────────
 export interface GroupDmParticipant {
   user_id: string; username: string; avatar_url: string | null; display_name: string | null;

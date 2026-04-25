@@ -549,6 +549,30 @@ router.get('/:id/mutual-servers', authMiddleware, async (req: AuthRequest, res) 
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// GET /api/users/:id/mutual-friends
+router.get('/:id/mutual-friends', authMiddleware, async (req: AuthRequest, res) => {
+  const viewerId = req.user!.id;
+  const targetId = req.params.id;
+  try {
+    const { rows } = await query(
+      `SELECT u.id, u.username, u.avatar_url, u.status, u.custom_status
+       FROM users u
+       WHERE u.id IN (
+         SELECT CASE WHEN f.requester_id=$1 THEN f.addressee_id ELSE f.requester_id END
+         FROM friends f WHERE (f.requester_id=$1 OR f.addressee_id=$1) AND f.status='accepted'
+       )
+       AND u.id IN (
+         SELECT CASE WHEN f.requester_id=$2 THEN f.addressee_id ELSE f.requester_id END
+         FROM friends f WHERE (f.requester_id=$2 OR f.addressee_id=$2) AND f.status='accepted'
+       )
+       ORDER BY u.username
+       LIMIT 50`,
+      [viewerId, targetId]
+    );
+    return res.json(rows);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
 // ── Channel Notification Prefs ──────────────────────────────────────────────
 // GET /api/users/me/channel-prefs
 router.get('/me/channel-prefs', authMiddleware, async (req: AuthRequest, res) => {
