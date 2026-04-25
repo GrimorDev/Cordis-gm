@@ -13599,7 +13599,7 @@ export default function App() {
               assignUser={adminAssignUser} setAssignUser={setAdminAssignUser}
               assignBadgeId={adminAssignBadgeId} setAssignBadgeId={setAdminAssignBadgeId}
               onBack={()=>setActiveView(prevView)}
-              addToast={(t:any)=>setToasts(p=>[...p,{id:Date.now().toString(),...t}])}
+              addToast={(t:any)=>addToast(t.message||t.msg||String(t), t.type||'info')}
             />
           ) : (
             <>
@@ -14520,7 +14520,7 @@ export default function App() {
                                   APP
                                 </span>
                               )}
-                              {!isAuto&&getMsgSenderBadges(msg.sender_id).map(b=>{const BIcon=getBadgeIcon(b.name);return <BIcon key={b.id} size={10} style={{color:b.color}} title={b.label} className="shrink-0"/>;  })}
+                              {!isAuto&&getMsgSenderBadges(msg.sender_id).map(b=><BadgePip key={b.id} b={b} size={14}/>)}
                               {!isAuto&&(msg as MessageFull).sender_role&&(
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide"
                                   style={{
@@ -15659,7 +15659,7 @@ export default function App() {
                       {isOwner&&<Crown size={11} className={`${opacity?'text-amber-400/50':'text-amber-400'} shrink-0`}/>}
                       {m.is_bot&&<span className={`text-[9px] font-bold px-1 py-0.5 rounded border ${opacity?'border-violet-500/20 text-violet-500/60 bg-violet-500/5 opacity-50':'border-violet-500/40 text-violet-400 bg-violet-500/10'} leading-none select-none shrink-0`}>BOT</span>}
                       {(m as any).active_tag&&<span className={opacity?'opacity-50':''}><TagBadge tag={(m as any).active_tag} color={(m as any).active_tag_server_id?(serverTagColorMap[(m as any).active_tag_server_id]??null):null} icon={(m as any).active_tag_server_id?(serverTagIconMap[(m as any).active_tag_server_id]??null):null} serverInfo={(m as any).active_tag_server_id?(serverList.find(s=>s.id===(m as any).active_tag_server_id)??null):null}/></span>}
-                      {m.badges?.map((b:any)=>{const BIcon=getBadgeIcon(b.name);return <BIcon key={b.id} size={11} style={{color:opacity?b.color+'80':b.color}} title={b.label} className={`shrink-0 ${opacity?'opacity-50':''}`}/>;  })}
+                      {m.badges?.map((b:any)=><span key={b.id} className={opacity?'opacity-40':''}><BadgePip b={b} size={14}/></span>)}
                     </div>
                     {!opacity ? (mActivity?(
                       <p className="text-[11px] text-[#1DB954] truncate leading-tight flex items-center gap-1"><SpotifyIcon size={10} className="shrink-0"/> {mActivity.artists}</p>
