@@ -50,7 +50,7 @@ export const clearToken = () => localStorage.removeItem('cordyn_token');
 // ── Types ──────────────────────────────────────────────────────────────────
 export interface Badge {
   id: string; name: string; label: string;
-  color: string; icon: string;
+  color: string; icon: string; icon_url?: string | null;
   description?: string | null; position?: number;
 }
 export interface UserProfile {
@@ -752,15 +752,19 @@ export const adminApi = {
   overview: () => req<AdminOverview>('GET', '/admin/overview'),
   badges: {
     list: () => req<Badge[]>('GET', '/admin/badges'),
-    create: (d: { name: string; label: string; color?: string; icon?: string; description?: string; position?: number }) =>
+    create: (d: { name: string; label: string; color?: string; icon?: string; icon_url?: string; description?: string; position?: number }) =>
       req<Badge>('POST', '/admin/badges', d),
-    update: (id: string, d: Partial<{ label: string; color: string; icon: string; description: string; position: number }>) =>
+    update: (id: string, d: Partial<{ label: string; color: string; icon: string; icon_url: string; description: string; position: number }>) =>
       req<Badge>('PUT', `/admin/badges/${id}`, d),
     delete: (id: string) => req<void>('DELETE', `/admin/badges/${id}`),
     assign: (user_id: string, badge_id: string) =>
       req<{ ok: boolean }>('POST', '/admin/badges/assign', { user_id, badge_id }),
     remove: (userId: string, badgeId: string) =>
       req<{ ok: boolean }>('DELETE', `/admin/users/${userId}/badges/${badgeId}`),
+    uploadIcon: async (file: File): Promise<{ url: string }> => {
+      const fd = new FormData(); fd.append('icon', file);
+      return req<{ url: string }>('POST', '/admin/badges/upload-icon', fd, true);
+    },
   },
   users: {
     list: (page = 1, limit = 50) =>

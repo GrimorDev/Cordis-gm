@@ -2,12 +2,36 @@ import { Router, Response, NextFunction } from 'express';
 import { body, validationResult } from 'express-validator';
 import os from 'os';
 import crypto from 'crypto';
+import path from 'path';
+import fs from 'fs';
 import jwt from 'jsonwebtoken';
+import multer from 'multer';
 import { query } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { deleteFromR2, r2Enabled } from '../services/r2';
 import { config } from '../config';
+
+// SVG upload storage for badge icons
+const badgeIconStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = path.join(config.uploads.uploadDir, 'badges');
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (_req, _file, cb) => cb(null, `${crypto.randomUUID()}.svg`),
+});
+const uploadBadgeIcon = multer({
+  storage: badgeIconStorage,
+  limits: { fileSize: 512 * 1024 }, // 512 KB max
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === 'image/svg+xml' || file.originalname.toLowerCase().endsWith('.svg')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only SVG files are allowed'));
+    }
+  },
+});
 
 // ── Simple in-process API request counter ────────────────────────────────────
 let _apiRequestsTotal = 0;
@@ -156,6 +180,13 @@ router.get('/badges', async (_req, res: Response) => {
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// ── POST /api/admin/badges/upload-icon ───────────────────────────────
+router.post('/badges/upload-icon', uploadBadgeIcon.single('icon'), async (req: AuthRequest, res: Response) => {
+  if (!req.file) return res.status(400).json({ error: 'No SVG file uploaded' });
+  const url = `/uploads/badges/${req.file.filename}`;
+  return res.json({ url });
+});
+
 // ── POST /api/admin/badges ────────────────────────────────────────────
 router.post('/badges',
   [
@@ -163,17 +194,18 @@ router.post('/badges',
     body('label').trim().isLength({ min: 1, max: 100 }),
     body('color').optional().matches(/^#[0-9a-fA-F]{6}$/),
     body('icon').optional().isLength({ max: 10 }),
+    body('icon_url').optional().isLength({ max: 500 }),
     body('description').optional().isLength({ max: 500 }),
     body('position').optional().isInt({ min: 0, max: 9999 }),
   ],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-    const { name, label, color = '#6366f1', icon = '🔵', description, position = 0 } = req.body;
+    const { name, label, color = '#6366f1', icon = '', icon_url, description, position = 0 } = req.body;
     try {
       const { rows } = await query(
-        'INSERT INTO global_badges (name,label,color,icon,description,position) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
-        [name, label, color, icon, description || null, position]
+        'INSERT INTO global_badges (name,label,color,icon,icon_url,description,position) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+        [name, label, color, icon, icon_url || null, description || null, position]
       );
       auditLog(req, 'create_badge', 'badge', rows[0].id, { name, label });
       return res.status(201).json(rows[0]);

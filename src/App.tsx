@@ -2249,16 +2249,20 @@ const getBadgeIcon = (name: string): LucideIcon => BADGE_ICON_MAP[name] ?? Award
 function BadgePip({ b, size = 18 }: { b: import('./api').Badge; size?: number }) {
   const BIcon = getBadgeIcon(b.name);
   const pad   = Math.round(size * 0.22);
+  const inner = size - pad * 2;
   return (
     <div className="relative group/bp">
-      <div className="flex items-center justify-center rounded-[6px] border transition-transform hover:scale-110 cursor-default select-none"
+      <div className="flex items-center justify-center rounded-[6px] border transition-transform hover:scale-110 cursor-default select-none overflow-hidden"
         style={{
           width: size, height: size,
           background: (b.color || '#6366f1') + '22',
           borderColor: (b.color || '#6366f1') + '55',
-          padding: pad,
+          padding: b.icon_url ? 2 : pad,
         }}>
-        <BIcon size={size - pad * 2} style={{ color: b.color || '#6366f1' }} strokeWidth={2.2}/>
+        {b.icon_url
+          ? <img src={b.icon_url} alt={b.label} style={{ width: inner + 4, height: inner + 4, objectFit: 'contain', filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.4))' }}/>
+          : <BIcon size={inner} style={{ color: b.color || '#6366f1' }} strokeWidth={2.2}/>
+        }
       </div>
       {/* Tooltip */}
       <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 bg-zinc-900 border border-white/[0.12] rounded-lg px-2 py-1 text-[10px] font-semibold text-white whitespace-nowrap shadow-xl opacity-0 group-hover/bp:opacity-100 pointer-events-none z-50 transition-opacity"
@@ -4149,7 +4153,7 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
     try {
       const badge = await adminApi.badges.create(badgeForm);
       setBadges([...badges, badge]);
-      setBadgeForm({ name:'', label:'', color:'#6366f1', icon:'⚙️' });
+      setBadgeForm({ name:'', label:'', color:'#6366f1', icon:'', icon_url:'' });
       addToast({ type:'success', message:'Odznaka utworzona' });
     } catch { addToast({ type:'error', message:'Błąd tworzenia odznaki' }); }
     finally { setBadgeSaving(false); }
@@ -4165,10 +4169,17 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
 
   const handleAssignBadge = async () => {
     if (!assignUser || !assignBadgeId) return;
+    const badge = badges.find(b => b.id === assignBadgeId);
+    if (!badge) return;
+    // Prevent duplicate
+    if (assignUser.badges?.some(b => b.id === assignBadgeId)) {
+      addToast({ type:'info', message:'Użytkownik już ma tę odznakę' }); return;
+    }
     try {
       await adminApi.badges.assign(assignUser.id, assignBadgeId);
-      setAssignUser(null); setAssignBadgeId('');
-      adminApi.users.list(usersPage, 50).then(d => { setUsers(d.users); setUsersTotal(d.total); }).catch(()=>{});
+      const updBadges = [...(assignUser.badges || []), badge];
+      setAssignUser({ ...assignUser, badges: updBadges });
+      setUsers(users.map(u => u.id===assignUser.id ? { ...u, badges: updBadges } : u));
       addToast({ type:'success', message:'Odznaka przypisana' });
     } catch { addToast({ type:'error', message:'Błąd przypisywania odznaki' }); }
   };
@@ -4176,6 +4187,8 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
   const handleRemoveBadge = async (userId: string, badgeId: string) => {
     try {
       await adminApi.badges.remove(userId, badgeId);
+      const updBadges = (assignUser?.id === userId ? assignUser.badges : [])?.filter(b=>b.id!==badgeId) ?? [];
+      if (assignUser?.id === userId) setAssignUser({ ...assignUser, badges: updBadges });
       setUsers(users.map(u => u.id===userId ? { ...u, badges: u.badges.filter(b=>b.id!==badgeId) } : u));
       addToast({ type:'success', message:'Odznaka usunięta' });
     } catch { addToast({ type:'error', message:'Błąd usuwania odznaki' }); }
@@ -4901,8 +4914,39 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                 <div className="grid grid-cols-2 gap-3">
                   <input value={badgeForm.name} onChange={e=>setBadgeForm({...badgeForm,name:e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,'')})} placeholder="Nazwa (np. vip)" className={`${gi2} px-3 py-2 text-sm`}/>
                   <input value={badgeForm.label} onChange={e=>setBadgeForm({...badgeForm,label:e.target.value})} placeholder="Etykieta (np. VIP)" className={`${gi2} px-3 py-2 text-sm`}/>
-                  <input value={badgeForm.icon} onChange={e=>setBadgeForm({...badgeForm,icon:e.target.value})} placeholder="Emoji" className={`${gi2} px-3 py-2 text-sm`}/>
-                  <input value={badgeForm.color} onChange={e=>setBadgeForm({...badgeForm,color:e.target.value})} type="color" className="h-9 w-full rounded-xl border border-white/[0.08] bg-transparent cursor-pointer"/>
+                </div>
+                {/* SVG icon upload */}
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 block">Ikona SVG (własna)</label>
+                    <label className={`flex items-center gap-2 cursor-pointer ${gi2} px-3 py-2 text-sm text-zinc-400 hover:text-white transition-colors`}>
+                      <Upload size={13}/>
+                      {(badgeForm as any).icon_url ? 'Zmień SVG' : 'Wgraj plik SVG'}
+                      <input type="file" accept=".svg,image/svg+xml" className="hidden"
+                        onChange={async e=>{
+                          const file = e.target.files?.[0]; if(!file) return;
+                          setBadgeSaving(true);
+                          try {
+                            const r = await adminApi.badges.uploadIcon(file);
+                            setBadgeForm({...badgeForm,icon_url:r.url,icon:''});
+                          } catch { addToast({type:'error',message:'Błąd uploadu SVG'}); }
+                          finally { setBadgeSaving(false); e.target.value=''; }
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {(badgeForm as any).icon_url && (
+                    <div className="flex items-center gap-2">
+                      <div className="w-10 h-10 rounded-xl border border-white/[0.1] bg-white/[0.04] flex items-center justify-center overflow-hidden p-1">
+                        <img src={(badgeForm as any).icon_url} alt="preview" className="w-full h-full object-contain"/>
+                      </div>
+                      <button onClick={()=>setBadgeForm({...badgeForm,icon_url:'',icon:''})} className="text-zinc-600 hover:text-rose-400 transition-colors"><X size={13}/></button>
+                    </div>
+                  )}
+                  <div>
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5 block">Kolor</label>
+                    <input value={badgeForm.color} onChange={e=>setBadgeForm({...badgeForm,color:e.target.value})} type="color" className="h-9 w-20 rounded-xl border border-white/[0.08] bg-transparent cursor-pointer"/>
+                  </div>
                 </div>
                 <button onClick={handleCreateBadge} disabled={badgeSaving||!badgeForm.name||!badgeForm.label}
                   className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2">
@@ -7294,7 +7338,7 @@ export default function App() {
   const [adminUsersTotal, setAdminUsersTotal] = useState(0);
   const [adminUsersPage, setAdminUsersPage]   = useState(1);
   const [adminServersList, setAdminServersList] = useState<AdminServer[]>([]);
-  const [adminBadgeForm, setAdminBadgeForm]   = useState({ name:'', label:'', color:'#6366f1', icon:'⚙️' });
+  const [adminBadgeForm, setAdminBadgeForm]   = useState({ name:'', label:'', color:'#6366f1', icon:'', icon_url:'' });
   const [adminBadgeSaving, setAdminBadgeSaving] = useState(false);
   const [adminAssignUser, setAdminAssignUser] = useState<AdminUser|null>(null);
   const [adminAssignBadgeId, setAdminAssignBadgeId] = useState('');
@@ -13656,6 +13700,17 @@ export default function App() {
                         <p className="text-xs text-zinc-500 leading-tight capitalize">{activeDm.other_status||'offline'}</p>
                       </div>
                     </div>
+                  ) : activeDmUserId && dmPartnerProfile ? (
+                    <div className="flex items-center gap-3">
+                      <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava(dmPartnerProfile)}")`} as React.CSSProperties}>
+                        <img src={ava(dmPartnerProfile)} className={`w-8 h-8 rounded-2xl object-cover shadow-sm av-eff-${(dmPartnerProfile as any).avatar_effect||'none'}`} alt=""/>
+                        <StatusBadge status={dmPartnerProfile.status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-white text-sm leading-tight">{maskName(dmPartnerProfile.username)}</h3>
+                        <p className="text-xs text-zinc-500 leading-tight capitalize">{dmPartnerProfile.status||'offline'}</p>
+                      </div>
+                    </div>
                   ) : <h3 className="font-bold text-white text-sm">Wiadomości</h3>) : (
                     activeCh ? (
                       <div className="flex items-center gap-3 min-w-0">
@@ -14327,16 +14382,24 @@ export default function App() {
                     );
                   })()}
                   {!activeGroupDm && !msgsLoading&&!searchQuery.trim()&&<div className="text-center py-8 mb-3">
-                    {activeView==='dms'&&activeDm ? (
-                      <>
-                        <img src={ava({avatar_url:activeDm.other_avatar,username:activeDm.other_username})} className="w-20 h-20 rounded-2xl mx-auto mb-4 border-4 border-zinc-950 object-cover shadow-2xl" alt=""/>
-                        <h1 className="text-2xl font-bold text-white mb-1">{maskName(activeDm.other_username)}</h1>
-                        {friends.some(f=>f.id===activeDm.other_user_id) && messages.length===0 ? (
-                          <p className="text-sm text-zinc-400"><span className="font-medium text-white">{maskName(activeDm.other_username)}</span> jest Twoim znajomym! Zacznij rozmowę.</p>
-                        ) : (
-                          <p className="text-sm text-zinc-500">Początek Twojej rozmowy z <span className="text-zinc-400 font-medium">{maskName(activeDm.other_username)}</span>.</p>
-                        )}
-                      </>
+                    {activeView==='dms'&&(activeDm||dmPartnerProfile) ? (
+                      (() => {
+                        const dmName    = activeDm ? activeDm.other_username    : dmPartnerProfile!.username;
+                        const dmAvatar  = activeDm ? activeDm.other_avatar      : dmPartnerProfile!.avatar_url;
+                        const dmOtherId = activeDm ? activeDm.other_user_id     : dmPartnerProfile!.id;
+                        const isFrd     = friends.some(f => f.id === dmOtherId);
+                        return (
+                          <>
+                            <img src={ava({avatar_url:dmAvatar,username:dmName})} className="w-20 h-20 rounded-2xl mx-auto mb-4 border-4 border-zinc-950 object-cover shadow-2xl" alt=""/>
+                            <h1 className="text-2xl font-bold text-white mb-1">{maskName(dmName)}</h1>
+                            {isFrd && messages.length===0 ? (
+                              <p className="text-sm text-zinc-400"><span className="font-medium text-white">{maskName(dmName)}</span> jest Twoim znajomym! Zacznij rozmowę.</p>
+                            ) : (
+                              <p className="text-sm text-zinc-500">Początek Twojej rozmowy z <span className="text-zinc-400 font-medium">{maskName(dmName)}</span>.</p>
+                            )}
+                          </>
+                        );
+                      })()
                     ) : (
                       <>
                         <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-600/20 to-purple-600/10 border border-indigo-500/20 mb-4 shadow-2xl">
@@ -14959,6 +15022,8 @@ export default function App() {
                 {(()=>{
                   const isDmView = activeView==='dms' && !!activeDmUserId;
                   const isFriend = !isDmView || friends.some(f => f.id === activeDmUserId);
+                  // For non-friends in DM: check if they allow messages from strangers
+                  const dmTargetAllowsStrangers = !isDmView || isFriend || dmPartnerProfile?.privacy_dm_from_strangers !== false;
                   // Announcement channel — only those with manage_messages can write
                   if (activeCh?.type==='announcement' && !canManageMessages) return (
                     <div className="flex items-center justify-center gap-2.5 py-3 px-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400 text-sm">
@@ -14973,10 +15038,15 @@ export default function App() {
                       <span>Nie masz uprawnień do wysyłania wiadomości na tym kanale.</span>
                     </div>
                   );
-                  if (!isFriend) return (
+                  // DM privacy check — non-friend who has disabled DMs from strangers
+                  if (!dmTargetAllowsStrangers) return (
                     <div className="flex items-center justify-center gap-2.5 py-3 px-4 bg-zinc-900/60 border border-white/[0.06] rounded-xl text-zinc-500 text-sm">
                       <Lock size={14} className="text-zinc-600 shrink-0"/>
-                      <span>Możesz pisać tylko do znajomych — dodaj tę osobę do znajomych, aby wysłać wiadomość.</span>
+                      <span>
+                        {dmPartnerProfile
+                          ? `${maskName(dmPartnerProfile.username)} nie jest na Twojej liście znajomych i nie zezwala na wiadomości od osób spoza grona znajomych.`
+                          : 'Ten użytkownik nie zezwala na wiadomości od osób spoza grona znajomych.'}
+                      </span>
                     </div>
                   );
                   return (
@@ -15203,7 +15273,7 @@ export default function App() {
                             }
                             if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); handleSend(e as any); }
                           }}
-                          placeholder={activeView==='dms'&&activeDm?`Wiadomość do ${activeDm.other_username}...`:`Wiadomość w #${activeCh?.name||''}...`}
+                          placeholder={activeView==='dms'&&(activeDm||dmPartnerProfile)?`Wiadomość do ${activeDm?.other_username||dmPartnerProfile?.username||''}...`:`Wiadomość w #${activeCh?.name||''}...`}
                           className="flex-1 bg-transparent text-sm text-zinc-200 placeholder-zinc-600 outline-none min-w-0 resize-none overflow-hidden leading-[1.4] self-center"/>
                         {/* GIF picker */}
                         <div className="relative shrink-0">
