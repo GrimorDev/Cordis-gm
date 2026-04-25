@@ -2248,22 +2248,15 @@ const getBadgeIcon = (name: string): LucideIcon => BADGE_ICON_MAP[name] ?? Award
 /** Consistent Discord-style badge: colored icon square + tooltip, no inline text */
 function BadgePip({ b, size = 18 }: { b: import('./api').Badge; size?: number }) {
   const BIcon = getBadgeIcon(b.name);
-  const pad   = Math.round(size * 0.22);
-  const inner = size - pad * 2;
+  const iconSrc = b.icon_url
+    ? (b.icon_url.startsWith('/') ? `${STATIC_BASE}${b.icon_url}` : b.icon_url)
+    : null;
   return (
-    <div className="relative group/bp">
-      <div className="flex items-center justify-center rounded-[6px] border transition-transform hover:scale-110 cursor-default select-none overflow-hidden"
-        style={{
-          width: size, height: size,
-          background: (b.color || '#6366f1') + '22',
-          borderColor: (b.color || '#6366f1') + '55',
-          padding: b.icon_url ? 2 : pad,
-        }}>
-        {b.icon_url
-          ? <img src={b.icon_url.startsWith('/') ? `${STATIC_BASE}${b.icon_url}` : b.icon_url} alt={b.label} style={{ width: inner + 4, height: inner + 4, objectFit: 'contain', filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.4))' }}/>
-          : <BIcon size={inner} style={{ color: b.color || '#6366f1' }} strokeWidth={2.2}/>
-        }
-      </div>
+    <div className="relative group/bp flex items-center justify-center transition-transform hover:scale-125 cursor-default select-none" style={{ width: size, height: size }}>
+      {iconSrc
+        ? <img src={iconSrc} alt={b.label} style={{ width: size, height: size, objectFit: 'contain', filter: `drop-shadow(0 0 3px ${b.color || '#6366f1'}88)` }}/>
+        : <BIcon size={size} style={{ color: b.color || '#6366f1', filter: `drop-shadow(0 0 3px ${b.color || '#6366f1'}66)` }} strokeWidth={2}/>
+      }
       {/* Tooltip */}
       <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 bg-zinc-900 border border-white/[0.12] rounded-lg px-2 py-1 text-[10px] font-semibold text-white whitespace-nowrap shadow-xl opacity-0 group-hover/bp:opacity-100 pointer-events-none z-50 transition-opacity"
         style={{ color: b.color || '#a78bfa' }}>
