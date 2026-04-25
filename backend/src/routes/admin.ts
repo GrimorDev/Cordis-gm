@@ -15,7 +15,7 @@ import { config } from '../config';
 // SVG upload storage for badge icons
 const badgeIconStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
-    const dir = path.join(config.uploads.uploadDir, 'badges');
+    const dir = path.join(config.uploads.dir, 'badges');
     fs.mkdirSync(dir, { recursive: true });
     cb(null, dir);
   },
