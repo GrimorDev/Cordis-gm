@@ -2245,6 +2245,30 @@ const BADGE_ICON_MAP: Record<string, LucideIcon> = {
 };
 const getBadgeIcon = (name: string): LucideIcon => BADGE_ICON_MAP[name] ?? Award;
 
+/** Consistent Discord-style badge: colored icon square + tooltip, no inline text */
+function BadgePip({ b, size = 18 }: { b: import('./api').Badge; size?: number }) {
+  const BIcon = getBadgeIcon(b.name);
+  const pad   = Math.round(size * 0.22);
+  return (
+    <div className="relative group/bp">
+      <div className="flex items-center justify-center rounded-[6px] border transition-transform hover:scale-110 cursor-default select-none"
+        style={{
+          width: size, height: size,
+          background: (b.color || '#6366f1') + '22',
+          borderColor: (b.color || '#6366f1') + '55',
+          padding: pad,
+        }}>
+        <BIcon size={size - pad * 2} style={{ color: b.color || '#6366f1' }} strokeWidth={2.2}/>
+      </div>
+      {/* Tooltip */}
+      <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 bg-zinc-900 border border-white/[0.12] rounded-lg px-2 py-1 text-[10px] font-semibold text-white whitespace-nowrap shadow-xl opacity-0 group-hover/bp:opacity-100 pointer-events-none z-50 transition-opacity"
+        style={{ color: b.color || '#a78bfa' }}>
+        {b.label}
+      </div>
+    </div>
+  );
+}
+
 const BOT_ICON_MAP: Record<string, LucideIcon> = {
   music:     Music,
   fun:       Gamepad2,
@@ -3145,13 +3169,8 @@ function ServerSettingsPage({
                         {m.badges && m.badges.length > 0 && (
                           <div className="flex gap-1 mt-0.5 flex-wrap">
                             {m.badges.slice(0, 3).map(b => {
-                              const BIcon = getBadgeIcon(b.name);
                               return (
-                                <span key={b.id} title={b.label}
-                                  className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full border"
-                                  style={{color: b.color, borderColor: b.color+'40', background: b.color+'18'}}>
-                                  <BIcon size={8}/>{b.label}
-                                </span>
+                                <BadgePip key={b.id} b={b} size={16}/>
                               );
                             })}
                           </div>
@@ -5580,16 +5599,7 @@ function ProfilePage({
               {/* Badges */}
               {Array.isArray(disp?.badges) && disp.badges.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
-                  {disp.badges.map((b:Badge)=>{
-                    const BIcon = getBadgeIcon(b.name);
-                    return (
-                      <div key={b.id} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1"
-                        style={{background:b.color+'18',border:'1px solid '+b.color+'45'}}>
-                        <BIcon size={11} style={{color:b.color}} className="shrink-0"/>
-                        <span className="text-[11px] font-semibold" style={{color:b.color}}>{b.label}</span>
-                      </div>
-                    );
-                  })}
+                  {disp.badges.map((b:Badge) => <BadgePip key={b.id} b={b} size={22}/>)}
                 </div>
               )}
 
@@ -6823,22 +6833,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
           {/* Badges row */}
           {u?.badges && u.badges.length > 0 && (
             <div className="flex gap-1.5 flex-wrap mt-1 mb-2">
-              {u.badges.map(b => {
-                const BIcon = getBadgeIcon(b.name);
-                return (
-                  <div key={b.id} className="relative group/badge">
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border cursor-default select-none"
-                      style={{color: b.color, borderColor: b.color+'40', background: b.color+'18'}}>
-                      <BIcon size={9}/>{b.label}
-                    </span>
-                    {b.description && (
-                      <div className="absolute bottom-full mb-1.5 left-0 bg-zinc-900 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-zinc-300 whitespace-nowrap shadow-xl opacity-0 group-hover/badge:opacity-100 transition-opacity pointer-events-none z-10">
-                        {b.description}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {u.badges.map(b => <BadgePip key={b.id} b={b} size={20}/>)}
             </div>
           )}
 
@@ -15755,15 +15750,8 @@ export default function App() {
                   )}
                   {/* Badges row */}
                   {(dmPartnerProfile.badges?.length ?? 0) > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {dmPartnerProfile.badges!.map(b => (
-                        <span key={b.id} title={b.label}
-                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wide border"
-                          style={{color:b.color||'#a78bfa',borderColor:(b.color||'#a78bfa')+'33',background:(b.color||'#a78bfa')+'18'}}>
-                          {b.icon && <span className="text-[10px]">{b.icon}</span>}
-                          {b.name}
-                        </span>
-                      ))}
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {dmPartnerProfile.badges!.map(b => <BadgePip key={b.id} b={b} size={20}/>)}
                     </div>
                   )}
                 </div>
@@ -16912,17 +16900,10 @@ export default function App() {
 
                   {/* Badges row */}
                   <div className="flex items-center gap-2 mb-4 flex-wrap">
-                    {/* Global badges — Lucide icons */}
-                    {Array.isArray(selUser.badges)&&selUser.badges.map((b:Badge)=>{
-                      const BIcon = getBadgeIcon(b.name);
-                      return (
-                        <div key={b.id} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1"
-                          style={{background:b.color+'18',border:'1px solid '+b.color+'45'}}>
-                          <BIcon size={11} style={{color:b.color}} className="shrink-0"/>
-                          <span className="text-[11px] font-semibold" style={{color:b.color}}>{b.label}</span>
-                        </div>
-                      );
-                    })}
+                    {/* Global badges — icon-only pips */}
+                    {Array.isArray(selUser.badges)&&selUser.badges.map((b:Badge)=>(
+                      <BadgePip key={b.id} b={b} size={22}/>
+                    ))}
                     {/* Crown — server owner */}
                     {activeView==='servers'&&serverFull&&selUser.id===serverFull.owner_id&&(
                       <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2.5 py-1">
