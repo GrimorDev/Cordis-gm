@@ -396,7 +396,7 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
               u.active_tag_server_id, st.tag as active_tag, u.theme_id, u.banner_preset,
               u.created_at,
               COALESCE(
-                (SELECT json_agg(json_build_object('id', gb.id, 'name', gb.name, 'label', gb.label, 'color', gb.color, 'icon', gb.icon) ORDER BY gb.position)
+                (SELECT json_agg(json_build_object('id', gb.id, 'name', gb.name, 'label', gb.label, 'color', gb.color, 'icon', gb.icon, 'icon_url', gb.icon_url) ORDER BY gb.position)
                  FROM user_badges ub INNER JOIN global_badges gb ON gb.id = ub.badge_id WHERE ub.user_id = u.id),
                 '[]'::json
               ) as badges

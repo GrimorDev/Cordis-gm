@@ -2260,7 +2260,7 @@ function BadgePip({ b, size = 18 }: { b: import('./api').Badge; size?: number })
           padding: b.icon_url ? 2 : pad,
         }}>
         {b.icon_url
-          ? <img src={b.icon_url} alt={b.label} style={{ width: inner + 4, height: inner + 4, objectFit: 'contain', filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.4))' }}/>
+          ? <img src={b.icon_url.startsWith('/') ? `${STATIC_BASE}${b.icon_url}` : b.icon_url} alt={b.label} style={{ width: inner + 4, height: inner + 4, objectFit: 'contain', filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.4))' }}/>
           : <BIcon size={inner} style={{ color: b.color || '#6366f1' }} strokeWidth={2.2}/>
         }
       </div>
@@ -4938,7 +4938,7 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                   {(badgeForm as any).icon_url && (
                     <div className="flex items-center gap-2">
                       <div className="w-10 h-10 rounded-xl border border-white/[0.1] bg-white/[0.04] flex items-center justify-center overflow-hidden p-1">
-                        <img src={(badgeForm as any).icon_url} alt="preview" className="w-full h-full object-contain"/>
+                        <img src={((badgeForm as any).icon_url as string).startsWith('/') ? `${STATIC_BASE}${(badgeForm as any).icon_url}` : (badgeForm as any).icon_url} alt="preview" className="w-full h-full object-contain"/>
                       </div>
                       <button onClick={()=>setBadgeForm({...badgeForm,icon_url:'',icon:''})} className="text-zinc-600 hover:text-rose-400 transition-colors"><X size={13}/></button>
                     </div>

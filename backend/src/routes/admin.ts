@@ -267,7 +267,7 @@ router.get('/users/search', async (req: AuthRequest, res: Response) => {
     const { rows } = await query(
       `SELECT u.id, u.username, u.avatar_url, u.status, u.is_admin, u.created_at,
               COALESCE(
-                (SELECT json_agg(json_build_object('id', gb.id, 'name', gb.name, 'label', gb.label, 'color', gb.color, 'icon', gb.icon) ORDER BY gb.position)
+                (SELECT json_agg(json_build_object('id', gb.id, 'name', gb.name, 'label', gb.label, 'color', gb.color, 'icon', gb.icon, 'icon_url', gb.icon_url) ORDER BY gb.position)
                  FROM user_badges ub INNER JOIN global_badges gb ON gb.id = ub.badge_id WHERE ub.user_id = u.id),
                 '[]'::json
               ) as badges
@@ -294,7 +294,7 @@ router.post('/badges/assign',
       if (io) {
         const { rows: [updatedUser] } = await query(
           `SELECT id, username, COALESCE(
-            (SELECT json_agg(json_build_object('id', gb.id, 'name', gb.name, 'label', gb.label, 'color', gb.color, 'icon', gb.icon) ORDER BY gb.position)
+            (SELECT json_agg(json_build_object('id', gb.id, 'name', gb.name, 'label', gb.label, 'color', gb.color, 'icon', gb.icon, 'icon_url', gb.icon_url) ORDER BY gb.position)
              FROM user_badges ub INNER JOIN global_badges gb ON gb.id = ub.badge_id WHERE ub.user_id = u.id),
             '[]'::json) as badges FROM users u WHERE u.id=$1`, [user_id]
         );
@@ -314,7 +314,7 @@ router.delete('/users/:userId/badges/:badgeId', async (req: AuthRequest, res: Re
     if (io) {
       const { rows: [updatedUser] } = await query(
         `SELECT id, COALESCE(
-          (SELECT json_agg(json_build_object('id', gb.id, 'name', gb.name, 'label', gb.label, 'color', gb.color, 'icon', gb.icon) ORDER BY gb.position)
+          (SELECT json_agg(json_build_object('id', gb.id, 'name', gb.name, 'label', gb.label, 'color', gb.color, 'icon', gb.icon, 'icon_url', gb.icon_url) ORDER BY gb.position)
            FROM user_badges ub INNER JOIN global_badges gb ON gb.id = ub.badge_id WHERE ub.user_id = u.id),
           '[]'::json) as badges FROM users u WHERE u.id=$1`, [req.params.userId]
       );
