@@ -7054,6 +7054,7 @@ export default function App() {
   const [dmReadStates, setDmReadStates]       = useState<Record<string, string>>({});
   const [friends, setFriends]                 = useState<FriendEntry[]>([]);
   const [blockedUsers, setBlockedUsers]       = useState<Set<string>>(new Set());
+  const [blockedList, setBlockedList]         = useState<{id:string;username:string;avatar_url?:string|null;blocked_at:string}[]>([]);
   const [showDmMenu, setShowDmMenu]           = useState(false);
   const [friendReqs, setFriendReqs]           = useState<FriendRequest[]>([]);
   const [members, setMembers]                 = useState<ServerMember[]>([]);
@@ -9842,14 +9843,15 @@ export default function App() {
   const loadFriends = () => {
     friendsApi.list().then(setFriends).catch(console.error);
     friendsApi.requests().then(setFriendReqs).catch(console.error);
-    friendsApi.blocked().then(bl => setBlockedUsers(new Set(bl.map(b => b.id)))).catch(console.error);
+    friendsApi.blocked().then(bl => { setBlockedUsers(new Set(bl.map(b => b.id))); setBlockedList(bl); }).catch(console.error);
   };
   const loadDms       = () => dmsApi.conversations().then(setDmConvs).catch(console.error);
   const loadGroupConvs = () => groupDmApi.list().then(list => setGroupConvs(list)).catch(console.error);
 
-  const handleBlockUser = async (userId: string, username: string) => {
+  const handleBlockUser = async (userId: string, username: string, avatarUrl?: string | null) => {
     await friendsApi.block(userId);
     setBlockedUsers(prev => new Set([...prev, userId]));
+    setBlockedList(prev => prev.some(b => b.id === userId) ? prev : [{ id: userId, username, avatar_url: avatarUrl ?? null, blocked_at: new Date().toISOString() }, ...prev]);
     addToast(`Zablokowano ${username}`, 'success');
     setShowDmMenu(false);
   };
@@ -9857,6 +9859,7 @@ export default function App() {
   const handleUnblockUser = async (userId: string, username: string) => {
     await friendsApi.unblock(userId);
     setBlockedUsers(prev => { const s = new Set(prev); s.delete(userId); return s; });
+    setBlockedList(prev => prev.filter(b => b.id !== userId));
     addToast(`Odblokowano ${username}`, 'success');
     setShowDmMenu(false);
   };
@@ -18080,7 +18083,7 @@ export default function App() {
                     ]},
                     { group: 'APLIKACJA', items: [
                       {id:'devices',  label:t('settings.devices'),  icon:<Mic size={14}/>,    sections:[{id:'s-input',label:'Wejście'},{id:'s-output',label:'Wyjście'}]},
-                      {id:'privacy',  label:t('settings.privacy'),  icon:<Shield size={14}/>, sections:[{id:'s-status',label:'Status'},{id:'s-messages',label:'Wiadomości'}]},
+                      {id:'privacy',  label:t('settings.privacy'),  icon:<Shield size={14}/>, sections:[{id:'s-status',label:'Status'},{id:'s-messages',label:'Wiadomości'},{id:'s-blocked',label:'Zablokowane konta'}]},
                       {id:'locale',   label:t('settings.locale'),   icon:<Globe size={14}/>,  sections:[]},
                       ...(isTauri?[{id:'desktop' as const, label:'Aplikacja', icon:<Monitor size={14}/>, sections:[]}]:[]),
                       ...(isTauri?[{id:'updates' as const, label:'Aktualizacje', icon:<Download size={14}/>, sections:[]}]:[]),
@@ -18223,78 +18226,104 @@ export default function App() {
                         <PasswordChangeSection gi={gi} addToast={addToast}/>
                       </div>
 
-                      {/* ── SEKCJA: Aktywne sesje ─────────────────────── */}
+                      {/* ── SEKCJA: Aktywne sesje (styl Discord) ─────── */}
                       <div id="s-sessions" className="scroll-mt-4 pb-4">
                         <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 pb-1.5 border-b border-white/[0.06]">Aktywne sesje</p>
-                        <p className="text-xs text-zinc-500 mb-3">Urządzenia zalogowane na Twoje konto. Wylogowanie usuwa sesję — będziesz musiał zalogować się ponownie na tym urządzeniu.</p>
+                        <p className="text-xs text-zinc-500 mb-4 leading-relaxed">
+                          Oto wszystkie urządzenia, które są obecnie zalogowane na Twoje konto. Możesz wylogować każde z tych urządzeń pojedynczo lub wszystkie na raz.<br/>
+                          <span className="text-zinc-600 mt-1 block">Jeśli widzisz wpis, którego nie rozpoznajesz, natychmiast wyloguj się z urządzenia i zmień hasło.</span>
+                        </p>
                         {sessionsLoading ? (
                           <div className="flex items-center gap-2 py-4 text-zinc-600 text-sm"><Loader2 size={14} className="animate-spin shrink-0"/>Ładowanie sesji…</div>
                         ) : sessions.length === 0 ? (
                           <p className="text-xs text-zinc-600 py-3">Brak aktywnych sesji.</p>
-                        ) : (
-                          <div className="flex flex-col gap-2 mb-3">
-                            {sessions.map((s, i) => {
-                              const ua = s.user_agent || '';
-                              const isMobile = /mobile|android|iphone|ipad/i.test(ua);
-                              const isApp    = /Tauri|Electron|cordis-desktop/i.test(ua);
-                              const browser  = ua.match(/Chrome\/[\d.]+/) ? 'Chrome'
-                                : ua.match(/Firefox\/[\d.]+/) ? 'Firefox'
-                                : ua.match(/Safari\/[\d.]+/) ? 'Safari'
-                                : ua.match(/Edg\/[\d.]+/) ? 'Edge'
-                                : 'Przeglądarka';
-                              const DevIcon = isApp ? Monitor : isMobile ? Smartphone : Globe;
-                              const lastSeen = new Date(s.last_seen_at);
-                              const now = Date.now();
-                              const diffMin = Math.floor((now - lastSeen.getTime()) / 60000);
-                              const lastSeenStr = diffMin < 1 ? 'Aktywna teraz'
-                                : diffMin < 60 ? `${diffMin} min temu`
-                                : diffMin < 1440 ? `${Math.floor(diffMin/60)} godz. temu`
-                                : lastSeen.toLocaleDateString('pl-PL');
-                              const isCurrent = i === 0;
-                              return (
-                                <div key={s.id} className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${isCurrent ? 'bg-emerald-500/[0.07] border-emerald-500/20' : 'bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.05]'}`}>
-                                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isCurrent ? 'bg-emerald-500/15' : 'bg-white/[0.06]'}`}>
-                                    <DevIcon size={16} className={isCurrent ? 'text-emerald-400' : 'text-zinc-500'}/>
+                        ) : (() => {
+                          const parseSession = (s: UserSession) => {
+                            const ua = s.user_agent || '';
+                            const isMobile = /mobile|android|iphone|ipad/i.test(ua);
+                            const isApp    = /Tauri|Electron|cordis-desktop/i.test(ua);
+                            const os       = /Windows/i.test(ua) ? 'Windows'
+                              : /Mac OS/i.test(ua)  ? 'Mac OS X'
+                              : /Android/i.test(ua) ? 'Android'
+                              : /iPhone|iPad/i.test(ua) ? 'iOS'
+                              : /Linux/i.test(ua)   ? 'Linux'
+                              : 'Nieznany system';
+                            const browser  = isApp ? 'Cordis Client'
+                              : ua.match(/Edg\//) ? 'Edge'
+                              : ua.match(/Chrome\//) ? 'Chrome'
+                              : ua.match(/Firefox\//) ? 'Firefox'
+                              : ua.match(/Safari\//) ? 'Safari'
+                              : 'Przeglądarka';
+                            const label = isApp ? `${os} · Cordis Client` : `${os} · ${browser}${isMobile ? ' Mobile' : ''}`;
+                            const lastSeen = new Date(s.last_seen_at);
+                            const diffMin  = Math.floor((Date.now() - lastSeen.getTime()) / 60000);
+                            const ago      = diffMin < 1 ? 'Aktywna teraz'
+                              : diffMin < 60 ? `mniej niż godzinę temu`
+                              : diffMin < 1440 ? `${Math.floor(diffMin/60)} godz. temu`
+                              : diffMin < 10080 ? `${Math.floor(diffMin/1440)} dni temu`
+                              : lastSeen.toLocaleDateString('pl-PL');
+                            const DevIcon = isApp ? Monitor : isMobile ? Smartphone : Globe;
+                            return { label, ago, DevIcon };
+                          };
+                          const [current, ...others] = sessions;
+                          const { label: cLabel, ago: cAgo, DevIcon: CIcon } = parseSession(current);
+                          return (
+                            <div className="flex flex-col gap-5">
+                              {/* Bieżące urządzenie */}
+                              <div>
+                                <p className="text-xs font-bold text-zinc-400 mb-3">Bieżące urządzenie</p>
+                                <div className="flex items-center gap-4 py-3">
+                                  <div className="w-10 h-10 rounded-full bg-white/[0.06] flex items-center justify-center shrink-0">
+                                    <CIcon size={18} className="text-zinc-400"/>
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <p className="text-sm font-semibold text-white truncate">
-                                        {isApp ? 'Aplikacja Cordis' : `${browser}${isMobile ? ' (mobile)' : ''}`}
-                                      </p>
-                                      {isCurrent && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">TA SESJA</span>}
-                                    </div>
-                                    <p className="text-[11px] text-zinc-500 truncate">
-                                      {s.ip_address || 'Nieznany IP'} · {lastSeenStr}
-                                    </p>
+                                    <p className="text-sm font-bold text-white uppercase tracking-wide">{cLabel}</p>
+                                    <p className="text-xs text-zinc-500">{current.ip_address || 'Nieznany IP'} · {cAgo}</p>
                                   </div>
-                                  {!isCurrent && (
-                                    <button onClick={async () => {
-                                      try {
-                                        await sessionsApi.revoke(s.id);
-                                        setSessions(p => p.filter(x => x.id !== s.id));
-                                        addToast('Sesja wylogowana', 'success');
-                                      } catch { addToast('Błąd wylogowania sesji', 'error'); }
-                                    }} className="shrink-0 w-8 h-8 flex items-center justify-center rounded-xl text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all">
-                                      <LogOut size={14}/>
-                                    </button>
-                                  )}
                                 </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                        {sessions.length > 1 && (
-                          <button onClick={async () => {
-                            try {
-                              await sessionsApi.revokeAll();
-                              setSessions(p => p.slice(0, 1)); // keep current
-                              addToast('Wylogowano ze wszystkich innych urządzeń', 'success');
-                            } catch { addToast('Błąd wylogowania', 'error'); }
-                          }} className="flex items-center gap-2 text-sm text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/15 border border-rose-500/20 px-4 py-2.5 rounded-xl transition-all font-medium">
-                            <LogOut size={14}/>
-                            Wyloguj ze wszystkich innych urządzeń ({sessions.length - 1})
-                          </button>
-                        )}
+                              </div>
+                              {/* Inne urządzenia */}
+                              {others.length > 0 && (
+                                <div>
+                                  <p className="text-xs font-bold text-zinc-400 mb-3">Inne urządzenia</p>
+                                  <div className="flex flex-col">
+                                    {others.map((s, i) => {
+                                      const { label, ago, DevIcon } = parseSession(s);
+                                      return (
+                                        <div key={s.id} className={`flex items-center gap-4 py-3 ${i > 0 ? 'border-t border-white/[0.05]' : ''}`}>
+                                          <div className="w-10 h-10 rounded-full bg-white/[0.06] flex items-center justify-center shrink-0">
+                                            <DevIcon size={18} className="text-zinc-500"/>
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-bold text-zinc-300 uppercase tracking-wide">{label}</p>
+                                            <p className="text-xs text-zinc-500">{s.ip_address || 'Nieznany IP'} · {ago}</p>
+                                          </div>
+                                          <button onClick={async () => {
+                                            try { await sessionsApi.revoke(s.id); setSessions(p => p.filter(x => x.id !== s.id)); addToast('Sesja wylogowana', 'success'); }
+                                            catch { addToast('Błąd wylogowania sesji', 'error'); }
+                                          }} className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-white hover:bg-white/[0.08] transition-all">
+                                            <X size={14}/>
+                                          </button>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                              {/* Wyloguj wszystkie */}
+                              <div className="border-t border-white/[0.06] pt-4">
+                                <p className="text-sm font-bold text-white mb-1">Wyloguj się na wszystkich znanych urządzeniach</p>
+                                <p className="text-xs text-zinc-500 mb-3">Będzie trzeba ponownie zalogować się na wszystkich wylogowanych urządzeniach.</p>
+                                <button onClick={async () => {
+                                  try { await sessionsApi.revokeAll(); setSessions(p => p.slice(0,1)); addToast('Wylogowano ze wszystkich innych urządzeń', 'success'); }
+                                  catch { addToast('Błąd wylogowania', 'error'); }
+                                }} className="text-sm font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/15 border border-rose-500/20 px-5 py-2.5 rounded-xl transition-all">
+                                  Wyloguj wszystkie znane urządzenia
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                     </motion.div>
@@ -18907,6 +18936,53 @@ export default function App() {
                         </button>
                       </div>
                       </div>{/* end s-messages */}
+
+                      {/* ── SEKCJA: Zablokowane konta ─────────────────── */}
+                      <div id="s-blocked" className="scroll-mt-4 pb-4">
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 pb-1.5 border-b border-white/[0.06]">Zablokowane konta</p>
+                        <p className="text-xs text-zinc-500 mb-4 leading-relaxed">
+                          To Ty decydujesz, z kim chcesz mieć kontakt. Zablokowane osoby nie mogą wysyłać Ci wiadomości ani zaproszenia do znajomych.
+                        </p>
+                        {blockedList.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center py-8 gap-2">
+                            <div className="w-12 h-12 rounded-2xl bg-white/[0.04] flex items-center justify-center mb-1">
+                              <UserX size={22} className="text-zinc-600"/>
+                            </div>
+                            <p className="text-sm font-semibold text-zinc-500">Brak zablokowanych kont</p>
+                            <p className="text-xs text-zinc-600">Zablokowani użytkownicy pojawią się tutaj.</p>
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] mb-3">
+                              <div className="w-8 h-8 rounded-xl bg-zinc-800 flex items-center justify-center shrink-0">
+                                <UserX size={14} className="text-zinc-500"/>
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-zinc-300">Zablokowane konta</p>
+                                <p className="text-xs text-zinc-500">{blockedList.length} {blockedList.length === 1 ? 'konto' : blockedList.length < 5 ? 'konta' : 'kont'}</p>
+                              </div>
+                            </div>
+                            <div className="flex flex-col">
+                              {blockedList.map((b, i) => (
+                                <div key={b.id} className={`flex items-center gap-3 py-3 ${i > 0 ? 'border-t border-white/[0.05]' : ''}`}>
+                                  <img src={ava(b)} className="w-9 h-9 rounded-full object-cover shrink-0" alt=""/>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-bold text-white truncate">{b.username}</p>
+                                    <p className="text-[11px] text-zinc-500 truncate">{b.username.toLowerCase()}</p>
+                                  </div>
+                                  <button onClick={async () => {
+                                    try { await handleUnblockUser(b.id, b.username); }
+                                    catch { addToast('Błąd odblokowania', 'error'); }
+                                  }} className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/[0.07] hover:bg-white/[0.12] text-zinc-300 hover:text-white border border-white/[0.08] transition-all">
+                                    Odblokuj
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>{/* end s-blocked */}
+
                     </motion.div>
                   )}
 
