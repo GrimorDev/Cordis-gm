@@ -23,7 +23,7 @@ import {
   HardDrive, PieChart, Trash, History,
   Bookmark, BookmarkCheck, Timer, Square, ImageIcon, Moon,
   Keyboard, Radio, Compass, CalendarPlus, Mic2,
-  Home, BookOpen, TrendingUp, Layers, SmilePlus,
+  Home, BookOpen, TrendingUp, Layers, SmilePlus, Smartphone,
   type LucideIcon
 } from 'lucide-react';
 import {
@@ -45,8 +45,9 @@ import {
   botsApi, AVAILABLE_BOTS,
   type BotDefinition, type InstalledBot, type MusicBotState,
   channelPrefsApi, mutualServersApi, mutualFriendsApi, groupDmApi, eventsApi, discoverApi, onboardingApi,
+  sessionsApi,
   type ChannelPref, type MutualServer, type MutualFriend, type GroupDmConversation, type ServerEvent,
-  type DiscoverServer, type ServerOnboarding,
+  type DiscoverServer, type ServerOnboarding, type UserSession,
 } from './api';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -284,6 +285,10 @@ const THEMES = [
   { id: 'forest',   name: 'Las',             desc: 'Mroczna zieleń leśna',       vars: { '--app-bg': '#030d06', '--app-sidebar': '#05150a', '--app-card': '#091a0f', '--app-surface': '#0e2416' } },
   { id: 'sakura',   name: 'Sakura',          desc: 'Różowe wiśniowe akcenty',    vars: { '--app-bg': '#0d0408', '--app-sidebar': '#170610', '--app-card': '#200a18', '--app-surface': '#2b1020' } },
   { id: 'sunset',   name: 'Zachód słońca',   desc: 'Ciepłe brązowo-pomarańczowe', vars: { '--app-bg': '#0d0703', '--app-sidebar': '#160d05', '--app-card': '#1d1208', '--app-surface': '#261a0d' } },
+  { id: 'ocean',    name: 'Ocean',           desc: 'Głębiny błękitu oceanu',       vars: { '--app-bg': '#020d1a', '--app-sidebar': '#041627', '--app-card': '#071e34', '--app-surface': '#0c2844' } },
+  { id: 'neon',     name: 'Neon',            desc: 'Mroczne tło z cyberpunkowym blaskiem', vars: { '--app-bg': '#01080f', '--app-sidebar': '#030f1c', '--app-card': '#051629', '--app-surface': '#091f38' } },
+  { id: 'rose',     name: 'Róż',             desc: 'Subtelna elegancja różowych akcentów', vars: { '--app-bg': '#0e0308', '--app-sidebar': '#180510', '--app-card': '#21071a', '--app-surface': '#2e0d25' } },
+  { id: 'coffee',   name: 'Kawa',            desc: 'Ciepłe odcienie czekolady i espresso', vars: { '--app-bg': '#0b0603', '--app-sidebar': '#150e07', '--app-card': '#1e150a', '--app-surface': '#281d10' } },
 ] as const;
 type ThemeId = typeof THEMES[number]['id'];
 
@@ -7505,6 +7510,8 @@ export default function App() {
   // App Settings
   const [appSettOpen, setAppSettOpen]         = useState(false);
   const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'devices'|'privacy'|'locale'|'connections'|'theme'|'desktop'|'updates'|'about'>('account');
+  const [sessions, setSessions]               = useState<UserSession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
   // Globalny hook żeby OAuth callback mógł otworzyć zakładkę połączeń
   useEffect(() => { (window as any).__cordisGoToSettingsTab = (tab: typeof appSettTab) => setAppSettTab(tab); }, []);
   const [appVersion, setAppVersion]           = useState<string>('');
@@ -7541,6 +7548,14 @@ export default function App() {
       twoFactorApi.status().then(setTwoFaStatus).catch(() => {});
     }
   }, [appSettTab, isAuthenticated]);
+
+  // Load sessions when account tab opens
+  useEffect(() => {
+    if (appSettTab === 'account' && isAuthenticated && appSettOpen) {
+      setSessionsLoading(true);
+      sessionsApi.list().then(setSessions).catch(() => {}).finally(() => setSessionsLoading(false));
+    }
+  }, [appSettTab, isAuthenticated, appSettOpen]);
 
   // Activity modal
   const [showActivityModal, setShowActivityModal] = useState(false);
@@ -18057,7 +18072,7 @@ export default function App() {
                   {([
                     { group: 'KONTO UŻYTKOWNIKA', items: [
                       {id:'account',     label:t('settings.account'),    icon:<Users size={14}/>,
-                        sections:[{id:'s-profil',label:'Profil'},{id:'s-info',label:'Informacje'},{id:'s-password',label:'Hasło & bezpieczeństwo'}]},
+                        sections:[{id:'s-profil',label:'Profil'},{id:'s-info',label:'Informacje'},{id:'s-password',label:'Hasło & bezpieczeństwo'},{id:'s-sessions',label:'Aktywne sesje'}]},
                       {id:'appearance',  label:t('settings.appearance'), icon:<Image size={14}/>,
                         sections:[{id:'s-chat',label:'Czat'},{id:'s-accessibility',label:'Profil i efekty'},{id:'s-card-effect',label:'Efekt karty'}]},
                       {id:'theme',       label:'Motyw',                  icon:<Palette size={14}/>, sections:[]},
@@ -18203,9 +18218,83 @@ export default function App() {
                       </div>
 
                       {/* ── SEKCJA: Hasło & bezpieczeństwo ────────────── */}
-                      <div id="s-password" className="scroll-mt-4 pb-4">
+                      <div id="s-password" className="scroll-mt-4">
                         <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 pb-1.5 border-b border-white/[0.06]">Hasło i bezpieczeństwo</p>
                         <PasswordChangeSection gi={gi} addToast={addToast}/>
+                      </div>
+
+                      {/* ── SEKCJA: Aktywne sesje ─────────────────────── */}
+                      <div id="s-sessions" className="scroll-mt-4 pb-4">
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 pb-1.5 border-b border-white/[0.06]">Aktywne sesje</p>
+                        <p className="text-xs text-zinc-500 mb-3">Urządzenia zalogowane na Twoje konto. Wylogowanie usuwa sesję — będziesz musiał zalogować się ponownie na tym urządzeniu.</p>
+                        {sessionsLoading ? (
+                          <div className="flex items-center gap-2 py-4 text-zinc-600 text-sm"><Loader2 size={14} className="animate-spin shrink-0"/>Ładowanie sesji…</div>
+                        ) : sessions.length === 0 ? (
+                          <p className="text-xs text-zinc-600 py-3">Brak aktywnych sesji.</p>
+                        ) : (
+                          <div className="flex flex-col gap-2 mb-3">
+                            {sessions.map((s, i) => {
+                              const ua = s.user_agent || '';
+                              const isMobile = /mobile|android|iphone|ipad/i.test(ua);
+                              const isApp    = /Tauri|Electron|cordis-desktop/i.test(ua);
+                              const browser  = ua.match(/Chrome\/[\d.]+/) ? 'Chrome'
+                                : ua.match(/Firefox\/[\d.]+/) ? 'Firefox'
+                                : ua.match(/Safari\/[\d.]+/) ? 'Safari'
+                                : ua.match(/Edg\/[\d.]+/) ? 'Edge'
+                                : 'Przeglądarka';
+                              const DevIcon = isApp ? Monitor : isMobile ? Smartphone : Globe;
+                              const lastSeen = new Date(s.last_seen_at);
+                              const now = Date.now();
+                              const diffMin = Math.floor((now - lastSeen.getTime()) / 60000);
+                              const lastSeenStr = diffMin < 1 ? 'Aktywna teraz'
+                                : diffMin < 60 ? `${diffMin} min temu`
+                                : diffMin < 1440 ? `${Math.floor(diffMin/60)} godz. temu`
+                                : lastSeen.toLocaleDateString('pl-PL');
+                              const isCurrent = i === 0;
+                              return (
+                                <div key={s.id} className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${isCurrent ? 'bg-emerald-500/[0.07] border-emerald-500/20' : 'bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.05]'}`}>
+                                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isCurrent ? 'bg-emerald-500/15' : 'bg-white/[0.06]'}`}>
+                                    <DevIcon size={16} className={isCurrent ? 'text-emerald-400' : 'text-zinc-500'}/>
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-sm font-semibold text-white truncate">
+                                        {isApp ? 'Aplikacja Cordis' : `${browser}${isMobile ? ' (mobile)' : ''}`}
+                                      </p>
+                                      {isCurrent && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">TA SESJA</span>}
+                                    </div>
+                                    <p className="text-[11px] text-zinc-500 truncate">
+                                      {s.ip_address || 'Nieznany IP'} · {lastSeenStr}
+                                    </p>
+                                  </div>
+                                  {!isCurrent && (
+                                    <button onClick={async () => {
+                                      try {
+                                        await sessionsApi.revoke(s.id);
+                                        setSessions(p => p.filter(x => x.id !== s.id));
+                                        addToast('Sesja wylogowana', 'success');
+                                      } catch { addToast('Błąd wylogowania sesji', 'error'); }
+                                    }} className="shrink-0 w-8 h-8 flex items-center justify-center rounded-xl text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all">
+                                      <LogOut size={14}/>
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {sessions.length > 1 && (
+                          <button onClick={async () => {
+                            try {
+                              await sessionsApi.revokeAll();
+                              setSessions(p => p.slice(0, 1)); // keep current
+                              addToast('Wylogowano ze wszystkich innych urządzeń', 'success');
+                            } catch { addToast('Błąd wylogowania', 'error'); }
+                          }} className="flex items-center gap-2 text-sm text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/15 border border-rose-500/20 px-4 py-2.5 rounded-xl transition-all font-medium">
+                            <LogOut size={14}/>
+                            Wyloguj ze wszystkich innych urządzeń ({sessions.length - 1})
+                          </button>
+                        )}
                       </div>
 
                     </motion.div>

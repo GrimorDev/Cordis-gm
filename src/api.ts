@@ -366,6 +366,20 @@ export const auth = {
     req<{ ok: boolean }>('PUT', '/auth/change-password', { currentPassword, newPassword }),
 };
 
+// ── Sessions ───────────────────────────────────────────────────────────────
+export interface UserSession {
+  id: string;
+  ip_address?: string | null;
+  user_agent?: string | null;
+  created_at: string;
+  last_seen_at: string;
+}
+export const sessionsApi = {
+  list:      ()         => req<UserSession[]>('GET',    '/auth/sessions'),
+  revoke:    (id: string) => req<{ ok: boolean }>('DELETE', `/auth/sessions/${id}`),
+  revokeAll: ()         => req<{ ok: boolean }>('DELETE', '/auth/sessions'),
+};
+
 // ── Upload helper ──────────────────────────────────────────────────────────
 export async function uploadFile(file: File, folder: string): Promise<string> {
   const fd = new FormData();
