@@ -7117,6 +7117,7 @@ export default function App() {
   const [friendSearchLoading, setFriendSearchLoading] = useState(false);
   const [sending, setSending]                 = useState(false);
   const [sendError, setSendError]             = useState('');
+  const [dmBlockedPopup, setDmBlockedPopup]   = useState(false);
   const [replyTo, setReplyTo]                 = useState<MessageFull|DmMessageFull|null>(null);
   const [msgMenuId, setMsgMenuId]             = useState<string|null>(null);
   const [msgCtxMenu, setMsgCtxMenu]           = useState<{x:number;y:number;msg:MessageFull|DmMessageFull}|null>(null);
@@ -10416,6 +10417,11 @@ export default function App() {
       if ((err as any)?.status === 429) {
         const match = (err?.message || '').match(/(\d+)s/);
         setSlowmodeLeft(match ? parseInt(match[1]) : 5);
+      } else if ((err as any)?.status === 403 && activeView === 'dms' && activeDmUserId) {
+        // Block or privacy error in DM — show prominent popup
+        setDmBlockedPopup(true);
+        setMsgInput('');
+        return;
       }
       setSendError(err?.message || 'Nie udało się wysłać');
       setMsgInput(finalContent);
@@ -20507,6 +20513,42 @@ export default function App() {
       )}
 
       {/* ── Flying emoji reactions overlay ───────────────────────────────── */}
+      {/* ── DM Blocked Popup ─────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {dmBlockedPopup && (
+          <motion.div
+            initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={()=>setDmBlockedPopup(false)}>
+            <motion.div
+              initial={{opacity:0,scale:0.88,y:16}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.88,y:16}}
+              transition={{duration:0.18,ease:[0.16,1,0.3,1]}}
+              className="w-full max-w-sm bg-[#0f0f1a] border border-white/[0.1] rounded-2xl shadow-2xl overflow-hidden"
+              onClick={e=>e.stopPropagation()}>
+              {/* header z gradientem */}
+              <div className="h-24 bg-gradient-to-br from-rose-600/40 via-rose-500/20 to-transparent flex items-center justify-center relative">
+                <div className="w-14 h-14 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center shadow-lg shadow-rose-500/20">
+                  <UserX size={26} className="text-rose-400"/>
+                </div>
+              </div>
+              <div className="px-6 pb-6 pt-4 text-center">
+                <h2 className="text-lg font-bold text-white mb-2">Ups…</h2>
+                <p className="text-sm text-zinc-400 leading-relaxed mb-1">
+                  Niestety nie możesz wysłać wiadomości do tej osoby.
+                </p>
+                <p className="text-xs text-zinc-600 leading-relaxed mb-5">
+                  Możliwe przyczyny: ta osoba Cię zablokowała, Ty zablokowałeś(-aś) tę osobę, lub nie jesteście znajomymi i wiadomości od obcych są wyłączone.
+                </p>
+                <button onClick={()=>setDmBlockedPopup(false)}
+                  className="w-full py-3 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/25 text-rose-400 hover:text-rose-300 font-semibold text-sm transition-all active:scale-95">
+                  Rozumiem
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {ReactDOM.createPortal(
         <>
           {flyingEmojis.map(fe => (
