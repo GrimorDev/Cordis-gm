@@ -15044,7 +15044,7 @@ export default function App() {
                   // Blocked check — I blocked them or they blocked me
                   const iBlockedThem = isDmView && blockedUsers.has(activeDmUserId);
                   // Announcement channel — only those with manage_messages can write
-                  if (activeCh?.type==='announcement' && !canManageMessages) return (
+                  if (!isDmView && activeCh?.type==='announcement' && !canManageMessages) return (
                     <div className="flex items-center justify-center gap-2.5 py-3 px-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400 text-sm">
                       <Megaphone size={14} className="shrink-0"/>
                       <span>To jest kanał ogłoszeń. Tylko administratorzy mogą tutaj pisać.</span>
@@ -15788,7 +15788,7 @@ export default function App() {
           })()}
 
           {/* ─ DM PARTNER BIO PANEL ─ */}
-          {activeView==='dms'&&activeDm&&dmPartnerProfile&&(()=>{
+          {activeView==='dms'&&(activeDm||dmPartnerProfile)&&dmPartnerProfile&&(()=>{
             // ── helpers for tabs ─────────────────────────────────
             const IMG_EXT = /\.(jpe?g|png|gif|webp|avif|svg|bmp)(\?.*)?$/i;
             const VID_EXT = /\.(mp4|webm|ogg|mov|avi)(\?.*)?$/i;

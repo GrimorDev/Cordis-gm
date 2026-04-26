@@ -50,12 +50,15 @@ export default function ServersScreen() {
   const [activeVoice, setActiveVoice] = useState<{ channelId: string; channelName: string } | null>(null);
 
   // Modals
-  const [modal, setModal] = useState<'none' | 'create' | 'join'>('none');
+  const [modal, setModal] = useState<'none' | 'create' | 'join' | 'editChannel'>('none');
   const [joinCode, setJoinCode] = useState('');
   const [createName, setCreateName] = useState('');
   const [createDesc, setCreateDesc] = useState('');
   const [modalLoading, setModalLoading] = useState(false);
   const [actionServer, setActionServer] = useState<Server | null>(null);
+  const [actionChannel, setActionChannel] = useState<Channel | null>(null);
+  const [editChannelName, setEditChannelName] = useState('');
+  const [editChannelId, setEditChannelId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -175,6 +178,42 @@ export default function ServersScreen() {
       else next.add(key as any);
       return next;
     });
+  };
+
+  const handleEditChannel = async () => {
+    if (!editChannelId || !editChannelName.trim()) return;
+    setModalLoading(true);
+    try {
+      await channelsApi.update(editChannelId, { name: editChannelName.trim() });
+      setChannels(channels.map(ch => ch.id === editChannelId ? { ...ch, name: editChannelName.trim() } : ch));
+      setModal('none');
+      setEditChannelId(null);
+    } catch (e: any) {
+      Alert.alert('Błąd', e.message ?? 'Nie udało się edytować kanału');
+    } finally { setModalLoading(false); }
+  };
+
+  const handleDeleteChannel = (ch: Channel) => {
+    Alert.alert(
+      'Usuń kanał',
+      `Usunąć kanał #${ch.name}? Tej akcji nie można cofnąć.`,
+      [
+        { text: 'Anuluj', style: 'cancel' },
+        {
+          text: 'Usuń',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await channelsApi.delete(ch.id);
+              setChannels(channels.filter(c => c.id !== ch.id));
+              setActionChannel(null);
+            } catch (e: any) {
+              Alert.alert('Błąd', e.message ?? 'Nie udało się usunąć kanału');
+            }
+          },
+        },
+      ],
+    );
   };
 
   // ── Channel list view ──────────────────────────────────────────────────────
@@ -328,6 +367,8 @@ export default function ServersScreen() {
                           pathname: '/(app)/channel/[id]',
                           params: { id: ch.id, name: ch.name, serverId: activeServer.id },
                         })}
+                        onLongPress={() => { setActionChannel(ch); }}
+                        delayLongPress={350}
                         activeOpacity={0.7}
                       >
                         <View style={[styles.channelIconWrap, { backgroundColor: C.accent + '22' }]}>
@@ -375,6 +416,57 @@ export default function ServersScreen() {
           onLeave={handleLeave}
           onInvite={handleShareInvite}
         />
+
+        {/* Channel action sheet */}
+        <ChannelActionSheet
+          channel={actionChannel}
+          isOwner={isOwner}
+          onClose={() => setActionChannel(null)}
+          onOpen={(ch) => {
+            setActionChannel(null);
+            router.push({ pathname: '/(app)/channel/[id]', params: { id: ch.id, name: ch.name, serverId: activeServer.id } });
+          }}
+          onEdit={(ch) => {
+            setEditChannelId(ch.id);
+            setEditChannelName(ch.name);
+            setModal('editChannel');
+          }}
+          onDelete={(ch) => {
+            setActionChannel(null);
+            handleDeleteChannel(ch);
+          }}
+        />
+
+        {/* Edit channel modal */}
+        <Modal visible={modal === 'editChannel'} transparent animationType="slide" onRequestClose={() => setModal('none')}>
+          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setModal('none')}>
+            <View style={styles.modalCard} onStartShouldSetResponder={() => true}>
+              <View style={styles.modalDragBar} />
+              <Text style={styles.modalTitle}>Edytuj kanał</Text>
+              <Text style={styles.modalLabel}>NAZWA KANAŁU</Text>
+              <TextInput
+                style={styles.input}
+                value={editChannelName}
+                onChangeText={setEditChannelName}
+                placeholder="Nazwa kanału…"
+                placeholderTextColor={C.textMuted}
+                autoFocus
+                maxLength={100}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity
+                style={[styles.modalBtn, (!editChannelName.trim() || modalLoading) && styles.modalBtnDisabled]}
+                onPress={handleEditChannel}
+                disabled={!editChannelName.trim() || modalLoading}
+              >
+                {modalLoading
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={styles.modalBtnText}>Zapisz zmiany</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
       </View>
     );
   }
@@ -550,10 +642,63 @@ function ServerActionSheet({ server, onClose, onLeave, onInvite }: {
       <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
         <View style={styles.actionSheet}>
           <View style={styles.modalDragBar} />
-          <Text style={styles.actionSheetTitle}>{server.name}</Text>
+          <Text style={styles.actionSheetServerTitle}>{server.name}</Text>
           <ActionRow icon="link-outline" label="Wyślij zaproszenie" onPress={() => onInvite(server)} />
           <View style={styles.actionDivider} />
           <ActionRow icon="log-out-outline" label="Opuść serwer" color={C.danger} onPress={() => { onClose(); onLeave(server); }} />
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+// ── Channel Action Sheet ───────────────────────────────────────────────────────
+function ChannelActionSheet({ channel, isOwner, onClose, onOpen, onEdit, onDelete }: {
+  channel: Channel | null;
+  isOwner: boolean;
+  onClose: () => void;
+  onOpen: (ch: Channel) => void;
+  onEdit: (ch: Channel) => void;
+  onDelete: (ch: Channel) => void;
+}) {
+  if (!channel) return null;
+
+  const typeLabel = channel.type === 'voice' ? 'Kanał głosowy'
+    : channel.type === 'announcement' ? 'Kanał ogłoszeń'
+    : channel.type === 'forum' ? 'Forum'
+    : 'Kanał tekstowy';
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
+        <View style={styles.actionSheet} onStartShouldSetResponder={() => true}>
+          <View style={styles.modalDragBar} />
+          {/* Channel header in sheet */}
+          <View style={styles.chSheetHeader}>
+            <View style={styles.chSheetIcon}>
+              <Ionicons
+                name={channel.type === 'voice' ? 'mic' : channel.type === 'announcement' ? 'megaphone' : 'chatbox'}
+                size={18}
+                color={C.accent}
+              />
+            </View>
+            <View>
+              <Text style={styles.actionSheetTitle}>#{channel.name}</Text>
+              <Text style={styles.chSheetType}>{typeLabel}</Text>
+            </View>
+          </View>
+
+          <View style={styles.actionDivider} />
+
+          <ActionRow icon="arrow-forward-outline" label="Otwórz kanał" onPress={() => { onClose(); onOpen(channel); }} />
+
+          {isOwner && (
+            <>
+              <View style={styles.actionDivider} />
+              <ActionRow icon="pencil-outline" label="Zmień nazwę" onPress={() => { onClose(); onEdit(channel); }} />
+              <ActionRow icon="trash-outline" label="Usuń kanał" color={C.danger} onPress={() => { onDelete(channel); }} />
+            </>
+          )}
         </View>
       </TouchableOpacity>
     </Modal>
@@ -724,8 +869,21 @@ const styles = StyleSheet.create({
     backgroundColor: C.bgCard, borderTopLeftRadius: 24, borderTopRightRadius: 24,
     paddingBottom: 24, borderTopWidth: 1, borderColor: C.border,
   },
-  actionSheetTitle: { color: C.text, fontSize: 16, fontWeight: '700', textAlign: 'center', paddingVertical: 16, paddingHorizontal: 20 },
+  actionSheetTitle: { color: C.text, fontSize: 16, fontWeight: '700' },
+  actionSheetServerTitle: { color: C.text, fontSize: 16, fontWeight: '700', textAlign: 'center', paddingVertical: 16, paddingHorizontal: 20 },
   actionDivider: { height: 1, backgroundColor: C.border, marginHorizontal: 16 },
   actionRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, paddingHorizontal: 20 },
   actionLabel: { color: C.textSub, fontSize: 16 },
+
+  // Channel action sheet header
+  chSheetHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 20, paddingTop: 4, paddingBottom: 16,
+  },
+  chSheetIcon: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: C.accentMuted, borderWidth: 1, borderColor: C.borderAccent,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  chSheetType: { color: C.textMuted, fontSize: 12, marginTop: 1 },
 });

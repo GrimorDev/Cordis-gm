@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, TextInput,
   Alert, ScrollView, Modal, Platform, ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,11 +10,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { UserAvatar } from '../../src/components/UserAvatar';
 import { C, STATUS_COLOR, STATUS_LABEL } from '../../src/theme';
-import { authApi, usersApi } from '../../src/api';
+import { authApi, usersApi, friendsApi, type BlockedUser } from '../../src/api';
 import { useStore } from '../../src/store';
 import { disconnectSocket } from '../../src/socket';
 import { unregisterPushNotifications } from '../../src/notifications';
 import Constants from 'expo-constants';
+import { STATIC_BASE } from '../../src/config';
+
+function resolveAvatar(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${STATIC_BASE}${url}`;
+}
 
 const STATUS_OPTIONS = [
   { key: 'online',  label: 'Online',           icon: 'ellipse' as const,         color: C.online  },
@@ -22,7 +30,7 @@ const STATUS_OPTIONS = [
   { key: 'offline', label: 'Niewidoczny',        icon: 'ellipse-outline' as const, color: C.offline },
 ];
 
-type Sheet = 'none' | 'editBio' | 'changeUsername' | 'changePassword' | 'status';
+type Sheet = 'none' | 'editBio' | 'changeUsername' | 'changePassword' | 'status' | 'blocked';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -31,6 +39,8 @@ export default function ProfileScreen() {
   const [sheet, setSheet] = useState<Sheet>('none');
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
+  const [blockedLoading, setBlockedLoading] = useState(false);
 
   const [aboutMe, setAboutMe] = useState(currentUser?.about_me ?? '');
   const [newUsername, setNewUsername] = useState('');
@@ -38,6 +48,37 @@ export default function ProfileScreen() {
   const [newPass, setNewPass] = useState('');
   const [confirmPass, setConfirmPass] = useState('');
   const [showPass, setShowPass] = useState(false);
+
+  const loadBlocked = useCallback(async () => {
+    setBlockedLoading(true);
+    try {
+      const list = await friendsApi.blocked();
+      setBlockedUsers(list);
+    } catch { } finally { setBlockedLoading(false); }
+  }, []);
+
+  useEffect(() => { loadBlocked(); }, []);
+
+  const handleUnblock = (user: BlockedUser) => {
+    Alert.alert(
+      'Odblokuj użytkownika',
+      `Odblokować ${user.username}?`,
+      [
+        { text: 'Anuluj', style: 'cancel' },
+        {
+          text: 'Odblokuj',
+          onPress: async () => {
+            try {
+              await friendsApi.unblock(user.id);
+              setBlockedUsers(prev => prev.filter(u => u.id !== user.id));
+            } catch (e: any) {
+              Alert.alert('Błąd', e.message ?? 'Nie udało się odblokować.');
+            }
+          },
+        },
+      ],
+    );
+  };
 
   if (!currentUser) return null;
 
@@ -223,9 +264,30 @@ export default function ProfileScreen() {
           <Text style={styles.sectionTitle}>INFORMACJE</Text>
           <View style={styles.card}>
             <InfoRow label="ID użytkownika" value={currentUser.id.slice(0, 8) + '…'} selectable />
-            <InfoRow label="Konto założone" value={new Date(currentUser.created_at).toLocaleDateString('pl-PL', { year: 'numeric', month: 'long' })} border />
+            <InfoRow
+              label="Konto założone"
+              value={(() => {
+                if (!currentUser.created_at) return 'Brak danych';
+                const d = new Date(currentUser.created_at);
+                return isNaN(d.getTime()) ? 'Brak danych' : d.toLocaleDateString('pl-PL', { year: 'numeric', month: 'long' });
+              })()}
+              border
+            />
             <InfoRow label="Wersja aplikacji" value={`v${appVersion}`} border />
             <InfoRow label="System" value={Platform.OS === 'ios' ? 'iOS' : 'Android'} border />
+          </View>
+        </View>
+
+        {/* Privacy section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>PRYWATNOŚĆ</Text>
+          <View style={styles.card}>
+            <SettingRow
+              icon="ban-outline"
+              label="Zablokowani użytkownicy"
+              value={blockedUsers.length > 0 ? `${blockedUsers.length} zablokowanych` : 'Brak zablokowanych'}
+              onPress={() => setSheet('blocked')}
+            />
           </View>
         </View>
 
@@ -301,6 +363,55 @@ export default function ProfileScreen() {
           <Text style={styles.sheetBtnText}>{saving ? 'Zapisuję…' : 'Zmień nazwę'}</Text>
         </TouchableOpacity>
       </BottomSheet>
+
+      {/* Blocked users sheet */}
+      <Modal
+        visible={sheet === 'blocked'}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSheet('none')}
+      >
+        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setSheet('none')}>
+          <View style={[styles.sheet, { maxHeight: '75%' }]} onStartShouldSetResponder={() => true}>
+            <View style={styles.dragBar} />
+            <View style={styles.blockedHeader}>
+              <Text style={styles.sheetTitle}>Zablokowani użytkownicy</Text>
+              <TouchableOpacity onPress={loadBlocked}>
+                <Ionicons name="refresh-outline" size={20} color={C.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            {blockedLoading ? (
+              <ActivityIndicator color={C.accent} style={{ marginVertical: 24 }} />
+            ) : blockedUsers.length === 0 ? (
+              <View style={styles.blockedEmpty}>
+                <Ionicons name="checkmark-circle-outline" size={40} color={C.success} />
+                <Text style={styles.blockedEmptyText}>Brak zablokowanych użytkowników</Text>
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 400 }}>
+                {blockedUsers.map(u => (
+                  <View key={u.id} style={styles.blockedRow}>
+                    <UserAvatar url={resolveAvatar(u.avatar_url)} username={u.username} size={42} />
+                    <View style={styles.blockedInfo}>
+                      <Text style={styles.blockedName}>{u.username}</Text>
+                      <Text style={styles.blockedDate}>
+                        Zablokowany {new Date(u.blocked_at).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.unblockBtn}
+                      onPress={() => { setSheet('none'); setTimeout(() => handleUnblock(u), 350); }}
+                    >
+                      <Text style={styles.unblockBtnText}>Odblokuj</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Password sheet */}
       <BottomSheet visible={sheet === 'changePassword'} onClose={() => setSheet('none')} title="Zmień hasło">
@@ -603,4 +714,28 @@ const styles = StyleSheet.create({
   sheetBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   showPassRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   showPassText: { color: C.textMuted, fontSize: 13 },
+
+  // Blocked users
+  blockedHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4,
+  },
+  blockedEmpty: { alignItems: 'center', paddingVertical: 28, gap: 10 },
+  blockedEmptyText: { color: C.textSub, fontSize: 14, fontWeight: '600' },
+  blockedRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: C.border,
+  },
+  blockedInfo: { flex: 1 },
+  blockedName: { color: C.text, fontSize: 15, fontWeight: '600' },
+  blockedDate: { color: C.textMuted, fontSize: 11, marginTop: 2 },
+  unblockBtn: {
+    backgroundColor: C.successMuted,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: C.success + '44',
+  },
+  unblockBtnText: { color: C.success, fontSize: 13, fontWeight: '700' },
 });

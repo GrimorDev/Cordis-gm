@@ -24,6 +24,8 @@ interface Props {
   onAvatarPress?: (userId: string) => void;
   /** If true, render as a system/call message pill instead of normal bubble */
   isSystem?: boolean;
+  /** If true, moderator-level delete is allowed regardless of ownership */
+  canModerate?: boolean;
 }
 
 function fmtTime(dateStr: string) {
@@ -57,7 +59,7 @@ function callColor(content: string): string {
 }
 
 export function MessageBubble({
-  msg, isOwn, showHeader, onReply, onDelete, onReact, onEdit, onAvatarPress, isSystem,
+  msg, isOwn, showHeader, onReply, onDelete, onReact, onEdit, onAvatarPress, isSystem, canModerate,
 }: Props) {
   const [menuVisible, setMenuVisible] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -253,10 +255,10 @@ export function MessageBubble({
               <Text style={styles.menuLabel}>Kopiuj tekst</Text>
             </TouchableOpacity>
 
-            {isOwn && onDelete && (
+            {(isOwn || canModerate) && onDelete && (
               <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
                 <Ionicons name="trash-outline" size={18} color={C.danger} />
-                <Text style={[styles.menuLabel, { color: C.danger }]}>Usuń</Text>
+                <Text style={[styles.menuLabel, { color: C.danger }]}>Usuń wiadomość</Text>
               </TouchableOpacity>
             )}
           </Pressable>

@@ -208,6 +208,7 @@ export default function ChannelScreen() {
                 onEdit={isSysMsg ? undefined : handleEdit}
                 onReact={isSysMsg ? undefined : handleReact}
                 isSystem={isSysMsg}
+                canModerate={isOwner}
                 onAvatarPress={(uid) => {
                   if (uid !== currentUser?.id) {
                     router.push({ pathname: '/(app)/user-profile/[userId]', params: { userId: uid } } as any);

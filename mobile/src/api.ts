@@ -104,6 +104,14 @@ export interface Friend {
   avatar_url: string | null;
   status: string;
   since: string;
+  friendship_id?: string;
+}
+
+export interface BlockedUser {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+  blocked_at: string;
 }
 
 export interface FriendRequest {
@@ -174,7 +182,7 @@ export const serversApi = {
   leave:       (id: string) => req<{ ok: boolean }>('POST', `/servers/${id}/leave`),
   members:     (id: string) => req<ServerMember[]>('GET', `/servers/${id}/members`),
   generateInvite: (id: string) => req<{ code: string; url: string }>('POST', `/servers/${id}/invite`),
-  update:      (id: string, data: { name?: string; description?: string }) =>
+  update:      (id: string, data: { name?: string; description?: string; icon_url?: string; banner_url?: string; accent_color?: string }) =>
     req<Server>('PUT', `/servers/${id}`, data),
   delete:      (id: string) => req<{ ok: boolean }>('DELETE', `/servers/${id}`),
   kick:        (serverId: string, userId: string) =>
@@ -186,7 +194,29 @@ export const serversApi = {
     req<{ ok: boolean }>('DELETE', `/servers/${serverId}/bans/${userId}`),
   getRoles:    (serverId: string) =>
     req<{ id: string; name: string; color: string; permissions: number }[]>('GET', `/servers/${serverId}/roles`),
+  uploadImage: async (formData: FormData, folder: 'servers' | 'banners'): Promise<{ url: string }> => {
+    const token = await getToken();
+    const res = await fetch(`${API_URL}/upload/image?folder=${folder}`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+    return data as { url: string };
+  },
 };
+
+// Richer channel type with optional editable fields
+export interface ChannelFull extends Channel {
+  description?: string | null;
+  is_private?: boolean;
+  slowmode_seconds?: number;
+  user_limit?: number;
+  bitrate?: number;
+  background_url?: string | null;
+  background_gradient?: string | null;
+}
 
 // ── Channels ──────────────────────────────────────────────────────────────────
 export const channelsApi = {
@@ -195,11 +225,11 @@ export const channelsApi = {
    *   [ { id, name, channels: [ Channel, ... ] } ]
    * This function flattens it into a plain Channel[] with category_id / category_name set.
    */
-  list: async (serverId: string): Promise<Channel[]> => {
+  list: async (serverId: string): Promise<ChannelFull[]> => {
     const raw = await req<{ id: string | null; name: string | null; channels: any[] }[]>(
       'GET', `/channels/server/${serverId}`
     );
-    const result: Channel[] = [];
+    const result: ChannelFull[] = [];
     for (const cat of raw ?? []) {
       for (const ch of cat.channels ?? []) {
         result.push({
@@ -210,16 +240,30 @@ export const channelsApi = {
           position: ch.position ?? 0,
           category_id: cat.id ?? null,
           category_name: cat.name ?? null,
+          description: ch.description ?? null,
+          is_private: ch.is_private ?? false,
+          slowmode_seconds: ch.slowmode_seconds ?? 0,
+          user_limit: ch.user_limit ?? 0,
+          bitrate: ch.bitrate ?? 64,
+          background_url: ch.background_url ?? null,
+          background_gradient: ch.background_gradient ?? null,
         });
       }
     }
     return result;
   },
-  create: (serverId: string, name: string, type: 'text' | 'voice' = 'text') =>
-    req<Channel>('POST', '/channels', { server_id: serverId, name, type }),
-  update: (id: string, data: { name?: string; position?: number }) =>
-    req<Channel>('PUT', `/channels/${id}`, data),
+  create: (serverId: string, name: string, type: 'text' | 'voice' = 'text', opts?: {
+    description?: string; is_private?: boolean; user_limit?: number; bitrate?: number;
+  }) =>
+    req<Channel>('POST', '/channels', { server_id: serverId, name, type, ...opts }),
+  update: (id: string, data: {
+    name?: string; description?: string; is_private?: boolean;
+    slowmode_seconds?: number; user_limit?: number; bitrate?: number;
+    background_url?: string | null; background_gradient?: string | null;
+  }) => req<Channel>('PUT', `/channels/${id}`, data),
   delete: (id: string) => req<{ ok: boolean }>('DELETE', `/channels/${id}`),
+  createCategory: (serverId: string, name: string) =>
+    req<{ id: string; name: string }>('POST', '/channels/categories', { server_id: serverId, name }),
 };
 
 // ── Messages ──────────────────────────────────────────────────────────────────
@@ -252,7 +296,10 @@ export const friendsApi = {
   list:    () => req<Friend[]>('GET', '/friends'),
   requests:() => req<FriendRequest[]>('GET', '/friends/requests'),
   send:    (username: string) => req<{ ok: boolean }>('POST', '/friends/request', { username }),
-  accept:  (id: string) => req<{ ok: boolean }>('POST', `/friends/${id}/accept`),
-  reject:  (id: string) => req<{ ok: boolean }>('DELETE', `/friends/requests/${id}`),
-  remove:  (id: string) => req<{ ok: boolean }>('DELETE', `/friends/${id}`),
+  accept:  (id: string) => req<{ ok: boolean }>('PUT', `/friends/request/${id}`, { action: 'accept' }),
+  reject:  (id: string) => req<{ ok: boolean }>('PUT', `/friends/request/${id}`, { action: 'reject' }),
+  remove:  (friendshipId: string) => req<{ ok: boolean }>('DELETE', `/friends/${friendshipId}`),
+  block:   (userId: string) => req<{ ok: boolean }>('POST', `/friends/block/${userId}`),
+  unblock: (userId: string) => req<{ ok: boolean }>('DELETE', `/friends/block/${userId}`),
+  blocked: () => req<BlockedUser[]>('GET', '/friends/blocked'),
 };

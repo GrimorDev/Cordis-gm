@@ -20,14 +20,22 @@ export default function UserProfileScreen() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blockLoading, setBlockLoading] = useState(false);
 
   const isSelf = currentUser?.id === userId;
   const isFriend = friends.some((f) => f.id === userId);
 
   useEffect(() => {
     if (!userId) return;
-    usersApi.get(userId)
-      .then(setUser)
+    Promise.all([
+      usersApi.get(userId),
+      friendsApi.blocked(),
+    ])
+      .then(([userData, blocked]) => {
+        setUser(userData);
+        setIsBlocked(blocked.some(b => b.id === userId));
+      })
       .catch(() => Alert.alert('Błąd', 'Nie udało się załadować profilu.'))
       .finally(() => setLoading(false));
   }, [userId]);
@@ -46,6 +54,43 @@ export default function UserProfileScreen() {
   const handleSendDm = () => {
     if (!user) return;
     router.push({ pathname: '/(app)/dm/[userId]', params: { userId, username: user.username, avatar: user.avatar_url ?? '' } });
+  };
+
+  const handleBlock = () => {
+    if (!user) return;
+    Alert.alert(
+      'Zablokuj użytkownika',
+      `Zablokować ${user.username}? Nie będziecie mogli wymieniać wiadomości.`,
+      [
+        { text: 'Anuluj', style: 'cancel' },
+        {
+          text: 'Zablokuj',
+          style: 'destructive',
+          onPress: async () => {
+            setBlockLoading(true);
+            try {
+              await friendsApi.block(userId);
+              setIsBlocked(true);
+              Alert.alert('Zablokowano', `${user.username} został zablokowany.`);
+            } catch (e: any) {
+              Alert.alert('Błąd', e.message ?? 'Nie udało się zablokować.');
+            } finally { setBlockLoading(false); }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleUnblock = async () => {
+    if (!user) return;
+    setBlockLoading(true);
+    try {
+      await friendsApi.unblock(userId);
+      setIsBlocked(false);
+      Alert.alert('Odblokowano', `${user.username} został odblokowany.`);
+    } catch (e: any) {
+      Alert.alert('Błąd', e.message ?? 'Nie udało się odblokować.');
+    } finally { setBlockLoading(false); }
   };
 
   if (loading) {
@@ -77,21 +122,33 @@ export default function UserProfileScreen() {
           <Ionicons name="chevron-back" size={22} color={C.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>{user.username}</Text>
-        <View style={{ width: 40 }} />
+        {/* Block/unblock kebab for non-self */}
+        {!isSelf ? (
+          <TouchableOpacity
+            style={styles.moreBtn}
+            onPress={isBlocked ? handleUnblock : handleBlock}
+            disabled={blockLoading}
+          >
+            {blockLoading
+              ? <ActivityIndicator color={C.textMuted} size="small" />
+              : <Ionicons name={isBlocked ? 'lock-open-outline' : 'ban-outline'} size={20} color={isBlocked ? C.success : C.danger} />
+            }
+          </TouchableOpacity>
+        ) : <View style={{ width: 40 }} />}
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
         {/* Profile card */}
         <View style={styles.profileCard}>
           {/* Banner */}
-          <View style={[styles.banner, { backgroundColor: statusColor + '28' }]}>
-            <View style={[styles.bannerStripe, { backgroundColor: statusColor + '44' }]} />
+          <View style={[styles.banner, { backgroundColor: isBlocked ? C.danger + '18' : statusColor + '28' }]}>
+            <View style={[styles.bannerStripe, { backgroundColor: isBlocked ? C.danger + '44' : statusColor + '44' }]} />
           </View>
 
           {/* Avatar overlapping banner */}
           <View style={styles.avatarArea}>
-            <View style={[styles.avatarRing, { borderColor: statusColor + '66' }]}>
-              <UserAvatar url={user.avatar_url} username={user.username} size={80} status={status} showStatus />
+            <View style={[styles.avatarRing, { borderColor: isBlocked ? C.danger + '44' : statusColor + '66' }]}>
+              <UserAvatar url={user.avatar_url} username={user.username} size={80} status={isBlocked ? 'offline' : status} showStatus={!isBlocked} />
             </View>
             {user.is_admin && (
               <View style={styles.adminBadge}>
@@ -99,21 +156,34 @@ export default function UserProfileScreen() {
                 <Text style={styles.adminText}>Admin</Text>
               </View>
             )}
+            {isBlocked && (
+              <View style={styles.blockedBadge}>
+                <Ionicons name="ban-outline" size={12} color={C.danger} />
+                <Text style={styles.blockedBadgeText}>Zablokowany</Text>
+              </View>
+            )}
           </View>
 
           {/* Name & status */}
           <View style={styles.nameSection}>
             <Text style={styles.displayName}>{user.username}</Text>
-            <View style={[styles.statusPill, { backgroundColor: statusColor + '20', borderColor: statusColor + '50' }]}>
-              <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-              <Text style={[styles.statusText, { color: statusColor }]}>
-                {STATUS_LABEL[status] ?? 'Offline'}
-              </Text>
-            </View>
+            {!isBlocked ? (
+              <View style={[styles.statusPill, { backgroundColor: statusColor + '20', borderColor: statusColor + '50' }]}>
+                <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                <Text style={[styles.statusText, { color: statusColor }]}>
+                  {STATUS_LABEL[status] ?? 'Offline'}
+                </Text>
+              </View>
+            ) : (
+              <View style={[styles.statusPill, { backgroundColor: C.dangerMuted, borderColor: C.danger + '33' }]}>
+                <Ionicons name="ban-outline" size={11} color={C.danger} />
+                <Text style={[styles.statusText, { color: C.danger }]}>Zablokowany</Text>
+              </View>
+            )}
           </View>
 
           {/* About me */}
-          {user.about_me ? (
+          {user.about_me && !isBlocked ? (
             <View style={styles.aboutSection}>
               <Text style={styles.aboutLabel}>O MNIE</Text>
               <Text style={styles.aboutText}>{user.about_me}</Text>
@@ -138,12 +208,14 @@ export default function UserProfileScreen() {
         {/* Action buttons (not for self) */}
         {!isSelf && (
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.btnPrimary} onPress={handleSendDm} activeOpacity={0.85}>
-              <Ionicons name="chatbubble" size={18} color="#fff" />
-              <Text style={styles.btnPrimaryText}>Wyślij wiadomość</Text>
-            </TouchableOpacity>
+            {!isBlocked && (
+              <TouchableOpacity style={styles.btnPrimary} onPress={handleSendDm} activeOpacity={0.85}>
+                <Ionicons name="chatbubble" size={18} color="#fff" />
+                <Text style={styles.btnPrimaryText}>Wyślij wiadomość</Text>
+              </TouchableOpacity>
+            )}
 
-            {!isFriend && (
+            {!isBlocked && !isFriend && (
               <TouchableOpacity
                 style={[styles.btnSecondary, sending && { opacity: 0.55 }]}
                 onPress={handleSendFriendRequest}
@@ -160,12 +232,28 @@ export default function UserProfileScreen() {
               </TouchableOpacity>
             )}
 
-            {isFriend && (
+            {!isBlocked && isFriend && (
               <View style={styles.friendBadge}>
                 <Ionicons name="people" size={16} color={C.success} />
                 <Text style={styles.friendBadgeText}>Już jesteście znajomymi</Text>
               </View>
             )}
+
+            {/* Block / Unblock button */}
+            <TouchableOpacity
+              style={[styles.btnDanger, blockLoading && { opacity: 0.55 }]}
+              onPress={isBlocked ? handleUnblock : handleBlock}
+              disabled={blockLoading}
+              activeOpacity={0.85}
+            >
+              {blockLoading
+                ? <ActivityIndicator color={C.danger} size="small" />
+                : <Ionicons name={isBlocked ? 'lock-open-outline' : 'ban-outline'} size={18} color={C.danger} />
+              }
+              <Text style={styles.btnDangerText}>
+                {isBlocked ? 'Odblokuj użytkownika' : 'Zablokuj użytkownika'}
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
@@ -185,6 +273,7 @@ const styles = StyleSheet.create({
     backgroundColor: C.bgCard,
   },
   backBtn: { width: 40, alignItems: 'flex-start', padding: 4 },
+  moreBtn: { width: 40, alignItems: 'flex-end', padding: 4 },
   headerTitle: { color: C.text, fontSize: 17, fontWeight: '700', flex: 1, textAlign: 'center' },
 
   // Profile card
@@ -220,6 +309,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   adminText: { color: C.warning, fontSize: 11, fontWeight: '800' },
+  blockedBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: C.dangerMuted, paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: 10, borderWidth: 1, borderColor: C.danger + '44',
+    marginBottom: 4,
+  },
+  blockedBadgeText: { color: C.danger, fontSize: 11, fontWeight: '800' },
 
   nameSection: { paddingHorizontal: 20, gap: 8, marginBottom: 16 },
   displayName: { color: C.text, fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
@@ -278,4 +374,10 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: C.success + '33',
   },
   friendBadgeText: { color: C.success, fontSize: 15, fontWeight: '600' },
+  btnDanger: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: C.dangerMuted, borderRadius: 16, paddingVertical: 14,
+    borderWidth: 1, borderColor: C.danger + '33',
+  },
+  btnDangerText: { color: C.danger, fontSize: 15, fontWeight: '600' },
 });

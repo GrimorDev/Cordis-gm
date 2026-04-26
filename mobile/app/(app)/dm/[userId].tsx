@@ -9,8 +9,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { UserAvatar } from '../../../src/components/UserAvatar';
 import { MessageBubble } from '../../../src/components/MessageBubble';
 import { MessageInput } from '../../../src/components/MessageInput';
-import { C } from '../../../src/theme';
-import { dmsApi, API_URL } from '../../../src/api';
+import { C, STATUS_LABEL, STATUS_COLOR } from '../../../src/theme';
+import { dmsApi, friendsApi, API_URL } from '../../../src/api';
 import { useStore } from '../../../src/store';
 import { getSocket } from '../../../src/socket';
 import { storage } from '../../../src/storage';
@@ -92,6 +92,8 @@ export default function DmChatScreen() {
   const [isTyping, setIsTyping] = useState(false);
   const [replyTo, setReplyTo] = useState<DmMessage | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [isBlocked, setIsBlocked] = useState(false);   // I blocked them
+  const [blockedByThem, setBlockedByThem] = useState(false); // they blocked me (403 on send)
 
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const remoteTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -106,6 +108,10 @@ export default function DmChatScreen() {
   }, [userId]);
 
   useEffect(() => {
+    // Check if we've blocked this user
+    friendsApi.blocked().then(list => {
+      setIsBlocked(list.some(u => u.id === userId));
+    }).catch(() => {});
     load();
     markDmRead(userId);
 
@@ -164,6 +170,14 @@ export default function DmChatScreen() {
     try {
       const msg = await dmsApi.send(userId, text, attachmentUrl);
       addDmMessage(userId, msg);
+      setBlockedByThem(false);
+    } catch (e: any) {
+      const msg403 = e.message?.toLowerCase();
+      if (msg403?.includes('zablokować') || msg403?.includes('zablokow') || e.message?.includes('403')) {
+        setBlockedByThem(true);
+      } else {
+        Alert.alert('Błąd', e.message ?? 'Nie udało się wysłać wiadomości.');
+      }
     } finally {
       sendingRef.current = false;
     }
@@ -230,7 +244,12 @@ export default function DmChatScreen() {
         </TouchableOpacity>
         <View style={styles.headerInfo}>
           <Text style={styles.title}>{username}</Text>
-          <Text style={styles.statusText}>{status}</Text>
+          <View style={styles.headerStatusRow}>
+            <View style={[styles.headerStatusDot, { backgroundColor: STATUS_COLOR[status] ?? C.offline }]} />
+            <Text style={[styles.statusText, { color: STATUS_COLOR[status] ?? C.textMuted }]}>
+              {STATUS_LABEL[status] ?? 'Offline'}
+            </Text>
+          </View>
         </View>
         <TouchableOpacity style={styles.headerBtn} onPress={handleCallPress}>
           <Ionicons name="call-outline" size={20} color={C.textSub} />
@@ -318,13 +337,38 @@ export default function DmChatScreen() {
       )}
 
       <View style={{ paddingBottom: insets.bottom }}>
-        <MessageInput
-          placeholder={`Wiadomość do @${username}`}
-          replyTo={replyToAsMessage}
-          onClearReply={() => setReplyTo(null)}
-          onSend={handleSend}
-          onTyping={handleTyping}
-        />
+        {isBlocked ? (
+          <View style={styles.blockedBar}>
+            <Ionicons name="ban-outline" size={18} color={C.danger} />
+            <Text style={styles.blockedBarText}>Zablokowałeś tego użytkownika</Text>
+            <TouchableOpacity
+              style={styles.unblockBtn}
+              onPress={async () => {
+                try {
+                  await friendsApi.unblock(userId);
+                  setIsBlocked(false);
+                } catch (e: any) {
+                  Alert.alert('Błąd', e.message ?? 'Nie udało się odblokować.');
+                }
+              }}
+            >
+              <Text style={styles.unblockBtnText}>Odblokuj</Text>
+            </TouchableOpacity>
+          </View>
+        ) : blockedByThem ? (
+          <View style={styles.blockedBar}>
+            <Ionicons name="ban-outline" size={18} color={C.danger} />
+            <Text style={styles.blockedBarText}>Nie możesz napisać do tej osoby</Text>
+          </View>
+        ) : (
+          <MessageInput
+            placeholder={`Wiadomość do @${username}`}
+            replyTo={replyToAsMessage}
+            onClearReply={() => setReplyTo(null)}
+            onSend={handleSend}
+            onTyping={handleTyping}
+          />
+        )}
       </View>
 
       {/* Image lightbox */}
@@ -370,7 +414,9 @@ const styles = StyleSheet.create({
     backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border,
   },
   title: { color: C.text, fontSize: 16, fontWeight: '700' },
-  statusText: { color: C.textMuted, fontSize: 11, textTransform: 'capitalize', marginTop: 1 },
+  headerStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  headerStatusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusText: { fontSize: 11, fontWeight: '500' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   // System message pill
   systemPill: {
@@ -390,6 +436,32 @@ const styles = StyleSheet.create({
   // Typing indicator
   typingBar: { paddingHorizontal: 16, paddingBottom: 4 },
   typingText: { color: C.textMuted, fontSize: 12 },
+  // Blocked bar
+  blockedBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: C.dangerMuted,
+    borderTopWidth: 1,
+    borderTopColor: C.danger + '33',
+  },
+  blockedBarText: {
+    flex: 1,
+    color: C.danger,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  unblockBtn: {
+    backgroundColor: C.successMuted,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: C.success + '44',
+  },
+  unblockBtnText: { color: C.success, fontSize: 13, fontWeight: '700' },
   // Lightbox
   lightboxOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.92)',
