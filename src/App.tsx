@@ -15035,6 +15035,8 @@ export default function App() {
                   const isFriend = !isDmView || friends.some(f => f.id === activeDmUserId);
                   // For non-friends in DM: check if they allow messages from strangers
                   const dmTargetAllowsStrangers = !isDmView || isFriend || dmPartnerProfile?.privacy_dm_from_strangers !== false;
+                  // Blocked check — I blocked them or they blocked me
+                  const iBlockedThem = isDmView && blockedUsers.has(activeDmUserId);
                   // Announcement channel — only those with manage_messages can write
                   if (activeCh?.type==='announcement' && !canManageMessages) return (
                     <div className="flex items-center justify-center gap-2.5 py-3 px-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400 text-sm">
@@ -15047,6 +15049,19 @@ export default function App() {
                     <div className="flex items-center justify-center gap-2.5 py-3 px-4 bg-zinc-900/60 border border-white/[0.06] rounded-xl text-zinc-500 text-sm">
                       <Lock size={14} className="text-zinc-600 shrink-0"/>
                       <span>Nie masz uprawnień do wysyłania wiadomości na tym kanale.</span>
+                    </div>
+                  );
+                  // Blocked by me — show unblock prompt
+                  if (iBlockedThem) return (
+                    <div className="flex items-center justify-between gap-3 py-3 px-4 bg-zinc-900/60 border border-white/[0.06] rounded-xl text-sm">
+                      <div className="flex items-center gap-2.5 text-zinc-500">
+                        <UserX size={14} className="text-zinc-600 shrink-0"/>
+                        <span>Zablokowałeś(-aś) tego użytkownika. Odblokuj, aby wysyłać wiadomości.</span>
+                      </div>
+                      <button type="button" onClick={() => handleUnblockUser(activeDmUserId, dmPartnerProfile?.username || '')}
+                        className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/[0.07] hover:bg-white/[0.12] text-zinc-300 hover:text-white border border-white/[0.08] transition-all">
+                        Odblokuj
+                      </button>
                     </div>
                   );
                   // DM privacy check — non-friend who has disabled DMs from strangers
@@ -18963,21 +18978,24 @@ export default function App() {
                               </div>
                             </div>
                             <div className="flex flex-col">
-                              {blockedList.map((b, i) => (
+                              {blockedList.map((b, i) => {
+                                const blockedDate = new Date(b.blocked_at);
+                                const dateStr = blockedDate.toLocaleDateString('pl-PL', { day:'numeric', month:'long', year:'numeric' });
+                                return (
                                 <div key={b.id} className={`flex items-center gap-3 py-3 ${i > 0 ? 'border-t border-white/[0.05]' : ''}`}>
-                                  <img src={ava(b)} className="w-9 h-9 rounded-full object-cover shrink-0" alt=""/>
+                                  <img src={b.avatar_url ? staticUrl(b.avatar_url) : `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(b.username)}&size=40`}
+                                    className="w-10 h-10 rounded-full object-cover shrink-0" alt=""/>
                                   <div className="flex-1 min-w-0">
                                     <p className="text-sm font-bold text-white truncate">{b.username}</p>
-                                    <p className="text-[11px] text-zinc-500 truncate">{b.username.toLowerCase()}</p>
+                                    <p className="text-[11px] text-zinc-500 truncate">Zablokowany(-a) {dateStr}</p>
                                   </div>
-                                  <button onClick={async () => {
-                                    try { await handleUnblockUser(b.id, b.username); }
-                                    catch { addToast('Błąd odblokowania', 'error'); }
-                                  }} className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/[0.07] hover:bg-white/[0.12] text-zinc-300 hover:text-white border border-white/[0.08] transition-all">
+                                  <button onClick={() => handleUnblockUser(b.id, b.username)}
+                                    className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/[0.07] hover:bg-white/[0.12] text-zinc-300 hover:text-white border border-white/[0.08] transition-all">
                                     Odblokuj
                                   </button>
                                 </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         )}

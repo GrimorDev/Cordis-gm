@@ -164,6 +164,13 @@ router.post('/:userId/messages', authMiddleware, msgLimiter,
     }
 
     try {
+      // Block check — either party blocking the other prevents DMs in both directions
+      const { rows: [blockRow] } = await query(
+        `SELECT 1 FROM user_blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1)`,
+        [req.user!.id, req.params.userId]
+      );
+      if (blockRow) return res.status(403).json({ error: 'Nie możesz wysłać wiadomości temu użytkownikowi' });
+
       // Only friends can exchange DMs
       const { rows: [friendship] } = await query(
         `SELECT id FROM friends WHERE ((requester_id=$1 AND addressee_id=$2) OR (requester_id=$2 AND addressee_id=$1)) AND status='accepted'`,
