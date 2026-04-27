@@ -10,6 +10,7 @@ import { C } from '../../src/theme';
 import { authApi } from '../../src/api';
 import { useStore } from '../../src/store';
 import { connectSocket } from '../../src/socket';
+import { useT } from '../../src/i18n';
 
 function FocusInput({
   value, onChangeText, placeholder, secureTextEntry, returnKeyType, onSubmitEditing, autoCapitalize,
@@ -46,6 +47,7 @@ function FocusInput({
 }
 
 export default function LoginScreen() {
+  const t = useT();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -56,7 +58,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) {
-      setError('Wpisz login i hasło.');
+      setError(t.errLoginEmpty);
       return;
     }
     setLoading(true);
@@ -71,7 +73,7 @@ export default function LoginScreen() {
       await connectSocket();
       router.replace('/(app)');
     } catch (e: any) {
-      setError(e.message ?? 'Nieprawidłowy login lub hasło');
+      setError(e.message ?? t.errLoginFail);
     } finally {
       setLoading(false);
     }
@@ -86,29 +88,29 @@ export default function LoginScreen() {
             <Image source={require('../../assets/icon.png')} style={styles.logoImg} resizeMode="contain" />
           </View>
           <Text style={styles.appName}>Cordyn</Text>
-          <Text style={styles.tagline}>Twoja społeczność, Twoje miejsce</Text>
+          <Text style={styles.tagline}>{t.appTaglineLogin}</Text>
         </View>
 
         {/* Card */}
         <View style={styles.card}>
-          <Text style={styles.title}>Witaj z powrotem!</Text>
-          <Text style={styles.subtitle}>Zaloguj się, aby kontynuować</Text>
+          <Text style={styles.title}>{t.loginTitle}</Text>
+          <Text style={styles.subtitle}>{t.loginSubtitle}</Text>
 
           <View style={styles.field}>
-            <Text style={styles.label}>NAZWA UŻYTKOWNIKA</Text>
+            <Text style={styles.label}>{t.fieldUsername}</Text>
             <FocusInput
               value={username}
               onChangeText={setUsername}
-              placeholder="nazwa_użytkownika"
+              placeholder={t.phUsername}
             />
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.label}>HASŁO</Text>
+            <Text style={styles.label}>{t.fieldPassword}</Text>
             <FocusInput
               value={password}
               onChangeText={setPassword}
-              placeholder="••••••••"
+              placeholder={t.phPass}
               secureTextEntry
               returnKeyType="go"
               onSubmitEditing={handleLogin}
@@ -131,7 +133,7 @@ export default function LoginScreen() {
             >
               {loading
                 ? <ActivityIndicator color="#fff" />
-                : <Text style={styles.btnText}>Zaloguj się</Text>
+                : <Text style={styles.btnText}>{t.loginBtn}</Text>
               }
             </TouchableOpacity>
           </Animated.View>
@@ -139,8 +141,8 @@ export default function LoginScreen() {
 
         <TouchableOpacity onPress={() => router.push('/(auth)/register')} style={styles.switchRow}>
           <Text style={styles.switchText}>
-            Nie masz konta?{' '}
-            <Text style={styles.switchLink}>Zarejestruj się →</Text>
+            {t.noAccount}{' '}
+            <Text style={styles.switchLink}>{t.registerLink}</Text>
           </Text>
         </TouchableOpacity>
       </ScrollView>

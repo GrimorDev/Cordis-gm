@@ -17,6 +17,8 @@ import { storage } from '../../../src/storage';
 import { STATIC_BASE } from '../../../src/config';
 import { format, isToday, isYesterday } from 'date-fns';
 import { pl } from 'date-fns/locale';
+import { enGB } from 'date-fns/locale';
+import { useT, getT } from '../../../src/i18n';
 import type { DmMessage, Message } from '../../../src/api';
 
 function resolveAvatar(url: string | undefined | null): string | null {
@@ -31,11 +33,12 @@ function resolveAttachment(url: string | undefined | null): string | null {
   return `${STATIC_BASE}${url}`;
 }
 
-function fmtTime(dateStr: string) {
+function fmtTime(dateStr: string, lang: 'pl' | 'en' = 'pl', yesterday = 'Wczoraj') {
   const d = new Date(dateStr);
+  const locale = lang === 'pl' ? pl : enGB;
   if (isToday(d)) return format(d, 'HH:mm');
-  if (isYesterday(d)) return `Wczoraj ${format(d, 'HH:mm')}`;
-  return format(d, 'd MMM HH:mm', { locale: pl });
+  if (isYesterday(d)) return `${yesterday} ${format(d, 'HH:mm')}`;
+  return format(d, 'd MMM HH:mm', { locale });
 }
 
 /**
@@ -79,11 +82,12 @@ async function markDmRead(userId: string): Promise<void> {
 }
 
 export default function DmChatScreen() {
+  const t = useT();
   const { userId, username, avatar } = useLocalSearchParams<{ userId: string; username: string; avatar: string }>();
   const insets = useSafeAreaInsets();
   const {
     dmMessages, setDmMessages, addDmMessage, updateDmMessage, removeDmMessage,
-    currentUser, userStatuses,
+    currentUser, userStatuses, language,
   } = useStore();
   const msgs = dmMessages[userId] ?? [];
 
@@ -172,11 +176,15 @@ export default function DmChatScreen() {
       addDmMessage(userId, msg);
       setBlockedByThem(false);
     } catch (e: any) {
-      const msg403 = e.message?.toLowerCase();
-      if (msg403?.includes('zablokować') || msg403?.includes('zablokow') || e.message?.includes('403')) {
+      const msg403 = e.message?.toLowerCase() ?? '';
+      if (
+        msg403.includes('zablokować') || msg403.includes('zablokow') ||
+        msg403.includes('blocked') || msg403.includes('403')
+      ) {
         setBlockedByThem(true);
       } else {
-        Alert.alert('Błąd', e.message ?? 'Nie udało się wysłać wiadomości.');
+        const gt = getT();
+        Alert.alert(gt.error, e.message ?? gt.sendFailed);
       }
     } finally {
       sendingRef.current = false;
@@ -194,7 +202,8 @@ export default function DmChatScreen() {
       const updated = await dmsApi.editMessage(id, newContent);
       updateDmMessage(userId, updated);
     } catch (e: any) {
-      Alert.alert('Błąd', e.message ?? 'Nie udało się edytować wiadomości');
+      const gt = getT();
+      Alert.alert(gt.error, e.message ?? gt.editFailed);
     }
   };
 
@@ -203,24 +212,26 @@ export default function DmChatScreen() {
       await dmsApi.deleteMessage(id);
       removeDmMessage(userId, id);
     } catch (e: any) {
-      Alert.alert('Błąd', e.message ?? 'Nie udało się usunąć wiadomości');
+      const gt = getT();
+      Alert.alert(gt.error, e.message ?? gt.deleteFailed);
     }
   };
 
   const handleCallPress = () => {
+    const gt = getT();
     Alert.alert(
-      'Połączenie',
-      'Wybierz typ połączenia',
+      gt.callTitle,
+      gt.callSelectType,
       [
         {
-          text: 'Połączenie głosowe',
-          onPress: () => Alert.alert('Wkrótce', 'Połączenia głosowe nie są jeszcze dostępne w aplikacji mobilnej.'),
+          text: gt.voiceCallLabel,
+          onPress: () => Alert.alert(gt.comingSoon, gt.voiceCallComingSoon),
         },
         {
-          text: 'Połączenie wideo',
-          onPress: () => Alert.alert('Wkrótce', 'Połączenia wideo nie są jeszcze dostępne w aplikacji mobilnej.'),
+          text: gt.videoCallLabel,
+          onPress: () => Alert.alert(gt.comingSoon, gt.videoCallComingSoon),
         },
-        { text: 'Anuluj', style: 'cancel' },
+        { text: gt.cancel, style: 'cancel' },
       ],
     );
   };
@@ -270,7 +281,7 @@ export default function DmChatScreen() {
           renderItem={({ item, index }) => {
             // System messages
             if (item.sender_id === '__system__') {
-              const isMissed = item.content.toLowerCase().includes('nieodebrane');
+              const isMissed = item.content.toLowerCase().includes('nieodebrane') || item.content.toLowerCase().includes('missed');
               return (
                 <View style={styles.systemPill}>
                   <Ionicons
@@ -332,7 +343,7 @@ export default function DmChatScreen() {
 
       {isTyping && (
         <View style={styles.typingBar}>
-          <Text style={styles.typingText}>{username} pisze…</Text>
+          <Text style={styles.typingText}>{t.dmTyping(username ?? '')}</Text>
         </View>
       )}
 
@@ -340,7 +351,7 @@ export default function DmChatScreen() {
         {isBlocked ? (
           <View style={styles.blockedBar}>
             <Ionicons name="ban-outline" size={18} color={C.danger} />
-            <Text style={styles.blockedBarText}>Zablokowałeś tego użytkownika</Text>
+            <Text style={styles.blockedBarText}>{t.blockedUserBar}</Text>
             <TouchableOpacity
               style={styles.unblockBtn}
               onPress={async () => {
@@ -348,21 +359,22 @@ export default function DmChatScreen() {
                   await friendsApi.unblock(userId);
                   setIsBlocked(false);
                 } catch (e: any) {
-                  Alert.alert('Błąd', e.message ?? 'Nie udało się odblokować.');
+                  const gt = getT();
+                  Alert.alert(gt.error, e.message ?? gt.errUnblock);
                 }
               }}
             >
-              <Text style={styles.unblockBtnText}>Odblokuj</Text>
+              <Text style={styles.unblockBtnText}>{t.unblockBtn}</Text>
             </TouchableOpacity>
           </View>
         ) : blockedByThem ? (
           <View style={styles.blockedBar}>
             <Ionicons name="ban-outline" size={18} color={C.danger} />
-            <Text style={styles.blockedBarText}>Nie możesz napisać do tej osoby</Text>
+            <Text style={styles.blockedBarText}>{t.blockedByThemBar}</Text>
           </View>
         ) : (
           <MessageInput
-            placeholder={`Wiadomość do @${username}`}
+            placeholder={t.writeToUserDm(username ?? '')}
             replyTo={replyToAsMessage}
             onClearReply={() => setReplyTo(null)}
             onSend={handleSend}

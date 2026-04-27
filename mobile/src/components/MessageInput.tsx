@@ -8,6 +8,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { C } from '../theme';
 import { API_URL } from '../api';
 import { storage } from '../storage';
+import { useT, getT } from '../i18n';
 import type { Message } from '../api';
 
 interface Props {
@@ -33,12 +34,13 @@ async function uploadAttachment(uri: string, mimeType: string, fileName: string)
 }
 
 export function MessageInput({
-  placeholder = 'Napisz wiadomość…',
+  placeholder,
   replyTo,
   onClearReply,
   onSend,
   onTyping,
 }: Props) {
+  const t = useT();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [pendingImage, setPendingImage] = useState<{ uri: string; mimeType: string; fileName: string } | null>(null);
@@ -51,7 +53,8 @@ export function MessageInput({
   const handlePickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Brak uprawnień', 'Musisz przyznać dostęp do galerii.');
+      const gt = getT();
+      Alert.alert(gt.noPermission, gt.galleryPermission);
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -92,7 +95,8 @@ export function MessageInput({
       await onSend(trimmed, attachmentUrl);
     } catch (e: any) {
       setUploadingImage(false);
-      Alert.alert('Błąd', e.message ?? 'Nie udało się wysłać wiadomości');
+      const gt = getT();
+      Alert.alert(gt.error, e.message ?? gt.sendFailed);
       setText(text);
     } finally {
       isSendingRef.current = false;
@@ -110,7 +114,7 @@ export function MessageInput({
           <Ionicons name="return-up-forward" size={14} color={C.accentLight} />
           <Text style={styles.replyText} numberOfLines={1}>
             <Text style={styles.replyName}>{replyTo.sender_username}: </Text>
-            {replyTo.content || '📎 Załącznik'}
+            {replyTo.content || t.attachment}
           </Text>
           <TouchableOpacity onPress={onClearReply} style={styles.replyClose}>
             <Ionicons name="close" size={14} color={C.textMuted} />
@@ -146,7 +150,7 @@ export function MessageInput({
           style={styles.input}
           value={text}
           onChangeText={(v) => { setText(v); onTyping?.(); }}
-          placeholder={placeholder}
+          placeholder={placeholder ?? t.writeMessage}
           placeholderTextColor={C.textMuted}
           multiline
           maxLength={2000}

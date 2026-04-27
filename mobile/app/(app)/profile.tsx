@@ -16,6 +16,7 @@ import { disconnectSocket } from '../../src/socket';
 import { unregisterPushNotifications } from '../../src/notifications';
 import Constants from 'expo-constants';
 import { STATIC_BASE } from '../../src/config';
+import { useT, getT, LANGUAGES } from '../../src/i18n';
 
 function resolveAvatar(url: string | null | undefined): string | null {
   if (!url) return null;
@@ -23,18 +24,22 @@ function resolveAvatar(url: string | null | undefined): string | null {
   return `${STATIC_BASE}${url}`;
 }
 
-const STATUS_OPTIONS = [
-  { key: 'online',  label: 'Online',           icon: 'ellipse' as const,         color: C.online  },
-  { key: 'idle',    label: 'Bezczynny',         icon: 'moon' as const,            color: C.idle    },
-  { key: 'dnd',     label: 'Nie przeszkadzać',  icon: 'remove-circle' as const,   color: C.dnd     },
-  { key: 'offline', label: 'Niewidoczny',        icon: 'ellipse-outline' as const, color: C.offline },
-];
+function getStatusOptions(t: ReturnType<typeof useT>) {
+  return [
+    { key: 'online',  label: t.statusOnline,  icon: 'ellipse' as const,         color: C.online  },
+    { key: 'idle',    label: t.statusIdle,    icon: 'moon' as const,            color: C.idle    },
+    { key: 'dnd',     label: t.statusDnd,     icon: 'remove-circle' as const,   color: C.dnd     },
+    { key: 'offline', label: t.statusOffline, icon: 'ellipse-outline' as const, color: C.offline },
+  ];
+}
 
 type Sheet = 'none' | 'editBio' | 'changeUsername' | 'changePassword' | 'status' | 'blocked';
 
 export default function ProfileScreen() {
+  const t = useT();
   const insets = useSafeAreaInsets();
-  const { currentUser, setCurrentUser, clearAuth } = useStore();
+  const { currentUser, setCurrentUser, clearAuth, language, setLanguage } = useStore();
+  const STATUS_OPTIONS = getStatusOptions(t);
 
   const [sheet, setSheet] = useState<Sheet>('none');
   const [saving, setSaving] = useState(false);
@@ -60,19 +65,20 @@ export default function ProfileScreen() {
   useEffect(() => { loadBlocked(); }, []);
 
   const handleUnblock = (user: BlockedUser) => {
+    const gt = t;
     Alert.alert(
-      'Odblokuj użytkownika',
-      `Odblokować ${user.username}?`,
+      gt.unblockTitle,
+      gt.unblockConfirm(user.username),
       [
-        { text: 'Anuluj', style: 'cancel' },
+        { text: gt.cancel, style: 'cancel' },
         {
-          text: 'Odblokuj',
+          text: gt.unblockBtn,
           onPress: async () => {
             try {
               await friendsApi.unblock(user.id);
               setBlockedUsers(prev => prev.filter(u => u.id !== user.id));
             } catch (e: any) {
-              Alert.alert('Błąd', e.message ?? 'Nie udało się odblokować.');
+              Alert.alert(gt.error, e.message ?? gt.errUnblockFailed);
             }
           },
         },
@@ -88,7 +94,7 @@ export default function ProfileScreen() {
   const handleAvatarUpload = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Brak uprawnień', 'Musisz przyznać dostęp do galerii.');
+      Alert.alert(t.noPermission, t.galleryPermission);
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -105,9 +111,9 @@ export default function ProfileScreen() {
     try {
       const updated = await usersApi.updateAvatar(formData);
       setCurrentUser(updated);
-      Alert.alert('Gotowe!', 'Avatar został zaktualizowany.');
+      Alert.alert(t.done, t.avatarUpdated);
     } catch (e: any) {
-      Alert.alert('Błąd', e.message ?? 'Nie udało się zmienić avatara.');
+      Alert.alert(t.error, e.message ?? t.error);
     } finally { setUploadingAvatar(false); }
   };
 
@@ -116,7 +122,7 @@ export default function ProfileScreen() {
       await usersApi.updateStatus(status);
       setCurrentUser({ ...currentUser, preferred_status: status });
       setSheet('none');
-    } catch (e: any) { Alert.alert('Błąd', e.message); }
+    } catch (e: any) { const gt = getT(); Alert.alert(gt.error, e.message); }
   };
 
   const handleSaveBio = async () => {
@@ -125,7 +131,7 @@ export default function ProfileScreen() {
       const updated = await usersApi.updateMe({ about_me: aboutMe });
       setCurrentUser(updated);
       setSheet('none');
-    } catch (e: any) { Alert.alert('Błąd', e.message); }
+    } catch (e: any) { Alert.alert(t.error, e.message); }
     finally { setSaving(false); }
   };
 
@@ -137,28 +143,28 @@ export default function ProfileScreen() {
       setCurrentUser(updated);
       setSheet('none');
       setNewUsername('');
-    } catch (e: any) { Alert.alert('Błąd', e.message); }
+    } catch (e: any) { Alert.alert(t.error, e.message); }
     finally { setSaving(false); }
   };
 
   const handleSavePassword = async () => {
-    if (newPass !== confirmPass) { Alert.alert('Błąd', 'Hasła nie są takie same'); return; }
-    if (newPass.length < 8) { Alert.alert('Błąd', 'Hasło musi mieć co najmniej 8 znaków'); return; }
+    if (newPass !== confirmPass) { Alert.alert(t.error, t.errPassSame); return; }
+    if (newPass.length < 8) { Alert.alert(t.error, t.errPassMin8); return; }
     setSaving(true);
     try {
       await usersApi.changePassword(currentPass, newPass);
-      Alert.alert('Gotowe!', 'Hasło zostało zmienione.');
+      Alert.alert(t.done, t.passwordChanged);
       setSheet('none');
       setCurrentPass(''); setNewPass(''); setConfirmPass('');
-    } catch (e: any) { Alert.alert('Błąd', e.message); }
+    } catch (e: any) { Alert.alert(t.error, e.message); }
     finally { setSaving(false); }
   };
 
   const handleLogout = () => {
-    Alert.alert('Wyloguj się', 'Czy na pewno chcesz się wylogować?', [
-      { text: 'Anuluj', style: 'cancel' },
+    Alert.alert(t.logoutTitle, t.logoutConfirm, [
+      { text: t.cancel, style: 'cancel' },
       {
-        text: 'Wyloguj', style: 'destructive', onPress: async () => {
+        text: t.logoutAction, style: 'destructive', onPress: async () => {
           try { await authApi.logout(); } catch { }
           await unregisterPushNotifications().catch(() => {});
           disconnectSocket();
@@ -234,25 +240,25 @@ export default function ProfileScreen() {
 
         {/* Account section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>KONTO</Text>
+          <Text style={styles.sectionTitle}>{t.sectionAccount}</Text>
           <View style={styles.card}>
             <SettingRow
               icon="person-outline"
-              label="Zmień nazwę użytkownika"
+              label={t.changeUsername}
               value={currentUser.username}
               onPress={() => { setNewUsername(''); setSheet('changeUsername'); }}
             />
             <SettingRow
               icon="lock-closed-outline"
-              label="Zmień hasło"
+              label={t.changePassword}
               value="••••••••"
               onPress={() => setSheet('changePassword')}
               border
             />
             <SettingRow
               icon="document-text-outline"
-              label="O mnie / Bio"
-              value={currentUser.about_me || 'Brak opisu'}
+              label={t.bioLabel}
+              value={currentUser.about_me || t.bioEmpty}
               onPress={() => { setAboutMe(currentUser.about_me ?? ''); setSheet('editBio'); }}
               border
             />
@@ -261,31 +267,57 @@ export default function ProfileScreen() {
 
         {/* Info section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>INFORMACJE</Text>
+          <Text style={styles.sectionTitle}>{t.sectionInfo}</Text>
           <View style={styles.card}>
-            <InfoRow label="ID użytkownika" value={currentUser.id.slice(0, 8) + '…'} selectable />
+            <InfoRow label={t.userId} value={currentUser.id.slice(0, 8) + '…'} selectable />
             <InfoRow
-              label="Konto założone"
+              label={t.accountCreated}
               value={(() => {
-                if (!currentUser.created_at) return 'Brak danych';
+                if (!currentUser.created_at) return t.noData;
                 const d = new Date(currentUser.created_at);
-                return isNaN(d.getTime()) ? 'Brak danych' : d.toLocaleDateString('pl-PL', { year: 'numeric', month: 'long' });
+                if (isNaN(d.getTime())) return t.noData;
+                return language === 'pl'
+                  ? d.toLocaleDateString('pl-PL', { year: 'numeric', month: 'long' })
+                  : d.toLocaleDateString('en-GB', { year: 'numeric', month: 'long' });
               })()}
               border
             />
-            <InfoRow label="Wersja aplikacji" value={`v${appVersion}`} border />
-            <InfoRow label="System" value={Platform.OS === 'ios' ? 'iOS' : 'Android'} border />
+            <InfoRow label={t.appVersion} value={`v${appVersion}`} border />
+            <InfoRow label={t.system} value={Platform.OS === 'ios' ? 'iOS' : 'Android'} border />
+          </View>
+        </View>
+
+        {/* Language section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t.sectionLanguage}</Text>
+          <View style={styles.card}>
+            {LANGUAGES.map((lang, idx) => (
+              <TouchableOpacity
+                key={lang.key}
+                style={[styles.langRow, idx > 0 && styles.rowBorder]}
+                onPress={() => setLanguage(lang.key)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.langFlag}>{lang.flag}</Text>
+                <Text style={[styles.langLabel, language === lang.key && { color: C.accent, fontWeight: '700' }]}>
+                  {lang.label}
+                </Text>
+                {language === lang.key && (
+                  <Ionicons name="checkmark-circle" size={20} color={C.accent} />
+                )}
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
 
         {/* Privacy section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>PRYWATNOŚĆ</Text>
+          <Text style={styles.sectionTitle}>{t.sectionPrivacy}</Text>
           <View style={styles.card}>
             <SettingRow
               icon="ban-outline"
-              label="Zablokowani użytkownicy"
-              value={blockedUsers.length > 0 ? `${blockedUsers.length} zablokowanych` : 'Brak zablokowanych'}
+              label={t.blockedUsers}
+              value={blockedUsers.length > 0 ? t.blockedCount(blockedUsers.length) : t.noBlocked}
               onPress={() => setSheet('blocked')}
             />
           </View>
@@ -297,14 +329,14 @@ export default function ProfileScreen() {
             <View style={styles.logoutIcon}>
               <Ionicons name="log-out-outline" size={18} color={C.danger} />
             </View>
-            <Text style={styles.logoutText}>Wyloguj się</Text>
+            <Text style={styles.logoutText}>{t.logoutBtn}</Text>
             <Ionicons name="chevron-forward" size={16} color={C.danger + '80'} />
           </TouchableOpacity>
         </View>
       </ScrollView>
 
       {/* Status sheet */}
-      <BottomSheet visible={sheet === 'status'} onClose={() => setSheet('none')} title="Ustaw status">
+      <BottomSheet visible={sheet === 'status'} onClose={() => setSheet('none')} title={t.setStatus}>
         {STATUS_OPTIONS.map((opt) => (
           <TouchableOpacity
             key={opt.key}
@@ -321,12 +353,12 @@ export default function ProfileScreen() {
       </BottomSheet>
 
       {/* Bio sheet */}
-      <BottomSheet visible={sheet === 'editBio'} onClose={() => setSheet('none')} title="O mnie">
+      <BottomSheet visible={sheet === 'editBio'} onClose={() => setSheet('none')} title={t.bioLabel}>
         <TextInput
           style={[styles.sheetInput, styles.sheetInputMulti]}
           value={aboutMe}
           onChangeText={setAboutMe}
-          placeholder="Opisz siebie…"
+          placeholder={t.bioPlaceholder}
           placeholderTextColor={C.textMuted}
           multiline
           maxLength={190}
@@ -338,18 +370,18 @@ export default function ProfileScreen() {
           onPress={handleSaveBio}
           disabled={saving}
         >
-          <Text style={styles.sheetBtnText}>{saving ? 'Zapisuję…' : 'Zapisz'}</Text>
+          <Text style={styles.sheetBtnText}>{saving ? t.saving : t.save}</Text>
         </TouchableOpacity>
       </BottomSheet>
 
       {/* Username sheet */}
-      <BottomSheet visible={sheet === 'changeUsername'} onClose={() => setSheet('none')} title="Zmień nazwę">
-        <Text style={styles.sheetHint}>Obecna: <Text style={{ color: C.accent }}>{currentUser.username}</Text></Text>
+      <BottomSheet visible={sheet === 'changeUsername'} onClose={() => setSheet('none')} title={t.changeNameTitle}>
+        <Text style={styles.sheetHint}>{t.currentName} <Text style={{ color: C.accent }}>{currentUser.username}</Text></Text>
         <TextInput
           style={styles.sheetInput}
           value={newUsername}
           onChangeText={setNewUsername}
-          placeholder="Nowa nazwa użytkownika"
+          placeholder={t.newUsername}
           placeholderTextColor={C.textMuted}
           autoCapitalize="none"
           autoFocus
@@ -360,7 +392,7 @@ export default function ProfileScreen() {
           onPress={handleSaveUsername}
           disabled={!newUsername.trim() || saving}
         >
-          <Text style={styles.sheetBtnText}>{saving ? 'Zapisuję…' : 'Zmień nazwę'}</Text>
+          <Text style={styles.sheetBtnText}>{saving ? t.saving : t.changeNameBtn}</Text>
         </TouchableOpacity>
       </BottomSheet>
 
@@ -375,7 +407,7 @@ export default function ProfileScreen() {
           <View style={[styles.sheet, { maxHeight: '75%' }]} onStartShouldSetResponder={() => true}>
             <View style={styles.dragBar} />
             <View style={styles.blockedHeader}>
-              <Text style={styles.sheetTitle}>Zablokowani użytkownicy</Text>
+              <Text style={styles.sheetTitle}>{t.blockedUsers}</Text>
               <TouchableOpacity onPress={loadBlocked}>
                 <Ionicons name="refresh-outline" size={20} color={C.textMuted} />
               </TouchableOpacity>
@@ -386,7 +418,7 @@ export default function ProfileScreen() {
             ) : blockedUsers.length === 0 ? (
               <View style={styles.blockedEmpty}>
                 <Ionicons name="checkmark-circle-outline" size={40} color={C.success} />
-                <Text style={styles.blockedEmptyText}>Brak zablokowanych użytkowników</Text>
+                <Text style={styles.blockedEmptyText}>{t.noBlocked}</Text>
               </View>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 400 }}>
@@ -396,14 +428,14 @@ export default function ProfileScreen() {
                     <View style={styles.blockedInfo}>
                       <Text style={styles.blockedName}>{u.username}</Text>
                       <Text style={styles.blockedDate}>
-                        Zablokowany {new Date(u.blocked_at).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {new Date(u.blocked_at).toLocaleDateString(language === 'pl' ? 'pl-PL' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </Text>
                     </View>
                     <TouchableOpacity
                       style={styles.unblockBtn}
                       onPress={() => { setSheet('none'); setTimeout(() => handleUnblock(u), 350); }}
                     >
-                      <Text style={styles.unblockBtnText}>Odblokuj</Text>
+                      <Text style={styles.unblockBtnText}>{t.unblockBtn}</Text>
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -414,12 +446,12 @@ export default function ProfileScreen() {
       </Modal>
 
       {/* Password sheet */}
-      <BottomSheet visible={sheet === 'changePassword'} onClose={() => setSheet('none')} title="Zmień hasło">
+      <BottomSheet visible={sheet === 'changePassword'} onClose={() => setSheet('none')} title={t.changePassword}>
         <TextInput
           style={styles.sheetInput}
           value={currentPass}
           onChangeText={setCurrentPass}
-          placeholder="Obecne hasło"
+          placeholder={t.currentPass}
           placeholderTextColor={C.textMuted}
           secureTextEntry={!showPass}
           autoFocus
@@ -428,7 +460,7 @@ export default function ProfileScreen() {
           style={styles.sheetInput}
           value={newPass}
           onChangeText={setNewPass}
-          placeholder="Nowe hasło (min. 8 znaków)"
+          placeholder={t.newPass}
           placeholderTextColor={C.textMuted}
           secureTextEntry={!showPass}
         />
@@ -436,20 +468,20 @@ export default function ProfileScreen() {
           style={styles.sheetInput}
           value={confirmPass}
           onChangeText={setConfirmPass}
-          placeholder="Powtórz nowe hasło"
+          placeholder={t.confirmNewPass}
           placeholderTextColor={C.textMuted}
           secureTextEntry={!showPass}
         />
         <TouchableOpacity style={styles.showPassRow} onPress={() => setShowPass(p => !p)}>
           <Ionicons name={showPass ? 'eye-off-outline' : 'eye-outline'} size={16} color={C.textMuted} />
-          <Text style={styles.showPassText}>{showPass ? 'Ukryj hasła' : 'Pokaż hasła'}</Text>
+          <Text style={styles.showPassText}>{showPass ? t.hidePasswords : t.showPasswords}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.sheetBtn, (!currentPass || !newPass || !confirmPass || saving) && styles.sheetBtnDisabled]}
           onPress={handleSavePassword}
           disabled={!currentPass || !newPass || !confirmPass || saving}
         >
-          <Text style={styles.sheetBtnText}>{saving ? 'Zapisuję…' : 'Zmień hasło'}</Text>
+          <Text style={styles.sheetBtnText}>{saving ? t.saving : t.changePassword}</Text>
         </TouchableOpacity>
       </BottomSheet>
     </>
@@ -630,6 +662,16 @@ const styles = StyleSheet.create({
   },
   infoLabel: { color: C.textMuted, fontSize: 14 },
   infoValue: { color: C.textSub, fontSize: 13, fontWeight: '500', maxWidth: '55%', textAlign: 'right' },
+
+  // Language picker
+  langRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+  },
+  langFlag: { fontSize: 22 },
+  langLabel: { flex: 1, color: C.textSub, fontSize: 15 },
 
   // Logout
   logoutBtn: {

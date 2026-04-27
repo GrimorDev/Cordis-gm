@@ -12,18 +12,22 @@ import { dmsApi } from '../../src/api';
 import { useStore } from '../../src/store';
 import { format, isToday, isYesterday } from 'date-fns';
 import { pl } from 'date-fns/locale';
+import { enGB } from 'date-fns/locale';
+import { useT } from '../../src/i18n';
 
-function fmtTime(dateStr?: string | null) {
+function fmtTime(dateStr?: string | null, lang: 'pl' | 'en' = 'pl', yesterday = 'Wczoraj') {
   if (!dateStr) return '';
   try {
     const d = new Date(dateStr);
     if (isToday(d)) return format(d, 'HH:mm');
-    if (isYesterday(d)) return 'Wczoraj';
-    return format(d, 'd MMM', { locale: pl });
+    if (isYesterday(d)) return yesterday;
+    return format(d, 'd MMM', { locale: lang === 'pl' ? pl : enGB });
   } catch { return ''; }
 }
 
 function DmRow({ item, status, onPress }: { item: any; status: string; onPress: () => void }) {
+  const t = useT();
+  const { language } = useStore();
   const hasUnread = (item.unread_count ?? 0) > 0;
   const anim = useRef(new Animated.Value(1)).current;
 
@@ -56,7 +60,7 @@ function DmRow({ item, status, onPress }: { item: any; status: string; onPress: 
               {item.is_group ? (item.group_name || 'Grupa') : item.other_username}
             </Text>
             <Text style={[styles.rowTime, hasUnread && styles.rowTimeUnread]}>
-              {fmtTime(item.last_message_at)}
+              {fmtTime(item.last_message_at, language, t.yesterday)}
             </Text>
           </View>
           <View style={styles.rowBottom}>
@@ -64,7 +68,7 @@ function DmRow({ item, status, onPress }: { item: any; status: string; onPress: 
               style={[styles.rowPreview, hasUnread && styles.rowPreviewBold]}
               numberOfLines={1}
             >
-              {item.last_message || 'Zacznij rozmowę…'}
+              {item.last_message || t.startConvo}
             </Text>
             {hasUnread && (
               <View style={styles.badge}>
@@ -81,6 +85,7 @@ function DmRow({ item, status, onPress }: { item: any; status: string; onPress: 
 }
 
 export default function DmsScreen() {
+  const t = useT();
   const insets = useSafeAreaInsets();
   const { dmConversations, setDmConversations, userStatuses } = useStore();
   const [refreshing, setRefreshing] = useState(false);
@@ -101,9 +106,9 @@ export default function DmsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerTitle}>Wiadomości</Text>
+          <Text style={styles.headerTitle}>{t.dmsTitle}</Text>
           <Text style={styles.headerSub}>
-            {dmConversations.length > 0 ? `${dmConversations.length} rozmów` : 'Brak rozmów'}
+            {dmConversations.length > 0 ? t.dmsCount(dmConversations.length) : t.noConversations}
           </Text>
         </View>
         <TouchableOpacity
@@ -148,13 +153,11 @@ export default function DmsScreen() {
               <View style={styles.emptyIconWrap}>
                 <Ionicons name="chatbubbles" size={36} color={C.accent} />
               </View>
-              <Text style={styles.emptyTitle}>Brak wiadomości</Text>
-              <Text style={styles.emptySubtext}>
-                Wyślij wiadomość do znajomego, żeby zacząć rozmowę
-              </Text>
+              <Text style={styles.emptyTitle}>{t.noDmsTitle}</Text>
+              <Text style={styles.emptySubtext}>{t.noDmsSubtext}</Text>
               <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push('/(app)/friends')}>
                 <Ionicons name="people" size={16} color="#fff" />
-                <Text style={styles.emptyBtnText}>Znajomi</Text>
+                <Text style={styles.emptyBtnText}>{t.friendsBtn}</Text>
               </TouchableOpacity>
             </View>
           }

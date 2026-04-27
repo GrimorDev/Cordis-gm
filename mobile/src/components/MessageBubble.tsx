@@ -7,8 +7,11 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { format, isToday, isYesterday } from 'date-fns';
 import { pl } from 'date-fns/locale';
+import { enGB } from 'date-fns/locale';
 import { UserAvatar } from './UserAvatar';
 import { C } from '../theme';
+import { useT, getT } from '../i18n';
+import { useStore } from '../store';
 import type { Message } from '../api';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -28,11 +31,12 @@ interface Props {
   canModerate?: boolean;
 }
 
-function fmtTime(dateStr: string) {
+function fmtTime(dateStr: string, lang: 'pl' | 'en' = 'pl', yesterday = 'Wczoraj') {
   const d = new Date(dateStr);
+  const locale = lang === 'pl' ? pl : enGB;
   if (isToday(d)) return format(d, 'HH:mm');
-  if (isYesterday(d)) return `Wczoraj ${format(d, 'HH:mm')}`;
-  return format(d, 'd MMM HH:mm', { locale: pl });
+  if (isYesterday(d)) return `${yesterday} ${format(d, 'HH:mm')}`;
+  return format(d, 'd MMM HH:mm', { locale });
 }
 
 const QUICK_EMOJIS = ['❤️', '😂', '👍', '😮', '😢', '🔥'];
@@ -61,6 +65,8 @@ function callColor(content: string): string {
 export function MessageBubble({
   msg, isOwn, showHeader, onReply, onDelete, onReact, onEdit, onAvatarPress, isSystem, canModerate,
 }: Props) {
+  const t = useT();
+  const { language } = useStore();
   const [menuVisible, setMenuVisible] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editText, setEditText] = useState(msg.content);
@@ -90,9 +96,10 @@ export function MessageBubble({
 
   const handleDelete = () => {
     setMenuVisible(false);
-    Alert.alert('Usuń wiadomość', 'Na pewno chcesz usunąć tę wiadomość?', [
-      { text: 'Anuluj', style: 'cancel' },
-      { text: 'Usuń', style: 'destructive', onPress: () => onDelete?.(msg.id) },
+    const gt = getT();
+    Alert.alert(gt.deleteMsg, gt.deleteMsgConfirm, [
+      { text: gt.cancel, style: 'cancel' },
+      { text: gt.delete, style: 'destructive', onPress: () => onDelete?.(msg.id) },
     ]);
   };
 
@@ -129,7 +136,7 @@ export function MessageBubble({
           </TouchableOpacity>
           <View style={styles.headerText}>
             <Text style={styles.username}>{msg.sender_username}</Text>
-            <Text style={styles.time}>{fmtTime(msg.created_at)}</Text>
+            <Text style={styles.time}>{fmtTime(msg.created_at, language, t.yesterday)}</Text>
           </View>
         </View>
       )}
@@ -179,7 +186,7 @@ export function MessageBubble({
           {msg.content ? (
             <Text style={styles.content}>{msg.content}</Text>
           ) : null}
-          {msg.is_edited && <Text style={styles.edited}>(edytowano)</Text>}
+          {msg.is_edited && <Text style={styles.edited}>{t.editedMark}</Text>}
 
           {/* Image attachment */}
           {msg.attachment_url && (
@@ -240,25 +247,25 @@ export function MessageBubble({
 
             <TouchableOpacity style={styles.menuItem} onPress={() => { onReply(msg); setMenuVisible(false); }}>
               <Ionicons name="return-up-forward-outline" size={18} color={C.text} />
-              <Text style={styles.menuLabel}>Odpowiedz</Text>
+              <Text style={styles.menuLabel}>{t.reply}</Text>
             </TouchableOpacity>
 
             {isOwn && onEdit && (
               <TouchableOpacity style={styles.menuItem} onPress={handleEditPress}>
                 <Ionicons name="pencil-outline" size={18} color={C.text} />
-                <Text style={styles.menuLabel}>Edytuj</Text>
+                <Text style={styles.menuLabel}>{t.edit}</Text>
               </TouchableOpacity>
             )}
 
             <TouchableOpacity style={styles.menuItem} onPress={handleCopy}>
               <Ionicons name="copy-outline" size={18} color={C.text} />
-              <Text style={styles.menuLabel}>Kopiuj tekst</Text>
+              <Text style={styles.menuLabel}>{t.copyText}</Text>
             </TouchableOpacity>
 
             {(isOwn || canModerate) && onDelete && (
               <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
                 <Ionicons name="trash-outline" size={18} color={C.danger} />
-                <Text style={[styles.menuLabel, { color: C.danger }]}>Usuń wiadomość</Text>
+                <Text style={[styles.menuLabel, { color: C.danger }]}>{t.deleteMsg}</Text>
               </TouchableOpacity>
             )}
           </Pressable>

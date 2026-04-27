@@ -7,14 +7,8 @@ import { useStore } from '../../src/store';
 import { getSocket, connectSocket } from '../../src/socket';
 import { registerForPushNotifications } from '../../src/notifications';
 import { C } from '../../src/theme';
+import { useT, getT } from '../../src/i18n';
 import * as Notifications from 'expo-notifications';
-
-const TAB_DEFS = [
-  { name: 'index',   icon: 'server',        label: 'Serwery'    },
-  { name: 'dms',     icon: 'chatbubbles',   label: 'Wiadomości' },
-  { name: 'friends', icon: 'people',        label: 'Znajomi'    },
-  { name: 'profile', icon: 'person-circle', label: 'Profil'     },
-];
 
 function TabItem({ tab, focused, badge, onPress }: {
   tab: typeof TAB_DEFS[0];
@@ -63,9 +57,17 @@ function TabItem({ tab, focused, badge, onPress }: {
 }
 
 function TabBar({ state, navigation }: any) {
+  const t = useT();
   const insets = useSafeAreaInsets();
   const { dmConversations } = useStore();
   const totalUnread = dmConversations.reduce((s, c) => s + (c.unread_count ?? 0), 0);
+
+  const TAB_DEFS = [
+    { name: 'index',   icon: 'server',        label: t.servers      },
+    { name: 'dms',     icon: 'chatbubbles',   label: t.dmsTitle     },
+    { name: 'friends', icon: 'people',        label: t.friendsTitle },
+    { name: 'profile', icon: 'person-circle', label: t.tabProfile   },
+  ];
 
   return (
     <View style={[styles.tabBar, { paddingBottom: insets.bottom, height: 58 + insets.bottom }]}>
@@ -93,6 +95,7 @@ function TabBar({ state, navigation }: any) {
 }
 
 export default function AppLayout() {
+  const t = useT();
   const {
     isAuthenticated, addMessage, addDmMessage, setUserStatus, currentUser,
     updateMessage, removeMessage, updateDmMessage, removeDmMessage,
@@ -123,10 +126,11 @@ export default function AppLayout() {
     const onVoiceUserJoined = ({ channel_id, user }: any) => { addVoiceUser(channel_id, user); };
     const onVoiceUserLeft = ({ channel_id, user_id }: any) => { removeVoiceUser(channel_id, user_id); };
     const onCallInvite = ({ from, type }: any) => {
+      const gt = getT();
       Notifications.scheduleNotificationAsync({
         content: {
-          title: type === 'video' ? '📹 Połączenie wideo' : '📞 Połączenie głosowe',
-          body: `${from?.username ?? 'Ktoś'} dzwoni do Ciebie`,
+          title: type === 'video' ? `📹 ${gt.videoCallLabel}` : `📞 ${gt.voiceCallLabel}`,
+          body: `${from?.username ?? '?'} ${gt.callingYou}`,
           sound: true,
         },
         trigger: null,
@@ -190,12 +194,12 @@ export default function AppLayout() {
       tabBar={(props) => <TabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
-      <Tabs.Screen name="index"                   options={{ title: 'Serwery'     }} />
-      <Tabs.Screen name="channel/[id]"            options={{ href: null           }} />
-      <Tabs.Screen name="dms"                     options={{ title: 'Wiadomości'  }} />
-      <Tabs.Screen name="dm/[userId]"             options={{ href: null           }} />
-      <Tabs.Screen name="friends"                 options={{ title: 'Znajomi'     }} />
-      <Tabs.Screen name="profile"                 options={{ title: 'Profil'      }} />
+      <Tabs.Screen name="index"                   options={{ title: t.servers       }} />
+      <Tabs.Screen name="channel/[id]"            options={{ href: null             }} />
+      <Tabs.Screen name="dms"                     options={{ title: t.dmsTitle      }} />
+      <Tabs.Screen name="dm/[userId]"             options={{ href: null             }} />
+      <Tabs.Screen name="friends"                 options={{ title: t.friendsTitle  }} />
+      <Tabs.Screen name="profile"                 options={{ title: t.tabProfile    }} />
       <Tabs.Screen name="user-profile/[userId]"   options={{ href: null           }} />
       <Tabs.Screen name="server-settings/[serverId]" options={{ href: null        }} />
       <Tabs.Screen name="member-list/[serverId]"  options={{ href: null           }} />

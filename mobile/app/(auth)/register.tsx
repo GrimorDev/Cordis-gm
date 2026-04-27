@@ -9,6 +9,7 @@ import { C } from '../../src/theme';
 import { authApi } from '../../src/api';
 import { useStore } from '../../src/store';
 import { connectSocket } from '../../src/socket';
+import { useT } from '../../src/i18n';
 
 function FocusInput({
   value, onChangeText, placeholder, secureTextEntry, returnKeyType, onSubmitEditing,
@@ -44,6 +45,7 @@ function FocusInput({
 }
 
 export default function RegisterScreen() {
+  const t = useT();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -52,11 +54,11 @@ export default function RegisterScreen() {
   const { setAuth } = useStore();
 
   const handleRegister = async () => {
-    if (!username.trim() || !password) { setError('Wypełnij wszystkie pola.'); return; }
-    if (password.length < 6) { setError('Hasło musi mieć min. 6 znaków.'); return; }
-    if (password !== confirm) { setError('Hasła się nie zgadzają.'); return; }
+    if (!username.trim() || !password) { setError(t.errFillFields); return; }
+    if (password.length < 6) { setError(t.errPassMin6); return; }
+    if (password !== confirm) { setError(t.errPassMismatch); return; }
     if (!/^[a-zA-Z0-9_]{2,32}$/.test(username)) {
-      setError('Nazwa: 2–32 znaki, tylko litery, cyfry i _');
+      setError(t.errUsernameFormat);
       return;
     }
     setLoading(true);
@@ -67,7 +69,7 @@ export default function RegisterScreen() {
       await connectSocket();
       router.replace('/(app)');
     } catch (e: any) {
-      setError(e.message ?? 'Błąd rejestracji');
+      setError(e.message ?? t.error);
     } finally {
       setLoading(false);
     }
@@ -82,31 +84,31 @@ export default function RegisterScreen() {
             <Image source={require('../../assets/icon.png')} style={styles.logoImg} resizeMode="contain" />
           </View>
           <Text style={styles.appName}>Cordyn</Text>
-          <Text style={styles.tagline}>Dołącz do społeczności</Text>
+          <Text style={styles.tagline}>{t.appTaglineRegister}</Text>
         </View>
 
         {/* Card */}
         <View style={styles.card}>
-          <Text style={styles.title}>Utwórz konto</Text>
-          <Text style={styles.subtitle}>Bezpłatnie, na zawsze</Text>
+          <Text style={styles.title}>{t.registerTitle}</Text>
+          <Text style={styles.subtitle}>{t.registerSubtitle}</Text>
 
           <View style={styles.field}>
-            <Text style={styles.label}>NAZWA UŻYTKOWNIKA</Text>
-            <FocusInput value={username} onChangeText={setUsername} placeholder="nazwa_użytkownika" />
-            <Text style={styles.hint}>Tylko litery, cyfry i _ (2–32 znaki)</Text>
+            <Text style={styles.label}>{t.fieldUsername}</Text>
+            <FocusInput value={username} onChangeText={setUsername} placeholder={t.phUsername} />
+            <Text style={styles.hint}>{t.usernameHint}</Text>
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.label}>HASŁO</Text>
-            <FocusInput value={password} onChangeText={setPassword} placeholder="••••••••" secureTextEntry />
+            <Text style={styles.label}>{t.fieldPassword}</Text>
+            <FocusInput value={password} onChangeText={setPassword} placeholder={t.phPass} secureTextEntry />
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.label}>POTWIERDŹ HASŁO</Text>
+            <Text style={styles.label}>{t.fieldConfirmPass}</Text>
             <FocusInput
               value={confirm}
               onChangeText={setConfirm}
-              placeholder="••••••••"
+              placeholder={t.phPass}
               secureTextEntry
               returnKeyType="go"
               onSubmitEditing={handleRegister}
@@ -128,14 +130,14 @@ export default function RegisterScreen() {
           >
             {loading
               ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.btnText}>Zarejestruj się</Text>
+              : <Text style={styles.btnText}>{t.registerBtn}</Text>
             }
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity onPress={() => router.back()} style={styles.switchRow}>
           <Text style={styles.switchText}>
-            Masz już konto? <Text style={styles.switchLink}>Zaloguj się →</Text>
+            {t.hasAccount} <Text style={styles.switchLink}>{t.loginLink}</Text>
           </Text>
         </TouchableOpacity>
       </ScrollView>

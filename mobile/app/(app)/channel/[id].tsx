@@ -12,17 +12,11 @@ import { C } from '../../../src/theme';
 import { messagesApi } from '../../../src/api';
 import { useStore } from '../../../src/store';
 import { getSocket } from '../../../src/socket';
+import { useT, getT } from '../../../src/i18n';
 import type { Message } from '../../../src/api';
 
-// Translate backend error codes to Polish
-function friendlyError(msg: string): string {
-  if (msg === 'No access' || msg === 'Brak dostępu') {
-    return 'Nie masz dostępu do tego kanału.\nMoże być prywatny lub wymaga specjalnych uprawnień.';
-  }
-  return msg;
-}
-
 export default function ChannelScreen() {
+  const t = useT();
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
   const insets = useSafeAreaInsets();
   const {
@@ -48,7 +42,13 @@ export default function ChannelScreen() {
       const list = await messagesApi.list(id);
       setMessages(id, list);
     } catch (e: any) {
-      setError(friendlyError(e.message ?? 'Nie udało się załadować wiadomości'));
+      const gt = getT();
+      const msg: string = e.message ?? '';
+      if (msg === 'No access' || msg === 'Brak dostępu') {
+        setError(gt.noAccessMsg);
+      } else {
+        setError(msg || gt.error);
+      }
     } finally {
       setLoading(false);
     }
@@ -109,7 +109,8 @@ export default function ChannelScreen() {
       await messagesApi.delete(msgId);
       removeMessage(id, msgId);
     } catch (e: any) {
-      Alert.alert('Błąd', e.message ?? 'Nie udało się usunąć wiadomości');
+      const gt = getT();
+      Alert.alert(gt.error, e.message ?? gt.deleteFailed);
     }
   };
 
@@ -118,7 +119,8 @@ export default function ChannelScreen() {
       const updated = await messagesApi.edit(msgId, newContent);
       updateMessage(id, updated);
     } catch (e: any) {
-      Alert.alert('Błąd', e.message ?? 'Nie udało się edytować wiadomości');
+      const gt = getT();
+      Alert.alert(gt.error, e.message ?? gt.editFailed);
     }
   };
 
@@ -169,19 +171,19 @@ export default function ChannelScreen() {
             <View style={styles.errorIcon}>
               <Ionicons name="lock-closed" size={32} color={C.textMuted} />
             </View>
-            <Text style={styles.errorTitle}>Brak dostępu</Text>
+            <Text style={styles.errorTitle}>{t.noAccess}</Text>
             <Text style={styles.errorText}>{error}</Text>
             <TouchableOpacity style={styles.retryBtn} onPress={load}>
               <Ionicons name="refresh-outline" size={16} color="#fff" />
-              <Text style={styles.retryText}>Spróbuj ponownie</Text>
+              <Text style={styles.retryText}>{t.retryBtn}</Text>
             </TouchableOpacity>
           </View>
         </View>
       ) : msgs.length === 0 ? (
         <View style={styles.center}>
           <Ionicons name="chatbox-outline" size={48} color={C.textMuted} />
-          <Text style={styles.emptyText}>Brak wiadomości</Text>
-          <Text style={styles.emptySubtext}>Napisz pierwszą wiadomość!</Text>
+          <Text style={styles.emptyText}>{t.noMessages}</Text>
+          <Text style={styles.emptySubtext}>{t.noMessagesFirst}</Text>
         </View>
       ) : (
         <FlatList
@@ -226,14 +228,14 @@ export default function ChannelScreen() {
             <View style={styles.dot} /><View style={styles.dot} /><View style={styles.dot} />
           </View>
           <Text style={styles.typingText}>
-            {typing.slice(0, 2).join(', ')} {typing.length === 1 ? 'pisze…' : 'piszą…'}
+            {typing.slice(0, 2).join(', ')} {typing.length === 1 ? t.typingOne : t.typingMany}
           </Text>
         </View>
       )}
 
       <View style={{ paddingBottom: insets.bottom }}>
         <MessageInput
-          placeholder={`Napisz na #${name}`}
+          placeholder={t.writeTo(name ?? '')}
           replyTo={replyTo}
           onClearReply={() => setReplyTo(null)}
           onSend={handleSend}

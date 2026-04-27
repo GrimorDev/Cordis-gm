@@ -15,19 +15,12 @@ import { serversApi, type ServerMember } from '../../../src/api';
 import { useStore } from '../../../src/store';
 import { UserAvatar } from '../../../src/components/UserAvatar';
 import { C, STATUS_COLOR } from '../../../src/theme';
+import { useT, getT } from '../../../src/i18n';
 
 type Section = { title: string; data: ServerMember[] };
 
-function groupMembers(members: ServerMember[]): Section[] {
-  const online = members.filter((m) => m.status !== 'offline');
-  const offline = members.filter((m) => m.status === 'offline');
-  const sections: Section[] = [];
-  if (online.length > 0) sections.push({ title: `Online — ${online.length}`, data: online });
-  if (offline.length > 0) sections.push({ title: `Offline — ${offline.length}`, data: offline });
-  return sections;
-}
-
 export default function MemberListScreen() {
+  const t = useT();
   const { serverId, serverName } = useLocalSearchParams<{ serverId: string; serverName?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -36,18 +29,22 @@ export default function MemberListScreen() {
   const [members, setMembers] = useState<ServerMember[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const displayName = serverName ?? activeServer?.name ?? 'Serwer';
+  const displayName = serverName ?? activeServer?.name ?? t.serverFallback;
 
   useEffect(() => {
     if (!serverId) return;
     serversApi
       .members(serverId)
       .then(setMembers)
-      .catch(() => Alert.alert('Błąd', 'Nie udało się załadować członków.'))
+      .catch(() => { const gt = getT(); Alert.alert(gt.error, gt.errLoadMembers); })
       .finally(() => setLoading(false));
   }, [serverId]);
 
-  const sections = groupMembers(members);
+  const online = members.filter((m) => m.status !== 'offline');
+  const offline = members.filter((m) => m.status === 'offline');
+  const sections: Section[] = [];
+  if (online.length > 0) sections.push({ title: t.onlineCount(online.length), data: online });
+  if (offline.length > 0) sections.push({ title: t.offlineCount(offline.length), data: offline });
 
   type ListItem =
     | { type: 'header'; title: string }
@@ -120,7 +117,7 @@ export default function MemberListScreen() {
           <Ionicons name="chevron-back" size={24} color={C.text} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Członkowie</Text>
+          <Text style={styles.headerTitle}>{t.membersTitle}</Text>
           <Text style={styles.headerSub}>{displayName}</Text>
         </View>
         <View style={styles.countBadge}>

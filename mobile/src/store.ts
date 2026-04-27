@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { storage } from './storage';
 import type { User, Server, Channel, Message, DmConversation, DmMessage, Friend, FriendRequest } from './api';
+import type { Lang } from './i18n';
 
 type VoiceUser = { id: string; username: string; avatar_url: string | null };
 
@@ -11,6 +12,10 @@ interface AppStore {
   setAuth: (token: string, user: User) => Promise<void>;
   clearAuth: () => Promise<void>;
   setCurrentUser: (user: User) => void;
+
+  /** UI language — persisted to storage */
+  language: Lang;
+  setLanguage: (lang: Lang) => Promise<void>;
 
   servers: Server[];
   setServers: (s: Server[]) => void;
@@ -77,6 +82,12 @@ export const useStore = create<AppStore>((set) => ({
     });
   },
   setCurrentUser: (user) => set({ currentUser: user }),
+
+  language: 'pl',
+  setLanguage: async (lang) => {
+    await storage.setItemAsync('cordyn_lang', lang);
+    set({ language: lang });
+  },
 
   servers: [],
   setServers: (servers) => set({ servers }),

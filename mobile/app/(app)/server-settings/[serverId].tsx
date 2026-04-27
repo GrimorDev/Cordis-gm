@@ -16,6 +16,7 @@ import { useStore } from '../../../src/store';
 import { UserAvatar } from '../../../src/components/UserAvatar';
 import { C } from '../../../src/theme';
 import { STATIC_BASE } from '../../../src/config';
+import { useT, getT } from '../../../src/i18n';
 
 function resolveUrl(url: string | null | undefined): string | null {
   if (!url) return null;
@@ -24,29 +25,24 @@ function resolveUrl(url: string | null | undefined): string | null {
 
 type Tab = 'basic' | 'channels' | 'members' | 'bans';
 
-const TABS: { key: Tab; label: string; icon: string }[] = [
-  { key: 'basic',    label: 'Ogólne',    icon: 'settings-outline' },
-  { key: 'channels', label: 'Kanały',    icon: 'chatbox-outline'  },
-  { key: 'members',  label: 'Członkowie',icon: 'people-outline'   },
-  { key: 'bans',     label: 'Bany',      icon: 'ban-outline'      },
-];
-
 const ACCENT_COLORS = [
   '#f59e0b','#8b5cf6','#ec4899','#3b82f6','#10b981',
   '#14b8a6','#06b6d4','#f97316','#ef4444','#6366f1',
 ];
 
-const SLOWMODE_OPTIONS = [
-  { label: 'Wyłączony', value: 0 },
-  { label: '5 sekund',  value: 5 },
-  { label: '10 sekund', value: 10 },
-  { label: '30 sekund', value: 30 },
-  { label: '1 minuta',  value: 60 },
-  { label: '5 minut',   value: 300 },
-  { label: '30 minut',  value: 1800 },
-  { label: '1 godzina', value: 3600 },
-  { label: '6 godzin',  value: 21600 },
-];
+function getSlowmodeOptions(t: ReturnType<typeof useT>) {
+  return [
+    { label: t.slowmodeOff,  value: 0 },
+    { label: t.slowmode5s,   value: 5 },
+    { label: t.slowmode10s,  value: 10 },
+    { label: t.slowmode30s,  value: 30 },
+    { label: t.slowmode1m,   value: 60 },
+    { label: t.slowmode5m,   value: 300 },
+    { label: t.slowmode30m,  value: 1800 },
+    { label: t.slowmode1h,   value: 3600 },
+    { label: t.slowmode6h,   value: 21600 },
+  ];
+}
 
 const BITRATE_OPTIONS = [8, 16, 24, 32, 48, 64, 72, 96];
 
@@ -60,6 +56,8 @@ function ChannelEditorModal({
   onClose: () => void;
   onSave: (ch: ChannelFull) => void;
 }) {
+  const t = useT();
+  const SLOWMODE_OPTIONS = getSlowmodeOptions(t);
   const isVoice = channel?.type === 'voice';
 
   const [name, setName] = useState(channel?.name ?? '');
@@ -102,13 +100,13 @@ function ChannelEditorModal({
         background_gradient: gradient.trim() || null });
       onClose();
     } catch (e: any) {
-      Alert.alert('Błąd', e.message ?? 'Nie udało się zapisać.');
+      Alert.alert(t.error, e.message ?? t.errSaveSettings);
     } finally { setSaving(false); }
   };
 
   if (!channel) return null;
 
-  const slowmodeLabel = SLOWMODE_OPTIONS.find(o => o.value === slowmode)?.label ?? 'Wyłączony';
+  const slowmodeLabel = SLOWMODE_OPTIONS.find(o => o.value === slowmode)?.label ?? t.slowmodeOff;
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -120,7 +118,7 @@ function ChannelEditorModal({
               <Ionicons name="close" size={22} color={C.textMuted} />
             </TouchableOpacity>
             <Text style={ed.title}>
-              {isVoice ? '🎙 Kanał głosowy' : '# Kanał tekstowy'}
+              {isVoice ? t.editorTitleVoice : t.editorTitleText}
             </Text>
             <TouchableOpacity
               style={[ed.saveBtn, (!name.trim() || saving) && { opacity: 0.5 }]}
@@ -129,7 +127,7 @@ function ChannelEditorModal({
             >
               {saving
                 ? <ActivityIndicator color="#fff" size="small" />
-                : <Text style={ed.saveBtnText}>Zapisz</Text>
+                : <Text style={ed.saveBtnText}>{t.save}</Text>
               }
             </TouchableOpacity>
           </View>
@@ -137,12 +135,12 @@ function ChannelEditorModal({
           <ScrollView style={ed.scroll} contentContainerStyle={{ padding: 20, gap: 20, paddingBottom: 48 }}>
             {/* Name */}
             <View>
-              <Text style={ed.label}>NAZWA</Text>
+              <Text style={ed.label}>{t.fieldName}</Text>
               <TextInput
                 style={ed.input}
                 value={name}
                 onChangeText={setName}
-                placeholder="Nazwa kanału…"
+                placeholder={t.channelNameLabel}
                 placeholderTextColor={C.textMuted}
                 autoCapitalize="none"
                 maxLength={100}
@@ -151,12 +149,12 @@ function ChannelEditorModal({
 
             {/* Description */}
             <View>
-              <Text style={ed.label}>OPIS (OPCJONALNIE)</Text>
+              <Text style={ed.label}>{t.fieldDesc}</Text>
               <TextInput
                 style={[ed.input, ed.inputMulti]}
                 value={description}
                 onChangeText={setDescription}
-                placeholder="Opis kanału…"
+                placeholder={t.fieldDescPh}
                 placeholderTextColor={C.textMuted}
                 multiline
                 maxLength={500}
@@ -169,8 +167,8 @@ function ChannelEditorModal({
               <View style={ed.rowLeft}>
                 <Ionicons name="lock-closed-outline" size={18} color={C.textSub} />
                 <View>
-                  <Text style={ed.rowTitle}>Prywatny</Text>
-                  <Text style={ed.rowSub}>Dostępny dla wybranych ról</Text>
+                  <Text style={ed.rowTitle}>{t.fieldPrivate}</Text>
+                  <Text style={ed.rowSub}>{t.fieldPrivateSub}</Text>
                 </View>
               </View>
               <Switch
@@ -184,7 +182,7 @@ function ChannelEditorModal({
             {/* TEXT-ONLY: Slowmode */}
             {!isVoice && (
               <View>
-                <Text style={ed.label}>TRYB WOLNY</Text>
+                <Text style={ed.label}>{t.fieldSlowmode}</Text>
                 <TouchableOpacity style={ed.picker} onPress={() => setShowSlowmode(true)}>
                   <Ionicons name="timer-outline" size={16} color={C.textMuted} />
                   <Text style={ed.pickerText}>{slowmodeLabel}</Text>
@@ -196,7 +194,7 @@ function ChannelEditorModal({
             {/* TEXT-ONLY: Gradient */}
             {!isVoice && (
               <View>
-                <Text style={ed.label}>GRADIENT CSS (OPCJONALNIE)</Text>
+                <Text style={ed.label}>{t.fieldGradient}</Text>
                 <TextInput
                   style={ed.input}
                   value={gradient}
@@ -207,7 +205,7 @@ function ChannelEditorModal({
                 />
                 {gradient.trim() !== '' && (
                   <View style={[ed.gradientPreview, { background: gradient } as any]}>
-                    <Text style={ed.gradientPreviewText}>Podgląd gradientu</Text>
+                    <Text style={ed.gradientPreviewText}>{t.gradientPreviewLabel}</Text>
                   </View>
                 )}
               </View>
@@ -217,7 +215,7 @@ function ChannelEditorModal({
             {isVoice && (
               <View>
                 <View style={ed.sliderHeader}>
-                  <Text style={ed.label}>LIMIT UŻYTKOWNIKÓW</Text>
+                  <Text style={ed.label}>{t.fieldUserLimit}</Text>
                   <Text style={ed.sliderValue}>{parseInt(userLimit) === 0 ? '∞' : userLimit}</Text>
                 </View>
                 <TextInput
@@ -225,11 +223,11 @@ function ChannelEditorModal({
                   value={userLimit}
                   onChangeText={v => setUserLimit(v.replace(/[^0-9]/g, ''))}
                   keyboardType="number-pad"
-                  placeholder="0 = brak limitu"
+                  placeholder={t.userLimitPh}
                   placeholderTextColor={C.textMuted}
                   maxLength={2}
                 />
-                <Text style={ed.hint}>0 = brak limitu, max 99</Text>
+                <Text style={ed.hint}>{t.userLimitHint}</Text>
               </View>
             )}
 
@@ -237,7 +235,7 @@ function ChannelEditorModal({
             {isVoice && (
               <View>
                 <View style={ed.sliderHeader}>
-                  <Text style={ed.label}>PRĘDKOŚĆ STRUMIENIOWANIA</Text>
+                  <Text style={ed.label}>{t.fieldBitrate}</Text>
                   <Text style={ed.sliderValue}>{bitrate} kbps</Text>
                 </View>
                 <View style={ed.bitrateGrid}>
@@ -251,7 +249,7 @@ function ChannelEditorModal({
                     </TouchableOpacity>
                   ))}
                 </View>
-                <Text style={ed.hint}>kbps — wyższa wartość = lepsza jakość dźwięku</Text>
+                <Text style={ed.hint}>{t.bitrateHint}</Text>
               </View>
             )}
           </ScrollView>
@@ -260,7 +258,7 @@ function ChannelEditorModal({
           <Modal visible={showSlowmode} transparent animationType="fade" onRequestClose={() => setShowSlowmode(false)}>
             <TouchableOpacity style={ed.pickerOverlay} activeOpacity={1} onPress={() => setShowSlowmode(false)}>
               <View style={ed.pickerSheet} onStartShouldSetResponder={() => true}>
-                <Text style={ed.pickerSheetTitle}>Tryb wolny</Text>
+                <Text style={ed.pickerSheetTitle}>{t.fieldSlowmode}</Text>
                 {SLOWMODE_OPTIONS.map(opt => (
                   <TouchableOpacity
                     key={opt.value}
@@ -284,10 +282,17 @@ function ChannelEditorModal({
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function ServerSettingsScreen() {
+  const t = useT();
+  const TABS: { key: Tab; label: string; icon: string }[] = [
+    { key: 'basic',    label: t.tabGeneral,  icon: 'settings-outline' },
+    { key: 'channels', label: t.tabChannels, icon: 'chatbox-outline'  },
+    { key: 'members',  label: t.tabMembers,  icon: 'people-outline'   },
+    { key: 'bans',     label: t.tabBans,     icon: 'ban-outline'      },
+  ];
   const { serverId } = useLocalSearchParams<{ serverId: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { removeServer, setChannels: setStoreChannels } = useStore();
+  const { removeServer, setChannels: setStoreChannels, language } = useStore();
 
   const [server, setServer] = useState<Server | null>(null);
   const [loading, setLoading] = useState(true);
@@ -327,7 +332,7 @@ export default function ServerSettingsScreen() {
         setAccentColor((s as any).accent_color ?? '');
         setIconUrl(s.icon_url);
       })
-      .catch(() => Alert.alert('Błąd', 'Nie udało się załadować serwera.'))
+      .catch(() => { const gt = getT(); Alert.alert(gt.error, gt.errLoadServer); })
       .finally(() => setLoading(false));
 
     channelsApi.list(serverId).then(setLocalChannels);
@@ -353,7 +358,7 @@ export default function ServerSettingsScreen() {
   // ── Icon upload ──────────────────────────────────────────────────────────
   const handleIconUpload = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('Brak uprawnień', 'Musisz przyznać dostęp do galerii.'); return; }
+    if (status !== 'granted') { const gt = getT(); Alert.alert(gt.noPermission, gt.galleryPermission); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true, aspect: [1, 1], quality: 0.85,
@@ -368,9 +373,9 @@ export default function ServerSettingsScreen() {
       setIconUrl(url);
       await serversApi.update(serverId!, { icon_url: url });
       setServer(s => s ? { ...s, icon_url: url } : s);
-      Alert.alert('Gotowe!', 'Ikona serwera zaktualizowana.');
+      const gt = getT(); Alert.alert(gt.done, gt.iconUpdated);
     } catch (e: any) {
-      Alert.alert('Błąd', e.message ?? 'Upload nie powiódł się.');
+      const gt = getT(); Alert.alert(gt.error, e.message ?? gt.errUpload);
     } finally { setUploadingIcon(false); }
   };
 
@@ -385,23 +390,24 @@ export default function ServerSettingsScreen() {
         accent_color: accentColor || undefined,
       });
       setServer(updated);
-      Alert.alert('Zapisano!', 'Ustawienia serwera zaktualizowane.');
+      const gt = getT(); Alert.alert(gt.saved, gt.settingsUpdated);
     } catch (e: any) {
-      Alert.alert('Błąd', e.message ?? 'Nie udało się zapisać.');
+      const gt = getT(); Alert.alert(gt.error, e.message ?? gt.errSaveSettings);
     } finally { setSaving(false); }
   };
 
   // ── Delete server ────────────────────────────────────────────────────────
   const handleDeleteServer = () => {
-    Alert.alert('Usuń serwer', `Usunąć "${server?.name}"? Tej operacji nie można cofnąć.`, [
-      { text: 'Anuluj', style: 'cancel' },
+    const gt = getT();
+    Alert.alert(gt.deleteServerTitle, gt.deleteServerMsg(server?.name ?? ''), [
+      { text: gt.cancel, style: 'cancel' },
       {
-        text: 'Usuń', style: 'destructive', onPress: async () => {
+        text: gt.delete, style: 'destructive', onPress: async () => {
           try {
             await serversApi.delete(serverId!);
             removeServer(serverId!);
             router.replace('/(app)');
-          } catch (e: any) { Alert.alert('Błąd', e.message ?? 'Nie udało się usunąć.'); }
+          } catch (e: any) { const gt2 = getT(); Alert.alert(gt2.error, e.message ?? gt2.errDeleteServer); }
         },
       },
     ]);
@@ -416,20 +422,21 @@ export default function ServerSettingsScreen() {
       setLocalChannels(prev => [...prev, ch as ChannelFull]);
       setNewChanName('');
     } catch (e: any) {
-      Alert.alert('Błąd', e.message ?? 'Nie udało się utworzyć kanału.');
+      const gt = getT(); Alert.alert(gt.error, e.message ?? gt.errCreateChannel);
     } finally { setAddingChan(false); }
   };
 
   // ── Delete channel ───────────────────────────────────────────────────────
   const handleDeleteChannel = (ch: ChannelFull) => {
-    Alert.alert('Usuń kanał', `Usunąć #${ch.name}? Tej operacji nie można cofnąć.`, [
-      { text: 'Anuluj', style: 'cancel' },
+    const gt = getT();
+    Alert.alert(gt.deleteChannel, gt.deleteChannelMsg(ch.name), [
+      { text: gt.cancel, style: 'cancel' },
       {
-        text: 'Usuń', style: 'destructive', onPress: async () => {
+        text: gt.delete, style: 'destructive', onPress: async () => {
           try {
             await channelsApi.delete(ch.id);
             setLocalChannels(prev => prev.filter(c => c.id !== ch.id));
-          } catch (e: any) { Alert.alert('Błąd', e.message ?? 'Nie udało się usunąć kanału.'); }
+          } catch (e: any) { const gt2 = getT(); Alert.alert(gt2.error, e.message ?? gt2.errDeleteChannel); }
         },
       },
     ]);
@@ -437,23 +444,24 @@ export default function ServerSettingsScreen() {
 
   // ── Member actions ───────────────────────────────────────────────────────
   const handleMemberOptions = (member: ServerMember) => {
-    Alert.alert(member.username, 'Co chcesz zrobić?', [
-      { text: 'Anuluj', style: 'cancel' },
+    const gt = getT();
+    Alert.alert(member.username, gt.memberOptions, [
+      { text: gt.cancel, style: 'cancel' },
       {
-        text: 'Wyrzuć', onPress: () => Alert.alert('Wyrzuć', `Wyrzucić ${member.username}?`, [
-          { text: 'Anuluj', style: 'cancel' },
-          { text: 'Wyrzuć', style: 'destructive', onPress: async () => {
+        text: gt.kick, onPress: () => Alert.alert(gt.kick, gt.kickTitle(member.username), [
+          { text: gt.cancel, style: 'cancel' },
+          { text: gt.kickBtn, style: 'destructive', onPress: async () => {
             try { await serversApi.kick(serverId!, member.id); setMembers(prev => prev.filter(m => m.id !== member.id)); }
-            catch (e: any) { Alert.alert('Błąd', e.message); }
+            catch (e: any) { const gt2 = getT(); Alert.alert(gt2.error, e.message); }
           }},
         ]),
       },
       {
-        text: 'Zbanuj', style: 'destructive', onPress: () => Alert.prompt(
-          'Powód bana', `Powód dla ${member.username} (opcjonalnie):`,
+        text: gt.ban, style: 'destructive', onPress: () => Alert.prompt(
+          gt.banTitle, gt.banReasonPh(member.username),
           async (reason) => {
             try { await serversApi.ban(serverId!, member.id, reason || undefined); setMembers(prev => prev.filter(m => m.id !== member.id)); }
-            catch (e: any) { Alert.alert('Błąd', e.message); }
+            catch (e: any) { const gt2 = getT(); Alert.alert(gt2.error, e.message); }
           }, 'plain-text',
         ),
       },
@@ -485,18 +493,18 @@ export default function ServerSettingsScreen() {
         horizontal showsHorizontalScrollIndicator={false}
         style={styles.tabBar} contentContainerStyle={styles.tabBarContent}
       >
-        {TABS.map(t => (
+        {TABS.map(tab => (
           <TouchableOpacity
-            key={t.key}
-            style={[styles.tab, activeTab === t.key && styles.tabActive]}
-            onPress={() => setActiveTab(t.key)}
+            key={tab.key}
+            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
+            onPress={() => setActiveTab(tab.key)}
           >
             <Ionicons
-              name={t.icon as any}
+              name={tab.icon as any}
               size={14}
-              color={activeTab === t.key ? C.accent : C.textMuted}
+              color={activeTab === tab.key ? C.accent : C.textMuted}
             />
-            <Text style={[styles.tabText, activeTab === t.key && styles.tabTextActive]}>{t.label}</Text>
+            <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>{tab.label}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -509,7 +517,7 @@ export default function ServerSettingsScreen() {
           <>
             {/* Icon */}
             <View style={styles.card}>
-              <Text style={styles.sectionLabel}>IKONA SERWERA</Text>
+              <Text style={styles.sectionLabel}>{t.serverIcon}</Text>
               <View style={styles.iconRow}>
                 <TouchableOpacity style={styles.iconWrap} onPress={handleIconUpload} activeOpacity={0.8}>
                   {uploadingIcon ? (
@@ -528,29 +536,29 @@ export default function ServerSettingsScreen() {
                   </View>
                 </TouchableOpacity>
                 <View style={styles.iconHint}>
-                  <Text style={styles.iconHintTitle}>Zmień ikonę serwera</Text>
-                  <Text style={styles.iconHintSub}>Dotknij aby przesłać zdjęcie</Text>
+                  <Text style={styles.iconHintTitle}>{t.changeIcon}</Text>
+                  <Text style={styles.iconHintSub}>{t.tapToUpload}</Text>
                 </View>
               </View>
             </View>
 
             {/* Name & description */}
             <View style={styles.card}>
-              <Text style={styles.sectionLabel}>NAZWA</Text>
+              <Text style={styles.sectionLabel}>{t.serverNameLabel}</Text>
               <TextInput
                 style={styles.input}
                 value={name}
                 onChangeText={setName}
-                placeholder="Nazwa serwera"
+                placeholder={t.serverName}
                 placeholderTextColor={C.textMuted}
                 maxLength={100}
               />
-              <Text style={[styles.sectionLabel, { marginTop: 12 }]}>OPIS</Text>
+              <Text style={[styles.sectionLabel, { marginTop: 12 }]}>{t.serverDescLabel}</Text>
               <TextInput
                 style={[styles.input, styles.textarea]}
                 value={description}
                 onChangeText={setDescription}
-                placeholder="Krótki opis serwera…"
+                placeholder={t.serverDescPh}
                 placeholderTextColor={C.textMuted}
                 multiline
                 numberOfLines={3}
@@ -561,7 +569,7 @@ export default function ServerSettingsScreen() {
 
             {/* Accent color */}
             <View style={styles.card}>
-              <Text style={styles.sectionLabel}>KOLOR AKCENTU SERWERA</Text>
+              <Text style={styles.sectionLabel}>{t.accentColor}</Text>
               <View style={styles.colorGrid}>
                 {ACCENT_COLORS.map(col => (
                   <TouchableOpacity
@@ -576,7 +584,7 @@ export default function ServerSettingsScreen() {
               </View>
               {accentColor !== '' && (
                 <TouchableOpacity onPress={() => setAccentColor('')} style={styles.clearColorBtn}>
-                  <Text style={styles.clearColorText}>Wyczyść kolor</Text>
+                  <Text style={styles.clearColorText}>{t.clearColor}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -591,18 +599,18 @@ export default function ServerSettingsScreen() {
                 ? <ActivityIndicator color="#fff" />
                 : <>
                     <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
-                    <Text style={styles.btnText}>Zapisz zmiany</Text>
+                    <Text style={styles.btnText}>{t.saveChanges}</Text>
                   </>
               }
             </TouchableOpacity>
 
             {/* Danger zone */}
             <View style={[styles.card, styles.dangerCard]}>
-              <Text style={styles.dangerTitle}>⚠️ Strefa zagrożenia</Text>
-              <Text style={styles.dangerSubtext}>Usunięcie serwera jest nieodwracalne. Wszystkie kanały i wiadomości zostaną utracone.</Text>
+              <Text style={styles.dangerTitle}>{t.dangerZone}</Text>
+              <Text style={styles.dangerSubtext}>{t.dangerZoneText}</Text>
               <TouchableOpacity style={styles.btnDanger} onPress={handleDeleteServer}>
                 <Ionicons name="trash-outline" size={16} color="#fff" />
-                <Text style={styles.btnText}>Usuń serwer</Text>
+                <Text style={styles.btnText}>{t.deleteServer}</Text>
               </TouchableOpacity>
             </View>
           </>
@@ -613,27 +621,27 @@ export default function ServerSettingsScreen() {
           <>
             {/* Add channel */}
             <View style={styles.card}>
-              <Text style={styles.sectionLabel}>UTWÓRZ NOWY KANAŁ</Text>
+              <Text style={styles.sectionLabel}>{t.createChannel}</Text>
               <TextInput
                 style={styles.input}
                 value={newChanName}
                 onChangeText={setNewChanName}
-                placeholder="Nazwa kanału"
+                placeholder={t.channelNamePh}
                 placeholderTextColor={C.textMuted}
                 autoCapitalize="none"
                 maxLength={100}
               />
               <View style={styles.typeRow}>
-                {(['text', 'voice'] as const).map(t => (
+                {(['text', 'voice'] as const).map(chanType => (
                   <TouchableOpacity
-                    key={t}
-                    style={[styles.typeBtn, newChanType === t && styles.typeBtnActive]}
-                    onPress={() => setNewChanType(t)}
+                    key={chanType}
+                    style={[styles.typeBtn, newChanType === chanType && styles.typeBtnActive]}
+                    onPress={() => setNewChanType(chanType)}
                   >
-                    <Ionicons name={t === 'text' ? 'chatbubble-outline' : 'mic-outline'} size={14}
-                      color={newChanType === t ? '#fff' : C.textSub} />
-                    <Text style={[styles.typeBtnText, newChanType === t && { color: '#fff' }]}>
-                      {t === 'text' ? 'Tekstowy' : 'Głosowy'}
+                    <Ionicons name={chanType === 'text' ? 'chatbubble-outline' : 'mic-outline'} size={14}
+                      color={newChanType === chanType ? '#fff' : C.textSub} />
+                    <Text style={[styles.typeBtnText, newChanType === chanType && { color: '#fff' }]}>
+                      {chanType === 'text' ? t.typeText : t.typeVoice}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -645,15 +653,15 @@ export default function ServerSettingsScreen() {
               >
                 {addingChan
                   ? <ActivityIndicator color="#fff" />
-                  : <><Ionicons name="add" size={18} color="#fff" /><Text style={styles.btnText}>Utwórz kanał</Text></>
+                  : <><Ionicons name="add" size={18} color="#fff" /><Text style={styles.btnText}>{t.createChannelBtn}</Text></>
                 }
               </TouchableOpacity>
             </View>
 
             {/* Channel list */}
             <View style={styles.card}>
-              <Text style={styles.sectionLabel}>ISTNIEJĄCE KANAŁY ({channels.length})</Text>
-              {channels.length === 0 && <Text style={styles.emptyText}>Brak kanałów.</Text>}
+              <Text style={styles.sectionLabel}>{t.existingChannels(channels.length)}</Text>
+              {channels.length === 0 && <Text style={styles.emptyText}>{t.noChannelsList}</Text>}
               {channels.map(ch => (
                 <View key={ch.id} style={styles.chRow}>
                   <View style={[styles.chIcon, { backgroundColor: ch.type === 'voice' ? '#22c55e22' : C.accentMuted }]}>
@@ -668,7 +676,7 @@ export default function ServerSettingsScreen() {
                     {ch.is_private && (
                       <View style={styles.privateBadge}>
                         <Ionicons name="lock-closed" size={10} color={C.textMuted} />
-                        <Text style={styles.privateBadgeText}>Prywatny</Text>
+                        <Text style={styles.privateBadgeText}>{t.private}</Text>
                       </View>
                     )}
                   </View>
@@ -687,11 +695,11 @@ export default function ServerSettingsScreen() {
         {/* ─── MEMBERS ─── */}
         {activeTab === 'members' && (
           <View style={styles.card}>
-            <Text style={styles.sectionLabel}>CZŁONKOWIE ({members.length})</Text>
+            <Text style={styles.sectionLabel}>{t.membersCount(members.length)}</Text>
             {membersLoading ? (
               <ActivityIndicator color={C.accent} style={{ padding: 20 }} />
             ) : members.length === 0 ? (
-              <Text style={styles.emptyText}>Brak członków.</Text>
+              <Text style={styles.emptyText}>{t.noMembers}</Text>
             ) : (
               members.map(m => (
                 <TouchableOpacity key={m.id} style={styles.memberRow} onPress={() => handleMemberOptions(m)} activeOpacity={0.7}>
@@ -714,13 +722,13 @@ export default function ServerSettingsScreen() {
         {/* ─── BANS ─── */}
         {activeTab === 'bans' && (
           <View style={styles.card}>
-            <Text style={styles.sectionLabel}>ZBANOWANI ({bans.length})</Text>
+            <Text style={styles.sectionLabel}>{t.bannedCount(bans.length)}</Text>
             {bansLoading ? (
               <ActivityIndicator color={C.accent} style={{ padding: 20 }} />
             ) : bans.length === 0 ? (
               <View style={styles.emptyState}>
                 <Ionicons name="shield-checkmark-outline" size={40} color={C.success} />
-                <Text style={styles.emptyText}>Brak zbanowanych użytkowników</Text>
+                <Text style={styles.emptyText}>{t.noBanned}</Text>
               </View>
             ) : (
               bans.map(ban => (
@@ -729,7 +737,7 @@ export default function ServerSettingsScreen() {
                   <View style={styles.memberInfo}>
                     <Text style={styles.memberName}>{ban.username}</Text>
                     {ban.reason && <Text style={styles.banReason} numberOfLines={1}>{ban.reason}</Text>}
-                    <Text style={styles.banDate}>{new Date(ban.banned_at).toLocaleDateString('pl-PL')}</Text>
+                    <Text style={styles.banDate}>{new Date(ban.banned_at).toLocaleDateString(language === 'pl' ? 'pl-PL' : 'en-GB')}</Text>
                   </View>
                   <TouchableOpacity
                     style={styles.unbanBtn}
@@ -737,10 +745,10 @@ export default function ServerSettingsScreen() {
                       try {
                         await serversApi.unban(serverId!, ban.user_id);
                         setBans(prev => prev.filter(b => b.user_id !== ban.user_id));
-                      } catch (e: any) { Alert.alert('Błąd', e.message); }
+                      } catch (e: any) { const gt = getT(); Alert.alert(gt.error, e.message); }
                     }}
                   >
-                    <Text style={styles.unbanText}>Odbanuj</Text>
+                    <Text style={styles.unbanText}>{t.unban}</Text>
                   </TouchableOpacity>
                 </View>
               ))

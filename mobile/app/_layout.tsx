@@ -7,14 +7,21 @@ import { storage } from '../src/storage';
 import { useStore } from '../src/store';
 import { authApi } from '../src/api';
 import { connectSocket } from '../src/socket';
+import type { Lang } from '../src/i18n';
 
 export default function RootLayout() {
-  const { setAuth, isAuthenticated } = useStore();
+  const { setAuth, setLanguage } = useStore();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
+        // Restore language preference
+        const savedLang = await storage.getItemAsync('cordyn_lang');
+        if (savedLang === 'pl' || savedLang === 'en') {
+          await setLanguage(savedLang as Lang);
+        }
+        // Restore auth
         const token = await storage.getItemAsync('cordyn_token');
         if (token) {
           const user = await authApi.me();

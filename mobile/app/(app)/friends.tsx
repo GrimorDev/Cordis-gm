@@ -10,14 +10,9 @@ import { UserAvatar } from '../../src/components/UserAvatar';
 import { C, STATUS_COLOR, STATUS_LABEL } from '../../src/theme';
 import { friendsApi } from '../../src/api';
 import { useStore } from '../../src/store';
+import { useT, getT } from '../../src/i18n';
 
 type Tab = 'online' | 'all' | 'requests';
-
-const TABS: { key: Tab; label: string; icon: string }[] = [
-  { key: 'online',   label: 'Online',      icon: 'ellipse'       },
-  { key: 'all',      label: 'Wszyscy',     icon: 'people'        },
-  { key: 'requests', label: 'Zaproszenia', icon: 'mail'          },
-];
 
 function FriendRow({ item, status, onChat, onRemove }: {
   item: any; status: string; onChat: () => void; onRemove: () => void;
@@ -52,13 +47,14 @@ function FriendRow({ item, status, onChat, onRemove }: {
 function RequestRow({ item, onAccept, onReject }: {
   item: any; onAccept: () => void; onReject: () => void;
 }) {
+  const t = useT();
   return (
     <View style={styles.requestCard}>
       <UserAvatar url={item.from_avatar} username={item.from_username} size={46} />
       <View style={styles.requestInfo}>
         <Text style={styles.friendName}>{item.from_username}</Text>
         <Text style={styles.requestDir}>
-          {item.direction === 'incoming' ? 'wysłał(-a) Ci zaproszenie' : 'Oczekuje na akceptację'}
+          {item.direction === 'incoming' ? t.incomingRequest : t.awaitingAccept}
         </Text>
       </View>
       {item.direction === 'incoming' ? (
@@ -72,7 +68,7 @@ function RequestRow({ item, onAccept, onReject }: {
         </View>
       ) : (
         <View style={styles.pendingBadge}>
-          <Text style={styles.pendingText}>Oczekuje</Text>
+          <Text style={styles.pendingText}>{t.pending}</Text>
         </View>
       )}
     </View>
@@ -80,6 +76,12 @@ function RequestRow({ item, onAccept, onReject }: {
 }
 
 export default function FriendsScreen() {
+  const t = useT();
+  const TABS: { key: Tab; label: string; icon: string }[] = [
+    { key: 'online',   label: t.tabOnline,    icon: 'ellipse' },
+    { key: 'all',      label: t.tabAll,       icon: 'people'  },
+    { key: 'requests', label: t.tabRequests,  icon: 'mail'    },
+  ];
   const insets = useSafeAreaInsets();
   const { friends, setFriends, friendRequests, setFriendRequests, userStatuses } = useStore();
   const [tab, setTab] = useState<Tab>('online');
@@ -103,10 +105,12 @@ export default function FriendsScreen() {
     setAddLoading(true);
     try {
       await friendsApi.send(addInput.trim());
-      Alert.alert('Wysłano!', `Zaproszenie do ${addInput.trim()} zostało wysłane.`);
+      const gt = getT();
+      Alert.alert(gt.friendRequestSent, gt.friendRequestMsg(addInput.trim()));
       setAddInput('');
     } catch (e: any) {
-      Alert.alert('Błąd', e.message ?? 'Nie udało się wysłać zaproszenia');
+      const gt = getT();
+      Alert.alert(gt.error, e.message ?? gt.errSendRequest);
     } finally { setAddLoading(false); }
   };
 
@@ -122,10 +126,11 @@ export default function FriendsScreen() {
   };
 
   const handleRemove = (id: string, username: string) => {
-    Alert.alert('Usuń znajomego', `Usunąć ${username} ze znajomych?`, [
-      { text: 'Anuluj', style: 'cancel' },
+    const gt = getT();
+    Alert.alert(gt.removeFriendTitle, gt.removeFriendMsg(username), [
+      { text: gt.cancel, style: 'cancel' },
       {
-        text: 'Usuń', style: 'destructive', onPress: async () => {
+        text: gt.remove, style: 'destructive', onPress: async () => {
           try { await friendsApi.remove(id); setFriends(friends.filter(f => f.id !== id)); }
           catch { }
         }
@@ -143,7 +148,7 @@ export default function FriendsScreen() {
     <View style={[styles.flex, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Znajomi</Text>
+        <Text style={styles.headerTitle}>{t.friendsTitle}</Text>
         <View style={styles.headerStats}>
           <View style={styles.statPill}>
             <View style={[styles.statDot, { backgroundColor: C.online }]} />
@@ -161,7 +166,7 @@ export default function FriendsScreen() {
           style={styles.addInput}
           value={addInput}
           onChangeText={setAddInput}
-          placeholder="Dodaj znajomego po nazwie…"
+          placeholder={t.addFriendPh}
           placeholderTextColor={C.textMuted}
           autoCapitalize="none"
           returnKeyType="send"
@@ -229,7 +234,7 @@ export default function FriendsScreen() {
           ListEmptyComponent={
             <View style={styles.emptySmall}>
               <Ionicons name="mail-open-outline" size={40} color={C.textMuted} />
-              <Text style={styles.emptyText}>Brak zaproszeń</Text>
+              <Text style={styles.emptyText}>{t.noRequests}</Text>
             </View>
           }
         />
@@ -259,11 +264,9 @@ export default function FriendsScreen() {
             <View style={styles.emptySmall}>
               <Ionicons name="people-outline" size={44} color={C.textMuted} />
               <Text style={styles.emptyText}>
-                {tab === 'online' ? 'Żaden znajomy nie jest online' : 'Brak znajomych'}
+                {tab === 'online' ? t.noneOnline : t.noFriends}
               </Text>
-              <Text style={styles.emptySubtext}>
-                Dodaj kogoś przez pole powyżej
-              </Text>
+              <Text style={styles.emptySubtext}>{t.addFriendHint}</Text>
             </View>
           }
         />

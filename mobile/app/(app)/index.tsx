@@ -13,6 +13,7 @@ import { C } from '../../src/theme';
 import { serversApi, channelsApi } from '../../src/api';
 import { useStore } from '../../src/store';
 import { getSocket } from '../../src/socket';
+import { useT, getT } from '../../src/i18n';
 import type { Server, Channel } from '../../src/api';
 
 // Enable LayoutAnimation on Android
@@ -36,6 +37,7 @@ function channelIcon(type: string, focused = false): ChannelIconName {
 
 // ── Main screen ────────────────────────────────────────────────────────────────
 export default function ServersScreen() {
+  const t = useT();
   const insets = useSafeAreaInsets();
   const {
     servers, setServers, activeServer, setActiveServer,
@@ -65,7 +67,8 @@ export default function ServersScreen() {
       const list = await serversApi.list();
       setServers(list);
     } catch (e: any) {
-      Alert.alert('Błąd', 'Nie udało się załadować serwerów.');
+      const gt = getT();
+      Alert.alert(gt.error, gt.errLoadServer);
     } finally {
       setServersLoading(false);
     }
@@ -86,7 +89,8 @@ export default function ServersScreen() {
       setChannels(chs);
       getSocket()?.emit('join_server_room' as any, srv.id);
     } catch (e: any) {
-      Alert.alert('Błąd', 'Nie udało się załadować kanałów: ' + (e.message ?? ''));
+      const gt = getT();
+      Alert.alert(gt.error, gt.errLoadChannels + (e.message ? ` ${e.message}` : ''));
     } finally {
       setChannelsLoading(false);
     }
@@ -102,7 +106,8 @@ export default function ServersScreen() {
       setJoinCode('');
       openServer(srv);
     } catch (e: any) {
-      Alert.alert('Błąd', e.message ?? 'Nieprawidłowy kod zaproszenia');
+      const gt = getT();
+      Alert.alert(gt.error, e.message ?? gt.errInvalidCode);
     } finally { setModalLoading(false); }
   };
 
@@ -117,15 +122,17 @@ export default function ServersScreen() {
       setCreateDesc('');
       openServer(srv);
     } catch (e: any) {
-      Alert.alert('Błąd', e.message ?? 'Nie udało się stworzyć serwera');
+      const gt = getT();
+      Alert.alert(gt.error, e.message ?? gt.errCreateServer);
     } finally { setModalLoading(false); }
   };
 
   const handleLeave = (srv: Server) => {
-    Alert.alert('Opuść serwer', `Czy na pewno chcesz opuścić "${srv.name}"?`, [
-      { text: 'Anuluj', style: 'cancel' },
+    const gt = getT();
+    Alert.alert(gt.leaveServer, gt.leaveServerMsg(srv.name), [
+      { text: gt.cancel, style: 'cancel' },
       {
-        text: 'Opuść', style: 'destructive', onPress: async () => {
+        text: gt.leave, style: 'destructive', onPress: async () => {
           try {
             await serversApi.leave(srv.id);
             setServers(servers.filter(s => s.id !== srv.id));
@@ -135,7 +142,8 @@ export default function ServersScreen() {
               setShowChannels(false);
             }
           } catch (e: any) {
-            Alert.alert('Błąd', e.message ?? 'Nie udało się opuścić serwera');
+            const gt2 = getT();
+            Alert.alert(gt2.error, e.message ?? gt2.errLeaveServer);
           }
         },
       },
@@ -146,16 +154,17 @@ export default function ServersScreen() {
     try {
       const { code } = await serversApi.generateInvite(srv.id);
       setActionServer(null);
-      await Share.share({ message: `Dołącz do "${srv.name}" na Cordyn! Kod: ${code}` });
+      const gt = getT();
+      await Share.share({ message: gt.shareInviteMsg(srv.name, code) });
     } catch (e: any) {
-      Alert.alert('Błąd', e.message ?? 'Nie udało się wygenerować zaproszenia');
+      const gt = getT();
+      Alert.alert(gt.error, e.message ?? gt.errGenerateInvite);
     }
   };
 
   const handleJoinVoice = (ch: Channel) => {
-    if (activeVoice?.channelId === ch.id) return; // already in this channel
+    if (activeVoice?.channelId === ch.id) return;
     if (activeVoice) {
-      // Leave previous voice channel first
       getSocket()?.emit('voice_leave', { channel_id: activeVoice.channelId });
     }
     getSocket()?.emit('voice_join', { channel_id: ch.id });
@@ -189,18 +198,20 @@ export default function ServersScreen() {
       setModal('none');
       setEditChannelId(null);
     } catch (e: any) {
-      Alert.alert('Błąd', e.message ?? 'Nie udało się edytować kanału');
+      const gt = getT();
+      Alert.alert(gt.error, e.message ?? gt.errEditChannel);
     } finally { setModalLoading(false); }
   };
 
   const handleDeleteChannel = (ch: Channel) => {
+    const gt = getT();
     Alert.alert(
-      'Usuń kanał',
-      `Usunąć kanał #${ch.name}? Tej akcji nie można cofnąć.`,
+      gt.deleteChannel,
+      gt.deleteChannelMsg(ch.name),
       [
-        { text: 'Anuluj', style: 'cancel' },
+        { text: gt.cancel, style: 'cancel' },
         {
-          text: 'Usuń',
+          text: gt.delete,
           style: 'destructive',
           onPress: async () => {
             try {
@@ -208,7 +219,8 @@ export default function ServersScreen() {
               setChannels(channels.filter(c => c.id !== ch.id));
               setActionChannel(null);
             } catch (e: any) {
-              Alert.alert('Błąd', e.message ?? 'Nie udało się usunąć kanału');
+              const gt2 = getT();
+              Alert.alert(gt2.error, e.message ?? gt2.errDeleteChannel);
             }
           },
         },
@@ -273,12 +285,12 @@ export default function ServersScreen() {
         {channelsLoading ? (
           <View style={styles.centerFlex}>
             <ActivityIndicator color={C.accent} size="large" />
-            <Text style={styles.loadingText}>Ładowanie kanałów…</Text>
+            <Text style={styles.loadingText}>{t.loadingChannels}</Text>
           </View>
         ) : channels.length === 0 ? (
           <View style={styles.centerFlex}>
             <Ionicons name="chatbox-outline" size={44} color={C.textMuted} />
-            <Text style={styles.emptyText}>Brak kanałów</Text>
+            <Text style={styles.emptyText}>{t.noChannels}</Text>
           </View>
         ) : (
           <ScrollView contentContainerStyle={{ paddingBottom: 20 }} showsVerticalScrollIndicator={false}>
@@ -330,7 +342,7 @@ export default function ServersScreen() {
                             </Text>
                             {isInThisVoice ? (
                               <View style={styles.voiceConnectedBadge}>
-                                <Text style={styles.voiceConnectedText}>Połączony</Text>
+                                <Text style={styles.voiceConnectedText}>{t.voiceConnected}</Text>
                               </View>
                             ) : vUsers.length > 0 && (
                               <View style={styles.voiceCountBadge}>
@@ -400,7 +412,7 @@ export default function ServersScreen() {
                 <Ionicons name="mic" size={14} color="#22c55e" />
               </View>
               <View>
-                <Text style={styles.voiceBarTitle}>Połączony z głosowym</Text>
+                <Text style={styles.voiceBarTitle}>{t.voiceConnectedTitle}</Text>
                 <Text style={styles.voiceBarChannel}>#{activeVoice.channelName}</Text>
               </View>
             </View>
@@ -442,13 +454,13 @@ export default function ServersScreen() {
           <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setModal('none')}>
             <View style={styles.modalCard} onStartShouldSetResponder={() => true}>
               <View style={styles.modalDragBar} />
-              <Text style={styles.modalTitle}>Edytuj kanał</Text>
-              <Text style={styles.modalLabel}>NAZWA KANAŁU</Text>
+              <Text style={styles.modalTitle}>{t.editChannelTitle}</Text>
+              <Text style={styles.modalLabel}>{t.channelNameFieldLabel}</Text>
               <TextInput
                 style={styles.input}
                 value={editChannelName}
                 onChangeText={setEditChannelName}
-                placeholder="Nazwa kanału…"
+                placeholder={t.channelNameModalPh}
                 placeholderTextColor={C.textMuted}
                 autoFocus
                 maxLength={100}
@@ -461,7 +473,7 @@ export default function ServersScreen() {
               >
                 {modalLoading
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={styles.modalBtnText}>Zapisz zmiany</Text>
+                  : <Text style={styles.modalBtnText}>{t.saveChanges}</Text>
                 }
               </TouchableOpacity>
             </View>
@@ -475,7 +487,7 @@ export default function ServersScreen() {
   return (
     <View style={[styles.flex, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Serwery</Text>
+        <Text style={styles.headerTitle}>{t.servers}</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.headerBtn} onPress={() => setModal('join')}>
             <Ionicons name="link-outline" size={18} color={C.textSub} />
@@ -513,7 +525,7 @@ export default function ServersScreen() {
               {item.member_count != null && (
                 <View style={styles.memberCountRow}>
                   <View style={[styles.statusDot, { backgroundColor: '#22c55e' }]} />
-                  <Text style={styles.memberCount}>{item.member_count} członków</Text>
+                  <Text style={styles.memberCount}>{t.memberCountLabel(item.member_count)}</Text>
                 </View>
               )}
             </View>
@@ -529,16 +541,16 @@ export default function ServersScreen() {
                   <View style={styles.emptyIcon}>
                     <Ionicons name="server-outline" size={36} color={C.accent} />
                   </View>
-                  <Text style={styles.emptyTitle}>Brak serwerów</Text>
-                  <Text style={styles.emptySubtext}>Stwórz własny lub dołącz przez kod zaproszenia</Text>
+                  <Text style={styles.emptyTitle}>{t.noServers}</Text>
+                  <Text style={styles.emptySubtext}>{t.noServersSubtext}</Text>
                   <View style={styles.emptyBtns}>
                     <TouchableOpacity style={styles.emptyBtn} onPress={() => setModal('create')}>
                       <Ionicons name="add-circle-outline" size={16} color="#fff" />
-                      <Text style={styles.emptyBtnText}>Stwórz</Text>
+                      <Text style={styles.emptyBtnText}>{t.create}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.emptyBtn, styles.emptyBtnSecondary]} onPress={() => setModal('join')}>
                       <Ionicons name="link-outline" size={16} color={C.textSub} />
-                      <Text style={[styles.emptyBtnText, { color: C.textSub }]}>Dołącz</Text>
+                      <Text style={[styles.emptyBtnText, { color: C.textSub }]}>{t.join}</Text>
                     </TouchableOpacity>
                   </View>
                 </>
@@ -560,23 +572,23 @@ export default function ServersScreen() {
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setModal('none')}>
           <View style={styles.modalCard}>
             <View style={styles.modalDragBar} />
-            <Text style={styles.modalTitle}>Stwórz serwer</Text>
-            <Text style={styles.modalLabel}>NAZWA SERWERA</Text>
+            <Text style={styles.modalTitle}>{t.createServer}</Text>
+            <Text style={styles.modalLabel}>{t.serverNameField}</Text>
             <TextInput
               style={styles.input}
               value={createName}
               onChangeText={setCreateName}
-              placeholder="np. Mój serwer"
+              placeholder={t.serverNamePh}
               placeholderTextColor={C.textMuted}
               autoFocus
               maxLength={100}
             />
-            <Text style={styles.modalLabel}>OPIS (OPCJONALNIE)</Text>
+            <Text style={styles.modalLabel}>{t.serverDescField}</Text>
             <TextInput
               style={[styles.input, styles.inputMulti]}
               value={createDesc}
               onChangeText={setCreateDesc}
-              placeholder="Krótki opis…"
+              placeholder={t.serverDescShortPh}
               placeholderTextColor={C.textMuted}
               multiline
               maxLength={300}
@@ -588,7 +600,7 @@ export default function ServersScreen() {
             >
               {modalLoading
                 ? <ActivityIndicator color="#fff" />
-                : <Text style={styles.modalBtnText}>Stwórz serwer</Text>
+                : <Text style={styles.modalBtnText}>{t.createServer}</Text>
               }
             </TouchableOpacity>
           </View>
@@ -600,13 +612,13 @@ export default function ServersScreen() {
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setModal('none')}>
           <View style={styles.modalCard}>
             <View style={styles.modalDragBar} />
-            <Text style={styles.modalTitle}>Dołącz do serwera</Text>
-            <Text style={styles.modalLabel}>KOD ZAPROSZENIA</Text>
+            <Text style={styles.modalTitle}>{t.joinServer}</Text>
+            <Text style={styles.modalLabel}>{t.inviteCode.toUpperCase()}</Text>
             <TextInput
               style={styles.input}
               value={joinCode}
               onChangeText={setJoinCode}
-              placeholder="np. ABC123"
+              placeholder={t.inviteCodePh}
               placeholderTextColor={C.textMuted}
               autoCapitalize="none"
               autoFocus
@@ -619,7 +631,7 @@ export default function ServersScreen() {
             >
               {modalLoading
                 ? <ActivityIndicator color="#fff" />
-                : <Text style={styles.modalBtnText}>Dołącz</Text>
+                : <Text style={styles.modalBtnText}>{t.join}</Text>
               }
             </TouchableOpacity>
           </View>
@@ -636,6 +648,7 @@ function ServerActionSheet({ server, onClose, onLeave, onInvite }: {
   onLeave: (s: Server) => void;
   onInvite: (s: Server) => void;
 }) {
+  const t = useT();
   if (!server) return null;
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -643,9 +656,9 @@ function ServerActionSheet({ server, onClose, onLeave, onInvite }: {
         <View style={styles.actionSheet}>
           <View style={styles.modalDragBar} />
           <Text style={styles.actionSheetServerTitle}>{server.name}</Text>
-          <ActionRow icon="link-outline" label="Wyślij zaproszenie" onPress={() => onInvite(server)} />
+          <ActionRow icon="link-outline" label={t.sendInvite} onPress={() => onInvite(server)} />
           <View style={styles.actionDivider} />
-          <ActionRow icon="log-out-outline" label="Opuść serwer" color={C.danger} onPress={() => { onClose(); onLeave(server); }} />
+          <ActionRow icon="log-out-outline" label={t.leaveServer} color={C.danger} onPress={() => { onClose(); onLeave(server); }} />
         </View>
       </TouchableOpacity>
     </Modal>
@@ -661,12 +674,13 @@ function ChannelActionSheet({ channel, isOwner, onClose, onOpen, onEdit, onDelet
   onEdit: (ch: Channel) => void;
   onDelete: (ch: Channel) => void;
 }) {
+  const t = useT();
   if (!channel) return null;
 
-  const typeLabel = channel.type === 'voice' ? 'Kanał głosowy'
-    : channel.type === 'announcement' ? 'Kanał ogłoszeń'
-    : channel.type === 'forum' ? 'Forum'
-    : 'Kanał tekstowy';
+  const typeLabel = channel.type === 'voice' ? t.channelTypeVoice
+    : channel.type === 'announcement' ? t.channelTypeAnnouncement
+    : channel.type === 'forum' ? t.channelTypeForum
+    : t.channelTypeText;
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -690,13 +704,13 @@ function ChannelActionSheet({ channel, isOwner, onClose, onOpen, onEdit, onDelet
 
           <View style={styles.actionDivider} />
 
-          <ActionRow icon="arrow-forward-outline" label="Otwórz kanał" onPress={() => { onClose(); onOpen(channel); }} />
+          <ActionRow icon="arrow-forward-outline" label={t.openChannel} onPress={() => { onClose(); onOpen(channel); }} />
 
           {isOwner && (
             <>
               <View style={styles.actionDivider} />
-              <ActionRow icon="pencil-outline" label="Zmień nazwę" onPress={() => { onClose(); onEdit(channel); }} />
-              <ActionRow icon="trash-outline" label="Usuń kanał" color={C.danger} onPress={() => { onDelete(channel); }} />
+              <ActionRow icon="pencil-outline" label={t.renameChannel} onPress={() => { onClose(); onEdit(channel); }} />
+              <ActionRow icon="trash-outline" label={t.deleteChannel} color={C.danger} onPress={() => { onDelete(channel); }} />
             </>
           )}
         </View>

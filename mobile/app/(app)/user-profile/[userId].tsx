@@ -10,12 +10,14 @@ import { usersApi, friendsApi, type User } from '../../../src/api';
 import { useStore } from '../../../src/store';
 import { UserAvatar } from '../../../src/components/UserAvatar';
 import { C, STATUS_COLOR, STATUS_LABEL } from '../../../src/theme';
+import { useT, getT } from '../../../src/i18n';
 
 export default function UserProfileScreen() {
+  const t = useT();
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { currentUser, friends, userStatuses } = useStore();
+  const { currentUser, friends, userStatuses, language } = useStore();
 
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,7 +38,7 @@ export default function UserProfileScreen() {
         setUser(userData);
         setIsBlocked(blocked.some(b => b.id === userId));
       })
-      .catch(() => Alert.alert('Błąd', 'Nie udało się załadować profilu.'))
+      .catch(() => { const gt = getT(); Alert.alert(gt.error, gt.errLoadProfile); })
       .finally(() => setLoading(false));
   }, [userId]);
 
@@ -45,9 +47,11 @@ export default function UserProfileScreen() {
     setSending(true);
     try {
       await friendsApi.send(user.username);
-      Alert.alert('Wysłano!', 'Zaproszenie do znajomych wysłane.');
+      const gt = getT();
+      Alert.alert(gt.friendRequestSent, gt.friendRequestSentAlert);
     } catch (e: any) {
-      Alert.alert('Błąd', e.message ?? 'Nie udało się wysłać zaproszenia.');
+      const gt = getT();
+      Alert.alert(gt.error, e.message ?? gt.errSendFriend);
     } finally { setSending(false); }
   };
 
@@ -58,22 +62,25 @@ export default function UserProfileScreen() {
 
   const handleBlock = () => {
     if (!user) return;
+    const gt = getT();
     Alert.alert(
-      'Zablokuj użytkownika',
-      `Zablokować ${user.username}? Nie będziecie mogli wymieniać wiadomości.`,
+      gt.blockUser,
+      gt.blockConfirmMsg(user.username),
       [
-        { text: 'Anuluj', style: 'cancel' },
+        { text: gt.cancel, style: 'cancel' },
         {
-          text: 'Zablokuj',
+          text: gt.blockUser,
           style: 'destructive',
           onPress: async () => {
             setBlockLoading(true);
             try {
               await friendsApi.block(userId);
               setIsBlocked(true);
-              Alert.alert('Zablokowano', `${user.username} został zablokowany.`);
+              const gt2 = getT();
+              Alert.alert(gt2.blocked, `${user.username} ${gt2.blockedLabel.toLowerCase()}.`);
             } catch (e: any) {
-              Alert.alert('Błąd', e.message ?? 'Nie udało się zablokować.');
+              const gt2 = getT();
+              Alert.alert(gt2.error, e.message ?? gt2.errBlock);
             } finally { setBlockLoading(false); }
           },
         },
@@ -87,9 +94,11 @@ export default function UserProfileScreen() {
     try {
       await friendsApi.unblock(userId);
       setIsBlocked(false);
-      Alert.alert('Odblokowano', `${user.username} został odblokowany.`);
+      const gt = getT();
+      Alert.alert(gt.unblockedLabel, `${user.username} ${gt.unblockBtn.toLowerCase()}.`);
     } catch (e: any) {
-      Alert.alert('Błąd', e.message ?? 'Nie udało się odblokować.');
+      const gt = getT();
+      Alert.alert(gt.error, e.message ?? gt.errUnblock);
     } finally { setBlockLoading(false); }
   };
 
@@ -105,14 +114,19 @@ export default function UserProfileScreen() {
     return (
       <View style={[styles.center, { paddingTop: insets.top }]}>
         <Ionicons name="person-outline" size={48} color={C.textMuted} />
-        <Text style={styles.errorText}>Nie znaleziono użytkownika</Text>
+        <Text style={styles.errorText}>{t.userNotFound}</Text>
       </View>
     );
   }
 
   const status = userStatuses[userId] ?? user.preferred_status ?? user.status ?? 'offline';
   const statusColor = STATUS_COLOR[status] ?? C.offline;
-  const joinDateStr = new Date(user.created_at).toLocaleDateString('pl-PL', { year: 'numeric', month: 'long', day: 'numeric' });
+  const joinLocale = language === 'pl' ? 'pl-PL' : 'en-GB';
+  const joinDateStr = (() => {
+    if (!user.created_at) return t.noData;
+    const d = new Date(user.created_at);
+    return isNaN(d.getTime()) ? t.noData : d.toLocaleDateString(joinLocale, { year: 'numeric', month: 'long', day: 'numeric' });
+  })();
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -159,7 +173,7 @@ export default function UserProfileScreen() {
             {isBlocked && (
               <View style={styles.blockedBadge}>
                 <Ionicons name="ban-outline" size={12} color={C.danger} />
-                <Text style={styles.blockedBadgeText}>Zablokowany</Text>
+                <Text style={styles.blockedBadgeText}>{t.blockedLabel}</Text>
               </View>
             )}
           </View>
@@ -177,7 +191,7 @@ export default function UserProfileScreen() {
             ) : (
               <View style={[styles.statusPill, { backgroundColor: C.dangerMuted, borderColor: C.danger + '33' }]}>
                 <Ionicons name="ban-outline" size={11} color={C.danger} />
-                <Text style={[styles.statusText, { color: C.danger }]}>Zablokowany</Text>
+                <Text style={[styles.statusText, { color: C.danger }]}>{t.blockedLabel}</Text>
               </View>
             )}
           </View>
@@ -185,7 +199,7 @@ export default function UserProfileScreen() {
           {/* About me */}
           {user.about_me && !isBlocked ? (
             <View style={styles.aboutSection}>
-              <Text style={styles.aboutLabel}>O MNIE</Text>
+              <Text style={styles.aboutLabel}>{t.aboutMe}</Text>
               <Text style={styles.aboutText}>{user.about_me}</Text>
             </View>
           ) : null}
@@ -194,12 +208,12 @@ export default function UserProfileScreen() {
           <View style={styles.infoSection}>
             <View style={styles.infoRow}>
               <Ionicons name="calendar-outline" size={14} color={C.textMuted} />
-              <Text style={styles.infoLabel}>Dołączył</Text>
+              <Text style={styles.infoLabel}>{t.joinedAt}</Text>
               <Text style={styles.infoValue}>{joinDateStr}</Text>
             </View>
             <View style={[styles.infoRow, styles.infoRowBorder]}>
               <Ionicons name="id-card-outline" size={14} color={C.textMuted} />
-              <Text style={styles.infoLabel}>ID</Text>
+              <Text style={styles.infoLabel}>{t.idLabel}</Text>
               <Text style={styles.infoValue} selectable>{user.id.slice(0, 8)}…</Text>
             </View>
           </View>
@@ -211,7 +225,7 @@ export default function UserProfileScreen() {
             {!isBlocked && (
               <TouchableOpacity style={styles.btnPrimary} onPress={handleSendDm} activeOpacity={0.85}>
                 <Ionicons name="chatbubble" size={18} color="#fff" />
-                <Text style={styles.btnPrimaryText}>Wyślij wiadomość</Text>
+                <Text style={styles.btnPrimaryText}>{t.sendMessage}</Text>
               </TouchableOpacity>
             )}
 
@@ -227,7 +241,7 @@ export default function UserProfileScreen() {
                   : <Ionicons name="person-add-outline" size={18} color={C.accentLight} />
                 }
                 <Text style={styles.btnSecondaryText}>
-                  {sending ? 'Wysyłanie…' : 'Dodaj do znajomych'}
+                  {sending ? t.sendingFriend : t.addFriend}
                 </Text>
               </TouchableOpacity>
             )}
@@ -235,7 +249,7 @@ export default function UserProfileScreen() {
             {!isBlocked && isFriend && (
               <View style={styles.friendBadge}>
                 <Ionicons name="people" size={16} color={C.success} />
-                <Text style={styles.friendBadgeText}>Już jesteście znajomymi</Text>
+                <Text style={styles.friendBadgeText}>{t.alreadyFriends}</Text>
               </View>
             )}
 
@@ -251,7 +265,7 @@ export default function UserProfileScreen() {
                 : <Ionicons name={isBlocked ? 'lock-open-outline' : 'ban-outline'} size={18} color={C.danger} />
               }
               <Text style={styles.btnDangerText}>
-                {isBlocked ? 'Odblokuj użytkownika' : 'Zablokuj użytkownika'}
+                {isBlocked ? t.unblockUser : t.blockUser}
               </Text>
             </TouchableOpacity>
           </View>
