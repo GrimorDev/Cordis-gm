@@ -1875,6 +1875,134 @@ function WelcomeModal({ username, onClose }: { username: string; onClose: () => 
   );
 }
 
+// ─── TabsWelcomeModal ─────────────────────────────────────────────────────────
+/** One-time modal that introduces the global tab bar feature. */
+function TabsWelcomeModal({ onClose, onDisable }: { onClose: () => void; onDisable: () => void }) {
+  const [typed, setTyped] = React.useState('');
+  const TITLE = tl('tabs.welcome.title');
+
+  // Typewriter effect for title
+  React.useEffect(() => {
+    let i = 0;
+    const id = setInterval(() => {
+      i++;
+      setTyped(TITLE.slice(0, i));
+      if (i >= TITLE.length) clearInterval(id);
+    }, 38);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[300] flex items-center justify-center p-4"
+      style={{ backdropFilter: 'blur(16px)', background: 'rgba(0,0,0,0.75)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+
+      <motion.div
+        initial={{ scale: 0.88, opacity: 0, y: 32 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.92, opacity: 0, y: 16 }}
+        transition={{ type: 'spring', stiffness: 280, damping: 24 }}
+        className="relative w-full max-w-md glass-modal rounded-3xl shadow-2xl shadow-indigo-900/40 overflow-hidden">
+
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 z-10 w-8 h-8 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center text-zinc-400 hover:text-white transition-all">
+          <X size={15}/>
+        </button>
+
+        {/* Header gradient */}
+        <div className="relative h-40 bg-gradient-to-br from-indigo-600 via-violet-700 to-purple-800 overflow-hidden">
+          <motion.div animate={{ scale:[1,1.25,1], opacity:[0.25,0.5,0.25] }} transition={{ duration:5, repeat:Infinity }}
+            className="absolute -top-10 -right-10 w-48 h-48 rounded-full bg-white/10"/>
+          <motion.div animate={{ scale:[1,1.3,1], opacity:[0.15,0.35,0.15] }} transition={{ duration:7, repeat:Infinity, delay:1.5 }}
+            className="absolute -bottom-12 -left-12 w-56 h-56 rounded-full bg-white/10"/>
+
+          {/* Animated tab bar preview inside header */}
+          <div className="absolute inset-0 flex items-end pb-4 px-5">
+            <div className="w-full bg-black/30 rounded-xl px-3 py-2 flex items-center gap-2 border border-white/10">
+              <span className="text-[9px] font-bold text-white/50 uppercase tracking-widest mr-1">Zakładki</span>
+              {(['# general','# announcements','🎙 voice','💬 @anna'].map((label, i) => (
+                <motion.div key={label}
+                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 + i * 0.12 }}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium whitespace-nowrap ${i === 0 ? 'bg-indigo-500/80 text-white shadow-sm' : 'bg-white/[0.08] text-white/60'}`}>
+                  {label}
+                </motion.div>
+              )))}
+              <div className="ml-auto opacity-60">
+                <motion.div animate={{ opacity:[0.4,1,0.4] }} transition={{ duration:2, repeat:Infinity }}>
+                  <ChevronRight size={11} className="text-white/50"/>
+                </motion.div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Icon badge */}
+        <div className="absolute top-[120px] left-6 w-12 h-12 rounded-2xl bg-[#0f0f14] border-4 border-[#0f0f14]
+          flex items-center justify-center shadow-xl z-10">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600
+            flex items-center justify-center shadow-lg shadow-indigo-500/40 text-lg">
+            🗂️
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="px-6 pt-8 pb-6">
+          {/* Title with typewriter */}
+          <h2 className="text-xl font-black text-white mb-1 min-h-[1.75rem]">
+            {typed}<motion.span animate={{ opacity:[1,0,1] }} transition={{ duration:0.8, repeat:Infinity }} className="inline-block w-0.5 h-5 bg-indigo-400 ml-0.5 align-middle"/>
+          </h2>
+          <p className="text-sm text-zinc-400 mb-5 leading-relaxed">{tl('tabs.welcome.desc')}</p>
+
+          {/* Feature bullets */}
+          <div className="flex flex-col gap-2.5 mb-6">
+            {[
+              { icon: '📌', text: tl('tabs.welcome.pin') },
+              { icon: '🔀', text: tl('tabs.welcome.multi') },
+              { icon: '⚡', text: tl('tabs.welcome.quick') },
+            ].map((item, i) => (
+              <motion.div key={i}
+                initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.6 + i * 0.1 }}
+                className="flex items-center gap-3 text-sm text-zinc-300">
+                <span className="text-base leading-none">{item.icon}</span>
+                <span>{item.text}</span>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Disable note */}
+          <p className="text-[11px] text-zinc-600 mb-4 text-center leading-relaxed">
+            {tl('tabs.welcome.disableHint')}
+          </p>
+
+          {/* Buttons */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => { onDisable(); onClose(); }}
+              className="flex-1 py-2.5 rounded-2xl text-sm font-medium text-zinc-400 border border-white/[0.08] hover:border-white/[0.15] hover:text-zinc-200 transition-all">
+              {tl('tabs.welcome.disableBtn')}
+            </button>
+            <motion.button
+              whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              onClick={onClose}
+              className="flex-1 py-2.5 rounded-2xl text-sm font-bold text-white
+                bg-gradient-to-r from-indigo-500 to-violet-600
+                hover:from-indigo-400 hover:to-violet-500
+                shadow-lg shadow-indigo-500/25 transition-all">
+              {tl('tabs.welcome.gotIt')}
+            </motion.button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 // ─── Link Preview ─────────────────────────────────────────────────────────────
 const YT_RE = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?(?:[^&]+&)*v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
 const URL_RE = /https?:\/\/[^\s"<>()[\]{}]+/g;
@@ -7022,6 +7150,7 @@ export default function App() {
   const [pinnedTabKeys, setPinnedTabKeys]     = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('cordyn_ptabs')||'[]'); } catch { return []; } });
   const [tabContextMenu, setTabContextMenu]   = useState<{key:string;x:number;y:number}|null>(null);
   const [tabBarOpen, setTabBarOpen]           = useState<boolean>(() => { try { return localStorage.getItem('cordyn_tabbar') !== '0'; } catch { return true; } });
+  const [showTabsWelcome, setShowTabsWelcome] = useState(false);
   const pendingTabChannelRef                  = useRef<string|null>(null);
   const tabScrollRef                          = useRef<HTMLDivElement>(null);
   const [activeDmUserId, setActiveDmUserId]   = useState('');
@@ -9911,6 +10040,24 @@ export default function App() {
     else addToast(tl('appearance.error.tabLimit'), 'error');
   };
 
+  // tabs_enabled — server-side setting
+  const tabsEnabled = currentUser?.tabs_enabled ?? true;
+  const saveTabsEnabled = async (val: boolean) => {
+    const upd = await users.updateMe({ tabs_enabled: val } as any).catch(() => null);
+    if (upd) { setCurrentUser(upd); addToast(val ? tl('tabs.enabled') : tl('tabs.disabled'), 'success'); }
+    else addToast(tl('admin.error.save'), 'error');
+  };
+
+  // Show one-time tabs welcome modal after login when tabs are enabled
+  useEffect(() => {
+    if (!currentUser) return;
+    if (currentUser.tabs_enabled === false) return;  // user already disabled
+    try {
+      const seen = localStorage.getItem('cordyn_tabs_welcome_v1');
+      if (!seen) setShowTabsWelcome(true);
+    } catch { /* noop */ }
+  }, [currentUser?.id]);
+
   // Derived appearance values
   const msgFontCls = fontSize === 'small' ? 'text-xs' : fontSize === 'large' ? 'text-base' : 'text-sm';
   const isJumboEmoji = (text: string) => /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}){1,5}\s*$/u.test(text?.trim() ?? '');
@@ -11847,7 +11994,7 @@ export default function App() {
       {isMobileOpen&&<div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-20 md:hidden" onClick={() => setIsMobileOpen(false)}/>}
 
       {/* ── GLOBAL CHANNEL / DM TAB BAR — full width, below top nav ── */}
-      {globalTabs.length > 0 && (()=>{
+      {tabsEnabled && globalTabs.length > 0 && (()=>{
         const ordered = [
           ...pinnedTabKeys.filter(k=>globalTabs.some(t=>t.key===k)).map(k=>globalTabs.find(t=>t.key===k)!),
           ...globalTabs.filter(t=>!pinnedTabKeys.includes(t.key)),
@@ -18757,30 +18904,47 @@ export default function App() {
 
                       {/* ── SEKCJA: Zakładki ────────────────────────────── */}
                       <div className="flex flex-col gap-3">
-                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pb-1.5 border-b border-white/[0.06]">Interfejs</p>
-                        <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-4 hover:border-white/[0.09] transition-colors">
-                          <div className="flex items-center justify-between mb-3">
-                            <div>
-                              <p className="text-sm font-medium text-white">Limit otwartych zakładek</p>
-                              <p className="text-xs text-zinc-600 mt-0.5">Maksymalna liczba nieprzypętych zakładek (przypięte są poza limitem)</p>
-                            </div>
-                            <span className="text-lg font-bold text-indigo-400 tabular-nums w-8 text-right shrink-0">{tabLimitDraft}</span>
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pb-1.5 border-b border-white/[0.06]">{tl('tabs.settings.section')}</p>
+
+                        {/* Toggle: zakładki włączone / wyłączone */}
+                        <div className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-3.5 hover:border-white/[0.09] transition-colors">
+                          <div className="flex-1 min-w-0 mr-4">
+                            <p className="text-sm font-medium text-white">{tl('tabs.settings.label')}</p>
+                            <p className="text-xs text-zinc-600 mt-0.5">{tl('tabs.settings.desc')}</p>
                           </div>
-                          <input
-                            type="range" min={10} max={30} step={1}
-                            value={tabLimitDraft}
-                            onChange={e => setTabLimitDraft(Number(e.target.value))}
-                            onMouseUp={e => saveTabLimit(Number((e.target as HTMLInputElement).value))}
-                            onTouchEnd={e => saveTabLimit(Number((e.target as HTMLInputElement).value))}
-                            className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-indigo-500"
-                            style={{background:`linear-gradient(to right, #6366f1 ${((tabLimitDraft-10)/20)*100}%, rgba(255,255,255,0.08) ${((tabLimitDraft-10)/20)*100}%)`}}
-                          />
-                          <div className="flex justify-between mt-1.5">
-                            <span className="text-[10px] text-zinc-700">10</span>
-                            <span className="text-[10px] text-zinc-700">20</span>
-                            <span className="text-[10px] text-zinc-700">30</span>
-                          </div>
+                          <button
+                            onClick={() => saveTabsEnabled(!tabsEnabled)}
+                            className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${tabsEnabled ? 'bg-indigo-500' : 'bg-zinc-700'}`}>
+                            <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${tabsEnabled ? 'translate-x-5' : 'translate-x-0'}`}/>
+                          </button>
                         </div>
+
+                        {/* Limit zakładek — widoczny tylko gdy włączone */}
+                        {tabsEnabled && (
+                          <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-4 hover:border-white/[0.09] transition-colors">
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <p className="text-sm font-medium text-white">{tl('tabs.settings.limit')}</p>
+                                <p className="text-xs text-zinc-600 mt-0.5">{tl('tabs.settings.limitDesc')}</p>
+                              </div>
+                              <span className="text-lg font-bold text-indigo-400 tabular-nums w-8 text-right shrink-0">{tabLimitDraft}</span>
+                            </div>
+                            <input
+                              type="range" min={10} max={30} step={1}
+                              value={tabLimitDraft}
+                              onChange={e => setTabLimitDraft(Number(e.target.value))}
+                              onMouseUp={e => saveTabLimit(Number((e.target as HTMLInputElement).value))}
+                              onTouchEnd={e => saveTabLimit(Number((e.target as HTMLInputElement).value))}
+                              className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-indigo-500"
+                              style={{background:`linear-gradient(to right, #6366f1 ${((tabLimitDraft-10)/20)*100}%, rgba(255,255,255,0.08) ${((tabLimitDraft-10)/20)*100}%)`}}
+                            />
+                            <div className="flex justify-between mt-1.5">
+                              <span className="text-[10px] text-zinc-700">10</span>
+                              <span className="text-[10px] text-zinc-700">20</span>
+                              <span className="text-[10px] text-zinc-700">30</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* ── SEKCJA: Status ────────────────────────────────── */}
@@ -20292,6 +20456,23 @@ export default function App() {
         {showWelcome && currentUser && (
           <WelcomeModal username={currentUser.username} onClose={() => setShowWelcome(false)} />
         )}
+      </AnimatePresence>
+
+      {/* ── Tabs Welcome Modal (jednorazowe powiadomienie o zakładkach) ── */}
+      <AnimatePresence>
+        {showTabsWelcome && !showWelcome && (
+          <TabsWelcomeModal
+            onClose={() => {
+              setShowTabsWelcome(false);
+              try { localStorage.setItem('cordyn_tabs_welcome_v1', '1'); } catch {}
+            }}
+            onDisable={() => {
+              saveTabsEnabled(false);
+              try { localStorage.setItem('cordyn_tabs_welcome_v1', '1'); } catch {}
+            }}
+          />
+        )}
+      </AnimatePresence>
 
         {/* ── Invite join dialog ───────────────────────────────────── */}
         {inviteDialog && pendingInvite && (

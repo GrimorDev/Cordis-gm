@@ -986,6 +986,9 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
 );
 CREATE INDEX IF NOT EXISTS idx_admin_audit_time ON admin_audit_log(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_admin_audit_admin ON admin_audit_log(admin_id, created_at DESC);
+
+-- Tab bar enabled/disabled preference
+ALTER TABLE users ADD COLUMN IF NOT EXISTS tabs_enabled BOOLEAN DEFAULT true;
 `;
 
 const SEED_SQL = `

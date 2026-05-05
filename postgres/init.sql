@@ -448,5 +448,8 @@ ANALYZE users;
 -- ── Tab limit preference ──────────────────────────────────────────────
 ALTER TABLE users ADD COLUMN IF NOT EXISTS tab_limit SMALLINT DEFAULT 20;
 
+-- ── Tab bar enabled preference ────────────────────────────────────────
+ALTER TABLE users ADD COLUMN IF NOT EXISTS tabs_enabled BOOLEAN DEFAULT true;
+
 -- ── Badge custom SVG icon ─────────────────────────────────────────────
 ALTER TABLE global_badges ADD COLUMN IF NOT EXISTS icon_url TEXT;

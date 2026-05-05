@@ -146,6 +146,7 @@ router.put('/me', authMiddleware,
     body('theme_id').optional().isIn(['default','midnight','amoled','forest','sakura','sunset']),
     body('banner_preset').optional().isIn(['none','aurora','violet','fire','ocean','neon-pink','matrix','gold','galaxy','ice','sakura','cyber','city','space','forest','mountains','rain','lava','misty-forest','deep-space','night-city','lava-lamp','retro-sunset','this-is-fine','nyan-cat','homer-bush','rickroll']),
     body('tab_limit').optional().isInt({ min: 10, max: 30 }),
+    body('tabs_enabled').optional().isBoolean(),
   ],
   async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
@@ -156,6 +157,7 @@ router.put('/me', authMiddleware,
       font_size, show_timestamps, show_chat_avatars, message_animations, show_link_previews,
       privacy_status_visible, privacy_typing_visible, privacy_read_receipts, privacy_friend_requests,
       privacy_dm_from_strangers, avatar_effect, card_effect, card_color, card_font, theme_id, banner_preset, tab_limit,
+      tabs_enabled,
     } = req.body;
     const updates: string[] = [];
     const values: any[] = [];
@@ -184,9 +186,11 @@ router.put('/me', authMiddleware,
     if (card_font                 !== undefined) { updates.push(`card_font=$${idx++}`);                 values.push(card_font); }
     if (theme_id                  !== undefined) { updates.push(`theme_id=$${idx++}`);                  values.push(theme_id); }
     if (banner_preset             !== undefined) { updates.push(`banner_preset=$${idx++}`);             values.push(banner_preset); }
-    // tab_limit — only include in updates if column exists (graceful degradation for older DBs)
-    const hasTabLimit = tab_limit !== undefined;
-    if (hasTabLimit) { updates.push(`tab_limit=$${idx++}`); values.push(Number(tab_limit)); }
+    // tab_limit / tabs_enabled — graceful degradation for older DBs
+    const hasTabLimit   = tab_limit    !== undefined;
+    const hasTabsEnabled = tabs_enabled !== undefined;
+    if (hasTabLimit)    { updates.push(`tab_limit=$${idx++}`);    values.push(Number(tab_limit)); }
+    if (hasTabsEnabled) { updates.push(`tabs_enabled=$${idx++}`); values.push(Boolean(tabs_enabled)); }
     if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update' });
     updates.push(`updated_at=NOW()`);
     values.push(req.user!.id);
@@ -203,19 +207,20 @@ router.put('/me', authMiddleware,
       let rows: any[];
       try {
         const res2 = await query(
-          `UPDATE users SET ${updates.join(',')} WHERE id=$${idx} ${RETURNING_BASE},tab_limit`,
+          `UPDATE users SET ${updates.join(',')} WHERE id=$${idx} ${RETURNING_BASE},tab_limit,tabs_enabled`,
           values
         );
         rows = res2.rows;
       } catch {
-        // tab_limit column doesn't exist yet — retry without it
-        const updatesNoTab = hasTabLimit ? updates.slice(0, -2).concat(updates[updates.length - 1]) : updates;
-        const valuesNoTab  = hasTabLimit ? [...values.slice(0, -2), values[values.length - 1]] : values;
+        // tab_limit/tabs_enabled columns may not exist — retry without them
+        const extraCols = (hasTabLimit ? 1 : 0) + (hasTabsEnabled ? 1 : 0);
+        const updatesNoExtra = updates.slice(0, updates.length - extraCols - 1).concat(updates[updates.length - 1]);
+        const valuesNoExtra  = [...values.slice(0, values.length - extraCols - 1), values[values.length - 1]];
         const res2 = await query(
-          `UPDATE users SET ${updatesNoTab.join(',')} WHERE id=$${hasTabLimit ? idx - 1 : idx} ${RETURNING_BASE}`,
-          valuesNoTab
+          `UPDATE users SET ${updatesNoExtra.join(',')} WHERE id=$${idx - extraCols} ${RETURNING_BASE}`,
+          valuesNoExtra
         );
-        rows = res2.rows.map((r: any) => ({ ...r, tab_limit: 20 }));
+        rows = res2.rows.map((r: any) => ({ ...r, tab_limit: 20, tabs_enabled: true }));
       }
       await broadcastUserUpdate(req, { id: rows[0].id, username: rows[0].username, avatar_url: rows[0].avatar_url, banner_url: rows[0].banner_url, banner_color: rows[0].banner_color, bio: rows[0].bio, custom_status: rows[0].custom_status, privacy_read_receipts: rows[0].privacy_read_receipts, avatar_effect: rows[0].avatar_effect, banner_preset: rows[0].banner_preset });
       return res.json(rows[0]);

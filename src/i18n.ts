@@ -670,6 +670,23 @@ const T: Record<string, Record<Locale, string>> = {
   // ── Friends ───────────────────────────────────────────────────────────
   'friends.inviteSent':      { pl: 'Zaproszenie wysłane!',       en: 'Invitation sent!',        cs: 'Pozvánka odeslána!',         de: 'Einladung gesendet!'       },
   'friends.error.notFound':  { pl: 'Nie znaleziono użytkownika', en: 'User not found',          cs: 'Uživatel nenalezen',         de: 'Benutzer nicht gefunden'   },
+
+  // ── Tabs system ───────────────────────────────────────────────────────
+  'tabs.enabled':              { pl: 'Pasek zakładek włączony',                   en: 'Tab bar enabled',                         cs: 'Panel záložek povolen',                  de: 'Tab-Leiste aktiviert'                    },
+  'tabs.disabled':             { pl: 'Pasek zakładek wyłączony',                  en: 'Tab bar disabled',                        cs: 'Panel záložek zakázán',                  de: 'Tab-Leiste deaktiviert'                  },
+  'tabs.welcome.title':        { pl: 'Witaj w nowym systemie zakładek!',          en: 'Welcome to the new tab system!',          cs: 'Vítejte v novém systému záložek!',       de: 'Willkommen im neuen Tab-System!'         },
+  'tabs.welcome.desc':         { pl: 'Otwieraj wiele kanałów jednocześnie i przełączaj się między nimi jednym kliknięciem — bez utraty kontekstu.', en: 'Open multiple channels at once and switch between them with one click — without losing context.', cs: 'Otevřete více kanálů najednou a přepínejte mezi nimi jedním kliknutím — bez ztráty kontextu.', de: 'Öffne mehrere Kanäle gleichzeitig und wechsle mit einem Klick zwischen ihnen — ohne Kontext zu verlieren.' },
+  'tabs.welcome.pin':          { pl: 'Przypinaj ważne kanały',                    en: 'Pin important channels',                  cs: 'Připněte důležité kanály',               de: 'Wichtige Kanäle anheften'                },
+  'tabs.welcome.multi':        { pl: 'Otwieraj wiele kanałów jednocześnie',       en: 'Open multiple channels at once',          cs: 'Otevřete více kanálů najednou',          de: 'Mehrere Kanäle gleichzeitig öffnen'      },
+  'tabs.welcome.quick':        { pl: 'Szybki dostęp bez wychodzenia z serwera',   en: 'Quick access without leaving the server', cs: 'Rychlý přístup bez opuštění serveru',    de: 'Schneller Zugriff ohne den Server zu verlassen' },
+  'tabs.welcome.disableHint':  { pl: 'Możesz wyłączyć zakładki w Ustawienia → Prywatność', en: 'You can disable tabs in Settings → Privacy', cs: 'Záložky můžete vypnout v Nastavení → Soukromí', de: 'Du kannst Tabs in Einstellungen → Datenschutz deaktivieren' },
+  'tabs.welcome.disableBtn':   { pl: 'Wyłącz zakładki',                           en: 'Disable tabs',                            cs: 'Zakázat záložky',                        de: 'Tabs deaktivieren'                       },
+  'tabs.welcome.gotIt':        { pl: 'Rozumiem, świetnie!',                       en: 'Got it, great!',                          cs: 'Rozumím, skvělé!',                       de: 'Verstanden, super!'                      },
+  'tabs.settings.section':     { pl: 'Interfejs',                                 en: 'Interface',                               cs: 'Rozhraní',                               de: 'Benutzeroberfläche'                      },
+  'tabs.settings.label':       { pl: 'Pasek zakładek',                            en: 'Tab bar',                                 cs: 'Panel záložek',                          de: 'Tab-Leiste'                              },
+  'tabs.settings.desc':        { pl: 'Pokazuj pasek zakładek u góry — szybki dostęp do wielu kanałów jednocześnie', en: 'Show tab bar at the top — quick access to multiple channels at once', cs: 'Zobrazit panel záložek nahoře — rychlý přístup k více kanálům najednou', de: 'Tab-Leiste oben anzeigen — schneller Zugriff auf mehrere Kanäle gleichzeitig' },
+  'tabs.settings.limit':       { pl: 'Limit otwartych zakładek',                  en: 'Open tab limit',                          cs: 'Limit otevřených záložek',               de: 'Limit offener Tabs'                      },
+  'tabs.settings.limitDesc':   { pl: 'Maksymalna liczba nieprzypiętych zakładek', en: 'Maximum number of unpinned tabs',         cs: 'Maximální počet nepřipnutých záložek',   de: 'Maximale Anzahl nicht angehefteter Tabs' },
 };
 
 /** Translate a key to the given locale. Falls back to Polish, then the key itself. */
