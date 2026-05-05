@@ -31,7 +31,7 @@ interface Props {
   canModerate?: boolean;
 }
 
-function fmtTime(dateStr: string, lang: 'pl' | 'en' = 'pl', yesterday = 'Wczoraj') {
+function fmtTime(dateStr: string, lang: 'pl' | 'en' = 'en', yesterday = 'Yesterday') {
   const d = new Date(dateStr);
   const locale = lang === 'pl' ? pl : enGB;
   if (isToday(d)) return format(d, 'HH:mm');
@@ -81,7 +81,7 @@ export function MessageBubble({
         <View style={[styles.systemPill, { borderColor: color + '55' }]}>
           <Ionicons name={icon as any} size={13} color={color} />
           <Text style={[styles.systemText, { color }]}>{msg.content}</Text>
-          <Text style={styles.systemTime}>{fmtTime(msg.created_at)}</Text>
+          <Text style={styles.systemTime}>{fmtTime(msg.created_at, language, t.yesterday)}</Text>
         </View>
       </View>
     );

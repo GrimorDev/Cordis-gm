@@ -15,7 +15,7 @@ import { pl } from 'date-fns/locale';
 import { enGB } from 'date-fns/locale';
 import { useT } from '../../src/i18n';
 
-function fmtTime(dateStr?: string | null, lang: 'pl' | 'en' = 'pl', yesterday = 'Wczoraj') {
+function fmtTime(dateStr?: string | null, lang: 'pl' | 'en' = 'en', yesterday = 'Yesterday') {
   if (!dateStr) return '';
   try {
     const d = new Date(dateStr);
@@ -57,7 +57,7 @@ function DmRow({ item, status, onPress }: { item: any; status: string; onPress: 
         <View style={styles.rowInfo}>
           <View style={styles.rowTop}>
             <Text style={[styles.rowName, hasUnread && styles.rowNameBold]} numberOfLines={1}>
-              {item.is_group ? (item.group_name || 'Grupa') : item.other_username}
+              {item.is_group ? (item.group_name || t.group) : item.other_username}
             </Text>
             <Text style={[styles.rowTime, hasUnread && styles.rowTimeUnread]}>
               {fmtTime(item.last_message_at, language, t.yesterday)}

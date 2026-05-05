@@ -94,6 +94,13 @@ const translations = {
     statusIdle:         'Bezczynny',
     statusDnd:          'Nie przeszkadzać',
     statusOffline:      'Niewidoczny',
+    /** Etykiety statusu widoczne przy użytkowniku (np. na liście znajomych) */
+    statusLabels: {
+      online:  'Online',
+      idle:    'Bezczynny',
+      dnd:     'Nie przeszkadzać',
+      offline: 'Offline',
+    },
 
     // ── Friends ───────────────────────────────────────────────────────────────
     friendsTitle:       'Znajomi',
@@ -124,6 +131,7 @@ const translations = {
     friendsBtn:         'Znajomi',
     startConvo:         'Zacznij rozmowę…',
     yesterday:          'Wczoraj',
+    group:              'Grupa',
 
     // ── Channel / DM chat ──────────────────────────────────────────────────
     noAccess:           'Brak dostępu',
@@ -423,6 +431,13 @@ const translations = {
     statusIdle:         'Idle',
     statusDnd:          'Do not disturb',
     statusOffline:      'Invisible',
+    /** Status labels shown next to the user (e.g. in friend list) */
+    statusLabels: {
+      online:  'Online',
+      idle:    'Idle',
+      dnd:     'Do not disturb',
+      offline: 'Offline',
+    },
 
     // ── Friends ───────────────────────────────────────────────────────────────
     friendsTitle:       'Friends',
@@ -453,6 +468,7 @@ const translations = {
     friendsBtn:         'Friends',
     startConvo:         'Start a conversation…',
     yesterday:          'Yesterday',
+    group:              'Group',
 
     // ── Channel / DM chat ──────────────────────────────────────────────────
     noAccess:           'No access',

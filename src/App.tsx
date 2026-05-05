@@ -518,7 +518,7 @@ function TenorGifPicker({ onSelect, onClose }: { onSelect: (url: string) => void
       style={{maxHeight:'380px'}}>
       <div className="p-2 shrink-0 border-b border-white/[0.07]">
         <input ref={inputRef} value={query} onChange={e=>setQuery(e.target.value)}
-          placeholder="Szukaj GIF-ów…"
+          placeholder={tl('ui.searchGifs')}
           className="w-full bg-white/[0.06] border border-white/[0.08] rounded-xl px-3 py-1.5 text-sm text-zinc-200 placeholder-zinc-600 outline-none focus:border-indigo-500/40 transition-colors"/>
       </div>
       <div className="overflow-y-auto custom-scrollbar p-2 flex-1">
@@ -540,7 +540,7 @@ function TenorGifPicker({ onSelect, onClose }: { onSelect: (url: string) => void
           </div>
         )}
         {!loading && results.length === 0 && query && (
-          <p className="text-xs text-zinc-600 text-center py-6">Brak wyników dla „{query}"</p>
+          <p className="text-xs text-zinc-600 text-center py-6">{tl('ui.noResultsFor')} „{query}"</p>
         )}
       </div>
       <div className="shrink-0 px-3 py-1.5 border-t border-white/[0.05] flex justify-end">
@@ -693,10 +693,10 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
 
   // Returns OS-appropriate download URL + label
   const osDownload = React.useMemo(() => {
-    if (userOs === 'macos') return { url: macUrl,     label: 'Pobierz na macOS',   loading: !macUrl };
-    if (userOs === 'windows') return { url: desktopUrl, label: 'Pobierz na Windows', loading: !desktopUrl };
+    if (userOs === 'macos') return { url: macUrl,     label: tl('menu.downloadMacos'),   loading: !macUrl };
+    if (userOs === 'windows') return { url: desktopUrl, label: tl('menu.downloadWindows'), loading: !desktopUrl };
     // Other OS — prefer Windows, show generic label
-    return { url: desktopUrl || macUrl, label: 'Pobierz aplikację', loading: !desktopUrl && !macUrl };
+    return { url: desktopUrl || macUrl, label: tl('menu.downloadDesktop'), loading: !desktopUrl && !macUrl };
   }, [userOs, desktopUrl, macUrl]);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
@@ -859,7 +859,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
               <img src="/cordyn.png" alt="Cordyn"
                 style={{ width: 72, height: 72, margin: '0 auto 14px', borderRadius: 18, display: 'block' }} />
               <h1 style={{ color: '#f1f5f9', fontSize: 22, fontWeight: 800, margin: '0 0 6px', letterSpacing: '-0.5px' }}>Cordyn</h1>
-              <p style={{ color: '#64748b', fontSize: 12, margin: 0 }}>Platforma dla twórców i społeczności</p>
+              <p style={{ color: '#64748b', fontSize: 12, margin: 0 }}>{tl('auth.platform')}</p>
             </div>
 
             {/* Tab: login / register */}
@@ -867,7 +867,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
               {(['login', 'register'] as const).map(t => (
                 <button key={t} onClick={() => switchTab(t)}
                   className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${modalTab === t ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-zinc-400 hover:text-white'}`}>
-                  {t === 'login' ? 'Logowanie' : 'Rejestracja'}
+                  {t === 'login' ? tl('auth.login') : tl('auth.register')}
                 </button>
               ))}
             </div>
@@ -881,8 +881,8 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   <div className="flex items-center gap-3 p-3.5 bg-indigo-500/10 border border-indigo-500/20 rounded-xl mb-1">
                     <Shield size={18} className="text-indigo-400 shrink-0" />
                     <div>
-                      <p className="text-sm font-semibold text-white">Weryfikacja dwuetapowa</p>
-                      <p className="text-xs text-zinc-400">{twoFaType === 'totp' ? 'Podaj 6-cyfrowy kod z aplikacji authenticator' : 'Podaj kod zapasowy (XXXXX-XXXXX)'}</p>
+                      <p className="text-sm font-semibold text-white">{tl('landing.verify2fa')}</p>
+                      <p className="text-xs text-zinc-400">{twoFaType === 'totp' ? tl('landing.totp.hint') : tl('landing.backup.hint')}</p>
                     </div>
                   </div>
                   <input autoFocus value={twoFaCode} onChange={e => setTwoFaCode(e.target.value)}
@@ -899,14 +899,14 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   </AnimatePresence>
                   <button type="submit" disabled={loading || !twoFaCode.trim()}
                     className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
-                    {loading ? <><Loader2 size={17} className="animate-spin" /> Weryfikacja...</> : <><Shield size={15} />Zatwierdź</>}
+                    {loading ? <><Loader2 size={17} className="animate-spin" /> {tl('auth.verifying')}</> : <><Shield size={15} />{tl('auth.verify')}</>}
                   </button>
                   <div className="flex gap-2">
                     <button type="button" onClick={() => { setTwoFaSession(null); setError(''); }}
-                      className="flex-1 py-2 rounded-xl text-sm font-semibold text-zinc-400 bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.07] transition-all">← Wróć</button>
+                      className="flex-1 py-2 rounded-xl text-sm font-semibold text-zinc-400 bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.07] transition-all">{tl('auth.back')}</button>
                     <button type="button" onClick={() => { setTwoFaType(t => t === 'totp' ? 'backup' : 'totp'); setTwoFaCode(''); setError(''); }}
                       className="flex-1 py-2 rounded-xl text-xs font-medium text-zinc-500 hover:text-zinc-300 bg-white/[0.03] hover:bg-white/[0.05] border border-white/[0.05] transition-all">
-                      {twoFaType === 'totp' ? 'Użyj kodu zapasowego' : 'Użyj aplikacji authenticator'}
+                      {twoFaType === 'totp' ? tl('landing.useBackup') : tl('landing.useAuthApp')}
                     </button>
                   </div>
                 </motion.form>
@@ -919,14 +919,14 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   transition={{ duration: .2 }} className="flex flex-col gap-3.5">
                   <div className="relative">
                     <MessageSquare size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
-                    <input required autoFocus value={form.login} onChange={set('login')} placeholder="Login lub email"
+                    <input required autoFocus value={form.login} onChange={set('login')} placeholder={tl('landing.loginEmail')}
                       autoComplete="username" name="username"
                       className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`} />
                   </div>
                   <div className="relative">
                     <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
                     <input required type={showPass ? 'text' : 'password'} value={form.password} onChange={set('password')}
-                      placeholder="Hasło" minLength={6} autoComplete="current-password" name="password"
+                      placeholder={tl('auth.password')} minLength={6} autoComplete="current-password" name="password"
                       className={`${gi} rounded-xl pl-10 pr-10 py-3 text-sm w-full`} />
                     <button type="button" onClick={() => setShowPass(v => !v)}
                       className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
@@ -946,11 +946,11 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                       className={`w-4 h-4 rounded flex items-center justify-center border transition-all shrink-0 ${rememberMe?'bg-indigo-500 border-indigo-500':'border-zinc-600 bg-transparent group-hover:border-zinc-400'}`}>
                       {rememberMe && <Check size={10} className="text-white"/>}
                     </div>
-                    <span className="text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors">Zapamiętaj mnie</span>
+                    <span className="text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors">{tl('auth.rememberMe')}</span>
                   </label>
                   <button type="submit" disabled={loading}
                     className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
-                    {loading ? <><Loader2 size={17} className="animate-spin" /> Logowanie...</> : 'Zaloguj się →'}
+                    {loading ? <><Loader2 size={17} className="animate-spin" /> {tl('auth.loggingIn')}</> : tl('auth.loginBtn')}
                   </button>
                 </motion.form>
               )}
@@ -962,19 +962,19 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   transition={{ duration: .2 }} className="flex flex-col gap-3.5">
                   <div className="relative">
                     <Users size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
-                    <input required value={form.username} onChange={set('username')} placeholder="Nazwa użytkownika"
+                    <input required value={form.username} onChange={set('username')} placeholder={tl('auth.username')}
                       pattern="[a-zA-Z0-9_]+" minLength={2} maxLength={32}
                       className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`} />
                   </div>
                   <div className="relative">
                     <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 text-sm pointer-events-none">@</span>
-                    <input required type="email" value={form.email} onChange={set('email')} placeholder="Adres email"
+                    <input required type="email" value={form.email} onChange={set('email')} placeholder={tl('landing.emailAddress')}
                       className={`${gi} rounded-xl pl-9 pr-4 py-3 text-sm w-full`} />
                   </div>
                   <div className="relative">
                     <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
                     <input required type={showPass ? 'text' : 'password'} value={form.password} onChange={set('password')}
-                      placeholder="Hasło" minLength={6} className={`${gi} rounded-xl pl-10 pr-10 py-3 text-sm w-full`} />
+                      placeholder={tl('auth.password')} minLength={6} className={`${gi} rounded-xl pl-10 pr-10 py-3 text-sm w-full`} />
                     <button type="button" onClick={() => setShowPass(v => !v)}
                       className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
                       {showPass ? <Eye size={15} /> : <EyeOff size={15} />}
@@ -983,7 +983,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   <div className="relative">
                     <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
                     <input required type={showPass ? 'text' : 'password'} value={form.confirm} onChange={set('confirm')}
-                      placeholder="Potwierdź hasło" minLength={6}
+                      placeholder={tl('auth.confirmPassword')} minLength={6}
                       className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`} />
                   </div>
                   <AnimatePresence>
@@ -996,7 +996,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   </AnimatePresence>
                   <button type="submit" disabled={loading}
                     className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
-                    {loading ? <><Loader2 size={17} className="animate-spin" /> Wysyłanie kodu...</> : 'Wyślij kod weryfikacyjny →'}
+                    {loading ? <><Loader2 size={17} className="animate-spin" /> {tl('auth.sendingCode')}</> : tl('auth.sendCode')}
                   </button>
                 </motion.form>
               )}
@@ -1009,7 +1009,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   <div className="flex items-center gap-2.5 bg-indigo-500/10 border border-indigo-500/25 rounded-xl px-4 py-3">
                     <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center shrink-0"><span className="text-base">✉️</span></div>
                     <div className="min-w-0">
-                      <p className="text-xs text-indigo-300 font-medium">Kod wysłany na:</p>
+                      <p className="text-xs text-indigo-300 font-medium">{tl('auth.codeSentTo')}</p>
                       <p className="text-sm text-white font-semibold truncate">{form.email}</p>
                     </div>
                   </div>
@@ -1018,7 +1018,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     <input required value={verifyCode} onChange={handleCodeInput} placeholder="xx-xxx-xxx" maxLength={10}
                       className={`${gi} rounded-xl pl-9 pr-4 py-3 text-sm w-full font-mono tracking-widest text-center`} />
                   </div>
-                  <p className="text-xs text-zinc-600 text-center -mt-1">Sprawdź skrzynkę mailową · Ważny przez 15 minut</p>
+                  <p className="text-xs text-zinc-600 text-center -mt-1">{tl('auth.checkEmail')}</p>
                   <AnimatePresence>
                     {(error || info) && (
                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
@@ -1029,21 +1029,21 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   </AnimatePresence>
                   <button type="submit" disabled={loading}
                     className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
-                    {loading ? <><Loader2 size={17} className="animate-spin" /> Tworzenie konta...</> : 'Zarejestruj się →'}
+                    {loading ? <><Loader2 size={17} className="animate-spin" /> {tl('auth.creatingAccount')}</> : tl('auth.registerBtn')}
                   </button>
                   <button type="button" onClick={() => { setRegStep('form'); setError(''); setInfo(''); setVerifyCode(''); }}
                     className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors text-center">
-                    ← Zmień dane / wyślij kod ponownie
+                    {tl('landing.changeData')}
                   </button>
                 </motion.form>
               )}
             </AnimatePresence>
 
             <p className="text-xs text-zinc-700 text-center mt-5">
-              {modalTab === 'login' ? 'Nie masz konta? ' : 'Masz już konto? '}
+              {modalTab === 'login' ? tl('landing.noAccount') : tl('landing.haveAccount')}
               <button onClick={() => switchTab(modalTab === 'login' ? 'register' : 'login')}
                 className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">
-                {modalTab === 'login' ? 'Zarejestruj się' : 'Zaloguj się'}
+                {modalTab === 'login' ? tl('auth.switchToRegister') : tl('auth.switchToLogin')}
               </button>
             </p>
 
@@ -1072,7 +1072,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
 
             {/* Desktop nav links */}
             <div className="hidden md:flex items-center gap-7 text-sm text-zinc-400">
-              {['Funkcje','Integracje','Bezpieczeństwo'].map(l => (
+              {[tl('landing.features'),tl('landing.integrations'),tl('landing.security')].map(l => (
                 <a key={l} href={`#${l.toLowerCase()}`}
                   className="hover:text-white transition-colors cursor-pointer">{l}</a>
               ))}
@@ -1082,11 +1082,11 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
             <div className="hidden md:flex items-center gap-3">
               <button onClick={() => openModal('login')}
                 className="px-4 py-2 rounded-xl text-sm font-semibold text-zinc-300 hover:text-white hover:bg-white/[0.06] transition-all">
-                Zaloguj się
+                {tl('landing.loginBtn')}
               </button>
               <button onClick={() => openModal('register')}
                 className="px-4 py-2 rounded-xl text-sm font-bold bg-indigo-500 hover:bg-indigo-400 text-white transition-all shadow-lg shadow-indigo-500/20">
-                Zarejestruj się
+                {tl('landing.registerBtn')}
               </button>
             </div>
 
@@ -1106,18 +1106,18 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
             {mobileMenuOpen && (
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
                 className="md:hidden border-t border-white/[0.06] px-4 py-4 flex flex-col gap-3">
-                {['Funkcje','Integracje','Bezpieczeństwo'].map(l => (
+                {[tl('landing.features'),tl('landing.integrations'),tl('landing.security')].map(l => (
                   <a key={l} href={`#${l.toLowerCase()}`} onClick={() => setMobileMenuOpen(false)}
                     className="text-zinc-400 hover:text-white transition-colors py-1">{l}</a>
                 ))}
                 <div className="flex gap-3 mt-2 pt-3 border-t border-white/[0.06]">
                   <button onClick={() => openModal('login')}
                     className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-300 bg-white/[0.04] border border-white/[0.07] hover:bg-white/[0.08] transition-all">
-                    Zaloguj się
+                    {tl('landing.loginBtn')}
                   </button>
                   <button onClick={() => openModal('register')}
                     className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-indigo-500 hover:bg-indigo-400 text-white transition-all">
-                    Zarejestruj się
+                    {tl('landing.registerBtn')}
                   </button>
                 </div>
               </motion.div>
@@ -1164,22 +1164,22 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
             <motion.div initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} transition={{ duration:.5 }}
               className="inline-flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/25 rounded-full px-5 py-2 mb-8">
               <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"/>
-              <span className="text-sm text-indigo-300 font-medium">Komunikacja dla każdego</span>
+              <span className="text-sm text-indigo-300 font-medium">{tl('landing.communication')}</span>
             </motion.div>
 
             {/* Headline */}
             <motion.h1 initial={{ opacity:0, y:24 }} animate={{ opacity:1, y:0 }} transition={{ duration:.6, delay:.1 }}
               className="text-5xl sm:text-6xl lg:text-7xl font-black leading-[1.05] tracking-tight mb-6">
-              Rozmawiaj. Graj.{' '}
+              {tl('landing.headline1')}{' '}
               <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-                Buduj społeczność.
+                {tl('landing.headline2')}
               </span>
             </motion.h1>
 
             {/* Subtext */}
             <motion.p initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} transition={{ duration:.5, delay:.2 }}
               className="text-lg sm:text-xl text-zinc-400 max-w-2xl mx-auto leading-relaxed mb-10">
-              Cordyn to miejsce, gdzie możesz pisać ze znajomymi, rozmawiać głosowo, zakładać serwery i dzielić się tym, co robisz — bezpłatnie i bez reklam.
+              {tl('landing.subtext')}
             </motion.p>
 
             {/* CTA buttons */}
@@ -1187,11 +1187,11 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
               className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
               <button onClick={() => openModal('register')}
                 className="px-8 py-4 rounded-2xl text-base font-bold bg-indigo-500 hover:bg-indigo-400 text-white transition-all shadow-xl shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:-translate-y-0.5 active:translate-y-0">
-                Zacznij za darmo →
+                {tl('landing.startFree')}
               </button>
               <button onClick={() => openModal('login')}
                 className="px-8 py-4 rounded-2xl text-base font-semibold text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.1] transition-all hover:-translate-y-0.5">
-                Zaloguj się
+                {tl('landing.loginBtn')}
               </button>
               <a href={osDownload.url || '#'}
                 className={`flex items-center gap-2.5 px-8 py-4 rounded-2xl text-base font-semibold transition-all hover:-translate-y-0.5 group border ${!osDownload.loading ? 'text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border-white/[0.1] cursor-pointer' : 'text-zinc-600 bg-white/[0.02] border-white/[0.05] cursor-wait pointer-events-none'}`}>
@@ -1205,10 +1205,10 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
             <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:.5 }}
               className="flex flex-wrap items-center justify-center gap-8 sm:gap-12">
               {[
-                { val:'Głos', label:'i wideo HD', color:'text-indigo-400' },
-                { val:'2FA', label:'Bezpieczeństwo', color:'text-amber-400' },
-                { val:'∞', label:'Wiadomości', color:'text-emerald-400' },
-                { val:'Boty', label:'i automatyzacje', color:'text-violet-400' },
+                { val:tl('landing.stats.voice'), label:tl('landing.stats.videoHd'), color:'text-indigo-400' },
+                { val:'2FA', label:tl('landing.stats.security'), color:'text-amber-400' },
+                { val:'∞', label:tl('landing.stats.messages'), color:'text-emerald-400' },
+                { val:tl('landing.stats.bots'), label:tl('landing.stats.automations'), color:'text-violet-400' },
               ].map(s => (
                 <div key={s.label} className="text-center">
                   <p className={`text-2xl font-black ${s.color}`}>{s.val}</p>
@@ -1246,14 +1246,14 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                 </div>
                 {/* Channel list */}
                 <div className="w-44 sm:w-52 border-r border-white/[0.05] flex flex-col py-3 px-2 shrink-0">
-                  <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest px-2 mb-2">Kanały tekstowe</p>
+                  <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest px-2 mb-2">{tl('channel.textChannels')}</p>
                   {['ogólny','rozwój','design','random'].map((ch,i) => (
                     <div key={ch} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${i===0?'bg-indigo-500/15 text-white':'text-zinc-500 hover:text-zinc-300'} transition-colors cursor-pointer`}>
                       <span className="text-sm text-zinc-600">#</span>
                       <span className="text-xs font-medium truncate">{ch}</span>
                     </div>
                   ))}
-                  <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest px-2 mb-2 mt-3">Głosowe</p>
+                  <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest px-2 mb-2 mt-3">{tl('channel.voiceChannels')}</p>
                   {['Ogólny','Gaming'].map((ch) => (
                     <div key={ch} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer">
                       <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -1283,7 +1283,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   ))}
                   {/* Input mock */}
                   <div className="mt-auto flex items-center gap-2 bg-white/[0.04] rounded-xl px-3 py-2 border border-white/[0.06]">
-                    <span className="text-xs text-zinc-600 flex-1">Napisz wiadomość...</span>
+                    <span className="text-xs text-zinc-600 flex-1">{tl('channel.writeMessage')}</span>
                     <span className="text-zinc-600">😊</span>
                   </div>
                 </div>
@@ -1300,13 +1300,13 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
             <motion.div initial={{ opacity:0, y:24 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.5 }}
               className="text-center mb-16">
               <div className="inline-flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 rounded-full px-4 py-1.5 mb-4">
-                <span className="text-xs font-semibold text-violet-400 uppercase tracking-wider">Funkcje</span>
+                <span className="text-xs font-semibold text-violet-400 uppercase tracking-wider">{tl('landing.features')}</span>
               </div>
               <h2 className="text-3xl sm:text-4xl font-black mb-4">
-                Wszystko, czego potrzebujesz
+                {tl('landing.features.title')}
               </h2>
               <p className="text-zinc-400 max-w-xl mx-auto">
-                Jeden zestaw narzędzi do komunikacji, zarządzania społecznością i rozrywki.
+                {tl('landing.features.desc')}
               </p>
             </motion.div>
 
@@ -1340,13 +1340,13 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
             <motion.div initial={{ opacity:0, y:24 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.5 }}
               className="text-center mb-16">
               <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-4 py-1.5 mb-4">
-                <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Integracje</span>
+                <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">{tl('landing.integrations')}</span>
               </div>
               <h2 className="text-3xl sm:text-4xl font-black mb-4">
-                Połącz swoje platformy
+                {tl('landing.integrations.title')}
               </h2>
               <p className="text-zinc-400 max-w-xl mx-auto">
-                Cordyn integruje się z Twoimi ulubionymi serwisami, żebyś wszystko miał w jednym miejscu.
+                {tl('landing.integrations.desc')}
               </p>
             </motion.div>
 
@@ -1377,13 +1377,13 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
               {/* Left text */}
               <motion.div initial={{ opacity:0, x:-30 }} whileInView={{ opacity:1, x:0 }} viewport={{ once:true }} transition={{ duration:.5 }}>
                 <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-full px-4 py-1.5 mb-6">
-                  <span className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Bezpieczeństwo</span>
+                  <span className="text-xs font-semibold text-amber-400 uppercase tracking-wider">{tl('landing.security')}</span>
                 </div>
                 <h2 className="text-3xl sm:text-4xl font-black mb-5">
-                  Twoje konto jest bezpieczne
+                  {tl('landing.security.title')}
                 </h2>
                 <p className="text-zinc-400 leading-relaxed mb-8">
-                  Bezpieczeństwo to u nas priorytet. Każde konto jest chronione wieloma warstwami zabezpieczeń — możesz korzystać z Cordyna bez obaw.
+                  {tl('landing.security.desc')}
                 </p>
                 <div className="flex flex-col gap-3">
                   {[
@@ -1511,9 +1511,9 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
               </div>
               <span className="text-sm font-bold text-zinc-400">Cordyn</span>
             </div>
-            <p className="text-xs text-zinc-700">© 2025 Cordyn. Wszelkie prawa zastrzeżone.</p>
+            <p className="text-xs text-zinc-700">{tl('landing.copyright')}</p>
             <div className="flex items-center gap-5 text-xs text-zinc-600">
-              {['Funkcje','Integracje','Bezpieczeństwo'].map(l => (
+              {[tl('landing.features'),tl('landing.integrations'),tl('landing.security')].map(l => (
                 <a key={l} href={`#${l.toLowerCase()}`} className="hover:text-zinc-400 transition-colors">{l}</a>
               ))}
             </div>
@@ -1567,12 +1567,12 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
               {/* Header */}
               <div className="mb-7">
                 <h2 className="text-2xl font-bold text-white mb-1">
-                  {modalTab === 'login' ? 'Witaj z powrotem!' : 'Dołącz do Cordyn'}
+                  {modalTab === 'login' ? tl('landing.welcomeBack') : tl('landing.joinCordyn')}
                 </h2>
                 <p className="text-sm text-zinc-500">
                   {modalTab === 'login'
-                    ? inviteInfo ? 'Zaloguj się, aby dołączyć do serwera' : 'Zaloguj się na swoje konto'
-                    : inviteInfo ? 'Utwórz konto, aby dołączyć do serwera' : 'Utwórz konto i zacznij budować społeczność'}
+                    ? inviteInfo ? tl('auth.loginToJoin') : tl('auth.loginToAccount')
+                    : inviteInfo ? tl('landing.createAccountJoin') : tl('landing.createAccount')}
                 </p>
               </div>
 
@@ -1582,7 +1582,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   <button key={t} onClick={() => switchTab(t)}
                     className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
                       modalTab===t ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-zinc-400 hover:text-white'}`}>
-                    {t === 'login' ? 'Logowanie' : 'Rejestracja'}
+                    {t === 'login' ? tl('auth.login') : tl('auth.register')}
                   </button>
                 ))}
               </div>
@@ -1596,7 +1596,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     <div className="flex items-center gap-3 p-3.5 bg-indigo-500/10 border border-indigo-500/20 rounded-xl mb-1">
                       <Shield size={18} className="text-indigo-400 shrink-0"/>
                       <div>
-                        <p className="text-sm font-semibold text-white">Weryfikacja dwuetapowa</p>
+                        <p className="text-sm font-semibold text-white">{tl('landing.verify2fa')}</p>
                         <p className="text-xs text-zinc-400">
                           {twoFaType === 'totp' ? 'Podaj 6-cyfrowy kod z aplikacji authenticator' : 'Podaj kod zapasowy (XXXXX-XXXXX)'}
                         </p>
@@ -1617,14 +1617,14 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     </AnimatePresence>
                     <button type="submit" disabled={loading || !twoFaCode.trim()}
                       className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
-                      {loading ? <><Loader2 size={17} className="animate-spin"/> Weryfikacja...</> : <><Shield size={15}/>Zatwierdź</>}
+                      {loading ? <><Loader2 size={17} className="animate-spin"/> {tl('auth.verifying')}</> : <><Shield size={15}/>{tl('auth.verify')}</>}
                     </button>
                     <div className="flex gap-2">
                       <button type="button" onClick={() => { setTwoFaSession(null); setError(''); }}
-                        className="flex-1 py-2 rounded-xl text-sm font-semibold text-zinc-400 bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.07] transition-all">← Wróć</button>
+                        className="flex-1 py-2 rounded-xl text-sm font-semibold text-zinc-400 bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.07] transition-all">{tl('auth.back')}</button>
                       <button type="button" onClick={() => { setTwoFaType(t => t === 'totp' ? 'backup' : 'totp'); setTwoFaCode(''); setError(''); }}
                         className="flex-1 py-2 rounded-xl text-xs font-medium text-zinc-500 hover:text-zinc-300 bg-white/[0.03] hover:bg-white/[0.05] border border-white/[0.05] transition-all">
-                        {twoFaType === 'totp' ? 'Użyj kodu zapasowego' : 'Użyj aplikacji authenticator'}
+                        {twoFaType === 'totp' ? tl('landing.useBackup') : tl('landing.useAuthApp')}
                       </button>
                     </div>
                   </motion.form>
@@ -1637,14 +1637,14 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     transition={{ duration:.2 }} className="flex flex-col gap-3.5">
                     <div className="relative">
                       <MessageSquare size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
-                      <input required value={form.login} onChange={set('login')} placeholder="Login lub email"
+                      <input required value={form.login} onChange={set('login')} placeholder={tl('landing.loginEmail')}
                         autoComplete="username" name="username"
                         className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`}/>
                     </div>
                     <div className="relative">
                       <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
                       <input required type={showPass ? 'text' : 'password'} value={form.password} onChange={set('password')}
-                        placeholder="Hasło" minLength={6} autoComplete="current-password" name="password"
+                        placeholder={tl('auth.password')} minLength={6} autoComplete="current-password" name="password"
                         className={`${gi} rounded-xl pl-10 pr-10 py-3 text-sm w-full`}/>
                       <button type="button" onClick={() => setShowPass(v => !v)}
                         className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
@@ -1664,11 +1664,11 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                         className={`w-4 h-4 rounded flex items-center justify-center border transition-all shrink-0 ${rememberMe?'bg-indigo-500 border-indigo-500':'border-zinc-600 bg-transparent group-hover:border-zinc-400'}`}>
                         {rememberMe && <Check size={10} className="text-white"/>}
                       </div>
-                      <span className="text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors">Zapamiętaj mnie</span>
+                      <span className="text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors">{tl('auth.rememberMe')}</span>
                     </label>
                     <button type="submit" disabled={loading}
                       className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
-                      {loading ? <><Loader2 size={17} className="animate-spin"/> Logowanie...</> : 'Zaloguj się →'}
+                      {loading ? <><Loader2 size={17} className="animate-spin"/> {tl('auth.loggingIn')}</> : tl('auth.loginBtn')}
                     </button>
                   </motion.form>
                 )}
@@ -1686,13 +1686,13 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     </div>
                     <div className="relative">
                       <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 text-sm pointer-events-none">@</span>
-                      <input required type="email" value={form.email} onChange={set('email')} placeholder="Adres email"
+                      <input required type="email" value={form.email} onChange={set('email')} placeholder={tl('landing.emailAddress')}
                         className={`${gi} rounded-xl pl-9 pr-4 py-3 text-sm w-full`}/>
                     </div>
                     <div className="relative">
                       <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
                       <input required type={showPass ? 'text' : 'password'} value={form.password} onChange={set('password')}
-                        placeholder="Hasło" minLength={6}
+                        placeholder={tl('auth.password')} minLength={6}
                         className={`${gi} rounded-xl pl-10 pr-10 py-3 text-sm w-full`}/>
                       <button type="button" onClick={() => setShowPass(v => !v)}
                         className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
@@ -1702,7 +1702,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     <div className="relative">
                       <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
                       <input required type={showPass ? 'text' : 'password'} value={form.confirm} onChange={set('confirm')}
-                        placeholder="Potwierdź hasło" minLength={6}
+                        placeholder={tl('auth.confirmPassword')} minLength={6}
                         className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`}/>
                     </div>
                     <AnimatePresence>
@@ -1715,7 +1715,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     </AnimatePresence>
                     <button type="submit" disabled={loading}
                       className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
-                      {loading ? <><Loader2 size={17} className="animate-spin"/> Wysyłanie kodu...</> : 'Wyślij kod weryfikacyjny →'}
+                      {loading ? <><Loader2 size={17} className="animate-spin"/> {tl('auth.sendingCode')}</> : tl('auth.sendCode')}
                     </button>
                   </motion.form>
                 )}
@@ -1728,7 +1728,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     <div className="flex items-center gap-2.5 bg-indigo-500/10 border border-indigo-500/25 rounded-xl px-4 py-3">
                       <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center shrink-0"><span className="text-base">✉️</span></div>
                       <div className="min-w-0">
-                        <p className="text-xs text-indigo-300 font-medium">Kod wysłany na:</p>
+                        <p className="text-xs text-indigo-300 font-medium">{tl('auth.codeSentTo')}</p>
                         <p className="text-sm text-white font-semibold truncate">{form.email}</p>
                       </div>
                     </div>
@@ -1737,7 +1737,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                       <input required value={verifyCode} onChange={handleCodeInput} placeholder="xx-xxx-xxx" maxLength={10}
                         className={`${gi} rounded-xl pl-9 pr-4 py-3 text-sm w-full font-mono tracking-widest text-center`}/>
                     </div>
-                    <p className="text-xs text-zinc-600 text-center -mt-1">Sprawdź skrzynkę mailową · Ważny przez 15 minut</p>
+                    <p className="text-xs text-zinc-600 text-center -mt-1">{tl('auth.checkEmail')}</p>
                     <AnimatePresence>
                       {(error || info) && (
                         <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:'auto' }} exit={{ opacity:0, height:0 }}
@@ -1748,21 +1748,21 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     </AnimatePresence>
                     <button type="submit" disabled={loading}
                       className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
-                      {loading ? <><Loader2 size={17} className="animate-spin"/> Tworzenie konta...</> : 'Zarejestruj się →'}
+                      {loading ? <><Loader2 size={17} className="animate-spin"/> {tl('auth.creatingAccount')}</> : tl('auth.registerBtn')}
                     </button>
                     <button type="button" onClick={() => { setRegStep('form'); setError(''); setInfo(''); setVerifyCode(''); }}
                       className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors text-center">
-                      ← Zmień dane / wyślij kod ponownie
+                      {tl('landing.changeData')}
                     </button>
                   </motion.form>
                 )}
               </AnimatePresence>
 
               <p className="text-xs text-zinc-700 text-center mt-5">
-                {modalTab === 'login' ? 'Nie masz konta? ' : 'Masz już konto? '}
+                {modalTab === 'login' ? tl('landing.noAccount') : tl('landing.haveAccount')}
                 <button onClick={() => switchTab(modalTab === 'login' ? 'register' : 'login')}
                   className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">
-                  {modalTab === 'login' ? 'Zarejestruj się' : 'Zaloguj się'}
+                  {modalTab === 'login' ? tl('auth.switchToRegister') : tl('auth.switchToLogin')}
                 </button>
               </p>
 
@@ -1771,7 +1771,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                 <a href={osDownload.url || '#'}
                   className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-xs font-medium border transition-all group ${!osDownload.loading ? 'text-zinc-500 hover:text-zinc-300 bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.05] hover:border-white/[0.1] cursor-pointer' : 'text-zinc-700 bg-white/[0.02] border-white/[0.03] cursor-wait pointer-events-none'}`}>
                   {osDownload.loading ? <Loader2 size={13} className="animate-spin"/> : <Monitor size={13} className="group-hover:text-indigo-400 transition-colors"/>}
-                  {osDownload.loading ? 'Ładowanie…' : `Pobierz aplikację Cordyn — ${userOs === 'macos' ? 'macOS' : userOs === 'windows' ? 'Windows' : 'Desktop'}`}
+                  {osDownload.loading ? tl('landing.loading') : `${tl('landing.downloadApp')} — ${userOs === 'macos' ? 'macOS' : userOs === 'windows' ? 'Windows' : 'Desktop'}`}
                   {!osDownload.loading && <Download size={12} className="group-hover:text-indigo-400 transition-colors"/>}
                 </a>
               </div>
@@ -1784,11 +1784,11 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
 }
 
 // ─── WelcomeModal ─────────────────────────────────────────────────────────────
-const WELCOME_TIPS = [
-  { icon: <MessageCircle size={18}/>, color: 'text-indigo-400', bg: 'bg-indigo-500/10', title: 'Wiadomości & kanały głosowe', desc: 'Dołącz do serwera lub napisz do znajomego — tekst, głos i wideo w jednym miejscu.' },
-  { icon: <Users size={18}/>, color: 'text-violet-400', bg: 'bg-violet-500/10', title: 'Znajomi & zaproszenia', desc: 'Wyszukaj znajomych po nazwie użytkownika i zaproś ich — ikona 👤 w pasku bocznym.' },
-  { icon: <Zap size={18}/>, color: 'text-amber-400', bg: 'bg-amber-500/10', title: 'Stwórz własny serwer', desc: 'Kliknij „+" w pasku serwerów, nadaj nazwę i zaproś ludzi kodem zaproszenia.' },
-  { icon: <Globe size={18}/>, color: 'text-emerald-400', bg: 'bg-emerald-500/10', title: 'Dostosuj profil', desc: 'Zmień avatar, baner, bio i status — ikonka ⚙️ przy swoim niku na dole.' },
+const getWelcomeTips = () => [
+  { icon: <MessageCircle size={18}/>, color: 'text-indigo-400', bg: 'bg-indigo-500/10', title: tl('onboard.messages'), desc: tl('onboard.messages.desc') },
+  { icon: <Users size={18}/>, color: 'text-violet-400', bg: 'bg-violet-500/10', title: tl('onboard.friends'), desc: tl('onboard.friends.desc') },
+  { icon: <Zap size={18}/>, color: 'text-amber-400', bg: 'bg-amber-500/10', title: tl('onboard.server'), desc: tl('onboard.server.desc') },
+  { icon: <Globe size={18}/>, color: 'text-emerald-400', bg: 'bg-emerald-500/10', title: tl('onboard.profile'), desc: tl('onboard.profile.desc') },
 ];
 
 function WelcomeModal({ username, onClose }: { username: string; onClose: () => void }) {
@@ -1837,12 +1837,12 @@ function WelcomeModal({ username, onClose }: { username: string; onClose: () => 
             <h2 className="text-2xl font-black text-white mb-1">
               Witaj, <span className="bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">{username}</span>! 🎉
             </h2>
-            <p className="text-sm text-zinc-400">Twoje konto jest gotowe. Oto kilka wskazówek na start:</p>
+            <p className="text-sm text-zinc-400">{tl('landing.accountReady')}</p>
           </div>
 
           {/* Tips */}
           <div className="flex flex-col gap-3 mb-7">
-            {WELCOME_TIPS.map((tip, i) => (
+            {getWelcomeTips().map((tip, i) => (
               <motion.div key={i}
                 initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.15 + i * 0.07 }}
@@ -2019,7 +2019,7 @@ function AttachmentRenderer({ url, staticUrl, addToast }: { url: string; staticU
     if (downloading) return;
     // Zawsze pobieramy przez backend proxy — Content-Disposition: attachment, bez CORS
     const dlUrl = toProxyUrl(full, true);
-    addToast?.(`⬇️ Pobieranie: ${name}`, 'info');
+    addToast?.(`⬇️ ${tl('message.uploading')} ${name}`, 'info');
     window.location.href = dlUrl;
   };
 
@@ -2094,15 +2094,15 @@ function AttachmentRenderer({ url, staticUrl, addToast }: { url: string; staticU
           <span className="text-xs font-mono text-zinc-400 truncate flex-1">{name}</span>
           <a href={toProxyUrl(full, true)} download={name} className="text-zinc-600 hover:text-zinc-300 transition-colors shrink-0" title="Pobierz"><Download size={11}/></a>
           <button onClick={loadText} className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-200 transition-colors shrink-0 ml-1">
-            {textLoading ? <span className="text-[10px]">Ładowanie...</span> : expanded ? <ChevronUp size={11}/> : <ChevronDown size={11}/>}
-            {!textLoading && <span className="text-[10px]">{expanded ? 'Zwiń' : 'Podgląd'}</span>}
+            {textLoading ? <span className="text-[10px]">{tl('ui.loading')}</span> : expanded ? <ChevronUp size={11}/> : <ChevronDown size={11}/>}
+            {!textLoading && <span className="text-[10px]">{expanded ? tl('ui.collapse') : tl('ui.preview')}</span>}
           </button>
         </div>
         {/* Content */}
         {expanded && textContent !== null && (
           <div className="max-h-80 overflow-auto">
             <pre className="p-3 text-[11px] font-mono text-zinc-300 leading-relaxed whitespace-pre-wrap break-words">
-              {textContent.length > 8000 ? textContent.slice(0, 8000) + '\n\n… (plik jest za długi, pobierz aby zobaczyć całość)' : textContent}
+              {textContent.length > 8000 ? textContent.slice(0, 8000) + `\n\n… (${tl('ui.fileTooLarge')})` : textContent}
             </pre>
           </div>
         )}
@@ -2118,7 +2118,7 @@ function AttachmentRenderer({ url, staticUrl, addToast }: { url: string; staticU
         <FileArchive size={15} className="shrink-0"/>
         <div className="min-w-0 text-left">
           <p className="font-semibold truncate max-w-[220px]">{name}</p>
-          <p className="text-amber-500/70 text-[10px]">{ext.toUpperCase()} · {downloading ? 'Pobieranie…' : 'Kliknij aby pobrać'}</p>
+          <p className="text-amber-500/70 text-[10px]">{ext.toUpperCase()} · {downloading ? tl('ui.downloading') : tl('ui.clickToDownload')}</p>
         </div>
         {downloading ? <Loader2 size={13} className="shrink-0 ml-1 animate-spin"/> : <Download size={13} className="shrink-0 ml-1"/>}
       </button>
@@ -2133,7 +2133,7 @@ function AttachmentRenderer({ url, staticUrl, addToast }: { url: string; staticU
         <FileText size={15} className="shrink-0"/>
         <div className="min-w-0">
           <p className="font-semibold truncate max-w-[220px]">{name}</p>
-          <p className="text-red-500/70 text-[10px]">PDF · Otwórz lub pobierz</p>
+          <p className="text-red-500/70 text-[10px]">PDF · {tl('ui.openOrDownload')}</p>
         </div>
         <ExternalLink size={11} className="shrink-0 ml-1"/>
       </a>
@@ -3153,7 +3153,7 @@ function ServerSettingsPage({
                   <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Dołączył</span>
                   <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Akcje</span>
                 </div>
-                {filteredMembers.length === 0 && <div className="px-4 py-8 text-sm text-zinc-700 text-center">Brak wyników</div>}
+                {filteredMembers.length === 0 && <div className="px-4 py-8 text-sm text-zinc-700 text-center">{tl('ui.noResults')}</div>}
                 {filteredMembers.map((m, i) => (
                   <div key={m.id} className={`grid grid-cols-[1fr_150px_120px_80px] gap-3 items-center px-4 py-3 ${i > 0 ? 'border-t border-white/[0.03]' : ''} hover:bg-white/[0.02] transition-colors`}>
                     {/* Użytkownik */}
@@ -3444,8 +3444,8 @@ function ServerSettingsPage({
 
           {tab === 'bots' && (
             <div className="p-6">
-              <h3 className="text-base font-bold text-white mb-1">Ustawienia botów</h3>
-              <p className="text-xs text-zinc-500 mb-6">Ogranicz komendy botów do jednego wybranego kanału tekstowego.</p>
+              <h3 className="text-base font-bold text-white mb-1">{tl('bots.settings')}</h3>
+              <p className="text-xs text-zinc-500 mb-6">{tl('bots.settings.desc')}</p>
 
               {/* Bot channel selector */}
               <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-4 mb-4">
@@ -3466,8 +3466,8 @@ function ServerSettingsPage({
                     try {
                       const result = await botsApi.setBotSettings(serverFull.id, { bot_channel_id: val });
                       if (setBotChannelId) setBotChannelId(result.bot_channel_id);
-                      if (addToast) addToast(val ? 'Kanał botów ustawiony' : 'Ograniczenie kanału usunięte', 'success');
-                    } catch { if (addToast) addToast('Błąd zapisu ustawień', 'error'); }
+                      if (addToast) addToast(val ? tl('admin.bots.channelSet') : tl('admin.bots.channelClear'), 'success');
+                    } catch { if (addToast) addToast(tl('admin.error.save'), 'error'); }
                     if (setBotChLoading) setBotChLoading(false);
                   }}
                   disabled={botChLoading}
@@ -3705,7 +3705,7 @@ function VoiceRttGraph({ history }: { history: {rtt:number,t:number}[] }) {
   if (history.length < 2) {
     return (
       <div className="w-full h-16 bg-white/[0.02] rounded-xl flex items-center justify-center border border-white/[0.04]">
-        <p className="text-[10px] text-zinc-600">Zbieranie danych…</p>
+        <p className="text-[10px] text-zinc-600">{tl('voice.collectingData')}</p>
       </div>
     );
   }
@@ -3744,14 +3744,14 @@ function PasswordChangeSection({ gi, addToast }: { gi: string; addToast: (m:stri
   const [pwLoading, setPwLoading] = React.useState(false);
   const handlePwChange = async(e:React.FormEvent)=>{
     e.preventDefault();
-    if(pwForm.next!==pwForm.confirm){addToast('Hasła nie pasują do siebie','error');return;}
-    if(pwForm.next.length<8){addToast('Nowe hasło musi mieć min. 8 znaków','error');return;}
+    if(pwForm.next!==pwForm.confirm){addToast(tl('password.mismatch'),'error');return;}
+    if(pwForm.next.length<8){addToast(tl('password.tooShort'),'error');return;}
     setPwLoading(true);
     try{
       await auth.changePassword(pwForm.current, pwForm.next);
-      addToast('Hasło zmienione pomyślnie','success');
+      addToast(tl('password.changed'),'success');
       setPwForm({current:'',next:'',confirm:''});
-    }catch(err:any){addToast(err?.message||'Błąd zmiany hasła','error');}
+    }catch(err:any){addToast(err?.message||tl('password.error'),'error');}
     finally{setPwLoading(false);}
   };
   return(
@@ -3759,7 +3759,7 @@ function PasswordChangeSection({ gi, addToast }: { gi: string; addToast: (m:stri
       {(['current','next','confirm'] as const).map((field,i)=>(
         <div key={field}>
           <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">
-            {i===0?'Obecne hasło':i===1?'Nowe hasło':'Potwierdź nowe hasło'}
+            {i===0?tl('password.current'):i===1?tl('password.new'):tl('password.confirm')}
           </label>
           <input type="password" value={pwForm[field]} onChange={e=>setPwForm(p=>({...p,[field]:e.target.value}))}
             className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`} placeholder="••••••••"/>
@@ -3767,7 +3767,7 @@ function PasswordChangeSection({ gi, addToast }: { gi: string; addToast: (m:stri
       ))}
       <button type="submit" disabled={pwLoading||!pwForm.current||!pwForm.next}
         className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 text-white font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2">
-        {pwLoading?<Loader2 size={14} className="animate-spin"/>:null}Zmień hasło
+        {pwLoading?<Loader2 size={14} className="animate-spin"/>:null}{tl('password.change')}
       </button>
     </form>
   );
@@ -3799,7 +3799,7 @@ function StorageTab({ addToast }: { addToast: (m:string,t?:any)=>void }) {
     try {
       const s = await import('./api').then(m => m.adminApi.storage.stats());
       setStats(s);
-    } catch { addToast('Błąd ładowania statystyk', 'error'); }
+    } catch { addToast(tl('admin.error.stats'), 'error'); }
     setLoading(false);
   }, []);
 
@@ -3808,7 +3808,7 @@ function StorageTab({ addToast }: { addToast: (m:string,t?:any)=>void }) {
     try {
       const d = await import('./api').then(m => m.adminApi.storage.users(page, q));
       setSuUsers(d.users); setSuTotal(d.total);
-    } catch { addToast('Błąd ładowania użytkowników', 'error'); }
+    } catch { addToast(tl('admin.error.users'), 'error'); }
     setSuLoading(false);
   }, []);
 
@@ -3822,28 +3822,28 @@ function StorageTab({ addToast }: { addToast: (m:string,t?:any)=>void }) {
     setDeleting(id);
     try {
       await import('./api').then(m => m.adminApi.storage.deleteAtt(id));
-      addToast('Plik usunięty', 'success');
+      addToast(tl('admin.file.deleted'), 'success');
       load();
-    } catch { addToast('Błąd usuwania', 'error'); }
+    } catch { addToast(tl('admin.error.delete'), 'error'); }
     setDeleting(null);
   };
 
   const handleRecalc = async () => {
     try {
       await import('./api').then(m => m.adminApi.storage.recalc());
-      addToast('Przeliczono storage wszystkich użytkowników', 'success');
+      addToast(tl('admin.storage.recalced'), 'success');
       load();
-    } catch { addToast('Błąd przeliczania', 'error'); }
+    } catch { addToast(tl('admin.error.recalc'), 'error'); }
   };
 
   const handleSetPremium = async (userId: string, is_premium: boolean) => {
     try {
       const quota_mb = is_premium ? 600 : 50;
       await import('./api').then(m => m.adminApi.storage.setQuota(userId, { is_premium, quota_mb }));
-      addToast(is_premium ? 'Nadano Cordyn Power' : 'Odebrano Cordyn Power', 'success');
+      addToast(is_premium ? tl('admin.power.granted') : tl('admin.power.revoked'), 'success');
       if (storageView === 'users') loadUsers(suPage, suQ);
       else load();
-    } catch { addToast('Błąd', 'error'); }
+    } catch { addToast(tl('admin.error.generic'), 'error'); }
   };
 
   if (loading) return (
@@ -4277,7 +4277,7 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
       setUserDetailData(d => d ? { ...d, user: { ...d.user, username: updated.username, email: updated.email } } : d);
       setUsers(users.map(u => u.id === userDetailData.user.id ? { ...u, username: updated.username } : u));
       setEditUserForm(null);
-      addToast({ type:'success', message:'Profil zaktualizowany' });
+      addToast({ type:'success', message:tl('toast.profileUpdated') });
     } catch (e: any) { addToast({ type:'error', message: e?.message || 'Błąd edycji' }); }
     finally { setEditUserLoading(false); }
   };
@@ -4569,7 +4569,7 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                       </div>
                     </div>
                   ))}
-                  {users.length===0&&<p className="text-xs text-zinc-600 text-center py-8">Brak wyników</p>}
+                  {users.length===0&&<p className="text-xs text-zinc-600 text-center py-8">{tl('ui.noResults')}</p>}
                 </div>
                 {usersTotal>50&&!userQ&&(
                   <div className="flex justify-center gap-2">
@@ -4825,7 +4825,7 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                     </div>
                   </div>
                 ))}
-                {filteredServers.length===0&&<p className="text-xs text-zinc-600 text-center py-8">{serversList.length===0?<Loader2 size={14} className="animate-spin inline"/>:'Brak wyników'}</p>}
+                {filteredServers.length===0&&<p className="text-xs text-zinc-600 text-center py-8">{serversList.length===0?<Loader2 size={14} className="animate-spin inline"/>:tl('ui.noResults')}</p>}
               </div>
               {/* Delete server confirm dialog */}
               {deleteServerConfirmId&&(
@@ -5489,8 +5489,8 @@ function ProfilePage({
     try {
       await gamesApi.remove(id);
       onGameRemoved(id);
-      addToast(`Usunięto ${name}`, 'info');
-    } catch { addToast('Błąd usuwania gry', 'error'); }
+      addToast(`${tl('profile.game.removed')} ${name}`, 'info');
+    } catch { addToast(tl('profile.game.error'), 'error'); }
   };
 
   // For own profile: prefer full spotify data (with tracks) from userPublic, fall back to status-only
@@ -5518,7 +5518,7 @@ function ProfilePage({
           <ArrowLeft size={15}/>
         </button>
         <span className="text-sm font-semibold text-zinc-300">
-          {loading ? 'Ładowanie...' : user ? `@${user.username}` : 'Profil użytkownika'}
+          {loading ? tl('ui.loading') : user ? `@${user.username}` : tl('settings.section.profile')}
         </span>
       </div>
 
@@ -5545,7 +5545,7 @@ function ProfilePage({
                   <span className="text-[11px] font-bold text-white">NA ŻYWO</span>
                   <span className="text-[11px] text-zinc-300">·</span>
                   <span className="text-[11px] text-zinc-300 truncate max-w-[120px]">{twitchToShow.stream.game_name}</span>
-                  <span className="text-[11px] text-zinc-400">· {twitchToShow.stream.viewer_count.toLocaleString()} widzów</span>
+                  <span className="text-[11px] text-zinc-400">· {twitchToShow.stream.viewer_count.toLocaleString()} {tl('profile.viewers')}</span>
                 </div>
               </>
             ) : bannerSrc ? (
@@ -5801,7 +5801,7 @@ function ProfilePage({
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
-                    <Gamepad2 size={13} className="text-zinc-600"/>{isOwn?'Moje ulubione gry':'Ulubione gry'}
+                    <Gamepad2 size={13} className="text-zinc-600"/>{isOwn?tl('profile.myFavoriteGames'):tl('profile.favoriteGames')}
                   </h3>
                   {isOwn && games.length < 6 && (
                     <button onClick={()=>setShowGameModal(true)}
@@ -5953,7 +5953,7 @@ function ProfilePage({
                       <div className="bg-purple-900/20 border border-purple-500/20 rounded-xl px-3 py-2 flex items-center gap-2">
                         <span className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold shrink-0">🔴 NA ŻYWO</span>
                         <span className="text-xs text-white truncate">{twitchToShow.stream.game_name}</span>
-                        <span className="text-xs text-zinc-500 ml-auto shrink-0">{twitchToShow.stream.viewer_count.toLocaleString()} widzów</span>
+                        <span className="text-xs text-zinc-500 ml-auto shrink-0">{twitchToShow.stream.viewer_count.toLocaleString()} {tl('profile.viewers')}</span>
                       </div>
                     )}
                   </div>
@@ -5962,7 +5962,7 @@ function ProfilePage({
                     <div className="bg-purple-900/20 border border-purple-500/20 rounded-xl px-3 py-2 flex items-center gap-2">
                       <span className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold shrink-0">🔴 NA ŻYWO</span>
                       <span className="text-xs text-white truncate">{twitchToShow.stream.game_name}</span>
-                      <span className="text-xs text-zinc-500 ml-auto shrink-0">{twitchToShow.stream.viewer_count.toLocaleString()} widzów</span>
+                      <span className="text-xs text-zinc-500 ml-auto shrink-0">{twitchToShow.stream.viewer_count.toLocaleString()} {tl('profile.viewers')}</span>
                     </div>
                   ) : (
                     <div className="bg-purple-500/5 border border-purple-500/10 rounded-xl px-3.5 py-2.5 flex items-center gap-2">
@@ -5991,12 +5991,12 @@ function ProfilePage({
                         <div className="min-w-0">
                           <p className="text-xs text-zinc-500 font-semibold uppercase tracking-widest mb-0.5 flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block"/>
-                            Gra teraz
+                            {tl('profile.playingNow')}
                           </p>
                           <p className="text-sm text-white font-medium truncate">{steamToShow.current_game.name}</p>
                           {steamGameStartedAt && (
                             <p className="text-[11px] text-zinc-600 mt-0.5 flex items-center gap-1">
-                              <Clock size={10}/> Grasz od {fmtGameDur(steamGameStartedAt)}
+                              <Clock size={10}/> {tl('profile.playingSince')} {fmtGameDur(steamGameStartedAt)}
                             </p>
                           )}
                         </div>
@@ -6015,12 +6015,12 @@ function ProfilePage({
                         <div className="min-w-0">
                           <p className="text-xs text-zinc-500 font-semibold uppercase tracking-widest mb-0.5 flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block"/>
-                            Gra teraz
+                            {tl('profile.playingNow')}
                           </p>
                           <p className="text-sm text-white font-medium truncate">{steamToShow.current_game.name}</p>
                           {steamGameStartedAt && (
                             <p className="text-[11px] text-zinc-600 mt-0.5 flex items-center gap-1">
-                              <Clock size={10}/> Grasz od {fmtGameDur(steamGameStartedAt)}
+                              <Clock size={10}/> {tl('profile.playingSince')} {fmtGameDur(steamGameStartedAt)}
                             </p>
                           )}
                         </div>
@@ -6073,7 +6073,7 @@ function ProfilePage({
                         <div className="bg-red-900/20 border border-red-500/20 rounded-xl px-3 py-2 flex items-center gap-2">
                           <span className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold shrink-0">NA ŻYWO</span>
                           <span className="text-xs text-white truncate">{yt.live_title || 'Stream na żywo'}</span>
-                          {yt.live_viewers != null && <span className="text-xs text-zinc-500 ml-auto shrink-0">{yt.live_viewers.toLocaleString()} widzów</span>}
+                          {yt.live_viewers != null && <span className="text-xs text-zinc-500 ml-auto shrink-0">{yt.live_viewers.toLocaleString()} {tl('profile.viewers')}</span>}
                         </div>
                       )}
                       {!yt.is_live && yt.latest_video_id && (
@@ -6122,7 +6122,7 @@ function ProfilePage({
                         <div className="bg-[#53fc18]/10 border border-[#53fc18]/20 rounded-xl px-3 py-2 flex items-center gap-2">
                           <span className="text-xs bg-[#53fc18] text-black px-1.5 py-0.5 rounded-full font-bold shrink-0">NA ŻYWO</span>
                           <span className="text-xs text-white truncate">{k.live_title || ''}</span>
-                          {k.live_viewers != null && <span className="text-xs text-zinc-500 ml-auto shrink-0">{k.live_viewers.toLocaleString()} widzów</span>}
+                          {k.live_viewers != null && <span className="text-xs text-zinc-500 ml-auto shrink-0">{k.live_viewers.toLocaleString()} {tl('profile.viewers')}</span>}
                         </div>
                       )}
                       {k.is_live && k.live_category && (
@@ -6861,11 +6861,11 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
             {!isSelf && u && (
               <div className="flex gap-1.5">
                 <button onClick={()=>onOpenDm(userId)}
-                  className="w-7 h-7 bg-white/[0.06] hover:bg-indigo-500/20 border border-white/[0.08] rounded-lg flex items-center justify-center text-zinc-400 hover:text-indigo-400 transition-all" title="Wiadomość">
+                  className="w-7 h-7 bg-white/[0.06] hover:bg-indigo-500/20 border border-white/[0.08] rounded-lg flex items-center justify-center text-zinc-400 hover:text-indigo-400 transition-all" title={tl('profile.message')}>
                   <MessageCircle size={13}/>
                 </button>
                 <button onClick={()=>onCall(userId, u.username, u.avatar_url||null, 'voice')}
-                  className="w-7 h-7 bg-white/[0.06] hover:bg-emerald-500/20 border border-white/[0.08] rounded-lg flex items-center justify-center text-zinc-400 hover:text-emerald-400 transition-all" title="Połączenie głosowe">
+                  className="w-7 h-7 bg-white/[0.06] hover:bg-emerald-500/20 border border-white/[0.08] rounded-lg flex items-center justify-center text-zinc-400 hover:text-emerald-400 transition-all" title={tl('profile.voiceCall')}>
                   <Phone size={13}/>
                 </button>
               </div>
@@ -6893,7 +6893,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
                   ? <img src={nowPlaying.album_cover} className="w-9 h-9 rounded-lg object-cover shrink-0" alt=""/>
                   : <div className="w-9 h-9 bg-[#1DB954]/15 rounded-lg flex items-center justify-center shrink-0"><Music size={14} className="text-[#1DB954]"/></div>}
                 <div className="min-w-0 flex-1">
-                  <p className="text-[10px] text-[#1DB954] font-semibold uppercase tracking-widest mb-0.5">Słucha Spotify</p>
+                  <p className="text-[10px] text-[#1DB954] font-semibold uppercase tracking-widest mb-0.5">{tl('profile.listeningSpotify')}</p>
                   <p className="text-xs text-white font-medium truncate">{nowPlaying.name}</p>
                   <p className="text-[11px] text-zinc-500 truncate">{nowPlaying.artists}</p>
                 </div>
@@ -6918,9 +6918,9 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
           {twitchActivity && (
             <div className="bg-purple-900/20 border border-purple-500/20 rounded-xl px-3 py-2.5 mb-3">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-purple-400 uppercase tracking-widest">🔴 NA ŻYWO</span>
+                <span className="text-[10px] font-bold text-purple-400 uppercase tracking-widest">🔴 {tl('profile.watchingTwitch')}</span>
                 <span className="text-xs text-white truncate flex-1">{twitchActivity.game_name}</span>
-                <span className="text-[10px] text-zinc-500 shrink-0">{twitchActivity.viewer_count.toLocaleString()} widzów</span>
+                <span className="text-[10px] text-zinc-500 shrink-0">{twitchActivity.viewer_count.toLocaleString()} {tl('profile.viewers')}</span>
               </div>
             </div>
           )}
@@ -6932,12 +6932,12 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
               <div className="min-w-0">
                 <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block"/>
-                  Gra teraz
+                  {tl('profile.playingNow')}
                 </p>
                 <p className="text-xs text-white truncate">{steamActivity.name}</p>
                 {steamGameStartedAt && (
                   <p className="text-[10px] text-zinc-600 mt-0.5 flex items-center gap-1">
-                    <Clock size={9}/> Grasz od {fmtGameDur(steamGameStartedAt)}
+                    <Clock size={9}/> {tl('profile.playingSince')} {fmtGameDur(steamGameStartedAt)}
                   </p>
                 )}
               </div>
@@ -6947,7 +6947,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
           {/* Favorite games */}
           {(data?.games?.length ?? 0) > 0 && (
             <div className="mb-3">
-              <p className="text-[10px] text-zinc-600 uppercase font-bold tracking-widest mb-2">Ulubione gry</p>
+              <p className="text-[10px] text-zinc-600 uppercase font-bold tracking-widest mb-2">{tl('profile.favoriteGames')}</p>
               <div className="flex gap-1.5 flex-wrap">
                 {data!.games.slice(0, 4).map(g => (
                   <div key={g.id} title={g.game_name}
@@ -6964,7 +6964,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
           {/* View profile button */}
           <button onClick={()=>onOpenProfile(userId)}
             className="w-full mt-1 py-2 rounded-xl bg-white/[0.05] hover:bg-indigo-500/20 border border-white/[0.08] hover:border-indigo-500/30 text-[12px] font-semibold text-zinc-400 hover:text-indigo-300 transition-all flex items-center justify-center gap-1.5">
-            Przejdź do profilu →
+            {tl('profile.goToProfile')}
           </button>
         </div>
       </div>
@@ -7003,9 +7003,9 @@ export default function App() {
       });
   }, []);
   const appOsDownload = React.useMemo(() => {
-    if (userOs === 'macos')   return { url: appMacUrl,     label: 'Pobierz na macOS',   ready: !!appMacUrl };
-    if (userOs === 'windows') return { url: appDesktopUrl, label: 'Pobierz na Windows', ready: !!appDesktopUrl };
-    return { url: appDesktopUrl || appMacUrl, label: 'Pobierz aplikację', ready: !!(appDesktopUrl || appMacUrl) };
+    if (userOs === 'macos')   return { url: appMacUrl,     label: tl('menu.downloadMacos'),   ready: !!appMacUrl };
+    if (userOs === 'windows') return { url: appDesktopUrl, label: tl('menu.downloadWindows'), ready: !!appDesktopUrl };
+    return { url: appDesktopUrl || appMacUrl, label: tl('menu.downloadDesktop'), ready: !!(appDesktopUrl || appMacUrl) };
   }, [userOs, appDesktopUrl, appMacUrl]);
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -7793,58 +7793,58 @@ export default function App() {
     const p = new URLSearchParams(window.location.search);
     const s = p.get('spotify');
     if (s === 'connected') {
-      addToast('Spotify połączono pomyślnie! 🎵', 'success');
+      addToast(tl('connections.spotifyOk'), 'success');
       window.history.replaceState({}, '', window.location.pathname);
       spotifyApi.status().then(setOwnSpotify).catch(()=>{});
       // otwórz ustawienia na zakładce połączeń
       setActiveView('settings');
       setTimeout(() => (window as any).__cordisGoToSettingsTab?.('connections'), 300);
     } else if (s === 'error') {
-      addToast('Błąd połączenia Spotify — sprawdź czy konto jest aktywne', 'error');
+      addToast(tl('connections.spotifyErr'), 'error');
       window.history.replaceState({}, '', window.location.pathname);
     }
     const tw = p.get('twitch');
     if (tw === 'connected') {
-      addToast('Twitch połączono pomyślnie! 🎮', 'success');
+      addToast(tl('connections.twitchOk'), 'success');
       window.history.replaceState({}, '', window.location.pathname);
       twitchApi.status().then(setOwnTwitch).catch(()=>{});
       setActiveView('settings');
       setTimeout(() => (window as any).__cordisGoToSettingsTab?.('connections'), 300);
     } else if (tw === 'error') {
-      addToast('Błąd połączenia Twitch', 'error');
+      addToast(tl('connections.twitchErr'), 'error');
       window.history.replaceState({}, '', window.location.pathname);
     }
     const st = p.get('steam');
     if (st === 'connected') {
-      addToast('Steam połączono pomyślnie! 🎮', 'success');
+      addToast(tl('connections.steamOk'), 'success');
       window.history.replaceState({}, '', window.location.pathname);
       steamApi.status().then(setOwnSteam).catch(()=>{});
       setActiveView('settings');
       setTimeout(() => (window as any).__cordisGoToSettingsTab?.('connections'), 300);
     } else if (st === 'error') {
-      addToast('Błąd połączenia Steam', 'error');
+      addToast(tl('connections.steamErr'), 'error');
       window.history.replaceState({}, '', window.location.pathname);
     }
     const yt = p.get('youtube');
     if (yt === 'connected') {
-      addToast('YouTube połączono pomyślnie! 📺', 'success');
+      addToast(tl('connections.youtubeOk'), 'success');
       window.history.replaceState({}, '', window.location.pathname);
       youtubeApi.status().then(setOwnYoutube).catch(()=>{});
       setActiveView('settings');
       setTimeout(() => (window as any).__cordisGoToSettingsTab?.('connections'), 300);
     } else if (yt === 'error') {
-      addToast('Błąd połączenia YouTube', 'error');
+      addToast(tl('connections.youtubeErr'), 'error');
       window.history.replaceState({}, '', window.location.pathname);
     }
     const ki = p.get('kick');
     if (ki === 'connected') {
-      addToast('Kick połączono pomyślnie! 🟢', 'success');
+      addToast(tl('connections.kickOk'), 'success');
       window.history.replaceState({}, '', window.location.pathname);
       kickApi.status().then(setOwnKick).catch(()=>{});
       setActiveView('settings');
       setTimeout(() => (window as any).__cordisGoToSettingsTab?.('connections'), 300);
     } else if (ki === 'error') {
-      addToast('Błąd połączenia Kick', 'error');
+      addToast(tl('connections.kickErr'), 'error');
       window.history.replaceState({}, '', window.location.pathname);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -8337,7 +8337,7 @@ export default function App() {
     });
     (sock as any).on('spotify_jam_ended', (_: any) => {
       setMyJam({ role: null, members: [] });
-      addToast('JAM zakończony przez hosta', 'info');
+      addToast(tl('spotify.jamEndedByHost'), 'info');
     });
     (sock as any).on('spotify_jam_member_left', ({ user_id }: { user_id: string }) => {
       setMyJam(j => ({ ...j, members: j.members.filter((m: string) => m !== user_id) }));
@@ -9575,7 +9575,7 @@ export default function App() {
             if (mime.startsWith('image/')) setAttachPreview(URL.createObjectURL(file));
             else setAttachPreview(null);
           } catch (err) {
-            addToast('Nie można odczytać pliku', 'error');
+            addToast(tl('perm.noReadFile'), 'error');
           }
         });
         // Show drag overlay on enter
@@ -9760,7 +9760,7 @@ export default function App() {
       const s = pc.connectionState;
       console.log(`[Cordis WebRTC] connection state (${remoteUserId}):`, s);
       if (s === 'failed') {
-        addToast(`Problem z połączeniem głosowym — sprawdź konsolę przeglądarki (F12)`, 'error');
+        addToast(tl('toast.connectionError'), 'error');
       }
     };
     if (localStreamRef.current)
@@ -9868,7 +9868,7 @@ export default function App() {
   const handleRemoveFriend = async (friendshipId: string, username: string) => {
     await friendsApi.remove(friendshipId);
     setFriends(prev => prev.filter(f => (f.friendship_id ?? f.id) !== friendshipId));
-    addToast(`Usunięto ${username} ze znajomych`, 'success');
+    addToast(`${tl('toast.friendRemoved')} ${username}`, 'success');
     setShowDmMenu(false);
   };
 
@@ -9899,16 +9899,16 @@ export default function App() {
   const togglePrivacy = async (k: PrivacyKey) => {
     const next = !getPrivacy(k);
     const upd = await users.updateMe({ [k]: next } as any).catch(() => null);
-    if (upd) { setCurrentUser(upd); setEditProf({...upd}); addToast('Ustawienia prywatności zapisane', 'success'); }
-    else addToast('Błąd zapisu ustawień', 'error');
+    if (upd) { setCurrentUser(upd); setEditProf({...upd}); addToast(tl('toast.privacySaved'), 'success'); }
+    else addToast(tl('admin.error.save'), 'error');
   };
   const [tabLimitDraft, setTabLimitDraft] = useState<number>(() => currentUser?.tab_limit ?? 20);
   // Sync draft when currentUser loads (after login)
   useEffect(() => { setTabLimitDraft(currentUser?.tab_limit ?? 20); }, [currentUser?.tab_limit]);
   const saveTabLimit = async (val: number) => {
     const upd = await users.updateMe({ tab_limit: val }).catch(() => null);
-    if (upd) { setCurrentUser(upd); addToast(`Limit zakładek: ${val}`, 'success'); }
-    else addToast('Błąd zapisu limitu zakładek', 'error');
+    if (upd) { setCurrentUser(upd); addToast(`${tl('appearance.tabLimit')} ${val}`, 'success'); }
+    else addToast(tl('appearance.error.tabLimit'), 'error');
   };
 
   // Derived appearance values
@@ -10021,8 +10021,8 @@ export default function App() {
   // ── Appearance helpers (save to DB) ──────────────────────────────
   const saveAccentColor = async (color: string) => {
     const upd = await users.updateMe({ accent_color: color }).catch(() => null);
-    if (upd) { setCurrentUser(upd); setEditProf({...upd}); setAccentColor(color); addToast('Kolor akcentu zmieniony', 'success'); }
-    else addToast('Błąd zapisu', 'error');
+    if (upd) { setCurrentUser(upd); setEditProf({...upd}); setAccentColor(color); addToast(tl('appearance.accentChanged'), 'success'); }
+    else addToast(tl('appearance.error.save'), 'error');
   };
   const saveTheme = async (themeId: ThemeId) => {
     setSelectedTheme(themeId);
@@ -10090,8 +10090,8 @@ export default function App() {
 
   const saveAvatarEffect = async (effect: string) => {
     const upd = await users.updateMe({ avatar_effect: effect } as any).catch(() => null);
-    if (upd) { setCurrentUser(upd); setEditProf({...upd}); setAvatarEffect(effect); addToast('Efekt avatara zmieniony', 'success'); }
-    else addToast('Błąd zapisu', 'error');
+    if (upd) { setCurrentUser(upd); setEditProf({...upd}); setAvatarEffect(effect); addToast(tl('appearance.avatarEffect'), 'success'); }
+    else addToast(tl('appearance.error.save'), 'error');
   };
   const saveCardEffect = async (effect: string) => {
     const upd = await users.updateMe({ card_effect: effect } as any).catch(() => null);
@@ -10110,7 +10110,7 @@ export default function App() {
   };
   const saveCompactMessages = async (compact: boolean) => {
     const upd = await users.updateMe({ compact_messages: compact }).catch(() => null);
-    if (upd) { setCurrentUser(upd); setEditProf({...upd}); setCompactMessages(compact); addToast('Układ wiadomości zmieniony', 'success'); }
+    if (upd) { setCurrentUser(upd); setEditProf({...upd}); setCompactMessages(compact); addToast(tl('toast.layoutChanged'), 'success'); }
     else addToast('Błąd zapisu', 'error');
   };
   const saveFontSize = async (size: 'small'|'normal'|'large') => {
@@ -10216,7 +10216,7 @@ export default function App() {
       } catch {
         window.open(url, '_blank');
       }
-      addToast('Autoryzuj w przeglądarce — aplikacja automatycznie wykryje połączenie', 'info');
+      addToast(tl('connections.authorizeInBrowser'), 'info');
       // Poll for connection (up to 90s)
       let attempts = 0;
       const poll = setInterval(async () => {
@@ -10224,19 +10224,19 @@ export default function App() {
         try {
           if (service === 'spotify') {
             const s = await spotifyApi.status();
-            if (s.connected) { clearInterval(poll); setOwnSpotify(s); addToast('Spotify połączono! 🎵', 'success'); return; }
+            if (s.connected) { clearInterval(poll); setOwnSpotify(s); addToast(tl('connections.spotifyOk2'), 'success'); return; }
           } else if (service === 'twitch') {
             const s = await twitchApi.status();
-            if (s.connected) { clearInterval(poll); setOwnTwitch(s); addToast('Twitch połączono! 🎮', 'success'); return; }
+            if (s.connected) { clearInterval(poll); setOwnTwitch(s); addToast(tl('connections.twitchOk2'), 'success'); return; }
           } else if (service === 'youtube') {
             const s = await youtubeApi.status();
-            if (s.connected) { clearInterval(poll); setOwnYoutube(s); addToast('YouTube połączono! 📺', 'success'); return; }
+            if (s.connected) { clearInterval(poll); setOwnYoutube(s); addToast(tl('connections.youtubeOk2'), 'success'); return; }
           } else if (service === 'kick') {
             const s = await kickApi.status();
-            if (s.connected) { clearInterval(poll); setOwnKick(s); addToast('Kick połączono! 🟢', 'success'); return; }
+            if (s.connected) { clearInterval(poll); setOwnKick(s); addToast(tl('connections.kickOk2'), 'success'); return; }
           } else {
             const s = await steamApi.status();
-            if (s.connected) { clearInterval(poll); setOwnSteam(s); addToast('Steam połączono! 🎮', 'success'); return; }
+            if (s.connected) { clearInterval(poll); setOwnSteam(s); addToast(tl('connections.steamOk2'), 'success'); return; }
           }
         } catch {}
         if (attempts >= 45) clearInterval(poll);
@@ -10535,7 +10535,7 @@ export default function App() {
       setServerList(p => [...p, s]); setActiveServer(s.id); setActiveView('servers');
       setCreateSrvOpen(false); setJoinCode('');
       getSocket()?.emit('join_server_room' as any, s.id);
-    } catch (err: any) { addToast(err?.message || 'Nieprawidłowe zaproszenie', 'error'); }
+    } catch (err: any) { addToast(err?.message || tl('toast.invalidInvite'), 'error'); }
   };
   const handleLeaveServer = async (serverId: string) => {
     try {
@@ -10543,7 +10543,7 @@ export default function App() {
       setServerList(p => p.filter(s => s.id !== serverId));
       if (activeServer === serverId) { setActiveServer(''); setActiveView('friends'); setServerFull(null); setActiveChannel(''); }
       setSrvContextMenu(null);
-      addToast('Opuściłeś serwer', 'success');
+      addToast(tl('toast.leftServer'), 'success');
     } catch (err: any) { addToast(err?.message || 'Błąd opuszczania serwera', 'error'); }
   };
   const handleDeleteServer = async (serverId: string) => {
@@ -10552,7 +10552,7 @@ export default function App() {
       setServerList(p => p.filter(s => s.id !== serverId));
       if (activeServer === serverId) { setActiveServer(''); setActiveView('friends'); setServerFull(null); setActiveChannel(''); }
       setDeleteSrvConfirm(null);
-      addToast('Serwer został usunięty', 'success');
+      addToast(tl('toast.serverDeleted'), 'success');
     } catch (err: any) { addToast(err?.message || 'Błąd usuwania serwera', 'error'); }
   };
   const handleSaveSrv = async () => {
@@ -10566,7 +10566,7 @@ export default function App() {
       // Update form with saved URLs so preview doesn't disappear
       setSrvForm(p => ({...p, icon_url: upd.icon_url||icon, banner_url: upd.banner_url||banner}));
       const s = await serversApi.get(activeServer); setServerFull(s);
-      addToast('Ustawienia serwera zapisane', 'success');
+      addToast(tl('toast.settingsSaved'), 'success');
     } catch (err) { addToast('Błąd zapisu ustawień serwera', 'error'); }
   };
 
@@ -10842,7 +10842,7 @@ export default function App() {
   React.useEffect(() => {
     if (ownTwitch?.is_live && !isStreamMode) {
       setIsStreamMode(true);
-      addToast('Tryb streamu aktywowany — nicki i serwery są ukryte 🎥', 'info');
+      addToast(tl('stream.streamActivated'), 'info');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownTwitch?.is_live]);
@@ -10890,7 +10890,7 @@ export default function App() {
       setCurrentUser(upd); setEditProf({...upd}); setSelUser(upd);
       setProfilePageData(upd);
       if (opts?.closeProfileModal !== false) setProfileOpen(false);
-      addToast('Profil zaktualizowany', 'success');
+      addToast(tl('toast.profileUpdated'), 'success');
     } catch (err) { addToast('Błąd zapisu profilu', 'error'); }
   };
   const openDm = (userId: string) => { setActiveDmUserId(userId); setActiveView('dms'); setProfileOpen(false); };
@@ -11188,7 +11188,7 @@ export default function App() {
               video: { frameRate: { ideal: 60, max: 60 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
               audio: false,
             });
-            addToast('Udostępnianie dźwięku systemu niedostępne na tej platformie', 'info');
+            addToast(tl('toast.cannotShareAudio'), 'info');
           } else throw audioErr; // real error (user cancelled, no permission etc.)
         }
         // Hint: 'detail' = optimise for text/UI sharpness (vs 'motion' for video)
@@ -11240,7 +11240,7 @@ export default function App() {
         const call = activeCallRef.current;
         if (call?.userId)    getSocket().emit('screen_share_start' as any, { to_user_id: call.userId });
         if (call?.channelId) getSocket().emit('screen_share_start' as any, { channel_id: call.channelId });
-      } catch { addToast('Nie można udostępnić ekranu', 'error'); }
+      } catch { addToast(tl('toast.cannotShareScreen'), 'error'); }
     }
   };
 
@@ -11764,7 +11764,7 @@ export default function App() {
                     <div className="w-7 h-7 rounded-lg bg-white/[0.05] flex items-center justify-center shrink-0">
                       <Settings size={13} className="text-zinc-400"/>
                     </div>
-                    <span>Ustawienia</span>
+                    <span>{tl('menu.settings')}</span>
                   </button>
 
                   {/* Bookmarks */}
@@ -11773,7 +11773,7 @@ export default function App() {
                     <div className="w-7 h-7 rounded-lg bg-white/[0.05] flex items-center justify-center shrink-0">
                       <Bookmark size={13} className="text-indigo-400"/>
                     </div>
-                    <span>Zapisane</span>
+                    <span>{tl('menu.bookmarks')}</span>
                   </button>
 
                   <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
@@ -11783,14 +11783,14 @@ export default function App() {
                     setMoreMenuOpen(false);
                     setFocusMode(v => {
                       const next = !v;
-                      addToast(next ? '🌙 Focus Mode włączony — dźwięki wyciszone' : '🔔 Focus Mode wyłączony', 'info');
+                      addToast(next ? tl('toast.streamModeOn') : tl('toast.streamModeOff'), 'info');
                       return next;
                     });
                   }} className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-sm transition-colors text-left ${focusMode ? 'text-amber-300 hover:bg-amber-500/10' : 'text-zinc-300 hover:bg-white/[0.06] hover:text-white'}`}>
                     <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${focusMode ? 'bg-amber-500/20' : 'bg-white/[0.05]'}`}>
                       <Moon size={13} className={focusMode ? 'text-amber-400' : 'text-zinc-400'}/>
                     </div>
-                    <span>Focus Mode</span>
+                    <span>{tl('menu.focusMode')}</span>
                     {focusMode && <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 leading-none">ON</span>}
                   </button>
 
@@ -11800,7 +11800,7 @@ export default function App() {
                     <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${isStreamMode ? 'bg-red-500/20' : 'bg-white/[0.05]'}`}>
                       <Video size={13} className={isStreamMode ? 'text-red-400' : 'text-zinc-400'}/>
                     </div>
-                    <span>Tryb streamu</span>
+                    <span>{tl('menu.streamMode')}</span>
                     {isStreamMode && <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 leading-none">ON</span>}
                   </button>
 
@@ -11813,7 +11813,7 @@ export default function App() {
                         <div className="w-7 h-7 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
                           <LayoutDashboard size={13} className="text-violet-400"/>
                         </div>
-                        <span>Panel admina</span>
+                        <span>{tl('menu.adminPanel')}</span>
                       </button>
                     </>
                   )}
@@ -12664,7 +12664,7 @@ export default function App() {
                 </button>
                 <button title="Skróty klawiszowe (?)" onClick={()=>setShowShortcuts(true)}
                   className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all"><Keyboard size={12}/></button>
-                <button title="Ustawienia aplikacji" onClick={()=>{setAppSettTab('account');setAppSettOpen(true);}}
+                <button title={tl('app.settings')} onClick={()=>{setAppSettTab('account');setAppSettOpen(true);}}
                   className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all"><Settings size={13}/></button>
               </div>
             </div>
@@ -13462,8 +13462,8 @@ export default function App() {
                     const availableFriends = friends.filter(f => f.status==='online'||f.status==='idle'||f.status==='dnd');
                     const displayedFriends = friendsTab==='available' ? availableFriends : friends;
                     const label = friendsTab==='available'
-                      ? `Dostępni — ${availableFriends.length}`
-                      : `Wszyscy znajomi — ${friends.length}`;
+                      ? `${tl('friends.availableCount')} ${availableFriends.length}`
+                      : `${tl('friends.all')} ${tl('friends.title')} — ${friends.length}`;
                     return (
                     <div className="relative">
                       <h2 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">{label}</h2>
@@ -13795,7 +13795,7 @@ export default function App() {
                     }
                     {groupConvs.find(g=>g.id===activeGroupDm)?.creator_id===currentUser?.id&&<>
                       <button onClick={()=>{ const gc=groupConvs.find(g=>g.id===activeGroupDm); setGroupEditName(gc?.name||''); setGroupEditIconFile(null); setGroupEditIconPreview(gc?.icon_url?staticUrl(gc.icon_url):null); setGroupSettingsOpen(true); }}
-                        className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all duration-150 active:scale-95" title="Ustawienia grupy"><Settings size={15}/></button>
+                        className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all duration-150 active:scale-95" title={tl('group.settings')}><Settings size={15}/></button>
                     </>}
                     <div className="w-px h-4 bg-white/[0.06] mx-1"/>
                   </>)}
@@ -14652,7 +14652,7 @@ export default function App() {
                                     <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-4 max-w-xs">
                                       <div className="flex items-center gap-2 text-zinc-600 text-xs">
                                         <BarChart2 size={13}/>
-                                        <span>Ładowanie ankiety...</span>
+                                        <span>{tl('message.loadingPoll')}</span>
                                       </div>
                                     </div>
                                   );
@@ -14700,7 +14700,7 @@ export default function App() {
                                   <div className="bg-white/[0.03] border border-rose-500/20 rounded-2xl p-4 max-w-xs">
                                     <div className="flex items-center gap-2 text-rose-400 text-xs">
                                       <BarChart2 size={13}/>
-                                      <span>Nie można załadować ankiety</span>
+                                      <span>{tl('message.pollError')}</span>
                                     </div>
                                   </div>
                                 );
@@ -15047,14 +15047,14 @@ export default function App() {
                   if (!isDmView && activeCh?.type==='announcement' && !canManageMessages) return (
                     <div className="flex items-center justify-center gap-2.5 py-3 px-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400 text-sm">
                       <Megaphone size={14} className="shrink-0"/>
-                      <span>To jest kanał ogłoszeń. Tylko administratorzy mogą tutaj pisać.</span>
+                      <span>{tl('channel.announcementOnly')}</span>
                     </div>
                   );
                   // send_messages permission check (server channels only)
                   if (!isDmView && activeView==='servers' && !canSendMessages) return (
                     <div className="flex items-center justify-center gap-2.5 py-3 px-4 bg-zinc-900/60 border border-white/[0.06] rounded-xl text-zinc-500 text-sm">
                       <Lock size={14} className="text-zinc-600 shrink-0"/>
-                      <span>Nie masz uprawnień do wysyłania wiadomości na tym kanale.</span>
+                      <span>{tl('channel.noPermission')}</span>
                     </div>
                   );
                   // Blocked by me — show unblock prompt
@@ -15062,7 +15062,7 @@ export default function App() {
                     <div className="flex items-center justify-between gap-3 py-3 px-4 bg-zinc-900/60 border border-white/[0.06] rounded-xl text-sm">
                       <div className="flex items-center gap-2.5 text-zinc-500">
                         <UserX size={14} className="text-zinc-600 shrink-0"/>
-                        <span>Zablokowałeś(-aś) tego użytkownika. Odblokuj, aby wysyłać wiadomości.</span>
+                        <span>{tl('channel.userBlocked')}</span>
                       </div>
                       <button type="button" onClick={() => handleUnblockUser(activeDmUserId, dmPartnerProfile?.username || '')}
                         className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/[0.07] hover:bg-white/[0.12] text-zinc-300 hover:text-white border border-white/[0.08] transition-all">
@@ -15698,7 +15698,7 @@ export default function App() {
                     ):mTwitch?(
                       <p className="text-[11px] text-purple-400 truncate leading-tight flex items-center gap-1"><TwitchIcon size={10} className="shrink-0"/> Streamuje: {mTwitch.game_name}</p>
                     ):mSteam?(()=>{const mSteamStart=steamGameStartRef.current.get(m.id);return(
-                      <p className="text-[11px] text-zinc-400 truncate leading-tight flex items-center gap-1"><Gamepad2 size={10} className="shrink-0 text-emerald-400"/> <span className="text-emerald-400 font-semibold shrink-0">Gra teraz:</span> {mSteam.name}{mSteamStart?<span className="text-zinc-600 shrink-0">· {fmtGameDur(mSteamStart)}</span>:null}</p>
+                      <p className="text-[11px] text-zinc-400 truncate leading-tight flex items-center gap-1"><Gamepad2 size={10} className="shrink-0 text-emerald-400"/> <span className="text-emerald-400 font-semibold shrink-0">{tl('profile.playingNow')}:</span> {mSteam.name}{mSteamStart?<span className="text-zinc-600 shrink-0">· {fmtGameDur(mSteamStart)}</span>:null}</p>
                     );})():(()=>{const sl=statusLabel(m.status);return sl?<p className={`text-[11px] truncate leading-tight ${sl.cls}`}>{sl.text}</p>:m.role_name?<p className="text-[11px] text-zinc-600 truncate leading-tight">{m.role_name}</p>:null;})())
                     : m.role_name?<p className="text-[11px] text-zinc-700 truncate leading-tight">{m.role_name}</p>:null}
                   </div>
@@ -15891,13 +15891,13 @@ export default function App() {
                           {/* Bio */}
                           {dmPartnerProfile.bio&&(
                             <div>
-                              <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5">O mnie</h4>
+                              <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5">{tl('profile.aboutMe')}</h4>
                               <p className="text-[12px] text-zinc-400 leading-relaxed">{dmPartnerProfile.bio}</p>
                             </div>
                           )}
                           {/* Joined */}
                           <div>
-                            <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5">Dołączył/a</h4>
+                            <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5">{tl('profile.joinedAt')}</h4>
                             <p className="text-[12px] text-zinc-400">{fmtDate(dmPartnerProfile.created_at)}</p>
                           </div>
 
@@ -15907,7 +15907,7 @@ export default function App() {
                               <button onClick={()=>setDmMutSrvOpen(p=>!p)}
                                 className="w-full flex items-center justify-between group mb-2">
                                 <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest group-hover:text-zinc-400 transition-colors">
-                                  Wspólne serwery — {dmMutualServers.length}
+                                  {tl('profile.mutualServers')} — {dmMutualServers.length}
                                 </h4>
                                 {dmMutSrvOpen ? <ChevronUp size={11} className="text-zinc-600"/> : <ChevronDown size={11} className="text-zinc-600"/>}
                               </button>
@@ -15943,7 +15943,7 @@ export default function App() {
                               <button onClick={()=>setDmMutFrdOpen(p=>!p)}
                                 className="w-full flex items-center justify-between group mb-2">
                                 <h4 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest group-hover:text-zinc-400 transition-colors">
-                                  Wspólni znajomi — {dmMutualFriends.length}
+                                  {tl('profile.mutualFriends')} — {dmMutualFriends.length}
                                 </h4>
                                 {dmMutFrdOpen ? <ChevronUp size={11} className="text-zinc-600"/> : <ChevronDown size={11} className="text-zinc-600"/>}
                               </button>
@@ -15973,11 +15973,11 @@ export default function App() {
 
                           {/* Private note */}
                           <div>
-                            <label className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5 block">Prywatna notatka</label>
+                            <label className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('profile.privateNote')}</label>
                             <textarea
                               value={userNotes.get(dmPartnerProfile.id) || ''}
                               onChange={e => saveUserNote(dmPartnerProfile.id, e.target.value)}
-                              placeholder="Dodaj notatkę o tej osobie..."
+                              placeholder={tl('profile.addNote')}
                               rows={3}
                               className="w-full text-xs bg-white/[0.04] border border-white/[0.07] rounded-xl px-3 py-2 text-zinc-300 placeholder-zinc-600 resize-none outline-none focus:border-indigo-500/40 transition-all"
                             />
@@ -15990,7 +15990,7 @@ export default function App() {
                             onClick={()=>openProfilePage(dmPartnerProfile.id)}
                             className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-white/[0.04] hover:bg-indigo-500/10 border border-white/[0.07] hover:border-indigo-500/30 text-zinc-400 hover:text-indigo-300 text-xs font-semibold transition-all">
                             <ExternalLink size={12}/>
-                            Wyświetl pełny profil
+                            {tl('profile.viewFull')}
                           </button>
                         </div>
                       </motion.div>
@@ -16003,7 +16003,7 @@ export default function App() {
                         {mediaItems.length === 0 ? (
                           <div className="flex flex-col items-center gap-2 py-12 text-center">
                             <Image size={28} className="text-zinc-700"/>
-                            <p className="text-xs text-zinc-600">Brak zdjęć ani filmów</p>
+                            <p className="text-xs text-zinc-600">{tl('dm.noMedia')}</p>
                           </div>
                         ) : (() => {
                           // Build flat gallery items list (same order as grid)
@@ -16054,7 +16054,7 @@ export default function App() {
                         {linkItems.length === 0 ? (
                           <div className="flex flex-col items-center gap-2 py-12 text-center">
                             <Link2 size={28} className="text-zinc-700"/>
-                            <p className="text-xs text-zinc-600">Brak udostępnionych linków</p>
+                            <p className="text-xs text-zinc-600">{tl('dm.noLinks')}</p>
                           </div>
                         ) : (
                           [...linkItems].reverse().map(m => {
@@ -16592,7 +16592,7 @@ export default function App() {
                 onClick={()=>setChCtxSubmenu(p=>p==='notifications'?null:'notifications')}
                 className="w-full flex items-center gap-2.5 px-3.5 py-[9px] text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
                 <Bell size={13} className="text-zinc-500 shrink-0"/>
-                <span className="flex-1">Ustawienia powiadomień</span>
+                <span className="flex-1">{tl('menu.notifSettings')}</span>
                 <ChevronDown size={11} className={`text-zinc-600 transition-transform ${chCtxSubmenu==='notifications'?'rotate-180':''}`}/>
               </button>
               {chCtxSubmenu==='notifications'&&(
@@ -18094,21 +18094,21 @@ export default function App() {
               <div className="sm:w-56 shrink-0 border-b sm:border-b-0 sm:border-r border-white/[0.06] p-2 sm:p-4 flex sm:flex-col flex-row gap-0.5 overflow-x-auto overflow-y-auto scrollbar-hide" style={{background:'rgba(255,255,255,0.015)'}}>
                   {/* Grupy zakładek — styl Discord */}
                   {([
-                    { group: 'KONTO UŻYTKOWNIKA', items: [
+                    { group: tl('settings.group.account'), items: [
                       {id:'account',     label:t('settings.account'),    icon:<Users size={14}/>,
-                        sections:[{id:'s-profil',label:'Profil'},{id:'s-info',label:'Informacje'},{id:'s-password',label:'Hasło & bezpieczeństwo'},{id:'s-sessions',label:'Aktywne sesje'}]},
+                        sections:[{id:'s-profil',label:tl('settings.section.profile')},{id:'s-info',label:tl('settings.section.info')},{id:'s-password',label:tl('settings.section.password')},{id:'s-sessions',label:tl('settings.section.sessions')}]},
                       {id:'appearance',  label:t('settings.appearance'), icon:<Image size={14}/>,
-                        sections:[{id:'s-chat',label:'Czat'},{id:'s-accessibility',label:'Profil i efekty'},{id:'s-card-effect',label:'Efekt karty'}]},
-                      {id:'theme',       label:'Motyw',                  icon:<Palette size={14}/>, sections:[]},
-                      {id:'connections', label:'Połączone konta',        icon:<Link2 size={14}/>, sections:[]},
+                        sections:[{id:'s-chat',label:tl('settings.section.chat')},{id:'s-accessibility',label:tl('settings.section.profileEffects')},{id:'s-card-effect',label:tl('settings.section.cardEffect')}]},
+                      {id:'theme',       label:tl('settings.theme'),     icon:<Palette size={14}/>, sections:[]},
+                      {id:'connections', label:tl('settings.connections'),icon:<Link2 size={14}/>, sections:[]},
                     ]},
-                    { group: 'APLIKACJA', items: [
-                      {id:'devices',  label:t('settings.devices'),  icon:<Mic size={14}/>,    sections:[{id:'s-input',label:'Wejście'},{id:'s-output',label:'Wyjście'}]},
-                      {id:'privacy',  label:t('settings.privacy'),  icon:<Shield size={14}/>, sections:[{id:'s-status',label:'Status'},{id:'s-messages',label:'Wiadomości'},{id:'s-blocked',label:'Zablokowane konta'}]},
+                    { group: tl('settings.group.app'), items: [
+                      {id:'devices',  label:t('settings.devices'),  icon:<Mic size={14}/>,    sections:[{id:'s-input',label:tl('settings.section.input')},{id:'s-output',label:tl('settings.section.output')}]},
+                      {id:'privacy',  label:t('settings.privacy'),  icon:<Shield size={14}/>, sections:[{id:'s-status',label:tl('settings.section.status')},{id:'s-messages',label:tl('settings.section.messages')},{id:'s-blocked',label:tl('settings.section.blocked')}]},
                       {id:'locale',   label:t('settings.locale'),   icon:<Globe size={14}/>,  sections:[]},
-                      ...(isTauri?[{id:'desktop' as const, label:'Aplikacja', icon:<Monitor size={14}/>, sections:[]}]:[]),
-                      ...(isTauri?[{id:'updates' as const, label:'Aktualizacje', icon:<Download size={14}/>, sections:[]}]:[]),
-                      ...(isTauri?[{id:'about'   as const, label:'O aplikacji', icon:<Info size={14}/>,    sections:[]}]:[]),
+                      ...(isTauri?[{id:'desktop' as const, label:tl('settings.desktop'), icon:<Monitor size={14}/>, sections:[]}]:[]),
+                      ...(isTauri?[{id:'updates' as const, label:tl('settings.updates'), icon:<Download size={14}/>, sections:[]}]:[]),
+                      ...(isTauri?[{id:'about'   as const, label:tl('settings.about'),   icon:<Info size={14}/>,    sections:[]}]:[]),
                     ]},
                   ] as const).map(group=>(
                     <div key={group.group} className="mb-1">
@@ -18162,7 +18162,7 @@ export default function App() {
 
                       {/* ── SEKCJA: Profil ─────────────────────────────── */}
                       <div id="s-profil" className="scroll-mt-4">
-                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 pb-1.5 border-b border-white/[0.06]">Profil</p>
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 pb-1.5 border-b border-white/[0.06]">{tl('settings.section.profile')}</p>
 
                         {/* Avatar + banner preview */}
                         <div className="rounded-2xl overflow-hidden border border-white/[0.07] mb-4">
@@ -18243,21 +18243,21 @@ export default function App() {
 
                       {/* ── SEKCJA: Hasło & bezpieczeństwo ────────────── */}
                       <div id="s-password" className="scroll-mt-4">
-                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 pb-1.5 border-b border-white/[0.06]">Hasło i bezpieczeństwo</p>
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 pb-1.5 border-b border-white/[0.06]">{tl('settings.section.password')}</p>
                         <PasswordChangeSection gi={gi} addToast={addToast}/>
                       </div>
 
                       {/* ── SEKCJA: Aktywne sesje (styl Discord) ─────── */}
                       <div id="s-sessions" className="scroll-mt-4 pb-4">
-                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 pb-1.5 border-b border-white/[0.06]">Aktywne sesje</p>
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 pb-1.5 border-b border-white/[0.06]">{tl('settings.section.sessions')}</p>
                         <p className="text-xs text-zinc-500 mb-4 leading-relaxed">
-                          Oto wszystkie urządzenia, które są obecnie zalogowane na Twoje konto. Możesz wylogować każde z tych urządzeń pojedynczo lub wszystkie na raz.<br/>
-                          <span className="text-zinc-600 mt-1 block">Jeśli widzisz wpis, którego nie rozpoznajesz, natychmiast wyloguj się z urządzenia i zmień hasło.</span>
+                          {tl('sessions.desc')}<br/>
+                          <span className="text-zinc-600 mt-1 block">{tl('sessions.unknown')}</span>
                         </p>
                         {sessionsLoading ? (
-                          <div className="flex items-center gap-2 py-4 text-zinc-600 text-sm"><Loader2 size={14} className="animate-spin shrink-0"/>Ładowanie sesji…</div>
+                          <div className="flex items-center gap-2 py-4 text-zinc-600 text-sm"><Loader2 size={14} className="animate-spin shrink-0"/>{tl('sessions.loading')}</div>
                         ) : sessions.length === 0 ? (
-                          <p className="text-xs text-zinc-600 py-3">Brak aktywnych sesji.</p>
+                          <p className="text-xs text-zinc-600 py-3">{tl('sessions.none')}</p>
                         ) : (() => {
                           const parseSession = (s: UserSession) => {
                             const ua = s.user_agent || '';
@@ -18268,20 +18268,20 @@ export default function App() {
                               : /Android/i.test(ua) ? 'Android'
                               : /iPhone|iPad/i.test(ua) ? 'iOS'
                               : /Linux/i.test(ua)   ? 'Linux'
-                              : 'Nieznany system';
+                              : tl('sessions.unknownOs');
                             const browser  = isApp ? 'Cordis Client'
                               : ua.match(/Edg\//) ? 'Edge'
                               : ua.match(/Chrome\//) ? 'Chrome'
                               : ua.match(/Firefox\//) ? 'Firefox'
                               : ua.match(/Safari\//) ? 'Safari'
-                              : 'Przeglądarka';
+                              : tl('sessions.unknownBrowser');
                             const label = isApp ? `${os} · Cordis Client` : `${os} · ${browser}${isMobile ? ' Mobile' : ''}`;
                             const lastSeen = new Date(s.last_seen_at);
                             const diffMin  = Math.floor((Date.now() - lastSeen.getTime()) / 60000);
-                            const ago      = diffMin < 1 ? 'Aktywna teraz'
-                              : diffMin < 60 ? `mniej niż godzinę temu`
-                              : diffMin < 1440 ? `${Math.floor(diffMin/60)} godz. temu`
-                              : diffMin < 10080 ? `${Math.floor(diffMin/1440)} dni temu`
+                            const ago      = diffMin < 1 ? tl('sessions.activeNow')
+                              : diffMin < 60 ? tl('sessions.lessThanHour')
+                              : diffMin < 1440 ? `${Math.floor(diffMin/60)} ${tl('sessions.hoursAgo')}`
+                              : diffMin < 10080 ? `${Math.floor(diffMin/1440)} ${tl('sessions.daysAgo')}`
                               : lastSeen.toLocaleDateString('pl-PL');
                             const DevIcon = isApp ? Monitor : isMobile ? Smartphone : Globe;
                             return { label, ago, DevIcon };
@@ -18292,21 +18292,21 @@ export default function App() {
                             <div className="flex flex-col gap-5">
                               {/* Bieżące urządzenie */}
                               <div>
-                                <p className="text-xs font-bold text-zinc-400 mb-3">Bieżące urządzenie</p>
+                                <p className="text-xs font-bold text-zinc-400 mb-3">{tl('sessions.currentDevice')}</p>
                                 <div className="flex items-center gap-4 py-3">
                                   <div className="w-10 h-10 rounded-full bg-white/[0.06] flex items-center justify-center shrink-0">
                                     <CIcon size={18} className="text-zinc-400"/>
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <p className="text-sm font-bold text-white uppercase tracking-wide">{cLabel}</p>
-                                    <p className="text-xs text-zinc-500">{current.ip_address || 'Nieznany IP'} · {cAgo}</p>
+                                    <p className="text-xs text-zinc-500">{current.ip_address || tl('sessions.unknownIp')} · {cAgo}</p>
                                   </div>
                                 </div>
                               </div>
                               {/* Inne urządzenia */}
                               {others.length > 0 && (
                                 <div>
-                                  <p className="text-xs font-bold text-zinc-400 mb-3">Inne urządzenia</p>
+                                  <p className="text-xs font-bold text-zinc-400 mb-3">{tl('sessions.otherDevices')}</p>
                                   <div className="flex flex-col">
                                     {others.map((s, i) => {
                                       const { label, ago, DevIcon } = parseSession(s);
@@ -18317,11 +18317,11 @@ export default function App() {
                                           </div>
                                           <div className="flex-1 min-w-0">
                                             <p className="text-sm font-bold text-zinc-300 uppercase tracking-wide">{label}</p>
-                                            <p className="text-xs text-zinc-500">{s.ip_address || 'Nieznany IP'} · {ago}</p>
+                                            <p className="text-xs text-zinc-500">{s.ip_address || tl('sessions.unknownIp')} · {ago}</p>
                                           </div>
                                           <button onClick={async () => {
-                                            try { await sessionsApi.revoke(s.id); setSessions(p => p.filter(x => x.id !== s.id)); addToast('Sesja wylogowana', 'success'); }
-                                            catch { addToast('Błąd wylogowania sesji', 'error'); }
+                                            try { await sessionsApi.revoke(s.id); setSessions(p => p.filter(x => x.id !== s.id)); addToast(tl('sessions.revoked'), 'success'); }
+                                            catch { addToast(tl('sessions.revokeError'), 'error'); }
                                           }} className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-white hover:bg-white/[0.08] transition-all">
                                             <X size={14}/>
                                           </button>
@@ -18333,13 +18333,13 @@ export default function App() {
                               )}
                               {/* Wyloguj wszystkie */}
                               <div className="border-t border-white/[0.06] pt-4">
-                                <p className="text-sm font-bold text-white mb-1">Wyloguj się na wszystkich znanych urządzeniach</p>
-                                <p className="text-xs text-zinc-500 mb-3">Będzie trzeba ponownie zalogować się na wszystkich wylogowanych urządzeniach.</p>
+                                <p className="text-sm font-bold text-white mb-1">{tl('sessions.revokeAll.title')}</p>
+                                <p className="text-xs text-zinc-500 mb-3">{tl('sessions.revokeAll.desc')}</p>
                                 <button onClick={async () => {
-                                  try { await sessionsApi.revokeAll(); setSessions(p => p.slice(0,1)); addToast('Wylogowano ze wszystkich innych urządzeń', 'success'); }
-                                  catch { addToast('Błąd wylogowania', 'error'); }
+                                  try { await sessionsApi.revokeAll(); setSessions(p => p.slice(0,1)); addToast(tl('sessions.revokedAll'), 'success'); }
+                                  catch { addToast(tl('sessions.revokeAllError'), 'error'); }
                                 }} className="text-sm font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/15 border border-rose-500/20 px-5 py-2.5 rounded-xl transition-all">
-                                  Wyloguj wszystkie znane urządzenia
+                                  {tl('sessions.revokeAll.btn')}
                                 </button>
                               </div>
                             </div>
@@ -18361,7 +18361,7 @@ export default function App() {
                           <div className="w-6 h-6 rounded-lg bg-indigo-500/15 border border-indigo-500/20 flex items-center justify-center shrink-0">
                             <Palette size={12} className="text-indigo-400"/>
                           </div>
-                          <p className="text-sm font-bold text-white">Czat i wygląd</p>
+                          <p className="text-sm font-bold text-white">{tl('settings.chatAndAppearance')}</p>
                           <div className="flex-1 h-px bg-white/[0.06] ml-1"/>
                         </div>
 
@@ -19070,7 +19070,7 @@ export default function App() {
                   {appSettTab==='connections'&&(
                     <motion.div key="connections" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
                       className="flex flex-col gap-6">
-                      <h3 className="text-sm font-bold text-white">Połączone konta</h3>
+                      <h3 className="text-sm font-bold text-white">{tl('connections.title')}</h3>
 
                       {/* Spotify */}
                       <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
@@ -19346,7 +19346,7 @@ export default function App() {
                   {appSettTab==='desktop'&&isTauri&&(
                     <motion.div key="desktop" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
                       className="flex flex-col gap-6">
-                      <h3 className="text-sm font-bold text-white">Ustawienia aplikacji</h3>
+                      <h3 className="text-sm font-bold text-white">{tl('app.settings')}</h3>
 
                       {/* Autostart */}
                       <div className="p-4 bg-white/[0.02] border border-white/[0.07] rounded-2xl">
@@ -20120,7 +20120,7 @@ export default function App() {
                 {/* Click hint for DM toasts */}
                 {isDm && isClickable && (
                   <div className="px-4 pb-2.5 flex items-center gap-1 text-[10px] text-indigo-400/70">
-                    <span>Kliknij aby otworzyć rozmowę</span>
+                    <span>{tl('message.clickToOpen')}</span>
                   </div>
                 )}
               </motion.div>
@@ -21197,7 +21197,7 @@ export default function App() {
               onClick={e=>e.stopPropagation()}
               className="bg-[#141420] border border-white/[0.1] rounded-2xl p-6 w-full max-w-sm shadow-2xl flex flex-col gap-5">
               <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-white">Ustawienia grupy</h2>
+                <h2 className="text-base font-bold text-white">{tl('group.settings')}</h2>
                 <button onClick={()=>setGroupSettingsOpen(false)} className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all"><X size={14}/></button>
               </div>
               {/* Icon upload */}
@@ -21290,10 +21290,10 @@ export default function App() {
                   setGroupConvs(p => p.map(g => g.id === activeGroupDm
                     ? { ...g, name: groupEditName, ...(icon_url !== undefined ? { icon_url } : {}) }
                     : g));
-                  addToast('Ustawienia grupy zapisane', 'success');
+                  addToast(tl('group.settings.saved'), 'success');
                   setGroupSettingsOpen(false);
                 } catch (err: any) {
-                  addToast(err?.message || 'Błąd zapisu', 'error');
+                  addToast(err?.message || tl('group.settings.error'), 'error');
                 } finally { setGroupEditSaving(false); }
               }}
                 className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-sm transition-colors flex items-center justify-center gap-2">

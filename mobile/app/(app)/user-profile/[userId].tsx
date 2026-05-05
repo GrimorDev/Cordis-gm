@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usersApi, friendsApi, type User } from '../../../src/api';
 import { useStore } from '../../../src/store';
 import { UserAvatar } from '../../../src/components/UserAvatar';
-import { C, STATUS_COLOR, STATUS_LABEL } from '../../../src/theme';
+import { C, STATUS_COLOR } from '../../../src/theme';
 import { useT, getT } from '../../../src/i18n';
 
 export default function UserProfileScreen() {
@@ -185,7 +185,7 @@ export default function UserProfileScreen() {
               <View style={[styles.statusPill, { backgroundColor: statusColor + '20', borderColor: statusColor + '50' }]}>
                 <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                 <Text style={[styles.statusText, { color: statusColor }]}>
-                  {STATUS_LABEL[status] ?? 'Offline'}
+                  {(t.statusLabels as Record<string, string>)[status] ?? t.statusLabels.offline}
                 </Text>
               </View>
             ) : (

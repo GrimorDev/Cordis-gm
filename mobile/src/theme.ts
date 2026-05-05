@@ -45,9 +45,10 @@ export const STATUS_COLOR: Record<string, string> = {
   offline: C.offline,
 };
 
+/** @deprecated Use t.statusLabels from i18n instead (language-aware). */
 export const STATUS_LABEL: Record<string, string> = {
   online:  'Online',
-  idle:    'Bezczynny',
-  dnd:     'Nie przeszkadzać',
+  idle:    'Idle',
+  dnd:     'Do not disturb',
   offline: 'Offline',
 };

@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { UserAvatar } from '../../src/components/UserAvatar';
-import { C, STATUS_COLOR, STATUS_LABEL } from '../../src/theme';
+import { C, STATUS_COLOR } from '../../src/theme';
 import { authApi, usersApi, friendsApi, type BlockedUser } from '../../src/api';
 import { useStore } from '../../src/store';
 import { disconnectSocket } from '../../src/socket';
@@ -226,7 +226,7 @@ export default function ProfileScreen() {
               >
                 <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                 <Text style={[styles.statusPillText, { color: statusColor }]}>
-                  {STATUS_LABEL[currentStatus] ?? 'Online'}
+                  {(t.statusLabels as Record<string, string>)[currentStatus] ?? t.statusLabels.online}
                 </Text>
                 <Ionicons name="chevron-down" size={12} color={statusColor} />
               </TouchableOpacity>

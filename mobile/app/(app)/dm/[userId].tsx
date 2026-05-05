@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { UserAvatar } from '../../../src/components/UserAvatar';
 import { MessageBubble } from '../../../src/components/MessageBubble';
 import { MessageInput } from '../../../src/components/MessageInput';
-import { C, STATUS_LABEL, STATUS_COLOR } from '../../../src/theme';
+import { C, STATUS_COLOR } from '../../../src/theme';
 import { dmsApi, friendsApi, API_URL } from '../../../src/api';
 import { useStore } from '../../../src/store';
 import { getSocket } from '../../../src/socket';
@@ -33,7 +33,7 @@ function resolveAttachment(url: string | undefined | null): string | null {
   return `${STATIC_BASE}${url}`;
 }
 
-function fmtTime(dateStr: string, lang: 'pl' | 'en' = 'pl', yesterday = 'Wczoraj') {
+function fmtTime(dateStr: string, lang: 'pl' | 'en' = 'en', yesterday = 'Yesterday') {
   const d = new Date(dateStr);
   const locale = lang === 'pl' ? pl : enGB;
   if (isToday(d)) return format(d, 'HH:mm');
@@ -258,7 +258,7 @@ export default function DmChatScreen() {
           <View style={styles.headerStatusRow}>
             <View style={[styles.headerStatusDot, { backgroundColor: STATUS_COLOR[status] ?? C.offline }]} />
             <Text style={[styles.statusText, { color: STATUS_COLOR[status] ?? C.textMuted }]}>
-              {STATUS_LABEL[status] ?? 'Offline'}
+              {(t.statusLabels as Record<string, string>)[status] ?? t.statusLabels.offline}
             </Text>
           </View>
         </View>

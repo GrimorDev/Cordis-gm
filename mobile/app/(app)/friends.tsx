@@ -7,7 +7,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { UserAvatar } from '../../src/components/UserAvatar';
-import { C, STATUS_COLOR, STATUS_LABEL } from '../../src/theme';
+import { C, STATUS_COLOR } from '../../src/theme';
 import { friendsApi } from '../../src/api';
 import { useStore } from '../../src/store';
 import { useT, getT } from '../../src/i18n';
@@ -17,7 +17,9 @@ type Tab = 'online' | 'all' | 'requests';
 function FriendRow({ item, status, onChat, onRemove }: {
   item: any; status: string; onChat: () => void; onRemove: () => void;
 }) {
+  const t = useT();
   const anim = useRef(new Animated.Value(1)).current;
+  const statusLabel = (t.statusLabels as Record<string, string>)[status] ?? t.statusLabels.offline;
   return (
     <TouchableOpacity
       onPress={onChat}
@@ -30,7 +32,7 @@ function FriendRow({ item, status, onChat, onRemove }: {
         <View style={styles.friendInfo}>
           <Text style={styles.friendName}>{item.username}</Text>
           <Text style={[styles.friendStatus, { color: STATUS_COLOR[status] ?? C.textMuted }]}>
-            {STATUS_LABEL[status] ?? 'Offline'}
+            {statusLabel}
           </Text>
         </View>
         <TouchableOpacity style={styles.chatBtn} onPress={onChat}>
