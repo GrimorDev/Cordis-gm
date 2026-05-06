@@ -12401,18 +12401,21 @@ export default function App() {
           {activeView==='servers'&&<>
             {/* Server header with dropdown */}
             <div className="relative border-b border-white/[0.06]">
-              {/* subtle gradient glow behind header */}
-              <div className="absolute inset-0 pointer-events-none" style={{background:'radial-gradient(ellipse 80% 60% at 50% 0%,rgba(99,102,241,0.07) 0%,transparent 70%)'}}/>
-              <div className="relative px-4 py-3.5 cursor-pointer hover:bg-white/[0.03] transition-colors group"
+              {/* gradient header bg */}
+              <div className="absolute inset-0 pointer-events-none" style={{background:'linear-gradient(180deg,rgba(99,102,241,0.09) 0%,transparent 100%)'}}/>
+              <div className="relative px-3 py-3.5 cursor-pointer hover:bg-white/[0.04] transition-colors group"
                 onClick={() => setSrvDropOpen(p => !p)}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    {/* server avatar letter badge */}
-                    <div className="w-6 h-6 shrink-0 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
-                      <span className="text-[10px] font-bold text-indigo-300">
-                        {(serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'S').charAt(0).toUpperCase()}
-                      </span>
-                    </div>
+                    {/* server icon */}
+                    {serverFull?.icon_url
+                      ? <img src={serverFull.icon_url} className="w-7 h-7 rounded-xl object-cover shrink-0 border border-white/10" alt=""/>
+                      : <div className="w-7 h-7 shrink-0 rounded-xl flex items-center justify-center border border-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.2)]" style={{background:'linear-gradient(135deg,rgba(99,102,241,0.35) 0%,rgba(124,58,237,0.35) 100%)'}}>
+                          <span className="text-[11px] font-bold text-white">
+                            {(serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'S').charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                    }
                     <h2 className="text-sm font-bold text-white truncate">{serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'Serwer'}</h2>
                   </div>
                   <motion.div animate={{ rotate: srvDropOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
@@ -12421,7 +12424,7 @@ export default function App() {
                     </svg>
                   </motion.div>
                 </div>
-                {serverFull?.description&&<p className="text-xs text-zinc-500 mt-0.5 truncate pl-8">{serverFull.description}</p>}
+                {serverFull?.description&&<p className="text-xs text-zinc-500 mt-0.5 truncate pl-9">{serverFull.description}</p>}
               </div>
               <AnimatePresence>
               {srvDropOpen&&(
@@ -12508,13 +12511,15 @@ export default function App() {
                           <button
                             onClick={()=>{setActiveChannel(ch.id);openGlobalTab({key:`ch:${activeServer}:${ch.id}`,kind:'ch',name:ch.name,chType:ch.type,serverId:activeServer,channelId:ch.id,serverName:serverFull?.name,serverIcon:serverFull?.icon_url??undefined});setIsMobileOpen(false);setSrvSettOpen(false);setProfileViewId(null);if(activeViewRef.current==='admin')setActiveView('servers');}}
                             onContextMenu={e=>{e.preventDefault();setChCtxMenu({x:e.clientX,y:e.clientY,ch});}}
-                            className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-200 ${isAct?'bg-indigo-500/[0.13] text-white border border-indigo-500/30 shadow-[inset_3px_0_0_#818cf8,0_0_12px_rgba(99,102,241,0.08)]':ping>0?'text-white hover:bg-amber-500/[0.07] border border-amber-500/20 bg-amber-500/[0.04] hover:border-amber-500/30':unread>0?'text-white hover:bg-indigo-500/[0.07] border border-transparent hover:border-indigo-500/15':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]'}`}>
-                            <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
-                              <ChIcon size={16} className={`shrink-0 ${isAct?'text-indigo-400':ping>0?'text-amber-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
-                              <span className={`text-sm truncate ${(unread>0||ping>0)&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
+                            className={`ch-btn group/ch ${isAct?'active':ping>0?'pinged':unread>0?'unread':''}`}>
+                            <div className="flex items-center gap-2 truncate flex-1 min-w-0">
+                              <div className="ch-icon">
+                                <ChIcon size={13} className={isAct?'text-indigo-300':ping>0?'text-amber-400':unread>0?'text-indigo-400':'text-zinc-500'}/>
+                              </div>
+                              <span className={`text-[13px] truncate ${(unread>0||ping>0)&&!isAct?'font-semibold text-white':'font-medium'}`}>{ch.name}</span>
                             </div>
-                            {ping>0&&!isAct&&<span className="min-w-[18px] h-[18px] bg-amber-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1 shadow-[0_0_8px_rgba(245,158,11,0.5)]">@{ping>9?'9+':ping}</span>}
-                            {unread>0&&!isAct&&!ping&&<span className="min-w-[18px] h-[18px] bg-indigo-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1">{unread>99?'99+':unread}</span>}
+                            {ping>0&&!isAct&&<span className="shrink-0 min-w-[18px] h-[18px] bg-amber-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1 shadow-[0_0_8px_rgba(245,158,11,0.5)]">@{ping>9?'9+':ping}</span>}
+                            {unread>0&&!isAct&&!ping&&<span className="shrink-0 min-w-[18px] h-[18px] bg-indigo-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1 shadow-[0_0_8px_rgba(99,102,241,0.5)]">{unread>99?'99+':unread}</span>}
                           </button>
                         </div>
                       );
@@ -12542,7 +12547,7 @@ export default function App() {
 
                     {/* Category header — ALWAYS shown */}
                     {cat.id !== '__uncat__' && (
-                    <div className="flex items-center justify-between px-3 pt-5 pb-1.5 group/cat">
+                    <div className="cat-header-bar group/cat">
                       {editingCatId === cat.id ? (
                         <input autoFocus value={editingCatName}
                           onChange={e=>setEditingCatName(e.target.value.toUpperCase())}
@@ -12550,9 +12555,7 @@ export default function App() {
                           onBlur={()=>submitEditCat(cat.id)}
                           className="flex-1 bg-white/[0.07] border border-indigo-500/40 text-zinc-300 text-[10px] font-bold uppercase tracking-widest rounded-lg px-2 py-0.5 outline-none focus:border-indigo-500/70 transition-all mr-2"/>
                       ) : (
-                        <span className="text-[10px] font-bold text-zinc-500 group-hover/cat:text-zinc-400 uppercase tracking-[0.12em] cursor-default select-none flex-1 transition-colors">
-                          {cat.name}
-                        </span>
+                        <span className="cat-label flex-1">{cat.name}</span>
                       )}
                       {canManageChannels&&editingCatId!==cat.id&&(
                         <div className="flex items-center gap-0.5 opacity-0 group-hover/cat:opacity-100 transition-opacity">
@@ -12588,19 +12591,14 @@ export default function App() {
                             <button
                               onClick={() => { setActiveChannel(ch.id); openGlobalTab({key:`ch:${activeServer}:${ch.id}`,kind:'ch',name:ch.name,chType:ch.type,serverId:activeServer,channelId:ch.id,serverName:serverFull?.name,serverIcon:serverFull?.icon_url??undefined}); setIsMobileOpen(false); setSrvSettOpen(false); setProfileViewId(null); if(activeViewRef.current==='admin')setActiveView('servers'); }}
                               onContextMenu={e=>{ e.preventDefault(); setChCtxMenu({x:e.clientX,y:e.clientY,ch}); }}
-                              className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-200 ${
-                                isAct
-                                  ? 'bg-indigo-500/[0.13] text-white border border-indigo-500/30 shadow-[inset_3px_0_0_#818cf8,0_0_12px_rgba(99,102,241,0.08)]'
-                                  : ping > 0
-                                    ? 'text-white hover:bg-amber-500/[0.07] border border-amber-500/20 bg-amber-500/[0.04] hover:border-amber-500/30'
-                                    : unread > 0
-                                      ? 'text-white hover:bg-indigo-500/[0.07] border border-transparent hover:border-indigo-500/15'
-                                      : 'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]'}`}>
-                              <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
-                                <ChIcon size={16} className={`shrink-0 transition-colors ${isAct?'text-indigo-400':ping>0?'text-amber-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
-                                <span className={`text-sm truncate transition-colors ${(unread>0||ping>0)&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
+                              className={`ch-btn group/ch ${isAct?'active':ping>0?'pinged':unread>0?'unread':''}`}>
+                              <div className="flex items-center gap-2 truncate flex-1 min-w-0">
+                                <div className="ch-icon">
+                                  <ChIcon size={13} className={isAct?'text-indigo-300':ping>0?'text-amber-400':ch.type==='announcement'?'text-amber-500':ch.type==='forum'?'text-emerald-400':unread>0?'text-indigo-400':'text-zinc-500'}/>
+                                </div>
+                                <span className={`text-[13px] truncate ${(unread>0||ping>0)&&!isAct?'font-semibold text-white':'font-medium'}`}>{ch.name}</span>
                                 {ch.is_private&&<Lock size={9} className="text-zinc-700 shrink-0"/>}
-                                {hasDraft&&<span className="text-[9px] font-bold text-amber-400/80 shrink-0 leading-none">— szkic</span>}
+                                {hasDraft&&<span className="text-[9px] font-bold text-amber-400/80 shrink-0 leading-none">szkic</span>}
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
                                 {ping > 0 && !isAct && (
@@ -12646,12 +12644,11 @@ export default function App() {
                           <div key={ch.id} className="px-2">
                             <button onClick={() => joinVoiceCh(ch)}
                               onContextMenu={e=>{e.preventDefault();setChCtxMenu({x:e.clientX,y:e.clientY,ch});}}
-                              className={`w-full px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-200 ${
-                                isActiveVoice?'bg-emerald-500/[0.10] text-emerald-400 border border-emerald-500/30 shadow-[inset_3px_0_0_#34d399,0_0_12px_rgba(52,211,153,0.07)]':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]'}`}>
+                              className={`ch-btn group/ch ${isActiveVoice?'voice-active':''}`}>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2 min-w-0">
-                                  <Volume2 size={13} className={`shrink-0 ${isActiveVoice?'text-emerald-400':hasUsers?'text-zinc-400':'text-zinc-600'}`}/>
-                                  <span className="text-sm font-medium truncate">{ch.name}</span>
+                                  <div className="ch-icon"><Volume2 size={12} className={isActiveVoice?'text-emerald-400':hasUsers?'text-zinc-400':'text-zinc-500'}/></div>
+                                  <span className="text-[13px] font-medium truncate">{ch.name}</span>
                                   {(ch.user_limit??0)>0&&(
                                     <span className={`text-[10px] font-mono tabular-nums shrink-0 px-1 py-0.5 rounded-md ${chVoiceUsers.length>=(ch.user_limit??0)?'text-red-400 bg-red-500/10':'text-zinc-500 bg-white/[0.04]'}`}>
                                       {chVoiceUsers.length}/{ch.user_limit}
@@ -12889,11 +12886,7 @@ export default function App() {
           )}
 
           {/* USER BAR — bottom of sidebar */}
-          <div className="shrink-0 px-3 py-3 relative" ref={statusPickerRef}
-            style={{borderTop:'1px solid rgba(255,255,255,0.06)',background:'linear-gradient(to top,rgba(99,102,241,0.04) 0%,transparent 100%)'}}>
-            {/* thin indigo accent line at top */}
-            <div className="absolute top-0 left-4 right-4 h-px pointer-events-none"
-              style={{background:'linear-gradient(to right,transparent,rgba(99,102,241,0.35),transparent)'}}/>
+          <div className="shrink-0 px-3 py-3 sidebar-userbar" ref={statusPickerRef}>
 
 
             {/* Status picker popup */}
@@ -12976,7 +12969,7 @@ export default function App() {
               )}
             </AnimatePresence>
 
-            <div className="flex items-center gap-2.5 px-2 py-2 rounded-2xl hover:bg-white/[0.06] transition-all duration-200 cursor-default group/userbar">
+            <div className="flex items-center gap-2.5 px-2 py-2 rounded-2xl hover:bg-white/[0.08] transition-all duration-200 cursor-default group/userbar">
               {/* Avatar + status dot — click opens picker */}
               <div className="relative shrink-0 cursor-pointer" onClick={()=>setStatusPickerOpen(p=>!p)} title="Zmień status">
                 <img src={streamerMode ? 'https://api.dicebear.com/7.x/initials/svg?seed=S&backgroundColor=6366f1&fontColor=ffffff' : (currentUser?ava(currentUser):'')} className={`w-8 h-8 rounded-full object-cover av-eff-${avatarEffect} av-sc-xs`} alt=""/>
@@ -15519,7 +15512,7 @@ export default function App() {
                           </motion.div>
                         )}
                       </AnimatePresence>
-                      <div className={`flex items-center gap-3 bg-white/[0.055] border border-white/[0.09] rounded-2xl px-4 py-3.5 hover:border-indigo-500/25 hover:bg-white/[0.065] focus-within:border-indigo-500/55 focus-within:bg-white/[0.07] focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.10),0_0_24px_rgba(99,102,241,0.07)] transition-all duration-200 ${slowmodeLeft > 0 && activeView === 'servers' ? 'opacity-40 pointer-events-none' : ''}`}>
+                      <div className={`msg-input-wrap flex items-center gap-3 px-4 py-3.5 ${slowmodeLeft > 0 && activeView === 'servers' ? 'opacity-40 pointer-events-none' : ''}`}>
                         <input type="file" ref={attachRef} onChange={handleAttach} accept="*/*" multiple className="hidden"/>
                         {/* Plus menu — Discord-style */}
                         <div className="relative shrink-0">
@@ -16069,14 +16062,11 @@ export default function App() {
             };
 
             const SectionHeader = ({skey,label,count,color}:{skey:string;label:string;count:number;color?:string}) => (
-              <button onClick={()=>toggleRightSection(skey)} className="flex items-center gap-1.5 w-full text-left mb-2 px-1 group">
-                <ChevronRight size={9} className={`transition-transform shrink-0 text-zinc-600 group-hover:text-zinc-400 ${collapsedRightSections.has(skey)?'':'rotate-90'}`}/>
-                <span className="text-[10px] font-bold uppercase tracking-[0.12em] group-hover:opacity-90 transition-opacity" style={{color:color||'#71717a'}}>
-                  {label}
-                </span>
-                <span className="text-[10px] font-semibold ml-0.5 tabular-nums" style={{color:color?`${color}90`:'#52525b'}}>
-                  {count}
-                </span>
+              <button onClick={()=>toggleRightSection(skey)} className="members-section-hdr group">
+                <ChevronRight size={8} className={`transition-transform shrink-0 text-zinc-600 group-hover:text-zinc-400 flex-shrink-0 ${collapsedRightSections.has(skey)?'':'rotate-90'}`}/>
+                <span className="sec-dot" style={{background:color||'#6366f1',boxShadow:`0 0 6px ${color||'#6366f1'}80`}}/>
+                <span className="sec-label" style={{color:color||'#a1a1aa'}}>{label}</span>
+                <span className="sec-count">{count}</span>
               </button>
             );
 

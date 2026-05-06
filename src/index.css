@@ -151,6 +151,161 @@ body::before {
   box-shadow: 0 0 8px rgba(129, 140, 248, 0.6);
 }
 
+/* ── Channel item — active / hover states ── */
+.ch-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 14px;
+  margin-bottom: 2px;
+  border: 1px solid transparent;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  color: #71717a;
+  position: relative;
+  overflow: hidden;
+}
+.ch-btn:hover {
+  background: rgba(255,255,255,0.055);
+  color: #d4d4d8;
+  border-color: rgba(255,255,255,0.06);
+}
+.ch-btn.active {
+  background: rgba(99,102,241,0.18);
+  color: #fff;
+  border-color: rgba(99,102,241,0.32);
+  box-shadow: inset 3px 0 0 #6366f1, 0 0 18px rgba(99,102,241,0.14);
+}
+.ch-btn.unread:not(.active) {
+  color: #f4f4f5;
+}
+.ch-btn.pinged:not(.active) {
+  background: rgba(245,158,11,0.07);
+  border-color: rgba(245,158,11,0.22);
+  color: #fff;
+}
+.ch-btn.voice-active {
+  background: rgba(52,211,153,0.10);
+  color: #34d399;
+  border-color: rgba(52,211,153,0.28);
+  box-shadow: inset 3px 0 0 #34d399, 0 0 16px rgba(52,211,153,0.08);
+}
+/* Icon background circle inside channel button */
+.ch-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
+}
+.ch-btn:not(.active) .ch-icon {
+  background: rgba(255,255,255,0.05);
+}
+.ch-btn.active .ch-icon {
+  background: rgba(99,102,241,0.22);
+}
+.ch-btn:hover:not(.active) .ch-icon {
+  background: rgba(255,255,255,0.08);
+}
+
+/* ── Category header bar ── */
+.cat-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 12px 6px 12px;
+  position: relative;
+}
+.cat-header-bar::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 22px;
+  width: 3px;
+  height: 10px;
+  border-radius: 2px;
+  background: linear-gradient(to bottom, #6366f1, #8b5cf6);
+  opacity: 0.5;
+}
+.cat-header-bar .cat-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #71717a;
+  padding-left: 8px;
+  cursor: default;
+  user-select: none;
+  transition: color 0.15s ease;
+}
+.cat-header-bar:hover .cat-label { color: #a1a1aa; }
+
+/* ── Sidebar user bar ── */
+.sidebar-userbar {
+  background: linear-gradient(135deg, rgba(99,102,241,0.07) 0%, rgba(124,58,237,0.05) 100%);
+  border-top: 1px solid rgba(99,102,241,0.14);
+  box-shadow: 0 -1px 0 rgba(255,255,255,0.04);
+  position: relative;
+}
+.sidebar-userbar::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 20px; right: 20px; height: 1px;
+  background: linear-gradient(to right, transparent, rgba(99,102,241,0.4), transparent);
+  pointer-events: none;
+}
+
+/* ── Right panel section header ── */
+.members-section-hdr {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 8px 4px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+.members-section-hdr .sec-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.members-section-hdr .sec-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  transition: opacity 0.15s;
+}
+.members-section-hdr:hover .sec-label { opacity: 0.85; }
+.members-section-hdr .sec-count {
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.5;
+  margin-left: 2px;
+}
+
+/* ── Message input ── */
+.msg-input-wrap {
+  background: rgba(255,255,255,0.055);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 14px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+.msg-input-wrap:hover {
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(99,102,241,0.22);
+}
+.msg-input-wrap:focus-within {
+  background: rgba(255,255,255,0.075);
+  border-color: rgba(99,102,241,0.5);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.10), 0 0 24px rgba(99,102,241,0.08);
+}
+
 @keyframes shimmer {
   0%   { background-position: 0% center; }
   100% { background-position: 200% center; }
