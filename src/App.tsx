@@ -12401,17 +12401,27 @@ export default function App() {
           {activeView==='servers'&&<>
             {/* Server header with dropdown */}
             <div className="relative border-b border-white/[0.06]">
-              <div className="px-4 py-3.5 cursor-pointer hover:bg-white/[0.03] transition-colors group"
+              {/* subtle gradient glow behind header */}
+              <div className="absolute inset-0 pointer-events-none" style={{background:'radial-gradient(ellipse 80% 60% at 50% 0%,rgba(99,102,241,0.07) 0%,transparent 70%)'}}/>
+              <div className="relative px-4 py-3.5 cursor-pointer hover:bg-white/[0.03] transition-colors group"
                 onClick={() => setSrvDropOpen(p => !p)}>
                 <div className="flex items-center justify-between gap-2">
-                  <h2 className="text-sm font-bold text-white truncate">{serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'Serwer'}</h2>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {/* server avatar letter badge */}
+                    <div className="w-6 h-6 shrink-0 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
+                      <span className="text-[10px] font-bold text-indigo-300">
+                        {(serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'S').charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <h2 className="text-sm font-bold text-white truncate">{serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'Serwer'}</h2>
+                  </div>
                   <motion.div animate={{ rotate: srvDropOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-zinc-500 group-hover:text-indigo-400 transition-colors shrink-0">
                       <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                   </motion.div>
                 </div>
-                {serverFull?.description&&<p className="text-xs text-zinc-500 mt-0.5 truncate">{serverFull.description}</p>}
+                {serverFull?.description&&<p className="text-xs text-zinc-500 mt-0.5 truncate pl-8">{serverFull.description}</p>}
               </div>
               <AnimatePresence>
               {srvDropOpen&&(
@@ -12498,7 +12508,7 @@ export default function App() {
                           <button
                             onClick={()=>{setActiveChannel(ch.id);openGlobalTab({key:`ch:${activeServer}:${ch.id}`,kind:'ch',name:ch.name,chType:ch.type,serverId:activeServer,channelId:ch.id,serverName:serverFull?.name,serverIcon:serverFull?.icon_url??undefined});setIsMobileOpen(false);setSrvSettOpen(false);setProfileViewId(null);if(activeViewRef.current==='admin')setActiveView('servers');}}
                             onContextMenu={e=>{e.preventDefault();setChCtxMenu({x:e.clientX,y:e.clientY,ch});}}
-                            className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${isAct?'bg-indigo-500/15 text-white border border-indigo-500/25 shadow-[inset_3px_0_0_#818cf8]':ping>0?'text-white hover:bg-white/[0.06] border border-amber-500/20 bg-amber-500/5':unread>0?'text-white hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-200 ${isAct?'bg-indigo-500/[0.13] text-white border border-indigo-500/30 shadow-[inset_3px_0_0_#818cf8,0_0_12px_rgba(99,102,241,0.08)]':ping>0?'text-white hover:bg-amber-500/[0.07] border border-amber-500/20 bg-amber-500/[0.04] hover:border-amber-500/30':unread>0?'text-white hover:bg-indigo-500/[0.07] border border-transparent hover:border-indigo-500/15':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]'}`}>
                             <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
                               <ChIcon size={16} className={`shrink-0 ${isAct?'text-indigo-400':ping>0?'text-amber-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
                               <span className={`text-sm truncate ${(unread>0||ping>0)&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
@@ -12540,13 +12550,13 @@ export default function App() {
                           onBlur={()=>submitEditCat(cat.id)}
                           className="flex-1 bg-white/[0.07] border border-indigo-500/40 text-zinc-300 text-[10px] font-bold uppercase tracking-widest rounded-lg px-2 py-0.5 outline-none focus:border-indigo-500/70 transition-all mr-2"/>
                       ) : (
-                        <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest cursor-default select-none flex-1">
+                        <span className="text-[10px] font-bold text-zinc-500 group-hover/cat:text-zinc-400 uppercase tracking-[0.12em] cursor-default select-none flex-1 transition-colors">
                           {cat.name}
                         </span>
                       )}
                       {canManageChannels&&editingCatId!==cat.id&&(
                         <div className="flex items-center gap-0.5 opacity-0 group-hover/cat:opacity-100 transition-opacity">
-                          <button onClick={openAddCh} title="Dodaj kanał" className="w-4 h-4 flex items-center justify-center rounded hover:text-zinc-300 text-zinc-600 transition-colors"><Plus size={11}/></button>
+                          <button onClick={openAddCh} title="Dodaj kanał" className="w-4 h-4 flex items-center justify-center rounded hover:text-indigo-400 text-zinc-600 transition-colors"><Plus size={11}/></button>
                           <button onClick={()=>startEditCat(cat)} title="Zmień nazwę" className="w-4 h-4 flex items-center justify-center rounded hover:text-zinc-300 text-zinc-600 transition-colors"><Edit3 size={10}/></button>
                           <button onClick={()=>handleDeleteCat(cat)} title="Usuń kategorię" className="w-4 h-4 flex items-center justify-center rounded hover:text-rose-400 text-zinc-600 transition-colors"><Trash2 size={10}/></button>
                         </div>
@@ -12578,14 +12588,14 @@ export default function App() {
                             <button
                               onClick={() => { setActiveChannel(ch.id); openGlobalTab({key:`ch:${activeServer}:${ch.id}`,kind:'ch',name:ch.name,chType:ch.type,serverId:activeServer,channelId:ch.id,serverName:serverFull?.name,serverIcon:serverFull?.icon_url??undefined}); setIsMobileOpen(false); setSrvSettOpen(false); setProfileViewId(null); if(activeViewRef.current==='admin')setActiveView('servers'); }}
                               onContextMenu={e=>{ e.preventDefault(); setChCtxMenu({x:e.clientX,y:e.clientY,ch}); }}
-                              className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${
+                              className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-200 ${
                                 isAct
-                                  ? 'bg-indigo-500/15 text-white border border-indigo-500/25 shadow-[inset_3px_0_0_#818cf8]'
+                                  ? 'bg-indigo-500/[0.13] text-white border border-indigo-500/30 shadow-[inset_3px_0_0_#818cf8,0_0_12px_rgba(99,102,241,0.08)]'
                                   : ping > 0
-                                    ? 'text-white hover:bg-white/[0.06] border border-amber-500/20 bg-amber-500/5'
+                                    ? 'text-white hover:bg-amber-500/[0.07] border border-amber-500/20 bg-amber-500/[0.04] hover:border-amber-500/30'
                                     : unread > 0
-                                      ? 'text-white hover:bg-white/[0.06] border border-transparent'
-                                      : 'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
+                                      ? 'text-white hover:bg-indigo-500/[0.07] border border-transparent hover:border-indigo-500/15'
+                                      : 'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]'}`}>
                               <div className="flex items-center gap-2.5 truncate flex-1 min-w-0">
                                 <ChIcon size={16} className={`shrink-0 transition-colors ${isAct?'text-indigo-400':ping>0?'text-amber-400':unread>0?'text-indigo-400/70':'text-zinc-600'}`}/>
                                 <span className={`text-sm truncate transition-colors ${(unread>0||ping>0)&&!isAct?'font-semibold':'font-medium'}`}>{ch.name}</span>
@@ -12636,8 +12646,8 @@ export default function App() {
                           <div key={ch.id} className="px-2">
                             <button onClick={() => joinVoiceCh(ch)}
                               onContextMenu={e=>{e.preventDefault();setChCtxMenu({x:e.clientX,y:e.clientY,ch});}}
-                              className={`w-full px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-150 ${
-                                isActiveVoice?'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 shadow-[inset_0_0_12px_rgba(52,211,153,0.08)]':'text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200 border border-transparent'}`}>
+                              className={`w-full px-3 py-2 rounded-2xl mb-0.5 group/ch transition-all duration-200 ${
+                                isActiveVoice?'bg-emerald-500/[0.10] text-emerald-400 border border-emerald-500/30 shadow-[inset_3px_0_0_#34d399,0_0_12px_rgba(52,211,153,0.07)]':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]'}`}>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2 min-w-0">
                                   <Volume2 size={13} className={`shrink-0 ${isActiveVoice?'text-emerald-400':hasUsers?'text-zinc-400':'text-zinc-600'}`}/>
@@ -12723,7 +12733,7 @@ export default function App() {
                       }
                     }}
                     onContextMenu={e=>{ e.preventDefault(); setGroupCtxMenu({ x: e.clientX, y: Math.min(e.clientY, window.innerHeight - 160), gc }); }}
-                    className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/15 text-white border border-indigo-500/25 shadow-[inset_3px_0_0_#818cf8]':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
+                    className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-200 ${isActive?'bg-indigo-500/[0.13] text-white border border-indigo-500/30 shadow-[inset_3px_0_0_#818cf8,0_0_12px_rgba(99,102,241,0.08)]':unread>0?'text-zinc-200 hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]'}`}>
                     <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 flex items-center justify-center shrink-0 overflow-hidden">
                       {gc.icon_url
                         ? <img src={staticUrl(gc.icon_url)} className="w-full h-full object-cover" alt=""/>
@@ -12747,7 +12757,7 @@ export default function App() {
                 return (
                   <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setActiveGroupDm(null); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); setProfileViewId(null); openGlobalTab({key:`dm:${dm.other_user_id}`,kind:'dm',name:dm.other_username,userId:dm.other_user_id,userAvatar:dm.other_avatar??undefined,userStatus:dm.other_status}); }}
                     onContextMenu={e => { e.preventDefault(); const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setDmCtxMenu({ x: e.clientX, y: Math.min(e.clientY, window.innerHeight - 300), dm }); }}
-                    className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-150 ${isActive?'bg-indigo-500/15 text-white border border-indigo-500/25 shadow-[inset_3px_0_0_#818cf8]':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent'}`}>
+                    className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-200 ${isActive?'bg-indigo-500/[0.13] text-white border border-indigo-500/30 shadow-[inset_3px_0_0_#818cf8,0_0_12px_rgba(99,102,241,0.08)]':unread>0?'text-zinc-200 hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]'}`}>
                     <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava({avatar_url:dm.other_avatar,username:dm.other_username})}")`} as React.CSSProperties}
                       onClick={e=>{ e.stopPropagation(); showHoverCard(dm.other_user_id, e); }}>
                       <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className={`w-10 h-10 rounded-2xl object-cover av-eff-${(dm as any).other_avatar_effect||'none'} cursor-pointer hover:opacity-80 transition-opacity`} alt=""/>
@@ -12879,7 +12889,12 @@ export default function App() {
           )}
 
           {/* USER BAR — bottom of sidebar */}
-          <div className="shrink-0 px-3 py-3 border-t border-white/[0.05] relative" ref={statusPickerRef}>
+          <div className="shrink-0 px-3 py-3 relative" ref={statusPickerRef}
+            style={{borderTop:'1px solid rgba(255,255,255,0.06)',background:'linear-gradient(to top,rgba(99,102,241,0.04) 0%,transparent 100%)'}}>
+            {/* thin indigo accent line at top */}
+            <div className="absolute top-0 left-4 right-4 h-px pointer-events-none"
+              style={{background:'linear-gradient(to right,transparent,rgba(99,102,241,0.35),transparent)'}}/>
+
 
             {/* Status picker popup */}
             <AnimatePresence>
@@ -12961,7 +12976,7 @@ export default function App() {
               )}
             </AnimatePresence>
 
-            <div className="flex items-center gap-2.5 px-2 py-2 rounded-2xl hover:bg-white/[0.05] transition-colors cursor-default">
+            <div className="flex items-center gap-2.5 px-2 py-2 rounded-2xl hover:bg-white/[0.06] transition-all duration-200 cursor-default group/userbar">
               {/* Avatar + status dot — click opens picker */}
               <div className="relative shrink-0 cursor-pointer" onClick={()=>setStatusPickerOpen(p=>!p)} title="Zmień status">
                 <img src={streamerMode ? 'https://api.dicebear.com/7.x/initials/svg?seed=S&backgroundColor=6366f1&fontColor=ffffff' : (currentUser?ava(currentUser):'')} className={`w-8 h-8 rounded-full object-cover av-eff-${avatarEffect} av-sc-xs`} alt=""/>
@@ -12997,16 +13012,16 @@ export default function App() {
               <div className="flex items-center gap-0.5 shrink-0">
                 <button title={isMicMuted||activeCall?.isMuted?'Włącz mikrofon':'Wycisz mikrofon'}
                   onClick={handleMicToggle}
-                  className={`w-7 h-7 flex items-center justify-center rounded-md transition-all ${
+                  className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-150 ${
                     (isMicMuted||(activeCall?.isMuted??false))
                       ? 'text-rose-400 bg-rose-500/10 hover:bg-rose-500/20'
-                      : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07]'}`}>
+                      : 'text-zinc-500 hover:text-zinc-200 hover:bg-indigo-500/10'}`}>
                   {(isMicMuted||(activeCall?.isMuted??false))?<MicOff size={13}/>:<Mic size={13}/>}
                 </button>
                 <button title="Skróty klawiszowe (?)" onClick={()=>setShowShortcuts(true)}
-                  className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all"><Keyboard size={12}/></button>
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.08] transition-all duration-150"><Keyboard size={12}/></button>
                 <button title={tl('app.settings')} onClick={()=>{setAppSettTab('account');setAppSettOpen(true);}}
-                  className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07] transition-all"><Settings size={13}/></button>
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-indigo-500/10 transition-all duration-150"><Settings size={13}/></button>
               </div>
             </div>
           </div>
@@ -14032,7 +14047,10 @@ export default function App() {
               )}
 
               {/* ── CHAT HEADER (improved) ─────────────────────────────────── */}
-              <header className="border-b border-white/[0.05] flex items-center justify-between px-5 glass-dark z-10 shrink-0 gap-3" style={{minHeight:52}}>
+              <header className="border-b border-white/[0.05] flex items-center justify-between px-5 glass-dark z-10 shrink-0 gap-3 relative" style={{minHeight:52,background:'linear-gradient(to bottom,rgba(99,102,241,0.03) 0%,transparent 100%)'}}>
+                {/* thin gradient separator at bottom */}
+                <div className="absolute bottom-0 left-0 right-0 h-px pointer-events-none" style={{background:'linear-gradient(to right,transparent 0%,rgba(99,102,241,0.18) 30%,rgba(99,102,241,0.18) 70%,transparent 100%)'}}/>
+
                 <div className="flex items-center gap-3 min-w-0">
                   {activeView==='dms' ? (activeGroupDm ? (() => {
                     const gc = groupConvs.find(g=>g.id===activeGroupDm);
@@ -15308,7 +15326,10 @@ export default function App() {
               </div>
 
               {/* Input */}
-              <div className="shrink-0 px-4 md:px-6 pb-5 pt-3 bg-black/20 border-t border-white/[0.05]">
+              <div className="shrink-0 px-4 md:px-6 pb-5 pt-3 relative" style={{borderTop:'1px solid rgba(255,255,255,0.05)',background:'linear-gradient(to bottom,rgba(0,0,0,0.08) 0%,transparent 100%)'}}>
+                {/* accent gradient line at top of input area */}
+                <div className="absolute top-0 left-8 right-8 h-px pointer-events-none" style={{background:'linear-gradient(to right,transparent,rgba(99,102,241,0.12),transparent)'}}/>
+
                 {/* Reply / attach previews */}
                 <AnimatePresence>
                   {replyTo&&(
@@ -15498,7 +15519,7 @@ export default function App() {
                           </motion.div>
                         )}
                       </AnimatePresence>
-                      <div className={`flex items-center gap-3 bg-white/[0.06] border border-white/[0.08] rounded-2xl px-4 py-3.5 hover:border-indigo-500/20 focus-within:border-indigo-500/50 focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.12),0_0_20px_rgba(99,102,241,0.08)] transition-all duration-200 ${slowmodeLeft > 0 && activeView === 'servers' ? 'opacity-40 pointer-events-none' : ''}`}>
+                      <div className={`flex items-center gap-3 bg-white/[0.055] border border-white/[0.09] rounded-2xl px-4 py-3.5 hover:border-indigo-500/25 hover:bg-white/[0.065] focus-within:border-indigo-500/55 focus-within:bg-white/[0.07] focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.10),0_0_24px_rgba(99,102,241,0.07)] transition-all duration-200 ${slowmodeLeft > 0 && activeView === 'servers' ? 'opacity-40 pointer-events-none' : ''}`}>
                         <input type="file" ref={attachRef} onChange={handleAttach} accept="*/*" multiple className="hidden"/>
                         {/* Plus menu — Discord-style */}
                         <div className="relative shrink-0">
@@ -16014,7 +16035,7 @@ export default function App() {
               const mTwitch = userTwitchActivities.get(m.id);
               const mSteam = userSteamActivities.get(m.id);
               return (
-                <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl relative overflow-hidden hover:bg-white/[0.06] hover:transition-all" onClick={e=>opacity?showHoverCard(m.id,e):showHoverCard(m.id,e)}>
+                <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl relative overflow-hidden transition-all duration-150 hover:bg-white/[0.055] border border-transparent hover:border-white/[0.05]" onClick={e=>opacity?showHoverCard(m.id,e):showHoverCard(m.id,e)}>
                   {m.banner_preset && m.banner_preset !== 'none' && !opacity && (
                     <div className={`bp-banner bp-${m.banner_preset}`} aria-hidden="true"/>
                   )}
@@ -16048,10 +16069,13 @@ export default function App() {
             };
 
             const SectionHeader = ({skey,label,count,color}:{skey:string;label:string;count:number;color?:string}) => (
-              <button onClick={()=>toggleRightSection(skey)} className="flex items-center gap-1 w-full text-left mb-2 px-1 group">
+              <button onClick={()=>toggleRightSection(skey)} className="flex items-center gap-1.5 w-full text-left mb-2 px-1 group">
                 <ChevronRight size={9} className={`transition-transform shrink-0 text-zinc-600 group-hover:text-zinc-400 ${collapsedRightSections.has(skey)?'':'rotate-90'}`}/>
-                <span className="text-[11px] font-bold uppercase tracking-widest group-hover:opacity-80 transition-opacity" style={{color:color||'#71717a'}}>
-                  {label} — {count}
+                <span className="text-[10px] font-bold uppercase tracking-[0.12em] group-hover:opacity-90 transition-opacity" style={{color:color||'#71717a'}}>
+                  {label}
+                </span>
+                <span className="text-[10px] font-semibold ml-0.5 tabular-nums" style={{color:color?`${color}90`:'#52525b'}}>
+                  {count}
                 </span>
               </button>
             );
