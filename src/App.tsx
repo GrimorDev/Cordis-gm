@@ -811,6 +811,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
       name: 'Spotify',
       desc: 'JAM sessions — słuchaj muzyki razem ze znajomymi w czasie rzeczywistym.',
       color: 'from-green-500/20 to-emerald-500/10',
+      gradFrom: 'rgba(29,185,84,0.09)',
       border: 'border-green-500/25',
       icon: (
         <svg viewBox="0 0 24 24" className="w-8 h-8" fill="#1DB954">
@@ -822,6 +823,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
       name: 'Twitch',
       desc: 'Linkuj swój kanał Twitch i pokaż znajomym, kiedy streamujesz.',
       color: 'from-purple-500/20 to-violet-500/10',
+      gradFrom: 'rgba(145,70,255,0.09)',
       border: 'border-purple-500/25',
       icon: (
         <svg viewBox="0 0 24 24" className="w-8 h-8" fill="#9146FF">
@@ -833,6 +835,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
       name: 'Steam',
       desc: 'Udostępnij swój profil Steam i pokaż, w co aktualnie grasz.',
       color: 'from-blue-500/20 to-sky-500/10',
+      gradFrom: 'rgba(27,136,184,0.09)',
       border: 'border-blue-500/25',
       icon: (
         <svg viewBox="0 0 24 24" className="w-8 h-8" fill="#1b2838">
@@ -1056,61 +1059,83 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
   return (
     <>
       {/* ─── LANDING PAGE ───────────────────────────────────────────────────── */}
-      <div className="min-h-screen bg-[#09090b] text-white overflow-x-hidden">
+      <div className="min-h-screen bg-[#030308] text-white overflow-x-hidden">
+
+        {/* ── Global animated background ── */}
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <motion.div animate={{ x:[0,50,-25,0],y:[0,-40,20,0],scale:[1,1.12,.93,1] }} transition={{ duration:20,repeat:Infinity,ease:'easeInOut' }}
+            className="absolute -top-1/4 -left-1/4 w-[900px] h-[900px] rounded-full"
+            style={{ background:'radial-gradient(circle,rgba(99,102,241,0.11) 0%,transparent 70%)' }}/>
+          <motion.div animate={{ x:[0,-60,30,0],y:[0,50,-25,0],scale:[1,.88,1.06,1] }} transition={{ duration:26,repeat:Infinity,ease:'easeInOut',delay:5 }}
+            className="absolute -bottom-1/4 -right-1/4 w-[800px] h-[800px] rounded-full"
+            style={{ background:'radial-gradient(circle,rgba(139,92,246,0.09) 0%,transparent 70%)' }}/>
+          <motion.div animate={{ scale:[1,1.1,1],opacity:[0.35,0.65,0.35] }} transition={{ duration:10,repeat:Infinity,ease:'easeInOut',delay:2 }}
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full"
+            style={{ background:'radial-gradient(circle,rgba(6,182,212,0.05) 0%,transparent 70%)' }}/>
+          {/* Dot grid */}
+          <div className="absolute inset-0"
+            style={{ backgroundImage:'radial-gradient(rgba(255,255,255,0.07) 1px,transparent 1px)', backgroundSize:'40px 40px', opacity:0.4 }}/>
+        </div>
 
         {/* ── Sticky Navbar ── */}
-        <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.06]"
-          style={{ background: 'rgba(9,9,11,0.85)', backdropFilter: 'blur(20px)' }}>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-            {/* Logo */}
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center">
-                <img src="/cordyn.png" alt="Cordyn" className="w-full h-full object-contain"/>
+        <nav className="fixed top-0 left-0 right-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4">
+            <motion.div initial={{ opacity:0,y:-14 }} animate={{ opacity:1,y:0 }} transition={{ duration:.5 }}
+              className="flex items-center justify-between h-14 px-4 rounded-2xl border border-white/[0.07]"
+              style={{ background:'rgba(3,3,8,0.82)',backdropFilter:'blur(24px)' }}>
+
+              {/* Logo */}
+              <div className="flex items-center gap-2.5 shrink-0">
+                <div className="w-8 h-8 rounded-xl overflow-hidden">
+                  <img src="/cordyn.png" alt="Cordyn" className="w-full h-full object-contain"/>
+                </div>
+                <span className="text-[15px] font-bold tracking-tight">Cordyn</span>
               </div>
-              <span className="text-lg font-bold tracking-tight">Cordyn</span>
-            </div>
 
-            {/* Desktop nav links */}
-            <div className="hidden md:flex items-center gap-7 text-sm text-zinc-400">
-              {[tl('landing.features'),tl('landing.integrations'),tl('landing.security')].map(l => (
-                <a key={l} href={`#${l.toLowerCase()}`}
-                  className="hover:text-white transition-colors cursor-pointer">{l}</a>
-              ))}
-            </div>
+              {/* Desktop pill nav */}
+              <div className="hidden md:flex items-center gap-0.5 bg-white/[0.03] border border-white/[0.06] rounded-xl px-2 py-1.5">
+                {[tl('landing.features'),tl('landing.integrations'),tl('landing.security')].map(l => (
+                  <a key={l} href={`#${l.toLowerCase()}`}
+                    className="px-4 py-1.5 rounded-lg text-[13px] font-medium text-zinc-400 hover:text-white hover:bg-white/[0.07] transition-all">{l}</a>
+                ))}
+              </div>
 
-            {/* Desktop CTA buttons */}
-            <div className="hidden md:flex items-center gap-3">
-              <button onClick={() => openModal('login')}
-                className="px-4 py-2 rounded-xl text-sm font-semibold text-zinc-300 hover:text-white hover:bg-white/[0.06] transition-all">
-                {tl('landing.loginBtn')}
+              {/* Desktop CTAs */}
+              <div className="hidden md:flex items-center gap-2">
+                <button onClick={() => openModal('login')}
+                  className="px-4 py-2 rounded-xl text-[13px] font-medium text-zinc-400 hover:text-white transition-all">
+                  {tl('landing.loginBtn')}
+                </button>
+                <button onClick={() => openModal('register')}
+                  className="px-4 py-2 rounded-xl text-[13px] font-bold bg-indigo-500 hover:bg-indigo-400 text-white transition-all shadow-lg shadow-indigo-500/30">
+                  {tl('landing.registerBtn')} →
+                </button>
+              </div>
+
+              {/* Mobile hamburger */}
+              <button className="md:hidden p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-all"
+                onClick={() => setMobileMenuOpen(v => !v)}>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  {mobileMenuOpen
+                    ? <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    : <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16"/>}
+                </svg>
               </button>
-              <button onClick={() => openModal('register')}
-                className="px-4 py-2 rounded-xl text-sm font-bold bg-indigo-500 hover:bg-indigo-400 text-white transition-all shadow-lg shadow-indigo-500/20">
-                {tl('landing.registerBtn')}
-              </button>
-            </div>
-
-            {/* Mobile hamburger */}
-            <button className="md:hidden p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-all"
-              onClick={() => setMobileMenuOpen(v => !v)}>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                {mobileMenuOpen
-                  ? <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                  : <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16"/>}
-              </svg>
-            </button>
+            </motion.div>
           </div>
 
           {/* Mobile menu */}
           <AnimatePresence>
             {mobileMenuOpen && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                className="md:hidden border-t border-white/[0.06] px-4 py-4 flex flex-col gap-3">
+              <motion.div initial={{ opacity:0,y:-8 }} animate={{ opacity:1,y:0 }} exit={{ opacity:0,y:-8 }}
+                transition={{ duration:.2 }}
+                className="md:hidden mx-4 mt-2 rounded-2xl border border-white/[0.07] p-4 flex flex-col gap-1.5"
+                style={{ background:'rgba(3,3,8,0.96)',backdropFilter:'blur(20px)' }}>
                 {[tl('landing.features'),tl('landing.integrations'),tl('landing.security')].map(l => (
                   <a key={l} href={`#${l.toLowerCase()}`} onClick={() => setMobileMenuOpen(false)}
-                    className="text-zinc-400 hover:text-white transition-colors py-1">{l}</a>
+                    className="px-3 py-2.5 rounded-xl text-sm text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-all">{l}</a>
                 ))}
-                <div className="flex gap-3 mt-2 pt-3 border-t border-white/[0.06]">
+                <div className="flex gap-2 mt-1.5 pt-3 border-t border-white/[0.06]">
                   <button onClick={() => openModal('login')}
                     className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-300 bg-white/[0.04] border border-white/[0.07] hover:bg-white/[0.08] transition-all">
                     {tl('landing.loginBtn')}
@@ -1126,265 +1151,426 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
         </nav>
 
         {/* ── Hero Section ── */}
-        <section className="relative pt-32 pb-24 px-4 sm:px-6 overflow-hidden">
-          {/* Animated bg blobs */}
-          <div className="absolute inset-0 pointer-events-none overflow-hidden">
-            <motion.div animate={{ x: [0,50,-20,0], y: [0,-30,15,0], scale: [1,1.1,.95,1] }}
-              transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
-              className="absolute -top-40 -left-40 w-[600px] h-[600px] bg-indigo-600/15 rounded-full blur-3xl"/>
-            <motion.div animate={{ x: [0,-50,20,0], y: [0,30,-15,0], scale: [1,.9,1.05,1] }}
-              transition={{ duration: 17, repeat: Infinity, ease: 'easeInOut', delay: 3 }}
-              className="absolute -bottom-40 -right-40 w-[600px] h-[600px] bg-purple-600/12 rounded-full blur-3xl"/>
-            <motion.div animate={{ x: [0,25,-35,0], y: [0,-20,20,0] }}
-              transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut', delay: 6 }}
-              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-violet-500/8 rounded-full blur-3xl"/>
-            {/* Grid overlay */}
-            <div className="absolute inset-0 opacity-[0.025]"
-              style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px)', backgroundSize: '60px 60px' }}/>
-            {/* Particles */}
-            {[
-              {x:'8%',y:'25%',s:3,d:4,dl:0,c:'bg-indigo-400/50'},
-              {x:'72%',y:'12%',s:2,d:6,dl:1,c:'bg-purple-400/50'},
-              {x:'88%',y:'55%',s:4,d:5,dl:2,c:'bg-violet-400/40'},
-              {x:'15%',y:'75%',s:2,d:7,dl:.5,c:'bg-blue-400/50'},
-              {x:'55%',y:'82%',s:3,d:4.5,dl:3,c:'bg-indigo-400/40'},
-              {x:'35%',y:'38%',s:2,d:8,dl:1.5,c:'bg-pink-400/40'},
-              {x:'62%',y:'30%',s:3,d:5.5,dl:2.5,c:'bg-cyan-400/40'},
-            ].map((p,i) => (
-              <motion.div key={i}
-                animate={{ y:[0,-14,0], opacity:[.4,1,.4] }}
-                transition={{ duration:p.d, repeat:Infinity, ease:'easeInOut', delay:p.dl }}
-                className={`absolute rounded-full ${p.c}`}
-                style={{ left:p.x, top:p.y, width:p.s*4, height:p.s*4 }}/>
+        <section className="relative pt-40 pb-20 px-4 sm:px-6 z-10">
+          <div className="max-w-7xl mx-auto">
+            <div className="grid lg:grid-cols-2 gap-16 items-center">
+
+              {/* LEFT: Text content */}
+              <div>
+                {/* Live badge */}
+                <motion.div initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ duration:.5 }}
+                  className="inline-flex items-center gap-2.5 mb-8 bg-white/[0.04] border border-white/[0.09] rounded-full px-4 py-2">
+                  <span className="relative flex w-2 h-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"/>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"/>
+                  </span>
+                  <span className="text-[13px] text-zinc-300 font-medium">{tl('landing.communication')}</span>
+                </motion.div>
+
+                {/* Headline */}
+                <motion.h1 initial={{ opacity:0, y:24 }} animate={{ opacity:1, y:0 }} transition={{ duration:.6, delay:.08 }}
+                  className="text-5xl sm:text-6xl xl:text-[72px] font-black leading-[1.03] tracking-tight mb-6">
+                  <span className="block text-white">{tl('landing.headline1')}</span>
+                  <span className="block bg-gradient-to-r from-indigo-400 via-violet-400 to-cyan-400 bg-clip-text text-transparent">
+                    {tl('landing.headline2')}
+                  </span>
+                </motion.h1>
+
+                {/* Subtext */}
+                <motion.p initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ duration:.5, delay:.15 }}
+                  className="text-base sm:text-lg text-zinc-500 max-w-lg leading-relaxed mb-10">
+                  {tl('landing.subtext')}
+                </motion.p>
+
+                {/* CTA buttons */}
+                <motion.div initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }} transition={{ duration:.5, delay:.22 }}
+                  className="flex flex-wrap gap-3 mb-12">
+                  <button onClick={() => openModal('register')}
+                    className="group relative px-7 py-3.5 rounded-2xl text-[15px] font-bold text-white transition-all shadow-xl shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:-translate-y-0.5 active:translate-y-0 overflow-hidden"
+                    style={{ background:'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
+                    <span className="relative z-10">{tl('landing.startFree')}</span>
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                      style={{ background:'linear-gradient(135deg,#818cf8,#a78bfa)' }}/>
+                  </button>
+                  <button onClick={() => openModal('login')}
+                    className="px-7 py-3.5 rounded-2xl text-[15px] font-semibold text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.1] transition-all hover:-translate-y-0.5">
+                    {tl('landing.loginBtn')}
+                  </button>
+                  <a href={osDownload.url || '#'}
+                    className={`flex items-center gap-2 px-6 py-3.5 rounded-2xl text-[15px] font-semibold transition-all hover:-translate-y-0.5 group border ${!osDownload.loading ? 'text-zinc-400 bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] cursor-pointer' : 'text-zinc-600 bg-white/[0.02] border-white/[0.04] cursor-wait pointer-events-none'}`}>
+                    {osDownload.loading ? <Loader2 size={16} className="animate-spin text-zinc-600"/> : <Monitor size={16} className="text-zinc-500 group-hover:text-indigo-400 transition-colors"/>}
+                    <span>{osDownload.label}</span>
+                    {!osDownload.loading && <Download size={13} className="text-zinc-600 group-hover:text-indigo-400 transition-colors"/>}
+                  </a>
+                </motion.div>
+
+                {/* Stats row */}
+                <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:.4 }}
+                  className="flex flex-wrap gap-8 pt-8 border-t border-white/[0.06]">
+                  {[
+                    { val:tl('landing.stats.voice'), label:tl('landing.stats.videoHd'), color:'text-indigo-400' },
+                    { val:'2FA', label:tl('landing.stats.security'), color:'text-amber-400' },
+                    { val:'∞', label:tl('landing.stats.messages'), color:'text-emerald-400' },
+                    { val:tl('landing.stats.bots'), label:tl('landing.stats.automations'), color:'text-violet-400' },
+                  ].map(s => (
+                    <div key={s.label}>
+                      <p className={`text-2xl font-black ${s.color}`}>{s.val}</p>
+                      <p className="text-[11px] text-zinc-600 mt-0.5 uppercase tracking-wide">{s.label}</p>
+                    </div>
+                  ))}
+                </motion.div>
+              </div>
+
+              {/* RIGHT: App mockup */}
+              <motion.div initial={{ opacity:0, x:32 }} animate={{ opacity:1, x:0 }} transition={{ duration:.7, delay:.3 }}
+                className="relative hidden lg:block">
+                {/* Glow orb behind mockup */}
+                <div className="absolute -inset-10 rounded-full pointer-events-none"
+                  style={{ background:'radial-gradient(ellipse,rgba(99,102,241,0.14) 0%,transparent 70%)' }}/>
+
+                {/* Floating notification — top right */}
+                <motion.div animate={{ y:[0,-7,0] }} transition={{ duration:3.8,repeat:Infinity,ease:'easeInOut' }}
+                  className="absolute -top-5 -right-2 z-20 flex items-center gap-2.5 px-4 py-2.5 rounded-2xl shadow-xl shadow-black/30 border border-white/[0.09]"
+                  style={{ background:'rgba(10,10,18,0.95)',backdropFilter:'blur(12px)' }}>
+                  <div className="w-7 h-7 rounded-full bg-pink-500 flex items-center justify-center text-[11px] font-black text-white shrink-0">K</div>
+                  <div>
+                    <p className="text-[10px] text-zinc-600 leading-none mb-0.5">Kasia dołączyła</p>
+                    <p className="text-xs font-semibold text-white leading-none">Głosowy 🎙️ • Ogólny</p>
+                  </div>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"/>
+                </motion.div>
+
+                {/* Floating typing indicator — bottom left */}
+                <motion.div animate={{ y:[0,6,0] }} transition={{ duration:4.2,repeat:Infinity,ease:'easeInOut',delay:1.5 }}
+                  className="absolute -bottom-4 -left-8 z-20 flex items-center gap-2.5 px-4 py-2.5 rounded-2xl shadow-xl shadow-black/30 border border-white/[0.09]"
+                  style={{ background:'rgba(10,10,18,0.95)',backdropFilter:'blur(12px)' }}>
+                  <div className="flex items-center gap-0.5">
+                    {[0,1,2].map(i => (
+                      <motion.span key={i} animate={{ y:[0,-3,0] }} transition={{ duration:.6,repeat:Infinity,delay:i*0.13 }}
+                        className="w-1.5 h-1.5 rounded-full bg-indigo-400 inline-block"/>
+                    ))}
+                  </div>
+                  <p className="text-xs text-zinc-500 font-medium">Alex pisze…</p>
+                </motion.div>
+
+                {/* App window */}
+                <div className="relative rounded-3xl border border-white/[0.08] overflow-hidden shadow-2xl shadow-black/70"
+                  style={{ background:'linear-gradient(145deg,rgba(99,102,241,0.07) 0%,rgba(3,3,8,0.97) 100%)' }}>
+                  {/* Titlebar */}
+                  <div className="flex items-center gap-2 px-5 py-3 border-b border-white/[0.05]"
+                    style={{ background:'rgba(3,3,8,0.6)' }}>
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500/70"/>
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500/70"/>
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/70"/>
+                    <div className="flex-1 mx-4 h-5 rounded-md bg-white/[0.04] flex items-center justify-center">
+                      <span className="text-[9px] text-zinc-700 font-medium tracking-wide">cordyn.app</span>
+                    </div>
+                  </div>
+                  {/* Layout */}
+                  <div className="flex h-72">
+                    {/* Server icons sidebar */}
+                    <div className="w-[52px] border-r border-white/[0.04] flex flex-col items-center gap-2 py-3 shrink-0"
+                      style={{ background:'rgba(0,0,0,0.25)' }}>
+                      {['C','G','P','M'].map((l,i) => (
+                        <div key={i} className={`w-8 h-8 rounded-${i===0?'2xl':'xl'} flex items-center justify-center text-[11px] font-black transition-all
+                          ${i===0 ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/40' : 'bg-white/[0.06] text-zinc-600 hover:bg-white/[0.1]'}`}>{l}</div>
+                      ))}
+                      <div className="w-8 h-8 rounded-xl bg-white/[0.04] border border-dashed border-white/[0.12] text-zinc-700 flex items-center justify-center text-base mt-1">+</div>
+                    </div>
+                    {/* Channel list */}
+                    <div className="w-40 border-r border-white/[0.04] flex flex-col py-2.5 px-1.5 shrink-0"
+                      style={{ background:'rgba(0,0,0,0.12)' }}>
+                      <p className="text-[9px] font-bold text-zinc-700 uppercase tracking-widest px-2 mb-1.5">{tl('channel.textChannels')}</p>
+                      {['ogólny','development','design'].map((ch,i) => (
+                        <div key={ch} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg mb-0.5 transition-colors cursor-pointer
+                          ${i===0 ? 'bg-white/[0.07] text-white' : 'text-zinc-600 hover:text-zinc-400'}`}>
+                          <span className="text-[10px] text-zinc-700">#</span>
+                          <span className="text-[11px] font-medium truncate">{ch}</span>
+                        </div>
+                      ))}
+                      <p className="text-[9px] font-bold text-zinc-700 uppercase tracking-widest px-2 mt-2.5 mb-1.5">{tl('channel.voiceChannels')}</p>
+                      {['Ogólny','Gaming 🎮'].map((ch) => (
+                        <div key={ch} className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-zinc-700 cursor-pointer hover:text-zinc-500 transition-colors">
+                          <svg className="w-2.5 h-2.5 shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                          </svg>
+                          <span className="text-[11px] font-medium truncate">{ch}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Messages area */}
+                    <div className="flex-1 flex flex-col p-3 gap-2.5 overflow-hidden">
+                      {[
+                        { u:'Alex', c:'bg-indigo-500', msg:'Hej, ktoś gra dziś wieczorem? 🎮', time:'21:30' },
+                        { u:'Kasia', c:'bg-pink-500', msg:'Jestem! Wskakuję na głosowy 🎙️', time:'21:31' },
+                        { u:'Marek', c:'bg-emerald-500', msg:'Już lecę, chwila sekundy ⚡', time:'21:32' },
+                        { u:'Alex', c:'bg-indigo-500', msg:'Świetnie, zapraszam do #gaming 🕹️', time:'21:33' },
+                      ].map((m,i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <div className={`w-6 h-6 rounded-full ${m.c} flex items-center justify-center text-[9px] font-black text-white shrink-0 mt-0.5`}>{m.u[0]}</div>
+                          <div>
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="text-[11px] font-bold text-white">{m.u}</span>
+                              <span className="text-[8px] text-zinc-700">{m.time}</span>
+                            </div>
+                            <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">{m.msg}</p>
+                          </div>
+                        </div>
+                      ))}
+                      <div className="mt-auto flex items-center gap-2 bg-white/[0.04] rounded-xl px-3 py-2 border border-white/[0.05]">
+                        <span className="text-[10px] text-zinc-700 flex-1">{tl('channel.writeMessage')}</span>
+                        <span className="text-zinc-700 text-xs">😊</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Marquee strip ── */}
+        <div className="relative py-8 border-y border-white/[0.05] overflow-hidden z-10 my-4">
+          <div className="flex">
+            {[0,1].map(row => (
+              <motion.div key={row}
+                animate={{ x: row===0 ? ['0%','-50%'] : ['-50%','0%'] }}
+                transition={{ duration: row===0 ? 30 : 36, repeat:Infinity, ease:'linear' }}
+                className="flex gap-14 items-center shrink-0 pr-14">
+                {[
+                  '💬 Czat w czasie rzeczywistym','🎙️ Głos i wideo HD','🖥️ Udostępnianie ekranu',
+                  '🎮 Status gry','🎵 Spotify JAM','🔐 2FA i weryfikacja e-mail',
+                  '📱 Aplikacja mobilna','🤖 Boty i automatyzacje','🌍 Serwery publiczne',
+                  '🔔 Powiadomienia push','📌 System zakładek','✏️ Edycja wiadomości',
+                  '🌙 Focus Mode','🎨 Personalizacja profilu','🔗 Zaproszenia serwerowe',
+                ].map(item => (
+                  <span key={item} className="flex items-center gap-2 text-[13px] text-zinc-600 font-medium whitespace-nowrap hover:text-zinc-400 transition-colors">{item}</span>
+                ))}
+              </motion.div>
             ))}
           </div>
+          <div className="absolute inset-y-0 left-0 w-28 pointer-events-none" style={{ background:'linear-gradient(90deg,#030308,transparent)' }}/>
+          <div className="absolute inset-y-0 right-0 w-28 pointer-events-none" style={{ background:'linear-gradient(-90deg,#030308,transparent)' }}/>
+        </div>
 
-          <div className="relative max-w-4xl mx-auto text-center">
-            {/* Badge */}
-            <motion.div initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} transition={{ duration:.5 }}
-              className="inline-flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/25 rounded-full px-5 py-2 mb-8">
-              <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"/>
-              <span className="text-sm text-indigo-300 font-medium">{tl('landing.communication')}</span>
-            </motion.div>
-
-            {/* Headline */}
-            <motion.h1 initial={{ opacity:0, y:24 }} animate={{ opacity:1, y:0 }} transition={{ duration:.6, delay:.1 }}
-              className="text-5xl sm:text-6xl lg:text-7xl font-black leading-[1.05] tracking-tight mb-6">
-              {tl('landing.headline1')}{' '}
-              <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-                {tl('landing.headline2')}
-              </span>
-            </motion.h1>
-
-            {/* Subtext */}
-            <motion.p initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} transition={{ duration:.5, delay:.2 }}
-              className="text-lg sm:text-xl text-zinc-400 max-w-2xl mx-auto leading-relaxed mb-10">
-              {tl('landing.subtext')}
-            </motion.p>
-
-            {/* CTA buttons */}
-            <motion.div initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ duration:.5, delay:.3 }}
-              className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-              <button onClick={() => openModal('register')}
-                className="px-8 py-4 rounded-2xl text-base font-bold bg-indigo-500 hover:bg-indigo-400 text-white transition-all shadow-xl shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:-translate-y-0.5 active:translate-y-0">
-                {tl('landing.startFree')}
-              </button>
-              <button onClick={() => openModal('login')}
-                className="px-8 py-4 rounded-2xl text-base font-semibold text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.1] transition-all hover:-translate-y-0.5">
-                {tl('landing.loginBtn')}
-              </button>
-              <a href={osDownload.url || '#'}
-                className={`flex items-center gap-2.5 px-8 py-4 rounded-2xl text-base font-semibold transition-all hover:-translate-y-0.5 group border ${!osDownload.loading ? 'text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border-white/[0.1] cursor-pointer' : 'text-zinc-600 bg-white/[0.02] border-white/[0.05] cursor-wait pointer-events-none'}`}>
-                {osDownload.loading ? <Loader2 size={18} className="animate-spin text-zinc-600"/> : <Monitor size={18} className="text-zinc-400 group-hover:text-indigo-400 transition-colors"/>}
-                <span>{osDownload.label}</span>
-                {!osDownload.loading && <Download size={14} className="text-zinc-600 group-hover:text-indigo-400 transition-colors"/>}
-              </a>
-            </motion.div>
-
-            {/* Stats row */}
-            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:.5 }}
-              className="flex flex-wrap items-center justify-center gap-8 sm:gap-12">
-              {[
-                { val:tl('landing.stats.voice'), label:tl('landing.stats.videoHd'), color:'text-indigo-400' },
-                { val:'2FA', label:tl('landing.stats.security'), color:'text-amber-400' },
-                { val:'∞', label:tl('landing.stats.messages'), color:'text-emerald-400' },
-                { val:tl('landing.stats.bots'), label:tl('landing.stats.automations'), color:'text-violet-400' },
-              ].map(s => (
-                <div key={s.label} className="text-center">
-                  <p className={`text-2xl font-black ${s.color}`}>{s.val}</p>
-                  <p className="text-xs text-zinc-600 mt-0.5">{s.label}</p>
-                </div>
-              ))}
-            </motion.div>
-          </div>
-
-          {/* App UI mockup strip */}
-          <motion.div initial={{ opacity:0, y:40 }} animate={{ opacity:1, y:0 }} transition={{ duration:.7, delay:.45 }}
-            className="relative max-w-5xl mx-auto mt-20">
-            <div className="relative rounded-3xl border border-white/[0.08] overflow-hidden shadow-2xl shadow-black/60"
-              style={{ background: 'linear-gradient(180deg,rgba(99,102,241,.08) 0%,rgba(9,9,11,.95) 100%)' }}>
-              {/* Fake titlebar */}
-              <div className="flex items-center gap-2 px-5 py-3 border-b border-white/[0.06]">
-                <span className="w-3 h-3 rounded-full bg-red-500/70"/>
-                <span className="w-3 h-3 rounded-full bg-amber-500/70"/>
-                <span className="w-3 h-3 rounded-full bg-emerald-500/70"/>
-                <div className="flex-1 mx-4 h-5 rounded-lg bg-white/[0.04] flex items-center px-3">
-                  <span className="text-[10px] text-zinc-600">cordyn.app</span>
-                </div>
+        {/* ── Features Bento Section ── */}
+        <section id="funkcje" className="py-28 px-4 sm:px-6 z-10 relative">
+          <div className="max-w-7xl mx-auto">
+            <motion.div initial={{ opacity:0, y:24 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.5 }}
+              className="mb-16">
+              <div className="inline-flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 rounded-full px-4 py-1.5 mb-5">
+                <span className="text-[11px] font-bold text-violet-400 uppercase tracking-wider">{tl('landing.features')}</span>
               </div>
-              {/* Fake app layout */}
-              <div className="flex h-48 sm:h-64">
-                {/* Sidebar servers */}
-                <div className="w-14 border-r border-white/[0.05] flex flex-col items-center gap-2 py-3 px-2 shrink-0">
-                  {['#','C','G','P','M'].map((l,i) => (
-                    <div key={i} className={`w-9 h-9 rounded-${i===0?'2xl':'xl'} flex items-center justify-center text-xs font-bold
-                      ${i===0?'bg-indigo-500 text-white':'bg-white/[0.06] text-zinc-500 hover:bg-indigo-500/30 hover:text-white'} transition-all`}>
-                      {l}
-                    </div>
-                  ))}
-                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-base">+</div>
+              <h2 className="text-4xl sm:text-5xl font-black mb-4 leading-tight max-w-xl">{tl('landing.features.title')}</h2>
+              <p className="text-zinc-500 max-w-lg">{tl('landing.features.desc')}</p>
+            </motion.div>
+
+            {/* BENTO GRID */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 auto-rows-auto gap-4">
+
+              {/* BIG CARD: Chat — spans 2 rows on lg */}
+              <motion.div initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.45 }}
+                whileHover={{ y:-4 }}
+                className="sm:row-span-2 relative flex flex-col p-7 rounded-3xl border border-indigo-500/20 overflow-hidden group cursor-default"
+                style={{ background:'linear-gradient(145deg,rgba(99,102,241,0.09) 0%,rgba(3,3,8,0.95) 100%)' }}>
+                <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full opacity-30 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
+                  style={{ background:'radial-gradient(circle,rgba(99,102,241,0.7) 0%,transparent 70%)' }}/>
+                <div className="w-12 h-12 rounded-2xl bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center mb-6 relative z-10">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="w-6 h-6 text-indigo-400">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                  </svg>
                 </div>
-                {/* Channel list */}
-                <div className="w-44 sm:w-52 border-r border-white/[0.05] flex flex-col py-3 px-2 shrink-0">
-                  <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest px-2 mb-2">{tl('channel.textChannels')}</p>
-                  {['ogólny','rozwój','design','random'].map((ch,i) => (
-                    <div key={ch} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${i===0?'bg-indigo-500/15 text-white':'text-zinc-500 hover:text-zinc-300'} transition-colors cursor-pointer`}>
-                      <span className="text-sm text-zinc-600">#</span>
-                      <span className="text-xs font-medium truncate">{ch}</span>
-                    </div>
-                  ))}
-                  <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest px-2 mb-2 mt-3">{tl('channel.voiceChannels')}</p>
-                  {['Ogólny','Gaming'].map((ch) => (
-                    <div key={ch} className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer">
-                      <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                      </svg>
-                      <span className="text-xs font-medium truncate">{ch}</span>
-                    </div>
-                  ))}
-                </div>
-                {/* Chat */}
-                <div className="flex-1 flex flex-col p-3 gap-2 overflow-hidden">
+                <h3 className="text-xl font-bold text-white mb-3 relative z-10">Wiadomości i czat</h3>
+                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">Pisz do znajomych, wysyłaj zdjęcia, GIF-y i reaguj emotikonami. Wiadomości pojawiają się błyskawicznie.</p>
+                {/* Mini chat preview */}
+                <div className="mt-7 flex flex-col gap-2.5 relative z-10">
                   {[
-                    { u:'Alex', c:'bg-indigo-500', msg:'Hej, ktoś gra dziś wieczorem? 🎮', time:'21:30' },
-                    { u:'Kasia', c:'bg-pink-500', msg:'Ja jestem! Wskakuję na głosowy 🎙️', time:'21:31' },
-                    { u:'Marek', c:'bg-emerald-500', msg:'Idę, zaraz dołączę do kanału voice', time:'21:32' },
+                    { u:'Alex', c:'bg-indigo-500', msg:'Siema! Co słychać? 👋', side:'left' },
+                    { u:'Ty', c:'bg-violet-500', msg:'Hej! Gramy dziś? 🎮', side:'right' },
+                    { u:'Alex', c:'bg-indigo-500', msg:'Tak! O 20tej na głosowym 🎙️', side:'left' },
                   ].map((m,i) => (
-                    <div key={i} className="flex items-start gap-2">
-                      <div className={`w-7 h-7 rounded-full ${m.c} flex items-center justify-center text-xs font-bold text-white shrink-0`}>{m.u[0]}</div>
-                      <div>
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-xs font-semibold text-white">{m.u}</span>
-                          <span className="text-[9px] text-zinc-600">{m.time}</span>
-                        </div>
-                        <p className="text-xs text-zinc-400 mt-0.5">{m.msg}</p>
+                    <div key={i} className={`flex items-end gap-2 ${m.side==='right'?'flex-row-reverse':''}`}>
+                      <div className={`w-6 h-6 rounded-full ${m.c} flex items-center justify-center text-[9px] font-black text-white shrink-0`}>{m.u[0]}</div>
+                      <div className={`px-3 py-2 rounded-2xl text-xs font-medium max-w-[78%] leading-relaxed
+                        ${m.side==='right' ? 'bg-indigo-500/25 text-indigo-200 rounded-br-sm' : 'bg-white/[0.08] text-zinc-300 rounded-bl-sm'}`}>
+                        {m.msg}
                       </div>
                     </div>
                   ))}
-                  {/* Input mock */}
-                  <div className="mt-auto flex items-center gap-2 bg-white/[0.04] rounded-xl px-3 py-2 border border-white/[0.06]">
-                    <span className="text-xs text-zinc-600 flex-1">{tl('channel.writeMessage')}</span>
-                    <span className="text-zinc-600">😊</span>
+                  <div className="flex items-center gap-1.5 mt-1 ml-8">
+                    {[0,1,2].map(i => (
+                      <motion.span key={i} animate={{ y:[0,-2,0] }} transition={{ duration:.55,repeat:Infinity,delay:i*0.12 }}
+                        className="w-1.5 h-1.5 rounded-full bg-zinc-600 inline-block"/>
+                    ))}
+                    <span className="text-[10px] text-zinc-700 ml-1">Alex pisze…</span>
                   </div>
                 </div>
-              </div>
-            </div>
-            {/* Glow under mockup */}
-            <div className="absolute -inset-4 bg-indigo-500/5 blur-3xl rounded-full -z-10"/>
-          </motion.div>
-        </section>
+              </motion.div>
 
-        {/* ── Features Section ── */}
-        <section id="funkcje" className="py-24 px-4 sm:px-6">
-          <div className="max-w-7xl mx-auto">
-            <motion.div initial={{ opacity:0, y:24 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.5 }}
-              className="text-center mb-16">
-              <div className="inline-flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 rounded-full px-4 py-1.5 mb-4">
-                <span className="text-xs font-semibold text-violet-400 uppercase tracking-wider">{tl('landing.features')}</span>
-              </div>
-              <h2 className="text-3xl sm:text-4xl font-black mb-4">
-                {tl('landing.features.title')}
-              </h2>
-              <p className="text-zinc-400 max-w-xl mx-auto">
-                {tl('landing.features.desc')}
-              </p>
-            </motion.div>
+              {/* Voice & Video */}
+              <motion.div initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.45, delay:.07 }}
+                whileHover={{ y:-4 }}
+                className="relative flex flex-col p-7 rounded-3xl border border-violet-500/20 overflow-hidden group cursor-default"
+                style={{ background:'linear-gradient(145deg,rgba(139,92,246,0.09) 0%,rgba(3,3,8,0.95) 100%)' }}>
+                <div className="absolute -top-14 -right-14 w-36 h-36 rounded-full opacity-25 group-hover:opacity-55 transition-opacity duration-500 pointer-events-none"
+                  style={{ background:'radial-gradient(circle,rgba(139,92,246,0.7) 0%,transparent 70%)' }}/>
+                <div className="w-12 h-12 rounded-2xl bg-violet-500/15 border border-violet-500/25 flex items-center justify-center mb-5 relative z-10">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="w-6 h-6 text-violet-400">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                  </svg>
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2 relative z-10">Głos i wideo HD</h3>
+                <p className="text-sm text-zinc-500 leading-relaxed relative z-10 mb-5">Rozmawiaj i wideorozmawiaj jednym kliknięciem. Bez lagów, bez instalacji.</p>
+                {/* Voice users */}
+                <div className="flex gap-2 items-center relative z-10">
+                  {['A','K','M'].map((l,i) => (
+                    <div key={i} className="relative">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-black text-white ${['bg-indigo-500','bg-pink-500','bg-emerald-500'][i]} shadow-lg`}>{l}</div>
+                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[#030308]"/>
+                    </div>
+                  ))}
+                  <div className="w-10 h-10 rounded-xl bg-white/[0.05] border border-dashed border-white/[0.15] flex items-center justify-center text-zinc-600 ml-1">+</div>
+                  <span className="text-xs text-zinc-600 ml-1">3 online</span>
+                </div>
+              </motion.div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {LANDING_FEATURES.map((f, i) => (
-                <motion.div key={f.title}
-                  initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }}
-                  transition={{ duration:.4, delay: i * .07 }}
-                  whileHover={{ y:-4, scale:1.01 }}
-                  className={`relative flex flex-col gap-4 p-6 rounded-3xl border ${f.border} ${f.bg} hover:bg-white/[0.04] shadow-xl ${f.glow} hover:shadow-lg transition-all duration-200 cursor-default overflow-hidden`}>
-                  {/* Icon */}
-                  <div className={`inline-flex p-3 rounded-2xl bg-gradient-to-br ${f.grad} bg-opacity-10 w-fit`}
-                    style={{ background: 'rgba(255,255,255,0.05)' }}>
-                    <span className={`bg-gradient-to-r ${f.grad} bg-clip-text`} style={{ color:'transparent', display:'grid', placeItems:'center' }}>
-                      {f.icon}
-                    </span>
-                  </div>
-                  <div>
-                    <h3 className={`text-base font-bold mb-1.5 bg-gradient-to-r ${f.grad} bg-clip-text text-transparent`}>{f.title}</h3>
-                    <p className="text-sm text-zinc-500 leading-relaxed">{f.desc}</p>
-                  </div>
-                </motion.div>
-              ))}
+              {/* Servers */}
+              <motion.div initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.45, delay:.14 }}
+                whileHover={{ y:-4 }}
+                className="relative flex flex-col p-7 rounded-3xl border border-emerald-500/20 overflow-hidden group cursor-default"
+                style={{ background:'linear-gradient(145deg,rgba(34,197,94,0.07) 0%,rgba(3,3,8,0.95) 100%)' }}>
+                <div className="absolute -top-14 -right-14 w-36 h-36 rounded-full opacity-25 group-hover:opacity-55 transition-opacity duration-500 pointer-events-none"
+                  style={{ background:'radial-gradient(circle,rgba(34,197,94,0.6) 0%,transparent 70%)' }}/>
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center mb-5 relative z-10">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="w-6 h-6 text-emerald-400">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                  </svg>
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2 relative z-10">Serwery i społeczności</h3>
+                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">Stwórz własny serwer. Kanały, role, kategorie — w pełni konfigurowalny.</p>
+              </motion.div>
+
+              {/* Friends DM */}
+              <motion.div initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.45, delay:.21 }}
+                whileHover={{ y:-4 }}
+                className="relative flex flex-col p-7 rounded-3xl border border-pink-500/20 overflow-hidden group cursor-default"
+                style={{ background:'linear-gradient(145deg,rgba(236,72,153,0.07) 0%,rgba(3,3,8,0.95) 100%)' }}>
+                <div className="absolute -top-14 -right-14 w-36 h-36 rounded-full opacity-25 group-hover:opacity-55 transition-opacity duration-500 pointer-events-none"
+                  style={{ background:'radial-gradient(circle,rgba(236,72,153,0.6) 0%,transparent 70%)' }}/>
+                <div className="w-12 h-12 rounded-2xl bg-pink-500/15 border border-pink-500/25 flex items-center justify-center mb-5 relative z-10">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="w-6 h-6 text-pink-400">
+                    <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                  </svg>
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2 relative z-10">Znajomi i prywatne DM</h3>
+                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">Dodawaj znajomych, pisz prywatnie lub grupowo. Zapraszaj jednym linkiem.</p>
+              </motion.div>
+
+              {/* Security + Integrations row */}
+              <motion.div initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.45, delay:.28 }}
+                whileHover={{ y:-4 }}
+                className="relative flex flex-col p-7 rounded-3xl border border-amber-500/20 overflow-hidden group cursor-default"
+                style={{ background:'linear-gradient(145deg,rgba(245,158,11,0.07) 0%,rgba(3,3,8,0.95) 100%)' }}>
+                <div className="absolute -top-14 -right-14 w-36 h-36 rounded-full opacity-25 group-hover:opacity-55 transition-opacity duration-500 pointer-events-none"
+                  style={{ background:'radial-gradient(circle,rgba(245,158,11,0.6) 0%,transparent 70%)' }}/>
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center mb-5 relative z-10">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="w-6 h-6 text-amber-400">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2 relative z-10">Bezpieczne konto</h3>
+                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">2FA, weryfikacja e-mail, szyfrowane hasła. Twoje konto zawsze chronione.</p>
+              </motion.div>
+
+              {/* Integrations pill */}
+              <motion.div initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.45, delay:.35 }}
+                whileHover={{ y:-4 }}
+                className="relative flex flex-col p-7 rounded-3xl border border-cyan-500/20 overflow-hidden group cursor-default"
+                style={{ background:'linear-gradient(145deg,rgba(6,182,212,0.07) 0%,rgba(3,3,8,0.95) 100%)' }}>
+                <div className="absolute -top-14 -right-14 w-36 h-36 rounded-full opacity-25 group-hover:opacity-55 transition-opacity duration-500 pointer-events-none"
+                  style={{ background:'radial-gradient(circle,rgba(6,182,212,0.6) 0%,transparent 70%)' }}/>
+                <div className="w-12 h-12 rounded-2xl bg-cyan-500/15 border border-cyan-500/25 flex items-center justify-center mb-5 relative z-10">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="w-6 h-6 text-cyan-400">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                  </svg>
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2 relative z-10">Twoje ulubione serwisy</h3>
+                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">Spotify, Steam, Twitch — wszystko widoczne na profilu w czasie rzeczywistym.</p>
+              </motion.div>
+
             </div>
           </div>
         </section>
 
         {/* ── Integrations Section ── */}
-        <section id="integracje" className="py-24 px-4 sm:px-6">
+        <section id="integracje" className="py-28 px-4 sm:px-6 z-10 relative">
           <div className="max-w-7xl mx-auto">
-            <motion.div initial={{ opacity:0, y:24 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.5 }}
-              className="text-center mb-16">
-              <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-4 py-1.5 mb-4">
-                <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">{tl('landing.integrations')}</span>
-              </div>
-              <h2 className="text-3xl sm:text-4xl font-black mb-4">
-                {tl('landing.integrations.title')}
-              </h2>
-              <p className="text-zinc-400 max-w-xl mx-auto">
-                {tl('landing.integrations.desc')}
-              </p>
-            </motion.div>
+            <div className="grid lg:grid-cols-2 gap-16 items-center">
+              {/* Left: text */}
+              <motion.div initial={{ opacity:0, x:-24 }} whileInView={{ opacity:1, x:0 }} viewport={{ once:true }} transition={{ duration:.5 }}>
+                <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-4 py-1.5 mb-6">
+                  <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">{tl('landing.integrations')}</span>
+                </div>
+                <h2 className="text-4xl sm:text-5xl font-black mb-5 leading-tight">{tl('landing.integrations.title')}</h2>
+                <p className="text-zinc-500 leading-relaxed mb-10">{tl('landing.integrations.desc')}</p>
+                {/* Integration pills */}
+                <div className="flex flex-wrap gap-3">
+                  {[
+                    { name:'Spotify', color:'text-[#1DB954]', bg:'bg-[#1DB954]/10', border:'border-[#1DB954]/25' },
+                    { name:'Twitch', color:'text-[#9146FF]', bg:'bg-[#9146FF]/10', border:'border-[#9146FF]/25' },
+                    { name:'Steam', color:'text-sky-400', bg:'bg-sky-400/10', border:'border-sky-400/25' },
+                    { name:'YouTube', color:'text-red-400', bg:'bg-red-400/10', border:'border-red-400/25' },
+                    { name:'Kick', color:'text-green-400', bg:'bg-green-400/10', border:'border-green-400/25' },
+                    { name:'Epic Games', color:'text-zinc-300', bg:'bg-white/[0.06]', border:'border-white/[0.1]' },
+                  ].map(p => (
+                    <div key={p.name} className={`flex items-center gap-2 px-4 py-2 rounded-xl ${p.bg} border ${p.border} hover:opacity-90 transition-opacity`}>
+                      <span className={`text-sm font-semibold ${p.color}`}>{p.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {INTEGRATIONS.map((intg, i) => (
-                <motion.div key={intg.name}
-                  initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }}
-                  transition={{ duration:.4, delay: i * .1 }}
-                  whileHover={{ y:-4 }}
-                  className={`flex flex-col gap-5 p-7 rounded-3xl border ${intg.border} bg-gradient-to-br ${intg.color} transition-all duration-200`}>
-                  <div className="w-14 h-14 rounded-2xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center">
-                    {intg.icon}
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold mb-2">{intg.name}</h3>
-                    <p className="text-sm text-zinc-400 leading-relaxed">{intg.desc}</p>
-                  </div>
-                </motion.div>
-              ))}
+              {/* Right: integration cards */}
+              <div className="grid grid-cols-1 gap-4">
+                {INTEGRATIONS.map((intg, i) => (
+                  <motion.div key={intg.name}
+                    initial={{ opacity:0, x:24 }} whileInView={{ opacity:1, x:0 }} viewport={{ once:true }}
+                    transition={{ duration:.4, delay: i * .1 }}
+                    whileHover={{ x:4 }}
+                    className={`flex items-center gap-5 p-5 rounded-2xl border ${intg.border} overflow-hidden relative group`}
+                    style={{ background:`linear-gradient(135deg,${intg.gradFrom} 0%,rgba(3,3,8,0.97) 100%)` }}>
+                    <div className="w-12 h-12 rounded-2xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform duration-300">
+                      {intg.icon}
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-white mb-0.5">{intg.name}</h3>
+                      <p className="text-sm text-zinc-500 truncate">{intg.desc}</p>
+                    </div>
+                    <div className="ml-auto shrink-0 w-7 h-7 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-zinc-600 group-hover:text-zinc-400 transition-colors">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                      </svg>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
             </div>
           </div>
         </section>
 
         {/* ── Security Section ── */}
-        <section id="bezpieczeństwo" className="py-24 px-4 sm:px-6">
+        <section id="bezpieczeństwo" className="py-28 px-4 sm:px-6 z-10 relative">
           <div className="max-w-7xl mx-auto">
-            <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div className="grid lg:grid-cols-2 gap-16 items-center">
+
               {/* Left text */}
-              <motion.div initial={{ opacity:0, x:-30 }} whileInView={{ opacity:1, x:0 }} viewport={{ once:true }} transition={{ duration:.5 }}>
+              <motion.div initial={{ opacity:0, x:-28 }} whileInView={{ opacity:1, x:0 }} viewport={{ once:true }} transition={{ duration:.5 }}>
                 <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-full px-4 py-1.5 mb-6">
-                  <span className="text-xs font-semibold text-amber-400 uppercase tracking-wider">{tl('landing.security')}</span>
+                  <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider">{tl('landing.security')}</span>
                 </div>
-                <h2 className="text-3xl sm:text-4xl font-black mb-5">
-                  {tl('landing.security.title')}
-                </h2>
-                <p className="text-zinc-400 leading-relaxed mb-8">
-                  {tl('landing.security.desc')}
-                </p>
+                <h2 className="text-4xl sm:text-5xl font-black mb-5 leading-tight">{tl('landing.security.title')}</h2>
+                <p className="text-zinc-500 leading-relaxed mb-8">{tl('landing.security.desc')}</p>
                 <div className="flex flex-col gap-3">
                   {[
                     { icon:'🔐', text:'Dwuetapowe logowanie — dodatkowa ochrona przy każdym logowaniu' },
@@ -1392,50 +1578,55 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     { icon:'🛡️', text:'Automatyczne wylogowanie przy podejrzanej aktywności' },
                     { icon:'🔒', text:'Bezpieczne hasła wymagane przy zakładaniu konta' },
                     { icon:'⚡', text:'Ochrona przed spamem i nieautoryzowanym dostępem' },
-                  ].map(item => (
-                    <div key={item.text} className="flex items-center gap-3">
-                      <span className="text-xl shrink-0">{item.icon}</span>
+                  ].map((item,i) => (
+                    <motion.div key={item.text}
+                      initial={{ opacity:0, x:-14 }} whileInView={{ opacity:1, x:0 }} viewport={{ once:true }}
+                      transition={{ duration:.3, delay: i * .07 }}
+                      className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-white/[0.02] border border-white/[0.05] hover:border-amber-500/25 hover:bg-amber-500/5 transition-all duration-200">
+                      <span className="text-xl shrink-0 w-8 text-center">{item.icon}</span>
                       <span className="text-sm text-zinc-400">{item.text}</span>
-                    </div>
+                    </motion.div>
                   ))}
                 </div>
               </motion.div>
 
-              {/* Right: authenticator apps card */}
-              <motion.div initial={{ opacity:0, x:30 }} whileInView={{ opacity:1, x:0 }} viewport={{ once:true }} transition={{ duration:.5, delay:.1 }}
+              {/* Right: 2FA card */}
+              <motion.div initial={{ opacity:0, x:28 }} whileInView={{ opacity:1, x:0 }} viewport={{ once:true }} transition={{ duration:.5, delay:.1 }}
                 className="relative">
-                <div className="absolute inset-0 bg-amber-500/5 blur-3xl rounded-full pointer-events-none"/>
-                <div className="relative rounded-3xl border border-amber-500/20 bg-amber-500/5 p-7">
+                <div className="absolute inset-0 pointer-events-none blur-3xl"
+                  style={{ background:'radial-gradient(circle,rgba(245,158,11,0.07) 0%,transparent 70%)' }}/>
+                <div className="relative rounded-3xl border border-amber-500/20 p-7 overflow-hidden"
+                  style={{ background:'linear-gradient(145deg,rgba(245,158,11,0.06) 0%,rgba(3,3,8,0.97) 100%)' }}>
                   <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-xl">🔐</div>
-                    <div>
-                      <p className="font-bold text-white">Weryfikacja dwuetapowa</p>
-                      <p className="text-xs text-zinc-500">Obsługiwane aplikacje authenticator</p>
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/25 flex items-center justify-center text-xl">🔐</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-white text-sm">Weryfikacja dwuetapowa</p>
+                      <p className="text-xs text-zinc-600">Kompatybilna z każdą aplikacją TOTP (RFC 6238)</p>
+                    </div>
+                    <div className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 text-[10px] font-bold uppercase shrink-0">
+                      {tl('privacy.2fa.enabled')}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    {/* Google Authenticator */}
-                    <div className="flex items-center gap-2.5 p-3 rounded-2xl border bg-white/[0.04] border-white/[0.08]">
-                      <svg viewBox="0 0 24 24" className="w-7 h-7 shrink-0" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] hover:border-white/[0.15] transition-colors">
+                      <svg viewBox="0 0 24 24" className="w-7 h-7 shrink-0" fill="none">
                         <circle cx="12" cy="12" r="12" fill="#fff"/>
                         <path d="M21.8 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.5c-.2 1.2-.9 2.2-2 2.9v2.4h3.2c1.9-1.7 3-4.3 3-7.1z" fill="#4285F4"/>
-                        <path d="M12 22c2.7 0 5-0.9 6.7-2.4l-3.2-2.5c-.9.6-2 1-3.5 1-2.7 0-5-1.8-5.8-4.3H2.9v2.5C4.6 19.9 8.1 22 12 22z" fill="#34A853"/>
+                        <path d="M12 22c2.7 0 5-.9 6.7-2.4l-3.2-2.5c-.9.6-2 1-3.5 1-2.7 0-5-1.8-5.8-4.3H2.9v2.5C4.6 19.9 8.1 22 12 22z" fill="#34A853"/>
                         <path d="M6.2 13.8c-.2-.6-.3-1.2-.3-1.8s.1-1.2.3-1.8V7.7H2.9A10 10 0 0 0 2 12c0 1.6.4 3.1 1 4.4l3.2-2.6z" fill="#FBBC05"/>
                         <path d="M12 6.9c1.5 0 2.9.5 3.9 1.5L18.7 5.6C17 4 14.7 3 12 3 8.1 3 4.6 5.1 2.9 8.3l3.3 2.5C7 8.7 9.3 6.9 12 6.9z" fill="#EA4335"/>
                       </svg>
                       <span className="text-xs font-medium text-zinc-300 leading-tight">Google Authenticator</span>
                     </div>
-                    {/* Authy */}
-                    <div className="flex items-center gap-2.5 p-3 rounded-2xl border bg-[#EC1C24]/10 border-[#EC1C24]/25">
-                      <svg viewBox="0 0 40 40" className="w-7 h-7 shrink-0" xmlns="http://www.w3.org/2000/svg">
+                    <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-[#EC1C24]/10 border border-[#EC1C24]/25 hover:border-[#EC1C24]/40 transition-colors">
+                      <svg viewBox="0 0 40 40" className="w-7 h-7 shrink-0">
                         <circle cx="20" cy="20" r="19" fill="#EC1C24"/>
                         <text x="20" y="27" textAnchor="middle" fontSize="18" fontWeight="900" fill="white" fontFamily="Arial,sans-serif">A</text>
                       </svg>
                       <span className="text-xs font-medium text-zinc-300 leading-tight">Authy</span>
                     </div>
-                    {/* Microsoft Authenticator */}
-                    <div className="flex items-center gap-2.5 p-3 rounded-2xl border bg-[#0078D4]/10 border-[#0078D4]/25">
-                      <svg viewBox="0 0 24 24" className="w-7 h-7 shrink-0" xmlns="http://www.w3.org/2000/svg">
+                    <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-[#0078D4]/10 border border-[#0078D4]/25 hover:border-[#0078D4]/40 transition-colors">
+                      <svg viewBox="0 0 24 24" className="w-7 h-7 shrink-0">
                         <rect x="1" y="1" width="10" height="10" fill="#F25022"/>
                         <rect x="13" y="1" width="10" height="10" fill="#7FBA00"/>
                         <rect x="1" y="13" width="10" height="10" fill="#00A4EF"/>
@@ -1443,57 +1634,60 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                       </svg>
                       <span className="text-xs font-medium text-zinc-300 leading-tight">Microsoft Authenticator</span>
                     </div>
-                    {/* 1Password */}
-                    <div className="flex items-center gap-2.5 p-3 rounded-2xl border bg-[#1A8CFF]/10 border-[#1A8CFF]/25">
-                      <svg viewBox="0 0 40 40" className="w-7 h-7 shrink-0" xmlns="http://www.w3.org/2000/svg">
+                    <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-[#1A8CFF]/10 border border-[#1A8CFF]/25 hover:border-[#1A8CFF]/40 transition-colors">
+                      <svg viewBox="0 0 40 40" className="w-7 h-7 shrink-0">
                         <rect width="40" height="40" rx="9" fill="#1A8CFF"/>
                         <text x="20" y="28" textAnchor="middle" fontSize="22" fontWeight="900" fill="white" fontFamily="Arial">1</text>
                       </svg>
                       <span className="text-xs font-medium text-zinc-300 leading-tight">1Password</span>
                     </div>
                   </div>
-                  <p className="text-xs text-zinc-600 mt-4 text-center">
-                    Kompatybilny z każdą aplikacją TOTP (RFC 6238)
-                  </p>
                 </div>
               </motion.div>
+
             </div>
           </div>
         </section>
 
-        {/* ── Final CTA Section ── */}
-        <section className="py-24 px-4 sm:px-6">
-          <div className="max-w-3xl mx-auto text-center">
-            <motion.div initial={{ opacity:0, scale:.95 }} whileInView={{ opacity:1, scale:1 }} viewport={{ once:true }} transition={{ duration:.5 }}>
-              <div className="relative inline-block">
-                <motion.div
-                  animate={{ scale:[1,1.05,1], opacity:[.3,.6,.3] }}
-                  transition={{ duration:3, repeat:Infinity, ease:'easeInOut' }}
-                  className="absolute inset-0 bg-indigo-500/30 blur-3xl rounded-full"/>
-                <div className="relative rounded-3xl border border-indigo-500/25 bg-indigo-500/8 p-10 sm:p-14">
-                  <div className="w-16 h-16 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center mx-auto mb-6 overflow-hidden">
-                    <img src="/cordyn.png" alt="Cordyn" className="w-12 h-12 object-contain"/>
+        {/* ── Final CTA ── */}
+        <section className="py-28 px-4 sm:px-6 z-10 relative">
+          <div className="max-w-4xl mx-auto">
+            <motion.div initial={{ opacity:0, y:24 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.55 }}>
+              <div className="relative rounded-3xl border border-white/[0.08] overflow-hidden p-10 sm:p-16 text-center"
+                style={{ background:'linear-gradient(135deg,rgba(99,102,241,0.1) 0%,rgba(3,3,8,0.98) 50%,rgba(139,92,246,0.07) 100%)' }}>
+
+                {/* Radial glow */}
+                <motion.div animate={{ scale:[1,1.06,1],opacity:[.15,.3,.15] }} transition={{ duration:5,repeat:Infinity,ease:'easeInOut' }}
+                  className="absolute inset-0 pointer-events-none"
+                  style={{ background:'radial-gradient(ellipse at 50% 50%,rgba(99,102,241,0.25) 0%,transparent 65%)' }}/>
+
+                {/* Noise overlay */}
+                <div className="absolute inset-0 opacity-[0.018] pointer-events-none"
+                  style={{ backgroundImage:`url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}/>
+
+                <div className="relative z-10">
+                  <div className="w-16 h-16 rounded-2xl bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center mx-auto mb-7 overflow-hidden">
+                    <img src="/cordyn.png" alt="Cordyn" className="w-11 h-11 object-contain"/>
                   </div>
-                  <h2 className="text-3xl sm:text-4xl font-black mb-4">
-                    Gotowy na start?
-                  </h2>
-                  <p className="text-zinc-400 mb-8 max-w-md mx-auto">
+                  <h2 className="text-4xl sm:text-5xl font-black mb-4">Gotowy na start?</h2>
+                  <p className="text-zinc-500 mb-10 max-w-md mx-auto leading-relaxed">
                     Dołącz do Cordyn — bezpłatnie, bez reklam, bez limitów wiadomości.
                   </p>
-                  <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                     <button onClick={() => openModal('register')}
-                      className="px-8 py-4 rounded-2xl text-base font-bold bg-indigo-500 hover:bg-indigo-400 text-white transition-all shadow-xl shadow-indigo-500/30 hover:-translate-y-0.5">
+                      className="w-full sm:w-auto px-8 py-4 rounded-2xl text-[15px] font-bold text-white transition-all shadow-xl shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:-translate-y-0.5"
+                      style={{ background:'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
                       Zarejestruj się za darmo
                     </button>
                     <button onClick={() => openModal('login')}
-                      className="px-8 py-4 rounded-2xl text-base font-semibold text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.1] transition-all hover:-translate-y-0.5">
+                      className="w-full sm:w-auto px-8 py-4 rounded-2xl text-[15px] font-semibold text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.1] transition-all hover:-translate-y-0.5">
                       Mam już konto
                     </button>
                     <a href={osDownload.url || '#'}
-                      className={`flex items-center gap-2.5 px-8 py-4 rounded-2xl text-base font-semibold transition-all hover:-translate-y-0.5 group border ${!osDownload.loading ? 'text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border-white/[0.1] cursor-pointer' : 'text-zinc-600 bg-white/[0.02] border-white/[0.05] cursor-wait pointer-events-none'}`}>
-                      {osDownload.loading ? <Loader2 size={18} className="animate-spin text-zinc-600"/> : <Monitor size={18} className="text-zinc-400 group-hover:text-indigo-400 transition-colors"/>}
+                      className={`w-full sm:w-auto flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl text-[15px] font-semibold transition-all hover:-translate-y-0.5 group border ${!osDownload.loading ? 'text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border-white/[0.1] cursor-pointer' : 'text-zinc-600 bg-white/[0.02] border-white/[0.05] cursor-wait pointer-events-none'}`}>
+                      {osDownload.loading ? <Loader2 size={16} className="animate-spin"/> : <Monitor size={16} className="text-zinc-500 group-hover:text-indigo-400 transition-colors"/>}
                       <span>{osDownload.label}</span>
-                      {!osDownload.loading && <Download size={14} className="text-zinc-600 group-hover:text-indigo-400 transition-colors"/>}
+                      {!osDownload.loading && <Download size={13} className="text-zinc-600 group-hover:text-indigo-400 transition-colors"/>}
                     </a>
                   </div>
                 </div>
@@ -1503,16 +1697,16 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
         </section>
 
         {/* ── Footer ── */}
-        <footer className="py-8 px-4 sm:px-6 border-t border-white/[0.05]">
+        <footer className="py-8 px-4 sm:px-6 border-t border-white/[0.04] z-10 relative">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-7 h-7 rounded-lg overflow-hidden">
+            <div className="flex items-center gap-2.5">
+              <div className="w-6 h-6 rounded-lg overflow-hidden">
                 <img src="/cordyn.png" alt="Cordyn" className="w-full h-full object-contain"/>
               </div>
-              <span className="text-sm font-bold text-zinc-400">Cordyn</span>
+              <span className="text-sm font-bold text-zinc-600">Cordyn</span>
             </div>
-            <p className="text-xs text-zinc-700">{tl('landing.copyright')}</p>
-            <div className="flex items-center gap-5 text-xs text-zinc-600">
+            <p className="text-xs text-zinc-800">{tl('landing.copyright')}</p>
+            <div className="flex items-center gap-5 text-xs text-zinc-700">
               {[tl('landing.features'),tl('landing.integrations'),tl('landing.security')].map(l => (
                 <a key={l} href={`#${l.toLowerCase()}`} className="hover:text-zinc-400 transition-colors">{l}</a>
               ))}
