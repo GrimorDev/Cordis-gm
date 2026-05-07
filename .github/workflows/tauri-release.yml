@@ -146,14 +146,22 @@ jobs:
       - name: Add Rust targets
         run: rustup target add ${{ matrix.rust_targets }}
 
-      - name: Cache Cargo
+      - name: Cache Cargo registry
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('src-tauri/Cargo.toml') }}
-          restore-keys: ${{ runner.os }}-cargo-registry-
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Cache Cargo build artifacts
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/target
+          key: ${{ runner.os }}-tauri-target-${{ matrix.rust_targets }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-tauri-target-${{ matrix.rust_targets }}-
 
       - uses: pnpm/action-setup@v4
         with:
@@ -163,6 +171,15 @@ jobs:
         with:
           node-version: '22'
           cache: 'pnpm'
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            backend/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-node-
 
       - name: Install JS dependencies
         run: pnpm install --no-frozen-lockfile

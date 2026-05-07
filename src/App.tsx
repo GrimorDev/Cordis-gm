@@ -416,7 +416,7 @@ function EmojiPicker({ onSelect, onClose, serverEmojis }: { onSelect: (e: string
   const effectiveCat = hasServerEmojis ? cat - 1 : cat;
   return (
     <div ref={ref}
-      className="absolute bottom-full mb-2 right-0 w-80 bg-[#0e0e1c] border border-white/[0.12] rounded-3xl shadow-2xl shadow-black/80 overflow-hidden z-50" style={{backdropFilter:'blur(24px)'}}>
+      className="absolute bottom-full mb-2 right-0 w-80 bg-[#0e0e1c] border border-white/[0.12] rounded-3xl shadow-2xl shadow-black/80 overflow-hidden z-50" style={{backdropFilter:'blur(12px)'}}>
       {/* Category tabs */}
       <div className="flex overflow-x-auto border-b border-white/[0.07] p-1.5 gap-0.5"
         style={{ scrollbarWidth: 'none' }}>
@@ -1082,7 +1082,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
           <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4">
             <motion.div initial={{ opacity:0,y:-14 }} animate={{ opacity:1,y:0 }} transition={{ duration:.5 }}
               className="flex items-center justify-between h-14 px-4 rounded-2xl border border-white/[0.07]"
-              style={{ background:'rgba(3,3,8,0.82)',backdropFilter:'blur(24px)' }}>
+              style={{ background:'rgba(3,3,8,0.82)',backdropFilter:'blur(12px)' }}>
 
               {/* Logo */}
               <div className="flex items-center gap-2.5 shrink-0">
@@ -1130,7 +1130,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
               <motion.div initial={{ opacity:0,y:-8 }} animate={{ opacity:1,y:0 }} exit={{ opacity:0,y:-8 }}
                 transition={{ duration:.2 }}
                 className="md:hidden mx-4 mt-2 rounded-2xl border border-white/[0.07] p-4 flex flex-col gap-1.5"
-                style={{ background:'rgba(3,3,8,0.96)',backdropFilter:'blur(20px)' }}>
+                style={{ background:'rgba(3,3,8,0.96)',backdropFilter:'blur(10px)' }}>
                 {[tl('landing.features'),tl('landing.integrations'),tl('landing.security')].map(l => (
                   <a key={l} href={`#${l.toLowerCase()}`} onClick={() => setMobileMenuOpen(false)}
                     className="px-3 py-2.5 rounded-xl text-sm text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-all">{l}</a>
@@ -11963,7 +11963,7 @@ export default function App() {
                 <motion.div initial={{opacity:0,y:-8,scale:0.96}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:-8,scale:0.96}}
                   transition={{duration:0.15,ease:'easeOut'}}
                   className="absolute right-0 top-full mt-2 w-96 max-h-[480px] flex flex-col z-50 rounded-2xl border border-white/[0.1] shadow-2xl shadow-black/60 overflow-hidden"
-                  style={{background:'rgba(13,13,24,0.98)',backdropFilter:'blur(24px)'}}>
+                  style={{background:'rgba(13,13,24,0.98)',backdropFilter:'blur(12px)'}}>
                   <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07] shrink-0">
                     <div className="flex items-center gap-2">
                       <Bell size={14} className="text-indigo-400"/>
@@ -12097,7 +12097,7 @@ export default function App() {
                   initial={{opacity:0,scale:0.95,y:-4}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.95,y:-4}}
                   transition={{duration:0.12,ease:[0.16,1,0.3,1]}}
                   className="absolute right-0 top-full mt-2 w-56 z-50 rounded-2xl border border-white/[0.1] shadow-2xl shadow-black/60 py-1.5 overflow-hidden"
-                  style={{background:'rgba(13,11,26,0.98)',backdropFilter:'blur(24px)'}}>
+                  style={{background:'rgba(13,11,26,0.98)',backdropFilter:'blur(12px)'}}>
 
                   {/* Settings */}
                   <button onClick={() => { setMoreMenuOpen(false); setAppSettTab('account'); setAppSettOpen(true); }}
@@ -12432,7 +12432,7 @@ export default function App() {
                   <div className="fixed inset-0 z-[39]" onClick={()=>setSrvDropOpen(false)}/>
                   <motion.div initial={{opacity:0,y:-6,scale:0.97}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:-6,scale:0.97}}
                     transition={{duration:0.15,ease:[0.16,1,0.3,1]}}
-                    className="absolute left-3 right-3 top-full mt-1 z-40 bg-[#0e0e1c] border border-white/[0.12] rounded-2xl shadow-2xl shadow-black/80 py-1.5 overflow-hidden" style={{backdropFilter:'blur(24px)'}}>
+                    className="absolute left-3 right-3 top-full mt-1 z-40 bg-[#0e0e1c] border border-white/[0.12] rounded-2xl shadow-2xl shadow-black/80 py-1.5 overflow-hidden" style={{backdropFilter:'blur(12px)'}}>
                     {canManageChannels&&<>
                       <button onClick={()=>{setSrvDropOpen(false);setChCreateCatId('');setChCreateOpen(true);setNewChName('');setNewChType('text');setNewChPrivate(false);}}
                         className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-indigo-500/10 hover:text-white transition-colors text-left">
@@ -12894,7 +12894,7 @@ export default function App() {
               {statusPickerOpen&&(
                 <motion.div initial={{opacity:0,y:6,scale:0.95}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:6,scale:0.95}}
                   transition={{duration:0.15,ease:[0.16,1,0.3,1]}}
-                  className="absolute bottom-full left-3 right-3 mb-2 bg-[#0e0e1c] border border-white/[0.12] rounded-2xl shadow-2xl shadow-black/80 overflow-hidden z-50 p-1" style={{backdropFilter:'blur(24px)'}}>
+                  className="absolute bottom-full left-3 right-3 mb-2 bg-[#0e0e1c] border border-white/[0.12] rounded-2xl shadow-2xl shadow-black/80 overflow-hidden z-50 p-1" style={{backdropFilter:'blur(12px)'}}>
 
                   {/* Call status row — auto, shown when in call */}
                   {activeCall&&(
@@ -16551,7 +16551,7 @@ export default function App() {
         <>
           <div className="fixed inset-0 z-[90]" onClick={()=>setSrvContextMenu(null)}/>
           <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:0.95}}
-            style={{position:'fixed',left:srvContextMenu.x,top:srvContextMenu.y,backdropFilter:'blur(24px)'}}
+            style={{position:'fixed',left:srvContextMenu.x,top:srvContextMenu.y,backdropFilter:'blur(12px)'}}
             className="z-[91] bg-[#0e0e1c] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 py-1.5 min-w-[180px] overflow-hidden">
             {(srvContextMenu.srv.owner_id===currentUser?.id ||
               (srvContextMenu.srv.id===activeServer && (canManageServer||canManageRoles||canKickMembers))) && (<>
@@ -16629,7 +16629,7 @@ export default function App() {
           <>
             <div className="fixed inset-0 z-[90]" onClick={close}/>
             <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:0.95}}
-              style={{position:'fixed',left:groupCtxMenu.x,top:groupCtxMenu.y,backdropFilter:'blur(24px)'}}
+              style={{position:'fixed',left:groupCtxMenu.x,top:groupCtxMenu.y,backdropFilter:'blur(12px)'}}
               className="z-[91] bg-[#0e0e1c] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 py-1.5 min-w-[180px] overflow-hidden">
               <div className="px-3 py-2 border-b border-white/[0.06] mb-1">
                 <p className="text-xs font-semibold text-zinc-300 truncate">{gc.name || 'Grupa'}</p>
@@ -16696,7 +16696,7 @@ export default function App() {
           <>
             <div className="fixed inset-0 z-[90]" onClick={close}/>
             <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:0.95}}
-              style={{position:'fixed',left:dmCtxMenu.x,top:dmCtxMenu.y,backdropFilter:'blur(24px)'}}
+              style={{position:'fixed',left:dmCtxMenu.x,top:dmCtxMenu.y,backdropFilter:'blur(12px)'}}
               className="z-[91] bg-[#0e0e1c] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 py-1.5 min-w-[210px] overflow-hidden">
               {/* User info header */}
               <div className="flex items-center gap-2.5 px-3.5 py-2 mb-0.5">
@@ -20772,7 +20772,7 @@ export default function App() {
             <motion.div key="dm-gallery"
               initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.2}}
               className="fixed inset-0 z-[300] flex items-center justify-center"
-              style={{background:'rgba(0,0,0,0.92)',backdropFilter:'blur(20px)'}}
+              style={{background:'rgba(0,0,0,0.92)',backdropFilter:'blur(10px)'}}
               onClick={close}
               onKeyDown={e => { if(e.key==='Escape') close(); if(e.key==='ArrowLeft') prev(); if(e.key==='ArrowRight') next(); }}
               tabIndex={0}

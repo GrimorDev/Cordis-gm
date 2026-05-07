@@ -19,6 +19,45 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    build: {
+      // Target modern Chromium/WebKit (Tauri 2 minimum)
+      target: ['es2020', 'chrome105', 'safari15'],
+      // Raise warning threshold — we know the app is large
+      chunkSizeWarningLimit: 600,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            // React core — changes rarely, cache-stable
+            'vendor-react': ['react', 'react-dom'],
+            // Framer Motion — large, isolated
+            'vendor-motion': ['motion'],
+            // Tauri APIs — only load in desktop
+            'vendor-tauri': [
+              '@tauri-apps/api',
+              '@tauri-apps/plugin-updater',
+              '@tauri-apps/plugin-shell',
+              '@tauri-apps/plugin-process',
+              '@tauri-apps/plugin-autostart',
+              '@tauri-apps/plugin-notification',
+              '@tauri-apps/plugin-fs',
+            ],
+            // UI utilities
+            'vendor-ui': [
+              'lucide-react',
+              'lottie-react',
+              '@dnd-kit/core',
+              '@dnd-kit/sortable',
+              '@dnd-kit/utilities',
+              'react-easy-crop',
+            ],
+            // Markdown + sanitisation
+            'vendor-content': ['marked', 'dompurify'],
+            // Networking
+            'vendor-net': ['socket.io-client'],
+          },
+        },
+      },
+    },
     server: {
       port: 3000,
       // Tauri needs a fixed port — fail instead of trying another

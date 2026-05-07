@@ -90,6 +90,20 @@ body::before {
   font-feature-settings: "rlig" 1, "calt" 1;
 }
 
+/* ── Accessibility: respect OS "reduce motion" setting ──────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* Keep Framer Motion layout animations instant too */
+  [data-framer-motion-layout-id] {
+    transition: none !important;
+  }
+}
+
 /* ── Performance: isolate scrollable regions ─────────────────────────────
    contain:paint stops the browser re-painting the parent every time
    a child inside the scroll area changes. Critical for long message lists
