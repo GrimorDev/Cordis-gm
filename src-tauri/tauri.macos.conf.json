@@ -16,8 +16,17 @@
         "center": true,
         "fullscreen": false,
         "backgroundColor": "#09090b",
-        "dragDropEnabled": false
+        "dragDropEnabled": false,
+        "zoomHotkeysEnabled": false,
+        "acceptFirstMouse": true
       }
     ]
+  },
+  "bundle": {
+    "macOS": {
+      "entitlements": "./Entitlements.plist",
+      "infoPlist": "./Info.plist",
+      "minimumSystemVersion": "11.0"
+    }
   }
 }

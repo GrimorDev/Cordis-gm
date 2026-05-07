@@ -2,11 +2,31 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <!-- Permissions -->
   <key>NSMicrophoneUsageDescription</key>
   <string>Cordyn potrzebuje dostępu do mikrofonu, aby korzystać z kanałów głosowych i rozmów.</string>
   <key>NSCameraUsageDescription</key>
   <string>Cordyn potrzebuje dostępu do kamery, aby korzystać z rozmów wideo.</string>
   <key>NSBluetoothAlwaysUsageDescription</key>
   <string>Cordyn może korzystać z urządzeń Bluetooth (słuchawki, głośniki) do rozmów głosowych.</string>
+
+  <!-- GPU / rendering performance -->
+  <!-- Force discrete GPU on dual-GPU Macs (prevents switching lag) -->
+  <key>NSSupportsAutomaticGraphicsSwitching</key>
+  <false/>
+
+  <!-- Opt in to Metal / hardware accelerated rendering in WKWebView -->
+  <key>WebKitAcceleratedDrawingEnabled</key>
+  <true/>
+  <key>WebKitSubpixelCSSOMShadowsEnabled</key>
+  <false/>
+
+  <!-- Disable elastic scroll bounce (removes unnecessary compositing) -->
+  <key>NSScrollViewRubberbandingEnabled</key>
+  <false/>
+
+  <!-- High-resolution rendering — required for Retina, avoids upscale lag -->
+  <key>NSHighResolutionCapable</key>
+  <true/>
 </dict>
 </plist>
