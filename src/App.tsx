@@ -11848,7 +11848,7 @@ export default function App() {
       {/* TOP NAV — 3-col grid: [left tabs] [Cordyn] [right actions]
            grid-cols: 1fr auto 1fr guarantees center is always truly centered.
            No items-center on nav so children use h-full correctly (stretch). */}
-      <nav className="h-12 shrink-0 z-30 glass-panel rounded-2xl px-2 grid" style={{gridTemplateColumns:'1fr auto 1fr',borderColor:'rgba(139,92,246,0.28)',boxShadow:'0 4px 24px rgba(0,0,0,0.60),inset 0 1px 0 rgba(139,92,246,0.18),0 0 48px rgba(99,102,241,0.06)'}}>
+      <nav className="h-12 shrink-0 z-30 glass-panel rounded-2xl px-2 grid" style={{gridTemplateColumns:'1fr auto 1fr'}}>
         {/* Left col — flex, clips overflow so tabs can't bleed into center */}
         <div className="flex items-center h-full min-w-0 overflow-hidden">
           <button onClick={() => setIsMobileOpen(v => !v)} className="md:hidden w-9 h-9 flex items-center justify-center text-zinc-500 hover:text-white ml-2 shrink-0">
@@ -12197,13 +12197,13 @@ export default function App() {
           tabScrollRef.current?.scrollBy({left: dir * 180, behavior:'smooth'});
         };
         return (
-          <div className="shrink-0 glass-panel rounded-2xl overflow-hidden" style={{borderColor:'rgba(139,92,246,0.28)'}}>
+          <div className="shrink-0 glass-panel rounded-2xl overflow-hidden">
             {/* Toggle row */}
-            <div className="flex items-center justify-between px-3 py-1" style={{background:'linear-gradient(135deg,rgba(99,102,241,0.10) 0%,rgba(124,58,237,0.07) 100%)'}}>
-              <span className="sidebar-section-header select-none">Otwarte zakładki</span>
+            <div className="flex items-center justify-between px-3 py-0.5">
+              <span className="text-[9px] font-bold text-zinc-700 uppercase tracking-widest select-none">Otwarte zakładki</span>
               <button
                 onClick={()=>{ const v=!tabBarOpen; setTabBarOpen(v); try{localStorage.setItem('cordyn_tabbar',v?'1':'0')}catch{} }}
-                className="flex items-center gap-1 text-[9px] text-indigo-500 hover:text-indigo-300 transition-colors px-2 py-0.5 rounded-md hover:bg-indigo-500/[0.08] border border-transparent hover:border-indigo-500/20">
+                className="flex items-center gap-1 text-[9px] text-zinc-600 hover:text-zinc-400 transition-colors px-1.5 py-0.5 rounded-md hover:bg-white/[0.04]">
                 {tabBarOpen ? <><ChevronUp size={9}/> zwiń</> : <><ChevronDown size={9}/> rozwiń ({ordered.length})</>}
               </button>
             </div>
@@ -12218,10 +12218,10 @@ export default function App() {
                   exit={{height:0,opacity:0}}
                   transition={{duration:0.22,ease:[0.16,1,0.3,1]}}
                   style={{overflow:'hidden'}}>
-                  <div className="flex items-stretch border-t border-indigo-500/[0.14]">
+                  <div className="flex items-stretch border-t border-white/[0.05]">
                     {/* Left scroll arrow */}
                     <button onClick={()=>scrollBy(-1)}
-                      className="shrink-0 w-7 flex items-center justify-center text-indigo-600 hover:text-indigo-300 hover:bg-indigo-500/[0.08] transition-colors border-r border-indigo-500/[0.12]">
+                      className="shrink-0 w-7 flex items-center justify-center text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors border-r border-white/[0.04]">
                       <ChevronLeft size={13}/>
                     </button>
 
@@ -12249,23 +12249,15 @@ export default function App() {
 
                         return (
                           <div key={tab.key}
-                            className={`group/tab relative flex items-center gap-1.5 pl-2.5 pr-2 shrink-0 cursor-pointer select-none border-r transition-all duration-150 ${
-                              isAct
-                                ? 'border-r-indigo-500/20 text-white'
-                                : 'border-r-indigo-500/[0.08] text-zinc-500 hover:text-zinc-200 hover:bg-indigo-500/[0.07]'
+                            className={`group/tab relative flex items-center gap-1.5 pl-2.5 pr-2 shrink-0 cursor-pointer select-none border-r border-white/[0.04] transition-colors duration-100 ${
+                              isAct ? 'bg-indigo-500/10 text-white' : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.05]'
                             }`}
-                            style={{
-                              minWidth:76, maxWidth:152, height:34,
-                              ...(isAct ? {
-                                background:'linear-gradient(180deg,rgba(99,102,241,0.22) 0%,rgba(99,102,241,0.12) 100%)',
-                                boxShadow:'inset 0 1px 0 rgba(165,180,252,0.20)'
-                              } : {})
-                            }}
+                            style={{minWidth:76, maxWidth:152, height:34}}
                             onClick={()=>switchToTab(tab)}
                             onContextMenu={e=>{e.preventDefault();setTabContextMenu({key:tab.key,x:e.clientX,y:e.clientY});}}>
 
-                            {/* Active underline — gradient pill */}
-                            {isAct&&<div className="tab-underline-active absolute bottom-0 left-2 right-2 h-[2px] rounded-t-full" style={{background:'linear-gradient(90deg,#818cf8,#a78bfa)',boxShadow:'0 0 8px rgba(129,140,248,0.80)'}}/>}
+                            {/* Active underline */}
+                            {isAct&&<div className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-400 rounded-t-full"/>}
 
                             {/* Icon */}
                             {tab.kind==='ch' ? (
@@ -12384,7 +12376,7 @@ export default function App() {
       <main className="flex-1 flex gap-2 overflow-hidden relative min-h-0">
 
         {/* LEFT */}
-        <aside className={`absolute md:relative z-30 md:z-0 w-60 shrink-0 flex flex-col glass-panel rounded-2xl transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] h-full overflow-hidden ${isMobileOpen?'translate-x-0':'-translate-x-[120%] md:translate-x-0'}`} style={{borderColor:'rgba(139,92,246,0.25)'}}>
+        <aside className={`absolute md:relative z-30 md:z-0 w-60 shrink-0 flex flex-col glass-panel rounded-2xl transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] h-full overflow-hidden ${isMobileOpen?'translate-x-0':'-translate-x-[120%] md:translate-x-0'}`}>
           {/* mobile server row */}
           <div className="md:hidden p-2 border-b border-white/[0.05] flex gap-1.5 overflow-x-auto">
             {([{v:'friends' as const,i:<Users size={16}/>},{v:'dms' as const,i:<MessageCircle size={16}/>}]).map(({v,i}) => (
@@ -12408,33 +12400,31 @@ export default function App() {
           {/* servers */}
           {activeView==='servers'&&<>
             {/* Server header with dropdown */}
-            <div className="relative border-b border-indigo-500/[0.18]" style={{overflow:'hidden'}}>
-              {/* Vivid gradient header bg */}
-              <div className="absolute inset-0 pointer-events-none" style={{background:'linear-gradient(160deg,rgba(99,102,241,0.22) 0%,rgba(124,58,237,0.16) 50%,transparent 100%)'}}/>
-              {/* Bottom separator glow */}
-              <div className="absolute bottom-0 left-0 right-0 h-px pointer-events-none" style={{background:'linear-gradient(to right,transparent,rgba(139,92,246,0.50),transparent)'}}/>
-              <div className="relative px-3 py-3.5 cursor-pointer hover:bg-indigo-500/[0.06] transition-colors group"
+            <div className="relative border-b border-white/[0.06]">
+              {/* gradient header bg */}
+              <div className="absolute inset-0 pointer-events-none" style={{background:'linear-gradient(180deg,rgba(99,102,241,0.09) 0%,transparent 100%)'}}/>
+              <div className="relative px-3 py-3.5 cursor-pointer hover:bg-white/[0.04] transition-colors group"
                 onClick={() => setSrvDropOpen(p => !p)}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    {/* server icon — larger, more prominent */}
+                    {/* server icon */}
                     {serverFull?.icon_url
-                      ? <img src={serverFull.icon_url} className="w-8 h-8 rounded-xl object-cover shrink-0 border border-indigo-500/30 shadow-[0_0_14px_rgba(99,102,241,0.30)]" alt=""/>
-                      : <div className="w-8 h-8 shrink-0 rounded-xl flex items-center justify-center border border-indigo-400/40 shadow-[0_0_18px_rgba(99,102,241,0.35)]" style={{background:'linear-gradient(135deg,rgba(99,102,241,0.55) 0%,rgba(124,58,237,0.55) 100%)'}}>
-                          <span className="text-[13px] font-black text-white" style={{textShadow:'0 1px 4px rgba(0,0,0,0.4)'}}>
+                      ? <img src={serverFull.icon_url} className="w-7 h-7 rounded-xl object-cover shrink-0 border border-white/10" alt=""/>
+                      : <div className="w-7 h-7 shrink-0 rounded-xl flex items-center justify-center border border-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.2)]" style={{background:'linear-gradient(135deg,rgba(99,102,241,0.35) 0%,rgba(124,58,237,0.35) 100%)'}}>
+                          <span className="text-[11px] font-bold text-white">
                             {(serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'S').charAt(0).toUpperCase()}
                           </span>
                         </div>
                     }
-                    <h2 className="text-[14px] font-bold text-white truncate" style={{textShadow:'0 1px 8px rgba(99,102,241,0.30)'}}>{serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'Serwer'}</h2>
+                    <h2 className="text-sm font-bold text-white truncate">{serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'Serwer'}</h2>
                   </div>
-                  <motion.div animate={{ rotate: srvDropOpen ? 180 : 0 }} transition={{ type:'spring', stiffness:320, damping:24 }}>
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-indigo-500 group-hover:text-indigo-300 transition-colors shrink-0">
-                      <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  <motion.div animate={{ rotate: srvDropOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-zinc-500 group-hover:text-indigo-400 transition-colors shrink-0">
+                      <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                   </motion.div>
                 </div>
-                {serverFull?.description&&<p className="text-[11px] text-indigo-300/60 mt-0.5 truncate pl-[42px]">{serverFull.description}</p>}
+                {serverFull?.description&&<p className="text-xs text-zinc-500 mt-0.5 truncate pl-9">{serverFull.description}</p>}
               </div>
               <AnimatePresence>
               {srvDropOpen&&(
@@ -12715,17 +12705,10 @@ export default function App() {
 
           {/* dms */}
           {activeView==='dms'&&<>
-            <div className="px-4 py-4 border-b border-indigo-500/[0.18] flex items-center justify-between relative overflow-hidden" style={{background:'linear-gradient(160deg,rgba(99,102,241,0.16) 0%,rgba(124,58,237,0.10) 60%,transparent 100%)'}}>
-              {/* Decorative glow line at bottom */}
-              <div className="absolute bottom-0 left-0 right-0 h-px" style={{background:'linear-gradient(to right,transparent,rgba(139,92,246,0.45),transparent)'}}/>
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" style={{background:'linear-gradient(135deg,rgba(99,102,241,0.45) 0%,rgba(124,58,237,0.45) 100%)',boxShadow:'0 0 12px rgba(99,102,241,0.30)'}}>
-                  <MessageCircle size={12} className="text-indigo-200"/>
-                </div>
-                <h2 className="text-sm font-bold text-white" style={{textShadow:'0 0 16px rgba(99,102,241,0.35)'}}>{t('nav.dmsTitle')}</h2>
-              </div>
+            <div className="px-4 py-4 border-b border-white/[0.06] flex items-center justify-between">
+              <h2 className="text-sm font-bold text-white">{t('nav.dmsTitle')}</h2>
               <button onClick={()=>setShowGroupDmModal(true)} title="Nowa grupowa wiadomość"
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-indigo-500 hover:text-indigo-300 hover:bg-indigo-500/15 border border-transparent hover:border-indigo-500/25 transition-all">
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-indigo-300 hover:bg-indigo-500/10 transition-all">
                 <Users size={13}/>
               </button>
             </div>
@@ -12796,13 +12779,7 @@ export default function App() {
             </div>
           </>}
 
-          {activeView==='friends'&&<div className="px-4 py-4 border-b border-indigo-500/[0.18] flex items-center gap-2 relative overflow-hidden" style={{background:'linear-gradient(160deg,rgba(99,102,241,0.16) 0%,rgba(124,58,237,0.10) 60%,transparent 100%)'}}>
-            <div className="absolute bottom-0 left-0 right-0 h-px" style={{background:'linear-gradient(to right,transparent,rgba(139,92,246,0.45),transparent)'}}/>
-            <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" style={{background:'linear-gradient(135deg,rgba(99,102,241,0.45) 0%,rgba(124,58,237,0.45) 100%)',boxShadow:'0 0 12px rgba(99,102,241,0.30)'}}>
-              <Users size={12} className="text-indigo-200"/>
-            </div>
-            <h2 className="text-sm font-bold text-white" style={{textShadow:'0 0 16px rgba(99,102,241,0.35)'}}>Znajomi</h2>
-          </div>}
+          {activeView==='friends'&&<div className="p-3.5 border-b border-white/[0.05]"><h2 className="text-sm font-bold text-white">Znajomi</h2></div>}
 
           {/* ── VOICE STATUS BAR — Discord-style, above user bar ──────── */}
           {activeCall&&(
@@ -12992,11 +12969,10 @@ export default function App() {
               )}
             </AnimatePresence>
 
-            <div className="flex items-center gap-2.5 px-2 py-2 rounded-2xl hover:bg-indigo-500/[0.10] transition-all duration-200 cursor-default group/userbar" style={{transition:'background 0.2s ease, box-shadow 0.2s ease'}}>
-              {/* Avatar + status dot — click opens picker, with glow ring */}
-              <div className="relative shrink-0 cursor-pointer" onClick={()=>setStatusPickerOpen(p=>!p)} title="Zmień status"
-                style={{filter:'drop-shadow(0 0 6px rgba(99,102,241,0.40))'}}>
-                <img src={streamerMode ? 'https://api.dicebear.com/7.x/initials/svg?seed=S&backgroundColor=6366f1&fontColor=ffffff' : (currentUser?ava(currentUser):'')} className={`w-8 h-8 rounded-full object-cover av-eff-${avatarEffect} av-sc-xs ring-2 ring-indigo-500/30`} alt=""/>
+            <div className="flex items-center gap-2.5 px-2 py-2 rounded-2xl hover:bg-white/[0.08] transition-all duration-200 cursor-default group/userbar">
+              {/* Avatar + status dot — click opens picker */}
+              <div className="relative shrink-0 cursor-pointer" onClick={()=>setStatusPickerOpen(p=>!p)} title="Zmień status">
+                <img src={streamerMode ? 'https://api.dicebear.com/7.x/initials/svg?seed=S&backgroundColor=6366f1&fontColor=ffffff' : (currentUser?ava(currentUser):'')} className={`w-8 h-8 rounded-full object-cover av-eff-${avatarEffect} av-sc-xs`} alt=""/>
                 {/* Status dot — red phone when in call, else normal status */}
                 {activeCall ? (
                   <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-rose-500 border-2 border-[#181828] rounded-full flex items-center justify-center">
@@ -13010,7 +12986,7 @@ export default function App() {
               {/* Name + status label */}
               <div className="flex-1 min-w-0 cursor-pointer" onClick={openOwnProfile}>
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <p className="text-[13px] font-bold text-white leading-tight truncate hover:text-indigo-200 transition-colors" style={{textShadow:'0 0 12px rgba(99,102,241,0.25)'}}>{streamerMode ? 'Streamer' : currentUser?.username}</p>
+                  <p className="text-sm font-semibold text-white leading-tight truncate hover:text-zinc-300 transition-colors">{streamerMode ? 'Streamer' : currentUser?.username}</p>
                 </div>
                 <p className="text-xs truncate leading-tight mt-0.5">
                   {activeCall ? (
@@ -13045,7 +13021,7 @@ export default function App() {
         </aside>
 
         {/* CENTER */}
-        <section className="flex-1 flex flex-col glass-dark rounded-2xl overflow-hidden min-w-0 relative" style={{borderColor:'rgba(99,102,241,0.14)'}}>
+        <section className="flex-1 flex flex-col glass-dark rounded-2xl overflow-hidden min-w-0 relative">
           {showCallPanel && activeCall ? (
             /* ── CALL PANEL ─────────────────────────────────────────── */
             <div className="flex-1 flex flex-col overflow-hidden">
@@ -13581,21 +13557,19 @@ export default function App() {
             <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
               {!serverFull
                 ? <Loader2 size={28} className="text-indigo-400 animate-spin"/>
-                : <motion.div initial={{opacity:0,y:18,scale:0.96}} animate={{opacity:1,y:0,scale:1}} transition={{type:'spring',stiffness:280,damping:22}} className="flex flex-col items-center gap-4">
-                    <div className="w-20 h-20 rounded-3xl flex items-center justify-center float-up border border-indigo-500/30" style={{background:'linear-gradient(135deg,rgba(99,102,241,0.30) 0%,rgba(124,58,237,0.25) 100%)',boxShadow:'0 0 48px rgba(99,102,241,0.40),0 0 16px rgba(99,102,241,0.20) inset'}}>
-                      <Hash size={32} className="text-indigo-300"/>
-                    </div>
-                    <h2 className="text-xl font-bold text-white" style={{textShadow:'0 0 24px rgba(99,102,241,0.40)'}}>{serverFull.name}</h2>
-                    <p className="text-sm text-indigo-300/60 max-w-xs leading-relaxed">Wybierz kanał tekstowy z listy po lewej stronie.</p>
-                  </motion.div>
+                : <><div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center mb-2">
+                    <Hash size={26} className="text-zinc-600"/>
+                  </div>
+                  <h2 className="text-lg font-bold text-white">{serverFull.name}</h2>
+                  <p className="text-sm text-zinc-500">Wybierz kanał tekstowy z listy po lewej stronie.</p></>
               }
             </div>
           ) : activeView==='dms' && !activeDmUserId && !activeGroupDm ? (
             <div className="flex-1 flex flex-col items-center justify-center p-8">
               <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4}}
                 className="w-full max-w-sm flex flex-col items-center text-center">
-                <div className="w-24 h-24 rounded-3xl flex items-center justify-center float-up mb-5 border border-indigo-400/30" style={{background:'linear-gradient(135deg,rgba(99,102,241,0.32) 0%,rgba(124,58,237,0.28) 100%)',boxShadow:'0 0 60px rgba(99,102,241,0.50),0 0 20px rgba(99,102,241,0.20) inset'}}>
-                  <MessageCircle size={38} className="text-indigo-200" style={{filter:'drop-shadow(0 0 8px rgba(165,180,252,0.6))'}}/>
+                <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-600/30 to-purple-600/20 border border-indigo-500/20 flex items-center justify-center float-up mb-5 shadow-[0_0_40px_-8px_rgba(99,102,241,0.4)]">
+                  <MessageCircle size={34} className="text-indigo-400"/>
                 </div>
                 <h2 className="text-xl font-bold text-white mb-2">{t('nav.dmsTitle')}</h2>
                 <p className="text-sm text-zinc-500 mb-8 leading-relaxed max-w-xs">{t('dm.home.subtitle')}</p>
@@ -14066,11 +14040,9 @@ export default function App() {
               )}
 
               {/* ── CHAT HEADER (improved) ─────────────────────────────────── */}
-              <header className="border-b flex items-center justify-between px-5 glass-dark z-10 shrink-0 gap-3 relative" style={{minHeight:54,borderColor:'rgba(99,102,241,0.18)',background:'linear-gradient(to bottom,rgba(99,102,241,0.10) 0%,rgba(8,5,18,0.70) 100%)'}}>
-                {/* Stronger gradient separator at bottom */}
-                <div className="absolute bottom-0 left-0 right-0 h-px pointer-events-none" style={{background:'linear-gradient(to right,transparent 0%,rgba(139,92,246,0.40) 25%,rgba(139,92,246,0.40) 75%,transparent 100%)'}}/>
-                {/* Subtle top glow line */}
-                <div className="absolute top-0 left-8 right-8 h-px pointer-events-none" style={{background:'linear-gradient(to right,transparent,rgba(99,102,241,0.20),transparent)'}}/>
+              <header className="border-b border-white/[0.05] flex items-center justify-between px-5 glass-dark z-10 shrink-0 gap-3 relative" style={{minHeight:52,background:'linear-gradient(to bottom,rgba(99,102,241,0.03) 0%,transparent 100%)'}}>
+                {/* thin gradient separator at bottom */}
+                <div className="absolute bottom-0 left-0 right-0 h-px pointer-events-none" style={{background:'linear-gradient(to right,transparent 0%,rgba(99,102,241,0.18) 30%,rgba(99,102,241,0.18) 70%,transparent 100%)'}}/>
 
                 <div className="flex items-center gap-3 min-w-0">
                   {activeView==='dms' ? (activeGroupDm ? (() => {
@@ -14111,13 +14083,13 @@ export default function App() {
                   ) : <h3 className="font-bold text-white text-sm">Wiadomości</h3>) : (
                     activeCh ? (
                       <div className="flex items-center gap-3 min-w-0">
-                        {/* Channel type icon with strong glow */}
-                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
+                        {/* Channel type icon with glow */}
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
                           activeCh.type==='announcement'
-                            ? 'bg-amber-500/20 border-amber-500/30 shadow-[0_0_20px_rgba(245,158,11,0.35)]'
+                            ? 'bg-amber-500/15 shadow-[0_0_12px_rgba(245,158,11,0.2)]'
                             : activeCh.type==='forum'
-                              ? 'bg-emerald-500/20 border-emerald-500/30 shadow-[0_0_20px_rgba(34,197,94,0.35)]'
-                              : 'bg-indigo-500/22 border-indigo-500/35 shadow-[0_0_20px_rgba(99,102,241,0.40)]'
+                              ? 'bg-emerald-500/15 shadow-[0_0_12px_rgba(34,197,94,0.2)]'
+                              : 'bg-indigo-500/15 shadow-[0_0_12px_rgba(99,102,241,0.2)]'
                         }`}>
                           {activeCh.type==='forum'
                             ? <MessageSquare size={16} className="text-emerald-400"/>
@@ -15707,7 +15679,7 @@ export default function App() {
                           {showEmojiPicker && <EmojiPicker onSelect={insertEmoji} onClose={() => setShowEmojiPicker(false)} serverEmojis={activeView==='servers'&&activeServer ? (serverEmojis.get(activeServer)||[]) : []}/>}
                         </div>
                         <button type="submit" disabled={(!msgInput.trim()&&!attachFile&&!attachFiles.length)||sending}
-                          className={`w-8 h-8 rounded-xl send-btn disabled:opacity-25 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex items-center justify-center text-white shrink-0 ${(msgInput.trim()||attachFile||attachFiles.length)?'has-content':''}`}>
+                          className="w-8 h-8 rounded-xl send-btn disabled:opacity-25 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none flex items-center justify-center text-white shrink-0">
                           {sending?<Loader2 size={14} className="animate-spin"/>:<Send size={14}/>}
                         </button>
                       </div>
@@ -15734,7 +15706,7 @@ export default function App() {
             <ChevronRight size={14} className={`transition-transform duration-200 ${rightPanelOpen?'rotate-180':''}`}/>
           </button>
         )}
-        <aside className={`hidden xl:flex shrink-0 flex-col gap-0 glass-panel rounded-2xl overflow-y-auto custom-scrollbar transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${showCallPanel && activeCall && !rightPanelOpen ? 'w-0 opacity-0 overflow-hidden p-0' : 'w-64 opacity-100'}`} style={{borderColor:'rgba(139,92,246,0.25)'}}>
+        <aside className={`hidden xl:flex shrink-0 flex-col gap-0 glass-panel rounded-2xl overflow-y-auto custom-scrollbar transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${showCallPanel && activeCall && !rightPanelOpen ? 'w-0 opacity-0 overflow-hidden p-0' : 'w-64 opacity-100'}`}>
           {/* ─ ADMIN LIVE METRICS (shown when admin panel is open) ─ */}
           {activeView==='admin'&&(()=>{
             const m = adminMetrics;
@@ -16099,12 +16071,7 @@ export default function App() {
             );
 
             return (
-              <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col">
-                {/* Top accent strip for right panel */}
-                <div className="shrink-0 px-4 py-3 border-b" style={{borderColor:'rgba(139,92,246,0.18)',background:'linear-gradient(160deg,rgba(99,102,241,0.14) 0%,rgba(124,58,237,0.08) 100%)'}}>
-                  <span className="sidebar-section-header">Członkowie</span>
-                </div>
-              <div className="px-3 py-4 custom-scrollbar overflow-y-auto flex-1">
+              <div className="px-3 py-4 flex-1 overflow-y-auto custom-scrollbar">
                 {/* Role groups — only roles that have online members */}
                 {[...roleGroupMap.entries()].map(([roleName,{role,list}])=>(
                   <div key={roleName} className="mb-4">
@@ -16171,7 +16138,6 @@ export default function App() {
                     </div>
                   );
                 })()}
-              </div>
               </div>
             );
           })()}
