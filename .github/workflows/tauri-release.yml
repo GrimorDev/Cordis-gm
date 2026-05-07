@@ -155,12 +155,14 @@ jobs:
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('src-tauri/Cargo.toml') }}
           restore-keys: ${{ runner.os }}-cargo-registry-
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-
-      - name: Enable pnpm
-        run: corepack enable && corepack prepare pnpm@latest --activate
+          cache: 'pnpm'
 
       - name: Install JS dependencies
         run: pnpm install --no-frozen-lockfile
