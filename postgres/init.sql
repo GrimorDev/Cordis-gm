@@ -399,6 +399,25 @@ CREATE INDEX IF NOT EXISTS idx_friends_accepted
 CREATE INDEX IF NOT EXISTS idx_server_members_server_role
     ON server_members (server_id, role_name);
 
+-- ── Channel read state ────────────────────────────────────────────────
+-- Critical for unread count JOIN: WHERE crs.user_id=$1 AND crs.channel_id=c.id
+-- Without this, Postgres does a seq scan of channel_read_state per channel.
+CREATE INDEX IF NOT EXISTS idx_channel_read_state_lookup
+    ON channel_read_state (user_id, channel_id);
+
+-- ── Messages: unread count composite ─────────────────────────────────
+-- Covers the GROUP BY unread query: channel_id filter + date range + sender exclusion.
+-- (channel_id, created_at DESC) already exists as idx_messages_channel_time, but
+-- adding sender_id as third column lets PG do index-only scan for the COUNT.
+CREATE INDEX IF NOT EXISTS idx_messages_unread_count
+    ON messages (channel_id, created_at DESC, sender_id);
+
+-- ── DM conversations: last message lookup ─────────────────────────────
+-- Covers LATERAL subquery ORDER BY created_at DESC LIMIT 1 per conversation.
+CREATE INDEX IF NOT EXISTS idx_dm_messages_conv_time_covering
+    ON dm_messages (conversation_id, created_at DESC)
+    INCLUDE (content);
+
 -- ── Notifications (if table exists) ──────────────────────────────────
 -- Created by migrate.ts — guard with DO block so init.sql is safe.
 DO $$

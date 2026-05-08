@@ -82,13 +82,13 @@ export const KEYS = {
 export const TTL = {
   userStatus:     300,   // 5 min — refreshed on every socket heartbeat
   voiceChannel:   86400, // 24 h
-  msgCache:       30,    // 30 s (was 10 s — tripled hit window)
-  dmMsgCache:     30,    // 30 s
-  userProfile:    120,   // 2 min — badges/bio rarely change
-  serverChannels: 60,    // 1 min
-  serverMembers:  60,    // 1 min
-  dmList:         30,    // 30 s — last_message needs to be fairly fresh
-  notifCount:     60,    // 1 min
+  msgCache:       120,   // 2 min (invalidated on new_message socket event)
+  dmMsgCache:     120,   // 2 min
+  userProfile:    180,   // 3 min — badges/bio rarely change
+  serverChannels: 300,   // 5 min — structure rarely changes; invalidated on channel CRUD
+  serverMembers:  180,   // 3 min — invalidated on join/leave/kick/role change
+  dmList:         120,   // 2 min — invalidated on new DM message
+  notifCount:     120,   // 2 min
   jam:            14400, // 4 h
   voiceDj:        86400, // 24 h
 };

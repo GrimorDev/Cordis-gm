@@ -3477,7 +3477,7 @@ function ServerSettingsPage({
                 </div>
                 {filteredMembers.length === 0 && <div className="px-4 py-8 text-sm text-zinc-700 text-center">{tl('ui.noResults')}</div>}
                 {filteredMembers.map((m, i) => (
-                  <div key={m.id} className={`grid grid-cols-[1fr_150px_120px_80px] gap-3 items-center px-4 py-3 ${i > 0 ? 'border-t border-white/[0.03]' : ''} hover:bg-white/[0.02] transition-colors`}>
+                  <div key={m.id} style={{contentVisibility:'auto',containIntrinsicHeight:'auto 60px'}} className={`grid grid-cols-[1fr_150px_120px_80px] gap-3 items-center px-4 py-3 ${i > 0 ? 'border-t border-white/[0.03]' : ''} hover:bg-white/[0.02] transition-colors`}>
                     {/* Użytkownik */}
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="relative shrink-0">
@@ -14842,6 +14842,7 @@ export default function App() {
                           data-msg-id={msg.id}
                           initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: Math.min(idx * 0.01, 0.06), type: 'spring', stiffness: 340, damping: 28 }}
+                          style={{ contentVisibility: 'auto', containIntrinsicHeight: 'auto 72px' }}
                           className={`relative flex ${showChatAvatars?'gap-2.5':'gap-0'} group ${compactMessages || isGrouped ? 'mb-0.5' : 'mb-1.5'} ${isGrouped ? 'mt-0' : ''} ${isOwn?'flex-row-reverse':'flex-row'} ${mentionsMe?'rounded-xl bg-amber-400/5 border-l-2 border-amber-400/60 pl-2 -ml-2':''} ${isCurrentMatch?'rounded-xl outline outline-2 outline-indigo-500/60 bg-indigo-500/[0.07] -mx-1 px-1':''}  ${isSearchMatch&&!isCurrentMatch?'rounded-xl bg-indigo-500/[0.04]':''}`}
                           onContextMenu={e=>{
                             if(editingMsgId===msg.id) return;

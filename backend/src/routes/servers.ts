@@ -380,9 +380,15 @@ router.get('/:id/members', authMiddleware, async (req: AuthRequest, res: Respons
        WHERE mr.server_id = $1`,
       [req.params.id]
     );
+    // Build a Map first → O(N) instead of O(N²) filter per member
+    const rolesByUser = new Map<string, any[]>();
+    for (const r of mr) {
+      const arr = rolesByUser.get(r.user_id);
+      if (arr) arr.push(r); else rolesByUser.set(r.user_id, [r]);
+    }
     const result = rows.map((m: any) => ({
       ...m,
-      roles: mr.filter((r: any) => r.user_id === m.id),
+      roles: rolesByUser.get(m.id) ?? [],
     }));
     await setServerMembersCache(req.params.id, result);
     return res.json(result);

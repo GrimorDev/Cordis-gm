@@ -3,7 +3,7 @@ import { body, validationResult } from 'express-validator';
 import { query, getClient } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
-import { getVoiceMembers } from '../redis/client';
+import { getVoiceMembers, cacheGet, cacheSet, cacheDel, KEYS, TTL } from '../redis/client';
 
 const router = Router();
 
@@ -83,41 +83,65 @@ router.get('/server/:serverId/voice-users', authMiddleware, async (req: AuthRequ
 
 // GET /api/channels/server/:serverId
 router.get('/server/:serverId', authMiddleware, async (req: AuthRequest, res: Response) => {
-  const role = await isMember(req.params.serverId, req.user!.id);
+  const serverId = req.params.serverId;
+  const userId   = req.user!.id;
+
+  const role = await isMember(serverId, userId);
   if (!role) return res.status(403).json({ error: 'No access' });
+
   try {
-    const { rows: cats } = await query(
-      `SELECT id, name, position FROM channel_categories WHERE server_id = $1 ORDER BY position`,
-      [req.params.serverId]
-    );
-    // unread_count: messages posted after user's last_read_at for text/announcement channels.
-    // Falls back to 30-day window if user has never marked the channel as read.
-    const { rows: channels } = await query(
-      `SELECT c.id, c.category_id, c.name, c.type, c.description, c.is_private, c.position,
-              c.slowmode_seconds, c.background_url, c.background_gradient,
-              c.user_limit, c.bitrate,
-              CASE WHEN c.type IN ('text','announcement')
-                THEN COALESCE((
-                  SELECT COUNT(*)::int FROM messages m
-                  WHERE m.channel_id = c.id
-                    AND m.sender_id != $2
-                    AND m.created_at > COALESCE(
-                      (SELECT crs.last_read_at FROM channel_read_state crs
-                       WHERE crs.user_id = $2 AND crs.channel_id = c.id),
-                      NOW() - INTERVAL '30 days'
-                    )
-                ), 0)
-                ELSE 0
-              END AS unread_count
+    // ── Step 1: channel structure (server-level, cache-safe) ─────────────
+    // We cache cats+channels WITHOUT unread counts so all users share the
+    // same cached entry. Unread counts are user-specific and always fresh.
+    const structKey = KEYS.serverChannels(serverId);
+    let base = await cacheGet<{ cats: any[]; channels: any[] }>(structKey);
+
+    if (!base) {
+      const [catsRes, chRes] = await Promise.all([
+        query(
+          `SELECT id, name, position FROM channel_categories WHERE server_id=$1 ORDER BY position`,
+          [serverId]
+        ),
+        query(
+          `SELECT c.id, c.category_id, c.name, c.type, c.description, c.is_private, c.position,
+                  c.slowmode_seconds, c.background_url, c.background_gradient,
+                  c.user_limit, c.bitrate
+           FROM channels c
+           WHERE c.server_id=$1 ORDER BY c.position`,
+          [serverId]
+        ),
+      ]);
+      base = { cats: catsRes.rows, channels: chRes.rows };
+      await cacheSet(structKey, base, TTL.serverChannels);
+    }
+
+    // ── Step 2: unread counts — ONE query instead of N correlated subqueries
+    // JOIN channel_read_state once; GROUP BY eliminates per-channel sub-selects.
+    const { rows: unreadRows } = await query(
+      `SELECT c.id AS channel_id, COUNT(m.id)::int AS cnt
        FROM channels c
-       WHERE c.server_id = $1 ORDER BY c.position`,
-      [req.params.serverId, req.user!.id]
+       JOIN messages m
+         ON m.channel_id = c.id
+        AND m.sender_id != $2
+       LEFT JOIN channel_read_state crs
+         ON crs.channel_id = c.id AND crs.user_id = $2
+       WHERE c.server_id = $1
+         AND c.type IN ('text','announcement')
+         AND m.created_at > COALESCE(crs.last_read_at, NOW() - INTERVAL '30 days')
+       GROUP BY c.id`,
+      [serverId, userId]
     );
-    const result = cats.map((cat: any) => ({
+    const unread = new Map<string, number>(unreadRows.map((r: any) => [r.channel_id, r.cnt]));
+
+    const channels = base.channels.map((c: any) => ({
+      ...c,
+      unread_count: unread.get(c.id) ?? 0,
+    }));
+
+    const result = base.cats.map((cat: any) => ({
       ...cat,
       channels: channels.filter((c: any) => c.category_id === cat.id),
     }));
-    // Include uncategorized channels so mobile clients that parse the flat structure work correctly
     const uncategorized = channels.filter((c: any) => !c.category_id);
     if (uncategorized.length > 0) {
       result.push({ id: null, name: null, position: -1, channels: uncategorized } as any);
