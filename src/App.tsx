@@ -15674,13 +15674,14 @@ export default function App() {
                         <textarea ref={msgInputRef} value={msgInput} rows={1}
                           onPaste={e=>{
                             const items = Array.from(e.clipboardData?.items ?? []) as DataTransferItem[];
+                            // DEBUG — usuń po naprawieniu
+                            addToast(`📋 Paste: ${items.length} items — ${items.map(i=>`[${i.kind}/${i.type||'?'}]`).join(' ')}`, 'info');
                             const result = extractPasteFile(items);
                             if (result) {
                               e.preventDefault();
                               if (result.isImage) applyClipboardImage(result.file);
                               else applyClipboardFile(result.file);
                             }
-                            // Jeśli brak pliku — pozwól przeglądarce wkleić tekst natywnie
                           }}
                           onChange={e=>{
                             const v=e.target.value; setMsgInput(v);
