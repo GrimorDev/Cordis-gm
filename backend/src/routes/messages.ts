@@ -16,19 +16,25 @@ const router = Router();
  * Forward a user message to every developer bot installed in the server.
  * Runs fire-and-forget — never blocks message delivery.
  */
-async function deliverToDevBotWebhooks(serverId: string, message: any): Promise<void> {
+async function deliverToDevBotWebhooks(
+  serverId: string,
+  data: any,
+  event: string = 'MESSAGE_CREATE',
+  excludeAppId?: string
+): Promise<void> {
   const { rows: bots } = await query(
     `SELECT da.webhook_url, da.webhook_secret
      FROM bot_server_installations bsi
      JOIN developer_applications da ON da.id = bsi.application_id
      WHERE bsi.server_id = $1
        AND da.webhook_url IS NOT NULL
-       AND da.webhook_url <> ''`,
-    [serverId]
+       AND da.webhook_url <> ''
+       ${excludeAppId ? 'AND da.id <> $2' : ''}`,
+    excludeAppId ? [serverId, excludeAppId] : [serverId]
   );
   if (!bots.length) return;
 
-  const payload = JSON.stringify({ event: 'MESSAGE_CREATE', data: message });
+  const payload = JSON.stringify({ event, data });
 
   await Promise.allSettled(
     bots.map(({ webhook_url, webhook_secret }: any) => {
@@ -41,7 +47,7 @@ async function deliverToDevBotWebhooks(serverId: string, message: any): Promise<
         headers: {
           'Content-Type': 'application/json',
           'X-Cordyn-Signature-256': sig,
-          'X-Cordyn-Event': 'MESSAGE_CREATE',
+          'X-Cordyn-Event': event,
         },
         body: payload,
         signal: AbortSignal.timeout(4000),
@@ -383,6 +389,9 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     const io = req.app.get('io');
     if (io) io.to(`channel:${msg.channel_id}`).emit('message_updated', { id: updated.id, content: updated.content, edited: updated.edited });
     try { await redis.del(KEYS.msgCache(msg.channel_id)); } catch { /* ignore */ }
+    // Deliver MESSAGE_UPDATE to dev bots
+    const { rows: [ch] } = await query('SELECT server_id FROM channels WHERE id=$1', [msg.channel_id]);
+    if (ch?.server_id) deliverToDevBotWebhooks(ch.server_id, { ...updated, event_type: 'MESSAGE_UPDATE' }, 'MESSAGE_UPDATE').catch(() => {});
     return res.json(updated);
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -431,10 +440,15 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
         }
       } catch { /* ignore R2 errors */ }
     }
+    const channelId = msg.channel_id;
     await query('DELETE FROM messages WHERE id=$1', [req.params.id]);
     const io = req.app.get('io');
-    if (io) io.to(`channel:${msg.channel_id}`).emit('message_deleted', { id: msg.id, channel_id: msg.channel_id });
-    try { await redis.del(KEYS.msgCache(msg.channel_id)); } catch { /* ignore */ }
+    if (io) io.to(`channel:${channelId}`).emit('message_deleted', { id: msg.id, channel_id: channelId });
+    try { await redis.del(KEYS.msgCache(channelId)); } catch { /* ignore */ }
+    // Deliver MESSAGE_DELETE to dev bots
+    query('SELECT server_id FROM channels WHERE id=$1', [channelId]).then(({ rows: [ch] }) => {
+      if (ch?.server_id) deliverToDevBotWebhooks(ch.server_id, { id: msg.id, channel_id: channelId, server_id: ch.server_id }, 'MESSAGE_DELETE').catch(() => {});
+    }).catch(() => {});
     return res.json({ message: 'Deleted' });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
