@@ -9,6 +9,7 @@ import rateLimit from 'express-rate-limit';
 import { RedisStore } from 'rate-limit-redis';
 import jwt from 'jsonwebtoken';
 import path from 'path';
+import fs from 'fs';
 import { config } from './config';
 import { pool } from './db/pool';
 import { runMigrations } from './db/migrate';
@@ -161,8 +162,19 @@ import('./routes/admin').then(m => {
   app.use('/api/', (_req, _res, next) => { m.countRequest(); next(); });
 }).catch(() => {});
 
-// Static uploads
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+// Static uploads — use config.uploads.dir (absolute) so that both multer (diskStorage)
+// and express.static always resolve to the same directory, regardless of __dirname vs cwd.
+const uploadsDir = path.resolve(config.uploads.dir);
+// Ensure base subdirs exist at startup (avoid race on first upload)
+['attachments', 'avatars', 'banners', 'servers', 'emojis', 'misc'].forEach(sub =>
+  fs.mkdirSync(path.join(uploadsDir, sub), { recursive: true })
+);
+app.use('/uploads', express.static(uploadsDir, {
+  // Allow cross-origin image loads (helmet sets cross-origin-resource-policy: same-origin by default)
+  setHeaders: (_res, _filePath) => {
+    _res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  },
+}));
 
 // ── Routes ───────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);

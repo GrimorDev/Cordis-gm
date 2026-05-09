@@ -2296,6 +2296,32 @@ function getFileRenderType(url: string): 'image' | 'audio' | 'video' | 'pdf' | '
   return 'file';
 }
 
+/**
+ * Retry image loading up to 3 times with 2s delay (handles R2 brief propagation delay).
+ * Uses data-r attribute to count retries and data-orig to remember the original URL.
+ * After 3 failures shows "🖼️ Obraz niedostępny".
+ */
+function retryImgOnError(e: React.SyntheticEvent<HTMLImageElement> | Event) {
+  const t = (e as React.SyntheticEvent<HTMLImageElement>).currentTarget as HTMLImageElement
+         || (e as Event).target as HTMLImageElement;
+  if (!t) return;
+  const retries = parseInt(t.dataset.r || '0');
+  if (retries < 3) {
+    t.dataset.r = String(retries + 1);
+    if (!t.dataset.orig) t.dataset.orig = t.src.split('?_r=')[0];
+    setTimeout(() => {
+      if (t.isConnected) t.src = `${t.dataset.orig}?_r=${Date.now()}`;
+    }, 2000);
+  } else {
+    t.onerror = null;
+    t.style.display = 'none';
+    const p = document.createElement('div');
+    p.className = 'flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.04] text-zinc-500 text-xs';
+    p.innerHTML = '<span>🖼️ Obraz niedostępny</span>';
+    t.parentElement?.appendChild(p);
+  }
+}
+
 function getFileIcon(type: ReturnType<typeof getFileRenderType>, size = 14): React.ReactElement {
   switch (type) {
     case 'image':   return <FileImage size={size} className="text-sky-400"/>;
@@ -14771,7 +14797,7 @@ export default function App() {
                                 {msg.attachment_url && (() => {
                                   const isImg = /\.(png|jpg|jpeg|gif|webp|svg)(\?|$)/i.test(msg.attachment_url) || msg.attachment_url.startsWith('data:image');
                                   return isImg
-                                    ? <img src={staticUrl(msg.attachment_url)} className="max-w-xs max-h-64 rounded-2xl object-cover mb-1 cursor-pointer" onClick={()=>setLightboxSrc(staticUrl(msg.attachment_url))} alt="" loading="lazy" decoding="async"/>
+                                    ? <img src={staticUrl(msg.attachment_url)} className="max-w-xs max-h-64 rounded-2xl object-cover mb-1 cursor-pointer" onClick={()=>setLightboxSrc(staticUrl(msg.attachment_url))} alt="" loading="lazy" decoding="async" onError={retryImgOnError}/>
                                     : <a href={staticUrl(msg.attachment_url)} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.06] border border-white/[0.08] text-xs text-indigo-300 hover:text-indigo-200 mb-1"><Paperclip size={11}/> Załącznik</a>;
                                 })()}
                                 {msg.content && (() => {
@@ -15165,7 +15191,7 @@ export default function App() {
                                               className={`rounded-xl object-cover cursor-zoom-in hover:opacity-90 transition-opacity shadow-lg w-full ${count===3&&idx===2?'col-span-2':''}`}
                                               style={{height: `${h}px`}}
                                               loading="lazy" decoding="async"
-                                              onError={e=>{(e.currentTarget as HTMLImageElement).style.display='none';}}/>
+                                              onError={retryImgOnError}/>
                                           ))}
                                         </div>
                                       );
@@ -15175,7 +15201,7 @@ export default function App() {
                                     <img src={staticUrl(url)} alt="attachment" className="rounded-2xl max-h-64 object-contain cursor-zoom-in hover:opacity-90 transition-opacity shadow-lg"
                                       onClick={()=>setLightboxSrc(staticUrl(url))}
                                       loading="lazy" decoding="async"
-                                      onError={e=>{const t=e.currentTarget;t.onerror=null;t.style.display='none';const p=document.createElement('div');p.className='flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.04] text-zinc-500 text-xs';p.innerHTML='<span>🖼️ Obraz niedostępny</span>';t.parentElement?.appendChild(p);}}/>
+                                      onError={retryImgOnError}/>
                                   ) : (
                                     <AttachmentRenderer url={url} staticUrl={staticUrl} addToast={addToast}/>
                                   );
@@ -16483,7 +16509,7 @@ export default function App() {
                                       </div>
                                     </div>
                                   ) : (
-                                    <img src={item.url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"/>
+                                    <img src={item.url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={retryImgOnError}/>
                                   )}
                                   <div className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <div className="bg-black/60 rounded-md px-1.5 py-0.5 text-[9px] text-white/70">{item.date}</div>

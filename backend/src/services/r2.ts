@@ -73,7 +73,12 @@ export async function uploadToR2(
   try {
     await r2Client.send(new HeadObjectCommand({ Bucket: config.r2.bucket, Key: key }));
     deduplicated = true;
-  } catch {
+    console.log(`[R2] dedup hit: ${key}`);
+  } catch (headErr: any) {
+    if (headErr.name !== 'NoSuchKey' && headErr.$metadata?.httpStatusCode !== 404) {
+      // HeadObject failed for a reason OTHER than "not found" — log it
+      console.warn(`[R2] HeadObject error (proceeding with upload): ${headErr.name} ${headErr.message}`);
+    }
     // Nie istnieje → uploadujemy
     await r2Client.send(new PutObjectCommand({
       Bucket:      config.r2.bucket,
@@ -81,6 +86,7 @@ export async function uploadToR2(
       Body:        buffer,
       ContentType: mimeType,
     }));
+    console.log(`[R2] uploaded: ${key} (${buffer.length} bytes, ${mimeType})`);
   }
 
   // Zawsze zwracamy ścieżkę przez backend proxy — unikamy CORS na r2.dev.
