@@ -22,6 +22,8 @@ export const r2Client = hasCredentials
         accessKeyId:     config.r2.accessKeyId,
         secretAccessKey: config.r2.secretAccessKey,
       },
+      // Fail fast — 2 próby zamiast domyślnych 3, żeby szybciej przejść do disk fallback
+      maxAttempts: 2,
     })
   : null;
 
