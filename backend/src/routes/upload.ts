@@ -71,9 +71,10 @@ const uploadImages = multer({
   fileFilter: imageOnlyFilter,
 });
 
-// Attachments: multer limit = 600MB (max dla Power), per-user limit sprawdzany w handlerze
+// Attachments: zawsze memory storage — handler sam decyduje R2 vs dysk.
+// Dzięki temu możliwy jest fallback na dysk gdy R2 jest nieprawidłowo skonfigurowane.
 const uploadAttachments = multer({
-  storage: r2Enabled ? multer.memoryStorage() : diskStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 600 * 1024 * 1024 }, // 600MB max (Cordyn Power)
   fileFilter: attachmentFilter,
 });
@@ -129,10 +130,21 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response, next) => {
       } catch { /* błąd sprawdzenia → przepuść */ }
     }
 
-    // ── R2 upload or disk fallback ─────────────────────────────────────────
+    // ── R2 upload z automatycznym fallback na dysk ────────────────────────────
+    // Kolejność: 1) spróbuj R2 (jeśli skonfigurowane), 2) zapisz na dysk jako fallback.
+    // Dzięki temu zły endpoint/bucket/brak bucket nie blokuje wysyłania plików.
     let url: string;
     let r2Key: string | null = null;
     let deduplicated = false;
+
+    const saveToDisk = async (): Promise<string> => {
+      const ext      = path.extname(req.file!.originalname).toLowerCase() || '';
+      const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
+      const dir      = path.resolve(path.join(config.uploads.dir, folder));
+      fs.mkdirSync(dir, { recursive: true });
+      await fs.promises.writeFile(path.join(dir, filename), req.file!.buffer!);
+      return `/uploads/${folder}/${filename}`;
+    };
 
     if (r2Enabled && req.file.buffer) {
       try {
@@ -140,11 +152,28 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response, next) => {
         url          = result.url;
         r2Key        = result.key;
         deduplicated = result.deduplicated;
+        console.log(`[upload] R2 ok: ${result.key}`);
       } catch (uploadErr: any) {
-        console.error('[R2 upload error]', uploadErr);
-        return res.status(500).json({ error: 'Błąd uploadu do storage: ' + uploadErr.message });
+        // R2 niedostępne lub błędnie skonfigurowane → zapisz na dysk
+        console.warn(`[upload] R2 failed (${uploadErr?.message}), falling back to disk`);
+        try {
+          url = await saveToDisk();
+          console.log(`[upload] disk fallback ok: ${url}`);
+        } catch (diskErr: any) {
+          console.error('[upload] disk fallback also failed:', diskErr);
+          return res.status(500).json({ error: 'Nie można zapisać pliku (R2 i dysk niedostępne)' });
+        }
+      }
+    } else if (req.file.buffer) {
+      // R2 wyłączone (brak credentials) → dysk
+      try {
+        url = await saveToDisk();
+      } catch (diskErr: any) {
+        console.error('[upload] disk save failed:', diskErr);
+        return res.status(500).json({ error: 'Nie można zapisać pliku' });
       }
     } else {
+      // Multer użył diskStorage (nie powinno się zdarzyć, ale dla pewności)
       url = `/uploads/${folder}/${req.file.filename}`;
     }
 
