@@ -1825,7 +1825,7 @@ function DocsTab({ app }: DocsTabProps) {
     channels: (
       <div>
         <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>Kanały</h2>
-        <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a' }}>Odczyt i zarządzanie kanałami. Bot musi być w serwerze, do którego należy kanał.</p>
+        <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a' }}>Odczyt kanałów, historia wiadomości, wskaźnik pisania i reakcje. Bot musi być zainstalowany na serwerze, do którego należy kanał.</p>
         <EP method="GET" path="/api/v1/channels/:channelId" desc="Dane kanału" auth="Bot"
           params={[{ name: 'channelId', type: 'UUID', req: true, desc: 'ID kanału' }]}
           resp={`{\n  "id": "...",\n  "name": "general",\n  "type": "text",\n  "server_id": "...",\n  "topic": "Kanał ogólny",\n  "slowmode_seconds": 0\n}`} />
@@ -1836,52 +1836,70 @@ function DocsTab({ app }: DocsTabProps) {
             { name: 'before',    type: 'UUID', req: false, desc: 'Pobierz wiadomości przed tym ID' },
             { name: 'after',     type: 'UUID', req: false, desc: 'Pobierz wiadomości po tym ID' },
           ]}
-          resp={`[\n  {\n    "id": "...",\n    "content": "Cześć!",\n    "author": { "id": "...", "username": "graczek" },\n    "created_at": "2025-01-01T12:00:00.000Z",\n    "attachments": [],\n    "reactions": []\n  }\n]`} />
+          resp={`[\n  {\n    "id": "...",\n    "content": "Cześć!",\n    "embed": null,\n    "attachment_url": null,\n    "reply_to_id": null,\n    "author": { "id": "...", "username": "graczek", "is_bot": false },\n    "created_at": "2025-01-01T12:00:00.000Z",\n    "edited": false\n  }\n]`} />
+        <EP method="POST" path="/api/v1/channels/:channelId/typing" desc="Wyślij wskaźnik pisania (typing indicator)" auth="Bot"
+          params={[{ name: 'channelId', type: 'UUID', req: true, desc: 'ID kanału' }]}
+          resp={`// 204 No Content`} />
+        <EP method="GET" path="/api/v1/channels/:channelId/messages/:messageId/reactions" desc="Pobierz reakcje wiadomości z liczbą" auth="Bot"
+          params={[
+            { name: 'channelId', type: 'UUID', req: true, desc: 'ID kanału' },
+            { name: 'messageId', type: 'UUID', req: true, desc: 'ID wiadomości' },
+          ]}
+          resp={`[\n  { "emoji": "👍", "count": 3 },\n  { "emoji": "🐓", "count": 1 }\n]`} />
+        <EP method="PUT" path="/api/v1/channels/:channelId/messages/:messageId/reactions/:emoji/@me" desc="Dodaj reakcję emoji" auth="Bot"
+          params={[
+            { name: 'channelId', type: 'UUID',   req: true, desc: 'ID kanału' },
+            { name: 'messageId', type: 'UUID',   req: true, desc: 'ID wiadomości' },
+            { name: 'emoji',     type: 'string', req: true, desc: 'Emoji URL-encoded, np. %F0%9F%91%8D dla 👍' },
+          ]}
+          resp={`// 204 No Content`} />
+        <EP method="DELETE" path="/api/v1/channels/:channelId/messages/:messageId/reactions/:emoji/@me" desc="Usuń swoją reakcję" auth="Bot"
+          resp={`// 204 No Content`} />
       </div>
     ),
 
     messages: (
       <div>
         <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 800, color: '#f4f4f5' }}>Wiadomości</h2>
-        <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a' }}>Wysyłanie, edycja i usuwanie wiadomości. Scope <code style={{ fontFamily: 'monospace', color: '#818cf8' }}>messages.send</code> wymagany dla botów OAuth2.</p>
-        <EP method="POST" path="/api/v1/channels/:channelId/messages" desc="Wyślij wiadomość" auth="Bot"
+        <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a' }}>Wysyłanie, edycja i usuwanie wiadomości. Scope <code style={{ fontFamily: 'monospace', color: '#818cf8' }}>messages.send</code> wymagany dla botów OAuth2. Przynajmniej <code style={{ fontFamily: 'monospace' }}>content</code> lub <code style={{ fontFamily: 'monospace' }}>embed</code> musi być podane.</p>
+        <EP method="POST" path="/api/v1/channels/:channelId/messages" desc="Wyślij wiadomość (z opcjonalnym embedem)" auth="Bot"
           body={[
-            { name: 'content',    type: 'string', req: false, desc: 'Treść wiadomości (max 2000 znaków)' },
-            { name: 'embed',      type: 'object', req: false, desc: 'Rich embed — {title, description, color, fields[], footer}' },
-            { name: 'reply_to',   type: 'UUID',   req: false, desc: 'ID wiadomości, na którą odpowiadasz' },
-            { name: 'mentions',   type: 'UUID[]', req: false, desc: 'Tablica ID użytkowników do wzmianki' },
+            { name: 'content', type: 'string', req: false, desc: 'Treść wiadomości (max 2000 znaków). Wymagane jeśli brak embed.' },
+            { name: 'embed',   type: 'object', req: false, desc: 'Rich embed — szczegóły poniżej. Wymagane jeśli brak content.' },
           ]}
-          resp={`{\n  "id": "...",\n  "content": "Cześć ze strony bota!",\n  "author": { "id": "bot-id", "username": "moj_bot", "is_bot": true },\n  "created_at": "2025-01-01T12:00:00.000Z"\n}`} />
-        <EP method="DELETE" path="/api/v1/channels/:channelId/messages/:messageId" desc="Usuń wiadomość bota" auth="Bot"
+          resp={`{\n  "id": "a1b2c3d4-...",\n  "content": "Cześć ze strony bota!",\n  "embed": {\n    "title": "Wyniki",\n    "description": "Znaleziono 3 pozycje",\n    "color": 5765604\n  },\n  "author": { "id": "bot-id", "username": "moj_bot", "is_bot": true },\n  "created_at": "2025-01-01T12:00:00.000Z",\n  "edited": false\n}`} />
+        <EP method="PATCH" path="/api/v1/channels/:channelId/messages/:messageId" desc="Edytuj własną wiadomość bota" auth="Bot"
           params={[
             { name: 'channelId', type: 'UUID', req: true, desc: 'ID kanału' },
-            { name: 'messageId', type: 'UUID', req: true, desc: 'ID wiadomości (musi być własnością bota)' },
+            { name: 'messageId', type: 'UUID', req: true, desc: 'ID wiadomości (musi należeć do bota)' },
           ]}
-          resp={`{ "success": true }`} />
-        <EP method="PUT"  path="/api/v1/channels/:channelId/messages/:messageId/reactions/:emoji" desc="Dodaj reakcję emoji" auth="Bot"
+          body={[
+            { name: 'content', type: 'string', req: false, desc: 'Nowa treść wiadomości (max 2000 znaków)' },
+            { name: 'embed',   type: 'object|null', req: false, desc: 'Zaktualizowany embed. Przekaż null aby usunąć embed.' },
+          ]}
+          resp={`{\n  "id": "...",\n  "content": "Zaktualizowana treść",\n  "embed": null,\n  "edited": true,\n  "author": { "id": "bot-id", "username": "moj_bot", "is_bot": true }\n}`} />
+        <EP method="DELETE" path="/api/v1/channels/:channelId/messages/:messageId" desc="Usuń własną wiadomość bota" auth="Bot"
           params={[
-            { name: 'channelId', type: 'UUID',   req: true, desc: 'ID kanału' },
-            { name: 'messageId', type: 'UUID',   req: true, desc: 'ID wiadomości' },
-            { name: 'emoji',     type: 'string', req: true, desc: 'Emoji URL-encoded, np. %F0%9F%91%8D (👍)' },
+            { name: 'channelId', type: 'UUID', req: true, desc: 'ID kanału' },
+            { name: 'messageId', type: 'UUID', req: true, desc: 'ID wiadomości (musi należeć do bota)' },
           ]}
-          resp={`{ "success": true }`} />
-        <EP method="DELETE" path="/api/v1/channels/:channelId/messages/:messageId/reactions/:emoji" desc="Usuń reakcję bota" auth="Bot"
-          resp={`{ "success": true }`} />
+          resp={`// 204 No Content`} />
         <div style={{ marginTop: 20, padding: '14px 16px', background: '#18181b', border: '1px solid #27272a', borderRadius: 10 }}>
-          <h4 style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, color: '#f4f4f5' }}>Embed — pola obiektu</h4>
+          <h4 style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, color: '#f4f4f5' }}>Obiekt Embed — wszystkie pola</h4>
+          <p style={{ margin: '0 0 10px', fontSize: 12, color: '#71717a' }}>Kolor podawaj jako liczbę całkowitą (np. <code style={{ fontFamily: 'monospace', color: '#fbbf24' }}>0x6366f1</code> = <code style={{ fontFamily: 'monospace', color: '#fbbf24' }}>6579697</code>).</p>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead><tr style={{ borderBottom: '1px solid #27272a' }}>{['Pole','Typ','Opis'].map(h => <th key={h} style={{ textAlign: 'left', padding: '4px 8px', color: '#71717a' }}>{h}</th>)}</tr></thead>
             <tbody>
               {[
                 { f: 'title',       t: 'string',   d: 'Tytuł embeda (max 256 znaków)' },
-                { f: 'description', t: 'string',   d: 'Opis (max 4096 znaków, obsługa markdown)' },
-                { f: 'color',       t: 'string',   d: 'Kolor paska bocznego w formacie #RRGGBB' },
-                { f: 'url',         t: 'string',   d: 'URL linku na tytule' },
+                { f: 'description', t: 'string',   d: 'Opis (max 4096 znaków, markdown)' },
+                { f: 'color',       t: 'number',   d: 'Kolor paska — integer hex, np. 0x5865F2 (niebieski)' },
+                { f: 'url',         t: 'string',   d: 'URL jako link na tytule' },
                 { f: 'thumbnail',   t: 'string',   d: 'URL miniaturki (prawy górny róg)' },
-                { f: 'image',       t: 'string',   d: 'URL obrazka w treści' },
-                { f: 'fields',      t: 'Field[]',  d: '[{name, value, inline?}] — max 25 pól' },
-                { f: 'footer',      t: 'object',   d: '{text, icon_url?} — stopka embeda' },
-                { f: 'timestamp',   t: 'ISO 8601', d: 'Data wyświetlana w stopce' },
+                { f: 'image',       t: 'string',   d: 'URL obrazka w treści embeda' },
+                { f: 'fields',      t: 'Field[]',  d: 'Tablica pól: [{name, value, inline?}] — max 25' },
+                { f: 'footer',      t: 'string',   d: 'Tekst stopki (max 2048 znaków)' },
+                { f: 'timestamp',   t: 'ISO 8601', d: 'Data wyświetlana w stopce, np. new Date().toISOString()' },
               ].map(r => (
                 <tr key={r.f} style={{ borderBottom: '1px solid #27272a' }}>
                   <td style={{ padding: '5px 8px' }}><code style={{ fontFamily: 'monospace', color: '#fbbf24' }}>{r.f}</code></td>
@@ -1892,6 +1910,28 @@ function DocsTab({ app }: DocsTabProps) {
             </tbody>
           </table>
         </div>
+        <div style={{ marginTop: 16 }}>
+          <h4 style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: '#f4f4f5' }}>Przykład — wiadomość z embedem</h4>
+          {CB(codeSample(lang, {
+            method: 'POST',
+            url: `${origin}/api/v1/channels/CHANNEL_ID/messages`,
+            body: {
+              content: 'Oto wyniki:',
+              embed: {
+                title: '🏆 Top gracze',
+                description: 'Ranking dzienny',
+                color: 0x5865F2,
+                fields: [
+                  { name: '1. Wacek', value: '1 234 pkt', inline: true },
+                  { name: '2. Kasia',  value: '987 pkt',   inline: true },
+                ],
+                footer: 'Aktualizacja co godzinę',
+                timestamp: '2025-01-01T12:00:00.000Z',
+              },
+            },
+            comment: 'Wyślij wiadomość z embedem',
+          }), 'msg_embed_ex')}
+        </div>
       </div>
     ),
 
@@ -1901,15 +1941,17 @@ function DocsTab({ app }: DocsTabProps) {
         <p style={{ margin: '0 0 20px', fontSize: 14, color: '#71717a', lineHeight: 1.7 }}>
           Boty używają prefiksu <code style={{ fontFamily: 'monospace', color: '#818cf8' }}>/api/v1/</code> z tokenem <code style={{ fontFamily: 'monospace' }}>Authorization: Bot TOKEN</code>. Mają dostęp tylko do serwerów, na których są zainstalowane.
         </p>
-        <div style={{ padding: '14px 16px', background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 10, marginBottom: 20 }}>
-          <h4 style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, color: '#f4f4f5' }}>Uprawnienia bota</h4>
-          <p style={{ margin: '0 0 8px', fontSize: 13, color: '#71717a' }}>Bot po dodaniu do serwera automatycznie otrzymuje rolę <code style={{ fontFamily: 'monospace', color: '#818cf8' }}>Bot</code> i zakres <code style={{ fontFamily: 'monospace' }}>bot messages.read messages.send reactions</code>.</p>
+
+        {/* Uprawnienia */}
+        <div style={{ padding: '14px 16px', background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 10, marginBottom: 24 }}>
+          <h4 style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600, color: '#f4f4f5' }}>Uprawnienia bota (scopes)</h4>
+          <p style={{ margin: '0 0 8px', fontSize: 13, color: '#71717a' }}>Bot po dodaniu do serwera automatycznie ma dostęp do wszystkich zakresów:</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
             {[
-              { s: 'messages.read',  d: 'Odczyt wiadomości z kanałów' },
-              { s: 'messages.send',  d: 'Wysyłanie wiadomości' },
-              { s: 'reactions',      d: 'Dodawanie/usuwanie reakcji' },
-              { s: 'members.read',   d: 'Odczyt listy członków' },
+              { s: 'messages.read', d: 'Odczyt wiadomości z kanałów' },
+              { s: 'messages.send', d: 'Wysyłanie i edycja wiadomości' },
+              { s: 'reactions',     d: 'Dodawanie/usuwanie reakcji' },
+              { s: 'members.read',  d: 'Odczyt listy członków serwera' },
             ].map(p => (
               <div key={p.s} style={{ padding: '6px 10px', background: '#18181b', borderRadius: 6, fontSize: 12 }}>
                 <code style={{ fontFamily: 'monospace', color: '#818cf8' }}>{p.s}</code>
@@ -1918,28 +1960,65 @@ function DocsTab({ app }: DocsTabProps) {
             ))}
           </div>
         </div>
-        <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 700, color: '#f4f4f5' }}>Przykład — Bot wysyłający wiadomość powitalną</h3>
-        {CB(codeSample(lang, {
-          method: 'POST',
-          url: `${origin}/api/v1/channels/CHANNEL_ID/messages`,
-          body: {
-            content: 'Cześć! 👋 Jestem botem. Wpisz /help aby zobaczyć komendy.',
-            embed: { title: 'Witaj na serwerze!', description: 'Miło Cię widzieć.', color: '#6366f1' },
-          },
-          comment: 'Bot wysyła wiadomość powitalną',
-        }), 'bot_hello')}
-        <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 700, color: '#f4f4f5' }}>Przykład — Pobierz ostatnie wiadomości i odpowiedz</h3>
-        {CB(codeSample(lang, {
-          url: `${origin}/api/v1/channels/CHANNEL_ID/messages?limit=10`,
-          comment: 'Pobierz ostatnie 10 wiadomości z kanału',
-        }), 'bot_msgs')}
-        <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 700, color: '#f4f4f5' }}>Wskazówki dla botów</h3>
+
+        {/* Komendy slash */}
+        <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: '#f4f4f5' }}>Komendy slash — /api/v1/bot/commands</h3>
+        <p style={{ margin: '0 0 12px', fontSize: 13, color: '#71717a' }}>Zarejestruj komendy aby pojawiały się w podpowiedziach <code style={{ fontFamily: 'monospace' }}>/</code> w aplikacji. Użytkownicy widzą Twoje komendy jako <code style={{ fontFamily: 'monospace' }}>/kukuryku</code>, <code style={{ fontFamily: 'monospace' }}>/ping</code> itp. Wywołanie komendy dostarcza wiadomość do Twojego webhooka.</p>
+        <EP method="PUT" path="/api/v1/bot/commands" desc="Zastąp WSZYSTKIE komendy bota (atomically)" auth="Bot"
+          body={[
+            { name: '[].name',        type: 'string', req: true,  desc: 'Nazwa komendy — tylko [a-z0-9_-], max 32 znaki' },
+            { name: '[].description', type: 'string', req: true,  desc: 'Opis komendy widoczny w podpowiedzi (max 100 znaków)' },
+            { name: '[].usage',       type: 'string', req: false, desc: 'Przykład użycia, np. /ping [adres] (domyślnie /name)' },
+          ]}
+          resp={`{ "registered": 2 }`} />
+        <EP method="POST" path="/api/v1/bot/commands" desc="Dodaj lub zaktualizuj pojedynczą komendę (upsert)" auth="Bot"
+          body={[
+            { name: 'name',        type: 'string', req: true,  desc: 'Nazwa komendy — tylko [a-z0-9_-], max 32 znaki' },
+            { name: 'description', type: 'string', req: true,  desc: 'Opis komendy (max 100 znaków)' },
+            { name: 'usage',       type: 'string', req: false, desc: 'Przykład użycia (max 100 znaków)' },
+          ]}
+          resp={`{\n  "name": "ping",\n  "description": "Sprawdź opóźnienie bota",\n  "usage": "/ping",\n  "created_at": "2025-01-01T12:00:00.000Z"\n}`} />
+        <EP method="GET" path="/api/v1/bot/commands" desc="Lista wszystkich zarejestrowanych komend" auth="Bot"
+          resp={`[\n  { "name": "kukuryku", "description": "Bot pieje jak kogut", "usage": "/kukuryku", "created_at": "..." },\n  { "name": "ping",     "description": "Sprawdź opóźnienie",   "usage": "/ping",     "created_at": "..." }\n]`} />
+        <EP method="PATCH" path="/api/v1/bot/commands/:name" desc="Zmień opis lub usage jednej komendy" auth="Bot"
+          params={[{ name: 'name', type: 'string', req: true, desc: 'Nazwa komendy do aktualizacji' }]}
+          body={[
+            { name: 'description', type: 'string', req: false, desc: 'Nowy opis komendy (max 100 znaków)' },
+            { name: 'usage',       type: 'string', req: false, desc: 'Nowy przykład użycia (max 100 znaków)' },
+          ]}
+          resp={`{ "name": "ping", "description": "Nowy opis", "usage": "/ping [host]", "created_at": "..." }`} />
+        <EP method="DELETE" path="/api/v1/bot/commands/:name" desc="Usuń pojedynczą komendę" auth="Bot"
+          params={[{ name: 'name', type: 'string', req: true, desc: 'Nazwa komendy do usunięcia' }]}
+          resp={`// 204 No Content`} />
+
+        {/* Webhooki */}
+        <h3 style={{ margin: '24px 0 12px', fontSize: 15, fontWeight: 700, color: '#f4f4f5' }}>Webhooki — zdarzenia przychodzące</h3>
+        <p style={{ margin: '0 0 12px', fontSize: 13, color: '#71717a' }}>Ustaw Webhook URL w Developer Portal. Cordyn wyśle POST na Twój serwer przy każdym zdarzeniu z nagłówkami <code style={{ fontFamily: 'monospace', color: '#818cf8' }}>X-Cordyn-Signature-256</code> i <code style={{ fontFamily: 'monospace', color: '#818cf8' }}>X-Cordyn-Event</code>.</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+          {[
+            { ev: 'MESSAGE_CREATE', d: 'Użytkownik lub inny bot wysłał wiadomość na serwerze. Zawiera pełny obiekt wiadomości z polem author.' },
+            { ev: 'MESSAGE_UPDATE', d: 'Wiadomość została edytowana — zawiera zaktualizowaną treść i embed.' },
+            { ev: 'MESSAGE_DELETE', d: 'Wiadomość usunięta — zawiera id, channel_id, server_id.' },
+            { ev: 'REACTION_ADD',   d: 'Ktoś dodał reakcję — zawiera message_id, channel_id, emoji, user_id.' },
+          ].map(e => (
+            <div key={e.ev} style={{ display: 'flex', gap: 12, padding: '10px 14px', background: '#18181b', border: '1px solid #27272a', borderRadius: 8 }}>
+              <code style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#818cf8', flexShrink: 0, minWidth: 130 }}>{e.ev}</code>
+              <span style={{ fontSize: 12, color: '#71717a' }}>{e.d}</span>
+            </div>
+          ))}
+        </div>
+        <h4 style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: '#f4f4f5' }}>Weryfikacja podpisu</h4>
+        {CB(`const crypto = require('crypto');\n\napp.post('/webhook', express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }), (req, res) => {\n  const sig = req.headers['x-cordyn-signature-256'];\n  const expected = 'sha256=' + crypto\n    .createHmac('sha256', process.env.WEBHOOK_SECRET)\n    .update(req.rawBody)\n    .digest('hex');\n\n  if (sig !== expected) return res.sendStatus(401);\n\n  const { event, data } = req.body;\n  console.log('EVENT:', event, data);\n  res.send('ok');\n});`, 'bot_webhook_verify')}
+        <h4 style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: '#f4f4f5' }}>Przykład — kompletny bot startujący komendy</h4>
+        {CB(`// index.js — rejestruje komendy przy starcie i obsługuje webhooki\nrequire('dotenv').config();\nconst express = require('express');\nconst axios = require('axios');\nconst crypto = require('crypto');\n\nconst api = axios.create({\n  baseURL: '${origin}/api/v1',\n  headers: { Authorization: \`Bot \${process.env.BOT_TOKEN}\` },\n});\n\n// 1. Zarejestruj komendy slash\nawait api.put('/bot/commands', [\n  { name: 'ping',     description: 'Sprawdź opóźnienie bota' },\n  { name: 'kukuryku', description: 'Bot pieje jak kogut 🐓' },\n]);\n\n// 2. Odpowiadaj na komendy przez webhook\nconst app = express();\napp.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));\n\napp.post('/webhook', (req, res) => {\n  // Weryfikuj podpis\n  const sig = req.headers['x-cordyn-signature-256'];\n  const expected = 'sha256=' + crypto\n    .createHmac('sha256', process.env.WEBHOOK_SECRET)\n    .update(req.rawBody).digest('hex');\n  if (sig !== expected) return res.sendStatus(401);\n\n  const { event, data } = req.body;\n  if (event === 'MESSAGE_CREATE' && !data.author.is_bot) {\n    const cmd = data.content.toLowerCase();\n    if (cmd === '/ping') {\n      api.post(\`/channels/\${data.channel_id}/messages\`, { content: '🏓 Pong!' });\n    } else if (cmd === '/kukuryku') {\n      api.post(\`/channels/\${data.channel_id}/messages\`, {\n        embed: { title: '🐓 KUKURYKUUUU!', color: 0xFF6600 },\n      });\n    }\n  }\n  res.send('ok');\n});\n\napp.listen(3001, () => console.log('Bot działa na porcie 3001'));`, 'bot_full_example')}
+
+        <h3 style={{ margin: '16px 0 10px', fontSize: 15, fontWeight: 700, color: '#f4f4f5' }}>Wskazówki</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[
-            { t: 'Nie odpowiadaj na własne wiadomości', d: 'Sprawdzaj czy author.is_bot === false przed odpowiedzią — unikniesz pętli.' },
-            { t: 'Przechowuj token bezpiecznie', d: 'Użyj zmiennych środowiskowych: process.env.BOT_TOKEN lub .env + dotenv.' },
-            { t: 'Obsługuj rate limiting', d: 'Sprawdzaj nagłówki X-RateLimit-*. Przy 429 czekaj X-RateLimit-Reset ms.' },
-            { t: 'Używaj webhook zamiast pollingu', d: 'Zamiast co chwilę pytać o nowe wiadomości, podłącz Socket.IO do zdarzeń realtime.' },
+            { t: 'Nie odpowiadaj na własne wiadomości', d: 'Sprawdzaj author.is_bot === false — unikniesz nieskończonej pętli.' },
+            { t: 'Token w .env, nie w kodzie', d: 'BOT_TOKEN i WEBHOOK_SECRET przechowuj w zmiennych środowiskowych.' },
+            { t: 'Wskaźnik pisania przed długą odpowiedzią', d: 'Wyślij POST /channels/:id/typing zanim zaczniesz obliczenia — dobry UX.' },
+            { t: 'ngrok do lokalnych testów', d: 'Webhook URL musi być publiczny. Użyj ngrok http 3001 i wklej URL do portalu.' },
           ].map((t, i) => (
             <div key={i} style={{ padding: '10px 14px', background: '#18181b', border: '1px solid #27272a', borderRadius: 8 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#f4f4f5', marginBottom: 2 }}>{t.t}</div>
