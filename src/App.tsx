@@ -16008,7 +16008,8 @@ export default function App() {
 
           {/* ─ MEMBERS ONLINE / OFFLINE ─ */}
           {activeView==='servers'&&members.length>0&&(()=>{
-            const online  = members.filter(m=>m.is_bot||m.status==='online'||m.status==='idle'||m.status==='dnd');
+            const devBotMembers = members.filter(m=>m.is_bot && m.role_name==='Bot');
+            const online  = members.filter(m=>!m.is_bot&&(m.status==='online'||m.status==='idle'||m.status==='dnd'));
             const offline = members.filter(m=>!m.is_bot&&(m.status==='offline'||!m.status));
 
             // Group online by primary role
@@ -16100,7 +16101,7 @@ export default function App() {
                     )}
                   </div>
                 )}
-                {/* ── BOTY section — installed bots shown as virtual members ── */}
+                {/* ── BOTY section — built-in bots (music, fun, etc.) ── */}
                 {installedBots.length>0&&(()=>{
                   const botDefs = installedBots.map(inst=>({inst, def:AVAILABLE_BOTS.find(b=>b.id===inst.bot_id)})).filter(x=>x.def);
                   if (!botDefs.length) return null;
@@ -16114,20 +16115,15 @@ export default function App() {
                           <div key={inst.bot_id} className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-violet-500/5 transition-all cursor-default">
                             <div className="relative shrink-0">
                               {(() => { const BotIco = getBotIcon(def!.id); return <div className="w-10 h-10 rounded-xl bg-violet-500/15 border border-violet-500/20 flex items-center justify-center"><BotIco size={18} className="text-violet-300"/></div>; })()}
-                              {/* always-online green dot */}
                               <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[#1a1a2e]"/>
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1.5 flex-wrap">
-                                <p className="text-[13px] font-semibold truncate leading-tight text-violet-200">
-                                  {def!.name}
-                                </p>
+                                <p className="text-[13px] font-semibold truncate leading-tight text-violet-200">{def!.name}</p>
                                 <span className="text-[9px] font-bold px-1 py-0.5 rounded border border-violet-500/40 text-violet-400 bg-violet-500/10 leading-none select-none shrink-0">APP</span>
                               </div>
                               {musicState?.playing && musicState.title ? (
-                                <p className="text-[11px] text-violet-400 truncate leading-tight flex items-center gap-1">
-                                  <Play size={9} className="shrink-0"/> {musicState.title}
-                                </p>
+                                <p className="text-[11px] text-violet-400 truncate leading-tight flex items-center gap-1"><Play size={9} className="shrink-0"/> {musicState.title}</p>
                               ) : (
                                 <p className="text-[11px] text-zinc-600 truncate leading-tight">{def!.category}</p>
                               )}
@@ -16139,6 +16135,33 @@ export default function App() {
                     </div>
                   );
                 })()}
+                {/* ── APLIKACJE section — developer bots added via OAuth2 ── */}
+                {devBotMembers.length>0&&(
+                  <div className="mt-4">
+                    <SectionHeader skey="devbots" label="Aplikacje" count={devBotMembers.length} color="#6366f1"/>
+                    {!collapsedRightSections.has('devbots')&&<div className="flex flex-col gap-0.5">
+                      {devBotMembers.map(m=>(
+                        <div key={m.id} className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-indigo-500/5 transition-all cursor-pointer" onClick={e=>showHoverCard(m.id,e)}>
+                          <div className="relative shrink-0">
+                            {m.avatar_url ? (
+                              <img src={m.avatar_url} alt="" className="w-10 h-10 rounded-xl object-cover"/>
+                            ) : (
+                              <div className="w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/20 flex items-center justify-center text-indigo-300 font-bold text-base">{m.username?.[0]?.toUpperCase()||'B'}</div>
+                            )}
+                            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[#1a1a2e]"/>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="text-[13px] font-semibold truncate leading-tight text-indigo-200">{m.username}</p>
+                              <span className="text-[9px] font-bold px-1 py-0.5 rounded border border-indigo-500/40 text-indigo-400 bg-indigo-500/10 leading-none select-none shrink-0">BOT</span>
+                            </div>
+                            <p className="text-[11px] text-zinc-600 truncate leading-tight">Aplikacja deweloperska</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>}
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -17125,14 +17148,21 @@ export default function App() {
                               <button
                                 disabled={publicBotInstalling === app.client_id}
                                 onClick={async () => {
-                                  if (!activeServer) return;
+                                  if (!activeServer) { addToast('Wybierz serwer przed dodaniem bota.','error'); return; }
                                   setPublicBotInstalling(app.client_id);
                                   try {
                                     await import('./developer/developerApi').then(({ devApi }) =>
                                       devApi.addBotToServer(app.client_id, activeServer)
                                     );
-                                    setInstalledBots(p => [...p, { bot_id: app.bot_user_id, installed_at: new Date().toISOString() } as any]);
-                                  } catch { /* ignore */ } finally {
+                                    addToast(`Bot ${app.name} został dodany do serwera!`,'success');
+                                    // Refresh member list so bot appears in Aplikacje section
+                                    import('./api').then(({ serversApi }) =>
+                                      serversApi.members(activeServer).then(setMembers).catch(()=>{})
+                                    );
+                                  } catch(err:any) {
+                                    const msg = err?.message||'Nie udało się dodać bota. Sprawdź czy jesteś Właścicielem/Adminem serwera.';
+                                    addToast(msg,'error');
+                                  } finally {
                                     setPublicBotInstalling(null);
                                   }
                                 }}
