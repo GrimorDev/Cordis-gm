@@ -15674,9 +15674,9 @@ export default function App() {
                         <textarea ref={msgInputRef} value={msgInput} rows={1}
                           onPaste={e=>{
                             const items = Array.from(e.clipboardData?.items ?? []) as DataTransferItem[];
-                            // DEBUG — usuń po naprawieniu
-                            addToast(`📋 Paste: ${items.length} items — ${items.map(i=>`[${i.kind}/${i.type||'?'}]`).join(' ')}`, 'info');
+                            // DEBUG
                             const result = extractPasteFile(items);
+                            addToast(`📋 result=${result?`size=${result.file.size} img=${result.isImage}`:'null'}`, 'info');
                             if (result) {
                               e.preventDefault();
                               if (result.isImage) applyClipboardImage(result.file);
