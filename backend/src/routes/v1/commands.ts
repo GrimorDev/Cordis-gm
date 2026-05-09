@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { query } from '../../db/pool';
+import { query, getClient } from '../../db/pool';
 
 const router = Router();
 
@@ -41,36 +41,32 @@ router.put('/', async (req: Request, res: Response) => {
     }
   }
 
+  const client = await getClient();
   try {
-    // Replace all commands for this bot atomically
-    await query('BEGIN');
-    await query(
+    await client.query('BEGIN');
+    await client.query(
       'DELETE FROM bot_commands WHERE application_id = $1',
       [p.applicationId]
     );
     if (commands.length > 0) {
-      const vals = commands.map((cmd, i) => {
-        const base = i * 3;
-        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4})`;
-      });
+      const vals4 = commands.map((_, i) => `($${i*4+1}, $${i*4+2}, $${i*4+3}, $${i*4+4})`);
       const params: any[] = [];
       commands.forEach(cmd => {
         params.push(p.applicationId, cmd.name, cmd.description, cmd.usage || `/${cmd.name}`);
       });
-      // rebuild placeholders with 4 params per row
-      const vals4 = commands.map((_, i) => `($${i*4+1}, $${i*4+2}, $${i*4+3}, $${i*4+4})`);
-      await query(
+      await client.query(
         `INSERT INTO bot_commands (application_id, name, description, usage) VALUES ${vals4.join(',')}`,
         params
       );
     }
-    await query('COMMIT');
-
+    await client.query('COMMIT');
     res.json({ registered: commands.length });
   } catch (err) {
-    await query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     console.error('PUT /api/v1/bot/commands error:', err);
     res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    client.release();
   }
 });
 
