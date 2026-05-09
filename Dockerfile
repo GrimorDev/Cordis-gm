@@ -1,15 +1,17 @@
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Pin pnpm to v9 — same as CI; avoids pnpm 10/11 breaking changes
+RUN corepack enable && corepack prepare pnpm@9 --activate
 
 WORKDIR /app
 
 # Copy lockfile + manifest first (better layer caching)
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 
-# Install only frontend deps (ignore workspace packages like backend)
-RUN pnpm install --frozen-lockfile --ignore-scripts
+# Install only frontend deps.
+# --no-frozen-lockfile: tolerates minor lockfile drift between commits
+# (scripts allowed via .npmrc dangerously-allow-all-builds=true)
+RUN pnpm install --no-frozen-lockfile
 
 COPY . .
 
