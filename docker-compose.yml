@@ -115,11 +115,9 @@ services:
       # Node.js heap — leave ~20% RAM headroom for OS + Redis on the same host
       # Adjust NODE_MAX_OLD_SPACE to ~70% of available RAM if running dedicated
       NODE_OPTIONS: "--max-old-space-size=${NODE_MAX_OLD_SPACE:-2048}"
-      # ── Cloudflare R2 (opcjonalne) ───────────────────────────────────
-      # Bez tych zmiennych pliki trafiają na dysk (backend-uploads volume).
-      # R2_ENDPOINT to URL specyficzny dla Twojego konta CF:
-      #   https://{ACCOUNT_ID}.r2.cloudflarestorage.com
-      R2_ENDPOINT: ${R2_ENDPOINT:-}
+      # ── Cloudflare R2 ────────────────────────────────────────────────
+      # Bez R2_ACCESS_KEY_ID i R2_SECRET_ACCESS_KEY pliki idą na dysk.
+      R2_ENDPOINT: ${R2_ENDPOINT:-https://f33e20b4cd126676f4659f7838db83cd.r2.cloudflarestorage.com}
       R2_BUCKET: ${R2_BUCKET:-cordyn}
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
