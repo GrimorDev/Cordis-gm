@@ -10713,13 +10713,30 @@ export default function App() {
       setPollModal({ open: true });
       return;
     }
-    // Bot slash commands — intercept and emit via socket
+    // Bot slash commands — intercept
     if (content.startsWith('/') && activeView === 'servers' && activeChannel && activeServer) {
       const parts = content.slice(1).split(/\s+/);
       const cmdName = parts[0].toLowerCase();
       const args = parts.slice(1);
       const matchedCmd = allSlashCommands.find(c => c.name === cmdName);
       if (matchedCmd) {
+        const isDevBot = devBotCommands.some(c => c.name === cmdName);
+        if (isDevBot) {
+          // Developer bots use webhook delivery — send as a regular message
+          // so deliverToDevBotWebhooks() fires on the backend
+          setMsgInput(''); setSlashQuery(null);
+          setSending(true); setSendError('');
+          try {
+            await messagesApi.send(activeChannel, content.trim(), {});
+            playMessageSent();
+          } catch (err: any) {
+            setSendError(err?.message || 'Nie udało się wysłać komendy');
+          } finally {
+            setSending(false);
+          }
+          return;
+        }
+        // Built-in bots (music, fun, moderacja, etc.) — use socket
         setMsgInput(''); setSlashQuery(null);
         getSocket()?.emit('bot_command' as any, {
           bot: matchedCmd.botId,
