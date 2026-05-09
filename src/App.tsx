@@ -19,7 +19,7 @@ import {
   Music, Gamepad2, ExternalLink, Link2, Link2Off, Film, PhoneIncoming, PhoneMissed, Download, Monitor, Copy,
   Bot, Play, Pause, SkipForward, ListMusic, Package, Slash, Palette,
   Star, Flame, Trophy, Rocket, Gem, Swords, Heart,
-  FileAudio, FileVideo, FileCode2, FileArchive, FileImage, File, ChevronUp,
+  FileAudio, FileVideo, FileCode2, FileArchive, FileImage, File as FileIcon, ChevronUp,
   HardDrive, PieChart, Trash, History,
   Bookmark, BookmarkCheck, Timer, Square, ImageIcon, Moon,
   Keyboard, Radio, Compass, CalendarPlus, Mic2,
@@ -2305,7 +2305,7 @@ function getFileIcon(type: ReturnType<typeof getFileRenderType>, size = 14): Rea
     case 'archive': return <FileArchive size={size} className="text-amber-400"/>;
     case 'code':    return <FileCode2 size={size} className="text-emerald-400"/>;
     case 'text':    return <FileText size={size} className="text-zinc-400"/>;
-    default:        return <File size={size} className="text-zinc-400"/>;
+    default:        return <FileIcon size={size} className="text-zinc-400"/>;
   }
 }
 
@@ -2468,7 +2468,7 @@ function AttachmentRenderer({ url, staticUrl, addToast }: { url: string; staticU
     <div className="mt-1.5">
       <button onClick={handleDownload} disabled={downloading}
         className="inline-flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs text-zinc-300 hover:bg-white/[0.07] transition-colors disabled:opacity-60 cursor-pointer w-auto">
-        <File size={15} className="shrink-0 text-zinc-500"/>
+        <FileIcon size={15} className="shrink-0 text-zinc-500"/>
         <div className="min-w-0 text-left">
           <p className="font-semibold truncate max-w-[220px]">{name}</p>
           <p className="text-zinc-600 text-[10px]">{ext.toUpperCase() || 'PLIK'} · {downloading ? 'Pobieranie…' : 'Pobierz'}</p>
@@ -15674,9 +15674,7 @@ export default function App() {
                         <textarea ref={msgInputRef} value={msgInput} rows={1}
                           onPaste={e=>{
                             const items = Array.from(e.clipboardData?.items ?? []) as DataTransferItem[];
-                            // DEBUG
                             const result = extractPasteFile(items);
-                            addToast(`📋 result=${result?`size=${result.file.size} img=${result.isImage}`:'null'}`, 'info');
                             if (result) {
                               e.preventDefault();
                               if (result.isImage) applyClipboardImage(result.file);
