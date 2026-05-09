@@ -24,6 +24,7 @@ import {
   Bookmark, BookmarkCheck, Timer, Square, ImageIcon, Moon,
   Keyboard, Radio, Compass, CalendarPlus, Mic2,
   Home, BookOpen, TrendingUp, Layers, SmilePlus, Smartphone,
+  Clipboard,
   type LucideIcon
 } from 'lucide-react';
 import {
@@ -7751,6 +7752,7 @@ export default function App() {
   const currentUserRef      = useRef(currentUser);
   const activeCallRef       = useRef(activeCall);
   const activeDmUserIdRef   = useRef(activeDmUserId);
+  const activeChannelRef    = useRef(activeChannel);
   const incomingCallRef     = useRef(incomingCall);
   const callConnectedRef    = useRef(false); // true after call_accepted (WebRTC established)
   const activeGroupDmRef    = useRef<string|null>(null);
@@ -9607,6 +9609,7 @@ export default function App() {
   useEffect(() => { activeCallRef.current     = activeCall;     }, [activeCall]);
   useEffect(() => { incomingCallRef.current   = incomingCall;   }, [incomingCall]);
   useEffect(() => { activeDmUserIdRef.current = activeDmUserId; }, [activeDmUserId]);
+  useEffect(() => { activeChannelRef.current = activeChannel; }, [activeChannel]);
   useEffect(() => { activeGroupDmRef.current  = activeGroupDm;  }, [activeGroupDm]);
   useEffect(() => { activeViewRef.current     = activeView;     }, [activeView]);
   useEffect(() => { activeServerRef.current   = activeServer;   }, [activeServer]);
@@ -9924,44 +9927,71 @@ export default function App() {
   }, [isAuthenticated]);
 
   // ── Global paste listener — łapie Ctrl+V z całego okna (screenshoty!) ──
+  const applyClipboardImage = (file: File) => {
+    setAttachFile(file);
+    setAttachPreview(URL.createObjectURL(file));
+    setAttachFiles([]);
+    setTimeout(() => msgInputRef.current?.focus(), 0);
+  };
+  const applyClipboardFile = (file: File) => {
+    if (file.size > 50 * 1024 * 1024) { setShowPowerModal(true); return; }
+    setAttachFile(file);
+    setAttachPreview(file.type.startsWith('image/') ? URL.createObjectURL(file) : null);
+    setAttachFiles([]);
+    setTimeout(() => msgInputRef.current?.focus(), 0);
+  };
+
   useEffect(() => {
     if (!isAuthenticated) return;
-    const handler = (e: ClipboardEvent) => {
+    const handler = async (e: ClipboardEvent) => {
       // Jeśli focus jest w innym input/textarea poza msgInputRef — nie przechwytuj
       const active = document.activeElement;
       const isMsgInput = active === msgInputRef.current;
       const isOtherInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') && !isMsgInput;
       if (isOtherInput) return;
-      // Musimy być w widoku czatu (serwer lub DM)
-      if (!activeChannel && !activeDmUserIdRef.current) return;
+      // Musimy być w widoku czatu (serwer lub DM) — używamy ref-ów żeby nie mieć stale closure
+      if (!activeChannelRef.current && !activeDmUserIdRef.current) return;
 
       const items = Array.from(e.clipboardData?.items ?? []) as DataTransferItem[];
-      // 1) Obrazki i screenshoty — priorytet po type
+
+      // 1) Obrazki z clipboardData (np. skopiowane z przeglądarki, drag z innej aplikacji)
       const imgItem = items.find(it => it.type.startsWith('image/'));
       if (imgItem) {
         e.preventDefault();
         const file = imgItem.getAsFile();
         if (!file) return;
         const ext = file.type.split('/').pop()?.split('+')[0] || 'png';
-        const named = new File([file], `paste-${Date.now()}.${ext}`, { type: file.type });
-        setAttachFile(named);
-        setAttachPreview(URL.createObjectURL(named));
-        setTimeout(() => msgInputRef.current?.focus(), 0);
+        applyClipboardImage(new File([file], `paste-${Date.now()}.${ext}`, { type: file.type }));
         return;
       }
-      // 2) Inne pliki (tylko gdy focus nie jest w textarea — żeby nie blokować copy-paste tekstu)
+
+      // 2) Fallback: Clipboard API — dla Tauri/Desktop gdzie Print Screen / Snipping Tool
+      //    zapisuje obraz jako system bitmap nie dostępny przez clipboardData.items
+      if (!imgItem && navigator.clipboard?.read) {
+        try {
+          const clipItems = await navigator.clipboard.read();
+          for (const ci of clipItems) {
+            const imgType = ci.types.find(t => t.startsWith('image/'));
+            if (imgType) {
+              e.preventDefault();
+              const blob = await ci.getType(imgType);
+              const ext = imgType.split('/')[1] || 'png';
+              applyClipboardImage(new File([blob], `paste-${Date.now()}.${ext}`, { type: imgType }));
+              return;
+            }
+          }
+        } catch { /* Clipboard API odmówiona lub nie dostępna — ignorujemy */ }
+      }
+
+      // 3) Inne pliki (tylko gdy focus nie jest w textarea — żeby nie blokować copy-paste tekstu)
       if (!isMsgInput) {
         const fileItem = items.find(it => it.kind === 'file');
         if (fileItem) {
           const file = fileItem.getAsFile();
           if (!file) return;
-          if (file.size > 50 * 1024 * 1024) { setShowPowerModal(true); return; }
           e.preventDefault();
           const ext = file.type.split('/').pop()?.split('+')[0] || 'bin';
-          const named = new File([file], `paste-${Date.now()}.${ext}`, { type: file.type });
-          setAttachFile(named);
-          setAttachPreview(null);
-          setTimeout(() => msgInputRef.current?.focus(), 0);
+          applyClipboardFile(new File([file], `paste-${Date.now()}.${ext}`, { type: file.type }));
         }
       }
     };
@@ -14467,30 +14497,40 @@ export default function App() {
                   if (file.type.startsWith('image/')) setAttachPreview(URL.createObjectURL(file));
                   else setAttachPreview(null);
                 }}
-                onPaste={e=>{
+                onPaste={async e=>{
                   const items = Array.from(e.clipboardData?.items ?? []) as DataTransferItem[];
-                  // 1) Szukamy obrazka po TYPE (screenshoty, skopiowane grafiki)
+                  // 1) Obrazki po TYPE
                   const imgItem = items.find(it => it.type.startsWith('image/'));
                   if (imgItem) {
                     e.preventDefault();
                     const file = imgItem.getAsFile();
                     if (!file) return;
                     const ext = file.type.split('/').pop()?.split('+')[0] || 'png';
-                    const named = new File([file], `paste-${Date.now()}.${ext}`, { type: file.type });
-                    setAttachFile(named); setAttachPreview(URL.createObjectURL(named));
-                    msgInputRef.current?.focus(); return;
+                    applyClipboardImage(new File([file], `paste-${Date.now()}.${ext}`, { type: file.type })); return;
                   }
-                  // 2) Inne pliki (zip, mp3, itd.) po KIND
+                  // 2) Fallback Clipboard API (Tauri Desktop)
+                  if (navigator.clipboard?.read) {
+                    try {
+                      const clipItems = await navigator.clipboard.read();
+                      for (const ci of clipItems) {
+                        const imgType = ci.types.find(t => t.startsWith('image/'));
+                        if (imgType) {
+                          e.preventDefault();
+                          const blob = await ci.getType(imgType);
+                          const ext = imgType.split('/')[1] || 'png';
+                          applyClipboardImage(new File([blob], `paste-${Date.now()}.${ext}`, { type: imgType })); return;
+                        }
+                      }
+                    } catch { /* brak uprawnień */ }
+                  }
+                  // 3) Inne pliki po KIND
                   const fileItem = items.find(it => it.kind === 'file');
                   if (fileItem) {
                     const file = fileItem.getAsFile();
                     if (!file) return;
-                    if (file.size > 50*1024*1024) { setShowPowerModal(true); return; }
                     e.preventDefault();
                     const ext = file.type.split('/').pop()?.split('+')[0] || 'bin';
-                    const named = new File([file], `paste-${Date.now()}.${ext}`, { type: file.type });
-                    setAttachFile(named); setAttachPreview(null);
-                    msgInputRef.current?.focus();
+                    applyClipboardFile(new File([file], `paste-${Date.now()}.${ext}`, { type: file.type }));
                   }
                 }}>
                 {/* ── Stream mode DM blur overlay ── */}
@@ -15584,6 +15624,44 @@ export default function App() {
                                     <p className="text-[10px] text-zinc-600 leading-tight">Zdjęcia, wideo, dokumenty…</p>
                                   </div>
                                 </button>
+                                {/* Wklej ze schowka */}
+                                <button type="button"
+                                  onClick={async ()=>{
+                                    setPlusMenuOpen(false);
+                                    if (!navigator.clipboard?.read) {
+                                      addToast('Twoja przeglądarka nie obsługuje odczytu schowka', 'error'); return;
+                                    }
+                                    try {
+                                      const clipItems = await navigator.clipboard.read();
+                                      for (const ci of clipItems) {
+                                        const imgType = ci.types.find(t => t.startsWith('image/'));
+                                        if (imgType) {
+                                          const blob = await ci.getType(imgType);
+                                          const ext = imgType.split('/')[1] || 'png';
+                                          applyClipboardImage(new File([blob], `paste-${Date.now()}.${ext}`, { type: imgType })); return;
+                                        }
+                                        // Plik nie-obrazkowy
+                                        const fileType = ci.types.find(t => t !== 'text/plain' && t !== 'text/html');
+                                        if (fileType) {
+                                          const blob = await ci.getType(fileType);
+                                          const ext = fileType.split('/')[1] || 'bin';
+                                          applyClipboardFile(new File([blob], `paste-${Date.now()}.${ext}`, { type: fileType })); return;
+                                        }
+                                      }
+                                      addToast('Schowek nie zawiera obrazka ani pliku', 'info');
+                                    } catch {
+                                      addToast('Brak dostępu do schowka — zezwól w ustawieniach przeglądarki', 'error');
+                                    }
+                                  }}
+                                  className="flex items-center gap-3 w-full px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
+                                  <div className="w-8 h-8 rounded-xl bg-sky-500/15 flex items-center justify-center shrink-0">
+                                    <Clipboard size={15} className="text-sky-400"/>
+                                  </div>
+                                  <div>
+                                    <p className="font-semibold text-sm leading-tight">Wklej ze schowka</p>
+                                    <p className="text-[10px] text-zinc-600 leading-tight">Obrazek, screenshot lub plik</p>
+                                  </div>
+                                </button>
                                 {/* Utwórz ankietę — tylko na serwerach */}
                                 {activeView==='servers' && (
                                   <button type="button"
@@ -15626,28 +15704,40 @@ export default function App() {
                           <Edit3 size={14}/>
                         </button>
                         <textarea ref={msgInputRef} value={msgInput} rows={1}
-                          onPaste={e=>{
+                          onPaste={async e=>{
                             const items = Array.from(e.clipboardData?.items ?? []) as DataTransferItem[];
-                            // 1) Obrazki (screenshoty, print screen) — szukaj po type, nie kind
+                            // 1) Obrazki (screenshoty, print screen) — szukaj po type
                             const imgItem = items.find(it => it.type.startsWith('image/'));
                             if (imgItem) {
                               e.preventDefault();
                               const file = imgItem.getAsFile();
                               if (!file) return;
                               const ext = file.type.split('/').pop()?.split('+')[0] || 'png';
-                              const named = new File([file], `paste-${Date.now()}.${ext}`, { type: file.type });
-                              setAttachFile(named); setAttachPreview(URL.createObjectURL(named)); return;
+                              applyClipboardImage(new File([file], `paste-${Date.now()}.${ext}`, { type: file.type })); return;
                             }
-                            // 2) Inne pliki
+                            // 2) Fallback Clipboard API (Tauri Desktop — Print Screen, Snipping Tool)
+                            if (navigator.clipboard?.read) {
+                              try {
+                                const clipItems = await navigator.clipboard.read();
+                                for (const ci of clipItems) {
+                                  const imgType = ci.types.find(t => t.startsWith('image/'));
+                                  if (imgType) {
+                                    e.preventDefault();
+                                    const blob = await ci.getType(imgType);
+                                    const ext = imgType.split('/')[1] || 'png';
+                                    applyClipboardImage(new File([blob], `paste-${Date.now()}.${ext}`, { type: imgType })); return;
+                                  }
+                                }
+                              } catch { /* brak uprawnień do Clipboard API */ }
+                            }
+                            // 3) Inne pliki (zip, mp3, pdf itd.)
                             const fileItem = items.find(it => it.kind === 'file');
                             if (fileItem) {
                               const file = fileItem.getAsFile();
                               if (!file) return;
-                              if (file.size > 50*1024*1024) { setShowPowerModal(true); return; }
                               e.preventDefault();
                               const ext = file.type.split('/').pop()?.split('+')[0] || 'bin';
-                              const named = new File([file], `paste-${Date.now()}.${ext}`, { type: file.type });
-                              setAttachFile(named); setAttachPreview(null);
+                              applyClipboardFile(new File([file], `paste-${Date.now()}.${ext}`, { type: file.type }));
                             }
                           }}
                           onChange={e=>{
