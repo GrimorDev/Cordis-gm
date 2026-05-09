@@ -347,6 +347,30 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// ── Bot slash commands for a server ──────────────────────────────────────────
+
+// GET /api/servers/:id/bot-commands — all slash commands from installed dev bots
+router.get('/:id/bot-commands', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!(await isMember(req.params.id, req.user!.id))) {
+      return res.status(403).json({ error: 'No access' });
+    }
+    const { rows } = await query(
+      `SELECT bc.name, bc.description, bc.usage,
+              da.name AS bot_name, da.icon_url AS bot_avatar, da.bot_user_id,
+              u.username AS bot_username, u.avatar_url AS bot_user_avatar
+       FROM bot_server_installations bsi
+       JOIN developer_applications da ON da.id = bsi.application_id
+       JOIN bot_commands bc ON bc.application_id = da.id
+       LEFT JOIN users u ON u.id = da.bot_user_id
+       WHERE bsi.server_id = $1
+       ORDER BY da.name, bc.name`,
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch { res.status(500).json({ error: 'Internal server error' }); }
+});
+
 // ── Members ───────────────────────────────────────────────────────────────────
 
 // GET /api/servers/:id/members

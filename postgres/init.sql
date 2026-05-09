@@ -412,6 +412,20 @@ CREATE INDEX IF NOT EXISTS idx_channel_read_state_lookup
 CREATE INDEX IF NOT EXISTS idx_messages_unread_count
     ON messages (channel_id, created_at DESC, sender_id);
 
+-- ── Bot slash commands registry ───────────────────────────────────────
+-- Bots register their slash commands via PUT /api/v1/bot/commands.
+-- Frontend fetches and shows them in the / autocomplete.
+CREATE TABLE IF NOT EXISTS bot_commands (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  application_id UUID NOT NULL REFERENCES developer_applications(id) ON DELETE CASCADE,
+  name           VARCHAR(32)  NOT NULL,
+  description    VARCHAR(100) NOT NULL,
+  usage          VARCHAR(100) NOT NULL DEFAULT '',
+  created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  UNIQUE (application_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_bot_commands_app ON bot_commands(application_id);
+
 -- ── DM conversations: last message lookup ─────────────────────────────
 -- Covers LATERAL subquery ORDER BY created_at DESC LIMIT 1 per conversation.
 CREATE INDEX IF NOT EXISTS idx_dm_messages_conv_time_covering

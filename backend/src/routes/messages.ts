@@ -8,8 +8,47 @@ import { redis, KEYS, checkSlowmode, setSlowmode } from '../redis/client';
 import { runAutomations } from '../services/automations';
 import { sendPushToUser } from '../services/push';
 import { deleteFromR2 } from '../services/r2';
+import crypto from 'crypto';
 
 const router = Router();
+
+/**
+ * Forward a user message to every developer bot installed in the server.
+ * Runs fire-and-forget — never blocks message delivery.
+ */
+async function deliverToDevBotWebhooks(serverId: string, message: any): Promise<void> {
+  const { rows: bots } = await query(
+    `SELECT da.webhook_url, da.webhook_secret
+     FROM bot_server_installations bsi
+     JOIN developer_applications da ON da.id = bsi.application_id
+     WHERE bsi.server_id = $1
+       AND da.webhook_url IS NOT NULL
+       AND da.webhook_url <> ''`,
+    [serverId]
+  );
+  if (!bots.length) return;
+
+  const payload = JSON.stringify({ event: 'MESSAGE_CREATE', data: message });
+
+  await Promise.allSettled(
+    bots.map(({ webhook_url, webhook_secret }: any) => {
+      const sig = 'sha256=' + crypto
+        .createHmac('sha256', webhook_secret || '')
+        .update(payload)
+        .digest('hex');
+      return fetch(webhook_url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Cordyn-Signature-256': sig,
+          'X-Cordyn-Event': 'MESSAGE_CREATE',
+        },
+        body: payload,
+        signal: AbortSignal.timeout(4000),
+      });
+    })
+  );
+}
 
 interface ChannelAccess { serverId: string; serverName: string; channelName: string; channelType: string; roleInServer: string; slowmodeSeconds: number; }
 
@@ -200,6 +239,12 @@ router.post('/channel/:channelId', authMiddleware, msgLimiter,
 
       // Invalidate latest-messages cache for this channel
       try { await redis.del(KEYS.msgCache(req.params.channelId)); } catch { /* ignore */ }
+
+      // ── Forward user messages to installed bot webhooks (fire-and-forget) ──
+      // Deliver MESSAGE_CREATE to every bot in this server that has a webhook URL.
+      if (access.serverId) {
+        deliverToDevBotWebhooks(access.serverId, full).catch(() => {});
+      }
 
       // ── automation triggers ───────────────────────────────────────────
       if (access.serverId) {

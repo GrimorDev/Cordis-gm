@@ -7692,6 +7692,8 @@ export default function App() {
   const [appsModalOpen, setAppsModalOpen] = useState(false);
   const [appsTab, setAppsTab] = useState<'browse'|'installed'|'public'>('browse');
   const [installedBots, setInstalledBots] = useState<import('./api').InstalledBot[]>([]);
+  // Slash commands from developer bots registered via PUT /api/v1/bot/commands
+  const [devBotCommands, setDevBotCommands] = useState<{name:string;description:string;usage:string;bot_name:string;bot_avatar:string|null;bot_user_avatar:string|null;bot_username:string}[]>([]);
   const [botInstalling, setBotInstalling] = useState<string|null>(null);
   const [publicApps, setPublicApps] = useState<import('./developer/developerApi').PublicApp[]>([]);
   const [publicAppsLoading, setPublicAppsLoading] = useState(false);
@@ -10342,10 +10344,22 @@ export default function App() {
   }, [musicVolume]);
 
   const allSlashCommands = activeView === 'servers' && activeServer
-    ? installedBots.flatMap(inst => {
-        const bot = AVAILABLE_BOTS.find(b => b.id === inst.bot_id);
-        return bot ? bot.commands.map(cmd => ({ ...cmd, botName: bot.name, botId: bot.id, botAvatar: bot.avatar })) : [];
-      })
+    ? [
+        // Built-in bots (music, fun, etc.)
+        ...installedBots.flatMap(inst => {
+          const bot = AVAILABLE_BOTS.find(b => b.id === inst.bot_id);
+          return bot ? bot.commands.map(cmd => ({ ...cmd, botName: bot.name, botId: bot.id, botAvatar: bot.avatar })) : [];
+        }),
+        // Developer bots registered via PUT /api/v1/bot/commands
+        ...devBotCommands.map(cmd => ({
+          name: cmd.name,
+          description: cmd.description,
+          usage: cmd.usage,
+          botName: cmd.bot_name || cmd.bot_username || 'Bot',
+          botId: cmd.bot_username || cmd.bot_name || 'dev',
+          botAvatar: cmd.bot_user_avatar || cmd.bot_avatar || null,
+        })),
+      ]
     : [];
   const slashSuggestions = slashQuery !== null
     ? allSlashCommands.filter(c => c.name.toLowerCase().startsWith(slashQuery.toLowerCase())).slice(0, 8)
@@ -10628,12 +10642,20 @@ export default function App() {
   // Reset slowmode and pinned panel when switching channels
   useEffect(() => { setSlowmodeLeft(0); setShowPinned(false); setPinnedMsgs([]); }, [activeChannel]);
 
-  // Load installed bots whenever the active server changes (also when apps modal opens)
+  // Load installed bots + dev bot slash commands whenever active server changes
   useEffect(() => {
     if (activeServer) {
       botsApi.list(activeServer).then(setInstalledBots).catch(() => setInstalledBots([]));
+      // Load slash commands registered by developer bots in this server
+      fetch(`/api/servers/${activeServer}/bot-commands`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('cordyn_token') || ''}` },
+      })
+        .then(r => r.ok ? r.json() : [])
+        .then(setDevBotCommands)
+        .catch(() => setDevBotCommands([]));
     } else {
       setInstalledBots([]);
+      setDevBotCommands([]);
     }
   }, [activeServer, appsModalOpen]);
 

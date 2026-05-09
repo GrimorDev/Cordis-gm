@@ -3,6 +3,7 @@ import { v1AuthMiddleware } from '../../middleware/botAuth';
 import usersRouter from './users';
 import guildsRouter from './guilds';
 import channelsRouter from './channels';
+import commandsRouter from './commands';
 import rateLimit from 'express-rate-limit';
 import { RedisStore } from 'rate-limit-redis';
 import { redis } from '../../redis/client';
@@ -54,6 +55,7 @@ router.use((req, _res, next) => {
 router.use('/users', usersRouter);
 router.use('/guilds', guildsRouter);
 router.use('/channels', channelsRouter);
+router.use('/bot/commands', commandsRouter);
 
 // API info
 router.get('/', (_req, res) => {
