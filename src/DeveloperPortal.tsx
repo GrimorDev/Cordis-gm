@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { devApi, DevApplication, BotServer, MyServer } from './developer/developerApi';
+import { uploadFile } from './api';
 
 // ===== INLINE SVG ICONS =====
 const CopyIcon = () => (
@@ -804,15 +805,7 @@ function BotTab({ app, onUpdate }: BotTabProps) {
     setSavingBot(true);
     setBotEditMsg(null);
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await fetch('/api/upload/image?folder=avatars', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${localStorage.getItem('cordis_token') || ''}` },
-        body: fd,
-      });
-      if (!res.ok) throw new Error('Upload avatara nie powiódł się');
-      const { url } = await res.json();
+      const url = await uploadFile(file, 'avatars');
       await devApi.updateBot(app.id, { avatar_url: url });
       const updated = await devApi.getApp(app.id);
       onUpdate(updated);
