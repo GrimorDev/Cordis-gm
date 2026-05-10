@@ -388,6 +388,40 @@ export async function uploadFile(file: File, folder: string): Promise<string> {
   return data.url;
 }
 
+/** Upload with real-time progress (0–100). Uses XHR instead of fetch. */
+export function uploadFileWithProgress(
+  file: File,
+  folder: string,
+  onProgress: (pct: number) => void,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const token = getToken();
+    const fd = new FormData();
+    fd.append('file', file);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${BASE}/upload?folder=${folder}`);
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          onProgress(100);
+          resolve(data.url);
+        } else {
+          reject(new ApiError(xhr.status, data.error || `HTTP ${xhr.status}`));
+        }
+      } catch {
+        reject(new ApiError(xhr.status, `HTTP ${xhr.status}`));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Network error'));
+    xhr.send(fd);
+  });
+}
+
 // ── Users ──────────────────────────────────────────────────────────────────
 export const users = {
   get: (id: string) => req<UserProfile>('GET', `/users/${id}`),

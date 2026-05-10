@@ -32,6 +32,43 @@ body::before {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Marquee / scrolling text on hover
+   Usage: <span class="marquee-host"><span class="marquee-roll">
+            <span>{text} · </span><span aria-hidden>{text} · </span>
+          </span></span>
+   Tekst przewija się w pętli tylko przy najechaniu kursorem.
+   Bez hoveru: clip (tekst ucinany bez kropek — użyj truncate na rodzicu)
+───────────────────────────────────────────────────────────────────────── */
+.marquee-host {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: default;
+  min-width: 0;
+}
+
+.marquee-roll {
+  display: inline-flex;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+/* Płynne przewijanie przy hoveru — pętla bezkońca */
+.marquee-host:hover .marquee-roll {
+  animation: marquee-slide var(--marquee-dur, 12s) linear infinite;
+}
+
+/* Delikatne opóźnienie startu żeby nie migało od razu */
+.marquee-host:hover .marquee-roll {
+  animation-delay: 0.4s;
+}
+
+@keyframes marquee-slide {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    Glassmorphism — macOS/WKWebView performance notes:
    backdrop-filter is GPU-expensive on WKWebView. Rules:
    • Sidebars / large panels: high opacity bg (0.92+) + LOW blur (10px) → GPU stays sane

@@ -151,19 +151,33 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response, next) => {
 
     // ── R2 backup w tle (fire-and-forget, nie blokuje odpowiedzi) ─────────────
     // Cel: CDN/deduplication backup. Błędy R2 nie wpływają na odpowiedź.
+    // Retry z exponential backoff: 3 próby co 2s, 4s, 8s
     let r2Key: string | null = null;
     let deduplicated = false;
 
     if (r2Enabled && req.file.buffer) {
-      uploadToR2(req.file.buffer, req.file.mimetype, req.file.originalname)
-        .then(result => {
-          r2Key        = result.key;
-          deduplicated = result.deduplicated;
-          console.log(`[upload] R2 backup ok: ${result.key}${result.deduplicated ? ' (dedup)' : ''}`);
-        })
-        .catch(err => {
-          console.warn(`[upload] R2 backup failed (plik jest na dysku): ${err?.message}`);
-        });
+      const buf = Buffer.from(req.file.buffer); // capture reference before multer clears it
+      const mime = req.file.mimetype;
+      const orig = req.file.originalname;
+      (async () => {
+        const delays = [0, 2000, 4000, 8000];
+        for (let attempt = 0; attempt < delays.length; attempt++) {
+          if (delays[attempt] > 0) await new Promise(r => setTimeout(r, delays[attempt]));
+          try {
+            const result = await uploadToR2(buf, mime, orig);
+            r2Key        = result.key;
+            deduplicated = result.deduplicated;
+            console.log(`[upload] R2 backup ok (attempt ${attempt + 1}): ${result.key}${result.deduplicated ? ' (dedup)' : ''}`);
+            return;
+          } catch (err: any) {
+            if (attempt < delays.length - 1) {
+              console.warn(`[upload] R2 attempt ${attempt + 1} failed, retrying: ${err?.message}`);
+            } else {
+              console.warn(`[upload] R2 backup permanently failed after ${delays.length} attempts: ${err?.message}`);
+            }
+          }
+        }
+      })();
     }
 
     // ── Track quota ────────────────────────────────────────────────────────────

@@ -31,7 +31,7 @@ import {
   auth, users, serversApi, channelsApi, messagesApi, dmsApi, friendsApi, forumApi, adminApi,
   gamesApi, spotifyApi, twitchApi, steamApi, youtubeApi, kickApi, epicApi, twoFactorApi,
   emojisApi, notesApi, pollsApi, automationsApi, dmPinApi, pushApi, bookmarksApi,
-  uploadFile, setToken, clearToken, getToken,
+  uploadFile, uploadFileWithProgress, setToken, clearToken, getToken,
   type BookmarkEntry, type BookmarkFolder,
   type UserProfile, type ServerData, type ServerFull, type ServerRole,
   type ChannelData, type MessageFull, type DmConversation,
@@ -2249,6 +2249,38 @@ const STATUS_COL: Record<string, string> = {
   idle:   '#faa81a',
   dnd:    '#ed4245',
 };
+function MarqueeText({ text, className = '', style }: { text: string; className?: string; style?: React.CSSProperties }) {
+  const hostRef = useRef<HTMLSpanElement>(null);
+  const rollRef = useRef<HTMLSpanElement>(null);
+  const [overflows, setOverflows] = useState(false);
+
+  useEffect(() => {
+    setOverflows(false); // reset on text change so we measure un-doubled content
+    const id = requestAnimationFrame(() => {
+      const host = hostRef.current; const roll = rollRef.current;
+      if (host && roll) setOverflows(roll.offsetWidth > host.clientWidth);
+    });
+    const ro = new ResizeObserver(() => {
+      const host = hostRef.current; const roll = rollRef.current;
+      if (host && roll) setOverflows(roll.offsetWidth > host.clientWidth);
+    });
+    if (hostRef.current) ro.observe(hostRef.current);
+    return () => { cancelAnimationFrame(id); ro.disconnect(); };
+  }, [text]);
+
+  const SEP = ' · ';
+  const dur = Math.max(6, Math.min(20, text.length * 0.35));
+  return (
+    <span ref={hostRef} className={`marquee-host ${className}`} style={style}>
+      <span ref={rollRef}
+        className={overflows ? 'marquee-roll' : ''}
+        style={overflows ? { '--marquee-dur': `${dur}s` } as React.CSSProperties : undefined}>
+        {overflows ? text + SEP + text + SEP : text}
+      </span>
+    </span>
+  );
+}
+
 function StatusBadge({ status, size = 14, className = '' }: { status: string; size?: number; className?: string }) {
   const r = size / 2;
   const col = STATUS_COL[status] ?? '#747f8d';
@@ -6637,8 +6669,8 @@ function SpotifyDisplay({ spotify }: { spotify: SpotifyData }) {
                   {cp.is_playing ? 'Teraz gra' : 'Ostatnio grał'}
                 </span>
               </div>
-              <p className="text-sm font-semibold text-white truncate">{cp.name}</p>
-              <p className="text-xs text-zinc-500 truncate">{cp.artists}</p>
+              <MarqueeText text={cp.name} className="text-sm font-semibold text-white block"/>
+              <MarqueeText text={cp.artists} className="text-xs text-zinc-500 block"/>
             </div>
             {cp.external_url && (
               <a href={cp.external_url} target="_blank" rel="noopener noreferrer"
@@ -7243,8 +7275,8 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
                   : <div className="w-9 h-9 bg-[#1DB954]/15 rounded-lg flex items-center justify-center shrink-0"><Music size={14} className="text-[#1DB954]"/></div>}
                 <div className="min-w-0 flex-1">
                   <p className="text-[10px] text-[#1DB954] font-semibold uppercase tracking-widest mb-0.5">{tl('profile.listeningSpotify')}</p>
-                  <p className="text-xs text-white font-medium truncate">{nowPlaying.name}</p>
-                  <p className="text-[11px] text-zinc-500 truncate">{nowPlaying.artists}</p>
+                  <MarqueeText text={nowPlaying.name} className="text-xs text-white font-medium block"/>
+                  <MarqueeText text={nowPlaying.artists} className="text-[11px] text-zinc-500 block"/>
                 </div>
               </div>
               {/* Progress bar */}
@@ -7467,6 +7499,13 @@ export default function App() {
   const [friendSearchLoading, setFriendSearchLoading] = useState(false);
   const [sending, setSending]                 = useState(false);
   const [sendError, setSendError]             = useState('');
+  const [uploadProgress, setUploadProgress]   = useState<number | null>(null); // null = idle, 0-100 = uploading
+  // Infinite scroll — older messages
+  const [chHasMore,       setChHasMore]       = useState(true);
+  const [dmHasMore,       setDmHasMore]       = useState(true);
+  const [chLoadingMore,   setChLoadingMore]   = useState(false);
+  const [dmLoadingMore,   setDmLoadingMore]   = useState(false);
+  const scrollAnchorRef = useRef<{ height: number; top: number } | null>(null);
   const [dmBlockedPopup, setDmBlockedPopup]   = useState(false);
   const [replyTo, setReplyTo]                 = useState<MessageFull|DmMessageFull|null>(null);
   const [msgMenuId, setMsgMenuId]             = useState<string|null>(null);
@@ -8563,7 +8602,15 @@ export default function App() {
           }
         }
       } else {
-        setChannelMsgs(p => [...p, msg as MessageFull]);
+        setChannelMsgs(p => {
+          // Replace any temp optimistic message from same sender with same content
+          const withoutTemp = p.filter(m => !(
+            m.id.startsWith('temp-') &&
+            m.sender_id === msg.sender_id &&
+            m.content === msg.content
+          ));
+          return withoutTemp.some(m => m.id === msg.id) ? withoutTemp : [...withoutTemp, msg as MessageFull];
+        });
         if (!isOwnMsg) {
           // Mention alert sound — always plays (even in Focus Mode)
           const myUsername = currentUserRef.current?.username;
@@ -9479,8 +9526,8 @@ export default function App() {
       setForumPosts([]); setForumLoading(true);
       forumApi.listPosts(activeChannel).then(setForumPosts).catch(console.error).finally(()=>setForumLoading(false));
     } else {
-      setChannelMsgs([]); setMsgsLoading(true); setSearchQuery('');
-      messagesApi.list(activeChannel).then(setChannelMsgs).catch(console.error).finally(()=>setMsgsLoading(false));
+      setChannelMsgs([]); setMsgsLoading(true); setSearchQuery(''); setChHasMore(true);
+      messagesApi.list(activeChannel).then(msgs => { setChannelMsgs(msgs); if (msgs.length < 50) setChHasMore(false); }).catch(console.error).finally(()=>setMsgsLoading(false));
     }
     setReplyTo(null);
   }, [activeChannel, activeView]);
@@ -9488,9 +9535,9 @@ export default function App() {
   // ── DM change ───────────────────────────────────────────────────
   useEffect(() => {
     if (!activeDmUserId) return;
-    setDmMsgs([]); setMsgsLoading(true); setSearchQuery('');
+    setDmMsgs([]); setMsgsLoading(true); setSearchQuery(''); setDmHasMore(true);
     setTypingUsers({});
-    dmsApi.messages(activeDmUserId).then(setDmMsgs).catch(console.error).finally(()=>setMsgsLoading(false));
+    dmsApi.messages(activeDmUserId).then(msgs => { setDmMsgs(msgs); if (msgs.length < 50) setDmHasMore(false); }).catch(console.error).finally(()=>setMsgsLoading(false));
     users.get(activeDmUserId).then(setDmPartnerProfile).catch(console.error);
     setReplyTo(null);
     setDmRightTab('profile');
@@ -9590,6 +9637,49 @@ export default function App() {
     if (smooth) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     else el.scrollTop = el.scrollHeight;
   };
+
+  const loadMoreMessages = async () => {
+    const el = msgScrollRef.current;
+    const isDm = activeView === 'dms' && !!activeDmUserId;
+    const isChannel = activeView === 'servers' && !!activeChannel;
+    if (!el) return;
+    if (isDm && (dmLoadingMore || !dmHasMore)) return;
+    if (isChannel && (chLoadingMore || !chHasMore)) return;
+
+    // Save current scroll anchor so we can restore position after prepend
+    scrollAnchorRef.current = { height: el.scrollHeight, top: el.scrollTop };
+
+    try {
+      if (isDm) {
+        setDmLoadingMore(true);
+        const oldest = dmMsgs[0];
+        if (!oldest) return;
+        const older = await dmsApi.messages(activeDmUserId, oldest.id);
+        if (older.length < 50) setDmHasMore(false);
+        setDmMsgs(prev => [...older, ...prev]);
+      } else if (isChannel) {
+        setChLoadingMore(true);
+        const oldest = channelMsgs[0];
+        if (!oldest) return;
+        const older = await messagesApi.list(activeChannel!, oldest.id);
+        if (older.length < 50) setChHasMore(false);
+        setChannelMsgs(prev => [...older, ...prev]);
+      }
+    } catch { /* silently ignore */ } finally {
+      setChLoadingMore(false);
+      setDmLoadingMore(false);
+    }
+  };
+
+  // Restore scroll position after prepending older messages
+  useEffect(() => {
+    const anchor = scrollAnchorRef.current;
+    const el = msgScrollRef.current;
+    if (!anchor || !el) return;
+    // New height minus old height = how much content was prepended
+    el.scrollTop = anchor.top + (el.scrollHeight - anchor.height);
+    scrollAnchorRef.current = null;
+  }, [channelMsgs.length, dmMsgs.length]); // eslint-disable-line react-hooks/exhaustive-deps
   // Set flag on channel/DM/view switch
   useEffect(() => { scrollToBottomOnLoadRef.current = true; setHasNewMsgs(false); }, [activeChannel, activeDmUserId, activeView]);
   // PRIMARY: scroll when msgsLoading transitions false — messages are in DOM at this point.
@@ -10803,35 +10893,55 @@ export default function App() {
     setSending(true); setSendError('');
     let attachUrl: string | undefined;
     if (attachFiles.length > 1) {
-      // Multiple images → upload all, encode as JSON array
+      // Multiple images → upload all with progress (first file drives the bar)
       try {
-        const urls = await Promise.all(attachFiles.map(f => uploadFile(f, 'attachments')));
+        setUploadProgress(0);
+        const urls = await Promise.all(attachFiles.map((f, i) =>
+          uploadFileWithProgress(f, 'attachments', pct => {
+            if (i === 0) setUploadProgress(pct); // show first file as proxy
+          })
+        ));
         attachUrl = JSON.stringify(urls);
       } catch (err: any) {
         const isTooLarge = err?.status === 413;
+        setUploadProgress(null);
         if (isTooLarge) { setShowPowerModal(true); setSending(false); return; }
         setSendError(`Błąd uploadu: ${err?.message || 'Nieznany błąd'}`);
         setSending(false); return;
-      }
+      } finally { setUploadProgress(null); }
     } else if (attachFile) {
-      try { attachUrl = await uploadFile(attachFile, 'attachments'); }
-      catch (err: any) {
+      try {
+        setUploadProgress(0);
+        attachUrl = await uploadFileWithProgress(attachFile, 'attachments', setUploadProgress);
+      } catch (err: any) {
         const msg = (err?.message || 'Błąd przesyłania pliku') as string;
-        // 413 = plik za duży lub quota — pokaż Power modal zamiast błędu
         const isTooLarge = err?.status === 413
-          || msg.toLowerCase().includes('du') // duży/dużo
-          || msg.toLowerCase().includes('large')
-          || msg.toLowerCase().includes('limit')
-          || msg.toLowerCase().includes('413')
-          || msg.toLowerCase().includes('quota')
-          || msg.toLowerCase().includes('rozmiar');
+          || msg.toLowerCase().includes('du') || msg.toLowerCase().includes('large')
+          || msg.toLowerCase().includes('limit') || msg.toLowerCase().includes('413')
+          || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('rozmiar');
+        setUploadProgress(null);
         if (isTooLarge) { setShowPowerModal(true); setSending(false); return; }
         setSendError(`Błąd uploadu: ${msg}`);
         setSending(false); return;
-      }
+      } finally { setUploadProgress(null); }
     }
     const finalContent = content;
     const opts = { reply_to_id: replyTo?.id, attachment_url: attachUrl };
+    // ── Optimistic message (show immediately, replace when socket confirms) ──
+    const tempId = `temp-${Date.now()}`;
+    const cu = currentUser;
+    if (cu && activeView === 'servers' && activeChannel && !activeGroupDm && !activeDmUserId) {
+      const tempMsg: MessageFull = {
+        id: tempId, channel_id: activeChannel, content: finalContent,
+        edited: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        sender_id: cu.id, sender_username: cu.username, sender_avatar: cu.avatar_url ?? null,
+        attachment_url: attachUrl ?? null,
+        reply_to_id: replyTo?.id ?? null,
+        reply_content: (replyTo as MessageFull)?.content ?? null,
+        reply_username: (replyTo as MessageFull)?.sender_username ?? null,
+      };
+      setChannelMsgs(p => [...p, tempMsg]);
+    }
     setMsgInput(''); setAttachFile(null); setAttachPreview(null); setAttachFiles([]); setReplyTo(null);
     // Clear draft for current conversation
     const curKey = prevConvKeyRef.current;
@@ -10844,6 +10954,8 @@ export default function App() {
       else if (activeChannel) await messagesApi.send(activeChannel, finalContent, opts);
       playMessageSent();
     } catch (err: any) {
+      // Remove optimistic temp message on failure
+      setChannelMsgs(p => p.filter(m => m.id !== tempId));
       // 429 = slowmode – extract remaining seconds from error
       if ((err as any)?.status === 429) {
         const match = (err?.message || '').match(/(\d+)s/);
@@ -13677,9 +13789,9 @@ export default function App() {
                           </div>
                           <button onClick={()=>openDm(f.id)} className="flex-1 min-w-0 text-left">
                             <p className="text-sm font-semibold text-zinc-300 group-hover:text-white transition-colors truncate">{maskName(f.username)}</p>
-                            {fAct ? <p className="text-[11px] text-[#1DB954] truncate leading-tight flex items-center gap-1"><SpotifyIcon size={9} className="shrink-0"/> {fAct.artists}</p>
-                            : fTw ? <p className="text-[11px] text-purple-400 truncate leading-tight flex items-center gap-1"><TwitchIcon size={9} className="shrink-0"/> {fTw.game_name}</p>
-                            : fSt ? <p className="text-[11px] text-emerald-400 truncate leading-tight flex items-center gap-1"><Gamepad2 size={9} className="shrink-0"/> {fSt.name}</p>
+                            {fAct ? <p className="text-[11px] text-[#1DB954] leading-tight flex items-center gap-1 min-w-0"><SpotifyIcon size={9} className="shrink-0"/> <MarqueeText text={fAct.artists} className="flex-1"/></p>
+                            : fTw ? <p className="text-[11px] text-purple-400 leading-tight flex items-center gap-1 min-w-0"><TwitchIcon size={9} className="shrink-0"/> <MarqueeText text={fTw.game_name} className="flex-1"/></p>
+                            : fSt ? <p className="text-[11px] text-emerald-400 leading-tight flex items-center gap-1 min-w-0"><Gamepad2 size={9} className="shrink-0"/> <MarqueeText text={fSt.name} className="flex-1"/></p>
                             : f.custom_status ? <p className="text-xs text-zinc-600 truncate">{f.custom_status}</p> : null}
                           </button>
                           <MessageCircle size={14} className="text-zinc-700 group-hover:text-indigo-400 transition-colors shrink-0 cursor-pointer" onClick={()=>openDm(f.id)}/>
@@ -13919,11 +14031,11 @@ export default function App() {
                             <div>
                               <p className="font-semibold text-white text-sm">{maskName(f.username)}</p>
                               {fActivity ? (
-                                <p className="text-xs text-[#1DB954] truncate max-w-[160px] flex items-center gap-1"><SpotifyIcon size={11} className="shrink-0"/> {fActivity.artists} — {fActivity.name}</p>
+                                <p className="text-xs text-[#1DB954] flex items-center gap-1 min-w-0 max-w-[160px]"><SpotifyIcon size={11} className="shrink-0"/> <MarqueeText text={`${fActivity.artists} — ${fActivity.name}`} className="flex-1"/></p>
                               ) : fTwitch ? (
-                                <p className="text-xs text-purple-400 truncate max-w-[160px] flex items-center gap-1"><TwitchIcon size={11} className="shrink-0"/> Streamuje: {fTwitch.game_name}</p>
+                                <p className="text-xs text-purple-400 flex items-center gap-1 min-w-0 max-w-[160px]"><TwitchIcon size={11} className="shrink-0"/> <MarqueeText text={`Streamuje: ${fTwitch.game_name}`} className="flex-1"/></p>
                               ) : fSteam ? (()=>{const fSteamStart=steamGameStartRef.current.get(f.id);return(
-                                <p className="text-xs text-zinc-400 truncate max-w-[200px] flex items-center gap-1"><Gamepad2 size={11} className="shrink-0 text-emerald-400"/> <span className="text-emerald-400 font-semibold shrink-0">Gra:</span> {fSteam.name}{fSteamStart?<span className="text-zinc-600 shrink-0">· {fmtGameDur(fSteamStart)}</span>:null}</p>
+                                <p className="text-xs text-zinc-400 flex items-center gap-1 min-w-0 max-w-[200px]"><Gamepad2 size={11} className="shrink-0 text-emerald-400"/> <span className="text-emerald-400 font-semibold shrink-0">Gra:</span> <MarqueeText text={fSteam.name+(fSteamStart?` · ${fmtGameDur(fSteamStart)}`:'')} className="flex-1"/></p>
                               );})() : (
                                 <p className="text-xs text-zinc-600">{f.custom_status||f.status}</p>
                               )}
@@ -14723,6 +14835,8 @@ export default function App() {
                 onScroll={e => {
                   const el = e.currentTarget;
                   if (el.scrollHeight - el.scrollTop - el.clientHeight < 100) setHasNewMsgs(false);
+                  // Load older messages when near top
+                  if (el.scrollTop < 200 && !scrollAnchorRef.current) loadMoreMessages();
                 }}
                 onClickCapture={e => {
                   const btn = (e.target as HTMLElement).closest<HTMLElement>('.copy-code-btn');
@@ -14734,6 +14848,18 @@ export default function App() {
                     setTimeout(() => { btn.textContent = '⎘ Kopiuj'; btn.classList.remove('cb-copied'); }, 2000);
                   }).catch(() => {});
                 }}>
+                {/* Load-more indicator (top of list) */}
+                {(chLoadingMore || dmLoadingMore) && (
+                  <div className="flex items-center justify-center gap-2 py-2 text-xs text-zinc-600">
+                    <Loader2 size={12} className="animate-spin"/> Ładowanie starszych wiadomości…
+                  </div>
+                )}
+                {/* End of history banner */}
+                {!msgsLoading && !chLoadingMore && !dmLoadingMore &&
+                  ((activeView==='servers' && activeChannel && !chHasMore) ||
+                   (activeView==='dms' && activeDmUserId && !dmHasMore)) && channelMsgs.length + dmMsgs.length > 0 && (
+                  <div className="text-center text-xs text-zinc-700 py-3 select-none">— Początek historii —</div>
+                )}
                 {/* Loading skeleton */}
                 {msgsLoading&&(
                   <div className="mt-auto flex flex-col gap-3 pb-2">
@@ -15463,6 +15589,15 @@ export default function App() {
                       <button type="button" onClick={()=>setSendError('')}><X size={10}/></button>
                     </motion.div>
                   )}
+                  {uploadProgress !== null && (
+                    <div className="mb-2 flex items-center gap-2 text-xs text-zinc-500">
+                      <div className="flex-1 h-1 bg-white/[0.08] rounded-full overflow-hidden">
+                        <div className="h-full bg-indigo-500 rounded-full transition-all duration-150"
+                          style={{ width: `${uploadProgress}%` }}/>
+                      </div>
+                      <span className="shrink-0 tabular-nums">{uploadProgress}%</span>
+                    </div>
+                  )}
                 </AnimatePresence>
                 {/* Main input row */}
                 {(()=>{
@@ -16147,11 +16282,11 @@ export default function App() {
                       {m.badges?.map((b:any)=><span key={b.id} className={opacity?'opacity-40':''}><BadgePip b={b} size={14}/></span>)}
                     </div>
                     {!opacity ? (mActivity?(
-                      <p className="text-[11px] text-[#1DB954] truncate leading-tight flex items-center gap-1"><SpotifyIcon size={10} className="shrink-0"/> {mActivity.artists}</p>
+                      <p className="text-[11px] text-[#1DB954] leading-tight flex items-center gap-1 min-w-0"><SpotifyIcon size={10} className="shrink-0"/> <MarqueeText text={mActivity.artists} className="flex-1"/></p>
                     ):mTwitch?(
-                      <p className="text-[11px] text-purple-400 truncate leading-tight flex items-center gap-1"><TwitchIcon size={10} className="shrink-0"/> Streamuje: {mTwitch.game_name}</p>
+                      <p className="text-[11px] text-purple-400 leading-tight flex items-center gap-1 min-w-0"><TwitchIcon size={10} className="shrink-0"/> <MarqueeText text={`Streamuje: ${mTwitch.game_name}`} className="flex-1"/></p>
                     ):mSteam?(()=>{const mSteamStart=steamGameStartRef.current.get(m.id);return(
-                      <p className="text-[11px] text-zinc-400 truncate leading-tight flex items-center gap-1"><Gamepad2 size={10} className="shrink-0 text-emerald-400"/> <span className="text-emerald-400 font-semibold shrink-0">{tl('profile.playingNow')}:</span> {mSteam.name}{mSteamStart?<span className="text-zinc-600 shrink-0">· {fmtGameDur(mSteamStart)}</span>:null}</p>
+                      <p className="text-[11px] text-zinc-400 leading-tight flex items-center gap-1 min-w-0"><Gamepad2 size={10} className="shrink-0 text-emerald-400"/> <span className="text-emerald-400 font-semibold shrink-0">{tl('profile.playingNow')}:</span> <MarqueeText text={mSteam.name+(mSteamStart?` · ${fmtGameDur(mSteamStart)}`:'')} className="flex-1 text-zinc-400"/></p>
                     );})():(()=>{const sl=statusLabel(m.status);return sl?<p className={`text-[11px] truncate leading-tight ${sl.cls}`}>{sl.text}</p>:m.role_name?<p className="text-[11px] text-zinc-600 truncate leading-tight">{m.role_name}</p>:null;})())
                     : m.role_name?<p className="text-[11px] text-zinc-700 truncate leading-tight">{m.role_name}</p>:null}
                   </div>

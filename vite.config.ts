@@ -28,7 +28,7 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks: {
             // React core — changes rarely, cache-stable
-            'vendor-react': ['react', 'react-dom'],
+            'vendor-react': ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime'],
             // Framer Motion — large, isolated
             'vendor-motion': ['motion'],
             // Tauri APIs — only load in desktop
