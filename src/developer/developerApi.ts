@@ -90,6 +90,12 @@ export const devApi = {
       'POST',
       `${BASE}/applications/${appId}/bot`,
     ),
+  updateBot: (appId: string, data: { username?: string; avatar_url?: string | null }) =>
+    req<{ bot: { id: string; username: string; avatar_url: string | null } }>(
+      'PATCH',
+      `${BASE}/applications/${appId}/bot`,
+      data,
+    ),
   deleteBot: (appId: string) =>
     req<{ success: boolean }>('DELETE', `${BASE}/applications/${appId}/bot`),
   regenerateToken: (appId: string) =>

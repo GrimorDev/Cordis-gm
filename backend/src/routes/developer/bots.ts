@@ -72,6 +72,56 @@ router.delete('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// PATCH /api/developer/applications/:appId/bot — update bot username and/or avatar
+router.patch('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const app = await getOwnedApp(req.params.appId, req.user!.id);
+    if (!app) return res.status(404).json({ error: 'Application not found' });
+    if (!app.bot_user_id) return res.status(400).json({ error: 'No bot for this application' });
+
+    const { username, avatar_url } = req.body;
+    const updates: string[] = [];
+    const values: any[] = [];
+    let i = 1;
+
+    if (username !== undefined) {
+      if (typeof username !== 'string' || username.length < 2 || username.length > 32) {
+        return res.status(400).json({ error: 'Nazwa użytkownika musi mieć 2–32 znaki' });
+      }
+      const sanitized = username.toLowerCase().replace(/[^a-z0-9_.]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+      if (!sanitized) return res.status(400).json({ error: 'Nieprawidłowa nazwa użytkownika' });
+      // Check uniqueness (excluding this bot's own user)
+      const { rows: existing } = await query(
+        'SELECT id FROM users WHERE username = $1 AND id != $2',
+        [sanitized, app.bot_user_id]
+      );
+      if (existing.length) return res.status(409).json({ error: 'Ta nazwa użytkownika jest już zajęta' });
+      updates.push(`username = $${i++}`); values.push(sanitized);
+    }
+
+    if (avatar_url !== undefined) {
+      // Accept null (remove avatar) or a string URL
+      if (avatar_url !== null && typeof avatar_url !== 'string') {
+        return res.status(400).json({ error: 'Nieprawidłowy avatar_url' });
+      }
+      updates.push(`avatar_url = $${i++}`); values.push(avatar_url);
+    }
+
+    if (!updates.length) return res.status(400).json({ error: 'Brak danych do aktualizacji' });
+
+    values.push(app.bot_user_id);
+    const { rows: [botUser] } = await query(
+      `UPDATE users SET ${updates.join(', ')} WHERE id = $${i} RETURNING id, username, avatar_url, is_bot`,
+      values
+    );
+
+    res.json({ bot: botUser });
+  } catch (err) {
+    console.error('PATCH bot error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // POST /api/developer/applications/:appId/bot/token — generate/regenerate bot token
 router.post('/token', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {

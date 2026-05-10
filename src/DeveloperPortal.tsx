@@ -737,6 +737,10 @@ function BotTab({ app, onUpdate }: BotTabProps) {
   const [tokenModal, setTokenModal] = useState<string | null>(null);
   const [creatingBot, setCreatingBot] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  // Bot edit state
+  const [editUsername, setEditUsername] = useState('');
+  const [savingBot, setSavingBot] = useState(false);
+  const [botEditMsg, setBotEditMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const { copy, copiedKey } = useCopyToClipboard();
   const hasBot = !!app.bot_user_id;
 
@@ -744,6 +748,7 @@ function BotTab({ app, onUpdate }: BotTabProps) {
     if (hasBot) {
       loadServers();
       loadInviteUrl();
+      setEditUsername(app.bot_username || '');
     }
   }, [app.id, hasBot]);
 
@@ -773,6 +778,51 @@ function BotTab({ app, onUpdate }: BotTabProps) {
       alert('Błąd tworzenia bota: ' + err.message);
     } finally {
       setCreatingBot(false);
+    }
+  };
+
+  const handleSaveBot = async () => {
+    if (!editUsername.trim()) return;
+    setSavingBot(true);
+    setBotEditMsg(null);
+    try {
+      await devApi.updateBot(app.id, { username: editUsername.trim() });
+      const updated = await devApi.getApp(app.id);
+      onUpdate(updated);
+      setBotEditMsg({ type: 'ok', text: 'Zapisano!' });
+      setTimeout(() => setBotEditMsg(null), 2500);
+    } catch (err: any) {
+      setBotEditMsg({ type: 'err', text: err.message || 'Błąd zapisu' });
+    } finally {
+      setSavingBot(false);
+    }
+  };
+
+  const handleBotAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSavingBot(true);
+    setBotEditMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/upload/image?folder=avatars', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('cordis_token') || ''}` },
+        body: fd,
+      });
+      if (!res.ok) throw new Error('Upload avatara nie powiódł się');
+      const { url } = await res.json();
+      await devApi.updateBot(app.id, { avatar_url: url });
+      const updated = await devApi.getApp(app.id);
+      onUpdate(updated);
+      setBotEditMsg({ type: 'ok', text: 'Avatar zaktualizowany!' });
+      setTimeout(() => setBotEditMsg(null), 2500);
+    } catch (err: any) {
+      setBotEditMsg({ type: 'err', text: err.message || 'Błąd uploadu' });
+    } finally {
+      setSavingBot(false);
+      e.target.value = '';
     }
   };
 
@@ -850,21 +900,67 @@ function BotTab({ app, onUpdate }: BotTabProps) {
         />
       )}
 
-      {/* Bot info */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: '#18181b', border: '1px solid #27272a', borderRadius: 10, marginBottom: 24 }}>
-        {app.bot_avatar ? (
-          <img src={app.bot_avatar} alt="Bot avatar" style={{ width: 40, height: 40, borderRadius: '50%' }} />
-        ) : (
-          <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#3730a3', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 16 }}>
-            {(app.bot_username || 'B')[0].toUpperCase()}
+      {/* Bot identity editor */}
+      <div style={{ padding: '16px', background: '#18181b', border: '1px solid #27272a', borderRadius: 10, marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
+          {/* Avatar z clickable upload */}
+          <label style={{ cursor: 'pointer', position: 'relative', flexShrink: 0 }} title="Kliknij aby zmienić avatar">
+            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleBotAvatarUpload} disabled={savingBot} />
+            {app.bot_avatar ? (
+              <img src={app.bot_avatar} alt="Bot avatar" style={{ width: 56, height: 56, borderRadius: '50%', display: 'block' }} />
+            ) : (
+              <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#3730a3', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 20 }}>
+                {(app.bot_username || 'B')[0].toUpperCase()}
+              </div>
+            )}
+            <div style={{ position: 'absolute', bottom: 0, right: 0, width: 18, height: 18, borderRadius: '50%', background: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #18181b' }}>
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+              </svg>
+            </div>
+          </label>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>NAZWA BOTA</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                value={editUsername}
+                onChange={e => setEditUsername(e.target.value)}
+                placeholder={app.bot_username || 'nazwa_bota'}
+                maxLength={32}
+                style={{
+                  flex: 1, background: '#09090b', border: '1px solid #3f3f46',
+                  borderRadius: 7, padding: '6px 10px', color: '#f4f4f5', fontSize: 13,
+                  outline: 'none',
+                }}
+              />
+              <button
+                onClick={handleSaveBot}
+                disabled={savingBot || !editUsername.trim() || editUsername.trim() === app.bot_username}
+                style={{
+                  padding: '6px 14px', background: '#6366f1', border: 'none', borderRadius: 7,
+                  color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  opacity: (savingBot || !editUsername.trim() || editUsername.trim() === app.bot_username) ? 0.5 : 1,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {savingBot ? 'Zapisuję...' : 'Zapisz'}
+              </button>
+            </div>
+            {botEditMsg && (
+              <div style={{ marginTop: 4, fontSize: 12, color: botEditMsg.type === 'ok' ? '#4ade80' : '#f87171' }}>
+                {botEditMsg.text}
+              </div>
+            )}
+            <div style={{ marginTop: 4, fontSize: 11, color: '#52525b' }}>
+              <span style={{ marginRight: 8 }}>
+                <span style={{ padding: '1px 5px', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 3, color: '#818cf8', fontSize: 10 }}>BOT</span>
+              </span>
+              ID: {app.bot_user_id?.slice(0, 8)}…
+            </div>
           </div>
-        )}
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#f4f4f5' }}>
-            {app.bot_username || 'Bot'}
-            <span style={{ marginLeft: 8, fontSize: 11, padding: '2px 6px', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 4, color: '#818cf8' }}>BOT</span>
-          </div>
-          <div style={{ fontSize: 12, color: '#71717a' }}>ID: {app.bot_user_id}</div>
+        </div>
+        <div style={{ fontSize: 11, color: '#52525b', borderTop: '1px solid #27272a', paddingTop: 10 }}>
+          Kliknij w avatar aby go zmienić · Nazwa musi być unikalna, 2–32 znaki (litery, cyfry, _ i .)
         </div>
       </div>
 
