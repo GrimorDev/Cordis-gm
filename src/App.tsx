@@ -12617,7 +12617,7 @@ export default function App() {
                   <div className="flex items-center gap-2.5 min-w-0">
                     {/* server icon */}
                     {serverFull?.icon_url
-                      ? <img src={serverFull.icon_url} className="w-7 h-7 rounded-xl object-cover shrink-0 border border-white/10" alt=""/>
+                      ? <img src={staticUrl(serverFull.icon_url)} className="w-7 h-7 rounded-xl object-cover shrink-0 border border-white/10" alt=""/>
                       : <div className="w-7 h-7 shrink-0 rounded-xl flex items-center justify-center border border-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.2)]" style={{background:'linear-gradient(135deg,rgba(99,102,241,0.35) 0%,rgba(124,58,237,0.35) 100%)'}}>
                           <span className="text-[11px] font-bold text-white">
                             {(serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'S').charAt(0).toUpperCase()}
@@ -17933,7 +17933,7 @@ export default function App() {
                       <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Banner</label>
                       <div className="relative h-28 rounded-2xl overflow-hidden bg-white/[0.03] border border-white/[0.06]">
                         {(srvBannerFile?URL.createObjectURL(srvBannerFile):srvForm.banner_url) ? (
-                          <img src={srvBannerFile?URL.createObjectURL(srvBannerFile):srvForm.banner_url} className="w-full h-full object-cover" alt=""/>
+                          <img src={srvBannerFile?URL.createObjectURL(srvBannerFile):staticUrl(srvForm.banner_url)} className="w-full h-full object-cover" alt=""/>
                         ) : <div className="w-full h-full flex items-center justify-center text-zinc-700"><Image size={22}/></div>}
                         <label className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 hover:opacity-100 cursor-pointer transition-opacity">
                           <span className="text-sm text-white font-semibold flex items-center gap-1.5"><Upload size={14}/> Zmień banner</span>
@@ -17946,7 +17946,7 @@ export default function App() {
                       <div className="flex items-center gap-4">
                         <div className="relative w-14 h-14 rounded-2xl overflow-hidden bg-white/[0.04] border border-white/[0.06]">
                           {(srvIconFile?URL.createObjectURL(srvIconFile):srvForm.icon_url) ? (
-                            <img src={srvIconFile?URL.createObjectURL(srvIconFile):srvForm.icon_url} className="w-full h-full object-cover" alt=""/>
+                            <img src={srvIconFile?URL.createObjectURL(srvIconFile):staticUrl(srvForm.icon_url)} className="w-full h-full object-cover" alt=""/>
                           ) : <div className="w-full h-full flex items-center justify-center text-xl font-bold text-zinc-600">{serverFull.name.charAt(0)}</div>}
                         </div>
                         <label className={`cursor-pointer text-sm font-semibold ${gb} px-3 py-2 rounded-xl flex items-center gap-1.5`}>

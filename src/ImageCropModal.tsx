@@ -4,6 +4,8 @@ import type { Area, Point } from 'react-easy-crop';
 import { X, ZoomIn, ZoomOut, RotateCw, Check } from 'lucide-react';
 
 // ── Canvas helper — zwraca wykadrowany Blob ───────────────────────────────
+// Używa HTMLImageElement zamiast fetch(blob:...) — fetch blob-URL jest blokowany
+// przez Tauri CSP w webview, natomiast img.src=blobUrl działa wszędzie.
 async function getCroppedBlob(
   imageSrc: string,
   pixelCrop: Area,
@@ -11,15 +13,18 @@ async function getCroppedBlob(
   outputMime = 'image/jpeg',
   quality = 0.92,
 ): Promise<Blob> {
-  const image = await createImageBitmap(await (await fetch(imageSrc)).blob());
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d')!;
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Image load failed'));
+    img.src = imageSrc;
+  });
 
   const rad = (rotation * Math.PI) / 180;
   const sin = Math.abs(Math.sin(rad));
   const cos = Math.abs(Math.cos(rad));
-  const bw = image.width * cos + image.height * sin;
-  const bh = image.width * sin + image.height * cos;
+  const bw = image.naturalWidth * cos + image.naturalHeight * sin;
+  const bh = image.naturalWidth * sin + image.naturalHeight * cos;
 
   // Tymczasowy canvas z rotacją
   const rotCanvas = document.createElement('canvas');
@@ -28,10 +33,12 @@ async function getCroppedBlob(
   const rotCtx = rotCanvas.getContext('2d')!;
   rotCtx.translate(bw / 2, bh / 2);
   rotCtx.rotate(rad);
-  rotCtx.drawImage(image, -image.width / 2, -image.height / 2);
+  rotCtx.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2);
 
+  const canvas = document.createElement('canvas');
   canvas.width = pixelCrop.width;
   canvas.height = pixelCrop.height;
+  const ctx = canvas.getContext('2d')!;
   ctx.drawImage(
     rotCanvas,
     pixelCrop.x,
