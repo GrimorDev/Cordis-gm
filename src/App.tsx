@@ -1331,28 +1331,34 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
         </section>
 
         {/* ── Marquee strip ── */}
-        <div className="relative py-8 border-y border-white/[0.05] overflow-hidden z-10 my-4">
-          <div className="flex">
-            {[0,1].map(row => (
-              <motion.div key={row}
-                animate={{ x: row===0 ? ['0%','-50%'] : ['-50%','0%'] }}
-                transition={{ duration: row===0 ? 30 : 36, repeat:Infinity, ease:'linear' }}
-                className="flex gap-14 items-center shrink-0 pr-14">
-                {[
-                  '💬 Czat w czasie rzeczywistym','🎙️ Głos i wideo HD','🖥️ Udostępnianie ekranu',
-                  '🎮 Status gry','🎵 Spotify JAM','🔐 2FA i weryfikacja e-mail',
-                  '📱 Aplikacja mobilna','🤖 Boty i automatyzacje','🌍 Serwery publiczne',
-                  '🔔 Powiadomienia push','📌 System zakładek','✏️ Edycja wiadomości',
-                  '🌙 Focus Mode','🎨 Personalizacja profilu','🔗 Zaproszenia serwerowe',
-                ].map(item => (
-                  <span key={item} className="flex items-center gap-2 text-[13px] text-zinc-600 font-medium whitespace-nowrap hover:text-zinc-400 transition-colors">{item}</span>
+        {(()=>{
+          const ITEMS = [
+            'Czat w czasie rzeczywistym','Głos i wideo HD','Udostępnianie ekranu',
+            'Status gry','Spotify JAM','2FA i weryfikacja e-mail',
+            'Aplikacja mobilna','Boty i automatyzacje','Serwery publiczne',
+            'Powiadomienia push','System zakładek','Edycja wiadomości',
+            'Focus Mode','Personalizacja profilu','Zaproszenia serwerowe',
+          ];
+          const DOT = <span className="w-1 h-1 rounded-full bg-zinc-700 shrink-0" aria-hidden/>;
+          return (
+            <div className="relative py-7 border-y border-white/[0.05] overflow-hidden z-10 my-4">
+              <motion.div
+                animate={{ x: ['0%', '-50%'] }}
+                transition={{ duration: 35, repeat: Infinity, ease: 'linear' }}
+                className="flex gap-8 items-center shrink-0"
+                style={{ width: 'max-content' }}>
+                {[...ITEMS, ...ITEMS].map((item, i) => (
+                  <React.Fragment key={i}>
+                    <span className="text-[13px] text-zinc-500 font-medium whitespace-nowrap hover:text-zinc-300 transition-colors cursor-default select-none">{item}</span>
+                    {DOT}
+                  </React.Fragment>
                 ))}
               </motion.div>
-            ))}
-          </div>
-          <div className="absolute inset-y-0 left-0 w-28 pointer-events-none" style={{ background:'linear-gradient(90deg,#030308,transparent)' }}/>
-          <div className="absolute inset-y-0 right-0 w-28 pointer-events-none" style={{ background:'linear-gradient(-90deg,#030308,transparent)' }}/>
-        </div>
+              <div className="absolute inset-y-0 left-0 w-28 pointer-events-none" style={{ background:'linear-gradient(90deg,#030308,transparent)' }}/>
+              <div className="absolute inset-y-0 right-0 w-28 pointer-events-none" style={{ background:'linear-gradient(-90deg,#030308,transparent)' }}/>
+            </div>
+          );
+        })()}
 
         {/* ── Features Bento Section ── */}
         <section id="funkcje" className="py-28 px-4 sm:px-6 z-10 relative">
@@ -16375,7 +16381,7 @@ export default function App() {
                         <div key={m.id} className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-indigo-500/5 transition-all cursor-pointer" onClick={e=>showHoverCard(m.id,e)}>
                           <div className="relative shrink-0">
                             {m.avatar_url ? (
-                              <img src={m.avatar_url} alt="" className="w-10 h-10 rounded-xl object-cover"/>
+                              <img src={ava(m)} alt="" className="w-10 h-10 rounded-xl object-cover"/>
                             ) : (
                               <div className="w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/20 flex items-center justify-center text-indigo-300 font-bold text-base">{m.username?.[0]?.toUpperCase()||'B'}</div>
                             )}
@@ -17353,7 +17359,7 @@ export default function App() {
                       <div key={app.client_id} className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4 hover:border-violet-500/20 transition-all">
                         <div className="flex items-start gap-3.5">
                           {app.bot_avatar ? (
-                            <img src={app.bot_avatar} alt="" className="w-12 h-12 rounded-xl object-cover shrink-0"/>
+                            <img src={staticUrl(app.bot_avatar!) || app.bot_avatar!} alt="" className="w-12 h-12 rounded-xl object-cover shrink-0"/>
                           ) : (
                             <div className="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0 text-xl font-bold text-violet-300">
                               {app.name[0]}
