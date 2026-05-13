@@ -39,7 +39,7 @@ function fmtTime(dateStr: string, lang: 'pl' | 'en' = 'en', yesterday = 'Yesterd
   return format(d, 'd MMM HH:mm', { locale });
 }
 
-const QUICK_EMOJIS = ['❤️', '😂', '👍', '😮', '😢', '🔥'];
+const QUICK_EMOJIS = ['❤️', '😂', '👍', '🔥', '😮', '😢', '🎉', '👀', '💯', '😍', '🤔', '⚡'];
 
 /** Detect if content looks like a system/call message */
 function isCallMessage(content: string) {
@@ -338,15 +338,15 @@ const styles = StyleSheet.create({
     backgroundColor: C.bgCard,
   },
 
-  reactions: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, paddingLeft: 46, marginTop: 4 },
+  reactions: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, paddingLeft: 46, marginTop: 5 },
   reactionChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: C.bgCard, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3,
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: C.bgSurface, borderRadius: 14, paddingHorizontal: 9, paddingVertical: 4,
     borderWidth: 1, borderColor: C.border,
   },
-  reactionOwn: { borderColor: C.accent, backgroundColor: 'rgba(99,102,241,0.15)' },
+  reactionOwn: { borderColor: C.accentLight, backgroundColor: C.accentMuted },
   reactionEmoji: { fontSize: 14 },
-  reactionCount: { color: C.textSub, fontSize: 12 },
+  reactionCount: { color: C.textSub, fontSize: 12, fontWeight: '600' },
 
   // Inline edit
   editContainer: { paddingRight: 0 },
@@ -367,21 +367,28 @@ const styles = StyleSheet.create({
 
   // Context menu Modal
   modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.55)',
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.65)',
     justifyContent: 'center', alignItems: 'center',
   },
   menu: {
-    backgroundColor: C.bgElevated, borderRadius: 18, padding: 8,
-    minWidth: 240, maxWidth: SCREEN_W - 48,
+    backgroundColor: C.bgSurface, borderRadius: 20, padding: 8,
+    minWidth: 260, maxWidth: SCREEN_W - 40,
     borderWidth: 1, borderColor: C.border,
-    shadowColor: '#000', shadowOpacity: 0.6, shadowRadius: 16, elevation: 12,
+    shadowColor: '#000', shadowOpacity: 0.7, shadowRadius: 24, elevation: 20,
   },
-  quickReactions: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 8, paddingHorizontal: 4 },
-  quickEmoji: { padding: 4 },
+  quickReactions: {
+    flexDirection: 'row', flexWrap: 'wrap',
+    justifyContent: 'center', paddingVertical: 6, paddingHorizontal: 4, gap: 2,
+  },
+  quickEmoji: {
+    width: 42, height: 42, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: C.bgElevated,
+  },
   menuDivider: { height: 1, backgroundColor: C.border, marginVertical: 4 },
   menuItem: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
-    paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10,
+    paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12,
   },
   menuLabel: { color: C.text, fontSize: 15, fontWeight: '500' },
 

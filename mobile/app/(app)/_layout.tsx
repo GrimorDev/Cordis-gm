@@ -17,24 +17,42 @@ function TabItem({ tab, focused, badge, onPress }: {
   onPress: () => void;
 }) {
   const anim = useRef(new Animated.Value(focused ? 1 : 0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.spring(anim, {
       toValue: focused ? 1 : 0,
       useNativeDriver: true,
-      damping: 14,
-      stiffness: 200,
+      damping: 16,
+      stiffness: 260,
     }).start();
   }, [focused]);
 
-  const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1] });
-  const iconColor = focused ? C.accentLight : C.textMuted;
+  const handlePress = () => {
+    Animated.sequence([
+      Animated.timing(scaleAnim, { toValue: 0.85, duration: 70, useNativeDriver: true }),
+      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, damping: 10, stiffness: 300 }),
+    ]).start();
+    onPress();
+  };
+
+  const pillOpacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
+  const pillScale  = anim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] });
+  const iconY      = anim.interpolate({ inputRange: [0, 1], outputRange: [0, -1] });
+  const iconColor  = focused ? '#fff' : C.textMuted;
 
   return (
-    <TouchableOpacity style={styles.tabItem} onPress={onPress} activeOpacity={0.75}>
-      {focused && <View style={styles.tabPillBg} />}
+    <TouchableOpacity style={styles.tabItem} onPress={handlePress} activeOpacity={1}>
+      {/* Pill background */}
+      <Animated.View style={[
+        styles.tabPillBg,
+        { opacity: pillOpacity, transform: [{ scale: pillScale }] },
+      ]} />
 
-      <Animated.View style={[styles.tabIconWrap, { transform: [{ scale }] }]}>
+      <Animated.View style={[
+        styles.tabIconWrap,
+        { transform: [{ scale: scaleAnim }, { translateY: iconY }] },
+      ]}>
         <Ionicons
           name={(focused ? tab.icon : `${tab.icon}-outline`) as any}
           size={22}
@@ -47,11 +65,9 @@ function TabItem({ tab, focused, badge, onPress }: {
         )}
       </Animated.View>
 
-      <Text style={[styles.tabLabel, { color: iconColor, opacity: focused ? 1 : 0.55 }]}>
+      <Text style={[styles.tabLabel, { color: focused ? C.accentLight : C.textMuted }]}>
         {tab.label}
       </Text>
-
-      {focused && <View style={styles.activeDot} />}
     </TouchableOpacity>
   );
 }
@@ -70,7 +86,13 @@ function TabBar({ state, navigation }: any) {
   ];
 
   return (
-    <View style={[styles.tabBar, { paddingBottom: insets.bottom, height: 58 + insets.bottom }]}>
+    <View style={[
+      styles.tabBar,
+      {
+        paddingBottom: insets.bottom > 0 ? insets.bottom + 2 : 10,
+        height: 68 + (insets.bottom > 0 ? insets.bottom + 2 : 10),
+      },
+    ]}>
       {TAB_DEFS.map((tab) => {
         const route = state.routes.find((r: any) => r.name === tab.name);
         if (!route) return null;
@@ -210,32 +232,38 @@ export default function AppLayout() {
 const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: C.bgCard,
+    backgroundColor: C.bgFloating,
+    paddingTop: 8,
+    paddingHorizontal: 6,
+    // Strong top separator with accent glow
     borderTopWidth: 1,
-    borderTopColor: C.border,
-    paddingTop: 6,
-    elevation: 30,
+    borderTopColor: 'rgba(99,102,241,0.22)',
+    // Shadow punching upward
+    elevation: 50,
     shadowColor: '#000',
-    shadowOpacity: 0.6,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.8,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: -8 },
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
+    gap: 4,
     position: 'relative',
     paddingVertical: 4,
+    paddingHorizontal: 4,
   },
   tabPillBg: {
     position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 6,
-    right: 6,
-    borderRadius: 14,
-    backgroundColor: C.accentMuted,
+    top: 2,
+    bottom: 2,
+    left: 4,
+    right: 4,
+    borderRadius: 16,
+    backgroundColor: C.accentMutedStrong,
+    borderWidth: 1,
+    borderColor: C.borderAccent,
   },
   tabIconWrap: {
     position: 'relative',
@@ -252,20 +280,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 3,
     borderWidth: 2,
-    borderColor: C.bgCard,
+    borderColor: C.bgFloating,
   },
   badgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
   tabLabel: {
     fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 0.1,
-  },
-  activeDot: {
-    position: 'absolute',
-    bottom: 1,
-    width: 20,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: C.accent,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
 });

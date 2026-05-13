@@ -179,8 +179,9 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: C.border,
+    backgroundColor: C.bgCard,
   },
-  headerTitle: { color: C.text, fontSize: 22, fontWeight: '800', letterSpacing: -0.3 },
+  headerTitle: { color: C.text, fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },
   headerSub: { color: C.textMuted, fontSize: 12, marginTop: 1 },
   newDmBtn: {
     width: 38,
@@ -191,6 +192,10 @@ const styles = StyleSheet.create({
     borderColor: C.borderAccent,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: C.accent,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
 
   // Rows

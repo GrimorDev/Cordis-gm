@@ -139,7 +139,9 @@ export default function ChannelScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
           <Ionicons name="chevron-back" size={22} color={C.text} />
         </TouchableOpacity>
-        <Ionicons name="chatbox-outline" size={18} color={C.textMuted} />
+        <View style={styles.channelIconBg}>
+          <Ionicons name="chatbox" size={15} color={C.accentLight} />
+        </View>
         <Text style={styles.title} numberOfLines={1}>{name}</Text>
         <View style={styles.headerRight}>
           {isOwner && activeServer && (
@@ -254,8 +256,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: C.border,
     backgroundColor: C.bgCard,
   },
-  back: { padding: 4 },
-  title: { color: C.text, fontSize: 16, fontWeight: '700', flex: 1 },
+  back: {
+    width: 34, height: 34, borderRadius: 10,
+    backgroundColor: C.bgElevated, alignItems: 'center', justifyContent: 'center',
+  },
+  channelIconBg: {
+    width: 30, height: 30, borderRadius: 9,
+    backgroundColor: C.accentMuted, borderWidth: 1, borderColor: C.borderAccent,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  title: { color: C.text, fontSize: 16, fontWeight: '800', flex: 1, letterSpacing: -0.2 },
   headerRight: { flexDirection: 'row', gap: 6 },
   headerBtn: {
     padding: 8, borderRadius: 11,

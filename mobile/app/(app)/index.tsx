@@ -514,9 +514,13 @@ export default function ServersScreen() {
             style={styles.serverCard}
             onPress={() => openServer(item)}
             onLongPress={() => setActionServer(item)}
-            activeOpacity={0.75}
+            activeOpacity={0.7}
           >
-            <UserAvatar url={resolveUrl(item.icon_url)} username={item.name} size={50} />
+            {/* Left accent bar */}
+            <View style={styles.serverCardAccent} />
+
+            <UserAvatar url={resolveUrl(item.icon_url)} username={item.name} size={54} />
+
             <View style={styles.serverInfo}>
               <Text style={styles.serverName} numberOfLines={1}>{item.name}</Text>
               {item.description ? (
@@ -524,12 +528,15 @@ export default function ServersScreen() {
               ) : null}
               {item.member_count != null && (
                 <View style={styles.memberCountRow}>
-                  <View style={[styles.statusDot, { backgroundColor: '#22c55e' }]} />
+                  <View style={[styles.statusDot, { backgroundColor: C.online }]} />
                   <Text style={styles.memberCount}>{t.memberCountLabel(item.member_count)}</Text>
                 </View>
               )}
             </View>
-            <Ionicons name="chevron-forward" size={16} color={C.textMuted} />
+
+            <View style={styles.serverChevron}>
+              <Ionicons name="chevron-forward" size={15} color={C.accentLight} />
+            </View>
           </TouchableOpacity>
         )}
         ListEmptyComponent={
@@ -736,32 +743,48 @@ const styles = StyleSheet.create({
   // Server list header
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14,
+    paddingHorizontal: 16, paddingVertical: 16,
     borderBottomWidth: 1, borderBottomColor: C.border,
+    backgroundColor: C.bgCard,
   },
-  headerTitle: { color: C.text, fontSize: 22, fontWeight: '800', letterSpacing: -0.3 },
+  headerTitle: { color: C.text, fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },
   headerActions: { flexDirection: 'row', gap: 8 },
   headerBtn: {
-    width: 36, height: 36, borderRadius: 10,
-    backgroundColor: C.bgCard, alignItems: 'center', justifyContent: 'center',
+    width: 38, height: 38, borderRadius: 12,
+    backgroundColor: C.bgElevated, alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: C.border,
   },
-  headerBtnAccent: { backgroundColor: C.accent, borderColor: C.accent },
+  headerBtnAccent: {
+    backgroundColor: C.accent, borderColor: C.accent,
+    shadowColor: C.accent, shadowOpacity: 0.5, shadowRadius: 10, shadowOffset: { width: 0, height: 2 },
+    elevation: 8,
+  },
 
   // Server card
   serverCard: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
-    backgroundColor: C.bgCard, borderRadius: 18, padding: 14,
+    backgroundColor: C.bgCard, borderRadius: 20, padding: 14,
     borderWidth: 1, borderColor: C.border,
-    shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+    shadowColor: C.shadowAccent, shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 3 },
+    elevation: 6,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  serverCardAccent: {
+    position: 'absolute', left: 0, top: 0, bottom: 0, width: 3,
+    backgroundColor: C.accent, borderTopLeftRadius: 20, borderBottomLeftRadius: 20,
   },
   serverInfo: { flex: 1 },
-  serverName: { color: C.text, fontSize: 16, fontWeight: '700' },
-  serverDesc: { color: C.textMuted, fontSize: 12, marginTop: 2 },
-  memberCountRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
+  serverName: { color: C.text, fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
+  serverDesc: { color: C.textMuted, fontSize: 12, marginTop: 3, lineHeight: 16 },
+  memberCountRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5 },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
-  memberCount: { color: C.textMuted, fontSize: 12 },
+  memberCount: { color: C.textSub, fontSize: 12, fontWeight: '500' },
+  serverChevron: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: C.accentMuted, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: C.borderAccent,
+  },
 
   // Empty state
   empty: { alignItems: 'center', paddingVertical: 60, gap: 12 },
@@ -785,49 +808,53 @@ const styles = StyleSheet.create({
   // Channel list header
   chHeader: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 12, paddingVertical: 10,
+    paddingHorizontal: 12, paddingVertical: 12,
     borderBottomWidth: 1, borderBottomColor: C.border,
+    backgroundColor: C.bgCard,
     gap: 8,
   },
-  backBtn: { padding: 4 },
-  chTitle: { color: C.text, fontSize: 15, fontWeight: '700' },
+  backBtn: {
+    width: 34, height: 34, borderRadius: 10,
+    backgroundColor: C.bgElevated, alignItems: 'center', justifyContent: 'center',
+  },
+  chTitle: { color: C.text, fontSize: 15, fontWeight: '800', letterSpacing: -0.2 },
   chSubtitle: { color: C.textMuted, fontSize: 11, marginTop: 1 },
   chHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   chHeaderBtn: {
     padding: 7, borderRadius: 10,
-    backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border,
+    backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border,
   },
   serverMenuBtn: { padding: 6 },
 
   // Category
   catHeader: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 16, paddingTop: 20, paddingBottom: 6,
+    paddingHorizontal: 16, paddingTop: 22, paddingBottom: 6,
   },
-  catLabel: { color: C.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase' },
+  catLabel: { color: C.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 1.4, textTransform: 'uppercase' },
 
   // Channel rows
   channelRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 8, paddingHorizontal: 12,
-    marginHorizontal: 8, marginVertical: 1, borderRadius: 12,
+    paddingVertical: 9, paddingHorizontal: 12,
+    marginHorizontal: 8, marginVertical: 1, borderRadius: 14,
   },
   channelRowUnread: {
-    backgroundColor: C.bgCard,
-    borderWidth: 1, borderColor: 'rgba(99,102,241,0.15)',
+    backgroundColor: C.bgSurface,
+    borderWidth: 1, borderColor: C.borderAccent,
   },
   channelIconWrap: {
-    width: 30, height: 30, borderRadius: 9,
+    width: 32, height: 32, borderRadius: 10,
     alignItems: 'center', justifyContent: 'center',
   },
-  channelName: { color: C.textSub, fontSize: 14, flex: 1, fontWeight: '500' },
+  channelName: { color: C.textSub, fontSize: 14.5, flex: 1, fontWeight: '500' },
   unreadBadge: {
     backgroundColor: C.danger, borderRadius: 10,
     minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center',
     paddingHorizontal: 5,
   },
   unreadBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
-  channelRowActive: { backgroundColor: 'rgba(34,197,94,0.08)' },
+  channelRowActive: { backgroundColor: 'rgba(34,197,94,0.1)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.2)' },
   voiceCountBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
     backgroundColor: 'rgba(34,197,94,0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8,

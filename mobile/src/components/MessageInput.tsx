@@ -23,7 +23,7 @@ async function uploadAttachment(uri: string, mimeType: string, fileName: string)
   const token = await storage.getItemAsync('cordyn_token');
   const formData = new FormData();
   formData.append('file', { uri, type: mimeType, name: fileName } as any);
-  const res = await fetch(`${API_URL}/uploads/attachment`, {
+  const res = await fetch(`${API_URL}/upload?folder=attachments`, {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData,
