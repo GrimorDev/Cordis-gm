@@ -39,7 +39,7 @@ function TabItem({ tab, focused, badge, onPress }: {
   const pillOpacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
   const pillScale  = anim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] });
   const iconY      = anim.interpolate({ inputRange: [0, 1], outputRange: [0, -1] });
-  const iconColor  = focused ? '#fff' : C.textMuted;
+  const iconColor  = focused ? '#fff' : 'rgba(160,160,190,0.75)';
 
   return (
     <TouchableOpacity style={styles.tabItem} onPress={handlePress} activeOpacity={1}>
@@ -65,7 +65,7 @@ function TabItem({ tab, focused, badge, onPress }: {
         )}
       </Animated.View>
 
-      <Text style={[styles.tabLabel, { color: focused ? C.accentLight : C.textMuted }]}>
+      <Text style={[styles.tabLabel, { color: focused ? C.accentLight : 'rgba(150,150,180,0.7)' }]}>
         {tab.label}
       </Text>
     </TouchableOpacity>
@@ -232,13 +232,11 @@ export default function AppLayout() {
 const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: C.bgFloating,
-    paddingTop: 8,
-    paddingHorizontal: 6,
-    // Strong top separator with accent glow
+    backgroundColor: '#0e0e18',
+    paddingTop: 6,
+    paddingHorizontal: 4,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(99,102,241,0.22)',
-    // Shadow punching upward
+    borderTopColor: 'rgba(99,102,241,0.3)',
     elevation: 50,
     shadowColor: '#000',
     shadowOpacity: 0.8,
@@ -249,21 +247,21 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: 3,
     position: 'relative',
-    paddingVertical: 4,
-    paddingHorizontal: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 2,
   },
   tabPillBg: {
     position: 'absolute',
-    top: 2,
-    bottom: 2,
-    left: 4,
-    right: 4,
-    borderRadius: 16,
-    backgroundColor: C.accentMutedStrong,
+    top: 4,
+    bottom: 4,
+    left: 6,
+    right: 6,
+    borderRadius: 14,
+    backgroundColor: 'rgba(99,102,241,0.25)',
     borderWidth: 1,
-    borderColor: C.borderAccent,
+    borderColor: 'rgba(99,102,241,0.45)',
   },
   tabIconWrap: {
     position: 'relative',
@@ -284,8 +282,8 @@ const styles = StyleSheet.create({
   },
   badgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
   tabLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.2,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.1,
   },
 });

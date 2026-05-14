@@ -195,7 +195,8 @@ export default function ChannelScreen() {
           contentContainerStyle={{ paddingVertical: 8 }}
           onEndReached={loadMore}
           onEndReachedThreshold={0.2}
-          ListHeaderComponent={loadingMore ? <ActivityIndicator color={C.accent} style={{ padding: 12 }} /> : null}
+          maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+          ListFooterComponent={loadingMore ? <ActivityIndicator color={C.accent} style={{ padding: 12 }} /> : null}
           renderItem={({ item, index }) => {
             const reversedMsgs = [...msgs].reverse();
             const prev = reversedMsgs[index + 1];
@@ -251,25 +252,26 @@ export default function ChannelScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: C.bg },
   header: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: 12, paddingVertical: 11,
-    borderBottomWidth: 1, borderBottomColor: C.border,
-    backgroundColor: C.bgCard,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 14, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#111118',
   },
   back: {
-    width: 34, height: 34, borderRadius: 10,
-    backgroundColor: C.bgElevated, alignItems: 'center', justifyContent: 'center',
+    width: 36, height: 36, borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
   },
   channelIconBg: {
-    width: 30, height: 30, borderRadius: 9,
-    backgroundColor: C.accentMuted, borderWidth: 1, borderColor: C.borderAccent,
+    width: 32, height: 32, borderRadius: 10,
+    backgroundColor: 'rgba(99,102,241,0.25)', borderWidth: 1, borderColor: 'rgba(99,102,241,0.5)',
     alignItems: 'center', justifyContent: 'center',
   },
-  title: { color: C.text, fontSize: 16, fontWeight: '800', flex: 1, letterSpacing: -0.2 },
+  title: { color: '#f0f0f8', fontSize: 16, fontWeight: '800', flex: 1, letterSpacing: -0.2 },
   headerRight: { flexDirection: 'row', gap: 6 },
   headerBtn: {
     padding: 8, borderRadius: 11,
-    backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border,
+    backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
 
