@@ -5652,7 +5652,7 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                   {adminsList.map(a=>(
                     <div key={a.id} className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 flex items-center gap-4 hover:border-white/[0.1] transition-all">
                       <div className="relative shrink-0">
-                        <img src={a.avatar_url||`https://ui-avatars.com/api/?name=${a.username}&background=6366f1&color=fff&size=40`} alt={a.username} className="w-10 h-10 rounded-xl object-cover"/>
+                        <img src={staticUrl(a.avatar_url)||`https://ui-avatars.com/api/?name=${a.username}&background=6366f1&color=fff&size=40`} alt={a.username} className="w-10 h-10 rounded-xl object-cover"/>
                         <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#0d0d18] ${a.status==='online'?'bg-emerald-400':a.status==='idle'?'bg-amber-400':a.status==='dnd'?'bg-rose-500':'bg-zinc-600'}`}/>
                       </div>
                       <div className="flex-1 min-w-0">
