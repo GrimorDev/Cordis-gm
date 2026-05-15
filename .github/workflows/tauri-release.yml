@@ -1,7 +1,9 @@
 name: Release — Windows (.exe) + macOS (.dmg) + Linux (.AppImage/.deb)
 
-# Triggers on every push to main (auto-bumps patch version + creates tag).
-# Skips if the commit is the bot's own version-bump commit (prevents loop).
+# Triggers only on:
+#   - Manual dispatch (workflow_dispatch)
+#   - Push to main where commit message starts with "release:"
+# Regular feature/fix commits do NOT create releases.
 on:
   push:
     branches: [main]
@@ -12,9 +14,9 @@ on:
         required: false
         default: ''
 
-# Only one release at a time — cancel stale runs on rapid pushes.
+# Only one release at a time — cancel stale runs.
 concurrency:
-  group: "${{ startsWith(github.event.head_commit.message, 'chore: bump version') && 'noop' || 'release' }}"
+  group: release
   cancel-in-progress: true
 
 permissions:
@@ -27,7 +29,9 @@ jobs:
   prepare:
     name: Bump version & create tag
     runs-on: ubuntu-latest
-    if: "!startsWith(github.event.head_commit.message, 'chore: bump version')"
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.event.head_commit.message, 'release:')
     outputs:
       tag:     ${{ steps.ver.outputs.tag }}
       version: ${{ steps.ver.outputs.version }}

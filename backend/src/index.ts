@@ -131,10 +131,12 @@ const apiLimiter = rateLimit({
 // Auth limiter — still per real IP to protect against credential stuffing
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
-  message: { error: 'Too many auth attempts' },
+  max: 30,
+  message: { error: 'Too many auth attempts. Wait 15 minutes.' },
   keyGenerator: realIp,
   store: redisStore('rl:auth:'),
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 // ── Emergency rate-limit reset (NOT under /api/ → bypasses apiLimiter) ──────

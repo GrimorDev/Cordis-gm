@@ -638,6 +638,15 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
   const [showModal, setShowModal] = useState(false);
   const [modalTab, setModalTab] = useState<'login' | 'register'>('login');
   const [regStep, setRegStep] = useState<'form' | 'verify'>('form');
+  const [forgotView, setForgotView] = useState<'none' | 'form' | 'sent' | 'reset'>(() => {
+    const p = new URLSearchParams(window.location.search);
+    return (p.get('token') && p.get('uid')) ? 'reset' : 'none';
+  });
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [resetToken] = useState(() => new URLSearchParams(window.location.search).get('token') || '');
+  const [resetUid]   = useState(() => new URLSearchParams(window.location.search).get('uid')   || '');
+  const [resetPass, setResetPass] = useState('');
+  const [resetPass2, setResetPass2] = useState('');
   const savedCreds = (() => { try { const r = localStorage.getItem('cordyn_saved_creds'); return r ? JSON.parse(atob(r)) as { login: string; password: string } : null; } catch { return null; } })();
   const [form, setForm] = useState({ login: savedCreds?.login || localStorage.getItem('cordyn_saved_login') || '', username: '', email: '', password: savedCreds?.password || '', confirm: '' });
   const [verifyCode, setVerifyCode] = useState('');
@@ -807,6 +816,41 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
     } finally { setLoading(false); }
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(''); setLoading(true);
+    try {
+      await fetch(`${import.meta.env.VITE_API_BASE ?? '/api'}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail }),
+      });
+      // Always show "sent" to not leak whether email exists
+      setForgotView('sent');
+    } catch {
+      setError('Błąd połączenia z serwerem');
+    } finally { setLoading(false); }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(''); setLoading(true);
+    if (resetPass !== resetPass2) { setError('Hasła nie są identyczne'); setLoading(false); return; }
+    if (resetPass.length < 8) { setError('Hasło musi mieć co najmniej 8 znaków'); setLoading(false); return; }
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE ?? '/api'}/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: resetToken, userId: resetUid, newPassword: resetPass }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Błąd');
+      setForgotView('none');
+      setError('✓ Hasło zmienione! Możesz się teraz zalogować.');
+      window.history.replaceState({}, '', window.location.pathname);
+    } catch (err: any) {
+      setError(err.message || 'Błąd połączenia z serwerem');
+    } finally { setLoading(false); }
+  };
+
   const INTEGRATIONS = [
     {
       name: 'Spotify',
@@ -956,7 +1000,52 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
                     {loading ? <><Loader2 size={17} className="animate-spin" /> {tl('auth.loggingIn')}</> : tl('auth.loginBtn')}
                   </button>
+                  <button type="button" onClick={() => { setForgotView('form'); setError(''); }}
+                    className="text-xs text-zinc-500 hover:text-indigo-400 transition-colors text-center mt-0.5">
+                    Zapomniałeś hasła?
+                  </button>
                 </motion.form>
+              )}
+
+              {/* ── Forgot password form (landing) ── */}
+              {!twoFaSession && forgotView === 'form' && (
+                <motion.form key="dt-forgot" onSubmit={handleForgotPassword}
+                  initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-8 }}
+                  transition={{ duration:.2 }} className="flex flex-col gap-3.5">
+                  <div>
+                    <p className="text-sm font-semibold text-white mb-1">Resetuj hasło</p>
+                    <p className="text-xs text-zinc-500">Podaj email — wyślemy link do zmiany hasła.</p>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 text-sm pointer-events-none">@</span>
+                    <input required type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)}
+                      placeholder="twoj@email.pl" autoFocus
+                      className={`${gi} rounded-xl pl-9 pr-4 py-3 text-sm w-full`}/>
+                  </div>
+                  {error && <p className="text-rose-400 text-xs flex items-center gap-1.5"><AlertCircle size={13}/>{error}</p>}
+                  <button type="submit" disabled={loading}
+                    className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
+                    {loading ? <Loader2 size={17} className="animate-spin"/> : 'Wyślij link'}
+                  </button>
+                  <button type="button" onClick={() => { setForgotView('none'); setError(''); }}
+                    className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors text-center">
+                    ← Wróć do logowania
+                  </button>
+                </motion.form>
+              )}
+
+              {/* ── Forgot password sent (landing) ── */}
+              {!twoFaSession && forgotView === 'sent' && (
+                <motion.div key="dt-forgot-sent" initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
+                  transition={{ duration:.2 }} className="flex flex-col items-center gap-4 py-4 text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-green-500/15 border border-green-500/25 flex items-center justify-center">
+                    <Check size={28} className="text-green-400"/>
+                  </div>
+                  <p className="text-sm font-semibold text-white">Sprawdź skrzynkę email</p>
+                  <p className="text-xs text-zinc-500 leading-relaxed">Jeśli konto istnieje, link resetujący został wysłany. Wygasa za 1 godzinę.</p>
+                  <button type="button" onClick={() => { setForgotView('none'); setError(''); }}
+                    className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">← Wróć</button>
+                </motion.div>
               )}
 
               {/* ── Register step 1 ── */}
@@ -1870,6 +1959,88 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     <button type="submit" disabled={loading}
                       className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
                       {loading ? <><Loader2 size={17} className="animate-spin"/> {tl('auth.loggingIn')}</> : tl('auth.loginBtn')}
+                    </button>
+                    <button type="button" onClick={() => { setForgotView('form'); setError(''); setInfo(''); }}
+                      className="text-xs text-zinc-500 hover:text-indigo-400 transition-colors text-center mt-0.5">
+                      Zapomniałeś hasła?
+                    </button>
+                  </motion.form>
+                )}
+
+                {/* ── FORGOT PASSWORD FORM ── */}
+                {forgotView === 'form' && (
+                  <motion.form key="forgot-form" onSubmit={handleForgotPassword}
+                    initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-8 }}
+                    transition={{ duration:.2 }} className="flex flex-col gap-3.5">
+                    <div>
+                      <p className="text-sm font-semibold text-white mb-1">Resetuj hasło</p>
+                      <p className="text-xs text-zinc-500">Podaj adres email konta — wyślemy link do zresetowania hasła.</p>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 text-sm pointer-events-none">@</span>
+                      <input required type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)}
+                        placeholder="twoj@email.pl" autoFocus
+                        className={`${gi} rounded-xl pl-9 pr-4 py-3 text-sm w-full`}/>
+                    </div>
+                    {error && <p className="text-rose-400 text-xs flex items-center gap-1.5"><AlertCircle size={13}/>{error}</p>}
+                    <button type="submit" disabled={loading}
+                      className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
+                      {loading ? <Loader2 size={17} className="animate-spin"/> : 'Wyślij link resetujący'}
+                    </button>
+                    <button type="button" onClick={() => { setForgotView('none'); setError(''); }}
+                      className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors text-center">
+                      ← Wróć do logowania
+                    </button>
+                  </motion.form>
+                )}
+
+                {/* ── FORGOT PASSWORD SENT ── */}
+                {forgotView === 'sent' && (
+                  <motion.div key="forgot-sent" initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
+                    transition={{ duration:.2 }} className="flex flex-col items-center gap-4 py-4 text-center">
+                    <div className="w-14 h-14 rounded-2xl bg-green-500/15 border border-green-500/25 flex items-center justify-center">
+                      <Check size={28} className="text-green-400"/>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-white mb-1">Sprawdź skrzynkę</p>
+                      <p className="text-xs text-zinc-500 leading-relaxed">Jeśli konto istnieje, link resetujący został wysłany na adres <span className="text-zinc-300">{forgotEmail}</span>. Link wygasa za 1 godzinę.</p>
+                    </div>
+                    <button type="button" onClick={() => { setForgotView('none'); setError(''); }}
+                      className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+                      ← Wróć do logowania
+                    </button>
+                  </motion.div>
+                )}
+
+                {/* ── RESET PASSWORD (from email link) ── */}
+                {forgotView === 'reset' && (
+                  <motion.form key="reset-form" onSubmit={handleResetPassword}
+                    initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
+                    transition={{ duration:.2 }} className="flex flex-col gap-3.5">
+                    <div>
+                      <p className="text-sm font-semibold text-white mb-1">Ustaw nowe hasło</p>
+                      <p className="text-xs text-zinc-500">Nowe hasło musi mieć co najmniej 8 znaków.</p>
+                    </div>
+                    <div className="relative">
+                      <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
+                      <input required type={showPass ? 'text' : 'password'} value={resetPass} onChange={e => setResetPass(e.target.value)}
+                        placeholder="Nowe hasło" minLength={8} autoFocus
+                        className={`${gi} rounded-xl pl-10 pr-10 py-3 text-sm w-full`}/>
+                      <button type="button" onClick={() => setShowPass(v => !v)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                        {showPass ? <Eye size={15}/> : <EyeOff size={15}/>}
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"/>
+                      <input required type={showPass ? 'text' : 'password'} value={resetPass2} onChange={e => setResetPass2(e.target.value)}
+                        placeholder="Powtórz nowe hasło" minLength={8}
+                        className={`${gi} rounded-xl pl-10 pr-4 py-3 text-sm w-full`}/>
+                    </div>
+                    {error && <p className="text-rose-400 text-xs flex items-center gap-1.5"><AlertCircle size={13}/>{error}</p>}
+                    <button type="submit" disabled={loading}
+                      className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
+                      {loading ? <Loader2 size={17} className="animate-spin"/> : 'Zmień hasło'}
                     </button>
                   </motion.form>
                 )}
