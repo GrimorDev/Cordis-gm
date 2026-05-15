@@ -8634,6 +8634,27 @@ export default function App() {
     const retryDelays = [10_000, 2 * 60_000, 10 * 60_000, 30 * 60_000];
     let retryIdx = 0;
 
+    // If we just updated, skip checks for 2 hours to prevent "update loop"
+    const justUpdatedAt = parseInt(localStorage.getItem('cordis_updated_at') || '0', 10);
+    const justUpdatedVer = localStorage.getItem('cordis_updated_ver') || '';
+    const TWO_HOURS = 2 * 60 * 60 * 1000;
+    if (justUpdatedAt && Date.now() - justUpdatedAt < TWO_HOURS) {
+      console.log('[updater] skipping check — just updated to', justUpdatedVer, 'less than 2h ago');
+      // Still schedule a check after the cooldown expires
+      const remaining = TWO_HOURS - (Date.now() - justUpdatedAt);
+      retryTimer = setTimeout(() => {
+        localStorage.removeItem('cordis_updated_at');
+        localStorage.removeItem('cordis_updated_ver');
+        localStorage.removeItem('cordis_just_updated');
+        if (!cancelled) doCheck();
+      }, remaining);
+      return () => { cancelled = true; if (retryTimer) clearTimeout(retryTimer); };
+    }
+    // Clear stale flags
+    localStorage.removeItem('cordis_just_updated');
+    localStorage.removeItem('cordis_updated_at');
+    localStorage.removeItem('cordis_updated_ver');
+
     const doCheck = async () => {
       try {
         const { check } = await import('@tauri-apps/plugin-updater');
@@ -8727,6 +8748,8 @@ export default function App() {
         // Mark that the app was just updated so the new instance does a hard
         // reload after clearing all stale webview/SW caches on startup.
         localStorage.setItem('cordis_just_updated', '1');
+        localStorage.setItem('cordis_updated_at', String(Date.now()));
+        localStorage.setItem('cordis_updated_ver', updateAvailable?.version ?? '');
         // Pre-clear caches and unregister SW now, before relaunch, so the
         // new instance starts completely fresh (no stale assets → no black screen).
         try {
