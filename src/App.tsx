@@ -8741,17 +8741,17 @@ export default function App() {
     setUpdateInstalling(true);
     try {
       const { check } = await import('@tauri-apps/plugin-updater');
-      const { relaunch } = await import('@tauri-apps/plugin-process');
+      const { relaunch, exit } = await import('@tauri-apps/plugin-process');
       const update = await check();
       if (update?.available) {
-        await update.downloadAndInstall();
-        // Mark that the app was just updated so the new instance does a hard
-        // reload after clearing all stale webview/SW caches on startup.
+        // ── Write localStorage BEFORE downloadAndInstall ──────────────────────
+        // On Windows, NSIS kills the current process during installation so any
+        // code after downloadAndInstall() may never run. Writing the cooldown
+        // flag first ensures the new instance skips the immediate update check.
         localStorage.setItem('cordis_just_updated', '1');
         localStorage.setItem('cordis_updated_at', String(Date.now()));
         localStorage.setItem('cordis_updated_ver', updateAvailable?.version ?? '');
-        // Pre-clear caches and unregister SW now, before relaunch, so the
-        // new instance starts completely fresh (no stale assets → no black screen).
+        // Pre-clear caches so the new instance starts fresh (no stale assets).
         try {
           if ('serviceWorker' in navigator) {
             const regs = await navigator.serviceWorker.getRegistrations();
@@ -8761,8 +8761,21 @@ export default function App() {
             const names = await caches.keys();
             await Promise.all(names.map(n => caches.delete(n)));
           }
-        } catch { /* ignore cleanup errors — relaunch will still force reload */ }
-        await relaunch();
+        } catch { /* ignore — install will still proceed */ }
+
+        await update.downloadAndInstall();
+
+        // ── Platform-aware restart ────────────────────────────────────────────
+        // Windows (NSIS installer): call exit(0) so the NSIS process can replace
+        // the .exe. relaunch() starts a new instance of the *old* binary which
+        // keeps the file handle open and causes NSIS to fail silently.
+        // macOS / Linux: the updater patches in-place; relaunch() is required.
+        const isWindows = /windows/i.test(navigator.userAgent);
+        if (isWindows) {
+          await exit(0);   // NSIS handles restart on its own
+        } else {
+          await relaunch();
+        }
       }
     } catch (e) {
       console.error('Update failed', e);
