@@ -13012,7 +13012,7 @@ export default function App() {
                                 <div className="ch-icon">
                                   <ChIcon size={13} className={isAct?'text-indigo-300':ping>0?'text-amber-400':ch.type==='announcement'?'text-amber-500':ch.type==='forum'?'text-emerald-400':unread>0?'text-indigo-400':'text-zinc-500'}/>
                                 </div>
-                                <span className={`text-[13px] truncate ${(unread>0||ping>0)&&!isAct?'font-semibold text-white':'font-medium'}`}>{ch.name}</span>
+                                <span className={`text-[14px] truncate ${(unread>0||ping>0)&&!isAct?'font-semibold text-white':'font-medium'}`}>{ch.name}</span>
                                 {ch.is_private&&<Lock size={9} className="text-zinc-700 shrink-0"/>}
                                 {hasDraft&&<span className="text-[9px] font-bold text-amber-400/80 shrink-0 leading-none">szkic</span>}
                               </div>
@@ -14456,9 +14456,9 @@ export default function App() {
               )}
 
               {/* ── CHAT HEADER (improved) ─────────────────────────────────── */}
-              <header className="border-b border-white/[0.05] flex items-center justify-between px-5 glass-dark z-10 shrink-0 gap-3 relative" style={{minHeight:52,background:'linear-gradient(to bottom,rgba(99,102,241,0.03) 0%,transparent 100%)'}}>
+              <header className="flex items-center justify-between px-5 glass-dark z-10 shrink-0 gap-3 relative border-b border-white/[0.07]" style={{minHeight:56,background:'linear-gradient(180deg,rgba(99,102,241,0.05) 0%,transparent 100%)'}}>
                 {/* thin gradient separator at bottom */}
-                <div className="absolute bottom-0 left-0 right-0 h-px pointer-events-none" style={{background:'linear-gradient(to right,transparent 0%,rgba(99,102,241,0.18) 30%,rgba(99,102,241,0.18) 70%,transparent 100%)'}}/>
+                <div className="absolute bottom-0 left-0 right-0 h-px pointer-events-none" style={{background:'linear-gradient(to right,transparent,rgba(99,102,241,0.25),transparent)'}}/>
 
                 <div className="flex items-center gap-3 min-w-0">
                   {activeView==='dms' ? (activeGroupDm ? (() => {
@@ -14516,7 +14516,7 @@ export default function App() {
                         {/* Name + description stack */}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 min-w-0">
-                            <h3 className="font-bold text-white text-[15px] leading-tight truncate">{activeCh.name}</h3>
+                            <h3 className="font-bold text-white text-[16px] leading-tight truncate">{activeCh.name}</h3>
                             {activeCh.is_private&&<Lock size={11} className="text-zinc-600 shrink-0"/>}
                             {activeCh.slowmode_seconds!=null&&activeCh.slowmode_seconds>0&&(
                               <div className="flex items-center gap-0.5 text-amber-400/70 text-[10px] font-medium shrink-0">
@@ -15240,10 +15240,10 @@ export default function App() {
                     return (
                       <React.Fragment key={msg.id}>
                         {showSep&&(
-                          <div className="flex items-center gap-3 my-4">
-                            <div className="flex-1 h-px" style={{background:'linear-gradient(90deg,transparent,rgba(139,92,246,0.15),transparent)'}}/>
-                            <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest shrink-0 px-2 py-0.5 rounded-full border border-white/[0.04] bg-white/[0.02]">{sepLabel}</span>
-                            <div className="flex-1 h-px" style={{background:'linear-gradient(90deg,transparent,rgba(139,92,246,0.15),transparent)'}}/>
+                          <div className="flex items-center gap-3 my-5 mx-2">
+                            <div className="date-sep-line"/>
+                            <span className="date-sep-label">{sepLabel}</span>
+                            <div className="date-sep-line"/>
                           </div>
                         )}
                         {/* ── BUBBLE MESSAGE ───────────────────────── */}
@@ -15253,10 +15253,10 @@ export default function App() {
                         return (
                         <motion.div
                           data-msg-id={msg.id}
-                          initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: Math.min(idx * 0.01, 0.06), type: 'spring', stiffness: 340, damping: 28 }}
+                          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: Math.min(idx * 0.008, 0.05), type: 'spring', stiffness: 420, damping: 30 }}
                           style={{ contentVisibility: 'auto', containIntrinsicHeight: 'auto 72px' }}
-                          className={`relative flex ${showChatAvatars?'gap-2.5':'gap-0'} group ${compactMessages || isGrouped ? 'mb-0.5' : 'mb-1.5'} ${isGrouped ? 'mt-0' : ''} ${isOwn?'flex-row-reverse':'flex-row'} ${mentionsMe?'rounded-xl bg-amber-400/5 border-l-2 border-amber-400/60 pl-2 -ml-2':''} ${isCurrentMatch?'rounded-xl outline outline-2 outline-indigo-500/60 bg-indigo-500/[0.07] -mx-1 px-1':''}  ${isSearchMatch&&!isCurrentMatch?'rounded-xl bg-indigo-500/[0.04]':''}`}
+                          className={`relative flex ${showChatAvatars?'gap-3':'gap-0'} group ${compactMessages||isGrouped?'mb-0.5':'mb-2'} ${isGrouped?'mt-0':activeView!=='dms'?'mt-0.5':''} ${activeView==='dms'&&isOwn?'flex-row-reverse':'flex-row'} ${activeView!=='dms'?'msg-flat-row px-2':''} ${mentionsMe?'bg-amber-400/5 border-l-2 border-amber-400/60 pl-2':''} ${isCurrentMatch?'outline outline-2 outline-indigo-500/60 bg-indigo-500/[0.07]':''}  ${isSearchMatch&&!isCurrentMatch?'bg-indigo-500/[0.04]':''}`}
                           onContextMenu={e=>{
                             if(editingMsgId===msg.id) return;
                             if((msg as any).deleted||msg.content==='__deleted__') return;
@@ -15278,22 +15278,22 @@ export default function App() {
                             return (<>
                           {showChatAvatars && (
                             isGrouped
-                              ? <div className="w-9 shrink-0"/>
-                              : <div className="av-frozen shrink-0 self-end mb-0.5" style={{'--av-url':`url("${avatarSrc}")`} as React.CSSProperties}>
+                              ? <div className="w-10 shrink-0"/>
+                              : <div className="av-frozen shrink-0 self-start mt-0.5" style={{'--av-url':`url("${avatarSrc}")`} as React.CSSProperties}>
                                   <img src={avatarSrc} alt=""
                                     onClick={isAuto?undefined:(e)=>showHoverCard(msg.sender_id, e as unknown as React.MouseEvent)}
-                                    className={`w-8 h-8 md:w-9 md:h-9 rounded-xl object-cover ${isAuto?'cursor-default':'cursor-pointer hover:opacity-80 hover:scale-105'} transition-all av-eff-${(msg as any).sender_avatar_effect||'none'}`}/>
+                                    className={`w-10 h-10 rounded-xl object-cover ${isAuto?'cursor-default':'cursor-pointer hover:opacity-85 hover:scale-105'} transition-all av-eff-${(msg as any).sender_avatar_effect||'none'}`}/>
                                 </div>
                           )}
 
                           {/* Content column */}
-                          <div className={`flex flex-col max-w-[85%] md:max-w-[72%] ${isOwn?'items-end':'items-start'} min-w-0`}>
+                          <div className={`flex flex-col min-w-0 ${activeView==='dms'?`max-w-[85%] md:max-w-[72%] ${isOwn?'items-end':'items-start'}`:'flex-1 items-start'}`}>
 
                             {/* Meta (name + time) */}
                             {!isGrouped && (
-                            <div className={`flex items-center gap-1.5 mb-1 px-1 ${isOwn?'flex-row-reverse':''}`}>
-                              <span className={`text-xs font-semibold transition-opacity ${isAuto?'cursor-default':'cursor-pointer hover:underline hover:opacity-80'}`}
-                                style={{ color: isAuto?'#818cf8':((msg as MessageFull).sender_role_color || (isOwn ? '#818cf8' : '#a1a1aa')) }}
+                            <div className={`flex items-center gap-2 mb-1 ${activeView==='dms'&&isOwn?'flex-row-reverse':''}`}>
+                              <span className={`text-[13.5px] font-semibold leading-none transition-opacity ${isAuto?'cursor-default':'cursor-pointer hover:underline hover:opacity-80'}`}
+                                style={{ color: isAuto?'#818cf8':((msg as MessageFull).sender_role_color || (isOwn ? '#818cf8' : '#c4c4d8')) }}
                                 onClick={isAuto?undefined:(e)=>showHoverCard(msg.sender_id, e as unknown as React.MouseEvent)}>
                                 {displayName}
                               </span>
@@ -15314,7 +15314,7 @@ export default function App() {
                                   {(msg as MessageFull).sender_role}
                                 </span>
                               )}
-                              <span className={`text-[10px] text-zinc-600 transition-opacity ${alwaysShowTimestamps?'':'opacity-0 group-hover:opacity-100'}`}>{fmtTime(msg.created_at)}</span>
+                              <span className={`text-xs text-zinc-500 transition-opacity ${activeView!=='dms'||alwaysShowTimestamps?'':'opacity-0 group-hover:opacity-100'}`}>{fmtTime(msg.created_at)}</span>
                               {(msg as MessageFull).edited&&(
                                 <button className="text-[10px] text-zinc-600 italic hover:text-zinc-400 transition-colors"
                                   onClick={async()=>{
@@ -15333,7 +15333,7 @@ export default function App() {
 
                             {/* Reply preview */}
                             {msg.reply_to_id&&msg.reply_content&&(
-                              <div className={`flex items-center gap-1.5 mb-1 text-[11px] text-zinc-500 border-l-2 border-indigo-500/40 pl-2 py-0.5 ${isOwn?'self-end':''}`}>
+                              <div className={`flex items-center gap-1.5 mb-1 text-[11px] text-zinc-500 border-l-2 border-indigo-500/40 pl-2 py-0.5 ${activeView==='dms'&&isOwn?'self-end':''}`}>
                                 <Reply size={9} className="shrink-0"/>
                                 <span className="font-semibold">{msg.reply_username}</span>
                                 <span className="truncate max-w-[160px] text-zinc-600">{msg.reply_content}</span>
@@ -15489,7 +15489,9 @@ export default function App() {
                                   <span className="text-5xl leading-tight">{c}</span>
                                 </div>
                               );
-                              return (
+                              return activeView !== 'dms' ? (
+                                <p className={`${msgFontCls} leading-relaxed break-words msg-md text-[#d8d8ec]`} dangerouslySetInnerHTML={{__html: renderMsgHTML(msg.content)}}/>
+                              ) : (
                                 <div className={`relative px-4 py-2.5 rounded-2xl max-w-full ${isOwn
                                   ? 'bg-indigo-500/[0.14] border border-indigo-500/20 text-zinc-100 bubble-tail-right'
                                   : 'glass-bubble text-zinc-100 bubble-tail-left'
@@ -16107,7 +16109,7 @@ export default function App() {
                             if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); handleSend(e as any); }
                           }}
                           placeholder={activeView==='dms'&&(activeDm||dmPartnerProfile)?`Wiadomość do ${activeDm?.other_username||dmPartnerProfile?.username||''}...`:`Wiadomość w #${activeCh?.name||''}...`}
-                          className="flex-1 bg-transparent text-sm text-zinc-200 placeholder-zinc-600 outline-none min-w-0 resize-none overflow-hidden leading-[1.4] self-center"/>
+                          className="flex-1 bg-transparent text-[15px] text-zinc-100 placeholder-zinc-500 outline-none min-w-0 resize-none overflow-hidden leading-[1.45] self-center"/>
                         {/* GIF picker */}
                         <div className="relative shrink-0">
                           <button type="button" onClick={() => { setShowGifPicker(v => !v); setShowEmojiPicker(false); setPlusMenuOpen(false); }}

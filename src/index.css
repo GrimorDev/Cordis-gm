@@ -81,45 +81,37 @@ body::before {
    ───────────────────────────────────────────────────────────────────────── */
 
 .glass-panel {
-  background: rgba(13, 11, 28, 0.92);       /* more opaque → less bleed-through → blur can be smaller */
-  backdrop-filter: blur(10px);              /* was 28px — 10px saves ~60% GPU on WKWebView */
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(139, 92, 246, 0.08);
-  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.70);
-  will-change: transform;                   /* own compositing layer — stops sibling repaints */
-  transform: translateZ(0);                 /* force GPU rasterisation */
-  contain: layout style;                    /* limit layout reflow to this subtree */
-}
-.glass-panel-hover:hover {
-  background: rgba(20, 20, 36, 0.94);
-  border-color: rgba(255, 255, 255, 0.11);
-}
-/* Modals — fully opaque: NO backdrop-filter at all (zero GPU cost) */
-.glass-modal {
-  background: rgb(11, 11, 20);
-  /* backdrop-filter removed — modal is fully opaque, blur serves no purpose
-     and costs GPU. box-shadow provides depth instead. */
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  box-shadow: 0 32px 64px -16px rgba(0, 0, 0, 0.90), 0 0 0 1px rgba(139,92,246,0.08);
-  will-change: transform;
-  transform: translateZ(0);
-}
-/* Center panel — slightly translucent, low blur */
-.glass-dark {
-  background: rgba(8, 8, 18, 0.88);         /* was 0.60 — more opaque is faster */
-  backdrop-filter: blur(8px);               /* was 28px */
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: #0f0f1b;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 24px 48px -12px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04);
   will-change: transform;
   transform: translateZ(0);
   contain: layout style;
 }
-/* Small bubbles (context menus, tooltips) — small element, medium blur is ok */
+.glass-panel-hover:hover {
+  background: #131324;
+  border-color: rgba(255,255,255,0.12);
+}
+/* Modals — fully opaque */
+.glass-modal {
+  background: #0d0d1e;
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 32px 64px -16px rgba(0,0,0,0.90), 0 0 0 1px rgba(99,102,241,0.07);
+  will-change: transform;
+  transform: translateZ(0);
+}
+/* Center chat panel */
+.glass-dark {
+  background: #080812;
+  border: 1px solid rgba(255,255,255,0.07);
+  will-change: transform;
+  transform: translateZ(0);
+  contain: layout style;
+}
+/* DM conversation bubbles */
 .glass-bubble {
-  background: rgba(15, 13, 28, 0.94);
-  backdrop-filter: blur(12px);              /* was 16px */
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.10);
 }
 
 /* Smooth font rendering */
@@ -177,6 +169,35 @@ body::before {
 }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ── Flat server message row — subtle hover ── */
+.msg-flat-row {
+  border-radius: 10px;
+  transition: background 0.10s ease;
+}
+.msg-flat-row:hover {
+  background: rgba(255,255,255,0.025);
+}
+
+/* ── Date separator ── */
+.date-sep-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+}
+.date-sep-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(161,161,170,0.55);
+  padding: 2px 12px;
+  border-radius: 100px;
+  border: 1px solid rgba(255,255,255,0.07);
+  background: rgba(255,255,255,0.03);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 
 /* Animated gradient text */
 .gradient-text {
@@ -265,29 +286,29 @@ body::before {
   gap: 4px !important;
 }
 .ch-btn:hover {
-  background: rgba(255,255,255,0.055);
-  color: #d4d4d8;
-  border-color: rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.06);
+  color: #d4d4e8;
+  border-color: rgba(255,255,255,0.08);
 }
 .ch-btn.active {
-  background: rgba(99,102,241,0.18);
-  color: #fff;
-  border-color: rgba(99,102,241,0.32);
-  box-shadow: inset 3px 0 0 #6366f1, 0 0 18px rgba(99,102,241,0.14);
+  background: rgba(99,102,241,0.16);
+  color: #c7d2fe;
+  border-color: rgba(99,102,241,0.28);
+  box-shadow: inset 3px 0 0 #818cf8, 0 1px 16px rgba(99,102,241,0.12);
 }
 .ch-btn.unread:not(.active) {
-  color: #f4f4f5;
+  color: #e8e8f4;
 }
 .ch-btn.pinged:not(.active) {
-  background: rgba(245,158,11,0.07);
-  border-color: rgba(245,158,11,0.22);
-  color: #fff;
+  background: rgba(245,158,11,0.08);
+  border-color: rgba(245,158,11,0.24);
+  color: #fef08a;
 }
 .ch-btn.voice-active {
   background: rgba(52,211,153,0.10);
-  color: #34d399;
+  color: #6ee7b7;
   border-color: rgba(52,211,153,0.28);
-  box-shadow: inset 3px 0 0 #34d399, 0 0 16px rgba(52,211,153,0.08);
+  box-shadow: inset 3px 0 0 #34d399, 0 1px 12px rgba(52,211,153,0.10);
 }
 /* Icon background circle inside channel button */
 .ch-icon {
@@ -344,16 +365,15 @@ body::before {
 
 /* ── Sidebar user bar ── */
 .sidebar-userbar {
-  background: linear-gradient(135deg, rgba(99,102,241,0.07) 0%, rgba(124,58,237,0.05) 100%);
-  border-top: 1px solid rgba(99,102,241,0.14);
-  box-shadow: 0 -1px 0 rgba(255,255,255,0.04);
+  background: rgba(0,0,0,0.22);
+  border-top: 1px solid rgba(255,255,255,0.07);
   position: relative;
 }
 .sidebar-userbar::before {
   content: '';
   position: absolute;
-  top: 0; left: 20px; right: 20px; height: 1px;
-  background: linear-gradient(to right, transparent, rgba(99,102,241,0.4), transparent);
+  top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(to right, transparent, rgba(99,102,241,0.35), transparent);
   pointer-events: none;
 }
 
