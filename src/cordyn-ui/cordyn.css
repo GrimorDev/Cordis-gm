@@ -42,6 +42,7 @@
   flex-direction: column;
   padding: 10px;
   gap: 10px;
+  background: var(--bg-0);
 }
 
 .titlebar {

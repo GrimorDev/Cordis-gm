@@ -146,7 +146,7 @@ export const CordynShell: React.FC<CordynShellProps> = (p) => {
     return () => window.removeEventListener("keydown", handler);
   }, [cmdkOpen]);
 
-  const server = servers.find((s) => s.id === activeServerId) || servers[0];
+  const server = servers.find((s) => s.id === activeServerId) ?? (servers.length > 0 ? servers[0] : undefined);
   const currentDm = activeDM || (activeDmId ? dms.find((d) => d.id === activeDmId) : null);
 
   return (
@@ -185,24 +185,26 @@ export const CordynShell: React.FC<CordynShellProps> = (p) => {
         />
 
         {view === "server" ? (
-          <ChannelsPanel
-            servers={servers}
-            server={server}
-            serverTag={serverTag}
-            categories={categories}
-            activeChannelId={activeChannelId}
-            voiceActive={voiceActive}
-            layout={layout}
-            user={user}
-            micOn={micOn}
-            deafened={deafened}
-            onSelectChannel={onSelectChannel}
-            onSelectServer={onSelectServer}
-            onOpenCmdK={() => setCmdkOpen(true)}
-            onToggleMic={onToggleMic}
-            onToggleDeaf={onToggleDeaf}
-            onOpenSettings={onOpenSettings}
-          />
+          server ? (
+            <ChannelsPanel
+              servers={servers}
+              server={server}
+              serverTag={serverTag}
+              categories={categories}
+              activeChannelId={activeChannelId}
+              voiceActive={voiceActive}
+              layout={layout}
+              user={user}
+              micOn={micOn}
+              deafened={deafened}
+              onSelectChannel={onSelectChannel}
+              onSelectServer={onSelectServer}
+              onOpenCmdK={() => setCmdkOpen(true)}
+              onToggleMic={onToggleMic}
+              onToggleDeaf={onToggleDeaf}
+              onOpenSettings={onOpenSettings}
+            />
+          ) : null
         ) : (
           <DMSidebar
             dms={dms}
