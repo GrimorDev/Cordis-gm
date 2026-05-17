@@ -12073,25 +12073,9 @@ export default function App() {
     return null;
   };
 
-  // ── CordynShell computed props ────────────────────────────────────────────────
-  const cordynServers    = useMemo(() => mapServers(serverList, staticUrl), [serverList]); // eslint-disable-line
-  const cordynCategories = useMemo(() => mapCategories(serverFull?.categories ?? []), [serverFull]); // eslint-disable-line
-  const cordynMembers    = useMemo(() => mapMembers(members, staticUrl), [members]); // eslint-disable-line
-  const cordynDms        = useMemo(() => mapDMs(dmConvs, unreadDms, staticUrl), [dmConvs, unreadDms]); // eslint-disable-line
-  const cordynMessages   = useMemo(() => mapMessages(activeView === 'servers' ? channelMsgs : dmMsgs, staticUrl), [activeView, channelMsgs, dmMsgs]); // eslint-disable-line
-  const cordynActiveChannel = useMemo(() => {
-    const ch = allChs.find(c => c.id === activeChannel);
-    return ch ? { id: ch.id, name: ch.name, type: ch.type as ('text'|'voice'|'announcement'|'forum'), topic: ch.description || undefined } : { id: '', name: '', type: 'text' as const };
-  }, [allChs, activeChannel]); // eslint-disable-line
-  const cordynActiveDM   = useMemo(() => activeDm ? {
-    id: activeDm.id, name: activeDm.other_username,
-    avatar: activeDm.other_avatar ? staticUrl(activeDm.other_avatar) : undefined,
-    status: activeDm.other_status as ('online'|'idle'|'dnd'|'offline'), preview: activeDm.last_message || '',
-  } : null, [activeDm]); // eslint-disable-line
-  const cordynTyping     = useMemo(() => {
-    const typers = Object.entries(typingUsers).filter(([uid]) => uid !== currentUser?.id).map(([, n]) => n);
-    return typers.length > 0 ? typers[0] : null;
-  }, [typingUsers, currentUser]); // eslint-disable-line
+  // ── CordynShell computed props (no useMemo — avoid adding hooks to App) ───────
+  const _cordynCh = allChs.find(c => c.id === activeChannel);
+  const _cordynTypers = Object.entries(typingUsers).filter(([uid]) => uid !== currentUser?.id).map(([, n]) => n);
 
   // Returns badge array for a message sender (looks up members/dmPartnerProfile)
   const getMsgSenderBadges = (senderId: string): import('./api').Badge[] => {
@@ -12299,20 +12283,20 @@ export default function App() {
             activeChannelId={activeChannel}
             activeDmId={activeDm?.id || null}
             openTabs={globalTabs.map(t => ({ id: t.channelId || t.userId || t.groupId || t.key, label: t.name }))}
-            servers={cordynServers}
+            servers={mapServers(serverList, staticUrl)}
             serverTag={serverFull ? `${serverFull.member_count ?? members.length} online` : undefined}
-            categories={cordynCategories}
-            members={cordynMembers}
-            dms={cordynDms}
-            messages={cordynMessages}
+            categories={mapCategories(serverFull?.categories ?? [])}
+            members={mapMembers(members, staticUrl)}
+            dms={mapDMs(dmConvs, unreadDms, staticUrl)}
+            messages={mapMessages(activeView === 'servers' ? channelMsgs : dmMsgs, staticUrl)}
             cmdkItems={[]}
-            typing={cordynTyping}
+            typing={_cordynTypers.length > 0 ? _cordynTypers[0] : null}
             voiceActive={activeCall?.channelName || null}
             pinnedCount={pinnedMsgs.length}
             micOn={!(activeCall?.isMuted ?? true)}
             deafened={activeCall?.isDeafened ?? false}
-            activeChannel={cordynActiveChannel}
-            activeDM={cordynActiveDM}
+            activeChannel={_cordynCh ? { id: _cordynCh.id, name: _cordynCh.name, type: _cordynCh.type as ('text'|'voice'|'announcement'|'forum'), topic: _cordynCh.description || undefined } : { id: '', name: '', type: 'text' as const }}
+            activeDM={activeDm ? { id: activeDm.id, name: activeDm.other_username, avatar: activeDm.other_avatar ? staticUrl(activeDm.other_avatar) : undefined, status: activeDm.other_status as ('online'|'idle'|'dnd'|'offline'), preview: activeDm.last_message || '' } : null}
             onViewChange={(v) => { setActiveView(v === 'server' ? 'servers' : 'dms'); }}
             onSelectServer={(id) => {
               const same = activeServer === id;
