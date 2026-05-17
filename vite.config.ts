@@ -26,34 +26,42 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 600,
       rollupOptions: {
         output: {
-          manualChunks: {
-            // React core — changes rarely, cache-stable
-            'vendor-react': ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime'],
+          // Function form: always routes react/* to vendor-react first,
+        // preventing lottie-react/react-easy-crop from bundling a second copy.
+        manualChunks(id) {
+            // React — must be first to avoid duplicate-React issues
+            if (id.includes('/node_modules/react/') ||
+                id.includes('/node_modules/react-dom/') ||
+                id.includes('/node_modules/react/jsx-runtime')) {
+              return 'vendor-react';
+            }
             // Framer Motion — large, isolated
-            'vendor-motion': ['motion'],
+            if (id.includes('/node_modules/motion/') ||
+                id.includes('/node_modules/@motionone/')) {
+              return 'vendor-motion';
+            }
             // Tauri APIs — only load in desktop
-            'vendor-tauri': [
-              '@tauri-apps/api',
-              '@tauri-apps/plugin-updater',
-              '@tauri-apps/plugin-shell',
-              '@tauri-apps/plugin-process',
-              '@tauri-apps/plugin-autostart',
-              '@tauri-apps/plugin-notification',
-              '@tauri-apps/plugin-fs',
-            ],
-            // UI utilities
-            'vendor-ui': [
-              'lucide-react',
-              'lottie-react',
-              '@dnd-kit/core',
-              '@dnd-kit/sortable',
-              '@dnd-kit/utilities',
-              'react-easy-crop',
-            ],
-            // Markdown + sanitisation
-            'vendor-content': ['marked', 'dompurify'],
+            if (id.includes('/node_modules/@tauri-apps/')) {
+              return 'vendor-tauri';
+            }
             // Networking
-            'vendor-net': ['socket.io-client'],
+            if (id.includes('/node_modules/socket.io-client/') ||
+                id.includes('/node_modules/engine.io-client/')) {
+              return 'vendor-net';
+            }
+            // Markdown + sanitisation
+            if (id.includes('/node_modules/marked/') ||
+                id.includes('/node_modules/dompurify/')) {
+              return 'vendor-content';
+            }
+            // UI utilities (only after React is guaranteed separate)
+            if (id.includes('/node_modules/lucide-react/') ||
+                id.includes('/node_modules/lottie-react/') ||
+                id.includes('/node_modules/@lottiefiles/') ||
+                id.includes('/node_modules/@dnd-kit/') ||
+                id.includes('/node_modules/react-easy-crop/')) {
+              return 'vendor-ui';
+            }
           },
         },
       },

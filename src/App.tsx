@@ -86,26 +86,7 @@ marked.use({ gfm: true });
 import { CordynShell } from './cordyn-ui/CordynShell';
 import { mapServers, mapCategories, mapMembers, mapDMs, mapMessages } from './cordyn-ui/adapters';
 import type { Layout, Atmosphere, Density, Theme } from './cordyn-ui/types';
-import { Component as ReactComponent, type ErrorInfo, type ReactNode } from 'react';
-
-class CordynErrorBoundary extends ReactComponent<{children: ReactNode},{error: Error|null}> {
-  state = { error: null };
-  static getDerivedStateFromError(e: Error) { return { error: e }; }
-  componentDidCatch(e: Error, info: ErrorInfo) { console.error('[CordynShell crash]', e, info); }
-  render() {
-    if (this.state.error) {
-      const msg = (this.state.error as Error).message;
-      return (
-        <div style={{position:'fixed',inset:0,background:'#0f0f18',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#f5f5f7',fontFamily:'monospace',gap:12,padding:32}}>
-          <div style={{fontSize:18,fontWeight:600,color:'#ef4d63'}}>CordynShell — błąd renderowania</div>
-          <div style={{fontSize:13,color:'rgba(245,245,247,0.6)',maxWidth:540,textAlign:'center'}}>{msg}</div>
-          <button style={{marginTop:8,padding:'8px 20px',background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.12)',borderRadius:8,color:'#f5f5f7',cursor:'pointer'}} onClick={() => this.setState({error:null})}>Odśwież</button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
+import { CordynErrorBoundary } from './cordyn-ui/CordynErrorBoundary';
 
 // ─── Brand SVG icons ──────────────────────────────────────────────────────────
 const SpotifyIcon = ({ size = 14, className = '' }: { size?: number; className?: string }) => (
