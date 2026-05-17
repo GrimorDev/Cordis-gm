@@ -7685,6 +7685,7 @@ export default function App() {
   const [dmBlockedPopup, setDmBlockedPopup]   = useState(false);
   const [replyTo, setReplyTo]                 = useState<MessageFull|DmMessageFull|null>(null);
   const [msgMenuId, setMsgMenuId]             = useState<string|null>(null);
+  const [msgMenuPos, setMsgMenuPos]           = useState<{x:number;y:number}|null>(null);
   const [msgCtxMenu, setMsgCtxMenu]           = useState<{x:number;y:number;msg:MessageFull|DmMessageFull}|null>(null);
   const [editingMsgId, setEditingMsgId]       = useState<string|null>(null);
   const [editingMsgContent, setEditingMsgContent] = useState('');
@@ -12302,13 +12303,13 @@ export default function App() {
                     onClick={() => { if(activeServer===srv.id&&activeView==='servers') return; const sameServer=activeServer===srv.id; setActiveServer(srv.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); setProfileViewId(null); setBannerExpanded(false); if(sameServer) setServerReloadKey(k=>k+1); }}
                     onContextMenu={e => { e.preventDefault(); setSrvContextMenu({ x: e.clientX, y: e.clientY, srv }); }}
                     title={maskName(srv.name)}
-                    className={`relative w-8 h-8 flex items-center justify-center rounded-xl shrink-0 overflow-hidden transition-all duration-150 cursor-pointer border ${isActive?'border-indigo-500/50 bg-indigo-500/15 shadow-[0_0_16px_rgba(99,102,241,0.25)]':'border-white/[0.04] bg-white/[0.03] hover:bg-indigo-500/10 hover:border-indigo-500/20 hover:shadow-[0_0_10px_rgba(99,102,241,0.12)]'}`}>
+                    className={`relative w-10 h-10 flex items-center justify-center rounded-xl shrink-0 overflow-hidden transition-all duration-150 cursor-pointer border ${isActive?'border-indigo-500/50 bg-indigo-500/15 shadow-[0_0_16px_rgba(99,102,241,0.25)]':'border-white/[0.04] bg-white/[0.03] hover:bg-indigo-500/10 hover:border-indigo-500/20 hover:shadow-[0_0_10px_rgba(99,102,241,0.12)]'}`}>
                     {/* Active indicator bar — gradient */}
                     {isActive&&<span className="absolute bottom-0 left-0 right-0 h-[2px] shadow-[0_0_8px_rgba(99,102,241,0.8)]" style={{background:'linear-gradient(90deg,#818cf8,#a78bfa)'}}/>}
                     {/* Icon */}
-                    <span className={`w-8 h-8 flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden rounded-xl relative ${srv.is_official?'ring-1 ring-amber-400/60 ring-inset':''}`}>
+                    <span className={`w-10 h-10 flex items-center justify-center text-sm font-bold text-white shrink-0 overflow-hidden rounded-xl relative ${srv.is_official?'ring-1 ring-amber-400/60 ring-inset':''}`}>
                       {srv.icon_url ? <img src={staticUrl(srv.icon_url)} className="w-full h-full object-cover" alt=""/> : <span className={`w-full h-full flex items-center justify-center rounded-xl ${isActive?'bg-indigo-600':'bg-zinc-700/80'}`}>{srv.name.charAt(0).toUpperCase()}</span>}
-                      {srv.is_official&&<BadgeCheck size={8} className="absolute bottom-0.5 right-0.5 text-amber-400 drop-shadow-sm"/>}
+                      {srv.is_official&&<BadgeCheck size={9} className="absolute bottom-0.5 right-0.5 text-amber-400 drop-shadow-sm"/>}
                     </span>
                   </button>
                 );
@@ -13059,7 +13060,7 @@ export default function App() {
                           <div key={ch.id} className="px-2">
                             <button onClick={() => joinVoiceCh(ch)}
                               onContextMenu={e=>{e.preventDefault();setChCtxMenu({x:e.clientX,y:e.clientY,ch});}}
-                              className={`ch-btn group/ch ${isActiveVoice?'voice-active':''}`}>
+                              className={`ch-btn ch-btn-voice group/ch ${isActiveVoice?'voice-active':''}`}>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2 min-w-0">
                                   <div className="ch-icon"><Volume2 size={12} className={isActiveVoice?'text-emerald-400':hasUsers?'text-zinc-400':'text-zinc-500'}/></div>
@@ -15490,7 +15491,7 @@ export default function App() {
                               );
                               return (
                                 <div className={`relative px-4 py-2.5 rounded-2xl max-w-full ${isOwn
-                                  ? 'bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-lg shadow-indigo-500/20 bubble-tail-right'
+                                  ? 'bg-indigo-500/[0.14] border border-indigo-500/20 text-zinc-100 bubble-tail-right'
                                   : 'glass-bubble text-zinc-100 bubble-tail-left'
                                 }`}>
                                   <p className={`${msgFontCls} leading-relaxed break-words msg-md`} dangerouslySetInnerHTML={{__html: renderMsgHTML(msg.content)}}/>
@@ -15615,12 +15616,12 @@ export default function App() {
                                 title="Odpowiedz"><Reply size={13}/></button>
                               {/* More "…" */}
                               <div className="relative">
-                                <button onClick={e=>{e.stopPropagation();setMsgMenuId(prev=>prev===msg.id?null:msg.id);}}
+                                <button onClick={e=>{e.stopPropagation();if(msgMenuId===msg.id){setMsgMenuId(null);setMsgMenuPos(null);return;}const rect=e.currentTarget.getBoundingClientRect();const menuW=196;const x=Math.min(rect.right-menuW,window.innerWidth-menuW-8);const y=rect.bottom+4;setMsgMenuId(msg.id);setMsgMenuPos({x:Math.max(x,8),y:Math.min(y,window.innerHeight-320-8)});}}
                                   className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.08] rounded-lg transition-colors"
                                   title="Więcej"><MoreHorizontal size={13}/></button>
-                                {msgMenuId===msg.id&&(<>
-                                  <div className="fixed inset-0 z-[49]" onClick={()=>setMsgMenuId(null)}/>
-                                  <div className="absolute top-full right-0 mt-1 z-[50] bg-[#16161f] border border-white/[0.1] rounded-xl shadow-2xl py-1 w-48"
+                                {msgMenuId===msg.id&&msgMenuPos&&(<>
+                                  <div className="fixed inset-0 z-[49]" onClick={()=>{setMsgMenuId(null);setMsgMenuPos(null);}}/>
+                                  <div style={{position:'fixed',left:msgMenuPos.x,top:msgMenuPos.y}} className="z-[50] bg-[#16161f] border border-white/[0.1] rounded-xl shadow-2xl py-1 w-48"
                                     onClick={e=>e.stopPropagation()}>
                                     {isOwn&&activeView==='servers'&&(
                                       <button onClick={()=>{startEditMsg(msg);setMsgMenuId(null);}}

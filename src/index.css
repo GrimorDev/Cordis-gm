@@ -17,6 +17,8 @@ body {
     radial-gradient(circle at 75% 80%, rgba(236, 72, 153, 0.06) 0%, transparent 35%);
   color: #f4f4f5;
   font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
   margin: 0;
   overflow: hidden;
 }
@@ -196,13 +198,15 @@ body::before {
   animation: shimmer 4s linear infinite;
 }
 
-/* Own-message bubble — purple→violet gradient */
+/* Own-message bubble — flat professional tint */
 .msg-bubble-own {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.25);
+  background: rgba(99, 102, 241, 0.14);
+  border: 1px solid rgba(99, 102, 241, 0.22);
+  box-shadow: none;
 }
 .msg-bubble-own:hover {
-  background: linear-gradient(135deg, #4338ca 0%, #6d28d9 100%);
+  background: rgba(99, 102, 241, 0.19);
+  border-color: rgba(99, 102, 241, 0.30);
 }
 
 /* Send button gradient */
@@ -244,14 +248,21 @@ body::before {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 10px;
+  padding: 8px 12px;
   border-radius: 14px;
-  margin-bottom: 2px;
+  margin-bottom: 3px;
   border: 1px solid transparent;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
   color: #71717a;
   position: relative;
   overflow: hidden;
+}
+
+/* Voice channel button — flex-col so participant list stacks below header */
+.ch-btn-voice {
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 4px !important;
 }
 .ch-btn:hover {
   background: rgba(255,255,255,0.055);
@@ -280,8 +291,8 @@ body::before {
 }
 /* Icon background circle inside channel button */
 .ch-icon {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -304,7 +315,7 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 12px 6px 12px;
+  padding: 22px 14px 8px 14px;
   position: relative;
 }
 .cat-header-bar::before {
@@ -319,9 +330,9 @@ body::before {
   opacity: 0.5;
 }
 .cat-header-bar .cat-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.10em;
   text-transform: uppercase;
   color: #71717a;
   padding-left: 8px;
@@ -378,19 +389,24 @@ body::before {
 
 /* ── Message input ── */
 .msg-input-wrap {
-  background: rgba(255,255,255,0.055);
-  border: 1px solid rgba(255,255,255,0.09);
-  border-radius: 14px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 16px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 .msg-input-wrap:hover {
-  background: rgba(255,255,255,0.07);
-  border-color: rgba(99,102,241,0.22);
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(99,102,241,0.28);
 }
 .msg-input-wrap:focus-within {
-  background: rgba(255,255,255,0.075);
-  border-color: rgba(99,102,241,0.5);
-  box-shadow: 0 0 0 3px rgba(99,102,241,0.10), 0 0 24px rgba(99,102,241,0.08);
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(99,102,241,0.55);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.12), 0 0 28px rgba(99,102,241,0.10);
+}
+
+/* ── Members section header labels ── */
+.members-section-hdr .sec-label {
+  font-size: 11px;
 }
 
 @keyframes shimmer {
