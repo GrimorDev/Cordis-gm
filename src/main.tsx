@@ -2,6 +2,8 @@ import {StrictMode, lazy, Suspense} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import StatusPage from './StatusPage.tsx';
+import './cordyn-ui/tokens.css';
+import './cordyn-ui/cordyn.css';
 import './index.css';
 
 const DeveloperPortal = lazy(() => import('./DeveloperPortal.tsx'));

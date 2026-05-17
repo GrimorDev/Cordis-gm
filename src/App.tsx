@@ -82,6 +82,10 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 // Configure marked once — GFM mode, line-break aware
 marked.use({ gfm: true });
+// ─── CordynShell redesign ─────────────────────────────────────────────────────
+import { CordynShell } from './cordyn-ui/CordynShell';
+import { mapServers, mapCategories, mapMembers, mapDMs, mapMessages } from './cordyn-ui/adapters';
+import type { Layout, Atmosphere, Density, Theme } from './cordyn-ui/types';
 
 // ─── Brand SVG icons ──────────────────────────────────────────────────────────
 const SpotifyIcon = ({ size = 14, className = '' }: { size?: number; className?: string }) => (
@@ -7649,6 +7653,11 @@ export default function App() {
   const [activeBmFolder,  setActiveBmFolder]  = useState<string>('all');
   const [bmNewFolderName, setBmNewFolderName] = useState('');
   const [bmAddingFolder,  setBmAddingFolder]  = useState(false);
+  // ── CordynShell design settings ──────────────────────────────────────────────
+  const [shellLayout,     setShellLayout]     = useState<Layout>(() => (localStorage.getItem('cordyn_shell_layout') as Layout) || 'classic');
+  const [shellAtmosphere, setShellAtmosphere] = useState<Atmosphere>(() => (localStorage.getItem('cordyn_shell_atmosphere') as Atmosphere) || 'aurora');
+  const [shellDensity,    setShellDensity]    = useState<Density>(() => (localStorage.getItem('cordyn_shell_density') as Density) || 'comfortable');
+  const [shellTheme,      setShellTheme]      = useState<Theme>(() => (localStorage.getItem('cordyn_shell_theme') as Theme) || 'dark');
   // ── Focus Mode — silences all notification sounds except @mentions ─────────
   const [focusMode,       setFocusMode]       = useState(() => localStorage.getItem('cordyn_focus_mode') === '1');
   const focusModeRef = useRef(false);
@@ -12063,6 +12072,26 @@ export default function App() {
     return null;
   };
 
+  // ── CordynShell computed props ────────────────────────────────────────────────
+  const cordynServers    = useMemo(() => mapServers(serverList, staticUrl), [serverList]); // eslint-disable-line
+  const cordynCategories = useMemo(() => mapCategories(serverFull?.categories ?? []), [serverFull]); // eslint-disable-line
+  const cordynMembers    = useMemo(() => mapMembers(members, staticUrl), [members]); // eslint-disable-line
+  const cordynDms        = useMemo(() => mapDMs(dmConvs, unreadDms, staticUrl), [dmConvs, unreadDms]); // eslint-disable-line
+  const cordynMessages   = useMemo(() => mapMessages(activeView === 'servers' ? channelMsgs : dmMsgs, staticUrl), [activeView, channelMsgs, dmMsgs]); // eslint-disable-line
+  const cordynActiveChannel = useMemo(() => {
+    const ch = allChs.find(c => c.id === activeChannel);
+    return ch ? { id: ch.id, name: ch.name, type: ch.type as ('text'|'voice'|'announcement'|'forum'), topic: ch.description || undefined } : { id: '', name: '', type: 'text' as const };
+  }, [allChs, activeChannel]); // eslint-disable-line
+  const cordynActiveDM   = useMemo(() => activeDm ? {
+    id: activeDm.id, name: activeDm.other_username,
+    avatar: activeDm.other_avatar ? staticUrl(activeDm.other_avatar) : undefined,
+    status: activeDm.other_status as ('online'|'idle'|'dnd'|'offline'), preview: activeDm.last_message || '',
+  } : null, [activeDm]); // eslint-disable-line
+  const cordynTyping     = useMemo(() => {
+    const typers = Object.entries(typingUsers).filter(([uid]) => uid !== currentUser?.id).map(([, n]) => n);
+    return typers.length > 0 ? typers[0] : null;
+  }, [typingUsers, currentUser]); // eslint-disable-line
+
   // Returns badge array for a message sender (looks up members/dmPartnerProfile)
   const getMsgSenderBadges = (senderId: string): import('./api').Badge[] => {
     if (senderId === currentUser?.id) return currentUser?.badges ?? [];
@@ -12239,6 +12268,110 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-transparent p-2 gap-2">
+
+      {/* ── CordynShell redesign overlay — renders on top of the legacy layout ── */}
+      {(activeView === 'servers' || activeView === 'dms') && (
+        <div style={{position:'fixed',inset:0,zIndex:10,background:'#08080c'}}>
+          <CordynShell
+            layout={shellLayout}
+            atmosphere={shellAtmosphere}
+            density={shellDensity}
+            theme={shellTheme}
+            focus={focusMode}
+            membersOpen={rightPanelOpen}
+            onChangeShell={(changes) => {
+              if (changes.layout     !== undefined) { setShellLayout(changes.layout);         localStorage.setItem('cordyn_shell_layout',     changes.layout); }
+              if (changes.atmosphere !== undefined) { setShellAtmosphere(changes.atmosphere); localStorage.setItem('cordyn_shell_atmosphere', changes.atmosphere); }
+              if (changes.density    !== undefined) { setShellDensity(changes.density);       localStorage.setItem('cordyn_shell_density',    changes.density); }
+              if (changes.theme      !== undefined) { setShellTheme(changes.theme);           localStorage.setItem('cordyn_shell_theme',      changes.theme); }
+              if (changes.focus      !== undefined) { setFocusMode(changes.focus); try { localStorage.setItem('cordyn_focus_mode', changes.focus ? '1' : '0'); } catch {} }
+              if (changes.membersOpen !== undefined) { setRightPanelOpen(changes.membersOpen); try { localStorage.setItem('cordyn_right_panel', changes.membersOpen ? 'open' : 'closed'); } catch {} }
+            }}
+            user={{
+              name:   currentUser?.username || '',
+              avatar: currentUser?.avatar_url ? staticUrl(currentUser.avatar_url) : undefined,
+              status: currentUser?.custom_status || currentUser?.status || 'online',
+            }}
+            view={activeView === 'servers' ? 'server' : 'dm'}
+            activeServerId={activeServer}
+            activeChannelId={activeChannel}
+            activeDmId={activeDm?.id || null}
+            openTabs={globalTabs.map(t => ({ id: t.channelId || t.userId || t.groupId || t.key, label: t.name }))}
+            servers={cordynServers}
+            serverTag={serverFull ? `${serverFull.member_count ?? members.length} online` : undefined}
+            categories={cordynCategories}
+            members={cordynMembers}
+            dms={cordynDms}
+            messages={cordynMessages}
+            cmdkItems={[]}
+            typing={cordynTyping}
+            voiceActive={activeCall?.channelName || null}
+            pinnedCount={pinnedMsgs.length}
+            micOn={!(activeCall?.isMuted ?? true)}
+            deafened={activeCall?.isDeafened ?? false}
+            activeChannel={cordynActiveChannel}
+            activeDM={cordynActiveDM}
+            onViewChange={(v) => { setActiveView(v === 'server' ? 'servers' : 'dms'); }}
+            onSelectServer={(id) => {
+              const same = activeServer === id;
+              setActiveServer(id); setActiveView('servers'); setActiveChannel('');
+              setServerFull(null); setProfileViewId(null); setBannerExpanded(false);
+              if (same) setServerReloadKey(k => k + 1);
+            }}
+            onSelectChannel={(id) => {
+              const ch = allChs.find(c => c.id === id);
+              setActiveChannel(id); setActiveView('servers'); setIsMobileOpen(false);
+              openGlobalTab({ key: `ch:${activeServer}:${id}`, kind: 'ch', name: ch?.name || id, chType: ch?.type || 'text', serverId: activeServer, channelId: id, serverName: serverFull?.name, serverIcon: serverFull?.icon_url ?? undefined });
+            }}
+            onSelectDM={(id) => {
+              const conv = dmConvs.find(d => d.id === id);
+              if (conv) { setActiveDmUserId(conv.other_user_id); setActiveView('dms'); openGlobalTab({ key: `dm:${conv.other_user_id}`, kind: 'dm', name: conv.other_username, userId: conv.other_user_id }); }
+            }}
+            onCloseTab={(id) => {
+              const next = globalTabs.filter(t => (t.channelId || t.userId || t.groupId || t.key) !== id);
+              setGlobalTabs(next); try { localStorage.setItem('cordyn_gtabs', JSON.stringify(next)); } catch {}
+            }}
+            onSendMessage={(text) => {
+              if (!text.trim() || sending) return;
+              setSending(true); setSendError('');
+              if (activeView === 'servers' && activeChannel) {
+                messagesApi.send(activeChannel, text.trim(), {})
+                  .then(() => { try { playMessageSent(); } catch {} })
+                  .catch((err: any) => setSendError(err?.message || ''))
+                  .finally(() => setSending(false));
+              } else if (activeView === 'dms' && activeDmUserId) {
+                dmsApi.send(activeDmUserId, text.trim(), {})
+                  .catch(console.error).finally(() => setSending(false));
+              } else { setSending(false); }
+            }}
+            onReact={(messageId, reactionIdx) => {
+              const msgs: any[] = activeView === 'servers' ? channelMsgs : dmMsgs;
+              const msg = msgs.find((m: any) => m.id === messageId);
+              if (msg?.reactions?.[reactionIdx]) {
+                const r = msg.reactions[reactionIdx];
+                (r.mine ? messagesApi.removeReaction(messageId, r.emoji) : messagesApi.addReaction(messageId, r.emoji)).catch(console.error);
+              }
+            }}
+            onAddReaction={() => {}}
+            onToggleMic={() => {
+              if (!activeCall) return;
+              const nm = !activeCall.isMuted;
+              setActiveCall(p => p ? { ...p, isMuted: nm } : p);
+              try { getSocket().emit('voice_state' as any, { muted: nm, deafened: activeCall.isDeafened, channel_id: activeCall.channelId, to_user_id: activeCall.userId }); } catch {}
+            }}
+            onToggleDeaf={() => {
+              if (!activeCall) return;
+              const nd = !activeCall.isDeafened;
+              setActiveCall(p => p ? { ...p, isDeafened: nd } : p);
+              try { getSocket().emit('voice_state' as any, { muted: activeCall.isMuted, deafened: nd, channel_id: activeCall.channelId, to_user_id: activeCall.userId }); } catch {}
+            }}
+            onOpenSettings={() => { setAppSettOpen(true); setAppSettTab('account'); }}
+            onCreateServer={() => setCreateSrvOpen(true)}
+            onExploreServers={() => setActiveView('friends')}
+            onCmdAction={() => {}}
+          />
+        </div>
+      )}
 
       {/* Tauri frameless window titlebar — only rendered in the desktop app */}
       {isTauri && <TitleBar />}

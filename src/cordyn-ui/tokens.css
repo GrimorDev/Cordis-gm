@@ -1,0 +1,154 @@
+/* Cordyn Design Tokens
+ * CSS variables for dark/light themes, density levels, and atmospheres.
+ * Drop into your project before component styles.
+ */
+
+:root {
+  --bg-0: #08080c;
+  --bg-1: #0d0d12;
+  --bg-2: #14141b;
+  --bg-elev: rgba(255,255,255,0.04);
+  --bg-elev-2: rgba(255,255,255,0.07);
+  --bg-elev-3: rgba(255,255,255,0.11);
+  --stroke-1: rgba(255,255,255,0.06);
+  --stroke-2: rgba(255,255,255,0.10);
+  --stroke-3: rgba(255,255,255,0.16);
+  --text-1: #f5f5f7;
+  --text-2: rgba(245,245,247,0.66);
+  --text-3: rgba(245,245,247,0.42);
+  --text-4: rgba(245,245,247,0.28);
+  --accent: #f5f5f7;
+  --accent-on: #0b0b10;
+
+  --aurora-a: 170, 110, 255;
+  --aurora-b: 70, 200, 255;
+  --aurora-c: 255, 130, 180;
+
+  --status-online: #34d670;
+  --status-idle: #f0b740;
+  --status-dnd: #ef4d63;
+  --status-offline: #6c6c75;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-2xl: 32px;
+
+  --density-row: 38px;
+  --density-pad: 10px;
+  --density-msg-gap: 14px;
+  --density-font: 14.5px;
+
+  --font-sans: "Geist", "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Monaco, monospace;
+}
+
+[data-density="compact"] {
+  --density-row: 30px;
+  --density-pad: 7px;
+  --density-msg-gap: 8px;
+  --density-font: 13.5px;
+}
+[data-density="spacious"] {
+  --density-row: 46px;
+  --density-pad: 14px;
+  --density-msg-gap: 22px;
+  --density-font: 15.5px;
+}
+
+[data-theme="light"] {
+  --bg-0: #f5f3ee;
+  --bg-1: #faf8f3;
+  --bg-2: #ffffff;
+  --bg-elev: rgba(20,20,28,0.04);
+  --bg-elev-2: rgba(20,20,28,0.07);
+  --bg-elev-3: rgba(20,20,28,0.11);
+  --stroke-1: rgba(20,20,28,0.07);
+  --stroke-2: rgba(20,20,28,0.12);
+  --stroke-3: rgba(20,20,28,0.20);
+  --text-1: #14141b;
+  --text-2: rgba(20,20,28,0.66);
+  --text-3: rgba(20,20,28,0.42);
+  --text-4: rgba(20,20,28,0.28);
+  --accent: #14141b;
+  --accent-on: #fbfaf6;
+}
+
+/* ----- ATMOSPHERE backgrounds ----- */
+
+.atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.atmosphere::before, .atmosphere::after {
+  content: "";
+  position: absolute;
+  width: 60vw;
+  height: 60vw;
+  border-radius: 50%;
+  filter: blur(140px);
+  opacity: 0.55;
+  will-change: transform;
+}
+
+[data-atmosphere="aurora"] .atmosphere::before {
+  top: -20vw; left: -15vw;
+  background: radial-gradient(circle, rgba(var(--aurora-a),0.55), transparent 60%);
+}
+[data-atmosphere="aurora"] .atmosphere::after {
+  bottom: -25vw; right: -20vw;
+  background: radial-gradient(circle, rgba(var(--aurora-b),0.45), transparent 60%);
+}
+[data-atmosphere="aurora"] .atmosphere {
+  background: radial-gradient(60vw 60vh at 50% 100%, rgba(var(--aurora-c),0.18), transparent 70%);
+}
+
+[data-atmosphere="graphite"] .atmosphere::before {
+  top: -15vw; left: 30vw;
+  background: radial-gradient(circle, rgba(255,255,255,0.06), transparent 60%);
+  filter: blur(180px);
+}
+[data-atmosphere="graphite"] .atmosphere::after {
+  display: none;
+}
+
+[data-atmosphere="sunset"] .atmosphere::before {
+  top: -15vw; right: -10vw;
+  background: radial-gradient(circle, rgba(255,140,80,0.4), transparent 60%);
+}
+[data-atmosphere="sunset"] .atmosphere::after {
+  bottom: -20vw; left: -10vw;
+  background: radial-gradient(circle, rgba(255,80,120,0.3), transparent 60%);
+}
+[data-atmosphere="sunset"] .atmosphere {
+  background: radial-gradient(60vw 60vh at 30% 110%, rgba(255,180,60,0.12), transparent 70%);
+}
+
+[data-theme="light"][data-atmosphere="aurora"] .atmosphere::before {
+  background: radial-gradient(circle, rgba(var(--aurora-a),0.30), transparent 60%);
+  opacity: 0.7;
+}
+[data-theme="light"][data-atmosphere="aurora"] .atmosphere::after {
+  background: radial-gradient(circle, rgba(var(--aurora-b),0.25), transparent 60%);
+  opacity: 0.7;
+}
+
+/* base resets */
+* { box-sizing: border-box; }
+
+.cordyn-root, .cordyn-root *,
+html.cordyn, body.cordyn {
+  font-family: var(--font-sans);
+  font-size: var(--density-font);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.cordyn-root button { background: none; border: 0; padding: 0; cursor: pointer; }
+.cordyn-root input, .cordyn-root textarea { outline: none; border: 0; background: none; }
