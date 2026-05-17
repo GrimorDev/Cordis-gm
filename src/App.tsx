@@ -279,7 +279,8 @@ type BannerPresetKey = typeof BANNER_PRESETS[number]['key'];
 // ─── Theme system ──────────────────────────────────────────────────────────────
 const THEMES = [
   { id: 'system',   name: 'Systemowy',      desc: 'Dopasowuje się do ustawień systemu (ciemny/jasny)', vars: {}, isSystem: true },
-  { id: 'default',  name: 'Ciemny',         desc: 'Domyślny motyw Cordyna',     vars: {} },
+  { id: 'ayu',      name: 'Ayu Dark',       desc: 'Ciepły ciemny motyw z pomarańczowymi akcentami',   vars: { '--app-bg': '#0A0E14', '--app-sidebar': '#0D1017', '--app-card': '#131a24', '--app-surface': '#1a2535' } },
+  { id: 'default',  name: 'Ciemny',         desc: 'Klasyczny ciemny motyw Cordyna',                    vars: {} },
   { id: 'midnight', name: 'Midnight',        desc: 'Głęboki granat nocnego nieba', vars: { '--app-bg': '#030310', '--app-sidebar': '#05051a', '--app-card': '#0a0a25', '--app-surface': '#0f0f30' } },
   { id: 'amoled',   name: 'AMOLED',          desc: 'Czysta czerń, max oszczędność baterii', vars: { '--app-bg': '#000000', '--app-sidebar': '#040404', '--app-card': '#080808', '--app-surface': '#0e0e0e' } },
   { id: 'forest',   name: 'Las',             desc: 'Mroczna zieleń leśna',       vars: { '--app-bg': '#030d06', '--app-sidebar': '#05150a', '--app-card': '#091a0f', '--app-surface': '#0e2416' } },
@@ -7648,6 +7649,8 @@ export default function App() {
   const [activeBmFolder,  setActiveBmFolder]  = useState<string>('all');
   const [bmNewFolderName, setBmNewFolderName] = useState('');
   const [bmAddingFolder,  setBmAddingFolder]  = useState(false);
+  // ── Focus Card — dims sidebars, highlights center panel ─────────────────
+  const [focusCard,       setFocusCard]       = useState(false);
   // ── Focus Mode — silences all notification sounds except @mentions ─────────
   const [focusMode,       setFocusMode]       = useState(() => localStorage.getItem('cordyn_focus_mode') === '1');
   const focusModeRef = useRef(false);
@@ -8045,7 +8048,7 @@ export default function App() {
 
   // App preferences — initialized from currentUser (DB), updated via users.updateMe()
   const [accentColor, setAccentColor]           = useState<string>('indigo');
-  const [selectedTheme, setSelectedTheme]       = useState<ThemeId>('default');
+  const [selectedTheme, setSelectedTheme]       = useState<ThemeId>('ayu');
   const [avatarEffect, setAvatarEffect]         = useState<string>('none');
   const [showAllAvatarEffects, setShowAllAvatarEffects] = useState(false);
   const [cardEffect, setCardEffect]             = useState<string>('none');
@@ -10015,7 +10018,7 @@ export default function App() {
   // throughout the app, so ALL elements change without touching JSX.
   useEffect(() => {
     const applyThemeVars = (themeId: string) => {
-      const theme = THEMES.find(t => t.id === themeId) ?? THEMES.find(t => t.id === 'default')!;
+      const theme = THEMES.find(t => t.id === themeId) ?? THEMES.find(t => t.id === 'ayu')!;
       document.documentElement.setAttribute('data-theme', themeId);
       let styleTag = document.getElementById('cordyn-theme-override') as HTMLStyleElement | null;
       if (!styleTag) {
@@ -10024,14 +10027,26 @@ export default function App() {
         document.head.appendChild(styleTag);
       }
       if (!theme || Object.keys(theme.vars).length === 0) {
-        styleTag.textContent = '';
+        // For 'default' (no vars) just use Ayu Dark fallback values
+        styleTag.textContent = `
+          body, #root { background-color: #0A0E14 !important; }
+          .glass-panel { background: #0D1017 !important; }
+          .glass-modal { background: #0D1017 !important; }
+          .glass-dark  { background: #0A0E14 !important; }
+        `;
         return;
       }
       const v = theme.vars as Record<string, string>;
-      const bg      = v['--app-bg']      || '#07070f';
-      const sidebar = v['--app-sidebar'] || '#0d0d18';
-      const card    = v['--app-card']    || '#161622';
-      const surface = v['--app-surface'] || '#1e1e2e';
+      const bg      = v['--app-bg']      || '#0A0E14';
+      const sidebar = v['--app-sidebar'] || '#0D1017';
+      const card    = v['--app-card']    || '#131a24';
+      const surface = v['--app-surface'] || '#1a2535';
+      // Update CSS custom properties so --app-* vars are theme-aware
+      const root = document.documentElement;
+      root.style.setProperty('--app-bg',      bg);
+      root.style.setProperty('--app-sidebar',  sidebar);
+      root.style.setProperty('--app-card',     card);
+      root.style.setProperty('--app-surface',  surface);
       styleTag.textContent = `
         body, #root { background-color: ${bg} !important; }
         .bg-\\[\\#07070f\\], .bg-\\[\\#08080f\\], .bg-\\[\\#09090b\\] { background-color: ${bg} !important; }
@@ -10039,15 +10054,16 @@ export default function App() {
         .bg-\\[\\#0e0e1c\\] { background-color: ${card} !important; }
         .bg-\\[\\#141420\\], .bg-\\[\\#16161f\\], .bg-\\[\\#161622\\] { background-color: ${card} !important; }
         .bg-\\[\\#18182a\\], .bg-\\[\\#1a1a2e\\] { background-color: ${surface} !important; }
-        .glass-panel { background: ${sidebar}D0 !important; }
-        .glass-modal { background: ${bg} !important; }
+        .glass-panel { background: ${sidebar} !important; }
+        .glass-modal { background: ${sidebar} !important; }
+        .glass-dark  { background: ${bg} !important; }
       `;
     };
 
     if (selectedTheme === 'system') {
       const mq = window.matchMedia('(prefers-color-scheme: dark)');
-      // Cordyn only has dark themes — system dark → 'default', system light → 'amoled' (closest to light contrast)
-      const resolve = () => applyThemeVars(mq.matches ? 'default' : 'default');
+      // Cordyn only has dark themes — system dark → 'ayu', system light → 'ayu' (all dark)
+      const resolve = () => applyThemeVars(mq.matches ? 'ayu' : 'ayu');
       resolve();
       mq.addEventListener('change', resolve);
       return () => mq.removeEventListener('change', resolve);
@@ -10591,7 +10607,7 @@ export default function App() {
   };
 
   // tabs_enabled — server-side setting
-  const tabsEnabled = currentUser?.tabs_enabled ?? true;
+  const tabsEnabled = currentUser?.tabs_enabled ?? false;
   const saveTabsEnabled = async (val: boolean) => {
     const upd = await users.updateMe({ tabs_enabled: val } as any).catch(() => null);
     if (upd) { setCurrentUser(upd); addToast(val ? tl('tabs.enabled') : tl('tabs.disabled'), 'success'); }
@@ -10905,7 +10921,7 @@ export default function App() {
     setShowChatAvatars(u.show_chat_avatars !== false); // default true
     setMessageAnimations(u.message_animations !== false); // default true
     setShowLinkPreviews(u.show_link_previews !== false); // default true
-    setSelectedTheme((u.theme_id as ThemeId) || 'default');
+    setSelectedTheme((u.theme_id as ThemeId) || 'ayu');
   };
   const [showWelcome, setShowWelcome] = useState(false);
   const handleAuth = (u: UserProfile, _t: string, isNew = false) => {
@@ -12238,7 +12254,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-transparent p-2 gap-2">
+    <div className={`flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-transparent p-2 gap-2${focusCard?' focus-card-active':''}`}>
 
 
       {/* Tauri frameless window titlebar — only rendered in the desktop app */}
@@ -12294,9 +12310,15 @@ export default function App() {
         {/* Right col — search · bell · ⋯more · avatar */}
         <div className="flex items-center justify-end gap-1 pr-1">
 
+          {/* Focus Card toggle */}
+          <button onClick={() => setFocusCard(v => !v)} title={focusCard ? 'Wyłącz focus' : 'Focus: podświetl okno czatu'}
+            className={`hidden md:flex items-center justify-center w-8 h-8 rounded-xl transition-all ${focusCard ? 'bg-[rgba(255,143,64,0.18)] text-[#FFB454] shadow-[0_0_12px_rgba(255,143,64,0.25)]' : 'text-zinc-500 hover:text-[#FFB454] hover:bg-[rgba(255,143,64,0.10)]'}`}>
+            <Eye size={15}/>
+          </button>
+
           {/* Search */}
           <div className="relative group hidden sm:block">
-            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-indigo-400 transition-colors pointer-events-none"/>
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-[#FF8F40] transition-colors pointer-events-none"/>
             <input ref={searchInputRef} placeholder="Szukaj…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
               onKeyDown={e => {
                 if (e.key === 'Escape') { setSearchQuery(''); (e.target as HTMLInputElement).blur(); }
@@ -12307,7 +12329,7 @@ export default function App() {
                   else setSearchResultIdx(i => (i + 1) % searchMatches.length);
                 }
               }}
-              className="bg-white/[0.05] border border-white/[0.07] text-white placeholder-zinc-600 outline-none focus:border-indigo-500/40 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.08)] rounded-xl pl-7 pr-2 py-1.5 text-xs w-32 focus:w-52 transition-all duration-300"/>
+              className="bg-white/[0.05] border border-white/[0.07] text-white placeholder-zinc-600 outline-none focus:border-[rgba(255,143,64,0.45)] focus:shadow-[0_0_0_3px_rgba(255,143,64,0.09)] rounded-xl pl-7 pr-2 py-1.5 text-xs w-32 focus:w-52 transition-all duration-300"/>
           </div>
 
           {/* Notification bell */}
@@ -12319,7 +12341,7 @@ export default function App() {
                   Notification.requestPermission().catch(() => {});
                 }
               }
-            }} className={`relative w-8 h-8 flex items-center justify-center rounded-xl transition-all ${notifOpen ? 'bg-indigo-500/20 text-indigo-300' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]'}`}>
+            }} className={`relative w-8 h-8 flex items-center justify-center rounded-xl transition-all ${notifOpen ? 'bg-[rgba(255,143,64,0.15)] text-[#FFB454]' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]'}`}>
               <Bell size={15}/>
               {(()=>{ const u = notifications.filter(n=>!n.read).length; return u>0 ? (
                 <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-rose-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5 leading-none shadow-[0_0_6px_rgba(239,68,68,0.5)]">
@@ -12742,10 +12764,10 @@ export default function App() {
       })()}
 
       {/* WORKSPACE */}
-      <main className="flex-1 flex gap-2 overflow-hidden relative min-h-0">
+      <main className="flex-1 flex gap-2 overflow-hidden relative min-h-0 focus-card-center rounded-2xl">
 
         {/* ── VERTICAL SERVER ICON BAR ─────────────────────────────── */}
-        <aside className="srv-icon-bar hidden md:flex">
+        <aside className="srv-icon-bar hidden md:flex focus-card-dim">
           {/* DM / Friends */}
           <div className="flex flex-col items-center gap-1 px-2 pb-2 w-full border-b border-white/[0.07]">
             {([{v:'friends' as const,icon:<Users size={16}/>,label:'Znajomi'},{v:'dms' as const,icon:<MessageCircle size={16}/>,label:'Wiadomości'}] as const).map(({v,icon,label})=>{
@@ -12795,7 +12817,7 @@ export default function App() {
         </aside>
 
         {/* LEFT */}
-        <aside className={`absolute md:relative z-30 md:z-0 w-[220px] shrink-0 flex flex-col glass-panel rounded-2xl transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] h-full overflow-hidden ${isMobileOpen?'translate-x-0':'-translate-x-[120%] md:translate-x-0'}`}>
+        <aside className={`absolute md:relative z-30 md:z-0 w-[220px] shrink-0 flex flex-col glass-panel rounded-2xl transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] h-full overflow-hidden focus-card-dim ${isMobileOpen?'translate-x-0':'-translate-x-[120%] md:translate-x-0'}`}>
           {/* mobile server row */}
           <div className="md:hidden p-2 border-b border-white/[0.05] flex gap-1.5 overflow-x-auto">
             {([{v:'friends' as const,i:<Users size={16}/>},{v:'dms' as const,i:<MessageCircle size={16}/>}]).map(({v,i}) => (
@@ -16157,7 +16179,7 @@ export default function App() {
             <ChevronRight size={14} className={`transition-transform duration-200 ${rightPanelOpen?'rotate-180':''}`}/>
           </button>
         )}
-        <aside className={`hidden xl:flex shrink-0 flex-col gap-0 glass-panel rounded-2xl overflow-y-auto custom-scrollbar transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${showCallPanel && activeCall && !rightPanelOpen ? 'w-0 opacity-0 overflow-hidden p-0' : 'w-64 opacity-100'}`}>
+        <aside className={`hidden xl:flex shrink-0 flex-col gap-0 glass-panel rounded-2xl overflow-y-auto custom-scrollbar transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] focus-card-dim ${showCallPanel && activeCall && !rightPanelOpen ? 'w-0 opacity-0 overflow-hidden p-0' : 'w-64 opacity-100'}`}>
           {/* ─ ADMIN LIVE METRICS (shown when admin panel is open) ─ */}
           {activeView==='admin'&&(()=>{
             const m = adminMetrics;
