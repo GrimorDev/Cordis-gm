@@ -12265,73 +12265,26 @@ export default function App() {
            grid-cols: 1fr auto 1fr guarantees center is always truly centered.
            No items-center on nav so children use h-full correctly (stretch). */}
       <nav className="h-12 shrink-0 z-30 glass-panel rounded-2xl px-2 grid" style={{gridTemplateColumns:'1fr auto 1fr'}}>
-        {/* Left col — flex, clips overflow so tabs can't bleed into center */}
-        <div className="flex items-center h-full min-w-0 overflow-hidden">
-          <button onClick={() => setIsMobileOpen(v => !v)} className="md:hidden w-9 h-9 flex items-center justify-center text-zinc-500 hover:text-white ml-2 shrink-0">
+        {/* Left col — active context breadcrumb */}
+        <div className="flex items-center h-full min-w-0 gap-3 pl-1">
+          <button onClick={() => setIsMobileOpen(v => !v)} className="md:hidden w-9 h-9 flex items-center justify-center text-[#626A73] hover:text-white ml-1 shrink-0">
             {isMobileOpen ? <X size={18}/> : <Menu size={18}/>}
           </button>
-          {/* Friends / DM quick icons — always visible, shrink-0 */}
-          <div className="hidden md:flex items-center h-full pl-2 gap-0.5 pr-2 border-r border-white/[0.06] shrink-0">
-            {([{v:'friends' as const,i:<Users size={15}/>,label:t('nav.friends')},{v:'dms' as const,i:<MessageCircle size={15}/>,label:t('nav.dms')}]).map(({v,i,label}) => {
-              const totalUnreadDms: number = v==='dms' ? (Object.values(unreadDms) as number[]).reduce((a,b)=>a+b,0) : 0;
-              return (
-              <button key={v} title={label} onClick={() => { setActiveView(v); setActiveServer(''); setActiveChannel(''); }}
-                className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-200 relative ${activeView===v?'bg-indigo-500/25 text-indigo-300 shadow-[0_0_12px_rgba(99,102,241,0.2)]':'text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06]'}`}>
-                {i}
-                {v==='friends' && incoming.length > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 bg-rose-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5 leading-none">{incoming.length}</span>
-                )}
-                {v==='dms' && totalUnreadDms > 0 && activeView!=='dms' && (
-                  <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 bg-rose-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5 leading-none shadow-[0_0_6px_rgba(239,68,68,0.6)]">
-                    {totalUnreadDms > 99 ? '99+' : totalUnreadDms}
-                  </span>
-                )}
-              </button>
-              );
-            })}
+          {/* Active context name */}
+          <div className="hidden md:flex items-center gap-2 min-w-0 pl-1">
+            {activeView==='servers'&&serverFull&&(<>
+              {serverFull.icon_url
+                ? <img src={staticUrl(serverFull.icon_url)} className="w-5 h-5 rounded-lg object-cover shrink-0" alt=""/>
+                : <span className="w-5 h-5 rounded-lg bg-[#1a2030] flex items-center justify-center text-[10px] font-bold text-white shrink-0">{serverFull.name.charAt(0)}</span>}
+              <span className="text-[14px] font-semibold text-white truncate max-w-[160px]">{serverFull.name}</span>
+            </>)}
+            {activeView==='dms'&&<span className="text-[14px] font-semibold text-white">Wiadomości prywatne</span>}
+            {activeView==='friends'&&<span className="text-[14px] font-semibold text-white">Znajomi</span>}
           </div>
-          {/* Server icon-only strip — icons only, hover expands name label */}
-          <div className="hidden md:flex items-center h-full min-w-0 flex-1 relative">
-            {/* scrollable icon strip — smooth scroll */}
-            <div ref={srvTabsRef}
-              className="flex items-center h-full gap-0.5 overflow-x-auto scrollbar-hide min-w-0 flex-1 px-1"
-              style={{scrollBehavior:'smooth'}}>
-              {serverList.map(srv => {
-                const isActive = activeServer===srv.id&&activeView==='servers';
-                return (
-                  <button key={srv.id}
-                    onClick={() => { if(activeServer===srv.id&&activeView==='servers') return; const sameServer=activeServer===srv.id; setActiveServer(srv.id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); setProfileViewId(null); setBannerExpanded(false); if(sameServer) setServerReloadKey(k=>k+1); }}
-                    onContextMenu={e => { e.preventDefault(); setSrvContextMenu({ x: e.clientX, y: e.clientY, srv }); }}
-                    title={maskName(srv.name)}
-                    className={`relative w-10 h-10 flex items-center justify-center rounded-xl shrink-0 overflow-hidden transition-all duration-150 cursor-pointer border ${isActive?'border-indigo-500/50 bg-indigo-500/15 shadow-[0_0_16px_rgba(99,102,241,0.25)]':'border-white/[0.04] bg-white/[0.03] hover:bg-indigo-500/10 hover:border-indigo-500/20 hover:shadow-[0_0_10px_rgba(99,102,241,0.12)]'}`}>
-                    {/* Active indicator bar — gradient */}
-                    {isActive&&<span className="absolute bottom-0 left-0 right-0 h-[2px] shadow-[0_0_8px_rgba(99,102,241,0.8)]" style={{background:'linear-gradient(90deg,#818cf8,#a78bfa)'}}/>}
-                    {/* Icon */}
-                    <span className={`w-10 h-10 flex items-center justify-center text-sm font-bold text-white shrink-0 overflow-hidden rounded-xl relative ${srv.is_official?'ring-1 ring-amber-400/60 ring-inset':''}`}>
-                      {srv.icon_url ? <img src={staticUrl(srv.icon_url)} className="w-full h-full object-cover" alt=""/> : <span className={`w-full h-full flex items-center justify-center rounded-xl ${isActive?'bg-indigo-600':'bg-zinc-700/80'}`}>{srv.name.charAt(0).toUpperCase()}</span>}
-                      {srv.is_official&&<BadgeCheck size={9} className="absolute bottom-0.5 right-0.5 text-amber-400 drop-shadow-sm"/>}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          {/* Server list modal button */}
-          <button onClick={()=>{ setSrvListSearch(''); setShowSrvListModal(true); }}
-            title="Lista moich serwerów"
-            className="hidden md:flex items-center justify-center w-8 h-full text-zinc-600 hover:text-indigo-400 hover:bg-indigo-500/10 transition-all duration-200 border-r border-white/[0.05] shrink-0">
-            <Layers size={14}/>
-          </button>
-          {/* + button always visible */}
-          <button onClick={() => setCreateSrvOpen(true)} title="Utwórz serwer"
-            className="hidden md:flex items-center justify-center w-8 h-full text-zinc-600 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all duration-200 border-r border-white/[0.05] shrink-0">
-            <Plus size={15}/>
-          </button>
-          {/* Compass — discover public servers */}
-          <button onClick={()=>{ setDiscoveryCategory('all'); setDiscoveryQ(''); setDiscoveryLoading(true); discoverApi.list('').then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false)); setShowDiscovery(true); }}
-            title="Odkryj serwery"
-            className="hidden md:flex items-center justify-center w-8 h-full text-zinc-600 hover:text-violet-400 hover:bg-violet-500/10 transition-all duration-200 border-r border-white/[0.05] shrink-0">
-            <Compass size={15}/>
+          {/* Server list quick access */}
+          <button onClick={()=>{setSrvListSearch('');setShowSrvListModal(true);}} title="Lista serwerów"
+            className="hidden md:flex items-center justify-center w-7 h-7 rounded-lg text-[#626A73] hover:text-[#FFB454] hover:bg-[rgba(255,143,64,0.10)] transition-all shrink-0">
+            <Layers size={13}/>
           </button>
         </div>
         {/* Center col — Cordyn, always truly centered in the nav */}
@@ -12791,8 +12744,58 @@ export default function App() {
       {/* WORKSPACE */}
       <main className="flex-1 flex gap-2 overflow-hidden relative min-h-0">
 
+        {/* ── VERTICAL SERVER ICON BAR ─────────────────────────────── */}
+        <aside className="srv-icon-bar hidden md:flex">
+          {/* DM / Friends */}
+          <div className="flex flex-col items-center gap-1 px-2 pb-2 w-full border-b border-white/[0.07]">
+            {([{v:'friends' as const,icon:<Users size={16}/>,label:'Znajomi'},{v:'dms' as const,icon:<MessageCircle size={16}/>,label:'Wiadomości'}] as const).map(({v,icon,label})=>{
+              const unread=v==='dms'?(Object.values(unreadDms) as number[]).reduce((a,b)=>a+b,0):incoming.length;
+              const isAct=activeView===v;
+              return (
+                <button key={v} title={label} onClick={()=>{setActiveView(v);setActiveServer('');setActiveChannel('');}}
+                  className={`srv-icon-btn ${isAct?'active':''} ${isAct?'bg-[rgba(255,143,64,0.15)]':'bg-white/[0.04] hover:bg-white/[0.08]'}`}>
+                  <span className="srv-active-pip"/>
+                  <span className={`${isAct?'text-[#FFB454]':'text-[#626A73] group-hover:text-white'}`}>{icon}</span>
+                  {unread>0&&!isAct&&<span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 bg-red-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5 leading-none">{unread>99?'99+':unread}</span>}
+                </button>
+              );
+            })}
+          </div>
+          {/* Server icons — scrollable */}
+          <div className="flex-1 flex flex-col items-center gap-1.5 py-2 overflow-y-auto scrollbar-hide w-full px-2">
+            {serverList.map(srv=>{
+              const isAct=activeServer===srv.id&&activeView==='servers';
+              return (
+                <button key={srv.id}
+                  onClick={()=>{if(activeServer===srv.id&&activeView==='servers')return;const same=activeServer===srv.id;setActiveServer(srv.id);setActiveView('servers');setActiveChannel('');setServerFull(null);setProfileViewId(null);setBannerExpanded(false);if(same)setServerReloadKey(k=>k+1);}}
+                  onContextMenu={e=>{e.preventDefault();setSrvContextMenu({x:e.clientX,y:e.clientY,srv});}}
+                  title={maskName(srv.name)}
+                  className={`srv-icon-btn ${isAct?'active':''}`}>
+                  <span className="srv-active-pip"/>
+                  {srv.icon_url
+                    ? <img src={staticUrl(srv.icon_url)} className="w-full h-full object-cover rounded-[inherit]" alt=""/>
+                    : <span className={`w-full h-full flex items-center justify-center text-[13px] font-bold text-white rounded-[inherit] ${isAct?'bg-gradient-to-br from-[#FF8F40] to-[#FFB454]':'bg-[#1a2030] group-hover:bg-[#242d3d]'}`}>{srv.name.charAt(0).toUpperCase()}</span>}
+                  {srv.is_official&&<span className="absolute bottom-0.5 right-0.5"><BadgeCheck size={9} className="text-amber-400"/></span>}
+                </button>
+              );
+            })}
+          </div>
+          {/* Bottom actions */}
+          <div className="flex flex-col items-center gap-1 pt-2 px-2 w-full border-t border-white/[0.07]">
+            <button onClick={()=>setCreateSrvOpen(true)} title="Utwórz serwer"
+              className="w-10 h-10 flex items-center justify-center rounded-xl text-[#626A73] hover:text-[#7FD962] hover:bg-[rgba(127,217,98,0.10)] transition-all">
+              <Plus size={16}/>
+            </button>
+            <button onClick={()=>{setDiscoveryCategory('all');setDiscoveryQ('');setDiscoveryLoading(true);discoverApi.list('').then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false));setShowDiscovery(true);}}
+              title="Odkryj serwery"
+              className="w-10 h-10 flex items-center justify-center rounded-xl text-[#626A73] hover:text-[#59C2FF] hover:bg-[rgba(89,194,255,0.10)] transition-all">
+              <Compass size={16}/>
+            </button>
+          </div>
+        </aside>
+
         {/* LEFT */}
-        <aside className={`absolute md:relative z-30 md:z-0 w-60 shrink-0 flex flex-col glass-panel rounded-2xl transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] h-full overflow-hidden ${isMobileOpen?'translate-x-0':'-translate-x-[120%] md:translate-x-0'}`}>
+        <aside className={`absolute md:relative z-30 md:z-0 w-[220px] shrink-0 flex flex-col glass-panel rounded-2xl transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] h-full overflow-hidden ${isMobileOpen?'translate-x-0':'-translate-x-[120%] md:translate-x-0'}`}>
           {/* mobile server row */}
           <div className="md:hidden p-2 border-b border-white/[0.05] flex gap-1.5 overflow-x-auto">
             {([{v:'friends' as const,i:<Users size={16}/>},{v:'dms' as const,i:<MessageCircle size={16}/>}]).map(({v,i}) => (

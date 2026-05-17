@@ -8,14 +8,28 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+/* ── Ayu Dark palette variables ── */
+:root {
+  --ayu-bg:       #0A0E14;
+  --ayu-panel:    #0D1017;
+  --ayu-elevated: #131a24;
+  --ayu-border:   rgba(255,255,255,0.07);
+  --ayu-orange:   #FF8F40;
+  --ayu-blue:     #59C2FF;
+  --ayu-teal:     #95E6CB;
+  --ayu-green:    #7FD962;
+  --ayu-yellow:   #FFB454;
+  --ayu-text:     #BFBDB6;
+  --ayu-muted:    #626A73;
+}
+
 body {
-  background-color: #030305;
+  background-color: var(--ayu-bg);
   background-image:
-    radial-gradient(circle at 15% 50%, rgba(99, 102, 241, 0.16) 0%, transparent 45%),
-    radial-gradient(circle at 85% 25%, rgba(124, 58, 237, 0.12) 0%, transparent 40%),
-    radial-gradient(circle at 50% 100%, rgba(56, 189, 248, 0.10) 0%, transparent 40%),
-    radial-gradient(circle at 75% 80%, rgba(236, 72, 153, 0.06) 0%, transparent 35%);
-  color: #f4f4f5;
+    radial-gradient(circle at 10% 50%, rgba(255,143,64,0.07) 0%, transparent 45%),
+    radial-gradient(circle at 90% 20%, rgba(89,194,255,0.06) 0%, transparent 40%),
+    radial-gradient(circle at 50% 100%, rgba(149,230,203,0.04) 0%, transparent 40%);
+  color: var(--ayu-text);
   font-family: var(--font-sans);
   font-size: 15px;
   line-height: 1.5;
@@ -81,29 +95,29 @@ body::before {
    ───────────────────────────────────────────────────────────────────────── */
 
 .glass-panel {
-  background: #0f0f1b;
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 24px 48px -12px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04);
+  background: var(--ayu-panel);
+  border: 1px solid var(--ayu-border);
+  box-shadow: 0 20px 40px -8px rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,255,255,0.03);
   will-change: transform;
   transform: translateZ(0);
   contain: layout style;
 }
 .glass-panel-hover:hover {
-  background: #131324;
-  border-color: rgba(255,255,255,0.12);
+  background: var(--ayu-elevated);
+  border-color: rgba(255,255,255,0.10);
 }
-/* Modals — fully opaque */
+/* Modals */
 .glass-modal {
-  background: #0d0d1e;
+  background: var(--ayu-panel);
   border: 1px solid rgba(255,255,255,0.10);
-  box-shadow: 0 32px 64px -16px rgba(0,0,0,0.90), 0 0 0 1px rgba(99,102,241,0.07);
+  box-shadow: 0 32px 64px -16px rgba(0,0,0,0.90), 0 0 0 1px rgba(255,143,64,0.06);
   will-change: transform;
   transform: translateZ(0);
 }
 /* Center chat panel */
 .glass-dark {
-  background: #080812;
-  border: 1px solid rgba(255,255,255,0.07);
+  background: var(--ayu-bg);
+  border: 1px solid var(--ayu-border);
   will-change: transform;
   transform: translateZ(0);
   contain: layout style;
@@ -111,7 +125,7 @@ body::before {
 /* DM conversation bubbles */
 .glass-bubble {
   background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.09);
 }
 
 /* Smooth font rendering */
@@ -165,10 +179,64 @@ body::before {
   border-radius: 10px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.45);
+  background: rgba(255, 143, 64, 0.40);
 }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ── Vertical server icon bar ── */
+.srv-icon-bar {
+  width: 60px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  background: var(--ayu-panel);
+  border: 1px solid var(--ayu-border);
+  border-radius: 18px;
+  box-shadow: 0 20px 40px -8px rgba(0,0,0,0.50);
+  overflow: hidden;
+  padding: 8px 0;
+}
+
+.srv-icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: border-radius 0.20s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  border: 1px solid transparent;
+}
+.srv-icon-btn:hover {
+  border-radius: 14px;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+.srv-icon-btn.active {
+  border-radius: 14px;
+  border-color: rgba(255,143,64,0.30);
+  box-shadow: 0 4px 20px rgba(255,143,64,0.20);
+}
+.srv-icon-btn .srv-active-pip {
+  position: absolute;
+  left: -2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 0;
+  border-radius: 0 2px 2px 0;
+  background: var(--ayu-orange);
+  transition: height 0.20s cubic-bezier(0.16,1,0.3,1);
+}
+.srv-icon-btn.active .srv-active-pip { height: 24px; }
+.srv-icon-btn:hover:not(.active) .srv-active-pip { height: 10px; }
 
 /* ── Flat server message row — subtle hover ── */
 .msg-flat-row {
@@ -209,9 +277,9 @@ body::before {
   animation: shimmer 3s linear infinite;
 }
 
-/* Brand gradient — vivid purple→cyan for the Cordyn wordmark */
+/* Brand gradient — Ayu warm orange→yellow */
 .brand-gradient {
-  background: linear-gradient(110deg, #a78bfa 0%, #818cf8 40%, #38bdf8 100%);
+  background: linear-gradient(110deg, #FF8F40 0%, #FFB454 55%, #95E6CB 100%);
   background-size: 200% auto;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -230,20 +298,20 @@ body::before {
   border-color: rgba(99, 102, 241, 0.30);
 }
 
-/* Send button gradient */
+/* Send button — Ayu Orange */
 .send-btn {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.35);
+  background: linear-gradient(135deg, #e8832a 0%, #FF8F40 100%);
+  box-shadow: 0 2px 10px rgba(255,143,64, 0.30);
   transition: all 0.15s ease;
 }
 .send-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #4338ca 0%, #6d28d9 100%);
-  box-shadow: 0 3px 16px rgba(99, 102, 241, 0.5);
+  background: linear-gradient(135deg, #d4771f 0%, #f08035 100%);
+  box-shadow: 0 3px 16px rgba(255,143,64, 0.45);
   transform: scale(1.05);
 }
 .send-btn:active:not(:disabled) {
   transform: scale(0.92);
-  box-shadow: 0 1px 6px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 1px 6px rgba(255,143,64, 0.25);
 }
 
 /* Active channel pill — glowing left indicator */
@@ -259,8 +327,8 @@ body::before {
   width: 3px;
   height: 60%;
   border-radius: 0 3px 3px 0;
-  background: linear-gradient(180deg, #818cf8 0%, #a78bfa 100%);
-  box-shadow: 0 0 8px rgba(129, 140, 248, 0.6);
+  background: linear-gradient(180deg, var(--ayu-orange) 0%, var(--ayu-yellow) 100%);
+  box-shadow: 0 0 8px rgba(255,143,64,0.6);
 }
 
 /* ── Channel item — active / hover states ── */
@@ -291,24 +359,25 @@ body::before {
   border-color: rgba(255,255,255,0.08);
 }
 .ch-btn.active {
-  background: rgba(99,102,241,0.16);
-  color: #c7d2fe;
-  border-color: rgba(99,102,241,0.28);
-  box-shadow: inset 3px 0 0 #818cf8, 0 1px 16px rgba(99,102,241,0.12);
+  background: rgba(255,143,64,0.12);
+  color: var(--ayu-yellow);
+  border-color: rgba(255,143,64,0.25);
+  box-shadow: inset 3px 0 0 var(--ayu-orange), 0 1px 16px rgba(255,143,64,0.08);
 }
 .ch-btn.unread:not(.active) {
-  color: #e8e8f4;
+  color: var(--ayu-text);
+  font-weight: 600;
 }
 .ch-btn.pinged:not(.active) {
-  background: rgba(245,158,11,0.08);
-  border-color: rgba(245,158,11,0.24);
-  color: #fef08a;
+  background: rgba(255,143,64,0.08);
+  border-color: rgba(255,143,64,0.22);
+  color: var(--ayu-yellow);
 }
 .ch-btn.voice-active {
-  background: rgba(52,211,153,0.10);
-  color: #6ee7b7;
-  border-color: rgba(52,211,153,0.28);
-  box-shadow: inset 3px 0 0 #34d399, 0 1px 12px rgba(52,211,153,0.10);
+  background: rgba(127,217,98,0.10);
+  color: var(--ayu-green);
+  border-color: rgba(127,217,98,0.25);
+  box-shadow: inset 3px 0 0 var(--ayu-green), 0 1px 12px rgba(127,217,98,0.08);
 }
 /* Icon background circle inside channel button */
 .ch-icon {
@@ -409,19 +478,17 @@ body::before {
 
 /* ── Message input ── */
 .msg-input-wrap {
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.10);
+  background: var(--ayu-panel);
+  border: 1px solid rgba(255,255,255,0.09);
   border-radius: 16px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 .msg-input-wrap:hover {
-  background: rgba(255,255,255,0.08);
-  border-color: rgba(99,102,241,0.28);
+  border-color: rgba(255,143,64,0.22);
 }
 .msg-input-wrap:focus-within {
-  background: rgba(255,255,255,0.08);
-  border-color: rgba(99,102,241,0.55);
-  box-shadow: 0 0 0 3px rgba(99,102,241,0.12), 0 0 28px rgba(99,102,241,0.10);
+  border-color: rgba(255,143,64,0.50);
+  box-shadow: 0 0 0 3px rgba(255,143,64,0.09), 0 0 24px rgba(255,143,64,0.07);
 }
 
 /* ── Members section header labels ── */
