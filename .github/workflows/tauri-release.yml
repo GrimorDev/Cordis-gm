@@ -105,13 +105,15 @@ jobs:
             artifact_name:  windows
             bundle_path:    src-tauri/target/release/bundle/nsis
 
-          # ── macOS Universal (Intel + Apple Silicon) → DMG ─────────────────
+          # ── macOS Universal (Intel + Apple Silicon) → DMG + app.tar.gz ─────
+          # bundle_path points to the full bundle root so we capture both
+          # bundle/dmg (installer) and bundle/macos (.app.tar.gz.sig for updater)
           - name:           macOS Universal
             os:             macos-latest
             rust_targets:   x86_64-apple-darwin aarch64-apple-darwin
             tauri_args:     --target universal-apple-darwin
             artifact_name:  macos
-            bundle_path:    src-tauri/target/universal-apple-darwin/release/bundle/dmg
+            bundle_path:    src-tauri/target/universal-apple-darwin/release/bundle
 
           # ── Linux x64 → AppImage + .deb ───────────────────────────────────
           # ubuntu-22.04 ships webkit2gtk-4.1 which Tauri 2 requires
@@ -214,16 +216,42 @@ jobs:
         if: matrix.os == 'ubuntu-22.04'
         run: |
           mkdir -p linux-dist
-          find src-tauri/target/release/bundle/appimage -name "*.AppImage" -o -name "*.AppImage.sig" 2>/dev/null | xargs -I{} cp {} linux-dist/ || true
-          find src-tauri/target/release/bundle/deb      -name "*.deb"      -o -name "*.deb.sig"      2>/dev/null | xargs -I{} cp {} linux-dist/ || true
+          find src-tauri/target/release/bundle/appimage -name "*.AppImage"     2>/dev/null | xargs -I{} cp {} linux-dist/ || true
+          find src-tauri/target/release/bundle/appimage -name "*.AppImage.sig" 2>/dev/null | xargs -I{} cp {} linux-dist/ || true
+          find src-tauri/target/release/bundle/deb      -name "*.deb"          2>/dev/null | xargs -I{} cp {} linux-dist/ || true
+          find src-tauri/target/release/bundle/deb      -name "*.deb.sig"      2>/dev/null | xargs -I{} cp {} linux-dist/ || true
           ls -lh linux-dist/
+
+      # macOS: collect DMG (installer) + app.tar.gz (updater bundle)
+      - name: Collect macOS artifacts
+        if: matrix.os == 'macos-latest'
+        run: |
+          mkdir -p macos-dist
+          find src-tauri/target/universal-apple-darwin/release/bundle/dmg   -name "*.dmg"          2>/dev/null | xargs -I{} cp {} macos-dist/ || true
+          find src-tauri/target/universal-apple-darwin/release/bundle/dmg   -name "*.dmg.sig"      2>/dev/null | xargs -I{} cp {} macos-dist/ || true
+          find src-tauri/target/universal-apple-darwin/release/bundle/macos -name "*.app.tar.gz"   2>/dev/null | xargs -I{} cp {} macos-dist/ || true
+          find src-tauri/target/universal-apple-darwin/release/bundle/macos -name "*.app.tar.gz.sig" 2>/dev/null | xargs -I{} cp {} macos-dist/ || true
+          ls -lh macos-dist/
+
+      # Windows: collect only current-version NSIS files to avoid old cache artifacts
+      - name: Collect Windows artifacts
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          mkdir -p windows-dist
+          VERSION="${{ needs.prepare.outputs.version }}"
+          find src-tauri/target/release/bundle/nsis -name "Cordyn_${VERSION}_*" 2>/dev/null | xargs -I{} cp {} windows-dist/ || true
+          ls -lh windows-dist/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
           retention-days: 7
-          path: ${{ matrix.os == 'ubuntu-22.04' && 'linux-dist/*' || format('{0}/*', matrix.bundle_path) }}
+          path: |
+            ${{ matrix.os == 'ubuntu-22.04' && 'linux-dist/*' || '' }}
+            ${{ matrix.os == 'macos-latest'  && 'macos-dist/*'   || '' }}
+            ${{ matrix.os == 'windows-latest' && 'windows-dist/*' || '' }}
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # JOB 3 — Publish GitHub Release + latest.json for auto-updater
@@ -270,6 +298,8 @@ jobs:
             dist/windows/*.nsis.zip.sig
             dist/macos/*.dmg
             dist/macos/*.dmg.sig
+            dist/macos/*.app.tar.gz
+            dist/macos/*.app.tar.gz.sig
             dist/linux/*.AppImage
             dist/linux/*.AppImage.sig
             dist/linux/*.deb
@@ -304,29 +334,52 @@ jobs:
           REPO="https://github.com/GrimorDev/Cordis-gm"
           PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-          WIN_SIG_FILE=$(find dist/windows -name "*.nsis.zip.sig" | head -1)
-          [ -z "$WIN_SIG_FILE" ] && WIN_SIG_FILE=$(find dist/windows -name "*.exe.sig" | head -1)
+          echo "=== dist/windows ==="
+          find dist/windows -type f | sort || true
+          echo "=== dist/macos ==="
+          find dist/macos   -type f | sort || true
+          echo "=== dist/linux ==="
+          find dist/linux   -type f | sort || true
+
+          # Windows — prefer .nsis.zip.sig (updater bundle), fall back to .exe.sig
+          # Always match current VERSION to avoid picking up stale cache artifacts
+          WIN_SIG_FILE=$(find dist/windows -name "Cordyn_${VERSION}_*.nsis.zip.sig" | sort | head -1)
+          [ -z "$WIN_SIG_FILE" ] && WIN_SIG_FILE=$(find dist/windows -name "Cordyn_${VERSION}_*.exe.sig" | sort | head -1)
           WIN_SIG=""; WIN_URL=""
           if [ -n "$WIN_SIG_FILE" ]; then
             WIN_SIG=$(cat "$WIN_SIG_FILE" | tr -d '\n')
             WIN_FILE=$(basename "$WIN_SIG_FILE" .sig)
             WIN_URL="$REPO/releases/download/$TAG/$WIN_FILE"
+            echo "Windows updater: $WIN_FILE"
+          else
+            echo "WARNING: no Windows sig file found for version $VERSION"
           fi
 
-          MAC_SIG_FILE=$(find dist/macos -name "*.dmg.sig" | head -1)
+          # macOS — Tauri 2 uses .app.tar.gz for delta updates (not .dmg)
+          # .dmg.sig is for the installer only; the updater needs .app.tar.gz.sig
+          MAC_SIG_FILE=$(find dist/macos -name "*.app.tar.gz.sig" | sort | head -1)
+          [ -z "$MAC_SIG_FILE" ] && MAC_SIG_FILE=$(find dist/macos -name "*.dmg.sig" | sort | head -1)
           MAC_SIG=""; MAC_URL=""
           if [ -n "$MAC_SIG_FILE" ]; then
             MAC_SIG=$(cat "$MAC_SIG_FILE" | tr -d '\n')
             MAC_FILE=$(basename "$MAC_SIG_FILE" .sig)
             MAC_URL="$REPO/releases/download/$TAG/$MAC_FILE"
+            echo "macOS updater: $MAC_FILE"
+          else
+            echo "WARNING: no macOS sig file found"
           fi
 
-          LINUX_SIG_FILE=$(find dist/linux -name "*.AppImage.sig" | head -1)
+          # Linux — AppImage sig (version-specific)
+          LINUX_SIG_FILE=$(find dist/linux -name "Cordyn_${VERSION}_*.AppImage.sig" | sort | head -1)
+          [ -z "$LINUX_SIG_FILE" ] && LINUX_SIG_FILE=$(find dist/linux -name "*.AppImage.sig" | sort | head -1)
           LINUX_SIG=""; LINUX_URL=""
           if [ -n "$LINUX_SIG_FILE" ]; then
             LINUX_SIG=$(cat "$LINUX_SIG_FILE" | tr -d '\n')
             LINUX_FILE=$(basename "$LINUX_SIG_FILE" .sig)
             LINUX_URL="$REPO/releases/download/$TAG/$LINUX_FILE"
+            echo "Linux updater: $LINUX_FILE"
+          else
+            echo "WARNING: no Linux sig file found for version $VERSION"
           fi
 
           jq -n \
