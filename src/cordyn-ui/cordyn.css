@@ -142,9 +142,7 @@
   align-items: center;
   padding: 12px 0;
   gap: 10px;
-  background: var(--bg-elev);
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
+  background: var(--bg-1);
   border: 1px solid var(--stroke-1);
   border-radius: var(--radius-lg);
   overflow: hidden auto;
@@ -221,9 +219,7 @@
 .channels-panel {
   display: flex;
   flex-direction: column;
-  background: var(--bg-elev);
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
+  background: var(--bg-1);
   border: 1px solid var(--stroke-1);
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -433,9 +429,7 @@
 .chat-panel {
   display: flex;
   flex-direction: column;
-  background: var(--bg-elev);
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
+  background: var(--bg-2);
   border: 1px solid var(--stroke-1);
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -819,9 +813,7 @@
 .members-panel {
   display: flex;
   flex-direction: column;
-  background: var(--bg-elev);
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
+  background: var(--bg-1);
   border: 1px solid var(--stroke-1);
   border-radius: var(--radius-lg);
   overflow: hidden;
