@@ -10027,12 +10027,23 @@ export default function App() {
         document.head.appendChild(styleTag);
       }
       if (!theme || Object.keys(theme.vars).length === 0) {
-        // For 'default' (no vars) just use Ayu Dark fallback values
+        // 'default' theme — no custom vars, reset to Ayu Dark baseline
+        const root = document.documentElement;
+        root.style.setProperty('--ayu-bg',      '#0A0E14');
+        root.style.setProperty('--ayu-panel',    '#0D1017');
+        root.style.setProperty('--ayu-elevated', '#131a24');
+        root.style.setProperty('--app-bg',       '#0A0E14');
+        root.style.setProperty('--app-sidebar',  '#0D1017');
+        root.style.setProperty('--app-card',     '#131a24');
+        root.style.setProperty('--app-surface',  '#1a2535');
         styleTag.textContent = `
           body, #root { background-color: #0A0E14 !important; }
-          .glass-panel { background: #0D1017 !important; }
-          .glass-modal { background: #0D1017 !important; }
-          .glass-dark  { background: #0A0E14 !important; }
+          .glass-panel  { background: #0D1017 !important; }
+          .glass-modal  { background: #0D1017 !important; }
+          .glass-dark   { background: #0A0E14 !important; }
+          .srv-icon-bar { background: #0D1017 !important; }
+          .msg-input-wrap { background: #0D1017 !important; }
+          .sidebar-userbar { background: #0A0E14 !important; }
         `;
         return;
       }
@@ -10041,12 +10052,17 @@ export default function App() {
       const sidebar = v['--app-sidebar'] || '#0D1017';
       const card    = v['--app-card']    || '#131a24';
       const surface = v['--app-surface'] || '#1a2535';
-      // Update CSS custom properties so --app-* vars are theme-aware
+      // Update ALL CSS custom properties — both --app-* and --ayu-* so every
+      // component (srv-icon-bar, msg-input-wrap, etc.) picks up the theme colour.
       const root = document.documentElement;
-      root.style.setProperty('--app-bg',      bg);
-      root.style.setProperty('--app-sidebar',  sidebar);
-      root.style.setProperty('--app-card',     card);
-      root.style.setProperty('--app-surface',  surface);
+      root.style.setProperty('--app-bg',       bg);
+      root.style.setProperty('--app-sidebar',   sidebar);
+      root.style.setProperty('--app-card',      card);
+      root.style.setProperty('--app-surface',   surface);
+      // Mirror into --ayu-* so CSS that references var(--ayu-panel) also updates
+      root.style.setProperty('--ayu-bg',        bg);
+      root.style.setProperty('--ayu-panel',      sidebar);
+      root.style.setProperty('--ayu-elevated',   card);
       styleTag.textContent = `
         body, #root { background-color: ${bg} !important; }
         .bg-\\[\\#07070f\\], .bg-\\[\\#08080f\\], .bg-\\[\\#09090b\\] { background-color: ${bg} !important; }
@@ -10054,9 +10070,12 @@ export default function App() {
         .bg-\\[\\#0e0e1c\\] { background-color: ${card} !important; }
         .bg-\\[\\#141420\\], .bg-\\[\\#16161f\\], .bg-\\[\\#161622\\] { background-color: ${card} !important; }
         .bg-\\[\\#18182a\\], .bg-\\[\\#1a1a2e\\] { background-color: ${surface} !important; }
-        .glass-panel { background: ${sidebar} !important; }
-        .glass-modal { background: ${sidebar} !important; }
-        .glass-dark  { background: ${bg} !important; }
+        .glass-panel  { background: ${sidebar} !important; }
+        .glass-modal  { background: ${sidebar} !important; }
+        .glass-dark   { background: ${bg} !important; }
+        .srv-icon-bar { background: ${sidebar} !important; }
+        .msg-input-wrap { background: ${sidebar} !important; }
+        .sidebar-userbar { background: ${bg} !important; }
       `;
     };
 
@@ -12303,10 +12322,8 @@ export default function App() {
             <Layers size={13}/>
           </button>
         </div>
-        {/* Center col — Cordyn, always truly centered in the nav */}
-        <div className="flex items-center justify-center pointer-events-none select-none px-4">
-          <span className="brand-gradient font-bold tracking-tight text-sm">Cordyn</span>
-        </div>
+        {/* Center col — empty spacer (logo removed per user request) */}
+        <div className="flex items-center justify-center px-4"/>
         {/* Right col — search · bell · ⋯more · avatar */}
         <div className="flex items-center justify-end gap-1 pr-1">
 
