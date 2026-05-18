@@ -687,6 +687,19 @@ const T: Record<string, Record<Locale, string>> = {
   'tabs.settings.desc':        { pl: 'Pokazuj pasek zakładek u góry — szybki dostęp do wielu kanałów jednocześnie', en: 'Show tab bar at the top — quick access to multiple channels at once', cs: 'Zobrazit panel záložek nahoře — rychlý přístup k více kanálům najednou', de: 'Tab-Leiste oben anzeigen — schneller Zugriff auf mehrere Kanäle gleichzeitig' },
   'tabs.settings.limit':       { pl: 'Limit otwartych zakładek',                  en: 'Open tab limit',                          cs: 'Limit otevřených záložek',               de: 'Limit offener Tabs'                      },
   'tabs.settings.limitDesc':   { pl: 'Maksymalna liczba nieprzypiętych zakładek', en: 'Maximum number of unpinned tabs',         cs: 'Maximální počet nepřipnutých záložek',   de: 'Maximale Anzahl nicht angehefteter Tabs' },
+  // ── Channel Pulse ─────────────────────────────────────────────────────────
+  'pulse.title':        { pl: 'Channel Pulse',          en: 'Channel Pulse',          cs: 'Channel Pulse',          de: 'Channel Pulse'           },
+  'pulse.activity':     { pl: 'AKTYWNOŚĆ · OSTATNIE',   en: 'ACTIVITY · RECENT',      cs: 'AKTIVITA · POSLEDNÍ',    de: 'AKTIVITÄT · LETZTE'      },
+  'pulse.today':        { pl: 'DZIŚ',                   en: 'TODAY',                  cs: 'DNES',                   de: 'HEUTE'                   },
+  'pulse.tempo':        { pl: 'TEMPO',                  en: 'PACE',                   cs: 'TEMPO',                  de: 'TEMPO'                   },
+  'pulse.msgs':         { pl: 'wiadomości',             en: 'messages',               cs: 'zpráv',                  de: 'Nachrichten'             },
+  'pulse.perMin':       { pl: 'wiad / min',             en: 'msg / min',              cs: 'zpráv / min',            de: 'Nachr / min'             },
+  'pulse.inChannel':    { pl: 'wiad. w kanale',         en: 'msgs in channel',        cs: 'zpráv v kanálu',         de: 'Nachr. im Kanal'         },
+  'pulse.activity2':    { pl: 'AKTYWNOŚĆ',              en: 'ACTIVITY',               cs: 'AKTIVITA',               de: 'AKTIVITÄT'               },
+  'pulse.hot':          { pl: 'Gorąco!',                en: 'On fire!',               cs: 'Horko!',                 de: 'Heiß!'                   },
+  'pulse.active':       { pl: 'Aktywny',                en: 'Active',                 cs: 'Aktivní',                de: 'Aktiv'                   },
+  'pulse.chatting':     { pl: 'Rozmowa',                en: 'Chatting',               cs: 'Povídání',               de: 'Unterhaltung'            },
+  'pulse.quiet':        { pl: 'Spokój',                 en: 'Quiet',                  cs: 'Klid',                   de: 'Ruhig'                   },
 };
 
 /** Translate a key to the given locale. Falls back to Polish, then the key itself. */

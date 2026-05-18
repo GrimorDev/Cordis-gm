@@ -14663,10 +14663,9 @@ export default function App() {
                     return (
                       <div className="relative">
                         <button onClick={()=>setShowPulse(v=>!v)}
-                          title="Channel Pulse — statystyki aktywności kanału"
-                          className={`flex items-center gap-1 px-2 h-8 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 ${showPulse?'bg-[rgba(255,143,64,0.18)] text-[#FFB454]':lvl==='hot'?'bg-rose-500/10 text-rose-400':lvl==='active'?'bg-amber-500/10 text-amber-400':lvl==='chatting'?'bg-white/[0.05] text-zinc-400':'text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.04]'}`}>
-                          <span>{lvl==='hot'?'🔥':lvl==='active'?'⚡':lvl==='chatting'?'💬':'💤'}</span>
-                          <span className="tabular-nums hidden lg:inline">{msgsToday.length}</span>
+                          title={t('pulse.title')}
+                          className={`flex items-center gap-1 px-2.5 h-8 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 ${showPulse?'bg-[rgba(255,143,64,0.18)] text-[#FFB454]':lvl==='hot'?'bg-rose-500/10 text-rose-400':lvl==='active'?'bg-amber-500/10 text-amber-400':lvl==='chatting'?'bg-white/[0.05] text-zinc-400':'text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.04]'}`}>
+                          <span className="tabular-nums">{msgsToday.length}</span>
                         </button>
                         <AnimatePresence>
                           {showPulse&&(<>
@@ -14679,12 +14678,12 @@ export default function App() {
                               style={{position:'absolute',right:0,top:44,zIndex:50,width:258,background:'#0f1824',border:'1px solid rgba(255,255,255,0.11)',borderRadius:18,padding:16,display:'flex',flexDirection:'column',gap:12,boxShadow:'0 16px 48px rgba(0,0,0,0.75),0 0 0 1px rgba(255,143,64,0.07)'}}>
                               {/* Title */}
                               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                                <span style={{fontSize:12,fontWeight:700,color:'#e8e6df',display:'flex',alignItems:'center',gap:6}}><span>📊</span>Channel Pulse</span>
+                                <span style={{fontSize:12,fontWeight:700,color:'#e8e6df',display:'flex',alignItems:'center',gap:6}}><span>📊</span>{t('pulse.title')}</span>
                                 <button onClick={()=>setShowPulse(false)} style={{color:'#5a6270',cursor:'pointer',lineHeight:0,display:'flex'}}><X size={12}/></button>
                               </div>
                               {/* Mini freshness bar chart */}
                               <div>
-                                <p style={{fontSize:10,color:'#4a5260',marginBottom:7,letterSpacing:'0.06em',textTransform:'uppercase',fontWeight:600}}>Aktywność · ostatnie wiad.</p>
+                                <p style={{fontSize:10,color:'#4a5260',marginBottom:7,letterSpacing:'0.06em',textTransform:'uppercase',fontWeight:600}}>{t('pulse.activity')}</p>
                                 <div style={{display:'flex',alignItems:'flex-end',gap:2,height:36}}>
                                   {([...last12].reverse() as any[]).map((msg:any,i:number)=>{
                                     const age=now-new Date(msg.created_at).getTime();
@@ -14699,14 +14698,14 @@ export default function App() {
                               {/* Stats cards */}
                               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
                                 <div style={{background:'rgba(255,255,255,0.04)',borderRadius:12,padding:'10px 12px'}}>
-                                  <p style={{fontSize:10,color:'#4a5260',marginBottom:3,fontWeight:600,letterSpacing:'0.05em',textTransform:'uppercase'}}>Dziś</p>
+                                  <p style={{fontSize:10,color:'#4a5260',marginBottom:3,fontWeight:600,letterSpacing:'0.05em',textTransform:'uppercase'}}>{t('pulse.today')}</p>
                                   <p style={{fontSize:24,fontWeight:800,color:'#e8e6df',lineHeight:1,fontVariantNumeric:'tabular-nums'}}>{msgsToday.length}</p>
-                                  <p style={{fontSize:9,color:'#2e3740',marginTop:3}}>wiadomości</p>
+                                  <p style={{fontSize:9,color:'#2e3740',marginTop:3}}>{t('pulse.msgs')}</p>
                                 </div>
                                 <div style={{background:'rgba(255,255,255,0.04)',borderRadius:12,padding:'10px 12px'}}>
-                                  <p style={{fontSize:10,color:'#4a5260',marginBottom:3,fontWeight:600,letterSpacing:'0.05em',textTransform:'uppercase'}}>Tempo</p>
+                                  <p style={{fontSize:10,color:'#4a5260',marginBottom:3,fontWeight:600,letterSpacing:'0.05em',textTransform:'uppercase'}}>{t('pulse.tempo')}</p>
                                   <p style={{fontSize:24,fontWeight:800,color:'#FFB454',lineHeight:1,fontVariantNumeric:'tabular-nums'}}>{msgsPerMin<0.05?'0.0':msgsPerMin.toFixed(1)}</p>
-                                  <p style={{fontSize:9,color:'#2e3740',marginTop:3}}>wiad / min</p>
+                                  <p style={{fontSize:9,color:'#2e3740',marginTop:3}}>{t('pulse.perMin')}</p>
                                 </div>
                               </div>
                               {/* Top sender */}
@@ -14715,7 +14714,7 @@ export default function App() {
                                   <img src={topSnd.avatar_url||`https://api.dicebear.com/7.x/shapes/svg?seed=${topSnd.id}`} style={{width:28,height:28,borderRadius:8,objectFit:'cover',flexShrink:0}} alt=""/>
                                   <div style={{flex:1,minWidth:0}}>
                                     <p style={{fontSize:12,fontWeight:600,color:'#e8e6df',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{topSnd.username}</p>
-                                    <p style={{fontSize:10,color:'#4a5260'}}>{topEntry![1]} wiad. w kanale</p>
+                                    <p style={{fontSize:10,color:'#4a5260'}}>{topEntry![1]} {t('pulse.inChannel')}</p>
                                   </div>
                                   <span style={{fontSize:16}}>🏆</span>
                                 </div>
@@ -14723,9 +14722,9 @@ export default function App() {
                               {/* Activity bar */}
                               <div>
                                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
-                                  <span style={{fontSize:10,color:'#4a5260',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.05em'}}>Aktywność</span>
+                                  <span style={{fontSize:10,color:'#4a5260',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.05em'}}>{t('pulse.activity2')}</span>
                                   <span style={{fontSize:10,fontWeight:700,color:lvl==='hot'?'#f87171':lvl==='active'?'#fb923c':lvl==='chatting'?'#a78bfa':'#4a5260'}}>
-                                    {lvl==='hot'?'🔥 Gorąco!':lvl==='active'?'⚡ Aktywny':lvl==='chatting'?'💬 Rozmowa':'💤 Spokój'}
+                                    {lvl==='hot'?`🔥 ${t('pulse.hot')}`:lvl==='active'?`⚡ ${t('pulse.active')}`:lvl==='chatting'?`💬 ${t('pulse.chatting')}`:`💤 ${t('pulse.quiet')}`}
                                   </span>
                                 </div>
                                 <div style={{height:6,background:'rgba(255,255,255,0.06)',borderRadius:99,overflow:'hidden'}}>
