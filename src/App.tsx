@@ -17190,43 +17190,46 @@ export default function App() {
       })()}
 
       {/* ── Server icon bar tooltip ─────────────────────────────────────── */}
-      <AnimatePresence>
-        {srvTooltip&&ReactDOM.createPortal(
-          <motion.div
-            key={srvTooltip.id}
-            initial={{opacity:0,x:-6,scale:0.95}}
-            animate={{opacity:1,x:0,scale:1}}
-            exit={{opacity:0,x:-6,scale:0.95}}
-            transition={{duration:0.15,ease:[0.16,1,0.3,1]}}
-            style={{
-              position:'fixed',left:72,top:srvTooltip.y,
-              transform:'translateY(-50%)',zIndex:9999,pointerEvents:'none',
-              background:'var(--ayu-elevated, #131a24)',
-              border:'1px solid rgba(255,255,255,0.10)',
-              boxShadow:'0 8px 32px rgba(0,0,0,0.6)',
-              borderRadius:12,padding:'8px 12px',
-              display:'flex',flexDirection:'column',gap:3,
-              minWidth:120,maxWidth:200
-            }}>
-            {/* Arrow pointing left */}
-            <span style={{position:'absolute',left:-5,top:'50%',transform:'translateY(-50%)',width:0,height:0,borderTop:'5px solid transparent',borderBottom:'5px solid transparent',borderRight:'5px solid var(--ayu-elevated, #131a24)'}}/>
-            <span style={{fontSize:13,fontWeight:600,color:'#f5f5f7',lineHeight:1.3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{srvTooltip.name}</span>
-            {(()=>{
-              if(srvTooltip.id===activeServer&&serverFull){
-                const online=members.filter(m=>m.status&&m.status!=='offline').length;
-                const offline=members.length-online;
-                return (
-                  <span style={{fontSize:11,color:'#626A73',lineHeight:1.3}}>
-                    <span style={{color:'#7FD962'}}>●</span> {online} online &nbsp;<span style={{opacity:0.5}}>●</span> {offline} offline
-                  </span>
-                );
-              }
-              return null;
-            })()}
-          </motion.div>,
-          document.body
-        )}
-      </AnimatePresence>
+      {ReactDOM.createPortal(
+        <AnimatePresence>
+          {srvTooltip&&(
+            <motion.div
+              key={srvTooltip.id}
+              initial={{opacity:0,x:-10,scale:0.92}}
+              animate={{opacity:1,x:0,scale:1}}
+              exit={{opacity:0,x:-10,scale:0.92}}
+              transition={{duration:0.18,ease:[0.16,1,0.3,1]}}
+              style={{
+                position:'fixed',left:70,top:srvTooltip.y,
+                transform:'translateY(-50%)',zIndex:9999,pointerEvents:'none',
+                background:'#1a2535',
+                border:'1px solid rgba(255,255,255,0.12)',
+                boxShadow:'0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,143,64,0.08)',
+                borderRadius:10,padding:'9px 14px',
+                display:'flex',flexDirection:'column',gap:4,
+                minWidth:130,maxWidth:210
+              }}>
+              {/* Arrow pointing left */}
+              <span style={{position:'absolute',left:-6,top:'50%',transform:'translateY(-50%)',width:0,height:0,borderTop:'6px solid transparent',borderBottom:'6px solid transparent',borderRight:'6px solid #1a2535'}}/>
+              <span style={{fontSize:13,fontWeight:600,color:'#f0efe8',lineHeight:1.3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{srvTooltip.name}</span>
+              {(()=>{
+                if(srvTooltip.id===activeServer&&members.length>0){
+                  const online=members.filter(m=>m.status&&m.status!=='offline').length;
+                  const offline=members.length-online;
+                  return (
+                    <span style={{fontSize:11,color:'#626A73',lineHeight:1.4,display:'flex',gap:8}}>
+                      <span><span style={{color:'#7FD962'}}>●</span> {online} online</span>
+                      <span><span style={{opacity:0.4}}>●</span> {offline} offline</span>
+                    </span>
+                  );
+                }
+                return null;
+              })()}
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* ── Message context menu (right-click on message) ──────────────── */}
       {msgCtxMenu&&(()=>{
