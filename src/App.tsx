@@ -14676,6 +14676,7 @@ export default function App() {
                         <button onClick={()=>setShowPulse(v=>!v)}
                           title={t('pulse.title')}
                           className={`flex items-center gap-1 px-2.5 h-8 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 ${showPulse?'bg-[rgba(255,143,64,0.18)] text-[#FFB454]':lvl==='hot'?'bg-rose-500/10 text-rose-400':lvl==='active'?'bg-amber-500/10 text-amber-400':lvl==='chatting'?'bg-white/[0.05] text-zinc-400':'text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.04]'}`}>
+                          <span style={{fontSize:13,lineHeight:1}}>{lvl==='hot'?'🔥':lvl==='active'?'⚡':lvl==='chatting'?'💬':'💤'}</span>
                           <span className="tabular-nums">{msgsToday.length}</span>
                         </button>
                         <AnimatePresence>
@@ -14689,7 +14690,7 @@ export default function App() {
                               style={{position:'absolute',right:0,top:44,zIndex:50,width:258,background:'#0f1824',border:'1px solid rgba(255,255,255,0.11)',borderRadius:18,padding:16,display:'flex',flexDirection:'column',gap:12,boxShadow:'0 16px 48px rgba(0,0,0,0.75),0 0 0 1px rgba(255,143,64,0.07)'}}>
                               {/* Title */}
                               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                                <span style={{fontSize:12,fontWeight:700,color:'#e8e6df',display:'flex',alignItems:'center',gap:6}}><span>📊</span>{t('pulse.title')}</span>
+                                <span style={{fontSize:12,fontWeight:700,color:'#e8e6df'}}>{t('pulse.title')}</span>
                                 <button onClick={()=>setShowPulse(false)} style={{color:'#5a6270',cursor:'pointer',lineHeight:0,display:'flex'}}><X size={12}/></button>
                               </div>
                               {/* Mini freshness bar chart */}

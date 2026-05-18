@@ -688,7 +688,7 @@ const T: Record<string, Record<Locale, string>> = {
   'tabs.settings.limit':       { pl: 'Limit otwartych zakładek',                  en: 'Open tab limit',                          cs: 'Limit otevřených záložek',               de: 'Limit offener Tabs'                      },
   'tabs.settings.limitDesc':   { pl: 'Maksymalna liczba nieprzypiętych zakładek', en: 'Maximum number of unpinned tabs',         cs: 'Maximální počet nepřipnutých záložek',   de: 'Maximale Anzahl nicht angehefteter Tabs' },
   // ── Channel Pulse ─────────────────────────────────────────────────────────
-  'pulse.title':        { pl: 'Channel Pulse',          en: 'Channel Pulse',          cs: 'Channel Pulse',          de: 'Channel Pulse'           },
+  'pulse.title':        { pl: 'Puls Kanału',            en: 'Channel Pulse',          cs: 'Puls Kanálu',            de: 'Kanal-Puls'              },
   'pulse.activity':     { pl: 'AKTYWNOŚĆ · OSTATNIE',   en: 'ACTIVITY · RECENT',      cs: 'AKTIVITA · POSLEDNÍ',    de: 'AKTIVITÄT · LETZTE'      },
   'pulse.today':        { pl: 'DZIŚ',                   en: 'TODAY',                  cs: 'DNES',                   de: 'HEUTE'                   },
   'pulse.tempo':        { pl: 'TEMPO',                  en: 'PACE',                   cs: 'TEMPO',                  de: 'TEMPO'                   },
