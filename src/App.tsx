@@ -12808,8 +12808,7 @@ export default function App() {
                   onClick={()=>{if(activeServer===srv.id&&activeView==='servers')return;const same=activeServer===srv.id;setActiveServer(srv.id);setActiveView('servers');setActiveChannel('');setServerFull(null);setProfileViewId(null);setBannerExpanded(false);if(same)setServerReloadKey(k=>k+1);}}
                   onContextMenu={e=>{e.preventDefault();setSrvContextMenu({x:e.clientX,y:e.clientY,srv});}}
                   onMouseEnter={e=>{
-                    const r=e.currentTarget.getBoundingClientRect();
-                    const cy=r.top+r.height/2;
+                    const cy=e.clientY;
                     const isThisActive=srv.id===activeServer;
                     if(isThisActive){
                       // Aktywny serwer — mamy dane w pamięci
@@ -15669,10 +15668,10 @@ export default function App() {
                             <div className="flex items-center bg-[#1a1a2e] border border-white/[0.1] rounded-xl shadow-2xl overflow-visible">
                               {/* Quick reactions — servers only */}
                               {activeView==='servers' && <>
-                                {['👍','❤️','😂','🔥'].map(em => (
+                                {['👍','❤️','😂','🔥','😮','😢'].map(em => (
                                   <button key={em} onMouseDown={e=>{e.preventDefault();toggleReaction(msg.id,em,e);}}
-                                    className="w-8 h-8 flex items-center justify-center text-sm hover:bg-white/[0.08] rounded-lg transition-all hover:scale-110 active:scale-95"
-                                    title={em}>{em}</button>
+                                    className="w-7 h-7 flex items-center justify-center text-[15px] leading-none hover:bg-white/[0.10] rounded-lg transition-all duration-100 active:scale-90"
+                                    title={`Zareaguj ${em}`}>{em}</button>
                                 ))}
                                 <div className="w-px h-5 bg-white/[0.1] mx-0.5 shrink-0"/>
                               </>}
@@ -15687,6 +15686,20 @@ export default function App() {
                                   className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${threadRootId===msg.id?'text-indigo-400 bg-indigo-500/10':'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.08]'}`}
                                   title="Wątek"><MessageSquare size={13}/></button>
                               )}
+                              {/* Add reaction */}
+                              <button
+                                onClick={e=>{
+                                  e.stopPropagation();
+                                  if((msg as any).deleted||msg.content==='__deleted__') return;
+                                  setMsgMenuId(null); setMsgMenuPos(null);
+                                  const menuW=220, menuH=360;
+                                  const rect=e.currentTarget.getBoundingClientRect();
+                                  const x=Math.min(rect.left, window.innerWidth-menuW-8);
+                                  const y=Math.min(rect.bottom+4, window.innerHeight-menuH-8);
+                                  setMsgCtxMenu({x:Math.max(x,8), y:Math.max(y,8), msg});
+                                }}
+                                className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.08] rounded-lg transition-colors"
+                                title="Dodaj reakcję"><SmilePlus size={13}/></button>
                               {/* Reply */}
                               <button onClick={()=>setReplyTo(msg)}
                                 className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.08] rounded-lg transition-colors"
