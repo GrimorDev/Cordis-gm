@@ -24,7 +24,7 @@ import {
   Bookmark, BookmarkCheck, Timer, Square, ImageIcon, Moon,
   Keyboard, Radio, Compass, CalendarPlus, Mic2,
   Home, BookOpen, TrendingUp, Layers, SmilePlus, Smartphone,
-  Clipboard,
+  Clipboard, ScanLine,
   type LucideIcon
 } from 'lucide-react';
 import {
@@ -12331,11 +12331,6 @@ export default function App() {
         {/* Right col — search · bell · ⋯more · avatar */}
         <div className="flex items-center justify-end gap-1 pr-1">
 
-          {/* Focus Card toggle */}
-          <button onClick={() => setFocusCard(v => !v)} title={focusCard ? 'Wyłącz focus' : 'Focus: podświetl okno czatu'}
-            className={`hidden md:flex items-center justify-center w-8 h-8 rounded-xl transition-all ${focusCard ? 'bg-[rgba(255,143,64,0.18)] text-[#FFB454] shadow-[0_0_12px_rgba(255,143,64,0.25)]' : 'text-zinc-500 hover:text-[#FFB454] hover:bg-[rgba(255,143,64,0.10)]'}`}>
-            <Eye size={15}/>
-          </button>
 
           {/* Search */}
           <div className="relative group hidden sm:block">
@@ -12785,7 +12780,7 @@ export default function App() {
       })()}
 
       {/* WORKSPACE */}
-      <main className="flex-1 flex gap-2 overflow-hidden relative min-h-0 focus-card-center rounded-2xl">
+      <main className="flex-1 flex gap-2 overflow-hidden relative min-h-0 rounded-2xl">
 
         {/* ── VERTICAL SERVER ICON BAR ─────────────────────────────── */}
         <aside className="srv-icon-bar hidden md:flex focus-card-dim">
@@ -13510,7 +13505,7 @@ export default function App() {
         </aside>
 
         {/* CENTER */}
-        <section className="flex-1 flex flex-col glass-dark rounded-2xl overflow-hidden min-w-0 relative">
+        <section className="flex-1 flex flex-col glass-dark rounded-2xl overflow-hidden min-w-0 relative focus-card-center">
           {showCallPanel && activeCall ? (
             /* ── CALL PANEL ─────────────────────────────────────────── */
             <div className="flex-1 flex flex-col overflow-hidden">
@@ -14660,6 +14655,13 @@ export default function App() {
                       <Pin size={14}/>
                     </button>
                   )}
+                  {/* Focus toggle — podświetl środkowy panel czatu */}
+                  <button
+                    onClick={()=>setFocusCard(v=>!v)}
+                    title={focusCard?'Wyłącz focus':'Focus — wycisz boczne panele'}
+                    className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-200 active:scale-95 ${focusCard?'bg-[rgba(255,143,64,0.18)] text-[#FFB454] shadow-[0_0_10px_rgba(255,143,64,0.3)]':'text-zinc-500 hover:text-[#FFB454] hover:bg-[rgba(255,143,64,0.10)]'}`}>
+                    <ScanLine size={15}/>
+                  </button>
                   <div className="relative">
                     <button onClick={()=>setShowDmMenu(v=>!v)} className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-150 active:scale-95 ${showDmMenu?'text-white bg-white/[0.1]':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07]'}`}>
                       <MoreHorizontal size={15}/>

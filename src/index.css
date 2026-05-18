@@ -1733,21 +1733,26 @@ img.av-eff-arcade-coin { transition: filter 0.3s; }
 [data-theme="ayu"] .bg-\[\#1a1a2e\]  { background-color: #1a2535 !important; }
 
 /* ── Focus Card — dims sidebars, highlights chat panel ───────────────────── */
+.focus-card-dim {
+  transition: opacity 0.50s cubic-bezier(0.16,1,0.3,1),
+              filter  0.50s cubic-bezier(0.16,1,0.3,1);
+}
+.focus-card-center {
+  transition: box-shadow 0.50s cubic-bezier(0.16,1,0.3,1),
+              outline   0.50s cubic-bezier(0.16,1,0.3,1);
+}
 .focus-card-active .focus-card-dim {
-  opacity: 0.25;
-  filter: blur(2px) saturate(0.5);
-  transition: opacity 0.35s ease, filter 0.35s ease;
+  opacity: 0.12;
+  filter: blur(3px) saturate(0.25) brightness(0.55);
   pointer-events: none;
 }
 .focus-card-active .focus-card-center {
-  box-shadow: 0 0 0 2px rgba(255,143,64,0.35), 0 0 60px rgba(255,143,64,0.08) !important;
-  transition: box-shadow 0.35s ease;
-}
-.focus-card-dim {
-  transition: opacity 0.35s ease, filter 0.35s ease;
-}
-.focus-card-center {
-  transition: box-shadow 0.35s ease;
+  outline: 2px solid rgba(255,143,64,0.55) !important;
+  outline-offset: 0px;
+  box-shadow:
+    0 0 0 4px rgba(255,143,64,0.08),
+    0 0 50px rgba(255,143,64,0.12),
+    inset 0 0 80px rgba(255,143,64,0.03) !important;
 }
 
 /* ── Flying emoji reaction animation ── */
