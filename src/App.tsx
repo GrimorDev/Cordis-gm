@@ -7652,7 +7652,7 @@ export default function App() {
   // ── Focus Card — dims sidebars, highlights center panel ─────────────────
   const [focusCard,       setFocusCard]       = useState(false);
   // ── Server icon bar tooltip ───────────────────────────────────────────
-  const [srvTooltip, setSrvTooltip] = useState<{id:string;name:string;y:number}|null>(null);
+  const [srvTooltip, setSrvTooltip] = useState<{id:string;name:string;y:number;online:number|null;total:number|null}|null>(null);
   // ── Focus Mode — silences all notification sounds except @mentions ─────────
   const [focusMode,       setFocusMode]       = useState(() => localStorage.getItem('cordyn_focus_mode') === '1');
   const focusModeRef = useRef(false);
@@ -12810,7 +12810,13 @@ export default function App() {
                 <button key={srv.id}
                   onClick={()=>{if(activeServer===srv.id&&activeView==='servers')return;const same=activeServer===srv.id;setActiveServer(srv.id);setActiveView('servers');setActiveChannel('');setServerFull(null);setProfileViewId(null);setBannerExpanded(false);if(same)setServerReloadKey(k=>k+1);}}
                   onContextMenu={e=>{e.preventDefault();setSrvContextMenu({x:e.clientX,y:e.clientY,srv});}}
-                  onMouseEnter={e=>{const r=e.currentTarget.getBoundingClientRect();setSrvTooltip({id:srv.id,name:srv.name,y:r.top+r.height/2});}}
+                  onMouseEnter={e=>{
+                    const r=e.currentTarget.getBoundingClientRect();
+                    const isThisActive=srv.id===activeServer;
+                    const onlineCount=isThisActive?members.filter(m=>m.status&&m.status!=='offline').length:null;
+                    const totalCount=isThisActive?(serverFull?.member_count??members.length):null;
+                    setSrvTooltip({id:srv.id,name:srv.name,y:r.top+r.height/2,online:onlineCount,total:totalCount});
+                  }}
                   onMouseLeave={()=>setSrvTooltip(null)}
                   className={`srv-icon-btn ${isAct?'active':''}`}>
                   <span className="srv-active-pip"/>
@@ -17195,36 +17201,46 @@ export default function App() {
           {srvTooltip&&(
             <motion.div
               key={srvTooltip.id}
-              initial={{opacity:0,x:-10,scale:0.92}}
+              initial={{opacity:0,x:-8,scale:0.94}}
               animate={{opacity:1,x:0,scale:1}}
-              exit={{opacity:0,x:-10,scale:0.92}}
-              transition={{duration:0.18,ease:[0.16,1,0.3,1]}}
+              exit={{opacity:0,x:-8,scale:0.94}}
+              transition={{duration:0.15,ease:[0.16,1,0.3,1]}}
               style={{
-                position:'fixed',left:70,top:srvTooltip.y,
-                transform:'translateY(-50%)',zIndex:9999,pointerEvents:'none',
-                background:'#1a2535',
-                border:'1px solid rgba(255,255,255,0.12)',
-                boxShadow:'0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,143,64,0.08)',
-                borderRadius:10,padding:'9px 14px',
-                display:'flex',flexDirection:'column',gap:4,
-                minWidth:130,maxWidth:210
+                position:'fixed',
+                left:68,
+                top:srvTooltip.y,
+                transform:'translateY(-50%)',
+                zIndex:9999,
+                pointerEvents:'none',
+                background:'#131c2b',
+                border:'1px solid rgba(255,255,255,0.13)',
+                boxShadow:'0 4px 24px rgba(0,0,0,0.7)',
+                borderRadius:10,
+                padding:'8px 13px',
+                display:'flex',
+                flexDirection:'column',
+                gap:3,
+                minWidth:120,
+                maxWidth:200,
               }}>
               {/* Arrow pointing left */}
-              <span style={{position:'absolute',left:-6,top:'50%',transform:'translateY(-50%)',width:0,height:0,borderTop:'6px solid transparent',borderBottom:'6px solid transparent',borderRight:'6px solid #1a2535'}}/>
-              <span style={{fontSize:13,fontWeight:600,color:'#f0efe8',lineHeight:1.3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{srvTooltip.name}</span>
-              {(()=>{
-                if(srvTooltip.id===activeServer&&members.length>0){
-                  const online=members.filter(m=>m.status&&m.status!=='offline').length;
-                  const offline=members.length-online;
-                  return (
-                    <span style={{fontSize:11,color:'#626A73',lineHeight:1.4,display:'flex',gap:8}}>
-                      <span><span style={{color:'#7FD962'}}>●</span> {online} online</span>
-                      <span><span style={{opacity:0.4}}>●</span> {offline} offline</span>
-                    </span>
-                  );
-                }
-                return null;
-              })()}
+              <span style={{
+                position:'absolute',left:-6,top:'50%',
+                transform:'translateY(-50%)',
+                width:0,height:0,
+                borderTop:'6px solid transparent',
+                borderBottom:'6px solid transparent',
+                borderRight:'6px solid #131c2b',
+              }}/>
+              <span style={{fontSize:13,fontWeight:600,color:'#e8e6df',lineHeight:1.3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                {srvTooltip.name}
+              </span>
+              {srvTooltip.online!==null&&srvTooltip.total!==null&&(
+                <span style={{fontSize:11,color:'#5a6270',lineHeight:1.4,display:'flex',gap:10}}>
+                  <span><span style={{color:'#7FD962',marginRight:3}}>●</span>{srvTooltip.online} online</span>
+                  <span><span style={{color:'#444d58',marginRight:3}}>●</span>{srvTooltip.total-srvTooltip.online} offline</span>
+                </span>
+              )}
             </motion.div>
           )}
         </AnimatePresence>,
