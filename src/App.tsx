@@ -7651,6 +7651,8 @@ export default function App() {
   const [bmAddingFolder,  setBmAddingFolder]  = useState(false);
   // ── Focus Card — dims sidebars, highlights center panel ─────────────────
   const [focusCard,       setFocusCard]       = useState(false);
+  // ── Server icon bar tooltip ───────────────────────────────────────────
+  const [srvTooltip, setSrvTooltip] = useState<{id:string;name:string;y:number}|null>(null);
   // ── Focus Mode — silences all notification sounds except @mentions ─────────
   const [focusMode,       setFocusMode]       = useState(() => localStorage.getItem('cordyn_focus_mode') === '1');
   const focusModeRef = useRef(false);
@@ -12808,7 +12810,8 @@ export default function App() {
                 <button key={srv.id}
                   onClick={()=>{if(activeServer===srv.id&&activeView==='servers')return;const same=activeServer===srv.id;setActiveServer(srv.id);setActiveView('servers');setActiveChannel('');setServerFull(null);setProfileViewId(null);setBannerExpanded(false);if(same)setServerReloadKey(k=>k+1);}}
                   onContextMenu={e=>{e.preventDefault();setSrvContextMenu({x:e.clientX,y:e.clientY,srv});}}
-                  title={maskName(srv.name)}
+                  onMouseEnter={e=>{const r=e.currentTarget.getBoundingClientRect();setSrvTooltip({id:srv.id,name:srv.name,y:r.top+r.height/2});}}
+                  onMouseLeave={()=>setSrvTooltip(null)}
                   className={`srv-icon-btn ${isAct?'active':''}`}>
                   <span className="srv-active-pip"/>
                   {srv.icon_url
@@ -15658,71 +15661,20 @@ export default function App() {
                               <button onClick={()=>setReplyTo(msg)}
                                 className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.08] rounded-lg transition-colors"
                                 title="Odpowiedz"><Reply size={13}/></button>
-                              {/* More "…" */}
-                              <div className="relative">
-                                <button onClick={e=>{e.stopPropagation();if(msgMenuId===msg.id){setMsgMenuId(null);setMsgMenuPos(null);return;}const rect=e.currentTarget.getBoundingClientRect();const menuW=196;const x=Math.min(rect.right-menuW,window.innerWidth-menuW-8);const y=rect.bottom+4;setMsgMenuId(msg.id);setMsgMenuPos({x:Math.max(x,8),y:Math.min(y,window.innerHeight-320-8)});}}
-                                  className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.08] rounded-lg transition-colors"
-                                  title="Więcej"><MoreHorizontal size={13}/></button>
-                                {msgMenuId===msg.id&&msgMenuPos&&(<>
-                                  <div className="fixed inset-0 z-[49]" onClick={()=>{setMsgMenuId(null);setMsgMenuPos(null);}}/>
-                                  <div style={{position:'fixed',left:msgMenuPos.x,top:msgMenuPos.y}} className="z-[50] bg-[#16161f] border border-white/[0.1] rounded-xl shadow-2xl py-1 w-48"
-                                    onClick={e=>e.stopPropagation()}>
-                                    {isOwn&&activeView==='servers'&&(
-                                      <button onClick={()=>{startEditMsg(msg);setMsgMenuId(null);}}
-                                        className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors">
-                                        <Edit3 size={13}/> Edytuj
-                                      </button>
-                                    )}
-                                    <button onClick={()=>{setReplyTo(msg);setMsgMenuId(null);}}
-                                      className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors">
-                                      <Reply size={13}/> Odpowiedz
-                                    </button>
-                                    <button onClick={()=>{try{navigator.clipboard.writeText(msg.content);}catch{}addToast('Skopiowano tekst','success');setMsgMenuId(null);}}
-                                      className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors">
-                                      <Copy size={13}/> Kopiuj tekst
-                                    </button>
-                                    <button onClick={()=>{
-                                      const base = window.location.origin;
-                                      const link = activeView==='servers'
-                                        ? `${base}/channels/${activeServer}/${activeChannel}?msg=${msg.id}`
-                                        : `${base}/dm/${activeDm?.id}?msg=${msg.id}`;
-                                      try{navigator.clipboard.writeText(link);}catch{}
-                                      addToast('Skopiowano link do wiadomości','success');
-                                      setMsgMenuId(null);
-                                    }}
-                                      className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors">
-                                      <Link2 size={13}/> Kopiuj link
-                                    </button>
-                                    {activeView==='servers'&&canPinMessages&&activeCh?.type==='text'&&(
-                                      <button onClick={()=>{handlePinMessage(msg.id,!(msg as MessageFull).pinned);setMsgMenuId(null);}}
-                                        className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-sm transition-colors ${(msg as MessageFull).pinned?'text-amber-400 hover:bg-amber-500/10':'text-zinc-300 hover:bg-white/[0.06] hover:text-white'}`}>
-                                        <Pin size={13}/> {(msg as MessageFull).pinned?'Odepnij':'Przypnij'}
-                                      </button>
-                                    )}
-                                    {activeView==='dms'&&(
-                                      <button onClick={async()=>{
-                                        try{
-                                          await dmPinApi.pin(msg.id);
-                                          const np=!(msg as any).pinned;
-                                          setDmMsgs(p=>p.map(m=>m.id===msg.id?{...m,pinned:np}:m));
-                                          if(np) setDmPinnedMsgs(p=>[msg as DmMessageFull,...p.filter(x=>x.id!==msg.id)]);
-                                          else setDmPinnedMsgs(p=>p.filter(x=>x.id!==msg.id));
-                                        }catch{}
-                                        setMsgMenuId(null);
-                                      }} className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-sm transition-colors ${(msg as any).pinned?'text-amber-400 hover:bg-amber-500/10':'text-zinc-300 hover:bg-white/[0.06] hover:text-white'}`}>
-                                        <Pin size={13}/> {(msg as any).pinned?'Odepnij':'Przypnij'}
-                                      </button>
-                                    )}
-                                    {(isOwn||(activeView==='servers'&&canManageMessages))&&(<>
-                                      <div className="w-full h-px bg-white/[0.06] my-1"/>
-                                      <button onClick={()=>{confirmAction('Usunąć wiadomość?',()=>{if(activeView==='servers') messagesApi.delete(msg.id).catch(console.error); else dmsApi.deleteMessage(msg.id).catch(console.error);});setMsgMenuId(null);}}
-                                        className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors">
-                                        <Trash2 size={13}/> Usuń wiadomość
-                                      </button>
-                                    </>)}
-                                  </div>
-                                </>)}
-                              </div>
+                              {/* More "…" — otwiera ten sam ctx menu co prawy przycisk */}
+                              <button
+                                onClick={e=>{
+                                  e.stopPropagation();
+                                  if((msg as any).deleted||msg.content==='__deleted__') return;
+                                  setMsgMenuId(null); setMsgMenuPos(null);
+                                  const menuW=220, menuH=360;
+                                  const rect=e.currentTarget.getBoundingClientRect();
+                                  const x=Math.min(rect.left, window.innerWidth-menuW-8);
+                                  const y=Math.min(rect.bottom+4, window.innerHeight-menuH-8);
+                                  setMsgCtxMenu({x:Math.max(x,8), y:Math.max(y,8), msg});
+                                }}
+                                className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.08] rounded-lg transition-colors"
+                                title="Więcej"><MoreHorizontal size={13}/></button>
                             </div>
                           </div>
                           )}
@@ -17236,6 +17188,45 @@ export default function App() {
           </>
         );
       })()}
+
+      {/* ── Server icon bar tooltip ─────────────────────────────────────── */}
+      <AnimatePresence>
+        {srvTooltip&&ReactDOM.createPortal(
+          <motion.div
+            key={srvTooltip.id}
+            initial={{opacity:0,x:-6,scale:0.95}}
+            animate={{opacity:1,x:0,scale:1}}
+            exit={{opacity:0,x:-6,scale:0.95}}
+            transition={{duration:0.15,ease:[0.16,1,0.3,1]}}
+            style={{
+              position:'fixed',left:72,top:srvTooltip.y,
+              transform:'translateY(-50%)',zIndex:9999,pointerEvents:'none',
+              background:'var(--ayu-elevated, #131a24)',
+              border:'1px solid rgba(255,255,255,0.10)',
+              boxShadow:'0 8px 32px rgba(0,0,0,0.6)',
+              borderRadius:12,padding:'8px 12px',
+              display:'flex',flexDirection:'column',gap:3,
+              minWidth:120,maxWidth:200
+            }}>
+            {/* Arrow pointing left */}
+            <span style={{position:'absolute',left:-5,top:'50%',transform:'translateY(-50%)',width:0,height:0,borderTop:'5px solid transparent',borderBottom:'5px solid transparent',borderRight:'5px solid var(--ayu-elevated, #131a24)'}}/>
+            <span style={{fontSize:13,fontWeight:600,color:'#f5f5f7',lineHeight:1.3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{srvTooltip.name}</span>
+            {(()=>{
+              if(srvTooltip.id===activeServer&&serverFull){
+                const online=members.filter(m=>m.status&&m.status!=='offline').length;
+                const offline=members.length-online;
+                return (
+                  <span style={{fontSize:11,color:'#626A73',lineHeight:1.3}}>
+                    <span style={{color:'#7FD962'}}>●</span> {online} online &nbsp;<span style={{opacity:0.5}}>●</span> {offline} offline
+                  </span>
+                );
+              }
+              return null;
+            })()}
+          </motion.div>,
+          document.body
+        )}
+      </AnimatePresence>
 
       {/* ── Message context menu (right-click on message) ──────────────── */}
       {msgCtxMenu&&(()=>{
