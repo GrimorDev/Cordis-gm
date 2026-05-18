@@ -7867,6 +7867,7 @@ export default function App() {
   const [slowmodeLeft, setSlowmodeLeft]       = useState(0); // seconds remaining
   const [pinnedMsgs, setPinnedMsgs]           = useState<import('./api').MessageFull[]>([]);
   const [showPinned, setShowPinned]           = useState(false);
+  const [showPulse,  setShowPulse]            = useState(false);
   const [inviteDur, setInviteDur]             = useState('86400');
   const [inviteCode, setInviteCode]           = useState<string|null>(null);
   const [srvForm, setSrvForm]                 = useState({ name:'', description:'', icon_url:'', banner_url:'', accent_color:'indigo' });
@@ -14647,6 +14648,96 @@ export default function App() {
                     {members.length>4&&<div className="w-6 h-6 rounded-full border-2 border-[#181828] bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-white">+{members.length-4}</div>}
                   </div>
                   )}
+                  {/* ── Channel Pulse ── real-time activity stats (not on Discord!) */}
+                  {activeView==='servers'&&activeCh?.type==='text'&&(()=>{
+                    const now=Date.now();
+                    const msgsLast5=messages.filter(m=>now-new Date(m.created_at).getTime()<5*60*1000);
+                    const msgsToday=messages.filter(m=>new Date(m.created_at).toDateString()===new Date().toDateString());
+                    const msgsPerMin=msgsLast5.length/5;
+                    const lvl=msgsPerMin>2?'hot':msgsPerMin>0.5?'active':msgsPerMin>0.1?'chatting':'quiet';
+                    const senderMap:Record<string,number>={};
+                    messages.slice(-50).forEach(m=>{senderMap[m.sender_id]=(senderMap[m.sender_id]||0)+1;});
+                    const topEntry=Object.entries(senderMap).sort((a,b)=>b[1]-a[1])[0];
+                    const topSnd=topEntry?members.find(m=>m.id===topEntry[0]):null;
+                    const last12=messages.slice(-12);
+                    return (
+                      <div className="relative">
+                        <button onClick={()=>setShowPulse(v=>!v)}
+                          title="Channel Pulse — statystyki aktywności kanału"
+                          className={`flex items-center gap-1 px-2 h-8 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 ${showPulse?'bg-[rgba(255,143,64,0.18)] text-[#FFB454]':lvl==='hot'?'bg-rose-500/10 text-rose-400':lvl==='active'?'bg-amber-500/10 text-amber-400':lvl==='chatting'?'bg-white/[0.05] text-zinc-400':'text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.04]'}`}>
+                          <span>{lvl==='hot'?'🔥':lvl==='active'?'⚡':lvl==='chatting'?'💬':'💤'}</span>
+                          <span className="tabular-nums hidden lg:inline">{msgsToday.length}</span>
+                        </button>
+                        <AnimatePresence>
+                          {showPulse&&(<>
+                            <div className="fixed inset-0 z-40" onClick={()=>setShowPulse(false)}/>
+                            <motion.div
+                              initial={{opacity:0,y:-8,scale:0.96}}
+                              animate={{opacity:1,y:0,scale:1}}
+                              exit={{opacity:0,y:-8,scale:0.96}}
+                              transition={{duration:0.15,ease:[0.16,1,0.3,1]}}
+                              style={{position:'absolute',right:0,top:44,zIndex:50,width:258,background:'#0f1824',border:'1px solid rgba(255,255,255,0.11)',borderRadius:18,padding:16,display:'flex',flexDirection:'column',gap:12,boxShadow:'0 16px 48px rgba(0,0,0,0.75),0 0 0 1px rgba(255,143,64,0.07)'}}>
+                              {/* Title */}
+                              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                                <span style={{fontSize:12,fontWeight:700,color:'#e8e6df',display:'flex',alignItems:'center',gap:6}}><span>📊</span>Channel Pulse</span>
+                                <button onClick={()=>setShowPulse(false)} style={{color:'#5a6270',cursor:'pointer',lineHeight:0,display:'flex'}}><X size={12}/></button>
+                              </div>
+                              {/* Mini freshness bar chart */}
+                              <div>
+                                <p style={{fontSize:10,color:'#4a5260',marginBottom:7,letterSpacing:'0.06em',textTransform:'uppercase',fontWeight:600}}>Aktywność · ostatnie wiad.</p>
+                                <div style={{display:'flex',alignItems:'flex-end',gap:2,height:36}}>
+                                  {([...last12].reverse() as any[]).map((msg:any,i:number)=>{
+                                    const age=now-new Date(msg.created_at).getTime();
+                                    const h=Math.max(4,Math.round((1-Math.min(1,age/3_600_000))*100));
+                                    return <div key={msg.id} style={{flex:1,height:`${h}%`,background:`rgba(255,143,64,${0.12+0.7*(h/100)})`,borderRadius:3,transition:'height 0.5s ease'}}/>;
+                                  })}
+                                  {last12.length<12&&(Array.from({length:12-last12.length}) as any[]).map((_:any,i:number)=>(
+                                    <div key={'gap'+i} style={{flex:1,height:4,background:'rgba(255,255,255,0.05)',borderRadius:3}}/>
+                                  ))}
+                                </div>
+                              </div>
+                              {/* Stats cards */}
+                              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                                <div style={{background:'rgba(255,255,255,0.04)',borderRadius:12,padding:'10px 12px'}}>
+                                  <p style={{fontSize:10,color:'#4a5260',marginBottom:3,fontWeight:600,letterSpacing:'0.05em',textTransform:'uppercase'}}>Dziś</p>
+                                  <p style={{fontSize:24,fontWeight:800,color:'#e8e6df',lineHeight:1,fontVariantNumeric:'tabular-nums'}}>{msgsToday.length}</p>
+                                  <p style={{fontSize:9,color:'#2e3740',marginTop:3}}>wiadomości</p>
+                                </div>
+                                <div style={{background:'rgba(255,255,255,0.04)',borderRadius:12,padding:'10px 12px'}}>
+                                  <p style={{fontSize:10,color:'#4a5260',marginBottom:3,fontWeight:600,letterSpacing:'0.05em',textTransform:'uppercase'}}>Tempo</p>
+                                  <p style={{fontSize:24,fontWeight:800,color:'#FFB454',lineHeight:1,fontVariantNumeric:'tabular-nums'}}>{msgsPerMin<0.05?'0.0':msgsPerMin.toFixed(1)}</p>
+                                  <p style={{fontSize:9,color:'#2e3740',marginTop:3}}>wiad / min</p>
+                                </div>
+                              </div>
+                              {/* Top sender */}
+                              {topSnd&&(
+                                <div style={{display:'flex',alignItems:'center',gap:10,background:'rgba(255,255,255,0.04)',borderRadius:12,padding:'9px 12px'}}>
+                                  <img src={topSnd.avatar_url||`https://api.dicebear.com/7.x/shapes/svg?seed=${topSnd.id}`} style={{width:28,height:28,borderRadius:8,objectFit:'cover',flexShrink:0}} alt=""/>
+                                  <div style={{flex:1,minWidth:0}}>
+                                    <p style={{fontSize:12,fontWeight:600,color:'#e8e6df',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{topSnd.username}</p>
+                                    <p style={{fontSize:10,color:'#4a5260'}}>{topEntry![1]} wiad. w kanale</p>
+                                  </div>
+                                  <span style={{fontSize:16}}>🏆</span>
+                                </div>
+                              )}
+                              {/* Activity bar */}
+                              <div>
+                                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                                  <span style={{fontSize:10,color:'#4a5260',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.05em'}}>Aktywność</span>
+                                  <span style={{fontSize:10,fontWeight:700,color:lvl==='hot'?'#f87171':lvl==='active'?'#fb923c':lvl==='chatting'?'#a78bfa':'#4a5260'}}>
+                                    {lvl==='hot'?'🔥 Gorąco!':lvl==='active'?'⚡ Aktywny':lvl==='chatting'?'💬 Rozmowa':'💤 Spokój'}
+                                  </span>
+                                </div>
+                                <div style={{height:6,background:'rgba(255,255,255,0.06)',borderRadius:99,overflow:'hidden'}}>
+                                  <div style={{height:'100%',width:`${Math.min(100,msgsPerMin*33)}%`,background:'linear-gradient(90deg,#FF8F40,#FFB454)',borderRadius:99,transition:'width 0.9s cubic-bezier(0.16,1,0.3,1)'}}/>
+                                </div>
+                              </div>
+                            </motion.div>
+                          </>)}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  })()}
                   {activeView==='servers'&&activeCh?.type==='text'&&(
                     <button onClick={async()=>{setShowPinned(v=>{const next=!v;if(next){messagesApi.listPinned(activeChannel!).then(setPinnedMsgs).catch(()=>{});}return next;})} }
                       title="Przypięte wiadomości"
