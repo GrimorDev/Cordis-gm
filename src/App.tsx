@@ -7653,6 +7653,8 @@ export default function App() {
   const [focusCard,       setFocusCard]       = useState(false);
   // ── Server icon bar tooltip ───────────────────────────────────────────
   const [srvTooltip, setSrvTooltip] = useState<{id:string;name:string;y:number;online:number|null;total:number|null}|null>(null);
+  // cache: serverId → {online, total, fetchedAt}
+  const srvMemberCache = useRef<Map<string,{online:number;total:number;ts:number}>>(new Map());
   // ── Focus Mode — silences all notification sounds except @mentions ─────────
   const [focusMode,       setFocusMode]       = useState(() => localStorage.getItem('cordyn_focus_mode') === '1');
   const focusModeRef = useRef(false);
@@ -12812,10 +12814,30 @@ export default function App() {
                   onContextMenu={e=>{e.preventDefault();setSrvContextMenu({x:e.clientX,y:e.clientY,srv});}}
                   onMouseEnter={e=>{
                     const r=e.currentTarget.getBoundingClientRect();
+                    const cy=r.top+r.height/2;
                     const isThisActive=srv.id===activeServer;
-                    const onlineCount=isThisActive?members.filter(m=>m.status&&m.status!=='offline').length:null;
-                    const totalCount=isThisActive?(serverFull?.member_count??members.length):null;
-                    setSrvTooltip({id:srv.id,name:srv.name,y:r.top+r.height/2,online:onlineCount,total:totalCount});
+                    if(isThisActive){
+                      // Aktywny serwer — mamy dane w pamięci
+                      const onlineCount=members.filter(m=>m.status&&m.status!=='offline').length;
+                      const totalCount=serverFull?.member_count??members.length;
+                      setSrvTooltip({id:srv.id,name:srv.name,y:cy,online:onlineCount,total:totalCount});
+                    } else {
+                      // Obcy serwer — pokaż nazwę od razu, pobierz stats (z cache lub API)
+                      setSrvTooltip({id:srv.id,name:srv.name,y:cy,online:null,total:null});
+                      const cached=srvMemberCache.current.get(srv.id);
+                      const now=Date.now();
+                      if(cached&&now-cached.ts<60_000){
+                        setSrvTooltip({id:srv.id,name:srv.name,y:cy,online:cached.online,total:cached.total});
+                      } else {
+                        serversApi.members(srv.id).then(mbs=>{
+                          const online=mbs.filter((m:any)=>m.status&&m.status!=='offline').length;
+                          const total=mbs.length;
+                          srvMemberCache.current.set(srv.id,{online,total,ts:Date.now()});
+                          // aktualizuj tooltip tylko jeśli nadal na tym samym serwerze
+                          setSrvTooltip(prev=>prev?.id===srv.id?{...prev,online,total}:prev);
+                        }).catch(()=>{});
+                      }
+                    }
                   }}
                   onMouseLeave={()=>setSrvTooltip(null)}
                   className={`srv-icon-btn ${isAct?'active':''}`}>
