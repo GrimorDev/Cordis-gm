@@ -95,29 +95,34 @@ body::before {
    ───────────────────────────────────────────────────────────────────────── */
 
 .glass-panel {
-  background: var(--ayu-panel);
-  border: 1px solid var(--ayu-border);
-  box-shadow: 0 20px 40px -8px rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,255,255,0.03);
+  background: linear-gradient(145deg, rgba(16,18,32,0.96) 0%, rgba(10,12,22,0.99) 100%);
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 24px 48px -8px rgba(0,0,0,0.65),
+              inset 0 1px 0 rgba(255,255,255,0.07),
+              inset 0 -1px 0 rgba(0,0,0,0.3);
   will-change: transform;
   transform: translateZ(0);
   contain: layout style;
 }
 .glass-panel-hover:hover {
-  background: var(--ayu-elevated);
-  border-color: rgba(255,255,255,0.10);
+  background: linear-gradient(145deg, rgba(20,22,38,0.97) 0%, rgba(14,16,28,1) 100%);
+  border-color: rgba(255,255,255,0.16);
 }
 /* Modals */
 .glass-modal {
-  background: var(--ayu-panel);
-  border: 1px solid rgba(255,255,255,0.10);
-  box-shadow: 0 32px 64px -16px rgba(0,0,0,0.90), 0 0 0 1px rgba(255,143,64,0.06);
+  background: linear-gradient(145deg, rgba(14,15,28,0.98) 0%, rgba(9,10,18,1) 100%);
+  border: 1px solid rgba(255,255,255,0.13);
+  box-shadow: 0 32px 64px -16px rgba(0,0,0,0.90),
+              0 0 0 1px rgba(255,143,64,0.08),
+              inset 0 1px 0 rgba(255,255,255,0.07);
   will-change: transform;
   transform: translateZ(0);
 }
 /* Center chat panel */
 .glass-dark {
-  background: var(--ayu-bg);
-  border: 1px solid var(--ayu-border);
+  background: linear-gradient(180deg, rgba(9,10,20,0.97) 0%, rgba(7,8,16,1) 100%);
+  border: 1px solid rgba(255,255,255,0.09);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
   will-change: transform;
   transform: translateZ(0);
   contain: layout style;
@@ -192,10 +197,11 @@ body::before {
   flex-direction: column;
   align-items: center;
   gap: 0;
-  background: var(--ayu-panel);
-  border: 1px solid var(--ayu-border);
+  background: linear-gradient(180deg, rgba(14,15,28,0.99) 0%, rgba(8,9,18,1) 100%);
+  border: 1px solid rgba(255,255,255,0.11);
   border-radius: 18px;
-  box-shadow: 0 20px 40px -8px rgba(0,0,0,0.50);
+  box-shadow: 0 24px 48px -8px rgba(0,0,0,0.70),
+              inset 0 1px 0 rgba(255,255,255,0.07);
   overflow: hidden;
   padding: 8px 0;
 }
@@ -221,8 +227,10 @@ body::before {
 }
 .srv-icon-btn.active {
   border-radius: 14px;
-  border-color: rgba(255,143,64,0.30);
-  box-shadow: 0 4px 20px rgba(255,143,64,0.20);
+  border-color: rgba(255,143,64,0.50);
+  box-shadow: 0 4px 24px rgba(255,143,64,0.35),
+              0 0 0 1px rgba(255,143,64,0.20),
+              inset 0 1px 0 rgba(255,143,64,0.18);
 }
 .srv-icon-btn .srv-active-pip {
   position: absolute;
@@ -244,7 +252,7 @@ body::before {
   transition: background 0.10s ease;
 }
 .msg-flat-row:hover {
-  background: rgba(255,255,255,0.025);
+  background: rgba(255,255,255,0.04);
 }
 
 /* ── Date separator ── */
@@ -289,13 +297,14 @@ body::before {
 
 /* Own-message bubble — Ayu Dark warm tint */
 .msg-bubble-own {
-  background: rgba(255, 143, 64, 0.10);
-  border: 1px solid rgba(255, 143, 64, 0.18);
-  box-shadow: none;
+  background: linear-gradient(135deg, rgba(255,143,64,0.13) 0%, rgba(255,143,64,0.07) 100%);
+  border: 1px solid rgba(255, 143, 64, 0.24);
+  box-shadow: 0 2px 12px rgba(255,143,64,0.08), inset 0 1px 0 rgba(255,143,64,0.10);
 }
 .msg-bubble-own:hover {
-  background: rgba(255, 143, 64, 0.14);
-  border-color: rgba(255, 143, 64, 0.25);
+  background: linear-gradient(135deg, rgba(255,143,64,0.18) 0%, rgba(255,143,64,0.10) 100%);
+  border-color: rgba(255, 143, 64, 0.32);
+  box-shadow: 0 2px 16px rgba(255,143,64,0.12), inset 0 1px 0 rgba(255,143,64,0.14);
 }
 
 /* Send button — Ayu Orange */
@@ -354,15 +363,18 @@ body::before {
   gap: 4px !important;
 }
 .ch-btn:hover {
-  background: rgba(255,255,255,0.06);
-  color: #d4d4e8;
-  border-color: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.07);
+  color: #e4e4f0;
+  border-color: rgba(255,255,255,0.11);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
 }
 .ch-btn.active {
-  background: rgba(255,143,64,0.12);
+  background: linear-gradient(90deg, rgba(255,143,64,0.18) 0%, rgba(255,143,64,0.07) 100%);
   color: var(--ayu-yellow);
-  border-color: rgba(255,143,64,0.25);
-  box-shadow: inset 3px 0 0 var(--ayu-orange), 0 1px 16px rgba(255,143,64,0.08);
+  border-color: rgba(255,143,64,0.38);
+  box-shadow: inset 3px 0 0 var(--ayu-orange),
+              0 1px 20px rgba(255,143,64,0.14),
+              inset 0 1px 0 rgba(255,143,64,0.12);
 }
 .ch-btn.unread:not(.active) {
   color: var(--ayu-text);
@@ -374,10 +386,12 @@ body::before {
   color: var(--ayu-yellow);
 }
 .ch-btn.voice-active {
-  background: rgba(127,217,98,0.10);
+  background: linear-gradient(90deg, rgba(127,217,98,0.18) 0%, rgba(127,217,98,0.06) 100%);
   color: var(--ayu-green);
-  border-color: rgba(127,217,98,0.25);
-  box-shadow: inset 3px 0 0 var(--ayu-green), 0 1px 12px rgba(127,217,98,0.08);
+  border-color: rgba(127,217,98,0.38);
+  box-shadow: inset 3px 0 0 var(--ayu-green),
+              0 1px 18px rgba(127,217,98,0.15),
+              inset 0 1px 0 rgba(127,217,98,0.10);
 }
 /* Icon background circle inside channel button */
 .ch-icon {
@@ -388,16 +402,21 @@ body::before {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  border: 1px solid transparent;
 }
 .ch-btn:not(.active) .ch-icon {
-  background: rgba(255,255,255,0.05);
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.07);
 }
 .ch-btn.active .ch-icon {
-  background: rgba(255,143,64,0.20);
+  background: rgba(255,143,64,0.28);
+  border-color: rgba(255,143,64,0.38);
+  box-shadow: 0 0 14px rgba(255,143,64,0.22);
 }
 .ch-btn:hover:not(.active) .ch-icon {
-  background: rgba(255,255,255,0.08);
+  background: rgba(99,102,241,0.18);
+  border-color: rgba(99,102,241,0.28);
 }
 
 /* ── Category header bar ── */
@@ -414,10 +433,11 @@ body::before {
   left: 10px;
   top: 22px;
   width: 3px;
-  height: 10px;
+  height: 12px;
   border-radius: 2px;
   background: linear-gradient(to bottom, var(--ayu-orange), var(--ayu-yellow));
-  opacity: 0.5;
+  opacity: 0.75;
+  box-shadow: 0 0 8px rgba(255,143,64,0.45);
 }
 .cat-header-bar .cat-label {
   font-size: 11px;
@@ -434,15 +454,15 @@ body::before {
 
 /* ── Sidebar user bar ── */
 .sidebar-userbar {
-  background: rgba(0,0,0,0.22);
-  border-top: 1px solid rgba(255,255,255,0.07);
+  background: linear-gradient(180deg, rgba(10,11,22,0.92) 0%, rgba(7,8,16,0.98) 100%);
+  border-top: 1px solid rgba(255,255,255,0.10);
   position: relative;
 }
 .sidebar-userbar::before {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0; height: 1px;
-  background: linear-gradient(to right, transparent, rgba(255,143,64,0.25), transparent);
+  background: linear-gradient(to right, transparent, rgba(255,143,64,0.45), transparent);
   pointer-events: none;
 }
 
@@ -478,17 +498,23 @@ body::before {
 
 /* ── Message input ── */
 .msg-input-wrap {
-  background: var(--ayu-panel);
-  border: 1px solid rgba(255,255,255,0.09);
+  background: linear-gradient(135deg, rgba(14,15,28,0.97) 0%, rgba(10,11,20,0.99) 100%);
+  border: 1px solid rgba(255,255,255,0.13);
   border-radius: 16px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.06);
 }
 .msg-input-wrap:hover {
-  border-color: rgba(255,143,64,0.22);
+  border-color: rgba(255,143,64,0.32);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.07);
 }
 .msg-input-wrap:focus-within {
-  border-color: rgba(255,143,64,0.50);
-  box-shadow: 0 0 0 3px rgba(255,143,64,0.09), 0 0 24px rgba(255,143,64,0.07);
+  border-color: rgba(255,143,64,0.68);
+  box-shadow: 0 0 0 3px rgba(255,143,64,0.14),
+              0 0 36px rgba(255,143,64,0.18),
+              0 4px 20px rgba(0,0,0,0.40),
+              inset 0 1px 0 rgba(255,143,64,0.12);
+  background: linear-gradient(135deg, rgba(16,17,30,0.99) 0%, rgba(12,13,24,1) 100%);
 }
 
 /* ── Members section header labels ── */

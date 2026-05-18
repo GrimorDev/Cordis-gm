@@ -12887,28 +12887,38 @@ export default function App() {
             <div className="relative border-b border-white/[0.06]">
               {/* gradient header bg */}
               <div className="absolute inset-0 pointer-events-none" style={{background:'linear-gradient(180deg,rgba(99,102,241,0.09) 0%,transparent 100%)'}}/>
-              <div className="relative px-3 py-3.5 cursor-pointer hover:bg-white/[0.04] transition-colors group"
-                onClick={() => setSrvDropOpen(p => !p)}>
-                <div className="flex items-center justify-between gap-2">
+              <div
+                className="relative px-3 py-3.5 cursor-pointer transition-all duration-200 group overflow-hidden"
+                onClick={() => setSrvDropOpen(p => !p)}
+                style={{
+                  background: 'linear-gradient(135deg, rgba(255,143,64,0.10) 0%, rgba(99,102,241,0.06) 55%, transparent 100%)',
+                  borderBottom: '1px solid rgba(255,255,255,0.09)',
+                }}
+              >
+                {/* Shimmer accent line at top */}
+                <div style={{position:'absolute',top:0,left:0,right:0,height:1,background:'linear-gradient(90deg,transparent 0%,rgba(255,143,64,0.50) 40%,rgba(99,102,241,0.35) 70%,transparent 100%)',pointerEvents:'none'}}/>
+                {/* Hover overlay */}
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{background:'linear-gradient(135deg,rgba(255,143,64,0.06) 0%,transparent 60%)',pointerEvents:'none'}}/>
+                <div className="flex items-center justify-between gap-2 relative">
                   <div className="flex items-center gap-2.5 min-w-0">
                     {/* server icon */}
                     {serverFull?.icon_url
-                      ? <img src={staticUrl(serverFull.icon_url)} className="w-7 h-7 rounded-xl object-cover shrink-0 border border-white/10" alt=""/>
-                      : <div className="w-7 h-7 shrink-0 rounded-xl flex items-center justify-center border border-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.2)]" style={{background:'linear-gradient(135deg,rgba(99,102,241,0.35) 0%,rgba(124,58,237,0.35) 100%)'}}>
-                          <span className="text-[11px] font-bold text-white">
+                      ? <img src={staticUrl(serverFull.icon_url)} className="w-7 h-7 rounded-xl object-cover shrink-0 border border-white/15 shadow-[0_2px_10px_rgba(0,0,0,0.5)]" alt=""/>
+                      : <div className="w-7 h-7 shrink-0 rounded-xl flex items-center justify-center" style={{background:'linear-gradient(135deg,rgba(255,143,64,0.50) 0%,rgba(255,100,20,0.60) 100%)',border:'1px solid rgba(255,143,64,0.40)',boxShadow:'0 0 16px rgba(255,143,64,0.32),inset 0 1px 0 rgba(255,255,255,0.18)'}}>
+                          <span className="text-[11px] font-bold text-white drop-shadow">
                             {(serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'S').charAt(0).toUpperCase()}
                           </span>
                         </div>
                     }
-                    <h2 className="text-sm font-bold text-white truncate">{serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'Serwer'}</h2>
+                    <h2 className="text-sm font-bold text-white truncate group-hover:text-zinc-100 transition-colors">{serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'Serwer'}</h2>
                   </div>
                   <motion.div animate={{ rotate: srvDropOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-zinc-500 group-hover:text-indigo-400 transition-colors shrink-0">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-zinc-600 group-hover:text-[#FF8F40] transition-colors shrink-0">
                       <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                   </motion.div>
                 </div>
-                {serverFull?.description&&<p className="text-xs text-zinc-500 mt-0.5 truncate pl-9">{serverFull.description}</p>}
+                {serverFull?.description&&<p className="text-xs text-zinc-500 mt-0.5 truncate pl-9 relative">{serverFull.description}</p>}
               </div>
               <AnimatePresence>
               {srvDropOpen&&(
@@ -12998,12 +13008,12 @@ export default function App() {
                             className={`ch-btn group/ch ${isAct?'active':ping>0?'pinged':unread>0?'unread':''}`}>
                             <div className="flex items-center gap-2 truncate flex-1 min-w-0">
                               <div className="ch-icon">
-                                <ChIcon size={13} className={isAct?'text-indigo-300':ping>0?'text-amber-400':unread>0?'text-indigo-400':'text-zinc-500'}/>
+                                <ChIcon size={13} className={isAct?'text-[#FFB454]':ping>0?'text-amber-400':unread>0?'text-[#59C2FF]':ch.type==='forum'?'text-purple-400':ch.type==='announcement'?'text-[#FF8F40]':'text-zinc-500'}/>
                               </div>
                               <span className={`text-[13px] truncate ${(unread>0||ping>0)&&!isAct?'font-semibold text-white':'font-medium'}`}>{ch.name}</span>
                             </div>
                             {ping>0&&!isAct&&<span className="shrink-0 min-w-[18px] h-[18px] bg-amber-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1 shadow-[0_0_8px_rgba(245,158,11,0.5)]">@{ping>9?'9+':ping}</span>}
-                            {unread>0&&!isAct&&!ping&&<span className="shrink-0 min-w-[18px] h-[18px] bg-indigo-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1 shadow-[0_0_8px_rgba(99,102,241,0.5)]">{unread>99?'99+':unread}</span>}
+                            {unread>0&&!isAct&&!ping&&<span className="shrink-0 min-w-[18px] h-[18px] bg-[#59C2FF]/80 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1 shadow-[0_0_8px_rgba(89,194,255,0.5)]">{unread>99?'99+':unread}</span>}
                           </button>
                         </div>
                       );
@@ -13078,7 +13088,7 @@ export default function App() {
                               className={`ch-btn group/ch ${isAct?'active':ping>0?'pinged':unread>0?'unread':''}`}>
                               <div className="flex items-center gap-2 truncate flex-1 min-w-0">
                                 <div className="ch-icon">
-                                  <ChIcon size={13} className={isAct?'text-indigo-300':ping>0?'text-amber-400':ch.type==='announcement'?'text-amber-500':ch.type==='forum'?'text-emerald-400':unread>0?'text-indigo-400':'text-zinc-500'}/>
+                                  <ChIcon size={13} className={isAct?'text-[#FFB454]':ping>0?'text-amber-400':ch.type==='announcement'?'text-[#FF8F40]':ch.type==='forum'?'text-purple-400':unread>0?'text-[#59C2FF]':'text-zinc-500'}/>
                                 </div>
                                 <span className={`text-[14px] truncate ${(unread>0||ping>0)&&!isAct?'font-semibold text-white':'font-medium'}`}>{ch.name}</span>
                                 {ch.is_private&&<Lock size={9} className="text-zinc-700 shrink-0"/>}
@@ -13091,7 +13101,7 @@ export default function App() {
                                   </span>
                                 )}
                                 {unread > 0 && !isAct && !ping && (
-                                  <span className="min-w-[18px] h-[18px] bg-indigo-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1 leading-none shadow-[0_0_8px_rgba(99,102,241,0.5)]">
+                                  <span className="min-w-[18px] h-[18px] bg-[#59C2FF]/80 rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1 leading-none shadow-[0_0_8px_rgba(89,194,255,0.5)]">
                                     {unread > 99 ? '99+' : unread}
                                   </span>
                                 )}
@@ -13131,7 +13141,7 @@ export default function App() {
                               className={`ch-btn ch-btn-voice group/ch ${isActiveVoice?'voice-active':''}`}>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2 min-w-0">
-                                  <div className="ch-icon"><Volume2 size={12} className={isActiveVoice?'text-emerald-400':hasUsers?'text-zinc-400':'text-zinc-500'}/></div>
+                                  <div className="ch-icon" style={isActiveVoice?{background:'rgba(127,217,98,0.30)',border:'1px solid rgba(127,217,98,0.42)',boxShadow:'0 0 14px rgba(127,217,98,0.25)'}:hasUsers?{background:'rgba(89,194,255,0.15)',border:'1px solid rgba(89,194,255,0.22)'}:{}}><Volume2 size={12} className={isActiveVoice?'text-[#7FD962]':hasUsers?'text-[#59C2FF]':'text-zinc-500'}/></div>
                                   <span className="text-[13px] font-medium truncate">{ch.name}</span>
                                   {(ch.user_limit??0)>0&&(
                                     <span className={`text-[10px] font-mono tabular-nums shrink-0 px-1 py-0.5 rounded-md ${chVoiceUsers.length>=(ch.user_limit??0)?'text-red-400 bg-red-500/10':'text-zinc-500 bg-white/[0.04]'}`}>
@@ -13158,12 +13168,13 @@ export default function App() {
                                   const isDeafened = isSelf ? !!activeCall?.isDeafened : !!(voiceUserStates[u.id]?.deafened);
                                   return (
                                     <div key={u.id} className="flex items-center gap-1.5 pl-5">
-                                      <div className={`relative shrink-0 ${isSpeaking&&!isMuted?'ring-1 ring-emerald-500 rounded-full':''}`}>
+                                      <div className={`relative shrink-0 ${isSpeaking&&!isMuted?'ring-1 ring-[#7FD962] rounded-full shadow-[0_0_6px_rgba(127,217,98,0.6)]':''}`}>
                                         <img src={ava(u)} className="w-3.5 h-3.5 rounded-full object-cover" alt=""/>
                                       </div>
-                                      <span className={`text-xs truncate ${isSpeaking&&!isMuted?'text-emerald-400':isMuted?'text-rose-400/70':'text-zinc-500'}`}>{maskName(u.username)}</span>
+                                      <span className={`text-xs truncate ${isSpeaking&&!isMuted?'text-[#7FD962]':isMuted?'text-rose-400/70':'text-zinc-500'}`}>{maskName(u.username)}</span>
                                       {isMuted    && <MicOff  size={8} className="text-rose-400 shrink-0"/>}
                                       {isDeafened && <VolumeX size={8} className="text-rose-400 shrink-0"/>}
+                                      {isSpeaking&&!isMuted&&<div className="w-1 h-1 rounded-full bg-[#7FD962] shadow-[0_0_4px_rgba(127,217,98,0.9)] shrink-0 animate-pulse"/>}
                                     </div>
                                   );
                                 })}
@@ -13453,7 +13464,7 @@ export default function App() {
               )}
             </AnimatePresence>
 
-            <div className="flex items-center gap-2.5 px-2 py-2 rounded-2xl hover:bg-white/[0.08] transition-all duration-200 cursor-default group/userbar">
+            <div className="flex items-center gap-2.5 px-2 py-2 rounded-2xl hover:bg-white/[0.09] transition-all duration-200 cursor-default group/userbar border border-transparent hover:border-white/[0.09]" style={{boxShadow:'none'}}>
               {/* Avatar + status dot — click opens picker */}
               <div className="relative shrink-0 cursor-pointer" onClick={()=>setStatusPickerOpen(p=>!p)} title="Zmień status">
                 <img src={streamerMode ? 'https://api.dicebear.com/7.x/initials/svg?seed=S&backgroundColor=6366f1&fontColor=ffffff' : (currentUser?ava(currentUser):'')} className={`w-8 h-8 rounded-full object-cover av-eff-${avatarEffect} av-sc-xs`} alt=""/>
