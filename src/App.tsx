@@ -13225,7 +13225,8 @@ export default function App() {
                       }
                     }}
                     onContextMenu={e=>{ e.preventDefault(); setGroupCtxMenu({ x: e.clientX, y: Math.min(e.clientY, window.innerHeight - 160), gc }); }}
-                    className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-200 ${isActive?'bg-indigo-500/[0.13] text-white border border-indigo-500/30 shadow-[inset_3px_0_0_#818cf8,0_0_12px_rgba(99,102,241,0.08)]':unread>0?'text-zinc-200 hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]'}`}>
+                    className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-200 ${isActive?'text-white border':unread>0?'text-zinc-200 hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]'}`}
+                    style={isActive?{background:'linear-gradient(90deg,rgba(255,143,64,0.14) 0%,rgba(255,143,64,0.05) 100%)',borderColor:'rgba(255,143,64,0.32)',boxShadow:'inset 3px 0 0 var(--ayu-orange),0 1px 16px rgba(255,143,64,0.08)'}:{}}>
                     <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 flex items-center justify-center shrink-0 overflow-hidden">
                       {gc.icon_url
                         ? <img src={staticUrl(gc.icon_url)} className="w-full h-full object-cover" alt=""/>
@@ -13249,7 +13250,8 @@ export default function App() {
                 return (
                   <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setActiveGroupDm(null); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); setProfileViewId(null); openGlobalTab({key:`dm:${dm.other_user_id}`,kind:'dm',name:dm.other_username,userId:dm.other_user_id,userAvatar:dm.other_avatar??undefined,userStatus:dm.other_status}); }}
                     onContextMenu={e => { e.preventDefault(); const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setDmCtxMenu({ x: e.clientX, y: Math.min(e.clientY, window.innerHeight - 300), dm }); }}
-                    className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-200 ${isActive?'bg-indigo-500/[0.13] text-white border border-indigo-500/30 shadow-[inset_3px_0_0_#818cf8,0_0_12px_rgba(99,102,241,0.08)]':unread>0?'text-zinc-200 hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]'}`}>
+                    className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-200 ${isActive?'text-white border':unread>0?'text-zinc-200 hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]'}`}
+                    style={isActive?{background:'linear-gradient(90deg,rgba(255,143,64,0.14) 0%,rgba(255,143,64,0.05) 100%)',borderColor:'rgba(255,143,64,0.32)',boxShadow:'inset 3px 0 0 var(--ayu-orange),0 1px 16px rgba(255,143,64,0.08)'}:{}}>
                     <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava({avatar_url:dm.other_avatar,username:dm.other_username})}")`} as React.CSSProperties}
                       onClick={e=>{ e.stopPropagation(); showHoverCard(dm.other_user_id, e); }}>
                       <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className={`w-10 h-10 rounded-2xl object-cover av-eff-${(dm as any).other_avatar_effect||'none'} cursor-pointer hover:opacity-80 transition-opacity`} alt=""/>
@@ -14771,31 +14773,35 @@ export default function App() {
                       {showDmMenu&&(
                         <>
                           <div className="fixed inset-0 z-40" onClick={()=>setShowDmMenu(false)}/>
-                          <motion.div initial={{opacity:0,scale:0.92,y:-6}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.92,y:-6}}
-                            transition={{duration:0.12}}
-                            className="absolute right-0 top-10 z-50 bg-[#1a1a2e] border border-white/[0.08] rounded-xl shadow-2xl py-1 min-w-[180px] overflow-hidden">
+                          <motion.div initial={{opacity:0,scale:0.94,y:4}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.94,y:4}}
+                            transition={{duration:0.14,ease:[0.16,1,0.3,1]}}
+                            className="absolute right-0 top-full mt-2 z-50 py-1.5 min-w-[200px] overflow-hidden"
+                            style={{background:'linear-gradient(145deg,rgba(12,13,26,0.98) 0%,rgba(8,9,18,0.99) 100%)',border:'1px solid rgba(255,255,255,0.12)',borderRadius:16,boxShadow:'0 16px 48px rgba(0,0,0,0.80),0 0 0 1px rgba(255,255,255,0.04),inset 0 1px 0 rgba(255,255,255,0.06)'}}>
                             {activeView==='dms'&&activeDm&&(
                               <>
                                 {blockedUsers.has(activeDm.other_user_id) ? (
                                   <button onClick={()=>handleUnblockUser(activeDm.other_user_id,activeDm.other_username)}
-                                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-emerald-400 hover:bg-white/[0.05] transition-colors">
-                                    <UserCheck size={14}/>Odblokuj użytkownika
+                                    className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-emerald-400 hover:bg-emerald-500/[0.08] hover:text-emerald-300 transition-all duration-150 text-left">
+                                    <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0"><UserCheck size={13}/></div>
+                                    Odblokuj użytkownika
                                   </button>
                                 ) : (
                                   <button onClick={()=>handleBlockUser(activeDm.other_user_id,activeDm.other_username)}
-                                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-rose-400 hover:bg-white/[0.05] transition-colors">
-                                    <UserX size={14}/>Zablokuj użytkownika
+                                    className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-rose-400 hover:bg-rose-500/[0.08] hover:text-rose-300 transition-all duration-150 text-left">
+                                    <div className="w-7 h-7 rounded-lg bg-rose-500/10 flex items-center justify-center shrink-0"><UserX size={13}/></div>
+                                    Zablokuj użytkownika
                                   </button>
                                 )}
                                 {friends.some(f=>f.id===activeDm.other_user_id)&&(
                                   <>
-                                    <div className="h-px bg-white/[0.06] mx-2 my-1"/>
+                                    <div className="h-px mx-3 my-1" style={{background:'rgba(255,255,255,0.07)'}}/>
                                     <button onClick={()=>{
                                       const f=friends.find(fr=>fr.id===activeDm.other_user_id);
                                       if(f?.friendship_id) handleRemoveFriend(f.friendship_id,activeDm.other_username);
                                     }}
-                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-zinc-400 hover:text-rose-400 hover:bg-white/[0.05] transition-colors">
-                                      <UserMinus size={14}/>Usuń ze znajomych
+                                      className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-zinc-400 hover:text-rose-400 hover:bg-rose-500/[0.06] transition-all duration-150 text-left">
+                                      <div className="w-7 h-7 rounded-lg bg-white/[0.05] flex items-center justify-center shrink-0"><UserMinus size={13}/></div>
+                                      Usuń ze znajomych
                                     </button>
                                   </>
                                 )}
@@ -15426,13 +15432,20 @@ export default function App() {
                         {(()=>{ const mentionsMe = !!currentUser?.username && new RegExp(`!${currentUser.username}(?:[^a-zA-Z0-9_]|$)`,'i').test(msg.content);
                         const isSearchMatch = searchMatchSet.has(msg.id);
                         const isCurrentMatch = currentSearchId === msg.id;
+                        // ── Popular Message Glow — unique feature ──
+                        const totalReactions = (msg.reactions||[]).reduce((s:number,r:any)=>s+(r.count||0),0);
+                        const isPopular = totalReactions >= 5;
+                        const isWarm    = totalReactions >= 2 && totalReactions < 5;
                         return (
                         <motion.div
                           data-msg-id={msg.id}
                           initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: Math.min(idx * 0.008, 0.05), type: 'spring', stiffness: 420, damping: 30 }}
-                          style={{ contentVisibility: 'auto', containIntrinsicHeight: 'auto 72px' }}
-                          className={`relative flex ${showChatAvatars?'gap-3':'gap-0'} group ${compactMessages||isGrouped?'mb-0.5':'mb-2'} ${isGrouped?'mt-0':activeView!=='dms'?'mt-0.5':''} ${activeView==='dms'&&isOwn?'flex-row-reverse':'flex-row'} ${activeView!=='dms'?'msg-flat-row px-2':''} ${mentionsMe?'bg-amber-400/5 border-l-2 border-amber-400/60 pl-2':''} ${isCurrentMatch?'outline outline-2 outline-indigo-500/60 bg-indigo-500/[0.07]':''}  ${isSearchMatch&&!isCurrentMatch?'bg-indigo-500/[0.04]':''}`}
+                          style={{ contentVisibility: 'auto', containIntrinsicHeight: 'auto 72px',
+                            ...(isPopular ? {borderLeft:'2px solid rgba(255,180,64,0.55)',borderRadius:8,background:'linear-gradient(90deg,rgba(255,143,64,0.07) 0%,transparent 70%)',boxShadow:'inset 0 0 20px rgba(255,143,64,0.04)'} :
+                               isWarm    ? {borderLeft:'2px solid rgba(255,180,64,0.25)',paddingLeft:4,background:'rgba(255,143,64,0.025)'} : {})
+                          }}
+                          className={`relative flex ${showChatAvatars?'gap-3':'gap-0'} group ${compactMessages||isGrouped?'mb-0.5':'mb-2'} ${isGrouped?'mt-0':activeView!=='dms'?'mt-0.5':''} ${activeView==='dms'&&isOwn?'flex-row-reverse':'flex-row'} ${activeView!=='dms'?'msg-flat-row px-2':'px-2'} ${mentionsMe?'bg-amber-400/5 border-l-2 border-amber-400/60 pl-2':''} ${isCurrentMatch?'outline outline-2 outline-indigo-500/60 bg-indigo-500/[0.07]':''}  ${isSearchMatch&&!isCurrentMatch?'bg-indigo-500/[0.04]':''}`}
                           onContextMenu={e=>{
                             if(editingMsgId===msg.id) return;
                             if((msg as any).deleted||msg.content==='__deleted__') return;
@@ -15764,18 +15777,23 @@ export default function App() {
                             </button>
                           )}
 
-                          {/* ── Discord-style floating action bar ───────────── */}
+                          {/* ── Floating action bar ───────────── */}
                           {editingMsgId !== msg.id && !((msg as any).deleted || msg.content === '__deleted__') && (
-                          <div className="absolute top-1 right-2 z-40 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all duration-150">
-                            <div className="flex items-center bg-[#1a1a2e] border border-white/[0.1] rounded-xl shadow-2xl overflow-visible">
+                          <div className="absolute top-0.5 right-2 z-40 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto"
+                            style={{transition:'opacity 0.12s ease, transform 0.12s cubic-bezier(0.16,1,0.3,1)',transform:'translateY(0)'}}>
+                            <div className="flex items-center gap-0.5 px-1 py-1"
+                              style={{background:'linear-gradient(135deg,rgba(10,11,22,0.96) 0%,rgba(8,9,18,0.98) 100%)',border:'1px solid rgba(255,255,255,0.14)',borderRadius:14,boxShadow:'0 8px 32px rgba(0,0,0,0.75),0 2px 8px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.07)'}}>
                               {/* Quick reactions — servers only */}
                               {activeView==='servers' && <>
                                 {['👍','❤️','😂','🔥','😮','😢'].map(em => (
                                   <button key={em} onMouseDown={e=>{e.preventDefault();toggleReaction(msg.id,em,e);}}
-                                    className="w-7 h-7 flex items-center justify-center text-[15px] leading-none hover:bg-white/[0.10] rounded-lg transition-all duration-100 active:scale-90"
+                                    className="w-7 h-7 flex items-center justify-center text-[14px] leading-none rounded-lg transition-all duration-100 active:scale-90 hover:scale-125"
+                                    style={{transition:'transform 0.1s cubic-bezier(0.16,1,0.3,1),background 0.1s ease'}}
+                                    onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.background='rgba(255,255,255,0.10)';}}
+                                    onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.background='';}}
                                     title={`Zareaguj ${em}`}>{em}</button>
                                 ))}
-                                <div className="w-px h-5 bg-white/[0.1] mx-0.5 shrink-0"/>
+                                <div className="w-px h-5 mx-0.5 shrink-0" style={{background:'rgba(255,255,255,0.10)'}}/>
                               </>}
                               {/* Thread */}
                               {activeView!=='dms' && !msg.thread_root_id && (
@@ -15785,8 +15803,8 @@ export default function App() {
                                   const r = await fetch(`/api/messages/${msg.id}/thread`,{headers:{Authorization:`Bearer ${token}`}});
                                   if(r.ok) setThreadMessages(await r.json());
                                 }}
-                                  className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${threadRootId===msg.id?'text-indigo-400 bg-indigo-500/10':'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.08]'}`}
-                                  title="Wątek"><MessageSquare size={13}/></button>
+                                  className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-100 active:scale-90 ${threadRootId===msg.id?'text-[#95E6CB] bg-[rgba(149,230,203,0.15)]':'text-zinc-500 hover:text-[#95E6CB] hover:bg-[rgba(149,230,203,0.12)]'}`}
+                                  title="Wątek"><MessageSquare size={12}/></button>
                               )}
                               {/* Add reaction */}
                               <button
@@ -15800,13 +15818,13 @@ export default function App() {
                                   const y=Math.min(rect.bottom+4, window.innerHeight-menuH-8);
                                   setMsgCtxMenu({x:Math.max(x,8), y:Math.max(y,8), msg});
                                 }}
-                                className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.08] rounded-lg transition-colors"
-                                title="Dodaj reakcję"><SmilePlus size={13}/></button>
+                                className="w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-100 active:scale-90 text-zinc-500 hover:text-[#FFB454] hover:bg-[rgba(255,180,84,0.14)]"
+                                title="Dodaj reakcję"><SmilePlus size={12}/></button>
                               {/* Reply */}
                               <button onClick={()=>setReplyTo(msg)}
-                                className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.08] rounded-lg transition-colors"
-                                title="Odpowiedz"><Reply size={13}/></button>
-                              {/* More "…" — otwiera ten sam ctx menu co prawy przycisk */}
+                                className="w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-100 active:scale-90 text-zinc-500 hover:text-[#59C2FF] hover:bg-[rgba(89,194,255,0.14)]"
+                                title="Odpowiedz"><Reply size={12}/></button>
+                              {/* More "…" */}
                               <button
                                 onClick={e=>{
                                   e.stopPropagation();
@@ -15818,8 +15836,8 @@ export default function App() {
                                   const y=Math.min(rect.bottom+4, window.innerHeight-menuH-8);
                                   setMsgCtxMenu({x:Math.max(x,8), y:Math.max(y,8), msg});
                                 }}
-                                className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.08] rounded-lg transition-colors"
-                                title="Więcej"><MoreHorizontal size={13}/></button>
+                                className="w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-100 active:scale-90 text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.10]"
+                                title="Więcej"><MoreHorizontal size={12}/></button>
                             </div>
                           </div>
                           )}
