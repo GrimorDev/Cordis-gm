@@ -7694,6 +7694,7 @@ export default function App() {
   const [msgMenuId, setMsgMenuId]             = useState<string|null>(null);
   const [msgMenuPos, setMsgMenuPos]           = useState<{x:number;y:number}|null>(null);
   const [msgCtxMenu, setMsgCtxMenu]           = useState<{x:number;y:number;msg:MessageFull|DmMessageFull}|null>(null);
+  const [reactionPicker, setReactionPicker]   = useState<{x:number;y:number;msg:MessageFull|DmMessageFull}|null>(null);
   const [editingMsgId, setEditingMsgId]       = useState<string|null>(null);
   const [editingMsgContent, setEditingMsgContent] = useState('');
   const [attachFile, setAttachFile]           = useState<File|null>(null);
@@ -14775,18 +14776,43 @@ export default function App() {
                           <div className="fixed inset-0 z-40" onClick={()=>setShowDmMenu(false)}/>
                           <motion.div initial={{opacity:0,scale:0.94,y:4}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.94,y:4}}
                             transition={{duration:0.14,ease:[0.16,1,0.3,1]}}
-                            className="absolute right-0 top-full mt-2 z-50 py-1.5 min-w-[200px] overflow-hidden"
+                            className="absolute right-0 top-full mt-2 z-50 py-1.5 min-w-[210px] overflow-hidden"
                             style={{background:'linear-gradient(145deg,rgba(12,13,26,0.98) 0%,rgba(8,9,18,0.99) 100%)',border:'1px solid rgba(255,255,255,0.12)',borderRadius:16,boxShadow:'0 16px 48px rgba(0,0,0,0.80),0 0 0 1px rgba(255,255,255,0.04),inset 0 1px 0 rgba(255,255,255,0.06)'}}>
+
+                            {/* ── Server channel options ── */}
+                            {activeView==='servers'&&activeCh&&(()=>{
+                              const close=()=>setShowDmMenu(false);
+                              const row=(icon:React.ReactNode,label:string,onClick:()=>void,color='text-zinc-300',bg='hover:bg-white/[0.06]')=>(
+                                <button onClick={()=>{onClick();close();}}
+                                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-sm ${color} ${bg} transition-all duration-150 text-left`}>
+                                  <div className="w-7 h-7 rounded-lg bg-white/[0.05] flex items-center justify-center shrink-0">{icon}</div>
+                                  {label}
+                                </button>
+                              );
+                              const isMuted = chMuted[activeCh.id]??false;
+                              return (<>
+                                {row(<Bell size={13} className="text-[#59C2FF]"/>,'Powiadomienia kanału',()=>setChNotifPref(p=>({...p,[activeCh.id]:p[activeCh.id]==='muted'?'default':'muted'})))  }
+                                {row(isMuted?<Volume2 size={13} className="text-emerald-400"/>:<VolumeX size={13} className="text-zinc-400"/>,isMuted?'Wyłącz wyciszenie':'Wycisz kanał',()=>setChMuted(p=>({...p,[activeCh.id]:!p[activeCh.id]})))}
+                                {row(<AtSign size={13} className="text-amber-400"/>,'Zaznacz jako przeczytany',()=>{setUnreadChs(p=>({...p,[activeCh.id]:0}));setPingChs(p=>({...p,[activeCh.id]:0}));})}
+                                {row(<Link2 size={13} className="text-purple-400"/>,'Kopiuj link kanału',()=>{try{navigator.clipboard.writeText(`${window.location.origin}/channels/${activeServer}/${activeCh.id}`);}catch{}addToast('Skopiowano link','success');})}
+                                {canManageChannels&&(<>
+                                  <div className="h-px mx-3 my-1" style={{background:'rgba(255,255,255,0.07)'}}/>
+                                  {row(<Settings2 size={13} className="text-zinc-400"/>,'Ustawienia kanału',()=>{openChEdit(activeCh);})}
+                                </>)}
+                              </>);
+                            })()}
+
+                            {/* ── DM options ── */}
                             {activeView==='dms'&&activeDm&&(
                               <>
                                 {blockedUsers.has(activeDm.other_user_id) ? (
-                                  <button onClick={()=>handleUnblockUser(activeDm.other_user_id,activeDm.other_username)}
+                                  <button onClick={()=>{handleUnblockUser(activeDm.other_user_id,activeDm.other_username);setShowDmMenu(false);}}
                                     className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-emerald-400 hover:bg-emerald-500/[0.08] hover:text-emerald-300 transition-all duration-150 text-left">
                                     <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0"><UserCheck size={13}/></div>
                                     Odblokuj użytkownika
                                   </button>
                                 ) : (
-                                  <button onClick={()=>handleBlockUser(activeDm.other_user_id,activeDm.other_username)}
+                                  <button onClick={()=>{handleBlockUser(activeDm.other_user_id,activeDm.other_username);setShowDmMenu(false);}}
                                     className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-rose-400 hover:bg-rose-500/[0.08] hover:text-rose-300 transition-all duration-150 text-left">
                                     <div className="w-7 h-7 rounded-lg bg-rose-500/10 flex items-center justify-center shrink-0"><UserX size={13}/></div>
                                     Zablokuj użytkownika
@@ -14798,6 +14824,7 @@ export default function App() {
                                     <button onClick={()=>{
                                       const f=friends.find(fr=>fr.id===activeDm.other_user_id);
                                       if(f?.friendship_id) handleRemoveFriend(f.friendship_id,activeDm.other_username);
+                                      setShowDmMenu(false);
                                     }}
                                       className="w-full flex items-center gap-3 px-3.5 py-2.5 text-sm text-zinc-400 hover:text-rose-400 hover:bg-rose-500/[0.06] transition-all duration-150 text-left">
                                       <div className="w-7 h-7 rounded-lg bg-white/[0.05] flex items-center justify-center shrink-0"><UserMinus size={13}/></div>
@@ -17443,9 +17470,13 @@ export default function App() {
                       className="flex-1 h-8 flex items-center justify-center text-base hover:bg-white/[0.08] rounded-xl transition-all hover:scale-110 active:scale-95"
                       title={em}>{em}</button>
                   ))}
-                  <button onClick={()=>{close();/* otwiera emoji picker */}}
+                  <button onClick={e=>{
+                      const rect=e.currentTarget.getBoundingClientRect();
+                      close();
+                      setReactionPicker({x:Math.min(rect.left,window.innerWidth-260-8),y:Math.min(rect.bottom+6,window.innerHeight-420-8),msg:m});
+                    }}
                     className="flex-1 h-8 flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.08] rounded-xl transition-colors"
-                    title="Dodaj reakcję"><SmilePlus size={14}/></button>
+                    title="Więcej reakcji"><SmilePlus size={14}/></button>
                 </div>
                 {sep}
               </>
@@ -17532,6 +17563,21 @@ export default function App() {
           </motion.div>
         </>);
       })()}
+
+      {/* ── Floating Reaction Picker (SmilePlus from ctx menu) ── */}
+      {reactionPicker&&ReactDOM.createPortal(
+        <>
+          <div className="fixed inset-0 z-[149]" onClick={()=>setReactionPicker(null)}/>
+          <div className="fixed z-[150]" style={{left:reactionPicker.x,top:reactionPicker.y}}>
+            <EmojiPicker
+              onSelect={em=>{toggleReaction(reactionPicker.msg.id,em);setReactionPicker(null);}}
+              onClose={()=>setReactionPicker(null)}
+              serverEmojis={activeView==='servers'&&activeServer?(serverEmojis.get(activeServer)||[]):[]}
+            />
+          </div>
+        </>,
+        document.body
+      )}
 
       {/* Channel context menu (right-click on channel) */}
       {chCtxMenu&&(()=>{
