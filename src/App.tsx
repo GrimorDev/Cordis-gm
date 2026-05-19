@@ -13974,6 +13974,36 @@ export default function App() {
                   </div>
                 );
               })()}
+              {/* ── Voice channel text chat panel ── (BETWEEN participants and controls) */}
+              {voiceChatOpen && activeCall.channelId && (
+                <div className="shrink-0 flex flex-col relative z-10"
+                  style={{height:'240px',borderTop:'1px solid rgba(255,255,255,0.07)',background:'rgba(6,7,14,0.85)',backdropFilter:'blur(12px)'}}>
+                  <div className="flex-1 overflow-y-auto p-3 custom-scrollbar flex flex-col gap-1.5 min-h-0">
+                    {voiceChatMsgs.length === 0 && (
+                      <p className="text-xs text-zinc-600 text-center mt-4">Brak wiadomości — zacznij czat głosowy!</p>
+                    )}
+                    {voiceChatMsgs.map(msg => (
+                      <div key={msg.id} className={`flex gap-2 ${msg.sender_id===currentUser?.id?'flex-row-reverse':''}`}>
+                        <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} className="w-6 h-6 rounded-lg object-cover shrink-0 self-start mt-0.5" alt=""/>
+                        <div className={`max-w-[85%] px-2.5 py-1.5 rounded-xl text-xs msg-md ${msg.sender_id===currentUser?.id?'bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-sm shadow-indigo-500/20':'glass-bubble text-zinc-200'}`}
+                          dangerouslySetInnerHTML={{__html:renderMsgHTML(msg.content)}}/>
+                      </div>
+                    ))}
+                    <div ref={voiceChatEndRef}/>
+                  </div>
+                  <div className="p-2.5 border-t border-white/[0.06] shrink-0">
+                    <form onSubmit={handleVoiceChatSend} className="flex gap-2">
+                      <input value={voiceChatInput} onChange={e=>setVoiceChatInput(e.target.value)}
+                        placeholder={`Wiadomość w #${activeCall.channelName||'kanał'}...`}
+                        className="flex-1 bg-white/[0.07] border border-white/[0.08] rounded-xl px-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-600 outline-none focus:border-indigo-500/40 transition-colors"/>
+                      <button type="submit" disabled={!voiceChatInput.trim()}
+                        className="w-7 h-7 rounded-xl bg-indigo-500 hover:bg-indigo-400 disabled:opacity-30 flex items-center justify-center text-white transition-colors shrink-0 active:scale-90">
+                        <Send size={12}/>
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              )}
               {/* Call controls */}
               <div className="shrink-0 relative z-10 pb-5 px-5">
                 {/* Device settings panel */}
@@ -14090,36 +14120,6 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              {/* ── Voice channel text chat panel ────────────────────── */}
-              {voiceChatOpen && activeCall.channelId && (
-                <div className="h-64 shrink-0 flex flex-col relative z-10"
-                  style={{borderTop:'1px solid rgba(255,255,255,0.07)',background:'rgba(6,7,14,0.85)',backdropFilter:'blur(12px)'}}>
-                  <div className="flex-1 overflow-y-auto p-3 custom-scrollbar flex flex-col gap-1.5">
-                    {voiceChatMsgs.length === 0 && (
-                      <p className="text-xs text-zinc-600 text-center mt-4">Brak wiadomości — zacznij czat głosowy!</p>
-                    )}
-                    {voiceChatMsgs.map(msg => (
-                      <div key={msg.id} className={`flex gap-2 ${msg.sender_id===currentUser?.id?'flex-row-reverse':''}`}>
-                        <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} className="w-6 h-6 rounded-lg object-cover shrink-0 self-start mt-0.5" alt=""/>
-                        <div className={`max-w-[85%] px-2.5 py-1.5 rounded-xl text-xs msg-md ${msg.sender_id===currentUser?.id?'bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-sm shadow-indigo-500/20':'glass-bubble text-zinc-200'}`}
-                          dangerouslySetInnerHTML={{__html:renderMsgHTML(msg.content)}}/>
-                      </div>
-                    ))}
-                    <div ref={voiceChatEndRef}/>
-                  </div>
-                  <div className="p-2.5 border-t border-white/[0.06] shrink-0">
-                    <form onSubmit={handleVoiceChatSend} className="flex gap-2">
-                      <input value={voiceChatInput} onChange={e=>setVoiceChatInput(e.target.value)}
-                        placeholder={`Wiadomość w #${activeCall.channelName||'kanał'}...`}
-                        className="flex-1 bg-white/[0.07] border border-white/[0.08] rounded-xl px-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-600 outline-none focus:border-indigo-500/40 transition-colors"/>
-                      <button type="submit" disabled={!voiceChatInput.trim()}
-                        className="w-7 h-7 rounded-xl bg-indigo-500 hover:bg-indigo-400 disabled:opacity-30 flex items-center justify-center text-white transition-colors shrink-0 active:scale-90">
-                        <Send size={12}/>
-                      </button>
-                    </form>
-                  </div>
-                </div>
-              )}
             </div>
           ) : activeView==='servers' && !activeChannel ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
