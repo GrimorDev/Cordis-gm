@@ -45,7 +45,15 @@ export function makePeerConnection(
   onIce: (c: RTCIceCandidateInit) => void,
   onTrack: (e: RTCTrackEvent) => void,
 ): RTCPeerConnection {
-  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  const pc = new RTCPeerConnection({
+    iceServers: ICE_SERVERS,
+    // Bundle all m= sections onto one 5-tuple → fewer ports, less NAT hairpinning
+    bundlePolicy:      'max-bundle',
+    // Require RTP/RTCP multiplexing — reduces port usage and avoids RTCP-only failures
+    rtcpMuxPolicy:     'require',
+    // Pre-gather 10 candidates before first offer so ICE completes faster
+    iceCandidatePoolSize: 10,
+  });
   pc.onicecandidate = e => { if (e.candidate) onIce(e.candidate.toJSON()); };
   pc.ontrack = onTrack;
   return pc;
@@ -341,10 +349,53 @@ export function preferH264(sdp: string): string {
 }
 
 /**
+ * Rewrites the Opus codec fmtp line to enable stereo + higher bitrate.
+ * Must be called on the local SDP before setLocalDescription.
+ * stereo=1         → full stereo encoding
+ * sprop-stereo=1   → tells remote to expect stereo
+ * maxaveragebitrate=510000 → ~510 kbps ceiling (Opus tops out here)
+ * usedtx=1         → discontinuous transmission — saves bandwidth in silence
+ * useinbandfec=1   → in-band FEC for packet loss recovery
+ */
+export function preferOpusStereo(sdp: string): string {
+  try {
+    const lines  = sdp.split('\n');
+    let inAudio  = false;
+    let opusPt   = '';
+    let hasFmtp  = false;
+    for (const line of lines) {
+      if (line.startsWith('m=audio')) { inAudio = true; continue; }
+      if (line.startsWith('m=') && inAudio) break;
+      if (!inAudio) continue;
+      const m = line.match(/^a=rtpmap:(\d+)\s+opus/i);
+      if (m) { opusPt = m[1]; }
+      if (opusPt && line.startsWith(`a=fmtp:${opusPt} `)) hasFmtp = true;
+    }
+    if (!opusPt) return sdp;
+    const opusFmtp = `a=fmtp:${opusPt} minptime=10;useinbandfec=1;usedtx=1;stereo=1;sprop-stereo=1;maxaveragebitrate=510000`;
+    if (hasFmtp) {
+      // Replace existing fmtp line
+      return lines.map(line =>
+        line.startsWith(`a=fmtp:${opusPt} `) ? opusFmtp : line
+      ).join('\n');
+    } else {
+      // Insert fmtp after the rtpmap line
+      return lines.flatMap(line => {
+        if (line.match(new RegExp(`^a=rtpmap:${opusPt}\\s+opus`, 'i'))) return [line, opusFmtp];
+        return [line];
+      }).join('\n');
+    }
+  } catch {
+    return sdp; // never break negotiation
+  }
+}
+
+/**
  * Set encoding parameters on all audio senders: high priority + correct Opus bitrate.
  * Call after setLocalDescription or after adding tracks.
+ * Default 128 kbps — noticeably better than 64 kbps for voice/music.
  */
-export function tuneAudioSender(pc: RTCPeerConnection, bitrateKbps = 64): void {
+export function tuneAudioSender(pc: RTCPeerConnection, bitrateKbps = 128): void {
   pc.getSenders().forEach(sender => {
     if (sender.track?.kind !== 'audio') return;
     try {

@@ -75,7 +75,7 @@ import {
   makePeerConnection, attachRemoteAudio, attachRemoteScreenAudio, detachRemoteAudio,
   muteAllRemote, setRemoteVolume, setRemoteScreenVolume, muteRemoteUser, muteRemoteScreenStream,
   setOutputDevice, watchSpeaking, getMediaDevices, applyNoiseGate, applyDeepFilter, type NoisePipeline,
-  preferH264, tuneAudioSender, tuneVideoSenders, primePlaybackContext,
+  preferH264, preferOpusStereo, tuneAudioSender, tuneVideoSenders, primePlaybackContext,
   onDeepFilterStatus, type DeepFilterStatus,
 } from './webrtc';
 import { marked } from 'marked';
@@ -10489,19 +10489,19 @@ export default function App() {
       screenStreamRef.current.getTracks().forEach(t => pc.addTrack(t, screenStreamRef.current!));
     if (isInitiator) {
       const rawOffer = await pc.createOffer();
-      const tunedSdp = preferH264(rawOffer.sdp ?? '');
+      const tunedSdp = preferOpusStereo(preferH264(rawOffer.sdp ?? ''));
       const offer    = { ...rawOffer, sdp: tunedSdp };
       await pc.setLocalDescription(offer);
-      tuneAudioSender(pc, (activeCh as any)?.bitrate ?? 64);
+      tuneAudioSender(pc, (activeCh as any)?.bitrate ?? 128);
       tuneVideoSenders(pc, screenStreamRef.current);
       getSocket().emit('webrtc_offer', { to: remoteUserId, sdp: offer });
     } else if (sdpOffer) {
       await pc.setRemoteDescription(new RTCSessionDescription(sdpOffer));
       const rawAnswer = await pc.createAnswer();
-      const tunedSdp  = preferH264(rawAnswer.sdp ?? '');
+      const tunedSdp  = preferOpusStereo(preferH264(rawAnswer.sdp ?? ''));
       const answer     = { ...rawAnswer, sdp: tunedSdp };
       await pc.setLocalDescription(answer);
-      tuneAudioSender(pc, (activeCh as any)?.bitrate ?? 64);
+      tuneAudioSender(pc, (activeCh as any)?.bitrate ?? 128);
       tuneVideoSenders(pc, screenStreamRef.current);
       getSocket().emit('webrtc_answer', { to: remoteUserId, sdp: answer });
     }
@@ -12015,7 +12015,7 @@ export default function App() {
             tuneVideoSenders(pc, stream);   // 8 Mbps, 60 fps, high priority
             if (pc.signalingState === 'stable') {
               const rawOffer = await pc.createOffer();
-              const tunedSdp = preferH264(rawOffer.sdp ?? '');
+              const tunedSdp = preferOpusStereo(preferH264(rawOffer.sdp ?? ''));
               const offer    = { ...rawOffer, sdp: tunedSdp };
               await pc.setLocalDescription(offer);
               getSocket().emit('webrtc_offer', { to: peerId, sdp: offer });
@@ -13522,20 +13522,33 @@ export default function App() {
         <section className="flex-1 flex flex-col glass-dark rounded-2xl overflow-hidden min-w-0 relative focus-card-center">
           {showCallPanel && activeCall ? (
             /* ── CALL PANEL ─────────────────────────────────────────── */
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 flex flex-col overflow-hidden call-panel-bg">
+              {/* Animated gradient third orb */}
+              <div className="call-panel-orb3 pointer-events-none"/>
               {/* Call header */}
-              <header className="h-14 border-b border-white/[0.06] flex items-center justify-between px-5 glass-dark border-b border-white/[0.05] shrink-0">
+              <header className="shrink-0 flex items-center justify-between px-5 py-3 relative z-10"
+                style={{
+                  background:'linear-gradient(180deg,rgba(8,9,18,0.85) 0%,rgba(8,9,18,0.40) 100%)',
+                  borderBottom:'1px solid rgba(255,255,255,0.08)',
+                  backdropFilter:'blur(12px)',
+                }}>
+                {/* Shimmer accent top line */}
+                <div style={{position:'absolute',top:0,left:0,right:0,height:1,background:'linear-gradient(90deg,transparent 0%,rgba(255,143,64,0.40) 40%,rgba(89,194,255,0.30) 70%,transparent 100%)',pointerEvents:'none'}}/>
                 <div className="flex items-center gap-2.5">
-                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"/>
+                  <div className="relative flex items-center justify-center w-5 h-5">
+                    <div className="w-2 h-2 bg-emerald-400 rounded-full z-10 relative"/>
+                    <div className="absolute w-4 h-4 bg-emerald-400/30 rounded-full animate-ping"/>
+                  </div>
                   {activeCall.type==='voice_channel'
-                    ? <><Volume2 size={15} className="text-emerald-400"/><span className="font-bold text-white text-sm">{activeCall.channelName}</span></>
+                    ? <><Volume2 size={14} className="text-emerald-400"/><span className="font-bold text-white text-sm tracking-tight">{activeCall.channelName}</span></>
                     : activeCall.type==='dm_video'
-                      ? <><Video size={15} className="text-indigo-400"/><span className="font-bold text-white text-sm">{activeCall.username}</span></>
-                      : <><Phone size={15} className="text-indigo-400"/><span className="font-bold text-white text-sm">{activeCall.username}</span></>
+                      ? <><Video size={14} className="text-[#59C2FF]"/><span className="font-bold text-white text-sm tracking-tight">{activeCall.username}</span></>
+                      : <><Phone size={14} className="text-[#59C2FF]"/><span className="font-bold text-white text-sm tracking-tight">{activeCall.username}</span></>
                   }
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-zinc-500 font-mono bg-zinc-950/60 px-2 py-0.5 rounded-lg">{fmtDur(callDuration)}</span>
+                  <span className="text-xs text-emerald-400 font-mono px-2.5 py-0.5 rounded-lg font-semibold"
+                    style={{background:'rgba(127,217,98,0.10)',border:'1px solid rgba(127,217,98,0.20)'}}>{fmtDur(callDuration)}</span>
                   {activeCall.type==='voice_channel' && (
                     <button onClick={()=>setVoiceChatOpen(v=>!v)} title="Czat kanału głosowego"
                       className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${voiceChatOpen?'bg-indigo-500/30 text-indigo-300':gb}`}>
@@ -13590,12 +13603,15 @@ export default function App() {
                       </button>
                     )
                   )}
-                  <button onClick={()=>setShowCallPanel(false)} title="Minimalizuj" className={`w-7 h-7 ${gb} rounded-lg flex items-center justify-center`}><Minimize2 size={13}/></button>
+                  <button onClick={()=>setShowCallPanel(false)} title="Minimalizuj"
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all border border-transparent hover:border-white/[0.10]">
+                    <Minimize2 size={13}/>
+                  </button>
                 </div>
               </header>
               {/* Spotify DJ info bar */}
               {activeCall?.type==='voice_channel' && voiceDj[activeCall.channelId] && (
-                <div className="flex items-center justify-between px-4 py-2 bg-[#1DB954]/8 border-b border-[#1DB954]/20 shrink-0">
+                <div className="flex items-center justify-between px-4 py-2 bg-[#1DB954]/8 border-b border-[#1DB954]/20 shrink-0 relative z-10">
                   <div className="flex items-center gap-2">
                     <SpotifyIcon size={14} className="text-[#1DB954]"/>
                     <span className="text-xs text-[#1DB954] font-semibold">
@@ -13647,27 +13663,54 @@ export default function App() {
                   const uMuted = isSelf2 ? activeCall.isMuted : (voiceUserStates[u.id]?.muted??false);
                   const uDeafened = voiceUserStates[u.id]?.deafened ?? false;
                   const uMutedByMe = mutedByMe[u.id] ?? false;
+                  const cardClass = `call-participant-card${isSpeaking?' speaking':uMuted?' muted':''}`;
                   return (
-                    <div key={keyStr} className="flex flex-col items-center gap-2"
+                    <motion.div
+                      key={keyStr}
+                      layout
+                      initial={{opacity:0,scale:0.90,y:12}}
+                      animate={{opacity:1,scale:1,y:0}}
+                      exit={{opacity:0,scale:0.88,y:8}}
+                      transition={{type:'spring',stiffness:350,damping:28}}
+                      className={cardClass}
                       onContextMenu={isSelf2?undefined:e=>{e.preventDefault();setVolMenu({id:u.id,username:u.username,x:e.clientX,y:e.clientY});}}>
-                      <div className={`relative p-1 rounded-2xl border-2 transition-all duration-150 ${isSpeaking?'border-emerald-500 shadow-[0_0_12px_2px_rgba(16,185,129,0.45)]':uMuted?'border-rose-500/40':'border-white/10'}`}>
-                        <img src={ava(u)} className={`${hasStreams?'w-14 h-14':'w-24 h-24'} rounded-xl object-cover`} alt=""/>
-                        {!isSelf2&&uMutedByMe&&<div className="absolute inset-0 rounded-xl bg-zinc-900/60 flex items-center justify-center"><VolumeX size={20} className="text-rose-400"/></div>}
-                        <div className={`absolute bottom-1 right-1 w-5 h-5 rounded-full flex items-center justify-center ${uMuted?'bg-rose-500':isSpeaking?'bg-emerald-500':'bg-zinc-700'}`}>
+                      {/* Avatar with speaking ring */}
+                      <div className="relative">
+                        {isSpeaking && (
+                          <div className="absolute -inset-1.5 rounded-2xl"
+                            style={{background:'rgba(127,217,98,0.15)',boxShadow:'0 0 20px rgba(127,217,98,0.35)',animation:'glow-pulse 1.4s ease-in-out infinite'}}/>
+                        )}
+                        <div className={`relative rounded-2xl overflow-hidden border-2 transition-all duration-200 ${isSpeaking?'border-[#7FD962]/70':uMuted?'border-rose-500/40':'border-white/[0.12]'}`}
+                          style={{padding:2}}>
+                          <img src={ava(u)} className={`${hasStreams?'w-14 h-14':'w-20 h-20'} rounded-xl object-cover block`} alt=""/>
+                          {!isSelf2&&uMutedByMe&&(
+                            <div className="absolute inset-0 rounded-xl bg-zinc-900/65 flex items-center justify-center">
+                              <VolumeX size={18} className="text-rose-400"/>
+                            </div>
+                          )}
+                        </div>
+                        {/* Mic status pill */}
+                        <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center border border-zinc-900 transition-colors ${uMuted?'bg-rose-500':isSpeaking?'bg-[#7FD962]':'bg-zinc-700/90'}`}>
                           {uMuted?<MicOff size={9} className="text-white"/>:<Mic size={9} className="text-white"/>}
                         </div>
-                        {!isSelf2&&uDeafened&&<div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-rose-500 flex items-center justify-center"><VolumeX size={8} className="text-white"/></div>}
-                        {/* Streaming badge on participant */}
+                        {/* Deafened */}
+                        {!isSelf2&&uDeafened&&(
+                          <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 border border-zinc-900 flex items-center justify-center">
+                            <VolumeX size={8} className="text-white"/>
+                          </div>
+                        )}
+                        {/* Screen share badge */}
                         {(isSelf2 ? activeCall.isScreenSharing : sharingUserIds.has(u.id)) && (
-                          <div className="absolute top-1 left-1 w-4 h-4 rounded-full bg-indigo-600 flex items-center justify-center">
+                          <div className="absolute -top-1 -left-1 w-4 h-4 rounded-full bg-indigo-500 border border-zinc-900 flex items-center justify-center">
                             <ScreenShare size={8} className="text-white"/>
                           </div>
                         )}
                       </div>
-                      <p className={`text-xs font-bold ${isSpeaking?'text-emerald-400':uMuted?'text-rose-400':'text-white'}`}>
-                        {u.username}{isSelf2&&<span className="text-zinc-600"> (Ty)</span>}
+                      {/* Name */}
+                      <p className={`text-[12px] font-bold tracking-tight ${isSpeaking?'text-[#7FD962]':uMuted?'text-rose-400':'text-white'}`}>
+                        {u.username}{isSelf2&&<span className="text-zinc-600 font-normal"> (Ty)</span>}
                       </p>
-                    </div>
+                    </motion.div>
                   );
                 };
 
@@ -13711,6 +13754,7 @@ export default function App() {
                 // Only enters this view when the user explicitly clicked "Dołącz" (watchingStreamId !== null)
                 if (hasStreams && watchingStreamId) {
                   const screenStream = remoteScreenStreamsRef.current.get(watchingStreamId) ?? null;
+                  // (renders above gradient orbs)
                   const screenOwner  = getUsername(watchingStreamId);
                   const isMutedStream = streamMutedByMe[watchingStreamId] ?? false;
                   const svol = streamVols[watchingStreamId] ?? 100;
@@ -13723,7 +13767,7 @@ export default function App() {
                     if (activeCall.channelId) getSocket().emit('stream_watch_stop' as any, { channel_id: activeCall.channelId, streamer_id: watchingStreamId });
                   };
                   return (
-                    <div className="flex-1 flex flex-col gap-3 p-4 overflow-hidden min-h-0">
+                    <div className="flex-1 flex flex-col gap-3 p-4 overflow-hidden min-h-0 relative z-10">
                       {/* Active stream video */}
                       <div className="relative flex-1 bg-black rounded-xl overflow-hidden min-h-0 group">
                         {screenStream && (
@@ -13815,7 +13859,7 @@ export default function App() {
                         </div>
                       </div>
                       {/* Participants strip */}
-                      <div className="shrink-0 flex items-center justify-center gap-4 py-1">
+                      <div className="shrink-0 flex items-center justify-center gap-3 py-1 relative z-10">
                         {allParticipants}
                       </div>
                     </div>
@@ -13826,7 +13870,7 @@ export default function App() {
                 if (hasStreams) {
                   const cols = Math.min(allStreamIds.length, 3);
                   return (
-                    <div className="flex-1 flex flex-col gap-3 p-4 overflow-hidden min-h-0">
+                    <div className="flex-1 flex flex-col gap-3 p-4 overflow-hidden min-h-0 relative z-10">
                       <div className="flex-1 overflow-y-auto min-h-0">
                         <div className="grid gap-3 h-full" style={{gridTemplateColumns:`repeat(${cols},minmax(0,1fr))`}}>
                           {allStreamIds.map(streamId => {
@@ -13894,7 +13938,7 @@ export default function App() {
                         </div>
                       </div>
                       {/* Participants strip */}
-                      <div className="shrink-0 flex items-center justify-center gap-4 py-1 overflow-x-auto">
+                      <div className="shrink-0 flex items-center justify-center gap-3 py-1 overflow-x-auto relative z-10">
                         {allParticipants}
                       </div>
                     </div>
@@ -13903,19 +13947,22 @@ export default function App() {
 
                 // ── NORMAL GRID LAYOUT (no streams) ──────────────────────────
                 return (
-                  <div className="flex-1 flex flex-wrap items-center justify-center gap-6 p-8 overflow-y-auto">
-                    {allParticipants}
+                  <div className="flex-1 flex items-center justify-center p-8 overflow-y-auto relative z-10">
+                    <div className="flex flex-wrap items-center justify-center gap-5 max-w-2xl">
+                      {allParticipants}
+                    </div>
                   </div>
                 );
               })()}
               {/* Call controls */}
-              <div className="shrink-0 border-t border-white/[0.06] bg-white/[0.04]">
+              <div className="shrink-0 relative z-10 pb-5 px-5">
                 {/* Device settings panel */}
                 <AnimatePresence>
                   {devicesOpen&&(
                     <motion.div initial={{opacity:0,height:0}} animate={{opacity:1,height:'auto'}} exit={{opacity:0,height:0}}
-                      className="overflow-hidden border-b border-white/[0.05]">
-                      <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      className="overflow-hidden mb-3">
+                      <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-2xl"
+                        style={{background:'rgba(12,13,24,0.92)',border:'1px solid rgba(255,255,255,0.09)',backdropFilter:'blur(12px)'}}>
                         <div>
                           <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Mikrofon</label>
                           <select value={selMic} onChange={async e=>{setSelMic(e.target.value);if(localStreamRef.current)await acquireMic(e.target.value||undefined);}}
@@ -13987,43 +14034,46 @@ export default function App() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-                {/* DeepFilter status badge — hidden (AI disabled, using noise gate only) */}
-                <div className="p-5 flex items-center justify-center gap-3">
-                  <button onClick={toggleMute} title={activeCall.isMuted?'Włącz mikrofon':'Wycisz mikrofon'}
-                    className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${activeCall.isMuted?'bg-rose-500 hover:bg-rose-400 text-white':gb}`}>
-                    {activeCall.isMuted?<MicOff size={18}/>:<Mic size={18}/>}
-                  </button>
-                  <button onClick={toggleDeafen} title={activeCall.isDeafened?'Włącz głośnik':'Wycisz głośnik'}
-                    className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${activeCall.isDeafened?'bg-rose-500 hover:bg-rose-400 text-white':gb}`}>
-                    {activeCall.isDeafened?<VolumeX size={18}/>:<Volume2 size={18}/>}
-                  </button>
-                  <button onClick={toggleCamera} title={activeCall.isCameraOn?'Wyłącz kamerę':'Włącz kamerę'}
-                    className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${activeCall.isCameraOn?'bg-indigo-500 hover:bg-indigo-400 text-white':gb}`}>
-                    <Video size={18}/>
-                  </button>
-                  <button onClick={toggleScreen} title={activeCall.isScreenSharing?'Zatrzymaj udostępnianie':'Udostępnij ekran'}
-                    className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${activeCall.isScreenSharing?'bg-indigo-500 hover:bg-indigo-400 text-white':gb}`}>
-                    <ScreenShare size={18}/>
-                  </button>
-                  <button onClick={async()=>{
-                    if (!devicesOpen) {
-                      // Request mic permission so we get real device labels
-                      await getMediaDevices().then(setDevices).catch(()=>{});
-                    }
-                    setDevicesOpen(v=>!v);
-                  }} title="Ustawienia urządzeń"
-                    className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${devicesOpen?'bg-zinc-700 text-white':gb}`}>
-                    <Settings size={18}/>
-                  </button>
-                  <button onClick={hangupCall} title="Rozłącz"
-                    className="w-12 h-12 rounded-2xl bg-rose-500 hover:bg-rose-400 flex items-center justify-center text-white transition-colors">
-                    <PhoneOff size={18}/>
-                  </button>
+                {/* Floating control pill */}
+                <div className="flex items-center justify-center">
+                  <div className="call-controls-bar">
+                    <button onClick={toggleMute} title={activeCall.isMuted?'Włącz mikrofon':'Wycisz mikrofon'}
+                      className={`call-ctrl-btn ${activeCall.isMuted?'active-red':''}`}>
+                      {activeCall.isMuted?<MicOff size={18}/>:<Mic size={18}/>}
+                    </button>
+                    <button onClick={toggleDeafen} title={activeCall.isDeafened?'Włącz głośnik':'Wycisz głośnik'}
+                      className={`call-ctrl-btn ${activeCall.isDeafened?'active-red':''}`}>
+                      {activeCall.isDeafened?<VolumeX size={18}/>:<Volume2 size={18}/>}
+                    </button>
+                    <div className="call-ctrl-divider"/>
+                    <button onClick={toggleCamera} title={activeCall.isCameraOn?'Wyłącz kamerę':'Włącz kamerę'}
+                      className={`call-ctrl-btn ${activeCall.isCameraOn?'active-orange':''}`}>
+                      <Video size={18}/>
+                    </button>
+                    <button onClick={toggleScreen} title={activeCall.isScreenSharing?'Zatrzymaj udostępnianie':'Udostępnij ekran'}
+                      className={`call-ctrl-btn ${activeCall.isScreenSharing?'active-orange':''}`}>
+                      <ScreenShare size={18}/>
+                    </button>
+                    <button onClick={async()=>{
+                      if (!devicesOpen) {
+                        await getMediaDevices().then(setDevices).catch(()=>{});
+                      }
+                      setDevicesOpen(v=>!v);
+                    }} title="Ustawienia urządzeń"
+                      className={`call-ctrl-btn ${devicesOpen?'active-orange':''}`}>
+                      <Settings size={18}/>
+                    </button>
+                    <div className="call-ctrl-divider"/>
+                    <button onClick={hangupCall} title="Rozłącz" className="call-ctrl-btn danger">
+                      <PhoneOff size={18}/>
+                    </button>
+                  </div>
                 </div>
               </div>
               {/* ── Voice channel text chat panel ────────────────────── */}
               {voiceChatOpen && activeCall.channelId && (
-                <div className="h-64 shrink-0 flex flex-col border-t border-white/[0.06] bg-black/20">
+                <div className="h-64 shrink-0 flex flex-col relative z-10"
+                  style={{borderTop:'1px solid rgba(255,255,255,0.07)',background:'rgba(6,7,14,0.85)',backdropFilter:'blur(12px)'}}>
                   <div className="flex-1 overflow-y-auto p-3 custom-scrollbar flex flex-col gap-1.5">
                     {voiceChatMsgs.length === 0 && (
                       <p className="text-xs text-zinc-600 text-center mt-4">Brak wiadomości — zacznij czat głosowy!</p>

@@ -2263,3 +2263,189 @@ img.av-eff-arcade-coin { transition: filter 0.3s; }
 .bp-homer-bush::before   { background-image: url('https://media.giphy.com/media/jUwpNzg9IcyrK/giphy.gif'); }
 /* 🎵 Rickroll */
 .bp-rickroll::before     { background-image: url('https://media.giphy.com/media/Ju7l5y9osyymQ/giphy.gif'); }
+
+/* ══════════════════════════════════════════════════════════════
+   CALL SCREEN — Animated gradient background + glassmorphic cards
+   ══════════════════════════════════════════════════════════════ */
+
+/* Animated gradient orb keyframes */
+@keyframes call-orb-1 {
+  0%,100% { transform: translate(0,0) scale(1);   opacity: 0.55; }
+  33%      { transform: translate(6%,4%) scale(1.12); opacity: 0.70; }
+  66%      { transform: translate(-4%,6%) scale(0.92); opacity: 0.45; }
+}
+@keyframes call-orb-2 {
+  0%,100% { transform: translate(0,0) scale(1);    opacity: 0.40; }
+  40%      { transform: translate(-5%,-4%) scale(1.08); opacity: 0.60; }
+  70%      { transform: translate(5%,-2%) scale(0.95); opacity: 0.35; }
+}
+@keyframes call-orb-3 {
+  0%,100% { transform: translate(0,0) scale(1);   opacity: 0.30; }
+  50%      { transform: translate(4%,-5%) scale(1.15); opacity: 0.50; }
+}
+@keyframes call-title-shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+/* Call panel wrapper */
+.call-panel-bg {
+  position: relative;
+  background: radial-gradient(ellipse at 20% 30%, rgba(255,143,64,0.10) 0%, transparent 55%),
+              radial-gradient(ellipse at 80% 70%, rgba(89,194,255,0.08) 0%, transparent 50%),
+              radial-gradient(ellipse at 50% 50%, rgba(99,102,241,0.06) 0%, transparent 60%),
+              linear-gradient(180deg, rgba(8,9,18,1) 0%, rgba(5,6,14,1) 100%);
+  overflow: hidden;
+}
+.call-panel-bg::before,
+.call-panel-bg::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(60px);
+  will-change: transform, opacity;
+}
+.call-panel-bg::before {
+  width: 50%;
+  height: 50%;
+  top: -10%;
+  left: -5%;
+  background: radial-gradient(circle, rgba(255,143,64,0.20) 0%, transparent 70%);
+  animation: call-orb-1 12s ease-in-out infinite;
+}
+.call-panel-bg::after {
+  width: 40%;
+  height: 40%;
+  bottom: 5%;
+  right: -5%;
+  background: radial-gradient(circle, rgba(89,194,255,0.16) 0%, transparent 70%);
+  animation: call-orb-2 15s ease-in-out infinite;
+}
+
+/* Third orb via a child div */
+.call-panel-orb3 {
+  position: absolute;
+  width: 35%;
+  height: 35%;
+  bottom: 20%;
+  left: 30%;
+  background: radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%);
+  border-radius: 50%;
+  filter: blur(50px);
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation: call-orb-3 18s ease-in-out infinite;
+}
+
+/* Participant glass card */
+.call-participant-card {
+  background: linear-gradient(145deg, rgba(18,20,36,0.88) 0%, rgba(12,14,26,0.95) 100%);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 20px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.55),
+              inset 0 1px 0 rgba(255,255,255,0.07);
+  backdrop-filter: blur(12px);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  padding: 20px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-width: 120px;
+  position: relative;
+  overflow: hidden;
+}
+.call-participant-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(to right, transparent, rgba(255,255,255,0.12), transparent);
+  pointer-events: none;
+}
+.call-participant-card.speaking {
+  border-color: rgba(127,217,98,0.55);
+  box-shadow: 0 0 0 2px rgba(127,217,98,0.20),
+              0 12px 40px rgba(0,0,0,0.55),
+              0 0 30px rgba(127,217,98,0.18),
+              inset 0 1px 0 rgba(127,217,98,0.10);
+  transform: scale(1.02);
+}
+.call-participant-card.muted {
+  border-color: rgba(229,62,62,0.35);
+}
+
+/* Control bar floating pill */
+.call-controls-bar {
+  background: linear-gradient(135deg, rgba(14,15,30,0.95) 0%, rgba(9,10,20,0.98) 100%);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 24px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.70),
+              inset 0 1px 0 rgba(255,255,255,0.07),
+              inset 0 -1px 0 rgba(0,0,0,0.30);
+  backdrop-filter: blur(16px);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Control buttons */
+.call-ctrl-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #a1a1aa;
+}
+.call-ctrl-btn:hover {
+  background: rgba(255,255,255,0.12);
+  border-color: rgba(255,255,255,0.14);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.40);
+}
+.call-ctrl-btn:active { transform: scale(0.93); }
+.call-ctrl-btn.active-green {
+  background: rgba(127,217,98,0.18);
+  border-color: rgba(127,217,98,0.40);
+  color: #7FD962;
+  box-shadow: 0 0 14px rgba(127,217,98,0.20);
+}
+.call-ctrl-btn.active-orange {
+  background: rgba(255,143,64,0.18);
+  border-color: rgba(255,143,64,0.40);
+  color: #FF8F40;
+  box-shadow: 0 0 14px rgba(255,143,64,0.20);
+}
+.call-ctrl-btn.active-red {
+  background: rgba(239,68,68,0.22);
+  border-color: rgba(239,68,68,0.50);
+  color: #fff;
+  box-shadow: 0 0 14px rgba(239,68,68,0.25);
+}
+.call-ctrl-btn.danger {
+  background: rgba(239,68,68,0.85);
+  border-color: rgba(239,68,68,0.70);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(239,68,68,0.40);
+}
+.call-ctrl-btn.danger:hover {
+  background: rgba(239,68,68,1);
+  box-shadow: 0 6px 20px rgba(239,68,68,0.55);
+  transform: translateY(-1px) scale(1.04);
+}
+
+/* Divider in control bar */
+.call-ctrl-divider {
+  width: 1px;
+  height: 32px;
+  background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.10), transparent);
+  flex-shrink: 0;
+  margin: 0 4px;
+}
