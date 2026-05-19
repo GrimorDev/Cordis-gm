@@ -272,17 +272,42 @@ router.put('/me/status', authMiddleware, async (req: AuthRequest, res: Response)
       'UPDATE users SET status=$1, preferred_status=$1, status_until=$2 WHERE id=$3',
       [status, statusUntil, req.user!.id]
     );
-    // Broadcast real-time status change to all servers the user belongs to
+    // Broadcast real-time status change — servers + DM-only friends
     const io = req.app.get('io');
     if (io) {
+      // Check privacy setting — hide real status if opted out
+      const { rows: [priv] } = await query(
+        'SELECT privacy_status_visible FROM users WHERE id=$1', [req.user!.id]
+      );
+      const broadcastStatus = priv?.privacy_status_visible === false ? 'offline' : status;
+      const payload = { user_id: req.user!.id, status: broadcastStatus };
+
+      // 1) All server rooms the user belongs to
       const { rows: memberships } = await query(
         'SELECT server_id FROM server_members WHERE user_id=$1', [req.user!.id]
       );
-      const payload = { user_id: req.user!.id, status };
       for (const { server_id } of memberships) {
         io.to(`server:${server_id}`).emit('user_status', payload);
       }
-      // Also push to friends listening on their own user room
+
+      // 2) DM-only friends (friends who share no server — they won't be in any server room above)
+      const { rows: dmOnlyFriends } = await query(
+        `SELECT CASE WHEN requester_id=$1 THEN addressee_id ELSE requester_id END AS friend_id
+         FROM friends
+         WHERE (requester_id=$1 OR addressee_id=$1) AND status='accepted'
+         AND NOT EXISTS (
+           SELECT 1 FROM server_members sm1
+           JOIN server_members sm2 ON sm1.server_id=sm2.server_id
+           WHERE sm1.user_id=$1
+             AND sm2.user_id=CASE WHEN requester_id=$1 THEN addressee_id ELSE requester_id END
+         )`,
+        [req.user!.id]
+      );
+      for (const { friend_id } of dmOnlyFriends) {
+        io.to(`user:${friend_id}`).emit('user_status', payload);
+      }
+
+      // 3) Update the user's own socket so their own status badge refreshes immediately
       io.to(`user:${req.user!.id}`).emit('user_status', payload);
     }
     return res.json({ status, status_until: statusUntil });

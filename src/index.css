@@ -580,6 +580,16 @@ select optgroup {
 .msg-md a { color: #59C2FF; text-decoration: underline; }
 .msg-md a:hover { color: #95E6CB; }
 
+/* ── Chat font-size scaling (data-chat-font attribute on scroll container) ── */
+/* Normal is the default — only small/large need overrides */
+[data-chat-font="small"] .msg-md       { font-size: 11px !important; line-height: 1.55 !important; }
+[data-chat-font="small"] .msg-meta-name { font-size: 11.5px !important; }
+[data-chat-font="small"] .msg-ts        { font-size: 10px !important; }
+
+[data-chat-font="large"]  .msg-md       { font-size: 17px !important; line-height: 1.65 !important; }
+[data-chat-font="large"]  .msg-meta-name { font-size: 15px !important; }
+[data-chat-font="large"]  .msg-ts        { font-size: 13px !important; }
+
 /* ── Code blocks ──────────────────────────────────────────────────── */
 .code-block {
   background: #0b0b17;

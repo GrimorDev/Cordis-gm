@@ -9480,9 +9480,11 @@ export default function App() {
         if (!prev) { setJustReconnected(true); setTimeout(() => setJustReconnected(false), 2500); }
         return true;
       });
-      // Reset Steam emission guard so the next poll re-broadcasts current game
+      // Reset ALL emission guards so the next poll re-broadcasts current activity
       // (backend in-memory cache is cleared on restart, so friends need a fresh emit)
-      lastEmittedGame.current = undefined;
+      lastEmittedGame.current   = undefined;
+      lastEmittedTrack.current  = undefined;
+      lastEmittedStream.current = undefined;
       // Re-join the current channel room — critical so new_message events arrive
       if (prevChRef.current && activeViewRef.current === 'servers') {
         joinChannel(prevChRef.current);
@@ -10866,7 +10868,8 @@ export default function App() {
   const saveFontSize = async (size: 'small'|'normal'|'large') => {
     setFontSize(size); // apply immediately for live preview
     const upd = await users.updateMe({ font_size: size }).catch(() => null);
-    if (upd) { setCurrentUser(upd); setEditProf({...upd}); }
+    if (upd) { setCurrentUser(upd); setEditProf({...upd}); addToast(tl('toast.layoutChanged'), 'success'); }
+    else addToast(tl('admin.error.save'), 'error');
   };
   const saveTogglePref = async (
     key: 'show_timestamps'|'show_chat_avatars'|'message_animations'|'show_link_previews'|'privacy_dm_from_strangers',
@@ -15311,7 +15314,7 @@ export default function App() {
                   </div>
                 )}
               {/* Messages */}
-              <div ref={msgScrollRef} className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-5 custom-scrollbar flex flex-col"
+              <div ref={msgScrollRef} data-chat-font={fontSize} className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-5 custom-scrollbar flex flex-col"
                 style={activeCh?.background_url ? {
                   backgroundImage: activeCh.background_gradient
                     ? `${activeCh.background_gradient}, url(${activeCh.background_url})`
@@ -15409,7 +15412,7 @@ export default function App() {
                                 ? <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} className="w-8 h-8 rounded-xl object-cover shrink-0 self-start mt-0.5" alt=""/>
                                 : <div className="w-8 shrink-0"/>}
                               <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[70%]`}>
-                                {!sameAuthor && !isMe && <p className="text-[11px] font-semibold text-zinc-400 mb-1 px-1">{msg.sender_username}</p>}
+                                {!sameAuthor && !isMe && <p className="msg-meta-name text-[11px] font-semibold text-zinc-400 mb-1 px-1">{msg.sender_username}</p>}
                                 {msg.attachment_url && (() => {
                                   const isImg = /\.(png|jpg|jpeg|gif|webp|svg)(\?|$)/i.test(msg.attachment_url) || msg.attachment_url.startsWith('data:image');
                                   return isImg
@@ -15431,7 +15434,7 @@ export default function App() {
                                       dangerouslySetInnerHTML={{__html: renderMsgHTML(c)}}/>
                                   );
                                 })()}
-                                <span className="text-[10px] text-zinc-700 mt-0.5 px-1">{new Date(msg.created_at).toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'})}</span>
+                                <span className="msg-ts text-[10px] text-zinc-700 mt-0.5 px-1">{new Date(msg.created_at).toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'})}</span>
                               </div>
                             </div>
                           );
@@ -15575,7 +15578,7 @@ export default function App() {
                             {/* Meta (name + time) */}
                             {!isGrouped && (
                             <div className={`flex items-center gap-2 mb-1 ${activeView==='dms'&&isOwn?'flex-row-reverse':''}`}>
-                              <span className={`text-[13.5px] font-semibold leading-none transition-opacity ${isAuto?'cursor-default':'cursor-pointer hover:underline hover:opacity-80'}`}
+                              <span className={`msg-meta-name text-[13.5px] font-semibold leading-none transition-opacity ${isAuto?'cursor-default':'cursor-pointer hover:underline hover:opacity-80'}`}
                                 style={{ color: isAuto?'#818cf8':((msg as MessageFull).sender_role_color || (isOwn ? '#818cf8' : '#c4c4d8')) }}
                                 onClick={isAuto?undefined:(e)=>showHoverCard(msg.sender_id, e as unknown as React.MouseEvent)}>
                                 {displayName}
@@ -15597,7 +15600,7 @@ export default function App() {
                                   {(msg as MessageFull).sender_role}
                                 </span>
                               )}
-                              <span className={`text-xs text-zinc-500 transition-opacity ${activeView!=='dms'||alwaysShowTimestamps?'':'opacity-0 group-hover:opacity-100'}`}>{fmtTime(msg.created_at)}</span>
+                              <span className={`msg-ts text-xs text-zinc-500 transition-opacity ${activeView!=='dms'||alwaysShowTimestamps?'':'opacity-0 group-hover:opacity-100'}`}>{fmtTime(msg.created_at)}</span>
                               {(msg as MessageFull).edited&&(
                                 <button className="text-[10px] text-zinc-600 italic hover:text-zinc-400 transition-colors"
                                   onClick={async()=>{
@@ -16754,7 +16757,9 @@ export default function App() {
                       <p className="text-[11px] text-purple-400 leading-tight flex items-center gap-1 min-w-0"><TwitchIcon size={10} className="shrink-0"/> <MarqueeText text={`Streamuje: ${mTwitch.game_name}`} className="flex-1"/></p>
                     ):mSteam?(()=>{const mSteamStart=steamGameStartRef.current.get(m.id);return(
                       <p className="text-[11px] text-zinc-400 leading-tight flex items-center gap-1 min-w-0"><Gamepad2 size={10} className="shrink-0 text-emerald-400"/> <span className="text-emerald-400 font-semibold shrink-0">{tl('profile.playingNow')}:</span> <MarqueeText text={mSteam.name+(mSteamStart?` · ${fmtGameDur(mSteamStart)}`:'')} className="flex-1 text-zinc-400"/></p>
-                    );})():(()=>{const sl=statusLabel(m.status);return sl?<p className={`text-[11px] truncate leading-tight ${sl.cls}`}>{sl.text}</p>:m.role_name?<p className="text-[11px] text-zinc-600 truncate leading-tight">{m.role_name}</p>:null;})())
+                    );})():m.custom_status?(
+                      <p className="text-[11px] text-zinc-500 truncate leading-tight">{m.custom_status}</p>
+                    ):(()=>{const sl=statusLabel(m.status);return sl?<p className={`text-[11px] truncate leading-tight ${sl.cls}`}>{sl.text}</p>:m.role_name?<p className="text-[11px] text-zinc-600 truncate leading-tight">{m.role_name}</p>:null;})())
                     : m.role_name?<p className="text-[11px] text-zinc-700 truncate leading-tight">{m.role_name}</p>:null}
                   </div>
                 </div>
