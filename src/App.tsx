@@ -13967,17 +13967,23 @@ export default function App() {
 
                 // ── NORMAL GRID LAYOUT (no streams) ──────────────────────────
                 return (
-                  <div className="flex-1 flex items-center justify-center p-8 overflow-y-auto relative z-10">
+                  <div className="flex-1 flex items-center justify-center p-8 overflow-y-auto relative z-10"
+                    style={{paddingBottom: voiceChatOpen ? '260px' : undefined}}>
                     <div className="flex flex-wrap items-center justify-center gap-5 max-w-2xl">
                       {allParticipants}
                     </div>
                   </div>
                 );
               })()}
-              {/* ── Voice channel text chat panel ── (BETWEEN participants and controls) */}
+              {/* ── Voice channel text chat panel ── absolutely positioned, never breaks layout */}
               {voiceChatOpen && activeCall.channelId && (
-                <div className="shrink-0 flex flex-col relative z-10"
-                  style={{height:'240px',borderTop:'1px solid rgba(255,255,255,0.07)',background:'rgba(6,7,14,0.85)',backdropFilter:'blur(12px)'}}>
+                <div style={{
+                  position:'absolute', bottom:'90px', left:0, right:0, height:'240px',
+                  zIndex:20, display:'flex', flexDirection:'column',
+                  borderTop:'1px solid rgba(255,255,255,0.07)',
+                  background:'rgba(6,7,14,0.92)',
+                  backdropFilter:'blur(16px)',
+                }}>
                   <div className="flex-1 overflow-y-auto p-3 custom-scrollbar flex flex-col gap-1.5 min-h-0">
                     {voiceChatMsgs.length === 0 && (
                       <p className="text-xs text-zinc-600 text-center mt-4">Brak wiadomości — zacznij czat głosowy!</p>
