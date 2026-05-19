@@ -633,4 +633,77 @@ router.put('/me/channel-prefs/:channelId', authMiddleware, async (req: AuthReque
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// ── GET /api/users/me/all-events ────────────────────────────────────────────
+// Returns upcoming events across ALL servers the user is a member of.
+router.get('/me/all-events', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id;
+  try {
+    const { rows } = await query(
+      `SELECT e.*,
+              s.name       AS server_name,
+              s.icon_url   AS server_icon,
+              u.username   AS creator_username,
+              c.name       AS channel_name,
+              (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id = e.id AND r.type = 'going')::int      AS going_count,
+              (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id = e.id AND r.type = 'interested')::int AS interested_count,
+              (SELECT r.type FROM event_rsvps r WHERE r.event_id = e.id AND r.user_id = $1 LIMIT 1)       AS my_rsvp,
+              (SELECT json_agg(json_build_object('id', ru.id, 'username', ru.username, 'avatar_url', ru.avatar_url))
+               FROM event_rsvps er JOIN users ru ON ru.id = er.user_id
+               WHERE er.event_id = e.id AND er.type = 'going' LIMIT 6) AS going_users
+       FROM server_events e
+       JOIN servers s ON s.id = e.server_id
+       JOIN server_members sm ON sm.server_id = e.server_id AND sm.user_id = $1
+       LEFT JOIN users u ON u.id = e.creator_id
+       LEFT JOIN channels c ON c.id = e.channel_id
+       WHERE e.starts_at >= NOW() - INTERVAL '1 hour'
+         AND e.status IN ('scheduled','active')
+       ORDER BY e.starts_at ASC
+       LIMIT 20`,
+      [userId]
+    );
+    return res.json(rows);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ── GET /api/users/me/voice-activity ────────────────────────────────────────
+// Returns voice channel presences across ALL servers the user is a member of.
+router.get('/me/voice-activity', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id;
+  try {
+    // Get all channels for user's servers
+    const { rows: channels } = await query(
+      `SELECT c.id, c.name, c.server_id, s.name AS server_name, s.icon_url AS server_icon
+       FROM channels c
+       JOIN servers s ON s.id = c.server_id
+       JOIN server_members sm ON sm.server_id = c.server_id AND sm.user_id = $1
+       WHERE c.type = 'voice'`,
+      [userId]
+    );
+
+    const result: Record<string, { channel_id: string; channel_name: string; server_id: string; server_name: string; server_icon: string | null; users: any[] }> = {};
+
+    for (const ch of channels) {
+      const members = await redis.smembers(`voice:${ch.id}:members`);
+      if (members.length === 0) continue;
+      // Fetch user details from DB
+      const { rows: users } = await query(
+        `SELECT id, username, avatar_url, status FROM users WHERE id = ANY($1::uuid[])`,
+        [members]
+      );
+      if (users.length > 0) {
+        result[ch.id] = {
+          channel_id: ch.id,
+          channel_name: ch.name,
+          server_id: ch.server_id,
+          server_name: ch.server_name,
+          server_icon: ch.server_icon,
+          users,
+        };
+      }
+    }
+
+    return res.json(Object.values(result));
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
 export default router;

@@ -989,6 +989,17 @@ CREATE INDEX IF NOT EXISTS idx_admin_audit_admin ON admin_audit_log(admin_id, cr
 
 -- Tab bar enabled/disabled preference
 ALTER TABLE users ADD COLUMN IF NOT EXISTS tabs_enabled BOOLEAN DEFAULT true;
+
+-- ── Event RSVPs ───────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS event_rsvps (
+    event_id   UUID NOT NULL REFERENCES server_events(id) ON DELETE CASCADE,
+    user_id    UUID NOT NULL REFERENCES users(id)         ON DELETE CASCADE,
+    type       VARCHAR(20) NOT NULL CHECK (type IN ('going', 'interested')),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (event_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_event_rsvps_event ON event_rsvps(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_rsvps_user  ON event_rsvps(user_id);
 `;
 
 const SEED_SQL = `

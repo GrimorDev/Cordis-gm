@@ -1037,12 +1037,19 @@ export const groupDmApi = {
 };
 
 // ── Server Events ─────────────────────────────────────────────────────────────
+export interface EventRsvpUser { id: string; username: string; avatar_url: string | null; }
 export interface ServerEvent {
   id: string; server_id: string; channel_id: string | null;
   creator_id: string; title: string; description: string | null;
   image_url: string | null; starts_at: string; ends_at: string | null;
   status: 'scheduled' | 'active' | 'ended' | 'cancelled'; created_at: string;
   creator_username?: string; channel_name?: string;
+  // RSVP fields (present when fetched with user context)
+  going_count?: number; interested_count?: number;
+  my_rsvp?: 'going' | 'interested' | null;
+  going_users?: EventRsvpUser[];
+  // Cross-server fields (present in all-events endpoint)
+  server_name?: string; server_icon?: string | null;
 }
 export const eventsApi = {
   list:   (serverId: string) => req<ServerEvent[]>('GET', `/servers/${serverId}/events`),
@@ -1052,6 +1059,20 @@ export const eventsApi = {
     req<ServerEvent>('PUT', `/servers/${serverId}/events/${id}`, d),
   delete: (serverId: string, id: string) =>
     req<{ ok: boolean }>('DELETE', `/servers/${serverId}/events/${id}`),
+  rsvp:   (serverId: string, id: string, type: 'going' | 'interested') =>
+    req<{ going_count: number; interested_count: number; going_users: EventRsvpUser[]; my_rsvp: string }>('POST', `/servers/${serverId}/events/${id}/rsvp`, { type }),
+  unresvp: (serverId: string, id: string) =>
+    req<{ going_count: number; interested_count: number; going_users: EventRsvpUser[] }>('DELETE', `/servers/${serverId}/events/${id}/rsvp`),
+};
+
+export interface VoiceActivityChannel {
+  channel_id: string; channel_name: string;
+  server_id: string; server_name: string; server_icon: string | null;
+  users: { id: string; username: string; avatar_url: string | null; status: string }[];
+}
+export const activityApi = {
+  allEvents:       () => req<ServerEvent[]>('GET', '/users/me/all-events'),
+  allVoiceActivity: () => req<VoiceActivityChannel[]>('GET', '/users/me/voice-activity'),
 };
 
 // ── Server Discovery ──────────────────────────────────────────────────────────
