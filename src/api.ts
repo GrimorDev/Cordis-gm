@@ -528,6 +528,7 @@ export const channelsApi = {
     req<void>('DELETE', `/channels/categories/${id}`),
   reorderCategories: (serverId: string, categories: { id: string; position: number }[]) =>
     req<{ ok: boolean }>('PATCH', '/channels/categories/reorder', { server_id: serverId, categories }),
+  forceLeaveVoice: () => req<{ cleared: number; channels: string[] }>('POST', '/channels/voice/force-leave'),
   reorderChannels: (serverId: string, channels: { id: string; position: number; category_id: string }[]) =>
     req<{ ok: boolean }>('PATCH', '/channels/reorder', { server_id: serverId, channels }),
   markRead: (channelId: string) => req<{ ok: boolean }>('POST', `/channels/${channelId}/read`).catch(() => {}),

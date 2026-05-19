@@ -3,7 +3,7 @@ import { body, validationResult } from 'express-validator';
 import { query, getClient } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
-import { getVoiceMembers, cacheGet, cacheSet, cacheDel, KEYS, TTL } from '../redis/client';
+import { getVoiceMembers, clearUserFromAllVoiceChannels, cacheGet, cacheSet, cacheDel, KEYS, TTL } from '../redis/client';
 
 const router = Router();
 
@@ -563,5 +563,28 @@ router.patch('/reorder', authMiddleware,
     }
   }
 );
+
+// ── POST /api/channels/voice/force-leave ─────────────────────────
+// Removes the calling user from all voice channels in Redis (ghost cleanup).
+// Also notifies all servers via Socket.IO.
+router.post('/voice/force-leave', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const ghosted = await clearUserFromAllVoiceChannels(userId);
+    if (ghosted.length > 0) {
+      const io = req.app.get('io');
+      for (const channelId of ghosted) {
+        const { rows: [ch] } = await query(`SELECT server_id FROM channels WHERE id = $1`, [channelId]);
+        if (ch?.server_id && io) {
+          io.to(`server:${ch.server_id}`).emit('voice_user_left', {
+            channel_id: channelId,
+            user_id: userId,
+          });
+        }
+      }
+    }
+    return res.json({ cleared: ghosted.length, channels: ghosted });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
 
 export default router;

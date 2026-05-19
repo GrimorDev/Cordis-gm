@@ -159,6 +159,22 @@ export async function getVoiceMembers(channelId: string): Promise<string[]> {
   return redis.smembers(KEYS.voiceChannel(channelId));
 }
 
+/** Returns list of channelIds the user was ghosted in (and removes them). */
+export async function clearUserFromAllVoiceChannels(userId: string): Promise<string[]> {
+  const keys = await redis.keys('voice:*:members');
+  const ghostedChannels: string[] = [];
+  for (const key of keys) {
+    const isMember = await redis.sismember(key, userId);
+    if (isMember) {
+      await redis.srem(key, userId);
+      // Extract channelId from key pattern "voice:<channelId>:members"
+      const channelId = key.replace(/^voice:/, '').replace(/:members$/, '');
+      ghostedChannels.push(channelId);
+    }
+  }
+  return ghostedChannels;
+}
+
 // ════════════════════════════════════════════════════════════════════
 //  Slowmode helpers
 // ════════════════════════════════════════════════════════════════════

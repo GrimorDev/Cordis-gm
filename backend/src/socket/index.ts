@@ -8,6 +8,7 @@ import {
   setUserStatus, joinVoiceChannel, leaveVoiceChannel,
   getSpotifyJamMembers, getVoiceDj, getMyVoiceDjChannel,
   endSpotifyJam, clearVoiceDj, getVoiceMembers,
+  clearUserFromAllVoiceChannels,
 } from '../redis/client';
 import { query } from '../db/pool';
 import { JwtPayload, ServerToClientEvents, ClientToServerEvents } from '../types';
@@ -143,6 +144,21 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
     );
     for (const { server_id } of servers) {
       socket.join(`server:${server_id}`);
+    }
+
+    // ── Ghost cleanup: remove user from any voice channels they got stuck in ──
+    // Runs on every connect to prevent stale Redis entries from persisting
+    {
+      const ghosted = await clearUserFromAllVoiceChannels(user.id);
+      for (const channelId of ghosted) {
+        const { rows: [ch] } = await query(`SELECT server_id FROM channels WHERE id = $1`, [channelId]);
+        if (ch?.server_id) {
+          io.to(`server:${ch.server_id}`).emit('voice_user_left', {
+            channel_id: channelId,
+            user_id: user.id,
+          });
+        }
+      }
     }
 
     // ── Broadcast current activities of friends/co-members to newly connected user ──

@@ -8557,6 +8557,8 @@ export default function App() {
     if (!token) { setAuthLoading(false); return; }
     auth.me().then(u => {
       setCurrentUser(u); setEditProf({...u}); setIsAuthenticated(true); applyUserPrefs(u);
+      // Clear any ghost voice channel state from previous session
+      channelsApi.forceLeaveVoice().catch(() => {});
       if (u.active_tag_server_id) {
         setActiveTagServerId(u.active_tag_server_id);
         if (u.active_tag) {
