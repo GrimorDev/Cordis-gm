@@ -13523,8 +13523,13 @@ export default function App() {
           {showCallPanel && activeCall ? (
             /* ── CALL PANEL ─────────────────────────────────────────── */
             <div className="flex-1 flex flex-col overflow-hidden call-panel-bg">
-              {/* Animated gradient third orb */}
-              <div className="call-panel-orb3 pointer-events-none"/>
+              {/* Animated aurora layers */}
+              <div className="call-mesh"/>
+              <div className="call-orb call-orb-1"/>
+              <div className="call-orb call-orb-2"/>
+              <div className="call-orb call-orb-3"/>
+              <div className="call-orb call-orb-4"/>
+              <div className="call-vignette"/>
               {/* Call header */}
               <header className="shrink-0 flex items-center justify-between px-5 py-3 relative z-10"
                 style={{
@@ -13663,53 +13668,65 @@ export default function App() {
                   const uMuted = isSelf2 ? activeCall.isMuted : (voiceUserStates[u.id]?.muted??false);
                   const uDeafened = voiceUserStates[u.id]?.deafened ?? false;
                   const uMutedByMe = mutedByMe[u.id] ?? false;
+                  const avatarSrc = ava(u);
                   const cardClass = `call-participant-card${isSpeaking?' speaking':uMuted?' muted':''}`;
                   return (
                     <motion.div
                       key={keyStr}
                       layout
-                      initial={{opacity:0,scale:0.90,y:12}}
+                      initial={{opacity:0,scale:0.88,y:16}}
                       animate={{opacity:1,scale:1,y:0}}
-                      exit={{opacity:0,scale:0.88,y:8}}
-                      transition={{type:'spring',stiffness:350,damping:28}}
+                      exit={{opacity:0,scale:0.85,y:10}}
+                      transition={{type:'spring',stiffness:320,damping:26}}
                       className={cardClass}
                       onContextMenu={isSelf2?undefined:e=>{e.preventDefault();setVolMenu({id:u.id,username:u.username,x:e.clientX,y:e.clientY});}}>
-                      {/* Avatar with speaking ring */}
-                      <div className="relative">
-                        {isSpeaking && (
-                          <div className="absolute -inset-1.5 rounded-2xl"
-                            style={{background:'rgba(127,217,98,0.15)',boxShadow:'0 0 20px rgba(127,217,98,0.35)',animation:'glow-pulse 1.4s ease-in-out infinite'}}/>
-                        )}
-                        <div className={`relative rounded-2xl overflow-hidden border-2 transition-all duration-200 ${isSpeaking?'border-[#7FD962]/70':uMuted?'border-rose-500/40':'border-white/[0.12]'}`}
-                          style={{padding:2}}>
-                          <img src={ava(u)} className={`${hasStreams?'w-14 h-14':'w-20 h-20'} rounded-xl object-cover block`} alt=""/>
-                          {!isSelf2&&uMutedByMe&&(
-                            <div className="absolute inset-0 rounded-xl bg-zinc-900/65 flex items-center justify-center">
-                              <VolumeX size={18} className="text-rose-400"/>
-                            </div>
-                          )}
-                        </div>
-                        {/* Mic status pill */}
-                        <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center border border-zinc-900 transition-colors ${uMuted?'bg-rose-500':isSpeaking?'bg-[#7FD962]':'bg-zinc-700/90'}`}>
-                          {uMuted?<MicOff size={9} className="text-white"/>:<Mic size={9} className="text-white"/>}
-                        </div>
-                        {/* Deafened */}
-                        {!isSelf2&&uDeafened&&(
-                          <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 border border-zinc-900 flex items-center justify-center">
-                            <VolumeX size={8} className="text-white"/>
+                      {/* Avatar area with blurred bg */}
+                      <div className="cpc-avatar-wrap">
+                        {/* Blurred bg */}
+                        <div className="cpc-avatar-bg" style={{backgroundImage:`url(${avatarSrc})`}}/>
+                        {/* Main avatar */}
+                        <img src={avatarSrc} alt="" className=""/>
+                        {/* Muted-by-me overlay */}
+                        {!isSelf2&&uMutedByMe&&(
+                          <div className="absolute inset-0 flex items-center justify-center z-10" style={{background:'rgba(0,0,0,0.50)'}}>
+                            <VolumeX size={22} className="text-rose-400"/>
                           </div>
                         )}
                         {/* Screen share badge */}
                         {(isSelf2 ? activeCall.isScreenSharing : sharingUserIds.has(u.id)) && (
-                          <div className="absolute -top-1 -left-1 w-4 h-4 rounded-full bg-indigo-500 border border-zinc-900 flex items-center justify-center">
-                            <ScreenShare size={8} className="text-white"/>
+                          <div className="absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold text-white"
+                            style={{background:'rgba(99,102,241,0.75)',backdropFilter:'blur(4px)'}}>
+                            <ScreenShare size={9}/> Live
+                          </div>
+                        )}
+                        {/* Deafened badge */}
+                        {!isSelf2&&uDeafened&&(
+                          <div className="absolute top-2 right-2 z-10 w-5 h-5 rounded-full bg-rose-500 flex items-center justify-center">
+                            <VolumeX size={9} className="text-white"/>
+                          </div>
+                        )}
+                        {/* Self label */}
+                        {isSelf2 && (
+                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 px-2 py-0.5 rounded-md text-[9px] font-bold tracking-wide text-zinc-400"
+                            style={{background:'rgba(0,0,0,0.55)',backdropFilter:'blur(4px)'}}>
+                            TY
                           </div>
                         )}
                       </div>
-                      {/* Name */}
-                      <p className={`text-[12px] font-bold tracking-tight ${isSpeaking?'text-[#7FD962]':uMuted?'text-rose-400':'text-white'}`}>
-                        {u.username}{isSelf2&&<span className="text-zinc-600 font-normal"> (Ty)</span>}
-                      </p>
+                      {/* Name bar */}
+                      <div className="cpc-name-bar">
+                        <span className={`cpc-name ${isSpeaking?'text-[#7FD962]':uMuted?'text-rose-400':''}`}>
+                          {u.username}
+                        </span>
+                        <div className={`cpc-mic ${uMuted?'bg-rose-500/20':isSpeaking?'bg-[#7FD962]/20':'bg-white/[0.06]'}`}>
+                          {uMuted
+                            ? <MicOff size={10} className="text-rose-400"/>
+                            : isSpeaking
+                              ? <Mic size={10} className="text-[#7FD962]"/>
+                              : <Mic size={10} className="text-zinc-600"/>
+                          }
+                        </div>
+                      </div>
                     </motion.div>
                   );
                 };
