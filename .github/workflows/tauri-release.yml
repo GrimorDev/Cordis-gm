@@ -1,12 +1,22 @@
 name: Release — Windows (.exe) + macOS (.dmg) + Linux (.AppImage/.deb)
 
-# Triggers only on:
-#   - Manual dispatch (workflow_dispatch)
+# Triggers:
+#   - Manual dispatch (workflow_dispatch) — always builds a release
 #   - Push to main where commit message starts with "release:"
-# Regular feature/fix commits do NOT create releases.
+# Regular feature/fix commits do NOT trigger this workflow at all.
 on:
   push:
     branches: [main]
+    # Narrow the trigger: only paths that matter for a desktop build
+    # This prevents noise from pure backend or CSS-only commits.
+    # The prepare job still guards via commit-message check.
+    paths:
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'vite.config.ts'
+      - '.github/workflows/tauri-release.yml'
   workflow_dispatch:
     inputs:
       version:
@@ -14,9 +24,12 @@ on:
         required: false
         default: ''
 
-# Only one release at a time — cancel stale runs.
+# Separate concurrency buckets:
+#   - Release commits + manual dispatch  → group "release"  (de-dup real releases)
+#   - Regular pushes that hit the paths filter → group "ci-{sha}" (unique, no cancellation)
+# This prevents a random fix: push from cancelling an in-progress release build.
 concurrency:
-  group: release
+  group: ${{ (github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'release:')) && 'release' || format('ci-{0}', github.sha) }}
   cancel-in-progress: true
 
 permissions:
@@ -29,9 +42,6 @@ jobs:
   prepare:
     name: Bump version & create tag
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      startsWith(github.event.head_commit.message, 'release:')
     outputs:
       tag:     ${{ steps.ver.outputs.tag }}
       version: ${{ steps.ver.outputs.version }}
