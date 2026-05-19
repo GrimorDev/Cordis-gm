@@ -13525,7 +13525,12 @@ export default function App() {
         <section className="flex-1 flex flex-col glass-dark rounded-2xl overflow-hidden min-w-0 relative focus-card-center">
           {showCallPanel && activeCall ? (
             /* ── CALL PANEL ─────────────────────────────────────────── */
-            <div className="flex-1 flex flex-col overflow-hidden call-panel-bg">
+            <div className="flex-1 overflow-hidden call-panel-bg" style={{
+              display:'grid',
+              gridTemplateRows: voiceChatOpen
+                ? 'auto auto 1fr 220px auto'
+                : 'auto auto 1fr 0px auto',
+            }}>
               {/* Animated aurora layers */}
               <div className="call-mesh"/>
               <div className="call-orb call-orb-1"/>
@@ -13645,9 +13650,7 @@ export default function App() {
                   )}
                 </div>
               )}
-              {/* ── Body: participants + voice chat + controls — flex-col min-h-0 is critical ── */}
-              <div className="flex-1 flex flex-col min-h-0 relative z-10">
-              {/* Participants + screen share area */}
+              {/* Participants + screen share area — grid row 3 */}
               {(()=>{
                 const remoteScreenEntries = [...remoteScreenStreamsRef.current.entries()];
                 // All active streams: own first (if sharing), then remote sharers
@@ -13969,17 +13972,17 @@ export default function App() {
 
                 // ── NORMAL GRID LAYOUT (no streams) ──────────────────────────
                 return (
-                  <div className="flex-1 flex items-center justify-center p-8 overflow-y-auto min-h-0">
+                  <div className="flex items-center justify-center p-8 overflow-y-auto relative z-10" style={{minHeight:0}}>
                     <div className="flex flex-wrap items-center justify-center gap-5 max-w-2xl">
                       {allParticipants}
                     </div>
                   </div>
                 );
               })()}
-              {/* ── Voice channel text chat panel ── */}
+              {/* ── Voice channel text chat panel — grid row 4 ── */}
               {voiceChatOpen && activeCall.channelId && (
-                <div className="shrink-0 flex flex-col"
-                  style={{height:'220px',borderTop:'1px solid rgba(255,255,255,0.07)',background:'rgba(6,7,14,0.92)',backdropFilter:'blur(16px)'}}>
+                <div className="flex flex-col overflow-hidden relative z-10"
+                  style={{borderTop:'1px solid rgba(255,255,255,0.07)',background:'rgba(6,7,14,0.92)',backdropFilter:'blur(16px)'}}>
                   <div className="flex-1 overflow-y-auto p-3 custom-scrollbar flex flex-col gap-1.5 min-h-0">
                     {voiceChatMsgs.length === 0 && (
                       <p className="text-xs text-zinc-600 text-center mt-4">Brak wiadomości — zacznij czat głosowy!</p>
@@ -14006,8 +14009,8 @@ export default function App() {
                   </div>
                 </div>
               )}
-              {/* Call controls */}
-              <div className="shrink-0 relative z-10 pb-5 px-5">
+              {/* Call controls — grid row 5 */}
+              <div className="relative z-10 pb-5 px-5">
                 {/* Device settings panel */}
                 <AnimatePresence>
                   {devicesOpen&&(
@@ -14122,7 +14125,6 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              </div>{/* end body wrapper */}
             </div>
           ) : activeView==='servers' && !activeChannel ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
