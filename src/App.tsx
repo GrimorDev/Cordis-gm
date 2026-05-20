@@ -7333,7 +7333,8 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
   // Use real-time status from socket if available, fall back to fetched profile status
   const effectiveStatus = realtimeStatus ?? u?.status ?? 'offline';
   // Respect show_on_profile from fetched data; activity from socket is only shown if show_on_profile is true
-  const showSpotify = data?.spotify?.show_on_profile !== false;
+  // Also hide Spotify activity if the user is offline (status should suppress all activity)
+  const showSpotify = data?.spotify?.show_on_profile !== false && effectiveStatus !== 'offline';
   const nowPlaying: (SpotifyTrack & {is_playing?:boolean}) | null | undefined =
     showSpotify
       ? (activity !== undefined
@@ -8454,9 +8455,9 @@ export default function App() {
     const poll = async () => {
       try {
         const r = await spotifyApi.nowPlaying();
-        // Respect show_on_profile — emit null if disabled
+        // Respect show_on_profile AND own offline status — emit null if either disables activity
         const showOnProfile = ownSpotify?.show_on_profile !== false;
-        const effectiveTrack = (r.track && showOnProfile) ? r.track : null;
+        const effectiveTrack = (r.track && showOnProfile && myStatusRef.current !== 'offline') ? r.track : null;
         const trackKey = effectiveTrack ? `${effectiveTrack.name}|${effectiveTrack.artists}` : null;
         const trackChanged = trackKey !== lastEmittedTrack.current;
         if (trackChanged) lastEmittedTrack.current = trackKey;
