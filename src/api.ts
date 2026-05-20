@@ -27,25 +27,65 @@ export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 
+// ── Token ──────────────────────────────────────────────────────────────────
+export const getToken         = () => localStorage.getItem('cordyn_token')         || sessionStorage.getItem('cordyn_token');
+export const setToken         = (t: string) => localStorage.setItem('cordyn_token', t);
+export const clearToken       = () => { localStorage.removeItem('cordyn_token'); sessionStorage.removeItem('cordyn_token'); };
+
+export const getRefreshToken  = () => localStorage.getItem('cordyn_refresh_token');
+export const setRefreshToken  = (t: string) => localStorage.setItem('cordyn_refresh_token', t);
+export const clearRefreshToken = () => localStorage.removeItem('cordyn_refresh_token');
+
+// Whether a silent refresh is already in progress (avoid concurrent refresh races)
+let _refreshPromise: Promise<string | null> | null = null;
+
+/** Try to get a new access token using the stored refresh token.
+ *  Returns new token on success, null if refresh token is missing or expired. */
+export async function tryRefreshToken(): Promise<string | null> {
+  if (_refreshPromise) return _refreshPromise;
+  _refreshPromise = (async () => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) return null;
+    try {
+      const res = await fetch(`${BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!res.ok) { clearRefreshToken(); return null; }
+      const data = await res.json();
+      if (data.token) { setToken(data.token); return data.token; }
+      return null;
+    } catch { return null; }
+    finally { _refreshPromise = null; }
+  })();
+  return _refreshPromise;
+}
+
 async function req<T>(method: string, path: string, body?: unknown, isFormData = false): Promise<T> {
-  const token = getToken();
-  const headers: Record<string, string> = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  if (body && !isFormData) headers['Content-Type'] = 'application/json';
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers,
-    body: isFormData ? (body as BodyInit) : body ? JSON.stringify(body) : undefined,
-  });
+  const doFetch = (token: string | null) => {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (body && !isFormData) headers['Content-Type'] = 'application/json';
+    return fetch(`${BASE}${path}`, {
+      method,
+      headers,
+      body: isFormData ? (body as BodyInit) : body ? JSON.stringify(body) : undefined,
+    });
+  };
+
+  let res = await doFetch(getToken());
+  // On 401: try silent refresh once, then retry
+  if (res.status === 401) {
+    const newToken = await tryRefreshToken();
+    if (newToken) {
+      res = await doFetch(newToken);
+    }
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(res.status, data.error || data.message || 'Error');
   return data as T;
 }
-
-// ── Token ──────────────────────────────────────────────────────────────────
-export const getToken = () => localStorage.getItem('cordyn_token') || sessionStorage.getItem('cordyn_token');
-export const setToken = (t: string) => localStorage.setItem('cordyn_token', t);
-export const clearToken = () => localStorage.removeItem('cordyn_token');
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export interface Badge {
@@ -348,19 +388,20 @@ export const botsApi = {
 
 // ── Auth ───────────────────────────────────────────────────────────────────
 export type LoginResult =
-  | { user: UserProfile; token: string; requiresTwoFactor?: never }
-  | { requiresTwoFactor: true; sessionId: string; user?: never; token?: never };
+  | { user: UserProfile; token: string; refreshToken: string; requiresTwoFactor?: never }
+  | { requiresTwoFactor: true; sessionId: string; user?: never; token?: never; refreshToken?: never };
 
 export const auth = {
   sendCode: (email: string) =>
     req<{ message: string }>('POST', '/auth/send-code', { email }),
   register: (d: { username: string; email: string; password: string; code: string }) =>
-    req<{ user: UserProfile; token: string }>('POST', '/auth/register', d),
+    req<{ user: UserProfile; token: string; refreshToken: string }>('POST', '/auth/register', d),
   login: (d: { login: string; password: string }) =>
     req<LoginResult>('POST', '/auth/login', d),
   verify2fa: (d: { sessionId: string; code: string; type: 'totp' | 'backup' }) =>
-    req<{ user: UserProfile; token: string }>('POST', '/auth/2fa-verify', d),
-  logout: () => req<void>('POST', '/auth/logout'),
+    req<{ user: UserProfile; token: string; refreshToken: string }>('POST', '/auth/2fa-verify', d),
+  logout: (refreshToken?: string | null) =>
+    req<void>('POST', '/auth/logout', refreshToken ? { refreshToken } : undefined),
   me: () => req<UserProfile>('GET', '/auth/me'),
   changePassword: (currentPassword: string, newPassword: string) =>
     req<{ ok: boolean }>('PUT', '/auth/change-password', { currentPassword, newPassword }),

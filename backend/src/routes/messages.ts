@@ -58,9 +58,16 @@ async function deliverToDevBotWebhooks(
 
 interface ChannelAccess { serverId: string; serverName: string; channelName: string; channelType: string; roleInServer: string; slowmodeSeconds: number; }
 
+// Permissions that must be explicitly granted — never allowed by default for members without custom roles.
+// These affect other users or the whole server in significant ways.
+const SENSITIVE_PERMISSIONS = new Set([
+  'mention_everyone', 'manage_messages', 'manage_channels',
+  'manage_roles', 'ban_members', 'kick_members', 'administrator',
+]);
+
 /** Check if a member has a specific permission through their server roles.
  *  Owner/Admin bypass all checks.
- *  No custom roles assigned → allow (default member, unrestricted).
+ *  No custom roles assigned → allow ONLY for non-sensitive permissions (default member, unrestricted).
  *  Has assigned roles → any role with this permission grants access; otherwise deny.
  *  Empty permissions array on a role means "no permissions granted by this role". */
 async function hasPermission(serverId: string, userId: string, permission: string, roleName: string): Promise<boolean> {
@@ -71,8 +78,8 @@ async function hasPermission(serverId: string, userId: string, permission: strin
      WHERE mr.server_id = $1 AND mr.user_id = $2`,
     [serverId, userId]
   );
-  // No custom roles assigned → default allow (unrestricted member)
-  if (rows.length === 0) return true;
+  // No custom roles assigned → allow basic permissions, deny sensitive ones
+  if (rows.length === 0) return !SENSITIVE_PERMISSIONS.has(permission);
   // Has assigned roles: check if any role grants 'administrator' (full bypass) or specific permission
   return rows.some((r: any) =>
     Array.isArray(r.permissions) &&

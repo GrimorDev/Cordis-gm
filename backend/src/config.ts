@@ -42,7 +42,7 @@ export const config = {
 
   jwt: {
     secret: process.env.JWT_SECRET || JWT_SECRET_DEFAULT,
-    expiresIn: process.env.JWT_EXPIRES_IN || '30d',
+    expiresIn: process.env.JWT_EXPIRES_IN || '1h',      // short-lived — refreshed silently by client
     refreshSecret: process.env.JWT_REFRESH_SECRET || JWT_REFRESH_SECRET_DEFAULT,
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
   },

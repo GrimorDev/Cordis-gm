@@ -42,9 +42,15 @@ async function isAuthorized(serverId: string, userId: string, permission: string
   return !!rowCount;
 }
 
+// Permissions that are never granted by default — must be explicitly assigned via a role.
+const SENSITIVE_PERMISSIONS = new Set([
+  'mention_everyone', 'manage_messages', 'manage_channels',
+  'manage_roles', 'ban_members', 'kick_members', 'administrator',
+]);
+
 /**
- * Permissive: Owner/Admin always pass; members with NO custom roles pass (default allow);
- * members WITH custom roles need an explicit grant.
+ * Permissive: Owner/Admin always pass; members with NO custom roles pass for non-sensitive
+ * permissions (default allow); members WITH custom roles need an explicit grant.
  * Used for member actions (create_invites, etc.)
  */
 async function hasMemberPermission(serverId: string, userId: string, permission: string): Promise<boolean> {
@@ -60,7 +66,8 @@ async function hasMemberPermission(serverId: string, userId: string, permission:
      WHERE mr.server_id = $1 AND mr.user_id = $2`,
     [serverId, userId]
   );
-  if (rows.length === 0) return true; // No custom roles → allow by default
+  // No custom roles → allow only non-sensitive permissions
+  if (rows.length === 0) return !SENSITIVE_PERMISSIONS.has(permission);
   return rows.some((r: any) =>
     Array.isArray(r.permissions) &&
     (r.permissions.includes('administrator') || r.permissions.includes(permission))

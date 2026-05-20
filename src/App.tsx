@@ -32,6 +32,7 @@ import {
   gamesApi, spotifyApi, twitchApi, steamApi, youtubeApi, kickApi, epicApi, twoFactorApi,
   emojisApi, notesApi, pollsApi, automationsApi, dmPinApi, pushApi, bookmarksApi,
   uploadFile, uploadFileWithProgress, setToken, clearToken, getToken,
+  setRefreshToken, clearRefreshToken, getRefreshToken,
   type BookmarkEntry, type BookmarkFolder,
   type UserProfile, type ServerData, type ServerFull, type ServerRole,
   type ChannelData, type MessageFull, type DmConversation,
@@ -774,7 +775,9 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
     e.preventDefault(); setError(''); setLoading(true);
     try {
       const res = await auth.register({ username: form.username, email: form.email, password: form.password, code: verifyCode.trim() });
-      setToken(res.token); onAuth(res.user, res.token, true);
+      setToken(res.token);
+      if (res.refreshToken) setRefreshToken(res.refreshToken);
+      onAuth(res.user, res.token, true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Błąd połączenia z serwerem');
     } finally { setLoading(false); }
@@ -792,13 +795,17 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
         if (rememberMe) {
           localStorage.setItem('cordyn_saved_creds', btoa(JSON.stringify({ login: form.login, password: form.password })));
           setToken(res.token); // persist in localStorage
+          if (res.refreshToken) setRefreshToken(res.refreshToken);
         } else {
           localStorage.removeItem('cordyn_saved_creds');
           if (isTauri) {
             setToken(res.token); // desktop always persists session
+            if (res.refreshToken) setRefreshToken(res.refreshToken);
           } else {
             localStorage.removeItem('cordyn_token');
             sessionStorage.setItem('cordyn_token', res.token);
+            // Refresh token always in localStorage (needs to survive session tab close for auto-refresh)
+            if (res.refreshToken) setRefreshToken(res.refreshToken);
           }
         }
         // Also save to browser/WebView2 native credential store for OS-level autocomplete
@@ -819,7 +826,9 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
     e.preventDefault(); setError(''); setLoading(true);
     try {
       const res = await auth.verify2fa({ sessionId: twoFaSession!, code: twoFaCode.trim(), type: twoFaType });
-      setToken(res.token); onAuth(res.user, res.token, false);
+      setToken(res.token);
+      if (res.refreshToken) setRefreshToken(res.refreshToken);
+      onAuth(res.user, res.token, false);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Błąd połączenia z serwerem');
     } finally { setLoading(false); }
@@ -9208,7 +9217,7 @@ export default function App() {
       const msg = reason || 'Twoje konto zostało zbanowane';
       autoToast(msg, 'error');
       setTimeout(() => {
-        clearToken();
+        clearToken(); clearRefreshToken();
         disconnectSocket();
         setIsAuthenticated(false);
         setCurrentUser(null);
@@ -11082,8 +11091,9 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    try { await auth.logout(); } catch {}
-    clearToken(); disconnectSocket(); setIsAuthenticated(false); setCurrentUser(null);
+    const rt = getRefreshToken();
+    try { await auth.logout(rt); } catch {}
+    clearToken(); clearRefreshToken(); disconnectSocket(); setIsAuthenticated(false); setCurrentUser(null);
     setServerList([]); setActiveServer(''); setActiveChannel('');
   };
 
@@ -19754,7 +19764,7 @@ export default function App() {
                   ))}
                   {/* Logout — at end of tab bar on mobile, bottom of sidebar on desktop */}
                   <div className="sm:mt-auto sm:pt-3 sm:border-t border-white/[0.06] ml-auto sm:ml-0 shrink-0">
-                    <button onClick={()=>{setAppSettOpen(false);auth.logout().then(()=>{clearToken();setIsAuthenticated(false);setCurrentUser(null);}).catch(()=>{clearToken();setIsAuthenticated(false);setCurrentUser(null);});}}
+                    <button onClick={()=>{setAppSettOpen(false);const rt=getRefreshToken();auth.logout(rt).then(()=>{clearToken();clearRefreshToken();setIsAuthenticated(false);setCurrentUser(null);}).catch(()=>{clearToken();clearRefreshToken();setIsAuthenticated(false);setCurrentUser(null);});}}
                       className="flex items-center gap-2 px-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-medium text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all w-full shrink-0">
                       <LogOut size={14}/> <span>{t('action.logout')}</span>
                     </button>

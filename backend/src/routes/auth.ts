@@ -17,6 +17,9 @@ const router = Router();
 const signToken = (payload: { id: string; username: string; email: string }) =>
   jwt.sign(payload, config.jwt.secret, { algorithm: 'HS256', expiresIn: config.jwt.expiresIn } as any);
 
+const signRefreshToken = (payload: { id: string; username: string; email: string }) =>
+  jwt.sign({ ...payload, type: 'refresh' }, config.jwt.refreshSecret, { algorithm: 'HS256', expiresIn: config.jwt.refreshExpiresIn } as any);
+
 // POST /api/auth/send-code — send email verification code
 router.post(
   '/send-code',
@@ -117,10 +120,12 @@ router.post(
       await query('UPDATE email_verifications SET used = TRUE WHERE id = $1', [codeId]);
 
       const user = rows[0];
-      const token = signToken({ id: user.id, username: user.username, email: user.email });
+      const tokenPayload = { id: user.id, username: user.username, email: user.email };
+      const token = signToken(tokenPayload);
+      const refreshToken = signRefreshToken(tokenPayload);
       await setUserStatus(user.id, 'online');
 
-      return res.status(201).json({ token, user });
+      return res.status(201).json({ token, refreshToken, user });
     } catch (err) {
       console.error('Register error:', err);
       return res.status(500).json({ error: 'Internal server error' });
@@ -183,12 +188,14 @@ router.post(
         return res.json({ requiresTwoFactor: true, sessionId });
       }
 
-      const token = signToken({ id: user.id, username: user.username, email: user.email });
+      const tokenPayload = { id: user.id, username: user.username, email: user.email };
+      const token = signToken(tokenPayload);
+      const refreshToken = signRefreshToken(tokenPayload);
       await setUserStatus(user.id, 'online');
       await query('UPDATE users SET status = $1 WHERE id = $2', ['online', user.id]);
 
       const { password_hash: _, ...safeUser } = user;
-      return res.json({ token, user: safeUser });
+      return res.json({ token, refreshToken, user: safeUser });
     } catch (err) {
       console.error('Login error:', err);
       return res.status(500).json({ error: 'Internal server error' });
@@ -254,12 +261,14 @@ router.post(
         return res.status(403).json({ error: msg });
       }
 
-      const token = signToken({ id: user.id, username: user.username, email: user.email });
+      const tokenPayload = { id: user.id, username: user.username, email: user.email };
+      const token = signToken(tokenPayload);
+      const refreshToken = signRefreshToken(tokenPayload);
       await setUserStatus(userId, 'online');
       await query('UPDATE users SET status = $1 WHERE id = $2', ['online', userId]);
 
       const { password_hash: _, totp_secret: __, totp_backup_codes: ___, ...safeUser } = user;
-      return res.json({ token, user: safeUser });
+      return res.json({ token, refreshToken, user: safeUser });
     } catch (err) {
       console.error('2fa-verify error:', err);
       return res.status(500).json({ error: 'Internal server error' });
@@ -283,17 +292,60 @@ router.put('/change-password', authMiddleware, async (req: AuthRequest, res: Res
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// POST /api/auth/refresh — exchange a valid refresh token for a new access token
+router.post('/refresh', async (req: Request, res: Response) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) return res.status(400).json({ error: 'No refresh token' });
+  try {
+    const payload = jwt.verify(refreshToken, config.jwt.refreshSecret, { algorithms: ['HS256'] }) as any;
+    if (payload.type !== 'refresh') return res.status(401).json({ error: 'Invalid token type' });
+
+    // Verify the refresh token is not blacklisted
+    const rtHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    const isBlacklisted = await redis.get(KEYS.blacklistToken(rtHash));
+    if (isBlacklisted) return res.status(401).json({ error: 'Token revoked' });
+
+    // Verify user still exists and is not banned
+    const { rows: [user] } = await query(
+      `SELECT id, username, email FROM users
+       WHERE id = $1 AND NOT EXISTS (
+         SELECT 1 FROM user_bans WHERE user_id=$1 AND is_active=TRUE
+         AND (banned_until IS NULL OR banned_until > NOW())
+       )`,
+      [payload.id]
+    );
+    if (!user) return res.status(401).json({ error: 'User not found or suspended' });
+
+    const tokenPayload = { id: user.id, username: user.username, email: user.email };
+    const newToken = signToken(tokenPayload);
+    return res.json({ token: newToken });
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired refresh token' });
+  }
+});
+
 // POST /api/auth/logout
 router.post('/logout', authMiddleware, async (req: AuthRequest, res: Response) => {
   const token = req.headers.authorization!.slice(7);
-  // Blacklist token until it expires
   try {
+    // Blacklist access token
     const decoded = jwt.decode(token) as any;
     const ttl = decoded?.exp ? decoded.exp - Math.floor(Date.now() / 1000) : 86400;
     if (ttl > 0) {
-      // Use SHA-256 hash as key (consistent with auth middleware, avoids collision risk)
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
       await redis.setex(KEYS.blacklistToken(tokenHash), ttl, '1');
+    }
+    // Also blacklist refresh token if provided in body
+    const { refreshToken } = req.body || {};
+    if (refreshToken) {
+      try {
+        const rtDecoded = jwt.decode(refreshToken) as any;
+        const rtTtl = rtDecoded?.exp ? rtDecoded.exp - Math.floor(Date.now() / 1000) : 30 * 86400;
+        if (rtTtl > 0) {
+          const rtHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+          await redis.setex(KEYS.blacklistToken(rtHash), rtTtl, '1');
+        }
+      } catch { /* ignore invalid refresh token on logout */ }
     }
     await setUserStatus(req.user!.id, 'offline');
     await query('UPDATE users SET status = $1 WHERE id = $2', ['offline', req.user!.id]);
@@ -311,6 +363,17 @@ router.post('/forgot-password',
     if (!errors.isEmpty()) return res.status(400).json({ error: 'Podaj prawidłowy adres email' });
     const { email } = req.body;
     try {
+      // Rate-limit: max 2 reset emails per address in 15 minutes (same key schema as send-code)
+      const recentResets = await query(
+        `SELECT COUNT(*) FROM password_reset_tokens
+         WHERE user_id IN (SELECT id FROM users WHERE email=$1)
+         AND created_at > NOW() - INTERVAL '15 minutes'`,
+        [email]
+      );
+      if (parseInt(recentResets.rows[0].count) >= 2) {
+        return res.json({ ok: true }); // silent — don't reveal throttle to prevent enumeration
+      }
+
       const { rows } = await query('SELECT id FROM users WHERE email=$1', [email]);
       // Always return success to not leak whether email exists
       if (!rows[0]) return res.json({ ok: true });
