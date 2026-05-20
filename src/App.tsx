@@ -12387,7 +12387,17 @@ export default function App() {
           <button onClick={() => setIsMobileOpen(v => !v)} className="md:hidden w-9 h-9 flex items-center justify-center text-[#626A73] hover:text-white ml-1 shrink-0">
             {isMobileOpen ? <X size={18}/> : <Menu size={18}/>}
           </button>
-          {/* Active context name */}
+          {/* Mobile: active context name (channel / server / view) */}
+          <div className="flex md:hidden items-center gap-1.5 min-w-0 max-w-[140px]">
+            <span className="text-[13px] font-semibold text-white truncate leading-none">
+              {activeView==='home' ? 'Dashboard' :
+               activeView==='friends' ? 'Znajomi' :
+               activeView==='dms' ? (activeDmUserId ? (activeDm?.other_username ?? '…') : 'Wiadomości') :
+               activeCh ? `#${activeCh.name}` :
+               (serverFull?.name ?? '')}
+            </span>
+          </div>
+          {/* Active context name (desktop) */}
           <div className="hidden md:flex items-center gap-2 min-w-0 pl-1">
             {activeView==='servers'&&serverFull&&(<>
               {serverFull.icon_url
@@ -12411,7 +12421,12 @@ export default function App() {
         <div className="flex items-center justify-end gap-1 pr-1">
 
 
-          {/* Search */}
+          {/* Search — icon-only on xs, full input on sm+ */}
+          <button className="sm:hidden w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all"
+            onClick={() => searchInputRef.current?.focus()}
+            title="Szukaj">
+            <Search size={15}/>
+          </button>
           <div className="relative group hidden sm:block">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-[#FF8F40] transition-colors pointer-events-none"/>
             <input ref={searchInputRef} placeholder="Szukaj…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
@@ -12448,7 +12463,7 @@ export default function App() {
               {notifOpen&&(
                 <motion.div initial={{opacity:0,y:-8,scale:0.96}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:-8,scale:0.96}}
                   transition={{duration:0.15,ease:'easeOut'}}
-                  className="absolute right-0 top-full mt-2 w-96 max-h-[480px] flex flex-col z-50 rounded-2xl border border-white/[0.1] shadow-2xl shadow-black/60 overflow-hidden"
+                  className="absolute right-0 top-full mt-2 w-96 max-sm:w-[calc(100vw-16px)] max-sm:right-0 max-h-[480px] flex flex-col z-50 rounded-2xl border border-white/[0.1] shadow-2xl shadow-black/60 overflow-hidden"
                   style={{background:'rgba(13,13,24,0.98)',backdropFilter:'blur(12px)'}}>
                   <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07] shrink-0">
                     <div className="flex items-center gap-2">
@@ -15747,9 +15762,11 @@ export default function App() {
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',
                   backgroundAttachment: 'local',
+                  overscrollBehavior: 'contain',
                 } : activeCh?.background_gradient ? {
                   background: activeCh.background_gradient,
-                } : undefined}
+                  overscrollBehavior: 'contain',
+                } : {overscrollBehavior: 'contain'}}
                 onScroll={e => {
                   const el = e.currentTarget;
                   if (el.scrollHeight - el.scrollTop - el.clientHeight < 100) setHasNewMsgs(false);
@@ -21676,7 +21693,10 @@ export default function App() {
       </AnimatePresence>
 
       {/* ── TOAST CONTAINER ─────────────────────────────────────────────── */}
-      <div className="fixed top-4 right-4 z-[200] flex flex-col items-end gap-2.5 pointer-events-none" style={{minWidth:'20rem',maxWidth:'26rem'}}>
+      {/* ── Toast positioning: bottom on mobile, top-right on sm+ ── */}
+      <div className="fixed z-[200] flex flex-col gap-2.5 pointer-events-none
+        bottom-4 left-3 right-3 items-stretch
+        sm:bottom-auto sm:top-4 sm:left-auto sm:right-4 sm:items-end sm:min-w-80 sm:max-w-[26rem]">
         <AnimatePresence>
           {toasts.map(t => {
             const isDm = !!t.avatar || !!t.senderName;
@@ -21742,7 +21762,7 @@ export default function App() {
           return (
             <motion.div initial={{opacity:0,scale:0.85,y:24}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.85,y:20}}
               transition={{duration:0.3,ease:[0.16,1,0.3,1]}}
-              className={`fixed bottom-6 right-6 z-[150] ${gm} shadow-2xl border-indigo-500/10 overflow-hidden`}>
+              className={`fixed md:bottom-6 md:right-6 bottom-20 right-3 max-sm:left-3 z-[150] ${gm} shadow-2xl border-indigo-500/10 overflow-hidden`}>
               {/* Stream preview (shown when someone is streaming) */}
               {hasStream && (
                 <div className="relative bg-black cursor-pointer" style={{width:280,height:158}} onClick={()=>setShowCallPanel(true)}>
@@ -22342,7 +22362,7 @@ export default function App() {
         {threadRootId && (
           <motion.div initial={{opacity:0,x:30}} animate={{opacity:1,x:0}} exit={{opacity:0,x:30}}
             transition={{type:'spring',stiffness:380,damping:32}}
-            className="fixed right-4 top-16 bottom-16 w-80 bg-[#0f0f1a] border border-white/[0.1] rounded-2xl shadow-2xl z-[150] flex flex-col overflow-hidden">
+            className="fixed right-0 sm:right-4 top-14 sm:top-16 bottom-0 sm:bottom-16 w-full sm:w-80 bg-[#0f0f1a] border-l sm:border border-white/[0.1] sm:rounded-2xl shadow-2xl z-[150] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3.5 border-b border-white/[0.07] shrink-0">
               <div className="flex items-center gap-2">
                 <MessageSquare size={15} className="text-indigo-400"/>

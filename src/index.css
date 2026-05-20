@@ -44,7 +44,7 @@ body::before {
   inset: 0;
   background: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.04'/%3E%3C/svg%3E");
   pointer-events: none;
-  z-index: 9999;
+  z-index: 2;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -138,6 +138,12 @@ body::before {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-feature-settings: "rlig" 1, "calt" 1;
+  box-sizing: border-box;
+}
+
+/* Mobile tap delay fix — removes 300ms delay on touchscreen buttons */
+button, [role="button"], a, input, textarea, select {
+  touch-action: manipulation;
 }
 
 /* ── Accessibility: respect OS "reduce motion" setting ──────────────────── */
@@ -157,17 +163,20 @@ body::before {
 /* ── Performance: isolate scrollable regions ─────────────────────────────
    contain:paint stops the browser re-painting the parent every time
    a child inside the scroll area changes. Critical for long message lists
-   and channel lists on macOS WKWebView.                                    */
+   and channel lists on macOS WKWebView.
+   overscroll-behavior: contain prevents iOS rubber-band bounce.
+   -webkit-overflow-scrolling: touch enables momentum scrolling on iOS.    */
 .custom-scrollbar {
   contain: paint;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
-/* ── Performance: Framer Motion animated elements ────────────────────────
-   All motion.div transitions should run on the compositor thread.
-   This hint tells the browser to allocate a dedicated GPU layer.          */
-[data-framer-motion-layout-id],
-[style*="transform"],
-[style*="opacity"] {
+/* ── Performance: Framer Motion layout-animated elements only ─────────────
+   Only layout-animated elements need will-change. Applying it to every
+   element with an inline style/transform would create thousands of GPU
+   layers and cause memory pressure.                                        */
+[data-framer-motion-layout-id] {
   will-change: transform, opacity;
 }
 
@@ -520,6 +529,44 @@ body::before {
 /* ── Members section header labels ── */
 .members-section-hdr .sec-label {
   font-size: 11px;
+}
+
+/* ── Responsive: mobile improvements ────────────────────────────────────── */
+@media (max-width: 639px) {
+  /* Modals should not overflow viewport on phones */
+  .glass-modal {
+    max-height: 90dvh !important;
+    border-radius: 20px !important;
+    overflow-y: auto;
+  }
+
+  /* Message input slightly less padding on mobile */
+  .msg-input-wrap {
+    border-radius: 14px;
+    padding-left: 2px;
+    padding-right: 2px;
+  }
+
+  /* Category header top spacing — less on mobile */
+  .cat-header-bar {
+    padding-top: 14px;
+  }
+
+  /* Sidebar user bar slightly tighter on mobile */
+  .sidebar-userbar {
+    padding: 10px 10px;
+  }
+}
+
+/* ── Focus visible — keyboard navigation accessibility ─────────────────── */
+/* :where() lowers specificity so class-level "outline-none" still wins.   */
+:where(:focus-visible) {
+  outline: 2px solid rgba(99, 102, 241, 0.65);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+:where(:focus:not(:focus-visible)) {
+  outline: none;
 }
 
 @keyframes shimmer {
