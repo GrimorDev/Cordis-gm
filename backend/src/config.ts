@@ -5,7 +5,8 @@ dotenv.config();
 const isProd = (process.env.NODE_ENV || 'development') === 'production';
 
 if (isProd) {
-  const required = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'POSTGRES_PASSWORD'] as const;
+  // JWT_REFRESH_SECRET is optional — if missing, it's derived from JWT_SECRET (still secure)
+  const required = ['JWT_SECRET', 'POSTGRES_PASSWORD'] as const;
   const missing = required.filter(k => !process.env[k]);
   if (missing.length > 0) {
     throw new Error(
@@ -15,6 +16,10 @@ if (isProd) {
   }
   if ((process.env.JWT_SECRET?.length ?? 0) < 32) {
     throw new Error('[SECURITY] JWT_SECRET must be at least 32 characters long.');
+  }
+  if (!process.env.JWT_REFRESH_SECRET) {
+    console.warn('[SECURITY] JWT_REFRESH_SECRET not set — deriving from JWT_SECRET. ' +
+      'Set it explicitly in Portainer for best security.');
   }
 }
 
@@ -43,7 +48,9 @@ export const config = {
   jwt: {
     secret: process.env.JWT_SECRET || JWT_SECRET_DEFAULT,
     expiresIn: process.env.JWT_EXPIRES_IN || '1h',      // short-lived — refreshed silently by client
-    refreshSecret: process.env.JWT_REFRESH_SECRET || JWT_REFRESH_SECRET_DEFAULT,
+    // If JWT_REFRESH_SECRET not set, derive from JWT_SECRET so it's unique per deployment
+    refreshSecret: process.env.JWT_REFRESH_SECRET ||
+      (process.env.JWT_SECRET ? process.env.JWT_SECRET + ':refresh' : JWT_REFRESH_SECRET_DEFAULT),
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
   },
 
