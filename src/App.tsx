@@ -8230,6 +8230,8 @@ export default function App() {
   const [homeVoice, setHomeVoice]               = useState<VoiceActivityChannel[]>([]);
   const [homeLoading, setHomeLoading]           = useState(false);
   const [homeVoiceLoading, setHomeVoiceLoading] = useState(false);
+  const [remindersFired, setRemindersFired]     = useState<Set<string>>(new Set());
+  const [, setHomeTick]                         = useState(0); // forces countdown re-render each minute
 
   // ── Feature: Server Discovery ────────────────────────────────────
   const [showDiscovery, setShowDiscovery]     = useState(false);
@@ -8642,6 +8644,42 @@ export default function App() {
   useEffect(() => {
     if (activeView === 'home' && isAuthenticated) loadHomeData();
   }, [activeView, isAuthenticated, loadHomeData]);
+
+  // ── Home: auto-refresh voice every 30s ──────────────────────────
+  useEffect(() => {
+    if (activeView !== 'home') return;
+    const iv = setInterval(() => {
+      activityApi.allVoiceActivity().then(setHomeVoice).catch(() => {});
+    }, 30_000);
+    return () => clearInterval(iv);
+  }, [activeView]);
+
+  // ── Home: tick every 60s for countdown re-renders ────────────────
+  useEffect(() => {
+    const iv = setInterval(() => setHomeTick(n => n + 1), 60_000);
+    return () => clearInterval(iv);
+  }, []);
+
+  // ── Home: event reminder toasts ──────────────────────────────────
+  useEffect(() => {
+    if (!homeEvents.length) return;
+    const check = () => {
+      const now = Date.now();
+      homeEvents.forEach(ev => {
+        if (!ev.my_rsvp) return;
+        const diff = new Date(ev.starts_at).getTime() - now;
+        if (diff > 0 && diff <= 15 * 60_000 && !remindersFired.has(ev.id)) {
+          const mins = Math.ceil(diff / 60_000);
+          addToast(`⏰ "${ev.title}" zaczyna się za ${mins} min!`, 'info');
+          setRemindersFired(prev => new Set([...prev, ev.id]));
+        }
+      });
+    };
+    check();
+    const iv = setInterval(check, 60_000);
+    return () => clearInterval(iv);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [homeEvents, remindersFired]);
 
   // ── Load onboarding when joining a server ──────────────────────
   useEffect(() => {
@@ -14175,7 +14213,9 @@ export default function App() {
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Header */}
               <div className="h-14 border-b border-white/[0.06] flex items-center px-5 shrink-0 gap-3 glass-dark z-10">
-                <LayoutDashboard size={17} className="text-amber-400 shrink-0"/>
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-500/30 to-orange-500/20 flex items-center justify-center border border-amber-500/20 shrink-0">
+                  <LayoutDashboard size={14} className="text-amber-400"/>
+                </div>
                 <h1 className="text-sm font-bold text-white shrink-0">Panel główny</h1>
                 <div className="flex-1"/>
                 <button onClick={loadHomeData}
@@ -14184,237 +14224,335 @@ export default function App() {
                   <RefreshCw size={13}/>
                 </button>
               </div>
-              {/* Body — scrollable 3-column grid */}
-              <div className="flex-1 overflow-y-auto p-5 custom-scrollbar">
+
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar" style={{background:'radial-gradient(ellipse at 60% 0%, rgba(99,102,241,0.04) 0%, transparent 60%)'}}>
                 {(homeLoading && homeEvents.length===0 && homeVoice.length===0) ? (
-                  <div className="flex items-center justify-center h-32"><Loader2 size={22} className="text-indigo-400 animate-spin"/></div>
+                  <div className="flex items-center justify-center h-48"><Loader2 size={22} className="text-indigo-400 animate-spin"/></div>
                 ) : (
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 max-w-6xl mx-auto">
+                  <div className="p-5 max-w-6xl mx-auto space-y-6">
 
-                    {/* ── VOICE ACTIVITY ── */}
-                    <div className="lg:col-span-2 flex flex-col gap-3">
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="w-2 h-2 rounded-full bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.8)] animate-pulse"/>
-                        <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Aktywne kanały głosowe</span>
-                        <button onClick={()=>{ setHomeVoiceLoading(true); activityApi.allVoiceActivity().then(setHomeVoice).catch(()=>{}).finally(()=>setHomeVoiceLoading(false)); }}
-                          className="ml-auto w-6 h-6 flex items-center justify-center rounded-md text-zinc-600 hover:text-zinc-300 transition-colors">
-                          {homeVoiceLoading ? <Loader2 size={11} className="animate-spin"/> : <RefreshCw size={11}/>}
-                        </button>
-                      </div>
-                      {homeVoice.length===0 ? (
-                        <div className="glass-panel rounded-2xl p-6 flex flex-col items-center gap-3 text-center border border-white/[0.06]">
-                          <div className="w-12 h-12 rounded-2xl bg-green-500/10 flex items-center justify-center">
-                            <Volume2 size={20} className="text-green-400 opacity-50"/>
+                    {/* ── MOJE ZAPISANE WYDARZENIA (pinned top) ── */}
+                    {(() => {
+                      const saved = homeEvents.filter(ev => ev.my_rsvp);
+                      if (!saved.length) return null;
+                      return (
+                        <section>
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-5 h-5 rounded-md bg-amber-500/20 flex items-center justify-center border border-amber-500/20 shrink-0">
+                              <Bookmark size={10} className="text-amber-400"/>
+                            </div>
+                            <span className="text-xs font-bold text-amber-400/80 uppercase tracking-widest">Moje zapisane wydarzenia</span>
+                            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/20">{saved.length}</span>
                           </div>
-                          <p className="text-sm text-zinc-500">Nikt nie jest teraz na kanale głosowym</p>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col gap-2">
-                          {homeVoice.map(vc => (
-                            <motion.div key={vc.channel_id}
-                              initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
-                              className="glass-panel rounded-2xl p-4 border border-white/[0.08] hover:border-green-500/30 transition-all group"
-                              style={{boxShadow:'0 4px 20px rgba(0,0,0,0.3)'}}>
-                              <div className="flex items-center gap-3 mb-3">
-                                {vc.server_icon
-                                  ? <img src={staticUrl(vc.server_icon)} className="w-8 h-8 rounded-xl object-cover shrink-0" alt=""/>
-                                  : <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-600/40 to-purple-600/30 flex items-center justify-center shrink-0">
-                                      <span className="text-xs font-bold text-white">{vc.server_name.charAt(0)}</span>
-                                    </div>}
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-[11px] text-zinc-500 truncate">{vc.server_name}</div>
-                                  <div className="flex items-center gap-1.5">
-                                    <Volume2 size={11} className="text-green-400 shrink-0"/>
-                                    <span className="text-xs font-semibold text-white truncate">{vc.channel_name}</span>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-1 bg-green-500/10 px-2 py-1 rounded-lg border border-green-500/20">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"/>
-                                  <span className="text-[10px] font-bold text-green-400">{vc.users.length}</span>
-                                </div>
-                              </div>
-                              <div className="flex flex-wrap gap-1.5">
-                                {vc.users.map(u => (
-                                  <div key={u.id} className="flex items-center gap-1.5 bg-white/[0.05] border border-white/[0.07] rounded-xl px-2 py-1 hover:bg-white/[0.09] transition-colors cursor-pointer"
-                                    onClick={()=>{ setProfileViewId(u.id); }}>
-                                    <div className="relative">
-                                      <img src={ava({avatar_url:u.avatar_url,username:u.username})} className="w-5 h-5 rounded-full object-cover" alt=""/>
-                                      <StatusBadge status={u.status as any} size={5} className="absolute -bottom-0.5 -right-0.5"/>
-                                    </div>
-                                    <span className="text-[11px] text-zinc-300 font-medium">{u.username}</span>
-                                  </div>
-                                ))}
-                              </div>
-                              {/* Join button — only if server is in user's list and they know the channel */}
-                              {serverList.find(s => s.id === vc.server_id) && (
-                                <button
-                                  onClick={() => { setActiveServer(vc.server_id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); }}
-                                  className="mt-3 w-full py-1.5 rounded-xl text-xs font-semibold text-green-400 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 hover:border-green-500/35 transition-all">
-                                  Przejdź do serwera
-                                </button>
-                              )}
-                            </motion.div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* ── FRIEND ACTIVITY ── */}
-                      <div className="flex items-center gap-2 mt-2 mb-1">
-                        <Users size={13} className="text-indigo-400"/>
-                        <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Aktywność znajomych</span>
-                      </div>
-                      {friends.filter(f => f.status !== 'offline').length === 0 ? (
-                        <div className="glass-panel rounded-2xl p-5 flex flex-col items-center gap-2 text-center border border-white/[0.06]">
-                          <Users size={18} className="text-indigo-400 opacity-40"/>
-                          <p className="text-xs text-zinc-500">Żaden znajomy nie jest teraz online</p>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col gap-1.5">
-                          {friends.filter(f => f.status !== 'offline').sort((a,b) => {
-                            const ord = (s:string) => s==='online'?0:s==='idle'?1:s==='dnd'?2:3;
-                            return ord(a.status) - ord(b.status);
-                          }).map(f => {
-                            const spotify = userActivities.get(f.id);
-                            const twitch  = userTwitchActivities.get(f.id);
-                            const steam   = userSteamActivities.get(f.id);
-                            const inVoice = Object.entries(voiceUsers).find(([,users]) => (users as any[]).some(u => u.id === f.id));
-                            return (
-                              <motion.div key={f.id} initial={{opacity:0,x:-8}} animate={{opacity:1,x:0}}
-                                className="glass-panel rounded-xl px-3 py-2.5 border border-white/[0.07] hover:border-indigo-500/30 flex items-center gap-3 transition-all cursor-pointer group"
-                                onClick={() => setProfileViewId(f.id)}>
-                                <div className="relative shrink-0">
-                                  <img src={ava({avatar_url:f.avatar_url,username:f.username})} className="w-9 h-9 rounded-xl object-cover" alt=""/>
-                                  <StatusBadge status={f.status as any} size={7} className="absolute -bottom-0.5 -right-0.5"/>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-[13px] font-semibold text-white truncate">{f.username}</div>
-                                  {spotify?.name ? (
-                                    <div className="flex items-center gap-1 mt-0.5">
-                                      <Music size={9} className="text-green-400 shrink-0"/>
-                                      <span className="text-[10px] text-green-400 truncate">{spotify.artists?.[0]?.name} — {spotify.name}</span>
-                                    </div>
-                                  ) : twitch ? (
-                                    <div className="flex items-center gap-1 mt-0.5">
-                                      <TwitchIcon size={9} className="text-purple-400 shrink-0"/>
-                                      <span className="text-[10px] text-purple-400 truncate">Streamuje: {twitch.game_name}</span>
-                                    </div>
-                                  ) : inVoice ? (
-                                    <div className="flex items-center gap-1 mt-0.5">
-                                      <Volume2 size={9} className="text-green-400 shrink-0"/>
-                                      <span className="text-[10px] text-green-400 truncate">Na kanale głosowym</span>
-                                    </div>
-                                  ) : (
-                                    <div className="text-[10px] text-zinc-500 mt-0.5">{f.custom_status || f.status}</div>
-                                  )}
-                                </div>
-                                <button className="opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center rounded-lg bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 transition-all shrink-0"
-                                  onClick={e => { e.stopPropagation(); openDm(f.id); }}
-                                  title="Napisz wiadomość">
-                                  <MessageCircle size={13}/>
-                                </button>
-                              </motion.div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* ── RIGHT: EVENTS ── */}
-                    <div className="flex flex-col gap-3">
-                      <div className="flex items-center gap-2 mb-1">
-                        <CalendarDays size={13} className="text-amber-400"/>
-                        <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Nadchodzące wydarzenia</span>
-                      </div>
-                      {homeLoading && homeEvents.length===0 ? (
-                        <div className="flex justify-center py-6"><Loader2 size={18} className="text-amber-400 animate-spin"/></div>
-                      ) : homeEvents.length===0 ? (
-                        <div className="glass-panel rounded-2xl p-6 flex flex-col items-center gap-3 text-center border border-white/[0.06]">
-                          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center">
-                            <CalendarDays size={20} className="text-amber-400 opacity-50"/>
-                          </div>
-                          <p className="text-sm text-zinc-500">Brak nadchodzących wydarzeń</p>
-                          <p className="text-[11px] text-zinc-600">Stwórz wydarzenie w swoim serwerze!</p>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col gap-2">
-                          {homeEvents.slice(0,8).map(ev => {
-                            const now = Date.now();
-                            const startMs = new Date(ev.starts_at).getTime();
-                            const diffMs = startMs - now;
-                            const isLive = ev.status === 'active' || (diffMs <= 0 && diffMs > -3600000);
-                            const diffMin = Math.floor(Math.abs(diffMs) / 60000);
-                            const diffH   = Math.floor(diffMin / 60);
-                            const diffD   = Math.floor(diffH / 24);
-                            const countdown = isLive ? 'LIVE' : diffD > 0 ? `za ${diffD}d ${diffH%24}h` : diffH > 0 ? `za ${diffH}h ${diffMin%60}m` : `za ${diffMin}m`;
-                            const handleRsvp = async (type: 'going'|'interested'|null) => {
-                              try {
-                                if (type === null || ev.my_rsvp === type) {
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {saved.map(ev => {
+                              const now = Date.now();
+                              const startMs = new Date(ev.starts_at).getTime();
+                              const diffMs = startMs - now;
+                              const isLive = ev.status === 'active' || (diffMs <= 0 && diffMs > -3_600_000);
+                              const diffMin = Math.floor(Math.abs(diffMs) / 60_000);
+                              const diffH = Math.floor(diffMin / 60);
+                              const diffD = Math.floor(diffH / 24);
+                              const countdown = isLive ? 'LIVE' : diffD > 0 ? `za ${diffD}d ${diffH%24}h` : diffH > 0 ? `za ${diffH}h ${diffMin%60}m` : `za ${diffMin}m`;
+                              const handleToggle = async () => {
+                                try {
                                   const r = await eventsApi.unresvp(ev.server_id, ev.id);
                                   setHomeEvents(p => p.map(e => e.id===ev.id ? {...e, ...r, my_rsvp: undefined} : e));
-                                } else {
-                                  const r = await eventsApi.rsvp(ev.server_id, ev.id, type);
-                                  setHomeEvents(p => p.map(e => e.id===ev.id ? {...e, ...r, my_rsvp: type} : e));
-                                }
-                              } catch { addToast('Błąd RSVP', 'error'); }
-                            };
-                            return (
-                              <motion.div key={ev.id}
-                                initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
-                                className={`glass-panel rounded-2xl p-4 border transition-all ${isLive ? 'border-amber-500/40 shadow-[0_0_20px_-4px_rgba(245,158,11,0.25)]' : 'border-white/[0.08] hover:border-amber-500/25'}`}>
-                                {/* Live badge */}
-                                {isLive && (
-                                  <div className="flex items-center gap-1.5 mb-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"/>
-                                    <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Na żywo</span>
+                                } catch { addToast('Błąd', 'error'); }
+                              };
+                              return (
+                                <motion.div key={ev.id} initial={{opacity:0,scale:0.97}} animate={{opacity:1,scale:1}}
+                                  className={`relative rounded-2xl p-4 border transition-all overflow-hidden ${isLive
+                                    ? 'border-amber-500/50 shadow-[0_0_24px_-6px_rgba(245,158,11,0.35)]'
+                                    : 'border-white/[0.10] hover:border-amber-500/30'}`}
+                                  style={{background: isLive
+                                    ? 'linear-gradient(135deg, rgba(245,158,11,0.08) 0%, rgba(234,88,12,0.04) 100%)'
+                                    : 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.02) 100%)'}}>
+                                  {/* Saved ribbon */}
+                                  <div className="absolute top-0 right-0 w-0 h-0"
+                                    style={{borderStyle:'solid',borderWidth:'0 32px 32px 0',borderColor:`transparent rgba(245,158,11,0.35) transparent transparent`}}/>
+                                  <div className="absolute top-1 right-1">
+                                    <Bookmark size={8} className="text-amber-400 fill-amber-400"/>
                                   </div>
-                                )}
-                                {/* Server */}
-                                <div className="flex items-center gap-1.5 mb-2">
-                                  {ev.server_icon
-                                    ? <img src={staticUrl(ev.server_icon!)} className="w-4 h-4 rounded-md object-cover" alt=""/>
-                                    : <div className="w-4 h-4 rounded-md bg-indigo-600/40 flex items-center justify-center">
-                                        <span className="text-[8px] font-bold text-white">{(ev.server_name||'?').charAt(0)}</span>
-                                      </div>}
-                                  <span className="text-[10px] text-zinc-500">{ev.server_name}</span>
-                                  <div className="ml-auto">
-                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isLive ? 'text-amber-400 bg-amber-500/15 border border-amber-500/25' : 'text-zinc-400 bg-white/[0.07] border border-white/[0.08]'}`}>
-                                      {countdown}
-                                    </span>
-                                  </div>
-                                </div>
-                                <h3 className="text-sm font-bold text-white mb-1 line-clamp-1">{ev.title}</h3>
-                                {ev.description && <p className="text-[11px] text-zinc-500 mb-2.5 line-clamp-2">{ev.description}</p>}
-                                {/* Attendees avatar stack */}
-                                {(ev.going_users ?? []).length > 0 && (
-                                  <div className="flex items-center gap-1.5 mb-2.5">
-                                    <div className="flex -space-x-1.5">
-                                      {(ev.going_users ?? []).slice(0,5).map(u => (
-                                        <img key={u.id} src={ava({avatar_url:u.avatar_url,username:u.username})} className="w-5 h-5 rounded-full object-cover border border-black/40" alt=""/>
-                                      ))}
+                                  {isLive && (
+                                    <div className="flex items-center gap-1 mb-2">
+                                      <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse"/>
+                                      <span className="text-[9px] font-bold text-red-400 uppercase tracking-widest">Na żywo</span>
                                     </div>
-                                    <span className="text-[10px] text-zinc-500">{ev.going_count} jedzie{(ev.interested_count ?? 0) > 0 ? ` · ${ev.interested_count} zainteresowanych` : ''}</span>
+                                  )}
+                                  <div className="flex items-center gap-1.5 mb-2">
+                                    {ev.server_icon
+                                      ? <img src={staticUrl(ev.server_icon!)} className="w-3.5 h-3.5 rounded-sm object-cover" alt=""/>
+                                      : <div className="w-3.5 h-3.5 rounded-sm bg-indigo-600/40 flex items-center justify-center">
+                                          <span className="text-[7px] font-bold text-white">{(ev.server_name||'?').charAt(0)}</span>
+                                        </div>}
+                                    <span className="text-[10px] text-zinc-500 truncate flex-1">{ev.server_name}</span>
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${isLive ? 'text-amber-400 bg-amber-500/15' : 'text-zinc-400 bg-white/[0.06]'}`}>{countdown}</span>
                                   </div>
-                                )}
-                                {/* RSVP buttons */}
-                                <div className="flex gap-1.5">
-                                  <button
-                                    onClick={() => handleRsvp('going')}
-                                    className={`flex-1 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${ev.my_rsvp==='going' ? 'bg-green-500/25 text-green-300 border border-green-500/35' : 'bg-white/[0.06] text-zinc-400 border border-white/[0.08] hover:bg-green-500/15 hover:text-green-400 hover:border-green-500/25'}`}>
-                                    ✓ Idę
+                                  <h3 className="text-sm font-bold text-white line-clamp-1 mb-2">{ev.title}</h3>
+                                  {(ev.going_users ?? []).length > 0 && (
+                                    <div className="flex items-center gap-1 mb-2">
+                                      <div className="flex -space-x-1">
+                                        {(ev.going_users ?? []).slice(0,4).map(u => (
+                                          <img key={u.id} src={ava({avatar_url:u.avatar_url,username:u.username})} className="w-4 h-4 rounded-full border border-black/50" alt=""/>
+                                        ))}
+                                      </div>
+                                      <span className="text-[9px] text-zinc-500 ml-1">{ev.going_count} uczestników</span>
+                                    </div>
+                                  )}
+                                  <button onClick={handleToggle}
+                                    className="w-full py-1.5 rounded-xl text-[11px] font-semibold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-amber-500/35 transition-all">
+                                    ✓ Zapisany · Wypisz się
                                   </button>
-                                  <button
-                                    onClick={() => handleRsvp('interested')}
-                                    className={`flex-1 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${ev.my_rsvp==='interested' ? 'bg-amber-500/25 text-amber-300 border border-amber-500/35' : 'bg-white/[0.06] text-zinc-400 border border-white/[0.08] hover:bg-amber-500/15 hover:text-amber-400 hover:border-amber-500/25'}`}>
-                                    ★ Interesuję
-                                  </button>
-                                </div>
-                              </motion.div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
+                                </motion.div>
+                              );
+                            })}
+                          </div>
+                        </section>
+                      );
+                    })()}
 
+                    {/* ── MAIN 2-COLUMN GRID ── */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+                      {/* LEFT 2/3: Voice + Friends */}
+                      <div className="lg:col-span-2 space-y-5">
+
+                        {/* VOICE ACTIVITY */}
+                        <section>
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-5 h-5 rounded-md bg-green-500/20 flex items-center justify-center border border-green-500/20 shrink-0">
+                              <Volume2 size={10} className="text-green-400"/>
+                            </div>
+                            <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Aktywne kanały głosowe</span>
+                            <div className="flex items-center gap-1 ml-1">
+                              <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse shadow-[0_0_4px_rgba(74,222,128,0.8)]"/>
+                              <span className="text-[9px] font-bold text-green-500">{homeVoice.reduce((s,v)=>s+v.users.length,0)}</span>
+                            </div>
+                            <button onClick={()=>{ setHomeVoiceLoading(true); activityApi.allVoiceActivity().then(setHomeVoice).catch(()=>{}).finally(()=>setHomeVoiceLoading(false)); }}
+                              className="ml-auto w-6 h-6 flex items-center justify-center rounded-md text-zinc-600 hover:text-zinc-300 transition-colors">
+                              {homeVoiceLoading ? <Loader2 size={11} className="animate-spin"/> : <RefreshCw size={11}/>}
+                            </button>
+                          </div>
+                          {homeVoice.length===0 ? (
+                            <div className="rounded-2xl p-5 flex items-center gap-4 border border-white/[0.05]"
+                              style={{background:'linear-gradient(135deg,rgba(255,255,255,0.03) 0%,rgba(255,255,255,0.01) 100%)'}}>
+                              <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center shrink-0 border border-green-500/10">
+                                <Volume2 size={18} className="text-green-500/40"/>
+                              </div>
+                              <p className="text-sm text-zinc-500">Nikt nie jest teraz na kanale głosowym</p>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {homeVoice.map(vc => (
+                                <motion.div key={vc.channel_id}
+                                  initial={{opacity:0,y:6}} animate={{opacity:1,y:0}}
+                                  className="rounded-2xl p-3.5 border border-white/[0.08] hover:border-green-500/25 transition-all group"
+                                  style={{background:'linear-gradient(135deg,rgba(74,222,128,0.04) 0%,rgba(255,255,255,0.02) 100%)',boxShadow:'0 4px 20px rgba(0,0,0,0.25)'}}>
+                                  <div className="flex items-center gap-2.5 mb-2.5">
+                                    {vc.server_icon
+                                      ? <img src={staticUrl(vc.server_icon)} className="w-7 h-7 rounded-lg object-cover shrink-0" alt=""/>
+                                      : <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-600/50 to-purple-600/30 flex items-center justify-center shrink-0 border border-white/10">
+                                          <span className="text-[11px] font-bold text-white">{vc.server_name.charAt(0)}</span>
+                                        </div>}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-[10px] text-zinc-500 truncate">{vc.server_name}</div>
+                                      <div className="flex items-center gap-1">
+                                        <Volume2 size={9} className="text-green-400 shrink-0"/>
+                                        <span className="text-[11px] font-semibold text-white truncate">{vc.channel_name}</span>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-1 bg-green-500/15 px-1.5 py-0.5 rounded-md border border-green-500/20 shrink-0">
+                                      <div className="w-1 h-1 rounded-full bg-green-400 animate-pulse"/>
+                                      <span className="text-[9px] font-bold text-green-400">{vc.users.length}</span>
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-wrap gap-1">
+                                    {vc.users.map(u => (
+                                      <button key={u.id}
+                                        className="flex items-center gap-1 bg-white/[0.05] border border-white/[0.07] rounded-lg px-1.5 py-0.5 hover:bg-white/[0.10] hover:border-green-500/20 transition-all"
+                                        onClick={()=>setProfileViewId(u.id)}>
+                                        <div className="relative">
+                                          <img src={ava({avatar_url:u.avatar_url,username:u.username})} className="w-4 h-4 rounded-full object-cover" alt=""/>
+                                          <StatusBadge status={u.status as any} size={4} className="absolute -bottom-0.5 -right-0.5"/>
+                                        </div>
+                                        <span className="text-[10px] text-zinc-300 font-medium">{u.username}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                  {serverList.find(s => s.id === vc.server_id) && (
+                                    <button
+                                      onClick={() => { setActiveServer(vc.server_id); setActiveView('servers'); setActiveChannel(''); setServerFull(null); }}
+                                      className="mt-2.5 w-full py-1 rounded-xl text-[10px] font-semibold text-green-400 bg-green-500/10 hover:bg-green-500/18 border border-green-500/15 hover:border-green-500/30 transition-all">
+                                      Przejdź →
+                                    </button>
+                                  )}
+                                </motion.div>
+                              ))}
+                            </div>
+                          )}
+                        </section>
+
+                        {/* FRIEND ACTIVITY */}
+                        <section>
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-5 h-5 rounded-md bg-indigo-500/20 flex items-center justify-center border border-indigo-500/20 shrink-0">
+                              <Users size={10} className="text-indigo-400"/>
+                            </div>
+                            <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Aktywność znajomych</span>
+                            <span className="ml-1 text-[9px] font-bold text-indigo-400/60">{friends.filter(f => f.status !== 'offline').length} online</span>
+                          </div>
+                          {friends.filter(f => f.status !== 'offline').length === 0 ? (
+                            <div className="rounded-2xl p-5 flex items-center gap-4 border border-white/[0.05]"
+                              style={{background:'linear-gradient(135deg,rgba(255,255,255,0.03) 0%,rgba(255,255,255,0.01) 100%)'}}>
+                              <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center shrink-0 border border-indigo-500/10">
+                                <Users size={18} className="text-indigo-500/40"/>
+                              </div>
+                              <p className="text-sm text-zinc-500">Żaden znajomy nie jest teraz online</p>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                              {friends.filter(f => f.status !== 'offline').sort((a,b) => {
+                                const ord = (s:string) => s==='online'?0:s==='idle'?1:s==='dnd'?2:3;
+                                return ord(a.status) - ord(b.status);
+                              }).map(f => {
+                                const spotify = userActivities.get(f.id);
+                                const twitch  = userTwitchActivities.get(f.id);
+                                const inVoice = Object.entries(voiceUsers).find(([,users]) => (users as any[]).some(u => u.id === f.id));
+                                return (
+                                  <motion.div key={f.id} initial={{opacity:0,x:-6}} animate={{opacity:1,x:0}}
+                                    className="rounded-xl px-3 py-2 border border-white/[0.06] hover:border-indigo-500/25 flex items-center gap-2.5 transition-all cursor-pointer group"
+                                    style={{background:'linear-gradient(135deg,rgba(255,255,255,0.03) 0%,rgba(255,255,255,0.015) 100%)'}}
+                                    onClick={() => setProfileViewId(f.id)}>
+                                    <div className="relative shrink-0">
+                                      <img src={ava({avatar_url:f.avatar_url,username:f.username})} className="w-8 h-8 rounded-xl object-cover" alt=""/>
+                                      <StatusBadge status={f.status as any} size={6} className="absolute -bottom-0.5 -right-0.5"/>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-[12px] font-semibold text-white truncate leading-none mb-0.5">{f.username}</div>
+                                      {spotify?.name ? (
+                                        <div className="flex items-center gap-1">
+                                          <Music size={8} className="text-green-400 shrink-0"/>
+                                          <span className="text-[9px] text-green-400 truncate">{spotify.artists?.[0]?.name} — {spotify.name}</span>
+                                        </div>
+                                      ) : twitch ? (
+                                        <div className="flex items-center gap-1">
+                                          <TwitchIcon size={8} className="text-purple-400 shrink-0"/>
+                                          <span className="text-[9px] text-purple-400 truncate">Streamuje: {twitch.game_name}</span>
+                                        </div>
+                                      ) : inVoice ? (
+                                        <div className="flex items-center gap-1">
+                                          <Volume2 size={8} className="text-green-400 shrink-0"/>
+                                          <span className="text-[9px] text-green-400 truncate">Na kanale głosowym</span>
+                                        </div>
+                                      ) : (
+                                        <span className="text-[9px] text-zinc-500">{f.custom_status || f.status}</span>
+                                      )}
+                                    </div>
+                                    <button className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded-lg bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 transition-all shrink-0"
+                                      onClick={e => { e.stopPropagation(); openDm(f.id); }}
+                                      title="Napisz wiadomość">
+                                      <MessageCircle size={11}/>
+                                    </button>
+                                  </motion.div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </section>
+                      </div>
+
+                      {/* RIGHT 1/3: UPCOMING EVENTS */}
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-5 h-5 rounded-md bg-orange-500/20 flex items-center justify-center border border-orange-500/20 shrink-0">
+                            <CalendarDays size={10} className="text-orange-400"/>
+                          </div>
+                          <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Nadchodzące</span>
+                        </div>
+                        {homeLoading && homeEvents.length===0 ? (
+                          <div className="flex justify-center py-8"><Loader2 size={18} className="text-amber-400 animate-spin"/></div>
+                        ) : homeEvents.length===0 ? (
+                          <div className="rounded-2xl p-6 flex flex-col items-center gap-3 text-center border border-white/[0.05]"
+                            style={{background:'linear-gradient(135deg,rgba(255,255,255,0.03) 0%,rgba(255,255,255,0.01) 100%)'}}>
+                            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center border border-amber-500/10">
+                              <CalendarDays size={20} className="text-amber-500/40"/>
+                            </div>
+                            <p className="text-sm text-zinc-500">Brak nadchodzących wydarzeń</p>
+                            <p className="text-[10px] text-zinc-600">Stwórz wydarzenie w swoim serwerze!</p>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-2">
+                            {homeEvents.filter(ev => !ev.my_rsvp).slice(0,6).map(ev => {
+                              const now = Date.now();
+                              const startMs = new Date(ev.starts_at).getTime();
+                              const diffMs = startMs - now;
+                              const isLive = ev.status === 'active' || (diffMs <= 0 && diffMs > -3_600_000);
+                              const diffMin = Math.floor(Math.abs(diffMs) / 60_000);
+                              const diffH = Math.floor(diffMin / 60);
+                              const diffD = Math.floor(diffH / 24);
+                              const countdown = isLive ? 'LIVE' : diffD > 0 ? `za ${diffD}d ${diffH%24}h` : diffH > 0 ? `za ${diffH}h ${diffMin%60}m` : `za ${diffMin}m`;
+                              const handleSave = async () => {
+                                try {
+                                  const r = await eventsApi.rsvp(ev.server_id, ev.id, 'going');
+                                  setHomeEvents(p => p.map(e => e.id===ev.id ? {...e, ...r, my_rsvp: 'going'} : e));
+                                  addToast(`Zapisano na "${ev.title}"`, 'success');
+                                } catch { addToast('Błąd zapisywania', 'error'); }
+                              };
+                              return (
+                                <motion.div key={ev.id}
+                                  initial={{opacity:0,y:6}} animate={{opacity:1,y:0}}
+                                  className={`rounded-xl p-3.5 border transition-all ${isLive
+                                    ? 'border-amber-500/40 shadow-[0_0_18px_-6px_rgba(245,158,11,0.3)]'
+                                    : 'border-white/[0.07] hover:border-orange-500/20'}`}
+                                  style={{background: isLive
+                                    ? 'linear-gradient(135deg,rgba(245,158,11,0.07) 0%,rgba(234,88,12,0.04) 100%)'
+                                    : 'linear-gradient(135deg,rgba(255,255,255,0.035) 0%,rgba(255,255,255,0.015) 100%)'}}>
+                                  {isLive && (
+                                    <div className="flex items-center gap-1 mb-1.5">
+                                      <div className="w-1 h-1 rounded-full bg-red-400 animate-pulse"/>
+                                      <span className="text-[9px] font-bold text-red-400 uppercase tracking-widest">Na żywo</span>
+                                    </div>
+                                  )}
+                                  <div className="flex items-center gap-1.5 mb-1.5">
+                                    {ev.server_icon
+                                      ? <img src={staticUrl(ev.server_icon!)} className="w-3.5 h-3.5 rounded-sm object-cover" alt=""/>
+                                      : <div className="w-3.5 h-3.5 rounded-sm bg-indigo-600/40 flex items-center justify-center">
+                                          <span className="text-[7px] font-bold text-white">{(ev.server_name||'?').charAt(0)}</span>
+                                        </div>}
+                                    <span className="text-[9px] text-zinc-500 flex-1 truncate">{ev.server_name}</span>
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${isLive ? 'text-amber-400 bg-amber-500/15' : 'text-zinc-500 bg-white/[0.05]'}`}>{countdown}</span>
+                                  </div>
+                                  <h3 className="text-[13px] font-bold text-white mb-1 line-clamp-1">{ev.title}</h3>
+                                  {ev.description && <p className="text-[10px] text-zinc-500 mb-2 line-clamp-1">{ev.description}</p>}
+                                  {(ev.going_users ?? []).length > 0 && (
+                                    <div className="flex items-center gap-1 mb-2">
+                                      <div className="flex -space-x-1">
+                                        {(ev.going_users ?? []).slice(0,4).map(u => (
+                                          <img key={u.id} src={ava({avatar_url:u.avatar_url,username:u.username})} className="w-4 h-4 rounded-full border border-black/50" alt=""/>
+                                        ))}
+                                      </div>
+                                      <span className="text-[9px] text-zinc-500 ml-0.5">{ev.going_count}</span>
+                                    </div>
+                                  )}
+                                  <button onClick={handleSave}
+                                    className="w-full py-1.5 rounded-lg text-[11px] font-semibold transition-all text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/15 hover:border-indigo-500/30 hover:text-indigo-200">
+                                    + Zapisz się
+                                  </button>
+                                </motion.div>
+                              );
+                            })}
+                            {homeEvents.filter(ev => !ev.my_rsvp).length === 0 && homeEvents.length > 0 && (
+                              <div className="text-center py-4">
+                                <p className="text-[11px] text-zinc-600">Zapisałeś się na wszystkie dostępne wydarzenia!</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
                   </div>
                 )}
               </div>
