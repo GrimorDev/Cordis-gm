@@ -12,8 +12,8 @@ const router = Router();
 
 // ── MIME types allowed ────────────────────────────────────────────────────────
 const ALLOWED_ATTACHMENT_MIMES = new Set([
-  // images
-  'image/jpeg','image/png','image/gif','image/webp','image/svg+xml','image/bmp','image/avif',
+  // images (SVG excluded — it's HTML and can execute scripts when opened directly)
+  'image/jpeg','image/png','image/gif','image/webp','image/bmp','image/avif',
   // audio
   'audio/mpeg','audio/ogg','audio/wav','audio/flac','audio/mp4','audio/aac','audio/opus','audio/x-wav',
   // video

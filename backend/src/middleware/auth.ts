@@ -1,4 +1,5 @@
 import { Response, NextFunction } from 'express';
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { AuthRequest, JwtPayload } from '../types';
@@ -14,10 +15,12 @@ export async function authMiddleware(req: AuthRequest, res: Response, next: Next
   const token = authHeader.slice(7);
 
   try {
-    const payload = jwt.verify(token, config.jwt.secret) as JwtPayload;
+    const payload = jwt.verify(token, config.jwt.secret, { algorithms: ['HS256'] }) as JwtPayload;
 
     // Check if token is blacklisted (logout)
-    const isBlacklisted = await redis.get(KEYS.blacklistToken(token.slice(-20)));
+    // Use full SHA-256 hash as key (not suffix) to avoid any collision risk
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const isBlacklisted = await redis.get(KEYS.blacklistToken(tokenHash));
     if (isBlacklisted) {
       return res.status(401).json({ error: 'Token revoked' });
     }
@@ -37,7 +40,7 @@ export function optionalAuth(req: AuthRequest, _res: Response, next: NextFunctio
   const authHeader = req.headers.authorization;
   if (authHeader?.startsWith('Bearer ')) {
     try {
-      const payload = jwt.verify(authHeader.slice(7), config.jwt.secret) as JwtPayload;
+      const payload = jwt.verify(authHeader.slice(7), config.jwt.secret, { algorithms: ['HS256'] }) as JwtPayload;
       req.user = { id: payload.id, username: payload.username, email: payload.email };
     } catch {
       // ignore invalid token in optional auth

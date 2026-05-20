@@ -11,6 +11,7 @@ import jwt from 'jsonwebtoken';
 import path from 'path';
 import fs from 'fs';
 import { config } from './config';
+import { authMiddleware } from './middleware/auth';
 import { pool } from './db/pool';
 import { runMigrations } from './db/migrate';
 import { redis } from './redis/client';
@@ -62,11 +63,19 @@ app.set('trust proxy', 1);
 
 // ── Security & Middleware ────────────────────────────────────────────
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-// API uses JWT (Authorization header), not cookies — CORS does not add security here.
-// Accept all origins so the desktop app (tauri://localhost / https://tauri.localhost)
-// and any future clients can connect without configuration changes.
+// CORS: allow-list from CORS_ORIGIN env (comma-separated) + Tauri desktop origins.
+// origin:true would reflect any Origin with credentials:true — CSRF risk if cookies are ever added.
+const CORS_ALLOW = (process.env.CORS_ORIGIN || 'http://localhost:3000')
+  .split(',').map(s => s.trim()).filter(Boolean);
+const TAURI_ORIGINS = /^(tauri:\/\/localhost|https:\/\/tauri\.localhost)$/;
+
 app.use(cors({
-  origin: true,
+  origin: (origin, cb) => {
+    // Native apps / server-to-server have no Origin
+    if (!origin) return cb(null, true);
+    if (CORS_ALLOW.includes(origin) || TAURI_ORIGINS.test(origin)) return cb(null, true);
+    cb(new Error(`CORS: origin '${origin}' not allowed`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -104,7 +113,7 @@ const userOrIp = (req: express.Request): string => {
   const auth = req.headers.authorization;
   if (auth?.startsWith('Bearer ')) {
     try {
-      const payload = jwt.verify(auth.slice(7), config.jwt.secret) as { id: string };
+      const payload = jwt.verify(auth.slice(7), config.jwt.secret, { algorithms: ['HS256'] }) as { id: string };
       return `u:${payload.id}`;
     } catch { /* expired / invalid — fall through to IP */ }
   }
@@ -146,7 +155,7 @@ app.post('/_rl_reset', async (req, res) => {
   const auth = req.headers.authorization ?? '';
   if (!auth.startsWith('Bearer ')) return res.status(401).json({ error: 'No token' });
   try {
-    const payload = jwt.verify(auth.slice(7), config.jwt.secret) as { id: string };
+    const payload = jwt.verify(auth.slice(7), config.jwt.secret, { algorithms: ['HS256'] }) as { id: string };
     const key = `rl:api:u:${payload.id}`;
     await redis.del(key);
     return res.json({ ok: true, cleared: key });
@@ -173,8 +182,15 @@ const uploadsDir = path.resolve(config.uploads.dir);
 );
 app.use('/uploads', express.static(uploadsDir, {
   // Allow cross-origin image loads (helmet sets cross-origin-resource-policy: same-origin by default)
-  setHeaders: (_res, _filePath) => {
-    _res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  setHeaders: (res, filePath) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    // Prevent SVG / HTML files from being rendered by the browser (XSS vector)
+    // Force download so even if an SVG slipped through, it won't execute scripts
+    if (/\.(svg|html?|xml|xhtml)$/i.test(filePath)) {
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Content-Disposition', 'attachment');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+    }
   },
 }));
 
@@ -216,10 +232,17 @@ app.use('/api/apps', appsRoutes);
 
 // ── Music audio stream proxy ──────────────────────────────────────────────────
 // Proxies the YouTube CDN audio URL through our server to bypass browser CORS restrictions.
-// The directUrl is fetched once by yt-dlp in the socket music handler and cached in state.
-// This endpoint just forwards the bytes — no ffmpeg, instant start.
-// No auth required — audio is not sensitive and channel IDs are already known to members.
-app.get('/api/stream/:channelId', async (req, res) => {
+// Auth required: verify the requester is a member of the server that owns the channel.
+app.get('/api/stream/:channelId', authMiddleware as any, async (req: any, res: any) => {
+  // Verify that the authenticated user is a member of the server owning this channel
+  const { rows: chRows } = await pool.query(
+    `SELECT c.server_id FROM channels c
+     JOIN server_members sm ON sm.server_id = c.server_id AND sm.user_id = $2
+     WHERE c.id = $1 LIMIT 1`,
+    [req.params.channelId, req.user!.id]
+  );
+  if (!chRows[0]) return res.status(403).json({ error: 'Not a member of this server' });
+
   const state = musicStates.get(req.params.channelId);
   if (!state?.playing) {
     return res.status(404).json({ error: 'No music playing on this channel' });
@@ -290,10 +313,15 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-// Error handler
+// Error handler — never expose stack traces or internal error details to clients
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('Unhandled error:', err);
-  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+  const status = err.status || err.statusCode || 500;
+  // Log full error server-side for debugging
+  if (status >= 500) console.error('Unhandled error:', err);
+  // Only pass through the message for known client errors (4xx),
+  // return a generic message for server errors to avoid info leakage
+  const message = status < 500 ? (err.message || 'Bad request') : 'Internal server error';
+  res.status(status).json({ error: message });
 });
 
 // ── BullMQ workers — start only once per server instance ─────────────

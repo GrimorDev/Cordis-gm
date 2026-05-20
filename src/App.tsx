@@ -640,12 +640,20 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
   const [modalTab, setModalTab] = useState<'login' | 'register'>('login');
   const [regStep, setRegStep] = useState<'form' | 'verify'>('form');
   const [forgotView, setForgotView] = useState<'none' | 'form' | 'sent' | 'reset'>(() => {
-    const p = new URLSearchParams(window.location.search);
-    return (p.get('token') && p.get('uid')) ? 'reset' : 'none';
+    // Token is in URL fragment (#token=...&uid=...) so it never appears in server logs
+    const h = new URLSearchParams(window.location.hash.slice(1));
+    const q = new URLSearchParams(window.location.search); // legacy fallback
+    return ((h.get('token') || q.get('token')) && (h.get('uid') || q.get('uid'))) ? 'reset' : 'none';
   });
   const [forgotEmail, setForgotEmail] = useState('');
-  const [resetToken] = useState(() => new URLSearchParams(window.location.search).get('token') || '');
-  const [resetUid]   = useState(() => new URLSearchParams(window.location.search).get('uid')   || '');
+  const [resetToken] = useState(() => {
+    const h = new URLSearchParams(window.location.hash.slice(1));
+    return h.get('token') || new URLSearchParams(window.location.search).get('token') || '';
+  });
+  const [resetUid]   = useState(() => {
+    const h = new URLSearchParams(window.location.hash.slice(1));
+    return h.get('uid') || new URLSearchParams(window.location.search).get('uid') || '';
+  });
   const [resetPass, setResetPass] = useState('');
   const [resetPass2, setResetPass2] = useState('');
   const savedCreds = (() => { try { const r = localStorage.getItem('cordyn_saved_creds'); return r ? JSON.parse(atob(r)) as { login: string; password: string } : null; } catch { return null; } })();

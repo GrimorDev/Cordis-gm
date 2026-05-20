@@ -15,7 +15,7 @@ import { verifyTotpCode, verifyBackupCode } from '../services/totp';
 const router = Router();
 
 const signToken = (payload: { id: string; username: string; email: string }) =>
-  jwt.sign(payload, config.jwt.secret, { expiresIn: config.jwt.expiresIn } as any);
+  jwt.sign(payload, config.jwt.secret, { algorithm: 'HS256', expiresIn: config.jwt.expiresIn } as any);
 
 // POST /api/auth/send-code — send email verification code
 router.post(
@@ -28,10 +28,12 @@ router.post(
     const { email } = req.body;
 
     try {
-      // Don't allow sending code if email already registered
+      // Check if email is already registered — but return 200 to prevent email enumeration.
+      // The frontend will learn the email is taken only when it calls /register (409 there).
       const taken = await query('SELECT id FROM users WHERE email = $1', [email]);
       if (taken.rowCount! > 0) {
-        return res.status(409).json({ error: 'Ten adres email jest już zajęty' });
+        // Return 200 OK without actually sending a code — attacker gets no oracle
+        return res.json({ ok: true });
       }
 
       // Rate-limit: max 3 codes per email in last 10 minutes
@@ -68,7 +70,7 @@ router.post(
   [
     body('username').trim().isLength({ min: 2, max: 32 }).matches(/^[a-zA-Z0-9_]+$/),
     body('email').isEmail().normalizeEmail(),
-    body('password').isLength({ min: 6, max: 128 }),
+    body('password').isLength({ min: 8, max: 128 }),
     body('code').trim().notEmpty(),
   ],
   async (req: Request, res: Response) => {
@@ -289,7 +291,9 @@ router.post('/logout', authMiddleware, async (req: AuthRequest, res: Response) =
     const decoded = jwt.decode(token) as any;
     const ttl = decoded?.exp ? decoded.exp - Math.floor(Date.now() / 1000) : 86400;
     if (ttl > 0) {
-      await redis.setex(KEYS.blacklistToken(token.slice(-20)), ttl, '1');
+      // Use SHA-256 hash as key (consistent with auth middleware, avoids collision risk)
+      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+      await redis.setex(KEYS.blacklistToken(tokenHash), ttl, '1');
     }
     await setUserStatus(req.user!.id, 'offline');
     await query('UPDATE users SET status = $1 WHERE id = $2', ['offline', req.user!.id]);
@@ -319,7 +323,9 @@ router.post('/forgot-password',
         [userId, hash]
       );
       const FRONTEND_URL = (process.env.FRONTEND_URL || (process.env.CORS_ORIGIN || 'http://localhost:3000').split(',')[0]).trim();
-      const resetUrl = `${FRONTEND_URL}/reset-password?token=${rawToken}&uid=${userId}`;
+      // Use URL fragment (#) so the token is never sent to the server, never appears in
+      // nginx/access logs, and never leaks via Referer header on external link clicks.
+      const resetUrl = `${FRONTEND_URL}/reset-password#token=${rawToken}&uid=${userId}`;
       await sendPasswordResetEmail(email, resetUrl);
       return res.json({ ok: true });
     } catch (err) {
