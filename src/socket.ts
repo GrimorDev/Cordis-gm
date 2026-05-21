@@ -1,6 +1,6 @@
 // Cordis Socket.IO Client
 import { io, Socket } from 'socket.io-client';
-import { getToken } from './api';
+import { getToken, tryRefreshToken } from './api';
 
 // In Tauri desktop context relative paths don't work — connect explicitly.
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -15,7 +15,10 @@ let socket: Socket | null = null;
 export function getSocket(): Socket {
   if (!socket) {
     socket = io(SOCKET_URL, {
-      auth: { token: getToken() },
+      // Use a function so every reconnect attempt picks up the latest token from localStorage.
+      // A static object { token: getToken() } captures the token at creation time and would
+      // cause infinite reconnect loops when the 1h access token expires mid-session.
+      auth: (cb: (data: object) => void) => cb({ token: getToken() }),
       autoConnect: false,
       transports: ['websocket', 'polling'],
       reconnection: true,
@@ -24,6 +27,21 @@ export function getSocket(): Socket {
       reconnectionDelayMax: 5000,
       timeout: 20000,
     });
+
+    // Handle authentication errors during reconnect (expired / invalid token)
+    socket.on('connect_error', async (err) => {
+      const msg = (err as any)?.message ?? '';
+      if (msg === 'Invalid token' || msg === 'Authentication required') {
+        // Token expired — try to get a new one via the refresh token
+        const newToken = await tryRefreshToken();
+        if (!newToken) {
+          // Refresh token also expired — stop reconnecting, let App.tsx force logout
+          socket?.disconnect();
+        }
+        // If refresh succeeded, the next reconnect attempt will pick up the new
+        // token automatically via the auth function above
+      }
+    });
   }
   return socket;
 }
@@ -31,7 +49,6 @@ export function getSocket(): Socket {
 export function connectSocket() {
   const s = getSocket();
   if (!s.connected) {
-    s.auth = { token: getToken() };
     s.connect();
   }
   return s;

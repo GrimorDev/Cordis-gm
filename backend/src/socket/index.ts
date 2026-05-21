@@ -210,17 +210,23 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
     socket.on('join_channel', async (channelId) => {
       // Verify the user has access: must be a member of the server owning this channel,
       // or have a DM conversation. Prevents subscribing to arbitrary channel rooms.
-      const { rows } = await query(
-        `SELECT 1 FROM channels c
-         JOIN server_members sm ON sm.server_id = c.server_id AND sm.user_id = $2
-         WHERE c.id = $1
-         UNION ALL
-         SELECT 1 FROM dm_conversations
-         WHERE id = $1 AND (user1_id = $2 OR user2_id = $2)
-         LIMIT 1`,
-        [channelId, user.id]
-      );
-      if (rows[0]) socket.join(`channel:${channelId}`);
+      // IMPORTANT: try-catch is required — async handlers without it cause unhandled
+      // promise rejections that can crash Socket.IO and disconnect the client.
+      try {
+        const { rows } = await query(
+          `SELECT 1 FROM channels c
+           JOIN server_members sm ON sm.server_id = c.server_id AND sm.user_id = $2
+           WHERE c.id = $1
+           UNION ALL
+           SELECT 1 FROM dm_conversations
+           WHERE id = $1 AND (user1_id = $2 OR user2_id = $2)
+           LIMIT 1`,
+          [channelId, user.id]
+        );
+        if (rows[0]) socket.join(`channel:${channelId}`);
+      } catch (err) {
+        console.error('[socket] join_channel error:', err);
+      }
     });
 
     socket.on('leave_channel', (channelId) => {
