@@ -11130,7 +11130,9 @@ export default function App() {
   }, [slowmodeLeft]);
 
   // Reset slowmode and pinned panel when switching channels
-  useEffect(() => { setSlowmodeLeft(0); setShowPinned(false); setPinnedMsgs([]); }, [activeChannel]);
+  useEffect(() => { setSlowmodeLeft(0); setShowPinned(false); setPinnedMsgs([]); setSendError(''); }, [activeChannel]);
+  // Clear send error on DM / server switches too (so permission errors don't carry over)
+  useEffect(() => { setSendError(''); }, [activeDmUserId, activeServer]);
 
   // Load installed bots + dev bot slash commands whenever active server changes
   useEffect(() => {
