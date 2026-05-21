@@ -8822,6 +8822,25 @@ export default function App() {
     } catch (e) { console.warn('[autostart]', e); }
   };
 
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const manualCheckUpdate = async () => {
+    if (!isTauri || updateChecking || updateInstalling) return;
+    setUpdateChecking(true);
+    try {
+      const { check } = await import('@tauri-apps/plugin-updater');
+      const update = await check();
+      if (update?.available) {
+        setUpdateAvailable({ version: update.version, body: update.body ?? null });
+      } else {
+        setUpdateAvailable(null);
+      }
+    } catch (e) {
+      console.error('[updater] manual check failed:', e);
+    } finally {
+      setUpdateChecking(false);
+    }
+  };
+
   const installUpdate = async () => {
     if (!updateAvailable || updateInstalling) return;
     setUpdateInstalling(true);
@@ -15257,7 +15276,7 @@ export default function App() {
                               {/* Top sender */}
                               {topSnd&&(
                                 <div style={{display:'flex',alignItems:'center',gap:10,background:'rgba(255,255,255,0.04)',borderRadius:12,padding:'9px 12px'}}>
-                                  <img src={topSnd.avatar_url||`https://api.dicebear.com/7.x/shapes/svg?seed=${topSnd.id}`} style={{width:28,height:28,borderRadius:8,objectFit:'cover',flexShrink:0}} alt=""/>
+                                  <img src={topSnd.avatar_url ? staticUrl(topSnd.avatar_url) : `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(topSnd.username)}&size=28`} style={{width:28,height:28,borderRadius:8,objectFit:'cover',flexShrink:0}} alt=""/>
                                   <div style={{flex:1,minWidth:0}}>
                                     <p style={{fontSize:12,fontWeight:600,color:'#e8e6df',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{topSnd.username}</p>
                                     <p style={{fontSize:10,color:'#4a5260'}}>{topEntry![1]} {t('pulse.inChannel')}</p>
@@ -21099,6 +21118,16 @@ export default function App() {
                             <p className="text-xs text-zinc-500 mt-0.5">Cordyn sprawdza aktualizacje automatycznie w tle</p>
                           </div>
                         </div>
+                      )}
+
+                      {/* Manual check button */}
+                      {!updateAvailable && (
+                        <button onClick={manualCheckUpdate} disabled={updateChecking}
+                          className="w-full py-2.5 rounded-xl text-sm font-semibold text-zinc-300 bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-50 transition-all flex items-center justify-center gap-2 border border-white/[0.07]">
+                          {updateChecking
+                            ? <><Loader2 size={14} className="animate-spin"/>Sprawdzanie…</>
+                            : <><RefreshCw size={14}/>Sprawdź aktualizacje</>}
+                        </button>
                       )}
 
                       {/* Install button */}

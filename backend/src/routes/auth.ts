@@ -125,6 +125,14 @@ router.post(
       const refreshToken = signRefreshToken(tokenPayload);
       await setUserStatus(user.id, 'online');
 
+      // Record active session
+      const ipReg = (req.headers['x-real-ip'] as string) || req.ip || '';
+      const uaReg = req.headers['user-agent'] || '';
+      await query(
+        `INSERT INTO user_sessions (user_id, ip_address, user_agent) VALUES ($1, $2, $3)`,
+        [user.id, ipReg, uaReg]
+      ).catch(() => {}); // non-fatal
+
       return res.status(201).json({ token, refreshToken, user });
     } catch (err) {
       console.error('Register error:', err);
@@ -193,6 +201,14 @@ router.post(
       const refreshToken = signRefreshToken(tokenPayload);
       await setUserStatus(user.id, 'online');
       await query('UPDATE users SET status = $1 WHERE id = $2', ['online', user.id]);
+
+      // Record active session
+      const ip = (req.headers['x-real-ip'] as string) || req.ip || '';
+      const ua = req.headers['user-agent'] || '';
+      await query(
+        `INSERT INTO user_sessions (user_id, ip_address, user_agent) VALUES ($1, $2, $3)`,
+        [user.id, ip, ua]
+      ).catch(() => {}); // non-fatal
 
       const { password_hash: _, ...safeUser } = user;
       return res.json({ token, refreshToken, user: safeUser });
@@ -266,6 +282,14 @@ router.post(
       const refreshToken = signRefreshToken(tokenPayload);
       await setUserStatus(userId, 'online');
       await query('UPDATE users SET status = $1 WHERE id = $2', ['online', userId]);
+
+      // Record active session
+      const ip2fa = (req.headers['x-real-ip'] as string) || req.ip || '';
+      const ua2fa = req.headers['user-agent'] || '';
+      await query(
+        `INSERT INTO user_sessions (user_id, ip_address, user_agent) VALUES ($1, $2, $3)`,
+        [userId, ip2fa, ua2fa]
+      ).catch(() => {}); // non-fatal
 
       const { password_hash: _, totp_secret: __, totp_backup_codes: ___, ...safeUser } = user;
       return res.json({ token, refreshToken, user: safeUser });
