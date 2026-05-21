@@ -63,19 +63,14 @@ app.set('trust proxy', 1);
 
 // ── Security & Middleware ────────────────────────────────────────────
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-// CORS: allow-list from CORS_ORIGIN env (comma-separated) + Tauri desktop origins.
-// origin:true would reflect any Origin with credentials:true — CSRF risk if cookies are ever added.
-const CORS_ALLOW = (process.env.CORS_ORIGIN || 'http://localhost:3000')
-  .split(',').map(s => s.trim()).filter(Boolean);
-const TAURI_ORIGINS = /^(tauri:\/\/localhost|https:\/\/tauri\.localhost)$/;
-
+// CORS: This API is secured by Bearer token (Authorization header), NOT cookies.
+// CSRF attacks only work with cookie-based auth — Bearer tokens require the attacker
+// to already have the token (obtainable only via XSS, against which CORS doesn't help).
+// Therefore origin:true is safe here and necessary for the Tauri desktop app
+// (which can have tauri://, https://tauri.localhost, or custom origins per platform/OS).
+// If auth is ever migrated to cookies, replace with an explicit allow-list.
 app.use(cors({
-  origin: (origin, cb) => {
-    // Native apps / server-to-server have no Origin
-    if (!origin) return cb(null, true);
-    if (CORS_ALLOW.includes(origin) || TAURI_ORIGINS.test(origin)) return cb(null, true);
-    cb(new Error(`CORS: origin '${origin}' not allowed`));
-  },
+  origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
