@@ -16024,7 +16024,7 @@ export default function App() {
                             ...(isPopular ? {borderLeft:'2px solid rgba(255,180,64,0.55)',borderRadius:8,background:'linear-gradient(90deg,rgba(255,143,64,0.07) 0%,transparent 70%)',boxShadow:'inset 0 0 20px rgba(255,143,64,0.04)'} :
                                isWarm    ? {borderLeft:'2px solid rgba(255,180,64,0.25)',paddingLeft:4,background:'rgba(255,143,64,0.025)'} : {})
                           }}
-                          className={`relative flex ${showChatAvatars?'gap-3':'gap-0'} group ${compactMessages||isGrouped?'mb-0.5':'mb-2'} ${isGrouped?'mt-0':activeView!=='dms'?'mt-0.5':''} ${activeView==='dms'&&isOwn?'flex-row-reverse':'flex-row'} ${activeView!=='dms'?'msg-flat-row px-2':'px-2'} ${mentionsMe?'bg-amber-400/5 border-l-2 border-amber-400/60 pl-2':''} ${isCurrentMatch?'outline outline-2 outline-indigo-500/60 bg-indigo-500/[0.07]':''}  ${isSearchMatch&&!isCurrentMatch?'bg-indigo-500/[0.04]':''}`}
+                          className={`relative flex ${showChatAvatars?'gap-3':'gap-0'} group hover:z-10 ${compactMessages||isGrouped?'mb-0.5':'mb-2'} ${isGrouped?'mt-0':activeView!=='dms'?'mt-0.5':''} ${activeView==='dms'&&isOwn?'flex-row-reverse':'flex-row'} ${activeView!=='dms'?'msg-flat-row px-2':'px-2'} ${mentionsMe?'bg-amber-400/5 border-l-2 border-amber-400/60 pl-2':''} ${isCurrentMatch?'outline outline-2 outline-indigo-500/60 bg-indigo-500/[0.07]':''}  ${isSearchMatch&&!isCurrentMatch?'bg-indigo-500/[0.04]':''}`}
                           onContextMenu={e=>{
                             if(editingMsgId===msg.id) return;
                             if((msg as any).deleted||msg.content==='__deleted__') return;
