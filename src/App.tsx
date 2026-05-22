@@ -12180,8 +12180,10 @@ export default function App() {
                 /* onUnsubscribed — handled below */ () => {},
               );
               await livekitPublishScreen(stream, screenQuality);
+              addToast(`🛰️ SFU aktywne — stream przez serwer (${screenQuality.toUpperCase()}/60fps)`, 'success');
             } catch (lkErr) {
               console.error('[LiveKit] publish failed, falling back to mesh:', lkErr);
+              addToast('⚠️ SFU niedostępne — tryb P2P (ograniczona liczba widzów)', 'warn');
               // Fallback: add tracks to existing peer connections (old mesh approach)
               stream.getTracks().forEach(t => {
                 peerConnsRef.current.forEach(pc => pc.addTrack(t, stream));
@@ -14023,6 +14025,7 @@ export default function App() {
                             <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-sm rounded-lg px-2.5 py-1">
                               <ScreenShare size={12} className="text-indigo-400"/>
                               <span className="text-xs text-white font-medium">{screenOwner} udostępnia ekran</span>
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-600/80 text-white tracking-wide" title="Odbierasz przez LiveKit SFU">SFU</span>
                             </div>
                             <div className="flex items-center gap-2">
                               {watcherBadge(watchingStreamId, true)}
@@ -14154,10 +14157,15 @@ export default function App() {
                                     </div>
                                   )}
                                 </div>
-                                {/* Bottom bar: owner name + viewer count */}
+                                {/* Bottom bar: owner name + viewer count + SFU badge */}
                                 <div className="absolute bottom-0 left-0 right-0 px-3 py-2 bg-gradient-to-t from-black/80 to-transparent flex items-center justify-between">
                                   <span className="text-[11px] font-semibold text-white truncate">{ownerName}</span>
-                                  {watcherBadge(streamId, true)}
+                                  <div className="flex items-center gap-1.5">
+                                    {isSelf && (
+                                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-600/80 text-white tracking-wide" title="Stream przez LiveKit SFU — skaluje do 1000+ widzów">SFU</span>
+                                    )}
+                                    {watcherBadge(streamId, true)}
+                                  </div>
                                 </div>
                               </div>
                             );
