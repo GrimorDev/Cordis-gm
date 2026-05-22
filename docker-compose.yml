@@ -179,7 +179,8 @@ services:
       - "50000-50200:50000-50200/udp"  # WebRTC media — must be reachable from the internet
     # Default entrypoint of the livekit image is /livekit-server (binary in rootfs, not in PATH).
     # docker-compose substitutes ${VAR} at deploy time — no shell wrapper needed.
-    command: --config /etc/livekit.yaml --keys "${LIVEKIT_API_KEY:-devkey}:${LIVEKIT_API_SECRET:-devsecret00000000000000000000000000000000}"
+    # LiveKit --keys format MUST be "key: secret" (colon + space), not "key:secret"
+    command: --config /etc/livekit.yaml --keys "${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-devsecret00000000000000000000000000000000}"
     environment:
       LIVEKIT_API_KEY:    ${LIVEKIT_API_KEY:-devkey}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-devsecret00000000000000000000000000000000}
