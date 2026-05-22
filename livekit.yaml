@@ -8,17 +8,15 @@ bind_addresses:
 
 rtc:
   tcp_port: 7881
+  # UDP port range for WebRTC media — must match ports exposed in docker-compose.yml
+  port_range_start: 50000
+  port_range_end:   50200
   # Auto-detect external IP so ICE candidates point to the correct public address.
   # Required when running behind Docker NAT on a VPS.
   use_external_ip: true
   enable_loopback_candidate: false
   # Allow TCP fallback for clients behind strict firewalls blocking UDP
   allow_tcp_fallback: true
-
-# UDP port range for WebRTC media
-# Must match the ports exposed in docker-compose.yml
-udp_port_range_start: 50000
-udp_port_range_end:   50200
 
 logging:
   level: warn
