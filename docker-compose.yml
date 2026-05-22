@@ -168,7 +168,7 @@ services:
   # Signaling: proxied via Nginx at /livekit/  (WebSocket)
   # Media:     direct UDP 50000-50200 from clients (cannot go through Nginx)
   livekit:
-    image: livekit/livekit-server:v1.7
+    image: livekit/livekit-server:latest
     container_name: cordis-livekit
     restart: unless-stopped
     volumes:
@@ -177,9 +177,13 @@ services:
       - "7880:7880"       # HTTP / WebSocket signaling (also proxied via Nginx /livekit/)
       - "7881:7881"       # RTC over TCP (fallback for UDP-blocked clients)
       - "50000-50200:50000-50200/udp"  # WebRTC media — must be reachable from the internet
-    command: >
-      --config /etc/livekit.yaml
-      --keys ${LIVEKIT_API_KEY:-devkey}:${LIVEKIT_API_SECRET:-devsecret00000000000000000000000000000000}
+    # $$ = literal $ in docker-compose (prevents compose from expanding) → shell gets $LIVEKIT_API_KEY
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'exec livekit-server --config /etc/livekit.yaml --keys "$$LIVEKIT_API_KEY:$$LIVEKIT_API_SECRET"'
+    environment:
+      LIVEKIT_API_KEY:    ${LIVEKIT_API_KEY:-devkey}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-devsecret00000000000000000000000000000000}
     networks:
       - default
     deploy:
