@@ -14180,6 +14180,23 @@ export default function App() {
                             {devices.filter(d=>d.kind==='videoinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`Kamera ${d.deviceId.slice(0,6)}`}</option>)}
                           </select>
                         </div>
+                        {/* Screen share quality */}
+                        <div className="sm:col-span-3 flex items-center justify-between px-0.5 pt-1 border-t border-white/[0.05] mt-1">
+                          <div className="flex flex-col">
+                            <span className="text-xs font-semibold text-white">Jakość udostępniania ekranu</span>
+                            <span className="text-[10px] text-zinc-500 mt-0.5">HD 720p/30fps — mniejsze łącze · FHD 1080p/60fps — wysoka jakość</span>
+                          </div>
+                          <div className="flex rounded-lg overflow-hidden border border-white/10 text-[11px] font-semibold shrink-0">
+                            <button onClick={() => setScreenQuality('hd')}
+                              className={`px-3 py-1.5 transition-colors ${screenQuality==='hd' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-white/40 hover:bg-white/10'}`}>
+                              HD
+                            </button>
+                            <button onClick={() => setScreenQuality('fhd')}
+                              className={`px-3 py-1.5 transition-colors ${screenQuality==='fhd' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-white/40 hover:bg-white/10'}`}>
+                              FHD
+                            </button>
+                          </div>
+                        </div>
                         {/* Noise cancellation toggle */}
                         <div className="sm:col-span-3 flex items-center justify-between px-0.5 pt-1 border-t border-white/[0.05] mt-1">
                           <div className="flex flex-col">
@@ -14243,21 +14260,6 @@ export default function App() {
                       className={`call-ctrl-btn ${activeCall.isCameraOn?'active-orange':''}`}>
                       <Video size={18}/>
                     </button>
-                    {/* Screen quality picker — only shown when not currently sharing */}
-                    {!activeCall.isScreenSharing && (
-                      <div className="flex rounded-lg overflow-hidden border border-white/10 text-[11px] font-medium self-center">
-                        <button onClick={() => setScreenQuality('hd')}
-                          className={`px-2 py-1 transition-colors ${screenQuality==='hd' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-white/40 hover:bg-white/10'}`}
-                          title="HD 720p / 30fps">
-                          HD
-                        </button>
-                        <button onClick={() => setScreenQuality('fhd')}
-                          className={`px-2 py-1 transition-colors ${screenQuality==='fhd' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-white/40 hover:bg-white/10'}`}
-                          title="FHD 1080p / 60fps">
-                          FHD
-                        </button>
-                      </div>
-                    )}
                     <button onClick={toggleScreen} title={activeCall.isScreenSharing?'Zatrzymaj udostępnianie':'Udostępnij ekran'}
                       className={`call-ctrl-btn ${activeCall.isScreenSharing?'active-orange':''}`}>
                       <ScreenShare size={18}/>
