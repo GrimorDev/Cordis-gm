@@ -111,6 +111,9 @@ services:
       UPLOAD_MAX_SIZE: "52428800"
       # Cluster: number of worker processes (defaults to CPU count)
       # Override in Portainer if you want to pin to a specific number
+      LIVEKIT_API_KEY:    ${LIVEKIT_API_KEY:-devkey}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-devsecret00000000000000000000000000000000}
+      LIVEKIT_HOST:       livekit:7880
       CLUSTER_WORKERS: ${CLUSTER_WORKERS:-0}
       # Node.js heap — leave ~20% RAM headroom for OS + Redis on the same host
       # Adjust NODE_MAX_OLD_SPACE to ~70% of available RAM if running dedicated
@@ -159,6 +162,34 @@ services:
       timeout: 10s
       retries: 10
       start_period: 60s
+
+  # ── LiveKit SFU — WebRTC media relay for screen share + video ───────
+  # Enables 1000+ viewers from a single upload stream (vs full mesh).
+  # Signaling: proxied via Nginx at /livekit/  (WebSocket)
+  # Media:     direct UDP 50000-50200 from clients (cannot go through Nginx)
+  livekit:
+    image: livekit/livekit-server:v1.7
+    container_name: cordis-livekit
+    restart: unless-stopped
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - "7880:7880"       # HTTP / WebSocket signaling (also proxied via Nginx /livekit/)
+      - "7881:7881"       # RTC over TCP (fallback for UDP-blocked clients)
+      - "50000-50200:50000-50200/udp"  # WebRTC media — must be reachable from the internet
+    command: >
+      --config /etc/livekit.yaml
+      --keys ${LIVEKIT_API_KEY:-devkey}:${LIVEKIT_API_SECRET:-devsecret00000000000000000000000000000000}
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 2G
+        reservations:
+          cpus: "0.25"
+          memory: 128M
 
   # ── PostgreSQL (tuned for high concurrency) ───────────────────────
   # PgBouncer zostanie dodany gdy będzie potrzeba skalowania horyzontalnego

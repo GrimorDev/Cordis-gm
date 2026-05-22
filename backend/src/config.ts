@@ -82,4 +82,11 @@ export const config = {
     privateKey: process.env.VAPID_PRIVATE_KEY || '',
     email:      process.env.VAPID_EMAIL       || 'admin@cordyn.pl',
   },
+
+  livekit: {
+    apiKey:    process.env.LIVEKIT_API_KEY    || 'devkey',
+    apiSecret: process.env.LIVEKIT_API_SECRET || 'devsecret00000000000000000000000000000000',
+    // Internal host — backend contacts LiveKit directly (not through Nginx)
+    host:      process.env.LIVEKIT_HOST       || 'localhost:7880',
+  },
 };

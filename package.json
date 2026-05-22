@@ -32,6 +32,7 @@
     "dompurify": "^3.3.2",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
+    "livekit-client": "^2.9.0",
     "lottie-react": "^2.4.1",
     "lucide-react": "^0.546.0",
     "marked": "^17.0.4",

@@ -67,6 +67,15 @@ import {
   getSocket,
 } from './socket';
 import {
+  connectRoom as livekitConnectRoom,
+  disconnectRoom as livekitDisconnectRoom,
+  publishScreen as livekitPublishScreen,
+  unpublishScreen as livekitUnpublishScreen,
+  channelRoom as livekitChannelRoom,
+  dmRoom as livekitDmRoom,
+} from './livekit';
+import { Track as LKTrack } from 'livekit-client';
+import {
   playDmNotification, startRing, stopRing,
   startIncomingRing, stopIncomingRing,
   playVoiceJoin, playVoiceLeave, playMessageSent, playMentionAlert, playMessageReceived,
@@ -11839,6 +11848,8 @@ export default function App() {
     // Stop speaking detection
     speakStopRef.current.forEach(fn => fn()); speakStopRef.current.clear();
     setSpeakingUsers(new Set());
+    // Disconnect LiveKit SFU room
+    livekitDisconnectRoom().catch(() => {});
   };
 
   const acquireMic = async (deviceId?: string, noiseCancelOverride?: boolean): Promise<MediaStream|null> => {
@@ -11962,6 +11973,30 @@ export default function App() {
     setShowCallPanel(true);
     // Notify other tabs to leave voice
     try { voiceBcRef.current?.postMessage({ type: 'voice_joined' }); } catch {}
+    // Connect to LiveKit room as subscriber so remote screen shares arrive automatically
+    livekitConnectRoom(
+      livekitChannelRoom(ch.id),
+      /* canPublish */ false,
+      (track, participant) => {
+        if (track.source === LKTrack.Source.ScreenShare) {
+          const stream = new MediaStream([track.mediaStreamTrack]);
+          remoteScreenStreamsRef.current.set(participant.identity, stream);
+          setScreenShareTick(t => t + 1);
+          track.mediaStreamTrack.onended = () => {
+            if (remoteScreenStreamsRef.current.get(participant.identity) === stream) {
+              remoteScreenStreamsRef.current.delete(participant.identity);
+              setScreenShareTick(t => t + 1);
+            }
+          };
+        }
+      },
+      (track, participant) => {
+        if (track.source === LKTrack.Source.ScreenShare) {
+          remoteScreenStreamsRef.current.delete(participant.identity);
+          setScreenShareTick(t => t + 1);
+        }
+      },
+    ).catch(err => console.warn('[LiveKit] channel room connect failed:', err));
   };
 
   const hangupCall = () => {
@@ -12084,7 +12119,10 @@ export default function App() {
       if (c?.userId)    getSocket().emit('screen_share_stop' as any, { to_user_id: c.userId });
       if (c?.channelId) getSocket().emit('screen_share_stop' as any, { channel_id: c.channelId });
     };
+
     if (activeCall?.isScreenSharing) {
+      // ── Stop sharing ───────────────────────────────────────────────
+      await livekitUnpublishScreen().catch(() => {});
       screenStreamRef.current?.getTracks().forEach(t => t.stop());
       screenStreamRef.current = null;
       if (isTauri) {
@@ -12094,7 +12132,7 @@ export default function App() {
       emitScreenStop();
     } else {
       try {
-        // captureScreen handles quality presets + audio fallback (NotSupportedError/TypeError retry)
+        // ── Capture screen ────────────────────────────────────────────
         let stream: MediaStream;
         try {
           stream = await captureScreen(screenQuality);
@@ -12103,12 +12141,12 @@ export default function App() {
           if (name === 'NotSupportedError' || name === 'TypeError' || name === 'OverconstrainedError') {
             addToast(tl('toast.cannotShareAudio'), 'info');
             throw audioErr;
-          } else throw audioErr; // user cancelled or no permission
+          } else throw audioErr;
         }
-        // Hint: 'detail' = optimise for text/UI sharpness (vs 'motion' for video)
+        // Optimise for text/UI sharpness
         stream.getVideoTracks().forEach(t => { (t as any).contentHint = 'detail'; });
-        // On Tauri desktop: if no audio track (WebView2 can't capture system audio),
-        // try WASAPI loopback capture via Rust plugin
+
+        // Tauri: WASAPI loopback if WebView2 can't capture system audio
         if (isTauri && stream.getAudioTracks().length === 0) {
           try {
             const { startLoopbackCapture } = await import('./audioLoopback');
@@ -12117,32 +12155,58 @@ export default function App() {
               (stream as any).addTrack(loopbackTrack);
               addToast('🎵 Dźwięk systemu: WASAPI loopback aktywny', 'success');
             }
-          } catch (e) {
-            console.warn('[Loopback] Not available:', e);
+          } catch (e) { console.warn('[Loopback] Not available:', e); }
+        }
+
+        screenStreamRef.current = stream;
+
+        // ── LiveKit SFU publish ───────────────────────────────────────
+        // Connect to the channel/DM LiveKit room as publisher, then push tracks.
+        // This means 1 upload from the sharer regardless of how many viewers watch.
+        const call = activeCallRef.current;
+        const me   = currentUserRef.current;
+        if (call && me) {
+          const roomName = call.channelId
+            ? livekitChannelRoom(call.channelId)
+            : call.userId
+              ? livekitDmRoom(String(me.id), call.userId)
+              : null;
+          if (roomName) {
+            try {
+              await livekitConnectRoom(
+                roomName,
+                /* canPublish */ true,
+                /* onSubscribed   — handled by livekitSetupSubscriptions below */ () => {},
+                /* onUnsubscribed — handled below */ () => {},
+              );
+              await livekitPublishScreen(stream, screenQuality);
+            } catch (lkErr) {
+              console.error('[LiveKit] publish failed, falling back to mesh:', lkErr);
+              // Fallback: add tracks to existing peer connections (old mesh approach)
+              stream.getTracks().forEach(t => {
+                peerConnsRef.current.forEach(pc => pc.addTrack(t, stream));
+              });
+              const shareProfile = getBitrateProfile(peerConnsRef.current.size + 1, true, screenQuality);
+              peerConnsRef.current.forEach(async (pc, peerId) => {
+                try {
+                  tuneVideoSenders(pc, stream, shareProfile, screenQuality);
+                  if (pc.signalingState === 'stable') {
+                    const rawOffer = await pc.createOffer();
+                    const tunedSdp = preferOpusStereo(preferH264(rawOffer.sdp ?? ''));
+                    const offer = { ...rawOffer, sdp: tunedSdp };
+                    await pc.setLocalDescription(offer);
+                    getSocket().emit('webrtc_offer', { to: peerId, sdp: offer });
+                  }
+                } catch {}
+              });
+            }
           }
         }
-        screenStreamRef.current = stream;
-        // Add ALL tracks (video + audio) to every peer connection BEFORE renegotiating
-        stream.getTracks().forEach(t => {
-          peerConnsRef.current.forEach((pc) => { pc.addTrack(t, stream); });
-        });
-        // Renegotiate once per peer: prefer H264 + adaptive bitrate based on participant count
-        const shareProfile = getBitrateProfile(peerConnsRef.current.size + 1, true, screenQuality);
-        peerConnsRef.current.forEach(async (pc, peerId) => {
-          try {
-            tuneVideoSenders(pc, stream, shareProfile, screenQuality);
-            if (pc.signalingState === 'stable') {
-              const rawOffer = await pc.createOffer();
-              const tunedSdp = preferOpusStereo(preferH264(rawOffer.sdp ?? ''));
-              const offer    = { ...rawOffer, sdp: tunedSdp };
-              await pc.setLocalDescription(offer);
-              getSocket().emit('webrtc_offer', { to: peerId, sdp: offer });
-            }
-          } catch {}
-        });
-        // Stop screen share when video track ends (user clicks browser stop button)
+
+        // Stop when user clicks browser "Stop sharing" button
         stream.getVideoTracks().forEach(t => {
           t.onended = () => {
+            livekitUnpublishScreen().catch(() => {});
             screenStreamRef.current = null;
             if (isTauri) {
               import('./audioLoopback').then(m => m.stopLoopbackCapture()).catch(() => {});
@@ -12151,8 +12215,8 @@ export default function App() {
             setActiveCall(p => p ? {...p, isScreenSharing: false} : p);
           };
         });
+
         setActiveCall(p => p ? {...p, isScreenSharing: true} : p);
-        const call = activeCallRef.current;
         if (call?.userId)    getSocket().emit('screen_share_start' as any, { to_user_id: call.userId });
         if (call?.channelId) getSocket().emit('screen_share_start' as any, { channel_id: call.channelId });
       } catch { addToast(tl('toast.cannotShareScreen'), 'error'); }
