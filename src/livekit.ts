@@ -77,13 +77,19 @@ export async function connectRoom(
   onTrackSubscribed:   LivekitTrackHandler,
   onTrackUnsubscribed: LivekitTrackHandler,
 ): Promise<Room> {
-  // Already connected to the same room — just update handlers
+  // Already connected to the same room — reuse unless we need to upgrade to canPublish
   if (_room && _roomName === roomName && _room.state === ConnectionState.Connected) {
-    _room.off(RoomEvent.TrackSubscribed,   _room.listeners(RoomEvent.TrackSubscribed)[0]   as any);
-    _room.off(RoomEvent.TrackUnsubscribed, _room.listeners(RoomEvent.TrackUnsubscribed)[0] as any);
-    _room.on(RoomEvent.TrackSubscribed,   onTrackSubscribed);
-    _room.on(RoomEvent.TrackUnsubscribed, onTrackUnsubscribed);
-    return _room;
+    const hasPublish = _room.localParticipant.permissions?.canPublish ?? false;
+    if (!canPublish || hasPublish) {
+      // No permission upgrade needed — just refresh the event handlers
+      _room.off(RoomEvent.TrackSubscribed,   _room.listeners(RoomEvent.TrackSubscribed)[0]   as any);
+      _room.off(RoomEvent.TrackUnsubscribed, _room.listeners(RoomEvent.TrackUnsubscribed)[0] as any);
+      _room.on(RoomEvent.TrackSubscribed,   onTrackSubscribed);
+      _room.on(RoomEvent.TrackUnsubscribed, onTrackUnsubscribed);
+      return _room;
+    }
+    // canPublish=true requested but existing token has canPublish=false → must reconnect
+    await disconnectRoom();
   }
 
   // Disconnect previous room if switching
