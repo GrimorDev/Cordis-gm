@@ -14184,7 +14184,7 @@ export default function App() {
                         <div className="sm:col-span-3 flex items-center justify-between px-0.5 pt-1 border-t border-white/[0.05] mt-1">
                           <div className="flex flex-col">
                             <span className="text-xs font-semibold text-white">Jakość udostępniania ekranu</span>
-                            <span className="text-[10px] text-zinc-500 mt-0.5">HD 720p/30fps — mniejsze łącze · FHD 1080p/60fps — wysoka jakość</span>
+                            <span className="text-[10px] text-zinc-500 mt-0.5">HD 720p/60fps — mniejsze łącze · FHD 1080p/60fps — wysoka jakość</span>
                           </div>
                           <div className="flex rounded-lg overflow-hidden border border-white/10 text-[11px] font-semibold shrink-0">
                             <button onClick={() => setScreenQuality('hd')}

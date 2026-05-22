@@ -10,9 +10,11 @@ export type ScreenQuality = 'hd' | 'fhd';
  * Falls back to video-only if system audio capture is not supported.
  */
 export async function captureScreen(quality: ScreenQuality): Promise<MediaStream> {
+  // Both qualities get 60 fps — it's the sharer's upload that's consumed, not the server.
+  // HD vs FHD only differs in resolution; fps is always maxed out.
   const videoConstraints = quality === 'fhd'
     ? { frameRate: { ideal: 60, max: 60 }, width: { ideal: 1920 }, height: { ideal: 1080 } }
-    : { frameRate: { ideal: 30, max: 30 }, width: { ideal: 1280 }, height: { ideal: 720  } };
+    : { frameRate: { ideal: 60, max: 60 }, width: { ideal: 1280 }, height: { ideal: 720  } };
 
   try {
     return await navigator.mediaDevices.getDisplayMedia({ video: videoConstraints, audio: true });
@@ -46,7 +48,7 @@ export interface BitrateProfile {
  *
  * Screen share bitrate stays high because there is typically ONE sharer:
  *   FHD 1080p60 : 8 Mbps — matches Netflix HD tier, crisp text
- *   HD  720p30  : 3 Mbps — enough for code/slides at 30 fps
+ *   HD  720p60  : 3 Mbps — lower resolution, same 60 fps (sharer's upload, not server)
  */
 export function getBitrateProfile(
   participantCount: number,
