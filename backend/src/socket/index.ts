@@ -9,6 +9,9 @@ import {
   getSpotifyJamMembers, getVoiceDj, getMyVoiceDjChannel,
   endSpotifyJam, clearVoiceDj, getVoiceMembers,
   clearUserFromAllVoiceChannels,
+  gcGetState, gcSetState, gcGetMembers, gcSetMembers, gcDeleteState,
+  addStreamWatcher, removeStreamWatcher, getStreamWatchersList,
+  clearStreamWatchers, removeUserFromAllStreamWatchers,
 } from '../redis/client';
 import { query } from '../db/pool';
 import { JwtPayload, ServerToClientEvents, ClientToServerEvents } from '../types';
@@ -25,13 +28,9 @@ interface SocketData {
 }
 
 
-// stream_watchers: "channel_id:streamer_id" → Map<watcher_user_id, username>
-const streamWatchers = new Map<string, Map<string, string>>();
-
-// ── Group call state ──────────────────────────────────────────────
-// groupId → { participants: Set<userId>, pending: Set<userId>, memberIds: string[] }
-type GroupCallState = { participants: Set<string>; pending: Set<string>; memberIds: string[] };
-const groupCalls = new Map<string, GroupCallState>();
+// Group call state and stream watchers are now Redis-backed (see redis/client.ts)
+// — gcGetState/gcSetState/gcDeleteState for group calls
+// — addStreamWatcher/removeStreamWatcher/getStreamWatchersList/clearStreamWatchers for streams
 
 // ── Activity caches (real-time state, cleared on disconnect) ──────
 // Keyed by user_id. Stores last known state + timestamp for freshness check.
@@ -485,7 +484,7 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
       io.to(`user:${to_user_id}`).emit('call_ended', { by_user_id: user.id });
     });
 
-    // ── Group Calls ───────────────────────────────────────────────────
+    // ── Group Calls (Redis-backed state — survives container restarts) ─
     socket.on('group_call_start', async ({ group_id }) => {
       try {
         const { rows: parts } = await query(
@@ -496,29 +495,26 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
         const memberIds = parts.map((p: any) => p.user_id as string);
         if (!memberIds.includes(user.id)) return;
 
-        // Init or reuse call state
-        if (!groupCalls.has(group_id)) {
-          groupCalls.set(group_id, { participants: new Set(), pending: new Set(), memberIds });
+        // Load or init state from Redis
+        let state = await gcGetState(group_id);
+        if (!state) {
+          state = { participants: [], pending: [] };
+          await gcSetMembers(group_id, memberIds); // store immutable member list
         }
-        const cs = groupCalls.get(group_id)!;
-        cs.memberIds = memberIds;
-        cs.participants.add(user.id);
-        // Pending = everyone except caller
+        // Add caller to participants, everyone else to pending
+        if (!state.participants.includes(user.id)) state.participants.push(user.id);
         const others = memberIds.filter(id => id !== user.id);
-        others.forEach(id => cs.pending.add(id));
+        others.forEach(id => { if (!state!.pending.includes(id)) state!.pending.push(id); });
+        await gcSetState(group_id, state.participants, state.pending);
 
         const callerInfo = parts.find((p: any) => p.user_id === user.id);
         const statePayload = {
           group_id,
-          participants: [...cs.participants],
-          pending: [...cs.pending],
+          participants: state.participants,
+          pending: state.pending,
           caller: { id: user.id, username: user.username, avatar_url: callerInfo?.avatar_url || null },
         };
-        // Notify others (invite)
-        for (const uid of others) {
-          io.to(`user:${uid}`).emit('group_call_invite', statePayload);
-        }
-        // Notify caller of initial state
+        for (const uid of others) io.to(`user:${uid}`).emit('group_call_invite', statePayload);
         socket.emit('group_call_state', statePayload);
       } catch (err) {
         console.error('[group-call] start error:', err);
@@ -526,58 +522,68 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
     });
 
     socket.on('group_call_join', async ({ group_id }) => {
-      const cs = groupCalls.get(group_id);
-      if (!cs) return;
-      cs.pending.delete(user.id);
-      const existingParticipants = [...cs.participants];
-      cs.participants.add(user.id);
+      try {
+        const state = await gcGetState(group_id);
+        if (!state) return;
+        const existingParticipants = [...state.participants];
+        state.pending = state.pending.filter(id => id !== user.id);
+        if (!state.participants.includes(user.id)) state.participants.push(user.id);
+        await gcSetState(group_id, state.participants, state.pending);
 
-      const statePayload = {
-        group_id,
-        participants: [...cs.participants],
-        pending: [...cs.pending],
-        new_user_id: user.id,
-        existing_participants: existingParticipants,
-      };
-      for (const uid of cs.participants) {
-        io.to(`user:${uid}`).emit('group_call_participant_joined', statePayload);
+        const statePayload = {
+          group_id,
+          participants: state.participants,
+          pending: state.pending,
+          new_user_id: user.id,
+          existing_participants: existingParticipants,
+        };
+        for (const uid of state.participants) {
+          io.to(`user:${uid}`).emit('group_call_participant_joined', statePayload);
+        }
+      } catch (err) {
+        console.error('[group-call] join error:', err);
       }
     });
 
-    socket.on('group_call_dismiss', ({ group_id }) => {
-      const cs = groupCalls.get(group_id);
-      if (!cs) return;
-      cs.pending.delete(user.id);
-      // If nobody joined and nobody is pending, clean up the orphaned call
-      if (cs.participants.size === 0 && cs.pending.size === 0) {
-        groupCalls.delete(group_id);
-        return;
-      }
-      const statePayload = { group_id, participants: [...cs.participants], pending: [...cs.pending] };
-      for (const uid of cs.participants) {
-        io.to(`user:${uid}`).emit('group_call_state', statePayload);
+    socket.on('group_call_dismiss', async ({ group_id }) => {
+      try {
+        const state = await gcGetState(group_id);
+        if (!state) return;
+        state.pending = state.pending.filter(id => id !== user.id);
+        // Orphaned call (nobody joined yet, nobody pending) → clean up
+        if (state.participants.length === 0 && state.pending.length === 0) {
+          await gcDeleteState(group_id);
+          return;
+        }
+        await gcSetState(group_id, state.participants, state.pending);
+        const statePayload = { group_id, participants: state.participants, pending: state.pending };
+        for (const uid of state.participants) io.to(`user:${uid}`).emit('group_call_state', statePayload);
+      } catch (err) {
+        console.error('[group-call] dismiss error:', err);
       }
     });
 
-    socket.on('group_call_leave', ({ group_id }) => {
-      const cs = groupCalls.get(group_id);
-      if (!cs) return;
-      cs.participants.delete(user.id);
-      cs.pending.delete(user.id);
+    socket.on('group_call_leave', async ({ group_id }) => {
+      try {
+        const state = await gcGetState(group_id);
+        if (!state) return;
+        state.participants = state.participants.filter(id => id !== user.id);
+        state.pending      = state.pending.filter(id => id !== user.id);
 
-      if (cs.participants.size === 0) {
-        for (const uid of cs.memberIds) {
-          io.to(`user:${uid}`).emit('group_call_ended', { group_id });
+        if (state.participants.length === 0) {
+          // Last person left — notify all members and clean up
+          const memberIds = await gcGetMembers(group_id) ?? [];
+          for (const uid of memberIds) io.to(`user:${uid}`).emit('group_call_ended', { group_id });
+          await gcDeleteState(group_id);
+        } else {
+          await gcSetState(group_id, state.participants, state.pending);
+          const leftPayload = { group_id, participants: state.participants, pending: state.pending, left_user_id: user.id };
+          for (const uid of state.participants) io.to(`user:${uid}`).emit('group_call_participant_left', leftPayload);
+          const statePayload = { group_id, participants: state.participants, pending: state.pending };
+          for (const uid of state.pending) io.to(`user:${uid}`).emit('group_call_state', statePayload);
         }
-        groupCalls.delete(group_id);
-      } else {
-        const statePayload = { group_id, participants: [...cs.participants], pending: [...cs.pending], left_user_id: user.id };
-        for (const uid of cs.participants) {
-          io.to(`user:${uid}`).emit('group_call_participant_left', statePayload);
-        }
-        for (const uid of cs.pending) {
-          io.to(`user:${uid}`).emit('group_call_state', { group_id, participants: [...cs.participants], pending: [...cs.pending] });
-        }
+      } catch (err) {
+        console.error('[group-call] leave error:', err);
       }
     });
 
@@ -606,35 +612,27 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
       if (channel_id) socket.to(`voice:${channel_id}`).emit('screen_share_start', { from: user.id });
     });
 
-    socket.on('screen_share_stop', ({ to_user_id, channel_id }) => {
+    socket.on('screen_share_stop', async ({ to_user_id, channel_id }) => {
       if (to_user_id) io.to(`user:${to_user_id}`).emit('screen_share_stop', { from: user.id });
       if (channel_id) socket.to(`voice:${channel_id}`).emit('screen_share_stop', { from: user.id });
-      // Clean up watchers for this stream
-      if (channel_id) {
-        const key = `${channel_id}:${user.id}`;
-        streamWatchers.delete(key);
-      }
+      // Clean up watchers for this stream in Redis
+      if (channel_id) await clearStreamWatchers(channel_id, user.id);
     });
 
-    // ── Stream viewer tracking ────────────────────────────────────────
-    const broadcastWatchers = (channelId: string, streamerId: string) => {
-      const key = `${channelId}:${streamerId}`;
-      const map = streamWatchers.get(key);
-      const watchers = map ? [...map.entries()].map(([id, username]) => ({ id, username })) : [];
+    // ── Stream viewer tracking (Redis-backed) ────────────────────────
+    const broadcastWatchers = async (channelId: string, streamerId: string) => {
+      const watchers = await getStreamWatchersList(channelId, streamerId);
       io.to(`voice:${channelId}`).emit('stream_watchers_update' as any, { streamer_id: streamerId, watchers });
     };
 
-    socket.on('stream_watch_start' as any, ({ channel_id, streamer_id }: { channel_id: string; streamer_id: string }) => {
-      const key = `${channel_id}:${streamer_id}`;
-      if (!streamWatchers.has(key)) streamWatchers.set(key, new Map());
-      streamWatchers.get(key)!.set(String(user.id), user.username);
-      broadcastWatchers(channel_id, streamer_id);
+    socket.on('stream_watch_start' as any, async ({ channel_id, streamer_id }: { channel_id: string; streamer_id: string }) => {
+      await addStreamWatcher(channel_id, streamer_id, String(user.id), user.username);
+      await broadcastWatchers(channel_id, streamer_id);
     });
 
-    socket.on('stream_watch_stop' as any, ({ channel_id, streamer_id }: { channel_id: string; streamer_id: string }) => {
-      const key = `${channel_id}:${streamer_id}`;
-      streamWatchers.get(key)?.delete(String(user.id));
-      broadcastWatchers(channel_id, streamer_id);
+    socket.on('stream_watch_stop' as any, async ({ channel_id, streamer_id }: { channel_id: string; streamer_id: string }) => {
+      await removeStreamWatcher(channel_id, streamer_id, String(user.id));
+      await broadcastWatchers(channel_id, streamer_id);
     });
 
     // ── Bot commands ─────────────────────────────────────────────────
@@ -734,24 +732,9 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
         }
       }
 
-      // Clean up stream watches on disconnect
-      for (const [key, map] of streamWatchers.entries()) {
-        const [channelId, streamerId] = key.split(':');
-        // Case 1: disconnecting user was a WATCHER
-        if (map.has(String(user.id))) {
-          map.delete(String(user.id));
-          const watchers = [...map.entries()].map(([id, username]) => ({ id, username }));
-          io.to(`voice:${channelId}`).emit('stream_watchers_update' as any, { streamer_id: streamerId, watchers });
-        }
-        // Case 2: disconnecting user was the STREAMER — clean up their key entirely
-        if (streamerId === String(user.id)) {
-          streamWatchers.delete(key);
-        }
-        // Case 3: remove empty inner maps to prevent accumulation
-        else if (map.size === 0) {
-          streamWatchers.delete(key);
-        }
-      }
+      // Clean up stream watches on disconnect (Redis-backed)
+      // Remove user from any watcher hashes they were in
+      await removeUserFromAllStreamWatchers(String(user.id)).catch(() => {});
 
       // Check if user has any other active sockets
       const userSockets = await io.in(`user:${user.id}`).fetchSockets();

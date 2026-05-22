@@ -1,5 +1,83 @@
 // ─── WebRTC Utilities for Cordis ─────────────────────────────────────────────
 
+// ─── Screen share quality ────────────────────────────────────────────────────
+export type ScreenQuality = 'hd' | 'fhd';
+
+/**
+ * Capture screen with the selected quality preset.
+ * HD  = 1280×720 @ 30 fps  — lower bitrate, smoother on weak connections
+ * FHD = 1920×1080 @ 60 fps — crisp text, best for presentations & code
+ * Falls back to video-only if system audio capture is not supported.
+ */
+export async function captureScreen(quality: ScreenQuality): Promise<MediaStream> {
+  const videoConstraints = quality === 'fhd'
+    ? { frameRate: { ideal: 60, max: 60 }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+    : { frameRate: { ideal: 30, max: 30 }, width: { ideal: 1280 }, height: { ideal: 720  } };
+
+  try {
+    return await navigator.mediaDevices.getDisplayMedia({ video: videoConstraints, audio: true });
+  } catch (e: any) {
+    const n = e?.name ?? '';
+    if (n === 'NotSupportedError' || n === 'TypeError' || n === 'OverconstrainedError') {
+      // System audio not supported — retry video-only
+      return navigator.mediaDevices.getDisplayMedia({ video: videoConstraints, audio: false });
+    }
+    throw e; // user cancelled or real error
+  }
+}
+
+// ─── Adaptive bitrate profile ────────────────────────────────────────────────
+export interface BitrateProfile {
+  audioBitrateKbps:  number; // Opus audio per sender
+  screenBitrateMbps: number; // Screen share video
+  webcamBitrateMbps: number; // Webcam video (lower priority)
+  webcamMaxFps:      number; // Webcam max framerate
+}
+
+/**
+ * Returns per-sender bitrate limits based on participant count.
+ *
+ * In a full mesh each user sends N-1 audio streams. Scaling bitrate down
+ * as participants grow keeps total upstream manageable without quality loss:
+ *   1-2 people  : 64 kbps Opus — studio quality
+ *   3-4 people  : 32 kbps Opus — CD quality, still clear speech
+ *   5-8 people  : 24 kbps Opus — voice band, intelligible
+ *   9+ people   : 16 kbps Opus — minimum usable Opus
+ *
+ * Screen share bitrate stays high because there is typically ONE sharer:
+ *   FHD 1080p60 : 8 Mbps — matches Netflix HD tier, crisp text
+ *   HD  720p30  : 3 Mbps — enough for code/slides at 30 fps
+ */
+export function getBitrateProfile(
+  participantCount: number,
+  hasScreen: boolean,
+  quality: ScreenQuality = 'fhd',
+): BitrateProfile {
+  const audioBitrateKbps =
+    participantCount <= 2  ? 64 :
+    participantCount <= 4  ? 32 :
+    participantCount <= 8  ? 24 : 16;
+
+  if (!hasScreen) {
+    return { audioBitrateKbps, screenBitrateMbps: 0, webcamBitrateMbps: 0, webcamMaxFps: 0 };
+  }
+
+  const fhd = quality === 'fhd';
+  const screenBitrateMbps =
+    participantCount <= 2  ? (fhd ? 8   : 4  ) :
+    participantCount <= 4  ? (fhd ? 8   : 3  ) :
+    participantCount <= 8  ? (fhd ? 5   : 2  ) : (fhd ? 3   : 1.5);
+
+  const webcamBitrateMbps =
+    participantCount <= 2  ? 1.5 :
+    participantCount <= 4  ? (fhd ? 0.5 : 0.8) :
+    participantCount <= 8  ? 0.3 : 0.2;
+
+  const webcamMaxFps = participantCount <= 4 ? 30 : 15;
+
+  return { audioBitrateKbps, screenBitrateMbps, webcamBitrateMbps, webcamMaxFps };
+}
+
 // ─── TURN server support ──────────────────────────────────────────────────────
 function buildIceServers(): RTCIceServer[] {
   const servers: RTCIceServer[] = [
@@ -392,16 +470,20 @@ export function preferOpusStereo(sdp: string): string {
 
 /**
  * Set encoding parameters on all audio senders: high priority + correct Opus bitrate.
- * Call after setLocalDescription or after adding tracks.
+ * Accepts either a raw kbps number (legacy) or a BitrateProfile (adaptive).
  * Default 128 kbps — noticeably better than 64 kbps for voice/music.
  */
-export function tuneAudioSender(pc: RTCPeerConnection, bitrateKbps = 128): void {
+export function tuneAudioSender(pc: RTCPeerConnection, bitrateKbpsOrProfile: number | BitrateProfile = 128): void {
+  const bitrateKbps = typeof bitrateKbpsOrProfile === 'number'
+    ? bitrateKbpsOrProfile
+    : bitrateKbpsOrProfile.audioBitrateKbps;
+
   pc.getSenders().forEach(sender => {
     if (sender.track?.kind !== 'audio') return;
     try {
       const params = sender.getParameters();
       if (!params.encodings?.length) params.encodings = [{}];
-      params.encodings[0].maxBitrate    = bitrateKbps * 1_000;
+      params.encodings[0].maxBitrate             = bitrateKbps * 1_000;
       (params.encodings[0] as any).priority        = 'high';
       (params.encodings[0] as any).networkPriority = 'high';
       sender.setParameters(params).catch(() => {});
@@ -410,16 +492,36 @@ export function tuneAudioSender(pc: RTCPeerConnection, bitrateKbps = 128): void 
 }
 
 /**
- * Set encoding parameters on all video senders (screen share):
- * max 8 Mbps @ 60 fps — minimum for crisp 1080p.
- * Also demotes any webcam senders to medium priority.
+ * Set encoding parameters on all video senders.
+ * Accepts either legacy (maxBitrateMbps, maxFps) or a BitrateProfile for adaptive quality.
+ * Screen share always gets high priority; webcam gets medium priority + lower bitrate.
  */
 export function tuneVideoSenders(
   pc: RTCPeerConnection,
   screenStream: MediaStream | null,
-  maxBitrateMbps = 8,
-  maxFps         = 60,
+  profileOrMaxMbps: BitrateProfile | number = 8,
+  quality: ScreenQuality | number = 'fhd',
 ): void {
+  // Resolve profile vs legacy call
+  let screenBitrateMbps: number;
+  let webcamBitrateMbps: number;
+  let webcamMaxFps: number;
+  let screenMaxFps: number;
+
+  if (typeof profileOrMaxMbps === 'object') {
+    // New adaptive path: BitrateProfile
+    screenBitrateMbps = profileOrMaxMbps.screenBitrateMbps || 8;
+    webcamBitrateMbps = profileOrMaxMbps.webcamBitrateMbps || 1.5;
+    webcamMaxFps      = profileOrMaxMbps.webcamMaxFps || 30;
+    screenMaxFps      = (quality === 'hd') ? 30 : 60;
+  } else {
+    // Legacy path: tuneVideoSenders(pc, stream, 8, 60)
+    screenBitrateMbps = profileOrMaxMbps;
+    webcamBitrateMbps = 1.5;
+    webcamMaxFps      = 30;
+    screenMaxFps      = typeof quality === 'number' ? quality : 60;
+  }
+
   pc.getSenders().forEach(sender => {
     if (sender.track?.kind !== 'video') return;
     try {
@@ -429,14 +531,14 @@ export function tuneVideoSenders(
       const isScreen = screenStream?.getVideoTracks().includes(sender.track as MediaStreamTrack) ?? false;
 
       if (isScreen) {
-        params.encodings[0].maxBitrate               = maxBitrateMbps * 1_000_000;
-        params.encodings[0].maxFramerate              = maxFps;
+        params.encodings[0].maxBitrate               = screenBitrateMbps * 1_000_000;
+        params.encodings[0].maxFramerate              = screenMaxFps;
         (params.encodings[0] as any).priority        = 'high';
         (params.encodings[0] as any).networkPriority = 'high';
       } else {
         // Webcam — lower priority so screen share gets the bandwidth
-        params.encodings[0].maxBitrate               = 1_500_000; // 1.5 Mbps
-        params.encodings[0].maxFramerate              = 30;
+        params.encodings[0].maxBitrate               = webcamBitrateMbps * 1_000_000;
+        params.encodings[0].maxFramerate              = webcamMaxFps;
         (params.encodings[0] as any).priority        = 'medium';
         (params.encodings[0] as any).networkPriority = 'medium';
       }

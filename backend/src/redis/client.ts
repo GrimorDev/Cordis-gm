@@ -76,6 +76,16 @@ export const KEYS = {
   // ── Voice DJ ────────────────────────────────────────────────────
   voiceDj:         (channelId: string) => `vdj:${channelId}`,
   voiceDjUser:     (userId: string)    => `vdj:user:${userId}`,
+
+  // ── Group calls (Redis-backed, survives restarts) ────────────────
+  // Hash fields: participants (JSON string[]), pending (JSON string[])
+  groupCall:        (groupId: string) => `groupcall:${groupId}`,
+  // Separate STRING key for the immutable member list of the conversation
+  groupCallMembers: (groupId: string) => `groupcall:${groupId}:members`,
+
+  // ── Stream watchers (Redis-backed, survives restarts) ────────────
+  // Hash: userId → username
+  streamWatchers: (channelId: string, streamerId: string) => `stream:watchers:${channelId}:${streamerId}`,
 };
 
 // TTL constants (seconds) — single source of truth
@@ -91,6 +101,8 @@ export const TTL = {
   notifCount:     120,   // 2 min
   jam:            14400, // 4 h
   voiceDj:        86400, // 24 h
+  groupCall:       7200, // 2 h — max reasonable group call duration
+  streamWatchers:  7200, // 2 h — auto-expires stale watchers
 };
 
 // ════════════════════════════════════════════════════════════════════
@@ -352,4 +364,90 @@ export async function getVoiceDj(channelId: string): Promise<string | null> {
 
 export async function getMyVoiceDjChannel(userId: string): Promise<string | null> {
   return redis.get(KEYS.voiceDjUser(userId));
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Group Call state (Redis-backed — survives container restarts)
+// ════════════════════════════════════════════════════════════════════
+
+export async function gcGetState(groupId: string): Promise<{ participants: string[]; pending: string[] } | null> {
+  try {
+    const raw = await redis.hgetall(KEYS.groupCall(groupId));
+    if (!raw || !raw.participants) return null;
+    return {
+      participants: JSON.parse(raw.participants),
+      pending:      JSON.parse(raw.pending ?? '[]'),
+    };
+  } catch { return null; }
+}
+
+export async function gcSetState(groupId: string, participants: string[], pending: string[]): Promise<void> {
+  try {
+    await redis.hset(KEYS.groupCall(groupId), {
+      participants: JSON.stringify(participants),
+      pending:      JSON.stringify(pending),
+    });
+    await redis.expire(KEYS.groupCall(groupId), TTL.groupCall);
+  } catch { /* non-fatal */ }
+}
+
+export async function gcGetMembers(groupId: string): Promise<string[] | null> {
+  try {
+    const raw = await redis.get(KEYS.groupCallMembers(groupId));
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+export async function gcSetMembers(groupId: string, memberIds: string[]): Promise<void> {
+  try {
+    await redis.setex(KEYS.groupCallMembers(groupId), TTL.groupCall, JSON.stringify(memberIds));
+  } catch { /* non-fatal */ }
+}
+
+export async function gcDeleteState(groupId: string): Promise<void> {
+  try {
+    await redis.del(KEYS.groupCall(groupId), KEYS.groupCallMembers(groupId));
+  } catch { /* non-fatal */ }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Stream watcher state (Redis-backed — survives container restarts)
+// ════════════════════════════════════════════════════════════════════
+
+export async function addStreamWatcher(channelId: string, streamerId: string, userId: string, username: string): Promise<void> {
+  try {
+    const key = KEYS.streamWatchers(channelId, streamerId);
+    await redis.hset(key, userId, username);
+    await redis.expire(key, TTL.streamWatchers);
+  } catch { /* non-fatal */ }
+}
+
+export async function removeStreamWatcher(channelId: string, streamerId: string, userId: string): Promise<void> {
+  try {
+    await redis.hdel(KEYS.streamWatchers(channelId, streamerId), userId);
+  } catch { /* non-fatal */ }
+}
+
+export async function getStreamWatchersList(channelId: string, streamerId: string): Promise<{ id: string; username: string }[]> {
+  try {
+    const hash = await redis.hgetall(KEYS.streamWatchers(channelId, streamerId));
+    return hash ? Object.entries(hash).map(([id, username]) => ({ id, username })) : [];
+  } catch { return []; }
+}
+
+export async function clearStreamWatchers(channelId: string, streamerId: string): Promise<void> {
+  try {
+    await redis.del(KEYS.streamWatchers(channelId, streamerId));
+  } catch { /* non-fatal */ }
+}
+
+/** Remove a user from all stream watcher hashes they might be in (called on disconnect). */
+export async function removeUserFromAllStreamWatchers(userId: string): Promise<void> {
+  try {
+    const keys = await redis.keys('stream:watchers:*');
+    if (keys.length === 0) return;
+    const pipeline = redis.pipeline();
+    for (const key of keys) pipeline.hdel(key, userId);
+    await pipeline.exec();
+  } catch { /* non-fatal */ }
 }

@@ -79,6 +79,7 @@ import {
   setOutputDevice, watchSpeaking, getMediaDevices, applyNoiseGate, applyDeepFilter, type NoisePipeline,
   preferH264, preferOpusStereo, tuneAudioSender, tuneVideoSenders, primePlaybackContext,
   onDeepFilterStatus, type DeepFilterStatus,
+  captureScreen, getBitrateProfile, type BitrateProfile, type ScreenQuality,
 } from './webrtc';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -8019,6 +8020,7 @@ export default function App() {
   const remoteScreenStreamsRef  = useRef(new Map<string, MediaStream>());
   const peerConnsRef            = useRef(new Map<string, RTCPeerConnection>());
   const speakStopRef     = useRef(new Map<string, ()=>void>()); // speaking detection cleanup
+  const screenQualityRef    = useRef<ScreenQuality>('fhd');
   const currentUserRef      = useRef(currentUser);
   const activeCallRef       = useRef(activeCall);
   const activeDmUserIdRef   = useRef(activeDmUserId);
@@ -8051,6 +8053,7 @@ export default function App() {
   // Screen share state — supports multiple simultaneous streams
   const [sharingUserIds, setSharingUserIds]   = useState<Set<string>>(new Set());
   const [screenShareTick, setScreenShareTick] = useState(0); // forces re-render when remote screen streams change
+  const [screenQuality, setScreenQuality]     = useState<ScreenQuality>('fhd');
   const [watchingStreamId, setWatchingStreamId] = useState<string|null>(null); // userId whose stream we're watching full-screen
   const [streamWatchers, setStreamWatchers]   = useState<Record<string, {id:string; username:string}[]>>({});
   const [watchersExpanded, setWatchersExpanded] = useState<Record<string, boolean>>({});
@@ -10060,6 +10063,7 @@ export default function App() {
   useEffect(() => { incomingCallRef.current   = incomingCall;   }, [incomingCall]);
   useEffect(() => { activeDmUserIdRef.current = activeDmUserId; }, [activeDmUserId]);
   useEffect(() => { activeChannelRef.current = activeChannel; }, [activeChannel]);
+  useEffect(() => { screenQualityRef.current = screenQuality; }, [screenQuality]);
   useEffect(() => { activeGroupDmRef.current  = activeGroupDm;  }, [activeGroupDm]);
   useEffect(() => { activeViewRef.current     = activeView;     }, [activeView]);
   useEffect(() => { activeServerRef.current   = activeServer;   }, [activeServer]);
@@ -10604,8 +10608,9 @@ export default function App() {
       const tunedSdp = preferOpusStereo(preferH264(rawOffer.sdp ?? ''));
       const offer    = { ...rawOffer, sdp: tunedSdp };
       await pc.setLocalDescription(offer);
-      tuneAudioSender(pc, (activeCh as any)?.bitrate ?? 128);
-      tuneVideoSenders(pc, screenStreamRef.current);
+      { const count = peerConnsRef.current.size + 1;
+        const prof: BitrateProfile = getBitrateProfile(count, !!screenStreamRef.current, screenQualityRef.current);
+        tuneAudioSender(pc, prof); tuneVideoSenders(pc, screenStreamRef.current, prof, screenQualityRef.current); }
       getSocket().emit('webrtc_offer', { to: remoteUserId, sdp: offer });
     } else if (sdpOffer) {
       await pc.setRemoteDescription(new RTCSessionDescription(sdpOffer));
@@ -10613,8 +10618,9 @@ export default function App() {
       const tunedSdp  = preferOpusStereo(preferH264(rawAnswer.sdp ?? ''));
       const answer     = { ...rawAnswer, sdp: tunedSdp };
       await pc.setLocalDescription(answer);
-      tuneAudioSender(pc, (activeCh as any)?.bitrate ?? 128);
-      tuneVideoSenders(pc, screenStreamRef.current);
+      { const count = peerConnsRef.current.size + 1;
+        const prof: BitrateProfile = getBitrateProfile(count, !!screenStreamRef.current, screenQualityRef.current);
+        tuneAudioSender(pc, prof); tuneVideoSenders(pc, screenStreamRef.current, prof, screenQualityRef.current); }
       getSocket().emit('webrtc_answer', { to: remoteUserId, sdp: answer });
     }
     return pc;
@@ -10627,6 +10633,7 @@ export default function App() {
         if (me && user.id !== me.id && call?.channelId === channel_id) {
           playVoiceJoin();
           if (!user.is_bot) await openPeer(user.id, true); // bots don't do WebRTC
+          retuneAllPeers();
         }
       },
       onUserLeft: ({ channel_id, user_id }: any) => {
@@ -10636,6 +10643,7 @@ export default function App() {
           playVoiceLeave();  // someone else left my channel
         }
         closePeer(user_id);
+        retuneAllPeers();
       },
       onOffer: async ({ from, sdp }: any) => {
         const existing = peerConnsRef.current.get(from);
@@ -12086,23 +12094,16 @@ export default function App() {
       emitScreenStop();
     } else {
       try {
-        // Try with system audio; if browser rejects audio (NotSupportedError/TypeError) retry video-only
+        // captureScreen handles quality presets + audio fallback (NotSupportedError/TypeError retry)
         let stream: MediaStream;
         try {
-          stream = await navigator.mediaDevices.getDisplayMedia({
-            video: { frameRate: { ideal: 60, max: 60 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-            audio: true, // let browser show system audio checkbox; no extra constraints that can fail
-          });
+          stream = await captureScreen(screenQuality);
         } catch (audioErr: any) {
           const name = audioErr?.name ?? '';
           if (name === 'NotSupportedError' || name === 'TypeError' || name === 'OverconstrainedError') {
-            // System audio not supported (some OS/browser/WebView combos) — fallback to video only
-            stream = await navigator.mediaDevices.getDisplayMedia({
-              video: { frameRate: { ideal: 60, max: 60 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-              audio: false,
-            });
             addToast(tl('toast.cannotShareAudio'), 'info');
-          } else throw audioErr; // real error (user cancelled, no permission etc.)
+            throw audioErr;
+          } else throw audioErr; // user cancelled or no permission
         }
         // Hint: 'detail' = optimise for text/UI sharpness (vs 'motion' for video)
         stream.getVideoTracks().forEach(t => { (t as any).contentHint = 'detail'; });
@@ -12125,10 +12126,11 @@ export default function App() {
         stream.getTracks().forEach(t => {
           peerConnsRef.current.forEach((pc) => { pc.addTrack(t, stream); });
         });
-        // Renegotiate once per peer: prefer H264 + set 8 Mbps / 60 fps on video senders
+        // Renegotiate once per peer: prefer H264 + adaptive bitrate based on participant count
+        const shareProfile = getBitrateProfile(peerConnsRef.current.size + 1, true, screenQuality);
         peerConnsRef.current.forEach(async (pc, peerId) => {
           try {
-            tuneVideoSenders(pc, stream);   // 8 Mbps, 60 fps, high priority
+            tuneVideoSenders(pc, stream, shareProfile, screenQuality);
             if (pc.signalingState === 'stable') {
               const rawOffer = await pc.createOffer();
               const tunedSdp = preferOpusStereo(preferH264(rawOffer.sdp ?? ''));
@@ -12155,6 +12157,18 @@ export default function App() {
         if (call?.channelId) getSocket().emit('screen_share_start' as any, { channel_id: call.channelId });
       } catch { addToast(tl('toast.cannotShareScreen'), 'error'); }
     }
+  };
+
+  // ── Adaptive bitrate: re-tune all peer connections when participant count changes ──
+  const retuneAllPeers = () => {
+    const count = peerConnsRef.current.size + 1;
+    const hasScreen = !!screenStreamRef.current;
+    const quality   = screenQualityRef.current;
+    const profile   = getBitrateProfile(count, hasScreen, quality);
+    peerConnsRef.current.forEach(pc => {
+      tuneAudioSender(pc, profile);
+      tuneVideoSenders(pc, screenStreamRef.current, profile, quality);
+    });
   };
 
   // ── Search computed values — MUST be before early returns (hooks rules) ──
@@ -14229,6 +14243,21 @@ export default function App() {
                       className={`call-ctrl-btn ${activeCall.isCameraOn?'active-orange':''}`}>
                       <Video size={18}/>
                     </button>
+                    {/* Screen quality picker — only shown when not currently sharing */}
+                    {!activeCall.isScreenSharing && (
+                      <div className="flex rounded-lg overflow-hidden border border-white/10 text-[11px] font-medium self-center">
+                        <button onClick={() => setScreenQuality('hd')}
+                          className={`px-2 py-1 transition-colors ${screenQuality==='hd' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-white/40 hover:bg-white/10'}`}
+                          title="HD 720p / 30fps">
+                          HD
+                        </button>
+                        <button onClick={() => setScreenQuality('fhd')}
+                          className={`px-2 py-1 transition-colors ${screenQuality==='fhd' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-white/40 hover:bg-white/10'}`}
+                          title="FHD 1080p / 60fps">
+                          FHD
+                        </button>
+                      </div>
+                    )}
                     <button onClick={toggleScreen} title={activeCall.isScreenSharing?'Zatrzymaj udostępnianie':'Udostępnij ekran'}
                       className={`call-ctrl-btn ${activeCall.isScreenSharing?'active-orange':''}`}>
                       <ScreenShare size={18}/>
