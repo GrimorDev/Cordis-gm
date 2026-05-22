@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Cordyn",
-  "version": "0.2.1112",
+  "version": "0.2.1113",
   "identifier": "com.cordis.cordyn",
   "build": {
     "frontendDist": "../dist",
