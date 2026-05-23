@@ -8215,7 +8215,24 @@ export default function App() {
   // ── Feature: Quick Switcher (Ctrl+K) ────────────────────────────
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
   const [quickQ, setQuickQ]                   = useState('');
+  const [quickIdx, setQuickIdx]               = useState(0);
   const quickInputRef                          = useRef<HTMLInputElement>(null);
+
+  // ── UX: Activity ring on server icons ───────────────────────────
+  // 'mention' = orange ring (someone @-mentioned me), 'unread' = blue ring
+  const [srvRingActivity, setSrvRingActivity] = useState<Record<string, 'mention'|'unread'>>({});
+  // Maps channel_id → server_id, built when any serverFull loads
+  const chServerMapRef                         = useRef<Record<string, string>>({});
+
+  // ── UX: Compact channel list mode ───────────────────────────────
+  const [compactChannels, setCompactChannels] = useState<boolean>(() => {
+    try { return localStorage.getItem('cordyn_compact_channels') === '1'; } catch { return false; }
+  });
+
+  // ── UX: Text channel hover preview ──────────────────────────────
+  const [chPreview, setChPreview]             = useState<{chId:string; x:number; y:number} | null>(null);
+  const chPreviewCache                         = useRef<Record<string, {content:string; username:string; avatar:string|null; ts:string} | null | undefined>>({});
+  const chPreviewTimer                         = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Feature: Channel Prefs (DB-backed) ──────────────────────────
   const [channelPrefs, setChannelPrefs]       = useState<Map<string, ChannelPref>>(new Map());
@@ -8915,6 +8932,16 @@ export default function App() {
       if (chId && chId !== prevChRef.current) {
         // Message in a channel we're not viewing — increment unread count
         setUnreadChs(p => ({ ...p, [chId]: (p[chId] || 0) + 1 }));
+        // Activity ring: if this channel belongs to a different server, update ring
+        const msgServerId = chServerMapRef.current[chId];
+        if (msgServerId && msgServerId !== activeServerRef.current) {
+          const myId = currentUserRef.current?.id;
+          const isMention = myId && (msg.mentions as string[] | undefined)?.includes(myId);
+          setSrvRingActivity(prev => {
+            if (prev[msgServerId] === 'mention') return prev; // don't downgrade
+            return { ...prev, [msgServerId]: isMention ? 'mention' : 'unread' };
+          });
+        }
         // Play notification sound for messages from others (skip if Focus Mode is on)
         if (!isOwnMsg && !focusModeRef.current) {
           const cSnd = chCustomSoundsRef.current[chId];
@@ -9816,6 +9843,12 @@ export default function App() {
         if ((ch as any).unread_count > 0) serverUnreads[ch.id] = (ch as any).unread_count;
       });
       setUnreadChs(prev => ({ ...serverUnreads, ...prev }));
+      // Build channel→server map for activity ring (covers any server the user visits)
+      const newMap: Record<string, string> = {};
+      s.categories.flatMap(c => c.channels).forEach(ch => { newMap[ch.id] = s.id; });
+      chServerMapRef.current = { ...chServerMapRef.current, ...newMap };
+      // Clear this server's ring when it loads (we're now viewing it)
+      setSrvRingActivity(prev => { const n = { ...prev }; delete n[s.id]; return n; });
       // Load server emojis
       emojisApi.list(activeServer).then(emojis => {
         setServerEmojis(p => new Map(p).set(activeServer, emojis));
@@ -13060,7 +13093,7 @@ export default function App() {
               const isAct=activeServer===srv.id&&activeView==='servers';
               return (
                 <button key={srv.id}
-                  onClick={()=>{if(activeServer===srv.id&&activeView==='servers')return;const same=activeServer===srv.id;setActiveServer(srv.id);setActiveView('servers');setActiveChannel('');setServerFull(null);setProfileViewId(null);setBannerExpanded(false);if(same)setServerReloadKey(k=>k+1);}}
+                  onClick={()=>{if(activeServer===srv.id&&activeView==='servers')return;const same=activeServer===srv.id;setActiveServer(srv.id);setActiveView('servers');setActiveChannel('');setServerFull(null);setProfileViewId(null);setBannerExpanded(false);if(same)setServerReloadKey(k=>k+1);setSrvRingActivity(prev=>{const n={...prev};delete n[srv.id];return n;});}}
                   onContextMenu={e=>{e.preventDefault();setSrvContextMenu({x:e.clientX,y:e.clientY,srv});}}
                   onMouseEnter={e=>{
                     const cy=e.clientY;
@@ -13089,12 +13122,16 @@ export default function App() {
                     }
                   }}
                   onMouseLeave={()=>setSrvTooltip(null)}
-                  className={`srv-icon-btn ${isAct?'active':''}`}>
+                  className={`srv-icon-btn ${isAct?'active':''} ${!isAct&&srvRingActivity[srv.id]==='mention'?'srv-ring-mention':!isAct&&srvRingActivity[srv.id]==='unread'?'srv-ring-unread':''}`}>
                   <span className="srv-active-pip"/>
                   {srv.icon_url
                     ? <img src={staticUrl(srv.icon_url)} className="w-full h-full object-cover rounded-[inherit]" alt=""/>
                     : <span className={`w-full h-full flex items-center justify-center text-[13px] font-bold text-white rounded-[inherit] ${isAct?'bg-gradient-to-br from-[#FF8F40] to-[#FFB454]':'bg-[#1a2030] group-hover:bg-[#242d3d]'}`}>{srv.name.charAt(0).toUpperCase()}</span>}
                   {srv.is_official&&<span className="absolute bottom-0.5 right-0.5"><BadgeCheck size={9} className="text-amber-400"/></span>}
+                  {/* Activity dot — visible when ring is active */}
+                  {!isAct && srvRingActivity[srv.id] && (
+                    <span className={`absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#0A0E14] ${srvRingActivity[srv.id]==='mention'?'bg-amber-400':'bg-[#59C2FF]'}`}/>
+                  )}
                 </button>
               );
             })}
@@ -13339,7 +13376,30 @@ export default function App() {
                             <button
                               onClick={() => { setActiveChannel(ch.id); openGlobalTab({key:`ch:${activeServer}:${ch.id}`,kind:'ch',name:ch.name,chType:ch.type,serverId:activeServer,channelId:ch.id,serverName:serverFull?.name,serverIcon:serverFull?.icon_url??undefined}); setIsMobileOpen(false); setSrvSettOpen(false); setProfileViewId(null); if(activeViewRef.current==='admin')setActiveView('servers'); }}
                               onContextMenu={e=>{ e.preventDefault(); setChCtxMenu({x:e.clientX,y:e.clientY,ch}); }}
-                              className={`ch-btn group/ch ${isAct?'active':ping>0?'pinged':unread>0?'unread':''}`}>
+                              onMouseEnter={e => {
+                                if (compactChannels) return;
+                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                if (chPreviewTimer.current) clearTimeout(chPreviewTimer.current);
+                                chPreviewTimer.current = setTimeout(() => {
+                                  setChPreview({ chId: ch.id, x: rect.right + 8, y: rect.top });
+                                  // Fetch preview if not cached
+                                  if (chPreviewCache.current[ch.id] === undefined) {
+                                    chPreviewCache.current[ch.id] = undefined; // mark as loading
+                                    messagesApi.list(ch.id, { limit: 1 }).then(msgs => {
+                                      const last = (msgs as any[])?.[0];
+                                      chPreviewCache.current[ch.id] = last
+                                        ? { content: last.content?.slice(0, 140) ?? '', username: last.sender_username ?? '?', avatar: last.sender_avatar ?? null, ts: last.created_at }
+                                        : null;
+                                      setChPreview(p => p?.chId === ch.id ? { ...p } : p);
+                                    }).catch(() => { chPreviewCache.current[ch.id] = null; });
+                                  }
+                                }, 500);
+                              }}
+                              onMouseLeave={() => {
+                                if (chPreviewTimer.current) clearTimeout(chPreviewTimer.current);
+                                setChPreview(null);
+                              }}
+                              className={`ch-btn group/ch ${compactChannels ? 'ch-btn-compact' : ''} ${isAct?'active':ping>0?'pinged':unread>0?'unread':''}`}>
                               <div className="flex items-center gap-2 truncate flex-1 min-w-0">
                                 <div className="ch-icon">
                                   <ChIcon size={13} className={isAct?'text-[#FFB454]':ping>0?'text-amber-400':ch.type==='announcement'?'text-[#FF8F40]':ch.type==='forum'?'text-purple-400':unread>0?'text-[#59C2FF]':'text-zinc-500'}/>
@@ -13392,7 +13452,7 @@ export default function App() {
                           <div key={ch.id} className="px-2">
                             <button onClick={() => joinVoiceCh(ch)}
                               onContextMenu={e=>{e.preventDefault();setChCtxMenu({x:e.clientX,y:e.clientY,ch});}}
-                              className={`ch-btn ch-btn-voice group/ch ${isActiveVoice?'voice-active':''}`}>
+                              className={`ch-btn ch-btn-voice group/ch ${compactChannels ? 'ch-btn-compact' : ''} ${isActiveVoice?'voice-active':''}`}>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2 min-w-0">
                                   <div className="ch-icon" style={isActiveVoice?{background:'rgba(127,217,98,0.30)',border:'1px solid rgba(127,217,98,0.42)',boxShadow:'0 0 14px rgba(127,217,98,0.25)'}:hasUsers?{background:'rgba(89,194,255,0.15)',border:'1px solid rgba(89,194,255,0.22)'}:{}}><Volume2 size={12} className={isActiveVoice?'text-[#7FD962]':hasUsers?'text-[#59C2FF]':'text-zinc-500'}/></div>
@@ -13449,6 +13509,37 @@ export default function App() {
               </motion.div>}
               </AnimatePresence>
               {!serverFull&&activeServer&&<div className="flex justify-center py-8"><Loader2 size={18} className="text-zinc-600 animate-spin"/></div>}
+              {/* ── Onboarding card — shown when server has no channels yet ── */}
+              {serverFull && canManageChannels && serverFull.categories.flatMap(c=>c.channels).length === 0 && (
+                <div className="mx-3 mb-4 p-4 rounded-2xl border border-indigo-500/25 bg-gradient-to-br from-indigo-500/8 to-violet-500/5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-6 h-6 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
+                      <Rocket size={12} className="text-indigo-400"/>
+                    </div>
+                    <span className="text-xs font-bold text-white">Zacznij tutaj</span>
+                    <span className="text-[10px] text-zinc-600">— 3 kroki do działającego serwera</span>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    {([
+                      { icon: <Hash size={11}/>, label: 'Utwórz kanał', sub: 'Dodaj pierwszy kanał tekstowy', onClick: () => { setNewChType('text'); setChCreateCatId(''); setChCreateOpen(true); setNewChName(''); setNewChPrivate(false); } },
+                      { icon: <UserPlus size={11}/>, label: 'Zaproś znajomych', sub: 'Podziel się linkiem zaproszenia', onClick: () => { setSrvSettTab('invites'); setSrvSettOpen(true); } },
+                      { icon: <Settings size={11}/>, label: 'Skonfiguruj serwer', sub: 'Ustaw nazwę, ikonę i opis', onClick: () => { setSrvSettTab('overview'); setSrvSettOpen(true); } },
+                    ] as const).map((step, i) => (
+                      <button key={i} onClick={step.onClick}
+                        className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left hover:bg-indigo-500/10 transition-colors group">
+                        <div className="w-6 h-6 rounded-lg bg-indigo-500/15 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0 group-hover:bg-indigo-500/30 transition-colors">
+                          {step.icon}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-semibold text-white leading-tight">{step.label}</p>
+                          <p className="text-[10px] text-zinc-600 truncate">{step.sub}</p>
+                        </div>
+                        <ChevronRight size={11} className="text-zinc-700 shrink-0 group-hover:text-indigo-400 transition-colors"/>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </>}
 
@@ -20253,6 +20344,19 @@ export default function App() {
                             </div>
                           </div>
 
+                          {/* Compact channel list */}
+                          <div className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-2xl px-3 py-2.5 hover:border-white/[0.09] transition-colors">
+                            <div className="flex-1 min-w-0 mr-3">
+                              <p className="text-xs font-medium text-white">Kompaktowa lista kanałów</p>
+                              <p className="text-[10px] text-zinc-600 mt-0.5 leading-tight">Mniejsze odstępy, brak ikon — więcej kanałów na raz</p>
+                            </div>
+                            <button onClick={() => { const next = !compactChannels; setCompactChannels(next); try { localStorage.setItem('cordyn_compact_channels', next ? '1' : '0'); } catch {} }}
+                              className={`w-9 h-5 rounded-full transition-all shrink-0 relative ${compactChannels ? 'bg-indigo-500' : 'bg-zinc-700'}`}>
+                              <span className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-200"
+                                style={{left: compactChannels ? 'calc(100% - 1.125rem)' : '0.125rem'}}/>
+                            </button>
+                          </div>
+
                           {/* Streamer mode */}
                           <div className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-2xl px-3 py-2.5 hover:border-white/[0.09] transition-colors">
                             <div className="flex-1 min-w-0 mr-3">
@@ -22659,63 +22763,149 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* ── Quick Switcher (Ctrl+K) ─────────────────────────────── */}
+      {/* ── Quick Switcher (Ctrl+K) — enhanced ─────────────────── */}
       <AnimatePresence>
         {quickSwitcherOpen && (
           <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-start justify-center pt-[15vh] p-4"
+            className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-start justify-center pt-[12vh] p-4"
             onClick={()=>setQuickSwitcherOpen(false)}>
-            <motion.div initial={{scale:0.96,opacity:0,y:-8}} animate={{scale:1,opacity:1,y:0}} exit={{scale:0.96,opacity:0,y:-8}}
-              className={`${gm} p-3 w-full max-w-xl`}
+            <motion.div initial={{scale:0.96,opacity:0,y:-12}} animate={{scale:1,opacity:1,y:0}} exit={{scale:0.96,opacity:0,y:-12}}
+              transition={{duration:0.18,ease:[0.16,1,0.3,1]}}
+              className={`${gm} w-full max-w-lg overflow-hidden`}
               onClick={e=>e.stopPropagation()}>
-              <div className="flex items-center gap-3 px-2 mb-3">
-                <Search size={15} className="text-zinc-500 shrink-0"/>
-                <input ref={quickInputRef} value={quickQ} onChange={e=>setQuickQ(e.target.value)}
-                  placeholder="Szukaj kanałów, serwerów, użytkowników..."
+              {/* Search bar */}
+              <div className="flex items-center gap-3 px-4 py-3.5 border-b border-white/[0.07]">
+                <Search size={16} className="text-zinc-400 shrink-0"/>
+                <input ref={quickInputRef} value={quickQ}
+                  onChange={e=>{ setQuickQ(e.target.value); setQuickIdx(0); }}
+                  onKeyDown={e => {
+                    if (e.key === 'Escape') { setQuickSwitcherOpen(false); return; }
+                    const q2 = quickQ.toLowerCase().trim();
+                    const chM = serverFull?.categories.flatMap(c=>c.channels).filter(c=>!q2||c.name.toLowerCase().includes(q2))??[];
+                    const sM  = serverList.filter(s=>!q2||s.name.toLowerCase().includes(q2));
+                    const fM  = friends.filter(f=>(f.username?.toLowerCase().includes(q2)||f.display_name?.toLowerCase().includes(q2))&&q2);
+                    const sttM= [
+                      {label:'Ustawienia konta',k:'account'},{label:'Wygląd i motywy',k:'appearance'},
+                      {label:'Urządzenia',k:'devices'},{label:'Prywatność',k:'privacy'},
+                    ].filter(s=>!q2||s.label.toLowerCase().includes(q2));
+                    const total = Math.min(chM.length,5)+Math.min(sM.length,5)+Math.min(fM.length,5)+Math.min(sttM.length,4);
+                    if (e.key === 'ArrowDown') { e.preventDefault(); setQuickIdx(i=>(i+1)%Math.max(total,1)); }
+                    if (e.key === 'ArrowUp')   { e.preventDefault(); setQuickIdx(i=>(i-1+Math.max(total,1))%Math.max(total,1)); }
+                    if (e.key === 'Enter') {
+                      let idx = 0;
+                      const fire = (arr: any[], action: (item:any)=>void) => {
+                        for (let i=0;i<Math.min(arr.length,5);i++,idx++) {
+                          if (idx===quickIdx){ action(arr[i]); setQuickSwitcherOpen(false); return true; }
+                        }
+                        return false;
+                      };
+                      fire(chM, c=>setActiveChannel(c.id))
+                        || fire(sM, s=>{ const same=activeServer===s.id; setActiveServer(s.id); setActiveView('servers'); setServerFull(null); setActiveChannel(''); setSrvRingActivity(prev=>{const n={...prev};delete n[s.id];return n;}); if(same)setServerReloadKey(k=>k+1); })
+                        || fire(fM, f=>openDm(f.id))
+                        || fire(sttM, s=>{ setAppSettTab(s.k as any); setAppSettOpen(true); });
+                    }
+                  }}
+                  placeholder="Szukaj kanałów, serwerów, znajomych, ustawień..."
                   className="flex-1 bg-transparent outline-none text-white placeholder-zinc-600 text-sm"/>
-                <kbd className="px-2 py-1 bg-white/[0.06] border border-white/[0.08] rounded-lg text-[10px] font-mono text-zinc-600">ESC</kbd>
+                <kbd className="px-2 py-1 bg-white/[0.05] border border-white/[0.08] rounded-md text-[10px] font-mono text-zinc-600 shrink-0">ESC</kbd>
               </div>
+
+              {/* Results */}
               {(() => {
                 const q = quickQ.toLowerCase().trim();
-                const serverMatches = serverList.filter(s => s.name.toLowerCase().includes(q || 'a') || !q);
-                const channelMatches = serverFull?.channels?.filter(c => c.name.toLowerCase().includes(q)) ?? [];
-                const friendMatches = friends.filter(f =>
-                  (f.username?.toLowerCase().includes(q) || f.display_name?.toLowerCase().includes(q)) && q
+                const channelMatches = serverFull?.categories.flatMap(c=>c.channels).filter(c=>!q||c.name.toLowerCase().includes(q))??[];
+                const serverMatches  = serverList.filter(s=>!q||s.name.toLowerCase().includes(q));
+                const friendMatches  = friends.filter(f=>(f.username?.toLowerCase().includes(q)||f.display_name?.toLowerCase().includes(q))&&q);
+                const settingsItems  = ([
+                  {label:'Ustawienia konta',  icon:<Users size={12}/>,  k:'account'   as const},
+                  {label:'Wygląd i motywy',   icon:<Palette size={12}/>,k:'appearance' as const},
+                  {label:'Urządzenia',         icon:<Mic size={12}/>,    k:'devices'    as const},
+                  {label:'Prywatność',         icon:<Shield size={12}/>, k:'privacy'    as const},
+                ] as const).filter(s=>!q||s.label.toLowerCase().includes(q));
+
+                const totalResults = channelMatches.length+serverMatches.length+friendMatches.length+settingsItems.length;
+                if (totalResults===0 && q) return (
+                  <div className="px-4 py-8 text-center">
+                    <Search size={22} className="text-zinc-700 mx-auto mb-2"/>
+                    <p className="text-sm text-zinc-600">Brak wyników dla „{quickQ}"</p>
+                  </div>
                 );
-                const hasResults = serverMatches.length + channelMatches.length + friendMatches.length > 0;
-                if (!hasResults && !q) return (
-                  <p className="text-xs text-zinc-600 text-center py-4">Zacznij pisać, aby wyszukać...</p>
+                if (!q) return (
+                  <div className="px-4 py-5 text-center">
+                    <p className="text-xs text-zinc-600">Wpisz aby wyszukać kanały, serwery, znajomych lub ustawienia</p>
+                    <div className="flex items-center justify-center gap-4 mt-3">
+                      {[['↑↓','nawigacja'],['↵','otwórz'],['ESC','zamknij']].map(([key,desc])=>(
+                        <span key={key} className="flex items-center gap-1.5 text-[10px] text-zinc-700">
+                          <kbd className="px-1.5 py-0.5 bg-white/[0.05] border border-white/[0.08] rounded text-zinc-500 font-mono">{key}</kbd>
+                          {desc}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 );
+
+                let globalIdx = 0;
+                const Row = ({idx, onClick, children}: {idx:number; onClick:()=>void; children:React.ReactNode}) => (
+                  <button onClick={()=>{onClick();setQuickSwitcherOpen(false);}}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all ${idx===quickIdx?'bg-indigo-500/15 text-white':'hover:bg-white/[0.04] text-zinc-300'}`}>
+                    {children}
+                  </button>
+                );
+                const SectionLabel = ({label}:{label:string}) => (
+                  <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest px-4 pt-3 pb-1">{label}</p>
+                );
+
                 return (
-                  <div className="flex flex-col gap-1 max-h-72 overflow-y-auto custom-scrollbar">
-                    {channelMatches.slice(0,5).map(c => (
-                      <button key={c.id} onClick={()=>{ setActiveChannel(c.id); setQuickSwitcherOpen(false); }}
-                        className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/[0.06] text-left transition-all">
-                        <Hash size={14} className="text-zinc-600 shrink-0"/>
-                        <span className="text-sm text-zinc-300">{c.name}</span>
-                        <span className="text-xs text-zinc-600 ml-auto">Kanał</span>
-                      </button>
-                    ))}
-                    {serverMatches.slice(0,5).map(s => (
-                      <button key={s.id} onClick={()=>{ const sameServer=activeServer===s.id; setActiveServer(s.id); setActiveView('servers'); setServerFull(null); setActiveChannel(''); setQuickSwitcherOpen(false); if(sameServer) setServerReloadKey(k=>k+1); }}
-                        className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/[0.06] text-left transition-all">
-                        {s.icon_url ? (
-                          <img src={staticUrl(s.icon_url)} alt={s.name} className="w-5 h-5 rounded-full object-cover shrink-0"/>
-                        ) : (
-                          <div className="w-5 h-5 rounded-full bg-indigo-500/30 flex items-center justify-center text-[9px] font-bold text-indigo-300 shrink-0">{s.name[0]}</div>
-                        )}
-                        <span className="text-sm text-zinc-300">{s.name}</span>
-                        <span className="text-xs text-zinc-600 ml-auto">Serwer</span>
-                      </button>
-                    ))}
-                    {friendMatches.slice(0,5).map(f => (
-                      <button key={f.id} onClick={()=>{ openDm(f.id); setQuickSwitcherOpen(false); }}
-                        className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/[0.06] text-left transition-all">
-                        <img src={ava(f)} alt={f.username} className="w-5 h-5 rounded-full object-cover shrink-0"/>
-                        <span className="text-sm text-zinc-300">{f.display_name||f.username}</span>
-                        <span className="text-xs text-zinc-600 ml-auto">Wiadomość</span>
-                      </button>
-                    ))}
+                  <div className="max-h-[380px] overflow-y-auto custom-scrollbar py-1">
+                    {channelMatches.length>0&&<>
+                      <SectionLabel label="Kanały"/>
+                      {channelMatches.slice(0,5).map(c => {
+                        const idx = globalIdx++;
+                        return <Row key={c.id} idx={idx} onClick={()=>setActiveChannel(c.id)}>
+                          <div className="w-6 h-6 rounded-lg bg-white/[0.05] flex items-center justify-center shrink-0">
+                            <Hash size={12} className="text-zinc-500"/>
+                          </div>
+                          <span className="text-sm flex-1 truncate">{c.name}</span>
+                          <span className="text-[10px] text-zinc-600 shrink-0">#{serverFull?.name}</span>
+                        </Row>;
+                      })}
+                    </>}
+                    {serverMatches.length>0&&<>
+                      <SectionLabel label="Serwery"/>
+                      {serverMatches.slice(0,5).map(s => {
+                        const idx = globalIdx++;
+                        return <Row key={s.id} idx={idx} onClick={()=>{ const same=activeServer===s.id; setActiveServer(s.id); setActiveView('servers'); setServerFull(null); setActiveChannel(''); setSrvRingActivity(prev=>{const n={...prev};delete n[s.id];return n;}); if(same)setServerReloadKey(k=>k+1); }}>
+                          {s.icon_url
+                            ? <img src={staticUrl(s.icon_url)} alt={s.name} className="w-6 h-6 rounded-lg object-cover shrink-0"/>
+                            : <div className="w-6 h-6 rounded-lg bg-indigo-500/25 flex items-center justify-center text-[10px] font-bold text-indigo-300 shrink-0">{s.name[0]}</div>}
+                          <span className="text-sm flex-1 truncate">{s.name}</span>
+                          {srvRingActivity[s.id] && <span className={`w-2 h-2 rounded-full shrink-0 ${srvRingActivity[s.id]==='mention'?'bg-amber-400':'bg-[#59C2FF]'}`}/>}
+                        </Row>;
+                      })}
+                    </>}
+                    {friendMatches.length>0&&<>
+                      <SectionLabel label="Znajomi"/>
+                      {friendMatches.slice(0,5).map(f => {
+                        const idx = globalIdx++;
+                        return <Row key={f.id} idx={idx} onClick={()=>openDm(f.id)}>
+                          <img src={ava(f)} alt={f.username} className="w-6 h-6 rounded-full object-cover shrink-0"/>
+                          <span className="text-sm flex-1 truncate">{f.display_name||f.username}</span>
+                          <span className="text-[10px] text-zinc-600 shrink-0">wiadomość</span>
+                        </Row>;
+                      })}
+                    </>}
+                    {settingsItems.length>0&&<>
+                      <SectionLabel label="Ustawienia"/>
+                      {settingsItems.slice(0,4).map(s => {
+                        const idx = globalIdx++;
+                        return <Row key={s.k} idx={idx} onClick={()=>{ setAppSettTab(s.k); setAppSettOpen(true); }}>
+                          <div className="w-6 h-6 rounded-lg bg-white/[0.05] flex items-center justify-center shrink-0 text-zinc-500">{s.icon}</div>
+                          <span className="text-sm flex-1 truncate">{s.label}</span>
+                          <span className="text-[10px] text-zinc-600 shrink-0">ustawienia</span>
+                        </Row>;
+                      })}
+                    </>}
+                    <div className="h-1"/>
                   </div>
                 );
               })()}
@@ -23384,6 +23574,56 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── Text channel hover preview ──────────────────────────────────── */}
+      {chPreview && (() => {
+        const preview = chPreviewCache.current[chPreview.chId];
+        const hch = serverFull?.categories.flatMap(c => c.channels).find(c => c.id === chPreview.chId);
+        if (!hch) return null;
+        return (
+          <div className="fixed z-[180] pointer-events-none"
+            style={{ left: Math.min(chPreview.x, window.innerWidth - 276), top: Math.max(8, chPreview.y - 10), width: 260 }}>
+            <div className="glass-dark rounded-xl p-3 border border-white/[0.08] shadow-xl">
+              <div className="flex items-center gap-2 mb-2">
+                <Hash size={11} className="text-zinc-500 shrink-0"/>
+                <span className="text-xs font-bold text-white truncate">{hch.name}</span>
+                {(hch as any).topic && (
+                  <span className="text-[10px] text-zinc-600 truncate">· {(hch as any).topic}</span>
+                )}
+              </div>
+              {preview === undefined && (
+                <p className="text-[11px] text-zinc-600 italic">Ładowanie...</p>
+              )}
+              {preview === null && (
+                <p className="text-[11px] text-zinc-600 italic">Brak wiadomości w tym kanale</p>
+              )}
+              {preview && (
+                <div className="flex items-start gap-2">
+                  <img
+                    src={preview.avatar ?? `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(preview.username)}`}
+                    className="w-5 h-5 rounded-full shrink-0 mt-0.5 object-cover"
+                    alt=""
+                  />
+                  <div className="min-w-0">
+                    <div className="flex items-baseline gap-1.5 mb-0.5">
+                      <span className="text-[11px] font-semibold text-white">{preview.username}</span>
+                      <span className="text-[9px] text-zinc-600">
+                        {new Date(preview.ts).toLocaleDateString('pl-PL', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed line-clamp-3">
+                      {preview.content
+                        ? preview.content
+                        : <em className="text-zinc-600">Załącznik lub osadzony plik</em>
+                      }
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

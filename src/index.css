@@ -2613,3 +2613,29 @@ img.av-eff-arcade-coin { transition: filter 0.3s; }
   flex-shrink: 0;
   margin: 0 4px;
 }
+
+/* ── Server icon activity rings ─────────────────────────────────── */
+.srv-icon-btn.srv-ring-mention {
+  box-shadow: 0 0 0 2px rgba(245,158,11,0.85);
+  animation: srv-ring-pulse 2.2s ease-in-out infinite;
+}
+.srv-icon-btn.srv-ring-unread {
+  box-shadow: 0 0 0 2px rgba(89,194,255,0.70);
+}
+@keyframes srv-ring-pulse {
+  0%,100% { box-shadow: 0 0 0 2px rgba(245,158,11,0.85); }
+  50%      { box-shadow: 0 0 0 3px rgba(245,158,11,0.35); }
+}
+
+/* ── Compact channel list ────────────────────────────────────────── */
+.ch-btn.ch-btn-compact {
+  padding-top:    3px !important;
+  padding-bottom: 3px !important;
+  min-height: 26px !important;
+}
+.ch-btn.ch-btn-compact .ch-icon {
+  display: none !important;
+}
+.ch-btn.ch-btn-compact span[class*="text-"] {
+  font-size: 12px !important;
+}
