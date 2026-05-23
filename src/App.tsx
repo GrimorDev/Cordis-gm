@@ -11,7 +11,7 @@ import {
   Shield, Trash2, Settings2, UserPlus, Check, X as XIcon,
   LogOut, Loader2, Lock, Phone, PhoneOff, MessageSquare, Upload, MoreHorizontal, ScreenShare,
   UserX, UserCheck, UserMinus, ShieldOff, CheckCheck, User,
-  CheckCircle2, AlertCircle, Info, AlertTriangle, PartyPopper, Sparkles, Zap, Globe,
+  CheckCircle2, AlertCircle, Info, AlertTriangle, PartyPopper, Sparkles, Zap, Globe, Save,
   Eye, EyeOff, Megaphone, FileText, ChevronLeft, ChevronRight, ChevronDown, ArrowLeft,
   Clock, Pin, PinOff, Activity, AtSign, BadgeCheck, Crown, LayoutDashboard,
   Code2, FlaskConical, ShieldCheck, Hammer, Award, CalendarDays, Quote,
@@ -7748,6 +7748,8 @@ export default function App() {
   const [editProf, setEditProf]               = useState<any>(null);
   const [profBannerFile, setProfBannerFile]   = useState<File|null>(null);
   const [profBannerPrev, setProfBannerPrev]   = useState<string|null>(null);
+  // Unsaved-changes guard for account/profile settings
+  const [profBarShake, setProfBarShake]       = useState(false);
 
   // ── Full profile page state ──────────────────────────────────────────
   const [profileViewId, setProfileViewId]     = useState<string|null>(null);
@@ -11913,6 +11915,18 @@ export default function App() {
       setProfBannerFile(cropped); setProfBannerPrev(URL.createObjectURL(cropped));
     });
   };
+  // Trigger shake+red on the unsaved-changes bar to warn user they can't leave yet
+  const shakeProfBar = () => {
+    setProfBarShake(true);
+    setTimeout(() => setProfBarShake(false), 600);
+  };
+  // Discard all unsaved profile edits
+  const revertProf = () => {
+    if (currentUser) { setEditProf({ ...currentUser }); }
+    setProfBannerFile(null);
+    setProfBannerPrev(null);
+  };
+
   const handleSaveProfile = async (opts?: { closeProfileModal?: boolean }) => {
     if (!editProf) return;
     try {
@@ -20167,7 +20181,20 @@ export default function App() {
 
             {/* ── TOP BAR ── */}
             <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/[0.06] shrink-0" style={{background:'rgba(255,255,255,0.02)'}}>
-              <button onClick={()=>setAppSettOpen(false)}
+              <button onClick={()=>{
+                // Block closing when there are unsaved profile changes
+                const dirty = !!(editProf && currentUser && (
+                  editProf.username !== currentUser.username ||
+                  (editProf.bio||'') !== (currentUser.bio||'') ||
+                  (editProf.custom_status||'') !== (currentUser.custom_status||'') ||
+                  (editProf.banner_color||'') !== (currentUser.banner_color||'') ||
+                  (editProf.banner_url||'') !== (currentUser.banner_url||'') ||
+                  (editProf.banner_preset||'') !== (currentUser.banner_preset||'') ||
+                  profBannerFile !== null
+                ));
+                if (dirty && appSettTab === 'account') { shakeProfBar(); return; }
+                setAppSettOpen(false);
+              }}
                 className="w-8 h-8 rounded-xl flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-all border border-transparent hover:border-white/[0.08]">
                 <X size={17}/>
               </button>
@@ -20209,7 +20236,22 @@ export default function App() {
                       <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest px-3 pt-2 pb-1 hidden sm:block">{group.group}</p>
                       {group.items.map((tab:any)=>(
                         <div key={tab.id}>
-                          <button onClick={()=>{setAppSettTab(tab.id);setActiveSettSection('');settContentRef.current?.scrollTo({top:0});}}
+                          <button onClick={()=>{
+                            // Guard: unsaved profile changes block tab switch
+                            if (appSettTab === 'account' && tab.id !== 'account') {
+                              const dirty = !!(editProf && currentUser && (
+                                editProf.username !== currentUser.username ||
+                                (editProf.bio||'') !== (currentUser.bio||'') ||
+                                (editProf.custom_status||'') !== (currentUser.custom_status||'') ||
+                                (editProf.banner_color||'') !== (currentUser.banner_color||'') ||
+                                (editProf.banner_url||'') !== (currentUser.banner_url||'') ||
+                                (editProf.banner_preset||'') !== (currentUser.banner_preset||'') ||
+                                profBannerFile !== null
+                              ));
+                              if (dirty) { shakeProfBar(); return; }
+                            }
+                            setAppSettTab(tab.id);setActiveSettSection('');settContentRef.current?.scrollTo({top:0});
+                          }}
                             className={`flex items-center gap-2 px-3 py-2 sm:py-2 rounded-xl text-xs sm:text-sm font-medium transition-all text-left w-full shrink-0 ${
                               appSettTab===tab.id?'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] border border-transparent'}`}>
                             <span className={appSettTab===tab.id?'text-indigo-400':'text-zinc-600'}>{tab.icon}</span>
@@ -20441,6 +20483,53 @@ export default function App() {
                         })()}
                       </div>
 
+                      {/* ── Unsaved changes bar — sticky bottom ──────────── */}
+                      {(() => {
+                        const dirty = !!(editProf && currentUser && (
+                          editProf.username !== currentUser.username ||
+                          (editProf.bio||'') !== (currentUser.bio||'') ||
+                          (editProf.custom_status||'') !== (currentUser.custom_status||'') ||
+                          (editProf.banner_color||'') !== (currentUser.banner_color||'') ||
+                          (editProf.banner_url||'') !== (currentUser.banner_url||'') ||
+                          (editProf.banner_preset||'') !== (currentUser.banner_preset||'') ||
+                          profBannerFile !== null
+                        ));
+                        if (!dirty) return null;
+                        return (
+                          <div className={`sticky bottom-0 left-0 right-0 z-20 mt-4
+                            flex items-center gap-3 px-4 py-3 rounded-2xl border shadow-2xl
+                            transition-colors duration-300
+                            ${profBarShake
+                              ? 'bg-rose-950/90 border-rose-500/40 prof-bar-shake'
+                              : 'bg-zinc-900/95 border-amber-500/25'
+                            }
+                            backdrop-blur-xl`}>
+                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-colors
+                              ${profBarShake ? 'bg-rose-500/20' : 'bg-amber-500/15'}`}>
+                              <AlertTriangle size={12} className={profBarShake ? 'text-rose-400' : 'text-amber-400'}/>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-xs font-semibold leading-tight transition-colors ${profBarShake ? 'text-rose-300' : 'text-white'}`}>
+                                {profBarShake ? 'Zapisz lub cofnij zmiany, aby kontynuować!' : 'Hej! Masz niezapisane zmiany.'}
+                              </p>
+                              {!profBarShake && (
+                                <p className="text-[10px] text-zinc-500 mt-0.5">Zmiany zostaną utracone jeśli opuścisz tę sekcję bez zapisania.</p>
+                              )}
+                            </div>
+                            <button
+                              onClick={revertProf}
+                              className="text-xs text-zinc-400 hover:text-white transition-colors px-3 py-1.5 rounded-xl hover:bg-white/[0.06] shrink-0">
+                              Cofnij
+                            </button>
+                            <button
+                              onClick={() => handleSaveProfile({ closeProfileModal: false })}
+                              className="text-xs font-semibold text-white px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 transition-colors shrink-0 flex items-center gap-1.5">
+                              <Save size={11}/>
+                              Zapisz zmiany
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </motion.div>
                   )}
 
