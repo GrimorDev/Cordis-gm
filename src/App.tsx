@@ -14039,14 +14039,24 @@ export default function App() {
                   return (
                     <div className="flex-1 flex flex-col gap-3 p-4 overflow-hidden min-h-0 relative z-10">
                       {/* Active stream video */}
-                      <div className="relative flex-1 bg-black rounded-xl overflow-hidden min-h-0 group">
+                      <div className="relative flex-1 bg-zinc-950 rounded-xl overflow-hidden min-h-0 group">
                         {screenStream && (
-                          <video
-                            id="screen-share-video"
-                            ref={el => { if (el && el.srcObject !== screenStream) { el.muted = true; el.srcObject = screenStream; el.play().catch(()=>{}); } }}
-                            className="w-full h-full object-contain"
-                            autoPlay playsInline muted
-                          />
+                          <>
+                            {/* Blurred background fill — removes black bars when aspect ratios differ */}
+                            <video
+                              ref={el => { if (el && el.srcObject !== screenStream) { el.muted = true; el.srcObject = screenStream; el.play().catch(()=>{}); } }}
+                              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                              style={{filter:'blur(28px)', transform:'scale(1.10)', opacity:0.40}}
+                              autoPlay playsInline muted
+                            />
+                            {/* Main video — object-contain keeps full content visible */}
+                            <video
+                              id="screen-share-video"
+                              ref={el => { if (el && el.srcObject !== screenStream) { el.muted = true; el.srcObject = screenStream; el.play().catch(()=>{}); } }}
+                              className="absolute inset-0 w-full h-full object-contain"
+                              autoPlay playsInline muted
+                            />
+                          </>
                         )}
                         {/* PiP: own stream while watching someone else */}
                         {activeCall.isScreenSharing && screenStreamRef.current && (
@@ -14130,7 +14140,7 @@ export default function App() {
                         </div>
                       </div>
                       {/* Participants strip */}
-                      <div className="shrink-0 flex items-center justify-center gap-3 py-1 relative z-10">
+                      <div className="shrink-0 flex flex-wrap items-center justify-center gap-3 py-1 relative z-10">
                         {allParticipants}
                       </div>
                     </div>
@@ -14142,7 +14152,7 @@ export default function App() {
                   const cols = Math.min(allStreamIds.length, 3);
                   return (
                     <div className="flex-1 flex flex-col gap-3 p-4 overflow-hidden min-h-0 relative z-10">
-                      <div className="flex-1 overflow-y-auto min-h-0">
+                      <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
                         <div className="grid gap-3 h-full" style={{gridTemplateColumns:`repeat(${cols},minmax(0,1fr))`}}>
                           {allStreamIds.map(streamId => {
                             const isSelf = streamId === 'self';
@@ -14214,7 +14224,7 @@ export default function App() {
                         </div>
                       </div>
                       {/* Participants strip */}
-                      <div className="shrink-0 flex items-center justify-center gap-3 py-1 overflow-x-auto relative z-10">
+                      <div className="shrink-0 flex flex-wrap items-center justify-center gap-3 py-1 relative z-10">
                         {allParticipants}
                       </div>
                     </div>
