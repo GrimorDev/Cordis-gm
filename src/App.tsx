@@ -11880,6 +11880,12 @@ export default function App() {
     // Stop speaking detection
     speakStopRef.current.forEach(fn => fn()); speakStopRef.current.clear();
     setSpeakingUsers(new Set());
+    // Clear remote screen streams — prevents ghost tiles after rejoin
+    remoteScreenStreamsRef.current.clear();
+    setSharingUserIds(new Set());
+    setWatchingStreamId(null);
+    setStreamWatchers({});
+    setScreenShareTick(t => t + 1);
     // Disconnect SFU room
     livekitDisconnectRoom().catch(() => {});
   };
