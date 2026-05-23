@@ -13293,6 +13293,40 @@ export default function App() {
               )}
               </AnimatePresence>
             </div>
+            {/* ── "Pierwsze kroki" button — always at top, below server header ── */}
+            {serverFull && canManageChannels && !fsDismissed[activeServer!] && (() => {
+              const srvSteps = fsSteps[activeServer!] || [false,false,false,false];
+              const allChs   = serverFull.categories.flatMap(c=>c.channels);
+              const doneCnt  = [
+                !!(serverFull as any).description?.trim(),
+                allChs.length > 2,
+                srvSteps[2] ?? false,
+                srvSteps[3] ?? false,
+              ].filter(Boolean).length;
+              return (
+                <button
+                  onClick={() => { setActiveChannel(''); setFsOpen(true); }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 border-b transition-all group
+                    ${fsOpen
+                      ? 'bg-indigo-500/10 border-indigo-500/20'
+                      : 'bg-transparent border-white/[0.04] hover:bg-white/[0.03]'
+                    }`}>
+                  <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-indigo-500/30 to-violet-500/20 border border-indigo-500/20 flex items-center justify-center shrink-0">
+                    <Rocket size={11} className="text-indigo-400"/>
+                  </div>
+                  <div className="flex-1 min-w-0 text-left">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-[11px] font-semibold text-white">Pierwsze kroki</span>
+                      <span className="text-[10px] text-zinc-500">{doneCnt}/4</span>
+                    </div>
+                    <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-500"
+                        style={{width:`${(doneCnt/4)*100}%`}}/>
+                    </div>
+                  </div>
+                </button>
+              );
+            })()}
             <div className="flex-1 overflow-y-auto py-2 custom-scrollbar">
               <AnimatePresence mode="wait">
               {serverFull && <motion.div key={activeServer}
@@ -13531,41 +13565,6 @@ export default function App() {
               </motion.div>}
               </AnimatePresence>
               {!serverFull&&activeServer&&<div className="flex justify-center py-8"><Loader2 size={18} className="text-zinc-600 animate-spin"/></div>}
-              {/* ── "Pierwsze kroki" sidebar button ─────────────────── */}
-              {serverFull && canManageChannels && !fsDismissed[activeServer!] && (() => {
-                const srvSteps = fsSteps[activeServer!] || [false,false,false,false];
-                const allChs   = serverFull.categories.flatMap(c=>c.channels);
-                const computed = [
-                  !!(serverFull as any).description?.trim(),       // step 0: server has description
-                  allChs.length > 2,                               // step 1: extra channel created
-                  srvSteps[2] ?? false,                            // step 2: invite opened (manual)
-                  srvSteps[3] ?? false,                            // step 3: first message sent
-                ];
-                const done  = computed.filter(Boolean).length;
-                const total = computed.length;
-                const allDone = done === total;
-                return (
-                  <div className="mx-3 mb-3">
-                    <button onClick={()=>setFsOpen(o=>!o)}
-                      className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-left transition-all group
-                        ${fsOpen ? 'bg-indigo-500/15 border border-indigo-500/25' : 'hover:bg-white/[0.04] border border-transparent'}`}>
-                      <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-indigo-500/30 to-violet-500/20 border border-indigo-500/20 flex items-center justify-center shrink-0">
-                        {allDone ? <PartyPopper size={11} className="text-amber-300"/> : <Rocket size={11} className="text-indigo-400"/>}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-0.5">
-                          <span className="text-[11px] font-semibold text-white">Pierwsze kroki</span>
-                          <span className="text-[10px] text-zinc-500">{done}/{total}</span>
-                        </div>
-                        <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-500"
-                            style={{width:`${(done/total)*100}%`}}/>
-                        </div>
-                      </div>
-                    </button>
-                  </div>
-                );
-              })()}
             </div>
           </>}
 
@@ -14521,7 +14520,7 @@ export default function App() {
                 </div>
               </div>
             </div>
-          ) : activeView==='servers' && fsOpen && serverFull && !activeChannel ? (
+          ) : activeView==='servers' && fsOpen && serverFull ? (
             /* ── First Steps onboarding view ──────────────────────────────── */
             (() => {
               const srvId    = activeServer!;
