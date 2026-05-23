@@ -23,7 +23,7 @@ import {
   ConnectionState,
   type RoomConnectOptions,
 } from 'livekit-client';
-import { getToken } from './api';
+import { getToken, API_BASE } from './api';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 // VITE_LIVEKIT_URL: e.g. "wss://yourdomain.com/livekit" (prod via nginx)
@@ -50,7 +50,7 @@ export function getLivekitRoomName(): string  { return _roomName; }
 
 // ── Token fetch ───────────────────────────────────────────────────────────────
 async function fetchToken(roomName: string, canPublish: boolean): Promise<string> {
-  const resp = await fetch('/api/livekit/token', {
+  const resp = await fetch(`${API_BASE}/livekit/token`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
