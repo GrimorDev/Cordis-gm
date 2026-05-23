@@ -8234,6 +8234,20 @@ export default function App() {
   const chPreviewCache                         = useRef<Record<string, {content:string; username:string; avatar:string|null; ts:string} | null | undefined>>({});
   const chPreviewTimer                         = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── UX: First Steps ("Pierwsze kroki") guided onboarding ────────
+  // Per-server: which of the 4 steps the user manually completed (steps 0-3)
+  const [fsSteps, setFsSteps] = useState<Record<string, boolean[]>>(() => {
+    try { return JSON.parse(localStorage.getItem('cordyn_fs_steps') || '{}'); } catch { return {}; }
+  });
+  // Per-server: whether the panel was dismissed entirely
+  const [fsDismissed, setFsDismissed] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem('cordyn_fs_dismissed') || '{}'); } catch { return {}; }
+  });
+  // Whether the First Steps view is currently open in main area
+  const [fsOpen, setFsOpen] = useState(false);
+  // Celebration state (confetti)
+  const [fsCelebrating, setFsCelebrating] = useState(false);
+
   // ── Feature: Channel Prefs (DB-backed) ──────────────────────────
   const [channelPrefs, setChannelPrefs]       = useState<Map<string, ChannelPref>>(new Map());
 
@@ -10754,6 +10768,14 @@ export default function App() {
   const loadServers = () => serversApi.list().then(list => {
     setServerList(list);
     // Do NOT auto-select first server — default view is DMs (set by useState initial value)
+    // Preload all servers' channels in the background so activity rings work immediately
+    list.forEach(srv => {
+      serversApi.get(srv.id).then(s => {
+        const newMap: Record<string, string> = {};
+        s.categories.flatMap((c: any) => c.channels).forEach((ch: any) => { newMap[ch.id] = s.id; });
+        chServerMapRef.current = { ...chServerMapRef.current, ...newMap };
+      }).catch(() => {});
+    });
   }).catch(console.error);
   const loadFriends = () => {
     friendsApi.list().then(setFriends).catch(console.error);
@@ -13093,7 +13115,7 @@ export default function App() {
               const isAct=activeServer===srv.id&&activeView==='servers';
               return (
                 <button key={srv.id}
-                  onClick={()=>{if(activeServer===srv.id&&activeView==='servers')return;const same=activeServer===srv.id;setActiveServer(srv.id);setActiveView('servers');setActiveChannel('');setServerFull(null);setProfileViewId(null);setBannerExpanded(false);if(same)setServerReloadKey(k=>k+1);setSrvRingActivity(prev=>{const n={...prev};delete n[srv.id];return n;});}}
+                  onClick={()=>{if(activeServer===srv.id&&activeView==='servers')return;const same=activeServer===srv.id;setActiveServer(srv.id);setActiveView('servers');setActiveChannel('');setServerFull(null);setProfileViewId(null);setBannerExpanded(false);setFsOpen(false);if(same)setServerReloadKey(k=>k+1);setSrvRingActivity(prev=>{const n={...prev};delete n[srv.id];return n;});}}
                   onContextMenu={e=>{e.preventDefault();setSrvContextMenu({x:e.clientX,y:e.clientY,srv});}}
                   onMouseEnter={e=>{
                     const cy=e.clientY;
@@ -13374,7 +13396,7 @@ export default function App() {
                           <SortableChannelItem id={ch.id} catId={cat.id} canManage={canManageChannels}>
                           <div className="px-2">
                             <button
-                              onClick={() => { setActiveChannel(ch.id); openGlobalTab({key:`ch:${activeServer}:${ch.id}`,kind:'ch',name:ch.name,chType:ch.type,serverId:activeServer,channelId:ch.id,serverName:serverFull?.name,serverIcon:serverFull?.icon_url??undefined}); setIsMobileOpen(false); setSrvSettOpen(false); setProfileViewId(null); if(activeViewRef.current==='admin')setActiveView('servers'); }}
+                              onClick={() => { setActiveChannel(ch.id); setFsOpen(false); openGlobalTab({key:`ch:${activeServer}:${ch.id}`,kind:'ch',name:ch.name,chType:ch.type,serverId:activeServer,channelId:ch.id,serverName:serverFull?.name,serverIcon:serverFull?.icon_url??undefined}); setIsMobileOpen(false); setSrvSettOpen(false); setProfileViewId(null); if(activeViewRef.current==='admin')setActiveView('servers'); }}
                               onContextMenu={e=>{ e.preventDefault(); setChCtxMenu({x:e.clientX,y:e.clientY,ch}); }}
                               onMouseEnter={e => {
                                 if (compactChannels) return;
@@ -13509,37 +13531,41 @@ export default function App() {
               </motion.div>}
               </AnimatePresence>
               {!serverFull&&activeServer&&<div className="flex justify-center py-8"><Loader2 size={18} className="text-zinc-600 animate-spin"/></div>}
-              {/* ── Onboarding card — shown when server has no channels yet ── */}
-              {serverFull && canManageChannels && serverFull.categories.flatMap(c=>c.channels).length === 0 && (
-                <div className="mx-3 mb-4 p-4 rounded-2xl border border-indigo-500/25 bg-gradient-to-br from-indigo-500/8 to-violet-500/5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-6 h-6 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
-                      <Rocket size={12} className="text-indigo-400"/>
-                    </div>
-                    <span className="text-xs font-bold text-white">Zacznij tutaj</span>
-                    <span className="text-[10px] text-zinc-600">— 3 kroki do działającego serwera</span>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    {([
-                      { icon: <Hash size={11}/>, label: 'Utwórz kanał', sub: 'Dodaj pierwszy kanał tekstowy', onClick: () => { setNewChType('text'); setChCreateCatId(''); setChCreateOpen(true); setNewChName(''); setNewChPrivate(false); } },
-                      { icon: <UserPlus size={11}/>, label: 'Zaproś znajomych', sub: 'Podziel się linkiem zaproszenia', onClick: () => { setSrvSettTab('invites'); setSrvSettOpen(true); } },
-                      { icon: <Settings size={11}/>, label: 'Skonfiguruj serwer', sub: 'Ustaw nazwę, ikonę i opis', onClick: () => { setSrvSettTab('overview'); setSrvSettOpen(true); } },
-                    ] as const).map((step, i) => (
-                      <button key={i} onClick={step.onClick}
-                        className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left hover:bg-indigo-500/10 transition-colors group">
-                        <div className="w-6 h-6 rounded-lg bg-indigo-500/15 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0 group-hover:bg-indigo-500/30 transition-colors">
-                          {step.icon}
+              {/* ── "Pierwsze kroki" sidebar button ─────────────────── */}
+              {serverFull && canManageChannels && !fsDismissed[activeServer!] && (() => {
+                const srvSteps = fsSteps[activeServer!] || [false,false,false,false];
+                const allChs   = serverFull.categories.flatMap(c=>c.channels);
+                const computed = [
+                  !!(serverFull as any).description?.trim(),       // step 0: server has description
+                  allChs.length > 2,                               // step 1: extra channel created
+                  srvSteps[2] ?? false,                            // step 2: invite opened (manual)
+                  srvSteps[3] ?? false,                            // step 3: first message sent
+                ];
+                const done  = computed.filter(Boolean).length;
+                const total = computed.length;
+                const allDone = done === total;
+                return (
+                  <div className="mx-3 mb-3">
+                    <button onClick={()=>setFsOpen(o=>!o)}
+                      className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-left transition-all group
+                        ${fsOpen ? 'bg-indigo-500/15 border border-indigo-500/25' : 'hover:bg-white/[0.04] border border-transparent'}`}>
+                      <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-indigo-500/30 to-violet-500/20 border border-indigo-500/20 flex items-center justify-center shrink-0">
+                        {allDone ? <PartyPopper size={11} className="text-amber-300"/> : <Rocket size={11} className="text-indigo-400"/>}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-[11px] font-semibold text-white">Pierwsze kroki</span>
+                          <span className="text-[10px] text-zinc-500">{done}/{total}</span>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-semibold text-white leading-tight">{step.label}</p>
-                          <p className="text-[10px] text-zinc-600 truncate">{step.sub}</p>
+                        <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-500"
+                            style={{width:`${(done/total)*100}%`}}/>
                         </div>
-                        <ChevronRight size={11} className="text-zinc-700 shrink-0 group-hover:text-indigo-400 transition-colors"/>
-                      </button>
-                    ))}
+                      </div>
+                    </button>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           </>}
 
@@ -14495,6 +14521,160 @@ export default function App() {
                 </div>
               </div>
             </div>
+          ) : activeView==='servers' && fsOpen && serverFull && !activeChannel ? (
+            /* ── First Steps onboarding view ──────────────────────────────── */
+            (() => {
+              const srvId    = activeServer!;
+              const srvSteps = fsSteps[srvId] || [false,false,false,false];
+              const allChs   = serverFull.categories.flatMap(c=>c.channels);
+              const computed = [
+                !!(serverFull as any).description?.trim(),
+                allChs.length > 2,
+                srvSteps[2] ?? false,
+                srvSteps[3] ?? false,
+              ];
+              const doneCnt = computed.filter(Boolean).length;
+              const markStep = (idx: number) => {
+                const next = [...(fsSteps[srvId] || [false,false,false,false])];
+                next[idx] = true;
+                const updated = { ...fsSteps, [srvId]: next };
+                setFsSteps(updated);
+                try { localStorage.setItem('cordyn_fs_steps', JSON.stringify(updated)); } catch {}
+                if (next.filter(Boolean).length === 4 && !computed.every(Boolean)) {
+                  setTimeout(() => setFsCelebrating(true), 300);
+                  setTimeout(() => setFsCelebrating(false), 4500);
+                }
+              };
+              const steps = [
+                {
+                  icon: <Settings size={16}/>,
+                  title: 'Skonfiguruj serwer',
+                  sub:   'Dodaj opis, ustaw ikonę i wybierz kolor akcentu serwera.',
+                  done:  computed[0],
+                  cta:   'Otwórz ustawienia',
+                  onClick: () => { setSrvSettTab('overview'); setSrvSettOpen(true); },
+                },
+                {
+                  icon: <Hash size={16}/>,
+                  title: 'Utwórz dodatkowy kanał',
+                  sub:   'Organizuj rozmowy przez osobne kanały dla różnych tematów.',
+                  done:  computed[1],
+                  cta:   'Dodaj kanał',
+                  onClick: () => { setChCreateCatId(''); setNewChType('text'); setChCreateOpen(true); },
+                },
+                {
+                  icon: <UserPlus size={16}/>,
+                  title: 'Zaproś znajomych',
+                  sub:   'Podziel się linkiem zaproszenia — daj znajomym dołączyć.',
+                  done:  computed[2],
+                  cta:   'Wygeneruj zaproszenie',
+                  onClick: () => { setSrvSettTab('invites'); setSrvSettOpen(true); markStep(2); },
+                },
+                {
+                  icon: <MessageSquare size={16}/>,
+                  title: 'Wyślij pierwszą wiadomość',
+                  sub:   'Przywitaj się! Kliknij kanał tekstowy i napisz coś do społeczności.',
+                  done:  computed[3],
+                  cta:   'Przejdź do kanału',
+                  onClick: () => {
+                    const firstTxt = allChs.find(c=>c.type==='text'||c.type==='announcement');
+                    if (firstTxt) { setActiveChannel(firstTxt.id); setFsOpen(false); }
+                    markStep(3);
+                  },
+                },
+              ];
+              return (
+                <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar p-8 gap-8">
+                  {/* Header */}
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500/30 to-violet-500/20 border border-indigo-500/20 flex items-center justify-center">
+                          <Rocket size={18} className="text-indigo-400"/>
+                        </div>
+                        <div>
+                          <h1 className="text-xl font-bold text-white">Pierwsze kroki</h1>
+                          <p className="text-xs text-zinc-500">{serverFull.name} · {doneCnt}/4 ukończone</p>
+                        </div>
+                      </div>
+                      {/* Progress bar */}
+                      <div className="w-64 h-2 bg-white/[0.07] rounded-full overflow-hidden">
+                        <motion.div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full"
+                          initial={{width:0}} animate={{width:`${(doneCnt/4)*100}%`}} transition={{duration:0.6,ease:'easeOut'}}/>
+                      </div>
+                    </div>
+                    <button onClick={()=>{
+                      const upd = { ...fsDismissed, [srvId]: true };
+                      setFsDismissed(upd);
+                      try { localStorage.setItem('cordyn_fs_dismissed', JSON.stringify(upd)); } catch {}
+                      setFsOpen(false);
+                    }} className="text-zinc-600 hover:text-zinc-300 transition-colors flex items-center gap-1 text-xs mt-1">
+                      <X size={13}/> Ukryj
+                    </button>
+                  </div>
+
+                  {/* Step cards */}
+                  <div className="grid grid-cols-1 gap-4 max-w-2xl">
+                    {steps.map((step, idx) => (
+                      <motion.div key={idx}
+                        initial={{opacity:0, y:12}} animate={{opacity:1, y:0}} transition={{delay:idx*0.07}}
+                        className={`relative p-5 rounded-2xl border transition-all
+                          ${step.done
+                            ? 'border-emerald-500/20 bg-emerald-500/[0.04]'
+                            : 'border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.04]'
+                          }`}>
+                        {/* Step number */}
+                        <div className="flex items-start gap-4">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border
+                            ${step.done
+                              ? 'bg-emerald-500/15 border-emerald-500/25 text-emerald-400'
+                              : 'bg-white/[0.05] border-white/[0.08] text-zinc-400'
+                            }`}>
+                            {step.done ? <Check size={16}/> : step.icon}
+                          </div>
+                          <div className="flex-1 min-w-0 mt-0.5">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Krok {idx+1}</span>
+                              {step.done && <span className="text-[10px] font-semibold text-emerald-400">✓ Gotowe</span>}
+                            </div>
+                            <h3 className={`text-sm font-bold mb-1 ${step.done ? 'text-zinc-400 line-through decoration-zinc-600' : 'text-white'}`}>
+                              {step.title}
+                            </h3>
+                            <p className="text-[12px] text-zinc-500 leading-relaxed mb-3">{step.sub}</p>
+                            {!step.done && (
+                              <button onClick={step.onClick}
+                                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors">
+                                {step.icon && <span className="opacity-70">{React.cloneElement(step.icon as React.ReactElement<any>, {size:11})}</span>}
+                                {step.cta}
+                                <ChevronRight size={11}/>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+
+                  {doneCnt === 4 && (
+                    <div className="flex flex-col items-center gap-3 py-6 text-center max-w-md mx-auto">
+                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400/20 to-orange-500/10 border border-amber-400/20 flex items-center justify-center mb-1">
+                        <PartyPopper size={28} className="text-amber-400"/>
+                      </div>
+                      <h2 className="text-lg font-bold text-white">Brawo! Serwer gotowy 🎉</h2>
+                      <p className="text-sm text-zinc-500">Wszystkie kroki ukończone. Możesz teraz skupić się na budowaniu społeczności!</p>
+                      <button onClick={()=>{
+                        const upd = { ...fsDismissed, [srvId]: true };
+                        setFsDismissed(upd);
+                        try { localStorage.setItem('cordyn_fs_dismissed', JSON.stringify(upd)); } catch {}
+                        setFsOpen(false);
+                      }} className="mt-2 px-6 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-semibold hover:opacity-90 transition-opacity">
+                        Przejdź do serwera →
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()
           ) : activeView==='servers' && !activeChannel ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
               {!serverFull
@@ -23569,6 +23749,42 @@ export default function App() {
                   </div>
                   );
                 })}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── First Steps celebration confetti ───────────────────────────── */}
+      <AnimatePresence>
+        {fsCelebrating && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 z-[300] pointer-events-none overflow-hidden">
+            {Array.from({length:42}).map((_,i)=>{
+              const colors=['#6366f1','#8b5cf6','#f59e0b','#10b981','#3b82f6','#ec4899','#f97316'];
+              const color = colors[i % colors.length];
+              const left  = Math.random()*100;
+              const delay = Math.random()*1.2;
+              const dur   = 2.0 + Math.random()*1.5;
+              const size  = 6 + Math.random()*8;
+              const rotate= Math.random()*360;
+              return (
+                <motion.div key={i}
+                  initial={{y:-20, x:`${left}vw`, opacity:1, rotate, scale:1}}
+                  animate={{y:'110vh', opacity:[1,1,0], rotate: rotate + (Math.random()>0.5?360:-360), scale:[1,0.8]}}
+                  transition={{duration:dur, delay, ease:'easeIn'}}
+                  style={{position:'absolute', top:0, left:0, width:size, height:size,
+                    borderRadius: i%3===0 ? '50%' : i%3===1 ? '2px' : '0',
+                    background: color}}/>
+              );
+            })}
+            <motion.div initial={{scale:0.5,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.8,opacity:0}}
+              transition={{delay:0.3, type:'spring', stiffness:300}}
+              className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
+              <div className="bg-[#0f1218]/90 backdrop-blur-xl rounded-3xl border border-amber-400/20 px-10 py-8 shadow-2xl">
+                <div className="text-5xl mb-3">🎉</div>
+                <h2 className="text-xl font-bold text-white mb-1">Serwer gotowy!</h2>
+                <p className="text-sm text-zinc-400">Wszystkie pierwsze kroki ukończone.</p>
               </div>
             </motion.div>
           </motion.div>

@@ -217,9 +217,15 @@ button, [role="button"], a, input, textarea, select {
   flex-shrink: 0;
   cursor: pointer;
   position: relative;
-  overflow: hidden;
+  overflow: visible;          /* must be visible so the ring dot renders outside bounds */
   transition: border-radius 0.20s ease, transform 0.15s ease, box-shadow 0.15s ease;
   border: 1px solid transparent;
+}
+/* Clip the inner image/avatar so it obeys rounded corners */
+.srv-icon-btn > img,
+.srv-icon-btn > span:not(.srv-active-pip) {
+  border-radius: inherit;
+  overflow: hidden;
 }
 .srv-icon-btn:hover {
   border-radius: 14px;

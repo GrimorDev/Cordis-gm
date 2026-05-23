@@ -588,8 +588,18 @@ export const forumApi = {
 
 // ── Messages ───────────────────────────────────────────────────────────────
 export const messagesApi = {
-  list: (channelId: string, before?: string) =>
-    req<MessageFull[]>('GET', `/messages/channel/${channelId}${before ? `?before=${before}` : ''}`),
+  list: (channelId: string, beforeOrOpts?: string | { before?: string; limit?: number }) => {
+    let query = '';
+    if (typeof beforeOrOpts === 'string') {
+      query = beforeOrOpts ? `?before=${beforeOrOpts}` : '';
+    } else if (beforeOrOpts) {
+      const p = new URLSearchParams();
+      if (beforeOrOpts.before) p.set('before', beforeOrOpts.before);
+      if (beforeOrOpts.limit) p.set('limit', String(beforeOrOpts.limit));
+      query = p.toString() ? `?${p}` : '';
+    }
+    return req<MessageFull[]>('GET', `/messages/channel/${channelId}${query}`);
+  },
   send: (channelId: string, content: string, opts?: { reply_to_id?: string; attachment_url?: string }) =>
     req<MessageFull>('POST', `/messages/channel/${channelId}`, { content, ...opts }),
   edit: (id: string, content: string) => req<MessageFull>('PUT', `/messages/${id}`, { content }),
