@@ -9572,6 +9572,10 @@ export default function App() {
       if (channel_id !== prevChRef.current) {
         setPingChs(p => ({ ...p, [channel_id]: (p[channel_id] || 0) + 1 }));
       }
+      // Update activity ring for the server that got the mention
+      if (server_id && server_id !== activeServerRef.current) {
+        setSrvRingActivity(prev => ({ ...prev, [server_id]: 'mention' }));
+      }
       // Store notification entry
       const entry: NotificationEntry = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
