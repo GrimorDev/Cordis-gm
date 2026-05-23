@@ -14551,7 +14551,8 @@ export default function App() {
                   sub:   'Dodaj opis, ustaw ikonę i wybierz kolor akcentu serwera.',
                   done:  computed[0],
                   cta:   'Otwórz ustawienia',
-                  onClick: () => { setSrvSettTab('overview'); setSrvSettOpen(true); },
+                  // Must close fsOpen first — srvSettOpen renders in the same slot
+                  onClick: () => { setFsOpen(false); setSrvSettTab('overview'); setSrvSettOpen(true); },
                 },
                 {
                   icon: <Hash size={16}/>,
@@ -14566,8 +14567,9 @@ export default function App() {
                   title: 'Zaproś znajomych',
                   sub:   'Podziel się linkiem zaproszenia — daj znajomym dołączyć.',
                   done:  computed[2],
-                  cta:   'Wygeneruj zaproszenie',
-                  onClick: () => { setSrvSettTab('invites'); setSrvSettOpen(true); markStep(2); },
+                  cta:   'Zaproś znajomych',
+                  // Open the dedicated invite-friends modal (with friend list + copy link)
+                  onClick: () => { setInviteFriendsOpen(true); markStep(2); },
                 },
                 {
                   icon: <MessageSquare size={16}/>,
@@ -14575,8 +14577,9 @@ export default function App() {
                   sub:   'Przywitaj się! Kliknij kanał tekstowy i napisz coś do społeczności.',
                   done:  computed[3],
                   cta:   'Przejdź do kanału',
+                  // Navigate to first text channel and close First Steps view
                   onClick: () => {
-                    const firstTxt = allChs.find(c=>c.type==='text'||c.type==='announcement');
+                    const firstTxt = allChs.find(c => c.type === 'text' || c.type === 'announcement');
                     if (firstTxt) { setActiveChannel(firstTxt.id); setFsOpen(false); }
                     markStep(3);
                   },
