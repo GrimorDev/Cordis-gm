@@ -10079,6 +10079,37 @@ export default function App() {
   useEffect(() => { activeServerRef.current   = activeServer;   }, [activeServer]);
   useEffect(() => { callDurationRef.current   = callDuration;   }, [callDuration]);
   useEffect(() => { serverFullRef.current     = serverFull;     }, [serverFull]);
+
+  // When someone starts sharing in our current channel, ensure we're in the SFU room.
+  // The initial connect (in joinVoiceChannel) may have failed if the SFU was temporarily
+  // unavailable — this retries automatically so the viewer gets TrackSubscribed events.
+  useEffect(() => {
+    const channelId = activeCall?.channelId;
+    if (!channelId || sharingUserIds.size === 0) return;
+    livekitConnectRoom(
+      livekitChannelRoom(channelId),
+      /* canPublish */ false,
+      (track, participant) => {
+        if (track.source !== LKTrack.Source.ScreenShare) return;
+        const stream = new MediaStream([track.mediaStreamTrack]);
+        remoteScreenStreamsRef.current.set(participant.identity, stream);
+        setScreenShareTick(t => t + 1);
+        track.mediaStreamTrack.onended = () => {
+          if (remoteScreenStreamsRef.current.get(participant.identity) === stream) {
+            remoteScreenStreamsRef.current.delete(participant.identity);
+            setScreenShareTick(t => t + 1);
+          }
+        };
+      },
+      (track, participant) => {
+        if (track.source !== LKTrack.Source.ScreenShare) return;
+        remoteScreenStreamsRef.current.delete(participant.identity);
+        setScreenShareTick(t => t + 1);
+      },
+    ).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharingUserIds, activeCall?.channelId]);
+
   // Update browser/desktop tab title with total unread count
   useEffect(() => {
     const total = Object.values(unreadChs).reduce((a, b) => a + b, 0);

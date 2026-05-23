@@ -23,14 +23,20 @@ import {
   ConnectionState,
   type RoomConnectOptions,
 } from 'livekit-client';
-import { getToken, API_BASE } from './api';
+import { getToken, API_BASE, isTauri } from './api';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 // VITE_LIVEKIT_URL: e.g. "wss://yourdomain.com/livekit" (prod via nginx)
 //                  or  "ws://localhost:7880"             (local dev)
-// Falls back to same-origin /livekit path which nginx proxies to livekit:7880.
+// Falls back to same-origin /livekit path which nginx proxies to the SFU.
+// On Tauri desktop, window.location is tauri://localhost — we derive from API_BASE instead.
 const RAW_URL = (import.meta.env.VITE_LIVEKIT_URL as string | undefined) || '';
 export const LIVEKIT_URL: string = RAW_URL || (() => {
+  if (isTauri) {
+    // API_BASE = "https://cordyn.pl/api" → "wss://cordyn.pl/livekit"
+    const origin = API_BASE.replace(/\/api\/?$/, '');
+    return origin.replace(/^http/, 'ws') + '/livekit';
+  }
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
   return `${proto}://${window.location.host}/livekit`;
 })();
