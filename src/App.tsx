@@ -14560,7 +14560,13 @@ export default function App() {
                   sub:   'Organizuj rozmowy przez osobne kanały dla różnych tematów.',
                   done:  computed[1],
                   cta:   'Dodaj kanał',
-                  onClick: () => { setChCreateCatId(''); setNewChType('text'); setChCreateOpen(true); },
+                  onClick: () => {
+                    // Use first real category so the channel actually gets created
+                    const firstCat = serverFull.categories.find(c => c.id !== '__uncat__');
+                    setChCreateCatId(firstCat?.id ?? '');
+                    setNewChType('text');
+                    setChCreateOpen(true);
+                  },
                 },
                 {
                   icon: <UserPlus size={16}/>,
@@ -14577,10 +14583,14 @@ export default function App() {
                   sub:   'Przywitaj się! Kliknij kanał tekstowy i napisz coś do społeczności.',
                   done:  computed[3],
                   cta:   'Przejdź do kanału',
-                  // Navigate to first text channel and close First Steps view
+                  // Navigate to first text channel, close First Steps, clear any lingering settings state
                   onClick: () => {
                     const firstTxt = allChs.find(c => c.type === 'text' || c.type === 'announcement');
-                    if (firstTxt) { setActiveChannel(firstTxt.id); setFsOpen(false); }
+                    if (firstTxt) {
+                      setSrvSettOpen(false);
+                      setFsOpen(false);
+                      setActiveChannel(firstTxt.id);
+                    }
                     markStep(3);
                   },
                 },
@@ -14677,7 +14687,7 @@ export default function App() {
                 </div>
               );
             })()
-          ) : activeView==='servers' && !activeChannel ? (
+          ) : activeView==='servers' && !activeChannel && !srvSettOpen ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
               {!serverFull
                 ? <Loader2 size={28} className="text-indigo-400 animate-spin"/>
