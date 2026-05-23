@@ -8225,6 +8225,9 @@ export default function App() {
   const [srvRingActivity, setSrvRingActivity] = useState<Record<string, 'mention'|'unread'>>({});
   // Maps channel_id → server_id, built when any serverFull loads
   const chServerMapRef                         = useRef<Record<string, string>>({});
+  // Dedup for new_message: backend emits to both channel: and server: rooms,
+  // so the same message can arrive twice. Track recently-seen IDs to skip dupes.
+  const recentMsgIds                           = useRef(new Set<string>());
 
   // ── UX: Compact channel list mode ───────────────────────────────
   const [compactChannels, setCompactChannels] = useState<boolean>(() => {
@@ -8939,6 +8942,16 @@ export default function App() {
     if (!isAuthenticated) return;
     const sock = connectSocket();
     sock.on('new_message', (msg: any) => {
+      // Dedup: backend now emits to both channel: and server: rooms for reliability,
+      // so the same message can arrive twice. Drop the duplicate.
+      if (msg.id) {
+        if (recentMsgIds.current.has(msg.id)) return;
+        recentMsgIds.current.add(msg.id);
+        if (recentMsgIds.current.size > 300) {
+          const arr = [...recentMsgIds.current];
+          recentMsgIds.current = new Set(arr.slice(-150));
+        }
+      }
       const chId = msg.channel_id;
       const isOwnMsg = msg.sender_id === currentUserRef.current?.id;
       // Also route to voice chat messages if the call is on this channel

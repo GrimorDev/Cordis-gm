@@ -248,7 +248,14 @@ router.post('/channel/:channelId', authMiddleware, msgLimiter,
         [ch.server_id, req.params.channelId, msg.id]
       );
       const io = req.app.get('io');
-      if (io) io.to(`channel:${req.params.channelId}`).emit('new_message', full);
+      if (io) {
+        // Emit to channel room (users who explicitly joined it) AND to the server room
+        // (all server members, auto-joined on connect). The server-room fallback ensures
+        // delivery even when join_channel failed silently (e.g. DB pool exhaustion).
+        // Frontend deduplicates by message ID so users in both rooms see it only once.
+        io.to(`channel:${req.params.channelId}`).emit('new_message', full);
+        io.to(`server:${ch.server_id}`).emit('new_message', full);
+      }
 
       // Invalidate latest-messages cache for this channel
       try { await redis.del(KEYS.msgCache(req.params.channelId)); } catch { /* ignore */ }
@@ -394,10 +401,14 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
       [content.trim(), req.params.id]
     );
     const io = req.app.get('io');
-    if (io) io.to(`channel:${msg.channel_id}`).emit('message_updated', { id: updated.id, content: updated.content, edited: updated.edited });
+    const { rows: [ch] } = await query('SELECT server_id FROM channels WHERE id=$1', [msg.channel_id]);
+    const updatePayload = { id: updated.id, content: updated.content, edited: updated.edited };
+    if (io) {
+      io.to(`channel:${msg.channel_id}`).emit('message_updated', updatePayload);
+      if (ch?.server_id) io.to(`server:${ch.server_id}`).emit('message_updated', updatePayload);
+    }
     try { await redis.del(KEYS.msgCache(msg.channel_id)); } catch { /* ignore */ }
     // Deliver MESSAGE_UPDATE to dev bots
-    const { rows: [ch] } = await query('SELECT server_id FROM channels WHERE id=$1', [msg.channel_id]);
     if (ch?.server_id) deliverToDevBotWebhooks(ch.server_id, { ...updated, event_type: 'MESSAGE_UPDATE' }, 'MESSAGE_UPDATE').catch(() => {});
     return res.json(updated);
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
@@ -421,8 +432,9 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
   try {
     const { rows: [msg] } = await query('SELECT * FROM messages WHERE id=$1', [req.params.id]);
     if (!msg) return res.status(404).json({ error: 'Not found' });
+    // Always resolve server_id — needed for permission checks, server-room emit, and webhooks
+    const { rows: [ch] } = await query('SELECT server_id FROM channels WHERE id=$1', [msg.channel_id]);
     if (msg.sender_id !== req.user!.id) {
-      const { rows: [ch] } = await query('SELECT server_id FROM channels WHERE id=$1', [msg.channel_id]);
       const { rows: [member] } = await query(
         'SELECT role_name FROM server_members WHERE server_id=$1 AND user_id=$2',
         [ch.server_id, req.user!.id]
@@ -450,12 +462,13 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
     const channelId = msg.channel_id;
     await query('DELETE FROM messages WHERE id=$1', [req.params.id]);
     const io = req.app.get('io');
-    if (io) io.to(`channel:${channelId}`).emit('message_deleted', { id: msg.id, channel_id: channelId });
+    if (io) {
+      io.to(`channel:${channelId}`).emit('message_deleted', { id: msg.id, channel_id: channelId });
+      if (ch?.server_id) io.to(`server:${ch.server_id}`).emit('message_deleted', { id: msg.id, channel_id: channelId });
+    }
     try { await redis.del(KEYS.msgCache(channelId)); } catch { /* ignore */ }
     // Deliver MESSAGE_DELETE to dev bots
-    query('SELECT server_id FROM channels WHERE id=$1', [channelId]).then(({ rows: [ch] }) => {
-      if (ch?.server_id) deliverToDevBotWebhooks(ch.server_id, { id: msg.id, channel_id: channelId, server_id: ch.server_id }, 'MESSAGE_DELETE').catch(() => {});
-    }).catch(() => {});
+    if (ch?.server_id) deliverToDevBotWebhooks(ch.server_id, { id: msg.id, channel_id: channelId, server_id: ch.server_id }, 'MESSAGE_DELETE').catch(() => {});
     return res.json({ message: 'Deleted' });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
