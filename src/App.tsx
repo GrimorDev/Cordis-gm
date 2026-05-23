@@ -11595,8 +11595,23 @@ export default function App() {
       await channelsApi.create({ server_id: activeServer, name: newChName.trim(), type: newChType, category_id: chCreateCatId || undefined, is_private: newChPrivate, role_ids: newChPrivate ? newChRoles : undefined });
       addServerActivity({ icon, text: `Kanał #${newChName.trim()} został utworzony` });
       setChCreateOpen(false); setNewChName(''); setNewChPrivate(false); setNewChRoles([]);
-      // NOTE: Do NOT refetch serverFull here — the socket 'channel_created' event handles state update.
-      // Re-fetching would overwrite the __uncat__ pseudo-category that the socket handler adds for uncategorized channels.
+      // NOTE: Normally the socket 'channel_created' event handles the state update.
+      // Re-fetching would overwrite the __uncat__ pseudo-category for uncategorized channels.
+      // EXCEPTION: when First Steps (fsOpen=true) is active, activeChannel='' causes the
+      // channel-change useEffect to early-return, which may cause the socket update to miss
+      // a render cycle. Refetch after 400ms as a guaranteed fallback in that case only.
+      if (fsOpen) {
+        setTimeout(() => {
+          if (!activeServer) return;
+          serversApi.get(activeServer).then(s => {
+            setServerFull(s);
+            // Keep chServerMapRef in sync with the refreshed channel list
+            const newMap: Record<string, string> = {};
+            s.categories.flatMap((c: any) => c.channels).forEach((ch: any) => { newMap[ch.id] = s.id; });
+            chServerMapRef.current = { ...chServerMapRef.current, ...newMap };
+          }).catch(console.error);
+        }, 400);
+      }
     } catch (err: any) {
       console.error(err);
       addToast(err?.message || 'Nie udało się utworzyć kanału', 'error');
