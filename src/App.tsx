@@ -22,7 +22,7 @@ import {
   FileAudio, FileVideo, FileCode2, FileArchive, FileImage, File as FileIcon, ChevronUp,
   HardDrive, PieChart, Trash, History,
   Bookmark, BookmarkCheck, Timer, Square, ImageIcon, Moon,
-  Keyboard, Radio, Compass, CalendarPlus, Mic2,
+  Keyboard, Radio, Compass, CalendarPlus, Mic2, HelpCircle,
   Home, BookOpen, TrendingUp, Layers, SmilePlus, Smartphone,
   Clipboard, ScanLine, RefreshCw,
   type LucideIcon
@@ -8588,7 +8588,7 @@ export default function App() {
   // App Settings
   const [appSettOpen, setAppSettOpen]         = useState(false);
   const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'notifications'|'devices'|'privacy'|'locale'|'connections'|'theme'|'desktop'|'updates'|'about'|'stats'>('account');
-  const [changelogOpen, setChangelogOpen]     = useState(false);
+
   const [userStats, setUserStats]             = useState<{messages_sent:number;messages_this_month:number;dms_sent:number;servers_joined:number;friends_count:number;reactions_given:number;reactions_received:number;account_created:string}|null>(null);
   const [statsLoading, setStatsLoading]       = useState(false);
 
@@ -8608,8 +8608,6 @@ export default function App() {
   const [sessionsLoading, setSessionsLoading] = useState(false);
   // Globalny hook żeby OAuth callback mógł otworzyć zakładkę połączeń
   useEffect(() => { (window as any).__cordisGoToSettingsTab = (tab: typeof appSettTab) => setAppSettTab(tab); }, []);
-  useEffect(() => { (window as any).__cordynOpenChangelog = () => setChangelogOpen(true); }, []);
-
   // Load stats when tab opens
   useEffect(() => {
     if (appSettTab === 'stats' && appSettOpen && !userStats && !statsLoading) {
@@ -21114,11 +21112,14 @@ export default function App() {
                 <span className="text-xs text-zinc-600">·</span>
                 <span className="text-xs text-zinc-500">{currentUser.username}</span>
               </div>
-              <div className="ml-auto">
-                <button onClick={()=>setChangelogOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] transition-all">
-                  <Megaphone size={13}/>
-                  Co nowego
+              <div className="ml-auto flex items-center gap-2">
+                <button onClick={()=>openExternalLink('https://cordyn.pl/support')} title="Centrum pomocy"
+                  className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-white hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] transition-all">
+                  <HelpCircle size={15}/>
+                </button>
+                <button onClick={()=>openExternalLink('https://cordyn.pl/blog')} title="Co nowego"
+                  className="w-8 h-8 flex items-center justify-center rounded-xl text-zinc-500 hover:text-white hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] transition-all">
+                  <Megaphone size={15}/>
                 </button>
               </div>
             </div>
@@ -22913,95 +22914,8 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* ── CHANGELOG MODAL ────────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {changelogOpen&&(
-          <motion.div key="changelog-bg" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-            style={{background:'rgba(0,0,0,0.65)',backdropFilter:'blur(6px)'}}
-            onClick={()=>setChangelogOpen(false)}>
-            <motion.div initial={{opacity:0,scale:0.95,y:12}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.95,y:8}}
-              transition={{duration:0.2,ease:[0.16,1,0.3,1]}}
-              className="w-full max-w-lg max-h-[80vh] flex flex-col rounded-2xl overflow-hidden"
-              style={{background:'#0e0e1a',border:'1px solid rgba(255,255,255,0.08)'}}
-              onClick={e=>e.stopPropagation()}>
-              {/* Header */}
-              <div className="flex items-center gap-3 px-5 py-4 border-b border-white/[0.07] shrink-0">
-                <div className="w-8 h-8 rounded-xl bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center">
-                  <Megaphone size={14} className="text-indigo-400"/>
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-white">Co nowego w Cordyn</h2>
-                  <p className="text-xs text-zinc-500">Historia aktualizacji platformy</p>
-                </div>
-                <button onClick={()=>setChangelogOpen(false)}
-                  className="ml-auto w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-all">
-                  <X size={15}/>
-                </button>
-              </div>
-              {/* Entries */}
-              <div className="flex-1 overflow-y-auto p-5 custom-scrollbar flex flex-col gap-6">
-                {([
-                  { version:'1.5.0', date:'24 maja 2026', items:[
-                    {type:'new',     text:'Statystyki użytkownika — nowa zakładka w ustawieniach'},
-                    {type:'new',     text:'Changelog — przegląd historii aktualizacji platformy'},
-                    {type:'improved',text:'Soundboard: pliki WAV, panel wieloserwerowy, przycinanie audio'},
-                    {type:'fixed',   text:'Zawijanie długich wiadomości w kanałach serwerowych'},
-                    {type:'fixed',   text:'Limit 2000 znaków w polu wiadomości z licznikiem'},
-                    {type:'removed', text:'Chat tekstowy w kanałach głosowych (nieużywany)'},
-                  ]},
-                  { version:'1.4.0', date:'10 maja 2026', items:[
-                    {type:'new',     text:'Waveform editor do przycinania dźwięków (maks. 10s)'},
-                    {type:'new',     text:'Soundboard wieloserwerowy z paskiem serwerów'},
-                    {type:'improved',text:'Wydajność renderowania wiadomości (content-visibility)'},
-                    {type:'fixed',   text:'Dźwięki przerywają się po opuszczeniu kanału głosowego'},
-                    {type:'fixed',   text:'Podwójne odtwarzanie dźwięku u nadawcy'},
-                  ]},
-                  { version:'1.3.0', date:'20 kwietnia 2026', items:[
-                    {type:'new',     text:'Screen share HD/FHD przez LiveKit SFU'},
-                    {type:'new',     text:'Developer API v1 — boty, komendy, webhooks'},
-                    {type:'new',     text:'OAuth2 — logowanie przez Cordyn w zewnętrznych aplikacjach'},
-                    {type:'improved',text:'Bezpieczeństwo: JWT blacklisting, bcrypt cost 12'},
-                  ]},
-                  { version:'1.2.0', date:'1 kwietnia 2026', items:[
-                    {type:'new',     text:'Forum — kanały z wątkami i tagami'},
-                    {type:'new',     text:'Połączenia Spotify, Twitch, Steam, YouTube'},
-                    {type:'new',     text:'Role serwerowe z kolorami i uprawnieniami'},
-                    {type:'improved',text:'Powiadomienia push (web + desktop)'},
-                  ]},
-                ] as const).map(entry=>(
-                  <div key={entry.version}>
-                    <div className="flex items-baseline gap-3 mb-3">
-                      <span className="text-sm font-bold text-white">v{entry.version}</span>
-                      <span className="text-xs text-zinc-600">{entry.date}</span>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      {entry.items.map((item,i)=>{
-                        const cfg:{bg:string;dot:string;label:string} =
-                          item.type==='new'      ?{bg:'bg-indigo-500/10',dot:'bg-indigo-400',label:'Nowość'}:
-                          item.type==='improved' ?{bg:'bg-emerald-500/10',dot:'bg-emerald-400',label:'Ulepszenie'}:
-                          item.type==='fixed'    ?{bg:'bg-amber-500/10',dot:'bg-amber-400',label:'Poprawka'}:
-                                                  {bg:'bg-zinc-500/10',dot:'bg-zinc-500',label:'Usunięto'};
-                        return(
-                          <div key={i} className={`flex items-start gap-3 px-3 py-2.5 rounded-xl ${cfg.bg}`}>
-                            <div className={`w-1.5 h-1.5 rounded-full ${cfg.dot} mt-1.5 shrink-0`}/>
-                            <div className="flex flex-col gap-0.5 min-w-0">
-                              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{cfg.label}</span>
-                              <span className="text-xs text-zinc-300 leading-relaxed">{item.text}</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
-      {/* ── ACCOUNT DELETION MODALS ─────────────────────────────────────── */}
+            {/* ── ACCOUNT DELETION MODALS ─────────────────────────────────────── */}
       <AnimatePresence>
         {deleteStep === 'confirm' && (
           <motion.div key="del-confirm-bg" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}

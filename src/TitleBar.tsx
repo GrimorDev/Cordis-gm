@@ -116,21 +116,25 @@ export function TitleBar() {
           Cordyn
         </span>
 
-        {/* Changelog button */}
-        <button
-          title="Co nowego"
-          onClick={() => { try { (window as any).__cordynOpenChangelog?.(); } catch {} }}
-          style={{
-            background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 6px',
-            color: '#475569', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
-            WebkitAppRegion: 'no-drag' as CSSProperties['WebkitAppRegion'],
-            transition: 'color 0.15s',
-          }}
-          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = '#475569'; }}
-        >
-          CO NOWEGO
-        </button>
+        {/* Help + Blog buttons (macOS right side) */}
+        <div style={{ display: 'flex', gap: 4, WebkitAppRegion: 'no-drag' as CSSProperties['WebkitAppRegion'] }}>
+          <button title="Centrum pomocy" onClick={() => openExternalLink('https://cordyn.pl/support')}
+            style={{ width: 26, height: 26, borderRadius: 7, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', transition: 'color 0.15s, background 0.15s' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.06)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = '#475569'; (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </button>
+          <button title="Co nowego" onClick={() => openExternalLink('https://cordyn.pl/blog')}
+            style={{ width: 26, height: 26, borderRadius: 7, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', transition: 'color 0.15s, background 0.15s' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.06)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = '#475569'; (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+          </button>
+        </div>
       </div>
     );
   }
@@ -201,22 +205,23 @@ export function TitleBar() {
         Cordyn
       </span>
 
-      {/* Changelog + Window control buttons — not draggable */}
-      <div
-        style={{ display: 'flex', alignItems: 'center', WebkitAppRegion: 'no-drag' as CSSProperties['WebkitAppRegion'] }}
-      >
-        <button
-          title="Co nowego"
-          onClick={() => { try { (window as any).__cordynOpenChangelog?.(); } catch {} }}
-          style={{
-            background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 10px',
-            color: '#475569', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
-            height: 32, transition: 'color 0.15s',
-          }}
+      {/* Help + Blog + Window controls — not draggable */}
+      <div style={{ display: 'flex', alignItems: 'center', WebkitAppRegion: 'no-drag' as CSSProperties['WebkitAppRegion'] }}>
+        <button title="Centrum pomocy" onClick={() => openExternalLink('https://cordyn.pl/support')}
+          style={{ width: 32, height: 32, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', transition: 'color 0.15s' }}
           onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = '#475569'; }}
-        >
-          CO NOWEGO
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = '#475569'; }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </button>
+        <button title="Co nowego" onClick={() => openExternalLink('https://cordyn.pl/blog')}
+          style={{ width: 32, height: 32, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', transition: 'color 0.15s' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = '#475569'; }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
         </button>
         {btn('─', 'Minimize', 'window_minimize', '#1e293b')}
         {btn('□', 'Maximize / Restore', 'window_maximize', '#1e293b')}
