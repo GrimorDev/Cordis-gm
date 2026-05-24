@@ -683,8 +683,9 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
   });
   const [resetPass, setResetPass] = useState('');
   const [resetPass2, setResetPass2] = useState('');
-  const savedCreds = (() => { try { const r = localStorage.getItem('cordyn_saved_creds'); return r ? JSON.parse(atob(r)) as { login: string; password: string } : null; } catch { return null; } })();
-  const [form, setForm] = useState({ login: savedCreds?.login || localStorage.getItem('cordyn_saved_login') || '', username: '', email: '', password: savedCreds?.password || '', confirm: '' });
+  // Migrate legacy cordyn_saved_creds (plain base64 password) — remove on first load
+  (() => { try { if (localStorage.getItem('cordyn_saved_creds')) { localStorage.removeItem('cordyn_saved_creds'); } } catch { /* ignore */ } })();
+  const [form, setForm] = useState({ login: localStorage.getItem('cordyn_saved_login') || '', username: '', email: '', password: '', confirm: '' });
   const [verifyCode, setVerifyCode] = useState('');
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
@@ -696,14 +697,13 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
-  // Try to pre-fill from the browser's native credential store (WebView2, Chrome, Edge)
-  // Falls back to localStorage already applied in useState above
+  // Try to pre-fill login from the browser's native credential store (WebView2, Chrome, Edge)
   React.useEffect(() => {
-    if (savedCreds || !('credentials' in navigator)) return;
+    if (!('credentials' in navigator)) return;
     (navigator.credentials as any).get({ password: true, mediation: 'optional' })
       .then((cred: any) => {
         if (cred?.id) {
-          setForm(f => ({ ...f, login: cred.id, password: cred.password || f.password }));
+          setForm(f => ({ ...f, login: cred.id }));
         }
       })
       .catch(() => {});
@@ -816,23 +816,17 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
       if (res.requiresTwoFactor) {
         setTwoFaSession(res.sessionId); setTwoFaCode(''); setTwoFaType('totp');
       } else {
-        // Save login for autocomplete always; save full creds only when rememberMe
+        // Save login for autocomplete (harmless — just the username/email)
         localStorage.setItem('cordyn_saved_login', form.login);
-        if (rememberMe) {
-          localStorage.setItem('cordyn_saved_creds', btoa(JSON.stringify({ login: form.login, password: form.password })));
-          setToken(res.token); // persist in localStorage
+        // rememberMe: persist token in localStorage; otherwise sessionStorage (lost on tab close)
+        if (rememberMe || isTauri) {
+          setToken(res.token);
           if (res.refreshToken) setRefreshToken(res.refreshToken);
         } else {
-          localStorage.removeItem('cordyn_saved_creds');
-          if (isTauri) {
-            setToken(res.token); // desktop always persists session
-            if (res.refreshToken) setRefreshToken(res.refreshToken);
-          } else {
-            localStorage.removeItem('cordyn_token');
-            sessionStorage.setItem('cordyn_token', res.token);
-            // Refresh token always in localStorage (needs to survive session tab close for auto-refresh)
-            if (res.refreshToken) setRefreshToken(res.refreshToken);
-          }
+          localStorage.removeItem('cordyn_token');
+          sessionStorage.setItem('cordyn_token', res.token);
+          // Refresh token always in localStorage — needed for silent re-auth after tab reopen
+          if (res.refreshToken) setRefreshToken(res.refreshToken);
         }
         // Also save to browser/WebView2 native credential store for OS-level autocomplete
         try {
