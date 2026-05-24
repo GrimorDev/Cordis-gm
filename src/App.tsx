@@ -8003,6 +8003,25 @@ export default function App() {
   const [chMuted, setChMuted] = useState<Record<string,boolean>>(() => {
     try { return JSON.parse(localStorage.getItem('cordyn_ch_muted')||'{}'); } catch { return {}; }
   });
+  // Per-server mute: true = muted
+  const [srvMuted, setSrvMuted] = useState<Record<string,boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem('cordyn_srv_muted')||'{}'); } catch { return {}; }
+  });
+  // Per-server notification pref: default | all | mentions | nothing
+  const [srvNotifPref, setSrvNotifPref] = useState<Record<string,'default'|'all'|'mentions'|'nothing'>>(() => {
+    try { return JSON.parse(localStorage.getItem('cordyn_srv_notif')||'{}'); } catch { return {}; }
+  });
+  // Refs for mute/notif prefs — updated every render for use inside socket handlers
+  const chMutedRef     = useRef<Record<string,boolean>>({});
+  chMutedRef.current   = chMuted;
+  const chNotifPrefRef = useRef<Record<string,'default'|'all'|'mentions'|'nothing'>>({});
+  chNotifPrefRef.current = chNotifPref;
+  const srvMutedRef    = useRef<Record<string,boolean>>({});
+  srvMutedRef.current  = srvMuted;
+  const srvNotifPrefRef = useRef<Record<string,'default'|'all'|'mentions'|'nothing'>>({});
+  srvNotifPrefRef.current = srvNotifPref;
+  // Server context menu notification submenu state
+  const [srvCtxNotifSubmenu, setSrvCtxNotifSubmenu] = useState(false);
 
   // ── Category inline edit ─────────────────────────────────────────
   const [editingCatId, setEditingCatId]       = useState<string|null>(null);
@@ -8973,8 +8992,22 @@ export default function App() {
             return { ...prev, [msgServerId]: isMention ? 'mention' : 'unread' };
           });
         }
-        // Play notification sound for messages from others (skip if Focus Mode is on)
-        if (!isOwnMsg && !focusModeRef.current) {
+        // Check mute/notification preferences before playing sound or sending desktop notification
+        const _bgSrvId = chServerMapRef.current[chId];
+        const _bgChMuted  = chMutedRef.current[chId];
+        const _bgSrvMuted = _bgSrvId ? srvMutedRef.current[_bgSrvId] : false;
+        const _bgChPref   = chNotifPrefRef.current[chId] ?? 'default';
+        const _bgSrvPref  = _bgSrvId ? (srvNotifPrefRef.current[_bgSrvId] ?? 'default') : 'default';
+        const _bgEffPref  = _bgChPref !== 'default' ? _bgChPref : _bgSrvPref;
+        const _bgMyId     = currentUserRef.current?.id;
+        const _bgIsMention = _bgMyId && (msg.mentions as string[] | undefined)?.includes(_bgMyId);
+        // Notification is allowed when: not muted AND pref allows this type of message
+        const _bgNotifAllowed = !_bgChMuted && !_bgSrvMuted && (
+          _bgEffPref === 'all' || _bgEffPref === 'default' ||
+          (_bgEffPref === 'mentions' && _bgIsMention)
+        );
+        // Play notification sound for messages from others (skip if Focus Mode, muted, or pref blocks)
+        if (!isOwnMsg && !focusModeRef.current && _bgNotifAllowed) {
           const cSnd = chCustomSoundsRef.current[chId];
           const sSnd = serverSoundsRef.current[serverFullRef.current?.id || ''];
           if (cSnd) playCustomSound(cSnd);
@@ -9001,11 +9034,18 @@ export default function App() {
           return withoutTemp.some(m => m.id === msg.id) ? withoutTemp : [...withoutTemp, msg as MessageFull];
         });
         if (!isOwnMsg) {
-          // Mention alert sound — always plays (even in Focus Mode)
+          // Check mute prefs for current channel too (still show message, just silence it)
+          const _curSrvId  = chServerMapRef.current[chId];
+          const _curMuted  = chMutedRef.current[chId] || (_curSrvId ? srvMutedRef.current[_curSrvId] : false);
+          const _curChPref = chNotifPrefRef.current[chId] ?? 'default';
+          const _curSrvPref = _curSrvId ? (srvNotifPrefRef.current[_curSrvId] ?? 'default') : 'default';
+          const _curEffPref = _curChPref !== 'default' ? _curChPref : _curSrvPref;
+          const _curFullySilenced = _curMuted || _curEffPref === 'nothing';
+          // Mention alert sound — plays unless fully silenced
           const myUsername = currentUserRef.current?.username;
-          if (myUsername && new RegExp(`!${myUsername}(?:[^a-zA-Z0-9_]|$)`,'i').test(msg.content || '')) {
+          if (!_curFullySilenced && myUsername && new RegExp(`!${myUsername}(?:[^a-zA-Z0-9_]|$)`,'i').test(msg.content || '')) {
             playMentionAlert();
-          } else if (!focusModeRef.current) {
+          } else if (!_curFullySilenced && !focusModeRef.current) {
             if (document.hidden) playNotifSound();
             else playMessageReceived();
           }
@@ -9605,43 +9645,53 @@ export default function App() {
         read: false,
       };
       setNotifications(prev => [entry, ...prev].slice(0, 50));
+      // Check mute/notification prefs — skip sound+notification if channel or server is muted
+      const _pngChMuted  = channel_id ? chMutedRef.current[channel_id] : false;
+      const _pngSrvMuted = server_id  ? srvMutedRef.current[server_id]  : false;
+      const _pngChPref   = channel_id ? (chNotifPrefRef.current[channel_id] ?? 'default') : 'default';
+      const _pngSrvPref  = server_id  ? (srvNotifPrefRef.current[server_id]  ?? 'default') : 'default';
+      const _pngEffPref  = _pngChPref !== 'default' ? _pngChPref : _pngSrvPref;
+      // Pings/mentions pass through even with 'mentions' pref; only 'nothing' or explicit mute blocks them
+      const _pngBlocked  = _pngChMuted || _pngSrvMuted || _pngEffPref === 'nothing';
       // Push notification — Tauri (native) lub przeglądarka
       const notifTitle = type === 'everyone'
         ? `@everyone na ${server_name ?? 'serwerze'}`
         : `${from_username} wspomniał(-a) o Tobie`;
       const notifBody  = (content ?? '').slice(0, 100);
-      if (isTauri) {
-        // Pobierz avatar do cache lokalnego, potem wyślij natywne powiadomienie
-        (async () => {
-          try {
-            const { sendNotification } = await import('@tauri-apps/plugin-notification');
-            // Pobierz avatar i zapisz jako plik tymczasowy
-            let iconPath: string | undefined;
-            const rawAvatarUrl = (from_avatar ?? '');
-            if (rawAvatarUrl) {
-              try {
-                const avatarUrl = staticUrl(rawAvatarUrl);
-                const resp = await fetch(avatarUrl);
-                if (resp.ok) {
-                  const { appDataDir } = await import('@tauri-apps/api/path');
-                  const { mkdir, writeFile } = await import('@tauri-apps/plugin-fs');
-                  const dir = (await appDataDir()) + 'notif-avatars';
-                  await mkdir(dir, { recursive: true }).catch(() => {});
-                  const ext = avatarUrl.split('.').pop()?.split('?')[0] ?? 'jpg';
-                  const filePath = `${dir}/${from_username ?? 'user'}.${ext}`;
-                  const buf = await resp.arrayBuffer();
-                  await writeFile(filePath, new Uint8Array(buf));
-                  iconPath = filePath;
-                }
-              } catch { /* brak avatara — ok */ }
-            }
-            sendNotification({ title: notifTitle, body: notifBody, ...(iconPath ? { icon: iconPath } : {}) });
-          } catch (e) { console.warn('[notif]', e); }
-        })();
-      } else if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        const avatarSrc = from_avatar ? staticUrl(from_avatar) : '/favicon.ico';
-        const n = new Notification(notifTitle, { body: notifBody, icon: avatarSrc, tag: channel_id });
-        n.onclick = () => { window.focus(); };
+      if (!_pngBlocked) {
+        if (isTauri) {
+          // Pobierz avatar do cache lokalnego, potem wyślij natywne powiadomienie
+          (async () => {
+            try {
+              const { sendNotification } = await import('@tauri-apps/plugin-notification');
+              // Pobierz avatar i zapisz jako plik tymczasowy
+              let iconPath: string | undefined;
+              const rawAvatarUrl = (from_avatar ?? '');
+              if (rawAvatarUrl) {
+                try {
+                  const avatarUrl = staticUrl(rawAvatarUrl);
+                  const resp = await fetch(avatarUrl);
+                  if (resp.ok) {
+                    const { appDataDir } = await import('@tauri-apps/api/path');
+                    const { mkdir, writeFile } = await import('@tauri-apps/plugin-fs');
+                    const dir = (await appDataDir()) + 'notif-avatars';
+                    await mkdir(dir, { recursive: true }).catch(() => {});
+                    const ext = avatarUrl.split('.').pop()?.split('?')[0] ?? 'jpg';
+                    const filePath = `${dir}/${from_username ?? 'user'}.${ext}`;
+                    const buf = await resp.arrayBuffer();
+                    await writeFile(filePath, new Uint8Array(buf));
+                    iconPath = filePath;
+                  }
+                } catch { /* brak avatara — ok */ }
+              }
+              sendNotification({ title: notifTitle, body: notifBody, ...(iconPath ? { icon: iconPath } : {}) });
+            } catch (e) { console.warn('[notif]', e); }
+          })();
+        } else if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          const avatarSrc = from_avatar ? staticUrl(from_avatar) : '/favicon.ico';
+          const n = new Notification(notifTitle, { body: notifBody, icon: avatarSrc, tag: channel_id });
+          n.onclick = () => { window.focus(); };
+        }
       }
     });
 
@@ -13239,8 +13289,14 @@ export default function App() {
                     ? <img src={staticUrl(srv.icon_url)} className="w-full h-full object-cover rounded-[inherit]" alt=""/>
                     : <span className={`w-full h-full flex items-center justify-center text-[13px] font-bold text-white rounded-[inherit] ${isAct?'bg-gradient-to-br from-[#FF8F40] to-[#FFB454]':'bg-[#1a2030] group-hover:bg-[#242d3d]'}`}>{srv.name.charAt(0).toUpperCase()}</span>}
                   {srv.is_official&&<span className="absolute bottom-0.5 right-0.5"><BadgeCheck size={9} className="text-amber-400"/></span>}
+                  {/* Mute indicator — shown when server is muted */}
+                  {srvMuted[srv.id] && (
+                    <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#0A0E14] flex items-center justify-center border border-[#0A0E14]">
+                      <BellOff size={9} className="text-zinc-400"/>
+                    </span>
+                  )}
                   {/* Activity dot — visible when ring is active */}
-                  {!isAct && srvRingActivity[srv.id] && (
+                  {!isAct && srvRingActivity[srv.id] && !srvMuted[srv.id] && (
                     <span className={`absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#0A0E14] ${srvRingActivity[srv.id]==='mention'?'bg-amber-400':'bg-[#59C2FF]'}`}/>
                   )}
                 </button>
@@ -18327,37 +18383,90 @@ export default function App() {
       {/* ── MODALS ─────────────────────────────────────────────────────── */}
 
       {/* Server context menu */}
-      {srvContextMenu&&(
-        <>
-          <div className="fixed inset-0 z-[90]" onClick={()=>setSrvContextMenu(null)}/>
-          <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:0.95}}
-            style={{position:'fixed',left:srvContextMenu.x,top:srvContextMenu.y,backdropFilter:'blur(12px)'}}
-            className="z-[91] bg-[#0e0e1c] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 py-1.5 min-w-[180px] overflow-hidden">
-            {(srvContextMenu.srv.owner_id===currentUser?.id ||
-              (srvContextMenu.srv.id===activeServer && (canManageServer||canManageRoles||canKickMembers))) && (<>
-              <button onClick={()=>{ setSrvContextMenu(null); setSrvSettTab(canManageServer?'overview':canManageRoles?'roles':'members'); setSrvSettOpen(true); setShowCallPanel(false); setActiveServer(srvContextMenu.srv.id); setActiveView('servers'); }}
+      {srvContextMenu&&(()=>{
+        const _srv = srvContextMenu.srv;
+        const _srvId = _srv.id;
+        const _isSrvMuted = srvMuted[_srvId] ?? false;
+        const _srvNotifVal = srvNotifPref[_srvId] ?? 'default';
+        const closeSrvMenu = () => { setSrvContextMenu(null); setSrvCtxNotifSubmenu(false); };
+        const saveSrvMute = (val: boolean) => {
+          const next = { ...srvMuted };
+          if (val) next[_srvId] = true; else delete next[_srvId];
+          setSrvMuted(next);
+          try { localStorage.setItem('cordyn_srv_muted', JSON.stringify(next)); } catch {}
+        };
+        const saveSrvNotif = (val: 'default'|'all'|'mentions'|'nothing') => {
+          const next = { ...srvNotifPref, [_srvId]: val };
+          setSrvNotifPref(next);
+          try { localStorage.setItem('cordyn_srv_notif', JSON.stringify(next)); } catch {}
+        };
+        return (
+          <>
+            <div className="fixed inset-0 z-[90]" onClick={closeSrvMenu}/>
+            <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:0.95}}
+              style={{position:'fixed',left:srvContextMenu.x,top:srvContextMenu.y,backdropFilter:'blur(12px)'}}
+              className="z-[91] bg-[#0e0e1c] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 py-1.5 min-w-[200px] overflow-visible">
+              {(_srv.owner_id===currentUser?.id ||
+                (_srvId===activeServer && (canManageServer||canManageRoles||canKickMembers))) && (<>
+                <button onClick={()=>{ closeSrvMenu(); setSrvSettTab(canManageServer?'overview':canManageRoles?'roles':'members'); setSrvSettOpen(true); setShowCallPanel(false); setActiveServer(_srvId); setActiveView('servers'); }}
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
+                  <Settings2 size={13} className="text-zinc-500 shrink-0"/>
+                  {t('server.settings')}
+                </button>
+                <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
+              </>)}
+
+              {/* ── Notifications ── */}
+              <button onClick={()=>{ saveSrvMute(!_isSrvMuted); addToast(_isSrvMuted ? 'Serwer odwyciszony' : 'Serwer wyciszony', 'success'); closeSrvMenu(); }}
                 className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
-                <Settings2 size={13} className="text-zinc-500 shrink-0"/>
-                {t('server.settings')}
+                {_isSrvMuted ? <BellOff size={13} className="text-zinc-500 shrink-0"/> : <Bell size={13} className="text-zinc-500 shrink-0"/>}
+                {_isSrvMuted ? 'Odcisz serwer' : 'Wycisz serwer'}
               </button>
+
+              {/* Notification settings submenu */}
+              <button onClick={()=>setSrvCtxNotifSubmenu(p=>!p)}
+                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
+                <Bell size={13} className="text-zinc-500 shrink-0"/>
+                <span className="flex-1">Powiadomienia</span>
+                <ChevronDown size={11} className={`text-zinc-600 transition-transform ${srvCtxNotifSubmenu?'rotate-180':''}`}/>
+              </button>
+              {srvCtxNotifSubmenu && (
+                <div className="mx-2 mb-1 bg-white/[0.04] rounded-xl overflow-hidden border border-white/[0.06]">
+                  {([
+                    ['all',      'Wszystkie wiadomości'],
+                    ['mentions', 'Tylko @wzmianki'],
+                    ['nothing',  'Nic'],
+                  ] as ['all'|'mentions'|'nothing', string][]).map(([val, label]) => (
+                    <button key={val} onClick={()=>{ saveSrvNotif(val); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-300 hover:bg-white/[0.07] hover:text-white transition-colors text-left">
+                      <div className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 flex items-center justify-center ${_srvNotifVal===val?'border-indigo-500 bg-indigo-500':'border-zinc-600'}`}>
+                        {_srvNotifVal===val && <div className="w-1.5 h-1.5 rounded-full bg-white"/>}
+                      </div>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
-            </>)}
-            {srvContextMenu.srv.owner_id===currentUser?.id ? (
-              <button onClick={()=>{ setDeleteSrvConfirm({id:srvContextMenu.srv.id,name:srvContextMenu.srv.name}); setSrvContextMenu(null); }}
-                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-rose-400 hover:bg-rose-500/10 transition-colors text-left">
-                <Trash2 size={13} className="shrink-0"/>
-                Usuń serwer
-              </button>
-            ) : (
-              <button onClick={()=>handleLeaveServer(srvContextMenu.srv.id)}
-                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-rose-400 hover:bg-rose-500/10 transition-colors text-left">
-                <LogOut size={13} className="shrink-0"/>
-                Opuść serwer
-              </button>
-            )}
-          </motion.div>
-        </>
-      )}
+
+              {_srv.owner_id===currentUser?.id ? (
+                <button onClick={()=>{ setDeleteSrvConfirm({id:_srvId,name:_srv.name}); closeSrvMenu(); }}
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-rose-400 hover:bg-rose-500/10 transition-colors text-left">
+                  <Trash2 size={13} className="shrink-0"/>
+                  Usuń serwer
+                </button>
+              ) : (
+                <button onClick={()=>handleLeaveServer(_srvId)}
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-rose-400 hover:bg-rose-500/10 transition-colors text-left">
+                  <LogOut size={13} className="shrink-0"/>
+                  Opuść serwer
+                </button>
+              )}
+            </motion.div>
+          </>
+        );
+      })()}
 
       {/* ── Cordyn Power upsell modal (file too large) ── */}
       <AnimatePresence>
