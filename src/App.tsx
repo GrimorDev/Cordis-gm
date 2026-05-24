@@ -355,7 +355,6 @@ const fmtDateLocale = (iso: string, opts?: Intl.DateTimeFormatOptions): string =
   } catch { return new Date(iso).toLocaleDateString(); }
 };
 const fmtDur = (s: number) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
-const fmtGameDur = (startMs: number): string => {
 
 /** Returns true when the current local time falls inside the configured quiet-hours window. */
 function isInQuietHours(cfg: { enabled: boolean; startHour: number; endHour: number; days: number[] }): boolean {
@@ -369,6 +368,8 @@ function isInQuietHours(cfg: { enabled: boolean; startHour: number; endHour: num
   if (start > end)   return cur >= start || cur < end;  // overnight (e.g. 22:00→08:00)
   return cur >= start && cur < end;          // same-day (e.g. 09:00→17:00)
 }
+
+const fmtGameDur = (startMs: number): string => {
   const sec = Math.floor((Date.now() - startMs) / 1000);
   if (sec < 60) return 'Przed chwilą';
   const h = Math.floor(sec / 3600);
