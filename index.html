@@ -21,6 +21,91 @@
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=Raleway:wght@400;600;700&family=Josefin+Sans:wght@400;600;700&family=Exo+2:wght@400;600;700&family=Ubuntu:wght@400;500;700&family=Press+Start+2P&family=Orbitron:wght@400;600;700&family=Bebas+Neue&family=Cinzel:wght@400;600;700&family=Playfair+Display:wght@400;600;700&family=Caveat:wght@400;600&family=Dancing+Script:wght@400;600;700&family=Pacifico&family=Righteous&display=swap" rel="stylesheet" />
   </head>
   <body>
+    <!-- ── DevTools / inspect protection ─────────────────────────────── -->
+    <script>
+      (function () {
+        'use strict';
+
+        // ── 1. Block right-click context menu ───────────────────────────
+        document.addEventListener('contextmenu', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        }, true);
+
+        // ── 2. Block keyboard shortcuts ─────────────────────────────────
+        document.addEventListener('keydown', function (e) {
+          var k = e.key || '';
+          var c = e.code || '';
+          // F12
+          if (k === 'F12' || c === 'F12') { e.preventDefault(); e.stopImmediatePropagation(); return false; }
+          // Ctrl/Cmd combos
+          if (e.ctrlKey || e.metaKey) {
+            // Ctrl+Shift+I / Ctrl+Shift+J / Ctrl+Shift+C / Ctrl+Shift+K
+            if (e.shiftKey && (k==='i'||k==='I'||k==='j'||k==='J'||k==='c'||k==='C'||k==='k'||k==='K')) {
+              e.preventDefault(); e.stopImmediatePropagation(); return false;
+            }
+            // Ctrl+U (view source)
+            if (k==='u'||k==='U') { e.preventDefault(); e.stopImmediatePropagation(); return false; }
+            // Ctrl+S (save page)
+            if (k==='s'||k==='S') { e.preventDefault(); e.stopImmediatePropagation(); return false; }
+            // Ctrl+P (print — reveals DOM)
+            if (k==='p'||k==='P') { e.preventDefault(); e.stopImmediatePropagation(); return false; }
+          }
+        }, true);
+
+        // ── 3. Console warning (Discord-style) ─────────────────────────
+        var _noop = function(){};
+        try {
+          console.log(
+            '%cSTOP!',
+            'color:#ef4444;font-size:56px;font-weight:900;-webkit-text-stroke:2px #7f1d1d;'
+          );
+          console.log(
+            '%cTo jest funkcja przeglądarki przeznaczona dla deweloperów.\n' +
+            'Jeśli ktoś kazał Ci tu coś wkleić aby uzyskać dostęp do Cordyn lub "zhackować" konto — to OSZUSTWO.\n' +
+            'Wklejenie czegokolwiek tutaj może dać atakującemu pełny dostęp do Twojego konta.',
+            'color:#fbbf24;font-size:14px;font-weight:600;line-height:1.6;'
+          );
+        } catch(e) {}
+
+        // ── 4. DevTools size detection — redirect/blank on open ────────
+        var _devtoolsOpen = false;
+        var _threshold = 160;
+        function _checkDevTools() {
+          var widthDiff  = window.outerWidth  - window.innerWidth;
+          var heightDiff = window.outerHeight - window.innerHeight;
+          if (widthDiff > _threshold || heightDiff > _threshold) {
+            if (!_devtoolsOpen) {
+              _devtoolsOpen = true;
+              // Clear console on every open
+              try { console.clear(); } catch(e){}
+              try {
+                console.log(
+                  '%cSTOP!',
+                  'color:#ef4444;font-size:56px;font-weight:900;'
+                );
+                console.log(
+                  '%cNieautoryzowany dostęp do narzędzi deweloperskich jest monitorowany.',
+                  'color:#fbbf24;font-size:14px;font-weight:600;'
+                );
+              } catch(e){}
+            }
+          } else {
+            _devtoolsOpen = false;
+          }
+        }
+        setInterval(_checkDevTools, 1000);
+
+        // ── 5. Debugger trap — pauses anyone who opens Sources tab ─────
+        // Runs every 3 s; effectively stalls debugger stepping.
+        (function _trap() {
+          try { (function(){ try { (function(d){if(('' + d/d).length !== 1 || d % 20 === 0) { (function(){}).constructor('debugger')(); }})(Date.now()); } catch(e){} }()); } catch(e){}
+          setTimeout(_trap, 3000);
+        })();
+
+      })();
+    </script>
     <!-- ── Tauri auto-update: clean stale SW + cache, then navigate fresh ── -->
     <script>
       (function () {
