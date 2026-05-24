@@ -9777,20 +9777,38 @@ export default function App() {
     // Soundboard — play audio for everyone in the channel
     sock.on('soundboard_played', (d: any) => {
       if (!d?.fileUrl) return;
-      const vol = Math.min(2, Math.max(0, (d.volume ?? 100) / 100));
+      // Skip for the sender — they already play locally to avoid double-play
+      if (d.playedBy && d.playedBy === currentUserRef.current?.id) return;
+      const vol       = Math.min(2, Math.max(0, (d.volume ?? 100) / 100));
+      const startSec  = typeof d.start_trim === 'number' ? d.start_trim : 0;
+      const endSec    = typeof d.end_trim   === 'number' && d.end_trim > startSec ? d.end_trim : null;
       if (d.fileUrl?.startsWith?.('builtin:')) {
-        // Synthesize locally — never try to load a builtin: URI as Audio src
         const ctx = playBuiltinAudio(d.fileUrl.replace('builtin:', ''), vol);
         sbPlayingRef.current = { ctx };
       } else {
-        const url = staticUrl(d.fileUrl);
+        const url   = staticUrl(d.fileUrl);
         const audio = new Audio(url);
         audio.volume = vol;
+        // Seek to start once enough data is loaded (setting currentTime before canplay is unreliable)
+        if (startSec > 0) {
+          audio.addEventListener('canplay', () => { audio.currentTime = startSec; }, { once: true });
+        }
+        // Stop at endTrim via timeupdate (more reliable than setTimeout for trim)
+        const stopAt = endSec ?? startSec + 10; // hard 10s max fallback
+        audio.addEventListener('timeupdate', () => {
+          if (audio.currentTime >= stopAt) {
+            audio.pause();
+            audio.currentTime = 0;
+            if (sbPlayingRef.current?.audio === audio) { sbPlayingRef.current = null; setPlayingSound(null); }
+          }
+        });
         audio.play().catch(() => {});
         sbPlayingRef.current = { audio };
       }
-      setPlayingSound(d.soundId ?? d.soundName ?? null);
-      setTimeout(() => setPlayingSound(null), 3000);
+      const soundKey = d.soundId ?? d.soundName ?? null;
+      setPlayingSound(soundKey);
+      const displayMs = endSec ? (endSec - startSec) * 1000 + 400 : 10400;
+      setTimeout(() => setPlayingSound(p => p === soundKey ? null : p), displayMs);
     });
     // Voice channel events (route through voiceHandlerRef for fresh closures)
     sock.on('voice_user_joined', (d: any) => {
@@ -15297,20 +15315,40 @@ export default function App() {
 
                   const playServer = (sound: ServerSound) => {
                     stopCurrentSound();
-                    const url = staticUrl(sound.file_url);
-                    const audio = new Audio(url);
-                    audio.volume = Math.min(2, sound.volume / 100);
-                    if (sound.start_trim > 0) audio.currentTime = sound.start_trim;
+                    const url      = staticUrl(sound.file_url);
+                    const audio    = new Audio(url);
+                    const startSec = typeof sound.start_trim === 'number' ? sound.start_trim : 0;
+                    const endSec   = typeof sound.end_trim   === 'number' && sound.end_trim > startSec
+                                       ? sound.end_trim
+                                       : startSec + 10; // hard 10s max fallback
+                    audio.volume   = Math.min(2, sound.volume / 100);
+                    // Seek after data is available
+                    if (startSec > 0) {
+                      audio.addEventListener('canplay', () => { audio.currentTime = startSec; }, { once: true });
+                    }
+                    // Enforce end trim via timeupdate — reliable regardless of buffering delays
+                    audio.addEventListener('timeupdate', () => {
+                      if (audio.currentTime >= endSec) {
+                        audio.pause();
+                        audio.currentTime = 0;
+                        if (sbPlayingRef.current?.audio === audio) { sbPlayingRef.current = null; setPlayingSound(null); }
+                      }
+                    });
                     audio.play().catch(()=>{});
                     sbPlayingRef.current = { audio };
-                    if (sound.end_trim) {
-                      setTimeout(() => { audio.pause(); audio.currentTime = 0; sbPlayingRef.current = null; setPlayingSound(null); }, (sound.end_trim - sound.start_trim) * 1000);
-                    }
                     setPlayingSound(sound.id);
-                    const dur = ((sound.end_trim ?? 10) - sound.start_trim) * 1000 + 300;
-                    setTimeout(() => setPlayingSound(p => p === sound.id ? null : p), dur);
+                    const displayMs = (endSec - startSec) * 1000 + 400;
+                    setTimeout(() => setPlayingSound(p => p === sound.id ? null : p), displayMs);
                     if (activeCall?.channelId) {
-                      try { getSocket().emit('soundboard_play', { channelId: activeCall.channelId, soundId: sound.id, fileUrl: sound.file_url, soundName: sound.name, volume: sound.volume }); } catch {}
+                      try { getSocket().emit('soundboard_play', {
+                        channelId: activeCall.channelId,
+                        soundId: sound.id,
+                        fileUrl: sound.file_url,
+                        soundName: sound.name,
+                        volume: sound.volume,
+                        start_trim: startSec,
+                        end_trim: endSec,
+                      }); } catch {}
                     }
                   };
 
@@ -15402,8 +15440,10 @@ export default function App() {
                     </button>
                     {/* Soundboard button */}
                     <button onClick={()=>{
-                      setSoundboardOpen(v=>!v);
-                      if (!soundboardOpen && activeCall?.serverId && sbSounds.length === 0) {
+                      const opening = !soundboardOpen;
+                      setSoundboardOpen(opening);
+                      // Always refresh server sounds when opening — picks up newly added sounds
+                      if (opening && activeCall?.serverId) {
                         setSoundsLoading(true);
                         soundsApi.list(activeCall.serverId).then(setSbSounds).catch(()=>{}).finally(()=>setSoundsLoading(false));
                       }

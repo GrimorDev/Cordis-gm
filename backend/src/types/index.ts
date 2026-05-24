@@ -148,7 +148,7 @@ export interface ServerToClientEvents {
   dm_user_typing: (data: { user_id: string; username: string }) => void;
   dm_user_stop_typing: (data: { user_id: string }) => void;
   // Soundboard
-  soundboard_played: (data: { playedBy: string; playedByUsername: string; channelId: string; soundId?: string; fileUrl: string; soundName: string; volume: number }) => void;
+  soundboard_played: (data: { playedBy: string; playedByUsername: string; channelId: string; soundId?: string; fileUrl: string; soundName: string; volume: number; start_trim: number; end_trim: number | null }) => void;
 }
 
 export interface ClientToServerEvents {
@@ -182,7 +182,7 @@ export interface ClientToServerEvents {
   group_call_leave: (data: { group_id: string }) => void;
   group_call_dismiss: (data: { group_id: string }) => void;
   // Soundboard
-  soundboard_play: (data: { channelId: string; soundId?: string; fileUrl: string; soundName: string; volume?: number }) => void;
+  soundboard_play: (data: { channelId: string; soundId?: string; fileUrl: string; soundName: string; volume?: number; start_trim?: number; end_trim?: number | null }) => void;
 }
 
 export interface MessageWithSender extends Message {

@@ -344,8 +344,8 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
     // ── Soundboard play ──────────────────────────────────────────────
     // Client emits: { channelId, soundId?, fileUrl, soundName, volume }
     // We broadcast to everyone in the voice room (including sender so they hear it too)
-    socket.on('soundboard_play', async ({ channelId, soundId, fileUrl, soundName, volume }: {
-      channelId: string; soundId?: string; fileUrl: string; soundName: string; volume?: number;
+    socket.on('soundboard_play', async ({ channelId, soundId, fileUrl, soundName, volume, start_trim, end_trim }: {
+      channelId: string; soundId?: string; fileUrl: string; soundName: string; volume?: number; start_trim?: number; end_trim?: number | null;
     }) => {
       if (!channelId || !fileUrl) return;
       io.to(`voice:${channelId}`).emit('soundboard_played', {
@@ -356,6 +356,8 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
         fileUrl,
         soundName,
         volume: volume ?? 100,
+        start_trim: start_trim ?? 0,
+        end_trim: end_trim ?? null,
       });
     });
 
