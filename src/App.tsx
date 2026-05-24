@@ -24,7 +24,7 @@ import {
   Bookmark, BookmarkCheck, Timer, Square, ImageIcon, Moon,
   Keyboard, Radio, Compass, CalendarPlus, Mic2, HelpCircle,
   Home, BookOpen, TrendingUp, Layers, SmilePlus, Smartphone,
-  Clipboard, ScanLine, RefreshCw,
+  Clipboard, ScanLine, RefreshCw, ShieldBan, Ban,
   type LucideIcon
 } from 'lucide-react';
 import {
@@ -8261,6 +8261,7 @@ export default function App() {
   const [draftKeys, setDraftKeys] = useState<Set<string>>(new Set()); // tracks channels with unsaved drafts
   const [showPowerModal, setShowPowerModal]   = useState(false);
   const [srvContextMenu, setSrvContextMenu]   = useState<{ x: number; y: number; srv: ServerData } | null>(null);
+  const [memberCtxMenu, setMemberCtxMenu]     = useState<{ x: number; y: number; member: any } | null>(null);
   const [deleteSrvConfirm, setDeleteSrvConfirm] = useState<{ id: string; name: string } | null>(null);
   const [dmCtxMenu, setDmCtxMenu] = useState<{ x: number; y: number; dm: typeof dmConvs[0] } | null>(null);
   const [groupCtxMenu, setGroupCtxMenu] = useState<{ x: number; y: number; gc: GroupDmConversation } | null>(null);
@@ -18531,7 +18532,7 @@ export default function App() {
               const mTwitch = userTwitchActivities.get(m.id);
               const mSteam = userSteamActivities.get(m.id);
               return (
-                <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl relative overflow-hidden transition-all duration-150 hover:bg-white/[0.055] border border-transparent hover:border-white/[0.05]" onClick={e=>opacity?showHoverCard(m.id,e):showHoverCard(m.id,e)}>
+                <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl relative overflow-hidden transition-all duration-150 hover:bg-white/[0.055] border border-transparent hover:border-white/[0.05]" onClick={e=>opacity?showHoverCard(m.id,e):showHoverCard(m.id,e)} onContextMenu={e=>{e.preventDefault();const menuH=m.id===currentUser?.id?200:canKickMembers||canBanMembers||canManageRoles?370:260;const y=Math.min(e.clientY,window.innerHeight-menuH-8);setMemberCtxMenu({x:Math.min(e.clientX,window.innerWidth-230),y,member:m});}}>
                   {m.banner_preset && m.banner_preset !== 'none' && !opacity && (
                     <div className={`bp-banner bp-${m.banner_preset}`} aria-hidden="true"/>
                   )}
@@ -19299,6 +19300,86 @@ export default function App() {
                 ? btn(<ShieldOff size={13} className="shrink-0"/>,'Zablokuj', () => handleBlockUser(dm.other_user_id, dm.other_username), true)
                 : btn(<Shield size={13} className="shrink-0"/>,'Odblokuj', () => handleUnblockUser(dm.other_user_id, dm.other_username))}
               {btn(<X size={13} className="shrink-0"/>,'Zamknij rozmowę', () => setDmConvs(p => p.filter(d => d.id !== dm.id)), true)}
+            </motion.div>
+          </>
+        );
+      })()}
+
+      {/* ── Member list right-click context menu */}
+      {memberCtxMenu&&(()=>{
+        const m = memberCtxMenu.member;
+        const isSelf = m.id === currentUser?.id;
+        const isOwnerOfServer = m.id === serverFull?.owner_id;
+        const isFriend = friends.some((f: any) => f.id === m.id);
+        const friendEntry = friends.find((f: any) => f.id === m.id) as any;
+        const isPendingOut = friendReqs.some((r: any) => r.id === m.id && r.direction === 'outgoing');
+        const isBlocked = blockedUsers.has(m.id);
+        const canTarget = !isSelf && !isOwnerOfServer;
+        const close = () => setMemberCtxMenu(null);
+        const sep = <div className="mx-3 my-1 h-px bg-white/[0.06]"/>;
+        const btn = (icon: React.ReactNode, label: string, action: ()=>void, danger = false, dimmed = false) => (
+          <button onClick={()=>{ action(); close(); }}
+            className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-sm transition-colors text-left ${danger?'text-rose-400 hover:bg-rose-500/10':dimmed?'text-zinc-500 hover:bg-white/[0.04] cursor-default':'text-zinc-300 hover:bg-white/[0.06] hover:text-white'}`}>
+            {icon}<span className="flex-1 leading-tight">{label}</span>
+          </button>
+        );
+        return (
+          <>
+            <div className="fixed inset-0 z-[90]" onClick={close} onContextMenu={e=>{e.preventDefault();close();}}/>
+            <motion.div initial={{opacity:0,scale:0.95,y:-4}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.95}}
+              transition={{duration:0.12,ease:[0.22,1,0.36,1]}}
+              style={{position:'fixed',left:memberCtxMenu.x,top:memberCtxMenu.y,backdropFilter:'blur(14px)'}}
+              className="z-[91] bg-[#0e0e1c]/95 border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/70 py-1.5 min-w-[220px] overflow-hidden">
+              {/* User header */}
+              <div className="flex items-center gap-2.5 px-3.5 pt-2 pb-2.5">
+                <div className="relative shrink-0">
+                  <img src={ava(m)} className="w-8 h-8 rounded-xl object-cover" alt=""/>
+                  <StatusBadge status={m.status||'offline'} size={9} className="absolute -bottom-0.5 -right-0.5"/>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-semibold text-white truncate leading-tight">{maskName(m.username)}</p>
+                  {m.role_name&&<p className="text-[11px] text-zinc-500 truncate leading-tight">{m.role_name}</p>}
+                </div>
+                {isOwnerOfServer&&<Crown size={12} className="text-amber-400 shrink-0"/>}
+                {m.is_bot&&<span className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-violet-500/40 text-violet-400 bg-violet-500/10 leading-none select-none shrink-0">BOT</span>}
+              </div>
+              {sep}
+
+              {/* Always visible */}
+              {btn(<User size={13} className="text-zinc-500 shrink-0"/>,'Profil', ()=>openProfilePage(m.id))}
+              {!isSelf&&!m.is_bot&&btn(<MessageCircle size={13} className="text-zinc-500 shrink-0"/>,'Wyślij wiadomość', ()=>openDm(m.id))}
+              {!isSelf&&activeChannel&&btn(<AtSign size={13} className="text-zinc-500 shrink-0"/>,'Wspomnij na kanale', ()=>{
+                const el = msgInputRef.current;
+                if(el){const pos=el.selectionStart??msgInput.length;const ins=`@${m.username} `;setMsgInput(msgInput.slice(0,pos)+ins+msgInput.slice(pos));setTimeout(()=>{el.focus();el.setSelectionRange(pos+ins.length,pos+ins.length);},10);}
+              })}
+
+              {/* Friends */}
+              {!isSelf&&!m.is_bot&&sep}
+              {!isSelf&&!m.is_bot&&!isFriend&&!isPendingOut&&btn(<UserPlus size={13} className="text-zinc-500 shrink-0"/>,'Dodaj do znajomych', async()=>{
+                try{await friendsApi.sendRequest(m.username);addToast('Prośba o znajomość wysłana','success');}catch(e:any){addToast(e?.message||'Błąd','error');}
+              })}
+              {!isSelf&&!m.is_bot&&!isFriend&&isPendingOut&&btn(<UserPlus size={13} className="text-zinc-500 shrink-0"/>,'Prośba wysłana…', ()=>{}, false, true)}
+              {!isSelf&&!m.is_bot&&isFriend&&btn(<UserMinus size={13} className="text-zinc-500 shrink-0"/>,'Usuń ze znajomych', ()=>{if(friendEntry?.friendship_id)handleRemoveFriend(friendEntry.friendship_id,m.username);})}
+
+              {/* Copy ID */}
+              {sep}
+              {btn(<Copy size={13} className="text-zinc-500 shrink-0"/>,'Kopiuj ID użytkownika', ()=>{ navigator.clipboard.writeText(m.id); addToast('ID skopiowane','success'); })}
+
+              {/* Moderation */}
+              {canTarget&&(canManageRoles||canKickMembers||canBanMembers)&&(
+                <>
+                  {sep}
+                  <p className="px-3.5 pt-1 pb-0.5 text-[10px] font-semibold text-zinc-600 uppercase tracking-wider">Moderacja</p>
+                  {canManageRoles&&btn(<Shield size={13} className="text-indigo-400 shrink-0"/>,'Zarządzaj rolami', ()=>{ setSrvSettTab('members'); setSrvSettOpen(true); })}
+                  {canKickMembers&&btn(<LogOut size={13} className="text-amber-400 shrink-0"/>,'Wyrzuć z serwera', ()=>handleKick(m.id))}
+                  {canBanMembers&&btn(<ShieldBan size={13} className="shrink-0"/>,'Zbanuj użytkownika', ()=>handleBan(m.id,m.username), true)}
+                </>
+              )}
+
+              {/* Block */}
+              {!isSelf&&sep}
+              {!isSelf&&!isBlocked&&btn(<Ban size={13} className="shrink-0"/>,'Zablokuj', ()=>handleBlockUser(m.id,m.username,m.avatar_url??null), true)}
+              {!isSelf&&isBlocked&&btn(<ShieldCheck size={13} className="text-zinc-500 shrink-0"/>,'Odblokuj', ()=>handleUnblockUser(m.id,m.username))}
             </motion.div>
           </>
         );
