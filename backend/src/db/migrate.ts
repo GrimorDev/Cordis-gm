@@ -1017,6 +1017,22 @@ export async function runMigrations(): Promise<void> {
   try {
     console.log('Running database migrations...');
     await client.query(SCHEMA_SQL);
+    // ── Incremental migrations (safe to run every startup) ──────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS server_sounds (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        server_id   UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+        name        VARCHAR(100) NOT NULL,
+        emoji       VARCHAR(20)  DEFAULT '🔊',
+        file_url    TEXT NOT NULL,
+        volume      INTEGER DEFAULT 100 CHECK (volume BETWEEN 1 AND 200),
+        start_trim  FLOAT DEFAULT 0,
+        end_trim    FLOAT,
+        added_by    UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at  TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_server_sounds_server ON server_sounds(server_id);
+    `).catch(err => console.warn('[migrate] server_sounds:', err.message));
     // Prune old service checks (keep 100 days)
     await client.query(`DELETE FROM service_checks WHERE checked_at < NOW() - INTERVAL '100 days'`).catch(() => {});
     await client.query(SEED_SQL);

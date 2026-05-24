@@ -16,7 +16,7 @@ import {
   Clock, Pin, PinOff, Activity, AtSign, BadgeCheck, Crown, LayoutDashboard,
   Code2, FlaskConical, ShieldCheck, Hammer, Award, CalendarDays, Quote,
   GripVertical, BarChart2, Server, Database,
-  Music, Gamepad2, ExternalLink, Link2, Link2Off, Film, PhoneIncoming, PhoneMissed, Download, Monitor, Copy,
+  Music, Music2, Gamepad2, ExternalLink, Link2, Link2Off, Film, PhoneIncoming, PhoneMissed, Download, Monitor, Copy,
   Bot, Play, Pause, SkipForward, ListMusic, Package, Slash, Palette,
   Star, Flame, Trophy, Rocket, Gem, Swords, Heart,
   FileAudio, FileVideo, FileCode2, FileArchive, FileImage, File as FileIcon, ChevronUp,
@@ -2965,6 +2965,15 @@ function EmojiTab({ serverId, initialEmojis, canManage, gi }: {
 }
 
 // ─── Sounds Tab ──────────────────────────────────────────────────────────────
+const SB_EMOJI_PICKER = [
+  '🔊','🎵','🎶','🎸','🥁','🎺','🎻','🎹','📯','🎷',
+  '😂','😎','🤣','😱','🤯','😤','🤩','😍','🥳','😡',
+  '👏','🙌','🤝','👋','✌️','🤙','👍','👎','🫡','💪',
+  '🦆','🐸','🐱','🐶','🦊','🐻','🐼','🐧','🦁','🐯',
+  '🔥','💥','⚡','❄️','💨','🌊','🌀','🌈','✨','💫',
+  '🚀','🛸','💣','🎯','🏆','🎃','🎄','🎆','🎇','🤡',
+];
+
 function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: boolean; gi: string }) {
   const [sounds, setSounds]       = React.useState<ServerSound[]>([]);
   const [loading, setLoading]     = React.useState(true);
@@ -2972,6 +2981,7 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
   const [file, setFile]           = React.useState<File|null>(null);
   const [name, setName]           = React.useState('');
   const [emoji, setEmoji]         = React.useState('🔊');
+  const [emojiPickerOpen, setEmojiPickerOpen] = React.useState(false);
   const [volume, setVolume]       = React.useState(100);
   const [startTrim, setStartTrim] = React.useState(0);
   const [endTrim, setEndTrim]     = React.useState<number|null>(null);
@@ -3012,7 +3022,7 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
       const newSound = await soundsApi.upload(serverId, fd);
       setSounds(p => [...p, newSound]);
       setUploadOpen(false);
-      setFile(null); setName(''); setEmoji('🔊'); setVolume(100); setStartTrim(0); setEndTrim(null); setPreviewUrl(null);
+      setFile(null); setName(''); setEmoji('🔊'); setVolume(100); setStartTrim(0); setEndTrim(null); setPreviewUrl(null); setEmojiPickerOpen(false);
     } catch (e: any) { alert(e?.message || 'Błąd przesyłania'); }
     finally { setSaving(false); }
   };
@@ -3112,10 +3122,31 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
 
             {/* Name + emoji */}
             <div className="flex gap-3 mb-3">
-              <div className="w-16">
+              <div className="w-16 relative">
                 <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1 block font-bold">Emoji</label>
-                <input value={emoji} onChange={e=>setEmoji(e.target.value.slice(0,4))} maxLength={4}
-                  className={`${gi} w-full text-center text-xl rounded-xl px-2 py-2 border-white/[0.08] text-white`}/>
+                <button type="button" onClick={()=>setEmojiPickerOpen(v=>!v)}
+                  className={`${gi} w-full text-center text-xl rounded-xl px-2 py-2 border border-white/[0.08] text-white hover:border-indigo-500/40 transition-colors`}>
+                  {emoji}
+                </button>
+                {emojiPickerOpen && (
+                  <div className="absolute left-0 top-full mt-1 z-50 w-64 bg-[#1a1a2e] border border-white/[0.12] rounded-2xl shadow-2xl p-2">
+                    <div className="grid grid-cols-10 gap-0.5">
+                      {SB_EMOJI_PICKER.map(e => (
+                        <button key={e} type="button" onClick={()=>{ setEmoji(e); setEmojiPickerOpen(false); }}
+                          className={`text-xl rounded-lg p-1 hover:bg-white/10 transition-colors leading-none ${emoji===e?'bg-indigo-500/30':''}`}>
+                          {e}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex gap-1 mt-2 pt-2 border-t border-white/[0.06]">
+                      <input value={emoji} onChange={e=>setEmoji(e.target.value.slice(0,4))} maxLength={4}
+                        placeholder="lub wpisz..."
+                        className="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-2 py-1 text-sm text-white text-center placeholder-zinc-600 outline-none focus:border-indigo-500/40"/>
+                      <button type="button" onClick={()=>setEmojiPickerOpen(false)}
+                        className="px-2 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-zinc-400 text-xs">OK</button>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="flex-1">
                 <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1 block font-bold">Nazwa dźwięku *</label>
@@ -7798,6 +7829,125 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
 // Detect /join/:code in URL (evaluated once on module load)
 const _inviteCodeFromUrl = (() => { const m = window.location.pathname.match(/^\/join\/([a-f0-9]+)$/i); return m ? m[1] : null; })();
 
+/** Synthesize a built-in soundboard sound via Web Audio API.
+ *  Pure function — no React state. Returns an AudioContext so caller can close it to stop. */
+function playBuiltinAudio(id: string, vol = 1.0): AudioContext {
+  const c = new AudioContext();
+  const master = c.createGain();
+  master.gain.value = vol;
+  master.connect(c.destination);
+  const t = c.currentTime;
+
+  if (id === 'sb_quack') {
+    // Duck quack: sawtooth + lowpass filter, frequency scoop
+    const osc = c.createOscillator();
+    const filt = c.createBiquadFilter();
+    filt.type = 'lowpass'; filt.frequency.value = 1800; filt.Q.value = 8;
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(500, t);
+    osc.frequency.exponentialRampToValueAtTime(260, t + 0.08);
+    osc.frequency.exponentialRampToValueAtTime(420, t + 0.14);
+    osc.frequency.exponentialRampToValueAtTime(260, t + 0.22);
+    const env = c.createGain();
+    env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(0.5, t + 0.01);
+    env.gain.setValueAtTime(0.5, t + 0.18); env.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+    osc.connect(filt); filt.connect(env); env.connect(master);
+    osc.start(t); osc.stop(t + 0.28);
+  } else if (id === 'sb_airhorn') {
+    // Air horn: multiple detuned sawtooth with long sustain
+    [220, 277, 330, 415].forEach((freq, i) => {
+      const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = freq;
+      const g = c.createGain();
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.18, t + 0.05);
+      g.gain.setValueAtTime(0.18, t + 1.1); g.gain.exponentialRampToValueAtTime(0.001, t + 1.4);
+      o.connect(g); g.connect(master); o.start(t + i * 0.015); o.stop(t + 1.5);
+    });
+    // Distortion layer
+    const wave = c.createOscillator(); wave.type = 'sawtooth'; wave.frequency.value = 110;
+    const wg = c.createGain(); wg.gain.setValueAtTime(0.06, t); wg.gain.exponentialRampToValueAtTime(0.001, t + 1.3);
+    wave.connect(wg); wg.connect(master); wave.start(t); wave.stop(t + 1.5);
+  } else if (id === 'sb_cricket') {
+    // Cricket chirp: rapid oscillator bursts
+    for (let i = 0; i < 40; i++) {
+      const o = c.createOscillator(); o.type = 'square'; o.frequency.value = 3800 + (i % 3) * 200;
+      const g = c.createGain(); const st = t + i * 0.04;
+      g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(0.06, st + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.001, st + 0.035);
+      o.connect(g); g.connect(master); o.start(st); o.stop(st + 0.04);
+    }
+  } else if (id === 'sb_clap') {
+    // Layered noise clap: 3 bursts
+    [0, 0.02, 0.04].forEach(delay => {
+      const buf = c.createBuffer(1, c.sampleRate * 0.15, c.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (c.sampleRate * 0.04));
+      const src = c.createBufferSource(); src.buffer = buf;
+      const filt = c.createBiquadFilter(); filt.type = 'bandpass'; filt.frequency.value = 1200; filt.Q.value = 0.8;
+      const g = c.createGain(); g.gain.value = 0.6;
+      src.connect(filt); filt.connect(g); g.connect(master); src.start(t + delay);
+    });
+  } else if (id === 'sb_badum') {
+    // Ba-dum-tss drum fill
+    // Bass drum × 2 + snare + cymbal
+    const kick = (time: number, freq: number) => {
+      const o = c.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(freq * 2, time); o.frequency.exponentialRampToValueAtTime(freq * 0.5, time + 0.1);
+      const g = c.createGain(); g.gain.setValueAtTime(0.9, time); g.gain.exponentialRampToValueAtTime(0.001, time + 0.25);
+      o.connect(g); g.connect(master); o.start(time); o.stop(time + 0.3);
+    };
+    kick(t, 60); kick(t + 0.35, 60);
+    // Snare
+    const snBuf = c.createBuffer(1, c.sampleRate * 0.15, c.sampleRate);
+    const snD = snBuf.getChannelData(0);
+    for (let i = 0; i < snD.length; i++) snD[i] = (Math.random() * 2 - 1) * Math.exp(-i / (c.sampleRate * 0.05));
+    const sn = c.createBufferSource(); sn.buffer = snBuf;
+    const snG = c.createGain(); snG.gain.value = 0.5;
+    sn.connect(snG); snG.connect(master); sn.start(t + 0.7);
+    // Hi-hat (cymbal)
+    const cymBuf = c.createBuffer(1, c.sampleRate * 0.4, c.sampleRate);
+    const cymD = cymBuf.getChannelData(0);
+    for (let i = 0; i < cymD.length; i++) cymD[i] = (Math.random() * 2 - 1) * Math.exp(-i / (c.sampleRate * 0.12));
+    const cym = c.createBufferSource(); cym.buffer = cymBuf;
+    const cymFilt = c.createBiquadFilter(); cymFilt.type = 'highpass'; cymFilt.frequency.value = 7000;
+    const cymG = c.createGain(); cymG.gain.value = 0.3;
+    cym.connect(cymFilt); cymFilt.connect(cymG); cymG.connect(master); cym.start(t + 0.78);
+  } else if (id === 'sb_bruh') {
+    // Bruh sound: low formant vowel-like synthesis
+    const osc1 = c.createOscillator(); osc1.type = 'sawtooth'; osc1.frequency.value = 100;
+    const osc2 = c.createOscillator(); osc2.type = 'sawtooth'; osc2.frequency.value = 102; // slight detune
+    const filt = c.createBiquadFilter(); filt.type = 'bandpass'; filt.frequency.value = 700; filt.Q.value = 3;
+    filt.frequency.setValueAtTime(700, t); filt.frequency.linearRampToValueAtTime(400, t + 0.4);
+    const env = c.createGain();
+    env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(0.35, t + 0.05);
+    env.gain.setValueAtTime(0.35, t + 0.45); env.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+    [osc1, osc2].forEach(o => { o.connect(filt); });
+    filt.connect(env); env.connect(master);
+    osc1.start(t); osc1.stop(t + 0.75);
+    osc2.start(t); osc2.stop(t + 0.75);
+  } else if (id === 'sb_ding') {
+    // Bell/ding: sine with 2nd harmonic decay
+    [[880, 0.4], [1760, 0.15], [2640, 0.06]].forEach(([freq, amp]) => {
+      const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = freq;
+      const g = c.createGain();
+      g.gain.setValueAtTime(amp, t); g.gain.exponentialRampToValueAtTime(0.001, t + 1.8);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t + 1.9);
+    });
+  } else if (id === 'sb_whoosh') {
+    // Whoosh: noise with rising bandpass sweep
+    const buf = c.createBuffer(1, c.sampleRate * 0.6, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1);
+    const src = c.createBufferSource(); src.buffer = buf;
+    const filt = c.createBiquadFilter(); filt.type = 'bandpass'; filt.Q.value = 1.5;
+    filt.frequency.setValueAtTime(150, t); filt.frequency.exponentialRampToValueAtTime(5000, t + 0.5);
+    const env = c.createGain();
+    env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(0.5, t + 0.08);
+    env.gain.setValueAtTime(0.5, t + 0.42); env.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+    src.connect(filt); filt.connect(env); env.connect(master); src.start(t);
+  }
+  return c;
+}
+
 export default function App() {
   // OS detection + download URLs (used in the app header download button)
   const userOs: 'windows' | 'macos' | 'other' = React.useMemo(() => {
@@ -8394,6 +8544,8 @@ export default function App() {
   const [sbUploadSaving,    setSbUploadSaving]    = useState(false);
   const [sbUploadPreviewUrl,setSbUploadPreviewUrl]= useState<string|null>(null);
   const sbUploadAudioRef                          = useRef<HTMLAudioElement|null>(null);
+  // Tracks the currently playing soundboard sound so it can be stopped
+  const sbPlayingRef = useRef<{ audio?: HTMLAudioElement; ctx?: AudioContext } | null>(null);
 
   // App Settings
   const [appSettOpen, setAppSettOpen]         = useState(false);
@@ -9478,11 +9630,18 @@ export default function App() {
     // Soundboard — play audio for everyone in the channel
     sock.on('soundboard_played', (d: any) => {
       if (!d?.fileUrl) return;
-      const url = staticUrl(d.fileUrl);
       const vol = Math.min(2, Math.max(0, (d.volume ?? 100) / 100));
-      const audio = new Audio(url);
-      audio.volume = vol;
-      audio.play().catch(() => {});
+      if (d.fileUrl?.startsWith?.('builtin:')) {
+        // Synthesize locally — never try to load a builtin: URI as Audio src
+        const ctx = playBuiltinAudio(d.fileUrl.replace('builtin:', ''), vol);
+        sbPlayingRef.current = { ctx };
+      } else {
+        const url = staticUrl(d.fileUrl);
+        const audio = new Audio(url);
+        audio.volume = vol;
+        audio.play().catch(() => {});
+        sbPlayingRef.current = { audio };
+      }
       setPlayingSound(d.soundId ?? d.soundName ?? null);
       setTimeout(() => setPlayingSound(null), 3000);
     });
@@ -14943,93 +15102,109 @@ export default function App() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-                {/* ── Soundboard panel ─────────────────────────────── */}
+                {/* ── Soundboard panel — absolute overlay, does NOT push content ── */}
                 {soundboardOpen && (()=>{
-                  // 8 built-in Cordyn sounds (synthesized via Web Audio)
                   const BUILTIN_SOUNDS = [
-                    { id:'sb_quack',    name:'Kwak',     emoji:'🦆' },
-                    { id:'sb_airhorn',  name:'Klakson',  emoji:'📯' },
-                    { id:'sb_cricket',  name:'Cykady',   emoji:'🦗' },
-                    { id:'sb_clap',     name:'Oklaski',  emoji:'👏' },
-                    { id:'sb_badum',    name:'Ba dum',   emoji:'🥁' },
-                    { id:'sb_bruh',     name:'Bruh',     emoji:'😐' },
-                    { id:'sb_ding',     name:'Ding',     emoji:'🔔' },
-                    { id:'sb_whoosh',   name:'Whoosh',   emoji:'💨' },
+                    { id:'sb_quack',   name:'Kwak',    emoji:'🦆' },
+                    { id:'sb_airhorn', name:'Klakson', emoji:'📯' },
+                    { id:'sb_cricket', name:'Cykady',  emoji:'🦗' },
+                    { id:'sb_clap',    name:'Oklaski', emoji:'👏' },
+                    { id:'sb_badum',   name:'Ba dum',  emoji:'🥁' },
+                    { id:'sb_bruh',    name:'Bruh',    emoji:'😐' },
+                    { id:'sb_ding',    name:'Ding',    emoji:'🔔' },
+                    { id:'sb_whoosh',  name:'Whoosh',  emoji:'💨' },
                   ];
-                  const playBuiltin = (id: string) => {
-                    const c = new AudioContext();
-                    const g = c.createGain();
-                    g.connect(c.destination);
-                    setPlayingSound(id);
-                    setTimeout(()=>setPlayingSound(null), 2000);
-                    if (id==='sb_quack') {
-                      const o=c.createOscillator(); o.type='sawtooth'; o.frequency.setValueAtTime(280,c.currentTime); o.frequency.exponentialRampToValueAtTime(140,c.currentTime+0.18); g.gain.setValueAtTime(0.3,c.currentTime); g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+0.2); o.connect(g); o.start(); o.stop(c.currentTime+0.22);
-                    } else if (id==='sb_airhorn') {
-                      [220,330,440].forEach((f,i)=>{ const o=c.createOscillator(); o.type='sawtooth'; o.frequency.value=f; const gg=c.createGain(); gg.gain.setValueAtTime(0.18,c.currentTime+i*0.01); gg.gain.exponentialRampToValueAtTime(0.001,c.currentTime+1.2); o.connect(gg); gg.connect(c.destination); o.start(c.currentTime+i*0.01); o.stop(c.currentTime+1.2); });
-                    } else if (id==='sb_cricket') {
-                      for(let i=0;i<30;i++){ const o=c.createOscillator(); o.type='square'; o.frequency.value=4200; const gg=c.createGain(); const t=c.currentTime+i*0.05; gg.gain.setValueAtTime(0,t); gg.gain.linearRampToValueAtTime(0.08,t+0.005); gg.gain.exponentialRampToValueAtTime(0.001,t+0.04); o.connect(gg); gg.connect(c.destination); o.start(t); o.stop(t+0.05); }
-                    } else if (id==='sb_clap') {
-                      const buf=c.createBuffer(1,c.sampleRate*0.6,c.sampleRate); const d=buf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/(c.sampleRate*0.08)); const s=c.createBufferSource(); s.buffer=buf; g.gain.value=0.5; s.connect(g); s.start();
-                    } else if (id==='sb_badum') {
-                      [[60,0],[55,0.3],[50,0.6],[200,0.75],[180,0.78],[400,0.79]].forEach(([f,t])=>{ const o=c.createOscillator(); o.type='sine'; o.frequency.value=f; const gg=c.createGain(); gg.gain.setValueAtTime(0.4,c.currentTime+t); gg.gain.exponentialRampToValueAtTime(0.001,c.currentTime+t+0.15); o.connect(gg); gg.connect(c.destination); o.start(c.currentTime+t); o.stop(c.currentTime+t+0.2); });
-                    } else if (id==='sb_bruh') {
-                      const o=c.createOscillator(); o.type='sawtooth'; o.frequency.setValueAtTime(90,c.currentTime); o.frequency.linearRampToValueAtTime(70,c.currentTime+0.5); g.gain.setValueAtTime(0.28,c.currentTime); g.gain.linearRampToValueAtTime(0.001,c.currentTime+0.7); o.connect(g); o.start(); o.stop(c.currentTime+0.75);
-                    } else if (id==='sb_ding') {
-                      const o=c.createOscillator(); o.type='sine'; o.frequency.value=880; g.gain.setValueAtTime(0.4,c.currentTime); g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+1.2); o.connect(g); o.start(); o.stop(c.currentTime+1.3);
-                    } else if (id==='sb_whoosh') {
-                      const buf=c.createBuffer(1,c.sampleRate*0.5,c.sampleRate); const d=buf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*0.6; const s=c.createBufferSource(); s.buffer=buf; const f=c.createBiquadFilter(); f.type='bandpass'; f.frequency.setValueAtTime(200,c.currentTime); f.frequency.exponentialRampToValueAtTime(4000,c.currentTime+0.4); g.gain.setValueAtTime(0.35,c.currentTime); g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+0.5); s.connect(f); f.connect(g); s.start();
+
+                  const stopCurrentSound = () => {
+                    if (sbPlayingRef.current?.audio) {
+                      sbPlayingRef.current.audio.pause();
+                      sbPlayingRef.current.audio.currentTime = 0;
                     }
-                    // Emit socket event for built-in sounds — use synthetic indicator
+                    if (sbPlayingRef.current?.ctx) {
+                      try { sbPlayingRef.current.ctx.close(); } catch {}
+                    }
+                    sbPlayingRef.current = null;
+                    setPlayingSound(null);
+                  };
+
+                  const playBuiltin = (id: string) => {
+                    stopCurrentSound();
+                    const ctx = playBuiltinAudio(id, 1.0);
+                    sbPlayingRef.current = { ctx };
+                    setPlayingSound(id);
+                    // Auto-clear after max sound duration (2s)
+                    setTimeout(() => setPlayingSound(p => p === id ? null : p), 2100);
                     if (activeCall?.channelId) {
                       try { getSocket().emit('soundboard_play', { channelId: activeCall.channelId, soundId: id, fileUrl: `builtin:${id}`, soundName: id, volume: 100 }); } catch {}
                     }
                   };
+
                   const playServer = (sound: ServerSound) => {
+                    stopCurrentSound();
                     const url = staticUrl(sound.file_url);
                     const audio = new Audio(url);
                     audio.volume = Math.min(2, sound.volume / 100);
                     if (sound.start_trim > 0) audio.currentTime = sound.start_trim;
                     audio.play().catch(()=>{});
-                    if (sound.end_trim) { setTimeout(()=>{ audio.pause(); audio.currentTime=0; }, (sound.end_trim - sound.start_trim) * 1000); }
+                    sbPlayingRef.current = { audio };
+                    if (sound.end_trim) {
+                      setTimeout(() => { audio.pause(); audio.currentTime = 0; sbPlayingRef.current = null; setPlayingSound(null); }, (sound.end_trim - sound.start_trim) * 1000);
+                    }
                     setPlayingSound(sound.id);
-                    setTimeout(()=>setPlayingSound(null), ((sound.end_trim??10) - sound.start_trim) * 1000 + 300);
+                    const dur = ((sound.end_trim ?? 10) - sound.start_trim) * 1000 + 300;
+                    setTimeout(() => setPlayingSound(p => p === sound.id ? null : p), dur);
                     if (activeCall?.channelId) {
                       try { getSocket().emit('soundboard_play', { channelId: activeCall.channelId, soundId: sound.id, fileUrl: sound.file_url, soundName: sound.name, volume: sound.volume }); } catch {}
                     }
                   };
+
                   return (
-                    <div className="mx-auto mb-3 w-full max-w-2xl">
-                      <div className="glass-dark rounded-2xl border border-white/[0.1] shadow-2xl p-4">
+                    /* absolute overlay — sits above call content, bottom-aligned above control pill */
+                    <div className="absolute left-4 right-4 bottom-[96px] z-50 pointer-events-none">
+                      <div className="pointer-events-auto glass-dark rounded-2xl border border-white/[0.12] shadow-2xl p-4 max-h-[50vh] overflow-y-auto custom-scrollbar">
                         <div className="flex items-center justify-between mb-3">
-                          <p className="text-xs font-bold text-zinc-300 uppercase tracking-widest">🎵 Soundboard</p>
-                          <button onClick={()=>setSoundboardOpen(false)} className="text-zinc-600 hover:text-zinc-300 transition-colors"><X size={14}/></button>
+                          <div className="flex items-center gap-2">
+                            <Music2 size={13} className="text-zinc-400"/>
+                            <p className="text-xs font-bold text-zinc-300 uppercase tracking-widest">Soundboard</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {playingSound && (
+                              <button onClick={stopCurrentSound}
+                                title="Zatrzymaj dźwięk"
+                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 text-[10px] font-semibold hover:bg-rose-500/30 transition-all">
+                                <Square size={10} className="fill-rose-300"/>
+                                Stop
+                              </button>
+                            )}
+                            <button onClick={()=>setSoundboardOpen(false)} className="text-zinc-600 hover:text-zinc-300 transition-colors p-1"><X size={13}/></button>
+                          </div>
                         </div>
-                        {/* Built-in sounds */}
+                        {/* Built-in Cordyn sounds */}
                         <p className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 font-bold">Cordyn</p>
                         <div className="grid grid-cols-4 gap-1.5 mb-3">
                           {BUILTIN_SOUNDS.map(s=>(
                             <button key={s.id} onClick={()=>playBuiltin(s.id)}
-                              className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all ${playingSound===s.id?'border-indigo-500/60 bg-indigo-500/15 text-white':'border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.07] text-zinc-300'}`}>
-                              <span className="text-lg leading-none">{s.emoji}</span>
-                              <span className="text-xs font-medium truncate">{s.name}</span>
+                              className={`flex items-center gap-2 px-2.5 py-2 rounded-xl border text-left transition-all active:scale-95 ${playingSound===s.id?'border-indigo-500/60 bg-indigo-500/15 text-white':'border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.08] text-zinc-300'}`}>
+                              <span className="text-base leading-none shrink-0">{s.emoji}</span>
+                              <span className="text-[11px] font-medium truncate">{s.name}</span>
                             </button>
                           ))}
                         </div>
-                        {/* Server sounds */}
+                        {/* Server-specific sounds */}
                         {activeCall?.serverId && (
                           <>
                             <p className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 font-bold">Serwer</p>
                             {soundsLoading && <p className="text-xs text-zinc-600 italic text-center py-2">Ładowanie...</p>}
                             {!soundsLoading && sbSounds.length === 0 && (
-                              <p className="text-xs text-zinc-700 italic text-center py-2">Brak własnych dźwięków — dodaj je w ustawieniach serwera</p>
+                              <p className="text-xs text-zinc-700 italic text-center py-2">Brak własnych dźwięków — dodaj w ustawieniach serwera</p>
                             )}
                             {sbSounds.length > 0 && (
-                              <div className="grid grid-cols-3 gap-1.5">
+                              <div className="grid grid-cols-4 gap-1.5">
                                 {sbSounds.map(s=>(
                                   <button key={s.id} onClick={()=>playServer(s)}
-                                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all ${playingSound===s.id?'border-amber-500/60 bg-amber-500/15 text-white':'border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.07] text-zinc-300'}`}>
-                                    <span className="text-lg leading-none">{s.emoji}</span>
-                                    <span className="text-xs font-medium truncate">{s.name}</span>
+                                    className={`flex items-center gap-2 px-2.5 py-2 rounded-xl border text-left transition-all active:scale-95 ${playingSound===s.id?'border-amber-500/60 bg-amber-500/15 text-white':'border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.08] text-zinc-300'}`}>
+                                    <span className="text-base leading-none shrink-0">{s.emoji}</span>
+                                    <span className="text-[11px] font-medium truncate">{s.name}</span>
                                   </button>
                                 ))}
                               </div>
@@ -15078,7 +15253,7 @@ export default function App() {
                       }
                     }} title="Soundboard"
                       className={`call-ctrl-btn ${soundboardOpen?'active-orange':''}`}>
-                      <span className="text-base leading-none">🎵</span>
+                      <Music2 size={18}/>
                     </button>
                     <div className="call-ctrl-divider"/>
                     <button onClick={hangupCall} title="Rozłącz" className="call-ctrl-btn danger">
