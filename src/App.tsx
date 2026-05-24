@@ -18146,7 +18146,7 @@ export default function App() {
                           className={`w-7 h-7 flex items-center justify-center rounded-xl transition-all shrink-0 active:scale-90 ${showFmtBar?'text-indigo-400 bg-indigo-500/10':'text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.07]'}`}>
                           <Edit3 size={14}/>
                         </button>
-                        <textarea ref={msgInputRef} value={msgInput} rows={1}
+                        <textarea ref={msgInputRef} value={msgInput} rows={1} maxLength={2000}
                           onPaste={e=>{
                             const items = Array.from(e.clipboardData?.items ?? []) as DataTransferItem[];
                             const result = extractPasteFile(items);
@@ -18228,7 +18228,13 @@ export default function App() {
                             if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); handleSend(e as any); }
                           }}
                           placeholder={activeView==='dms'&&(activeDm||dmPartnerProfile)?`Wiadomość do ${activeDm?.other_username||dmPartnerProfile?.username||''}...`:`Wiadomość w #${activeCh?.name||''}...`}
-                          className="flex-1 bg-transparent text-[15px] text-zinc-100 placeholder-zinc-500 outline-none min-w-0 resize-none overflow-hidden leading-[1.45] self-center"/>
+                          className="flex-1 bg-transparent text-[15px] text-zinc-100 placeholder-zinc-500 outline-none min-w-0 resize-none overflow-y-auto leading-[1.45] self-center"/>
+                        {/* Character counter */}
+                        {msgInput.length >= 1800 && (
+                          <span className={`shrink-0 text-[11px] font-semibold tabular-nums self-end pb-[3px] ${msgInput.length >= 1900 ? 'text-red-400' : 'text-yellow-400'}`}>
+                            {2000 - msgInput.length}
+                          </span>
+                        )}
                         {/* GIF picker */}
                         <div className="relative shrink-0">
                           <button type="button" onClick={() => { setShowGifPicker(v => !v); setShowEmojiPicker(false); setPlusMenuOpen(false); }}
