@@ -8160,12 +8160,6 @@ export default function App() {
   type GalleryItem = { url: string; isVideo: boolean; date: string; sender: string };
   const [dmGallery, setDmGallery] = useState<{ items: GalleryItem[]; index: number } | null>(null);
 
-  // Voice channel text chat
-  const [voiceChatOpen, setVoiceChatOpen]     = useState(false);
-  const [voiceChatMsgs, setVoiceChatMsgs]     = useState<MessageFull[]>([]);
-  const [voiceChatInput, setVoiceChatInput]   = useState('');
-  const voiceChatEndRef                        = useRef<HTMLDivElement>(null);
-
   const [profileOpen, setProfileOpen]         = useState(false);
   const [selUser, setSelUser]                 = useState<any>(null);
   const [editProf, setEditProf]               = useState<any>(null);
@@ -8842,27 +8836,6 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChannel, activeDmUserId]);
 
-  // Load voice channel messages when chat panel opens + subscribe to socket room
-  useEffect(() => {
-    if (voiceChatOpen && activeCall?.channelId) {
-      joinChannel(activeCall.channelId);
-      messagesApi.list(activeCall.channelId).then(setVoiceChatMsgs).catch(console.error);
-      return () => { leaveChannel(activeCall.channelId!); };
-    } else if (!voiceChatOpen) {
-      setVoiceChatMsgs([]);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [voiceChatOpen, activeCall?.channelId]);
-
-  // Scroll voice chat to bottom on new messages
-  useEffect(() => {
-    voiceChatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [voiceChatMsgs]);
-
-  // Reset voice chat when call ends
-  useEffect(() => {
-    if (!activeCall) { setVoiceChatOpen(false); setVoiceChatMsgs([]); }
-  }, [activeCall]);
 
   // ── Voice RTT stats polling (getStats every 1s) ────────────────────────────
   useEffect(() => {
@@ -9439,10 +9412,6 @@ export default function App() {
       }
       const chId = msg.channel_id;
       const isOwnMsg = msg.sender_id === currentUserRef.current?.id;
-      // Also route to voice chat messages if the call is on this channel
-      if (chId && activeCallRef.current?.channelId === chId) {
-        setVoiceChatMsgs(p => p.some(m => m.id === msg.id) ? p : [...p, msg as MessageFull]);
-      }
       if (chId && chId !== prevChRef.current) {
         // Message in a channel we're not viewing — increment unread count
         setUnreadChs(p => ({ ...p, [chId]: (p[chId] || 0) + 1 }));
@@ -12116,16 +12085,6 @@ export default function App() {
     }, 0);
   };
 
-  // ── Voice channel chat send ──────────────────────────────────────
-  const handleVoiceChatSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const content = voiceChatInput.trim();
-    if (!content || !activeCall?.channelId) return;
-    setVoiceChatInput('');
-    try { await messagesApi.send(activeCall.channelId, content); }
-    catch { setVoiceChatInput(content); }
-  };
-
   // ── Edit message ─────────────────────────────────────────────────
   const startEditMsg = (msg: MessageFull | DmMessageFull) => {
     setEditingMsgId(msg.id);
@@ -14616,12 +14575,7 @@ export default function App() {
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-emerald-400 font-mono px-2.5 py-0.5 rounded-lg font-semibold"
                     style={{background:'rgba(127,217,98,0.10)',border:'1px solid rgba(127,217,98,0.20)'}}>{fmtDur(callDuration)}</span>
-                  {activeCall.type==='voice_channel' && (
-                    <button onClick={()=>setVoiceChatOpen(v=>!v)} title="Czat kanału głosowego"
-                      className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${voiceChatOpen?'bg-indigo-500/30 text-indigo-300':gb}`}>
-                      <MessageSquare size={13}/>
-                    </button>
-                  )}
+
                   {activeCall.type==='voice_channel' && ownSpotify?.connected && (
                     voiceDj[activeCall.channelId] ? (
                       voiceDj[activeCall.channelId]?.id === currentUser?.id ? (
@@ -15049,36 +15003,7 @@ export default function App() {
                   </div>
                 );
               })()}
-              {/* ── Voice channel text chat panel ────────────────────── */}
-              {voiceChatOpen && activeCall.channelId && (
-                <div className="h-64 shrink-0 flex flex-col relative z-10"
-                  style={{borderTop:'1px solid rgba(255,255,255,0.07)',background:'rgba(6,7,14,0.85)',backdropFilter:'blur(12px)'}}>
-                  <div className="flex-1 overflow-y-auto p-3 custom-scrollbar flex flex-col gap-1.5">
-                    {voiceChatMsgs.length === 0 && (
-                      <p className="text-xs text-zinc-600 text-center mt-4">Brak wiadomości — zacznij czat głosowy!</p>
-                    )}
-                    {voiceChatMsgs.map(msg => (
-                      <div key={msg.id} className={`flex gap-2 ${msg.sender_id===currentUser?.id?'flex-row-reverse':''}`}>
-                        <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} className="w-6 h-6 rounded-lg object-cover shrink-0 self-start mt-0.5" alt=""/>
-                        <div className={`max-w-[85%] px-2.5 py-1.5 rounded-xl text-xs msg-md ${msg.sender_id===currentUser?.id?'bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-sm shadow-indigo-500/20':'glass-bubble text-zinc-200'}`}
-                          dangerouslySetInnerHTML={{__html:renderMsgHTML(msg.content)}}/>
-                      </div>
-                    ))}
-                    <div ref={voiceChatEndRef}/>
-                  </div>
-                  <div className="p-2.5 border-t border-white/[0.06] shrink-0">
-                    <form onSubmit={handleVoiceChatSend} className="flex gap-2">
-                      <input value={voiceChatInput} onChange={e=>setVoiceChatInput(e.target.value)}
-                        placeholder={`Wiadomość w #${activeCall.channelName||'kanał'}...`}
-                        className="flex-1 bg-white/[0.07] border border-white/[0.08] rounded-xl px-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-600 outline-none focus:border-indigo-500/40 transition-colors"/>
-                      <button type="submit" disabled={!voiceChatInput.trim()}
-                        className="w-7 h-7 rounded-xl bg-indigo-500 hover:bg-indigo-400 disabled:opacity-30 flex items-center justify-center text-white transition-colors shrink-0 active:scale-90">
-                        <Send size={12}/>
-                      </button>
-                    </form>
-                  </div>
-                </div>
-              )}
+
               {/* Call controls */}
               <div className="shrink-0 relative z-10 pb-5 px-5">
                 {/* Device settings panel */}
