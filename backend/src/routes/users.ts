@@ -76,6 +76,32 @@ router.get('/me/unread-counts', authMiddleware, async (req: AuthRequest, res: Re
   }
 });
 
+// GET /api/users/me/stats
+router.get('/me/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const uid = req.user!.id;
+    const { rows } = await query(
+      `SELECT
+        (SELECT COUNT(*)::int FROM messages    WHERE sender_id=$1 AND content != '__deleted__') AS messages_sent,
+        (SELECT COUNT(*)::int FROM messages    WHERE sender_id=$1 AND content != '__deleted__'
+                                               AND created_at >= NOW() - INTERVAL '30 days')   AS messages_this_month,
+        (SELECT COUNT(*)::int FROM dm_messages WHERE sender_id=$1)                             AS dms_sent,
+        (SELECT COUNT(*)::int FROM server_members WHERE user_id=$1)                            AS servers_joined,
+        (SELECT COUNT(*)::int FROM friends
+          WHERE (requester_id=$1 OR addressee_id=$1) AND status='accepted')                    AS friends_count,
+        (SELECT COUNT(*)::int FROM message_reactions WHERE user_id=$1)                        AS reactions_given,
+        (SELECT COUNT(*)::int FROM message_reactions mr
+          JOIN messages m ON m.id = mr.message_id WHERE m.sender_id=$1)                        AS reactions_received,
+        (SELECT created_at FROM users WHERE id=$1)                                             AS account_created`,
+      [uid]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('GET /me/stats error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/users/:id
 router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {

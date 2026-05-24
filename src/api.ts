@@ -485,6 +485,16 @@ export const users = {
   },
   requestDeletion: () => req<{ message: string }>('POST', '/users/me/request-deletion'),
   confirmDeletion: (code: string) => req<{ message: string }>('DELETE', '/users/me', { code }),
+  getStats: () => req<{
+    messages_sent: number;
+    messages_this_month: number;
+    dms_sent: number;
+    servers_joined: number;
+    friends_count: number;
+    reactions_given: number;
+    reactions_received: number;
+    account_created: string;
+  }>('GET', '/users/me/stats'),
 };
 
 // ── Two-Factor Auth ────────────────────────────────────────────────────────

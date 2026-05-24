@@ -116,8 +116,21 @@ export function TitleBar() {
           Cordyn
         </span>
 
-        {/* Spacer to balance left dots */}
-        <div style={{ width: 42 }} />
+        {/* Changelog button */}
+        <button
+          title="Co nowego"
+          onClick={() => { try { (window as any).__cordynOpenChangelog?.(); } catch {} }}
+          style={{
+            background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 6px',
+            color: '#475569', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
+            WebkitAppRegion: 'no-drag' as CSSProperties['WebkitAppRegion'],
+            transition: 'color 0.15s',
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = '#475569'; }}
+        >
+          CO NOWEGO
+        </button>
       </div>
     );
   }
@@ -188,10 +201,23 @@ export function TitleBar() {
         Cordyn
       </span>
 
-      {/* Window control buttons — not draggable */}
+      {/* Changelog + Window control buttons — not draggable */}
       <div
-        style={{ display: 'flex', WebkitAppRegion: 'no-drag' as CSSProperties['WebkitAppRegion'] }}
+        style={{ display: 'flex', alignItems: 'center', WebkitAppRegion: 'no-drag' as CSSProperties['WebkitAppRegion'] }}
       >
+        <button
+          title="Co nowego"
+          onClick={() => { try { (window as any).__cordynOpenChangelog?.(); } catch {} }}
+          style={{
+            background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 10px',
+            color: '#475569', fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
+            height: 32, transition: 'color 0.15s',
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = '#475569'; }}
+        >
+          CO NOWEGO
+        </button>
         {btn('─', 'Minimize', 'window_minimize', '#1e293b')}
         {btn('□', 'Maximize / Restore', 'window_maximize', '#1e293b')}
         {btn('✕', 'Close', 'window_close', '#7f1d1d')}
