@@ -81,6 +81,7 @@ import {
   playVoiceJoin, playVoiceLeave, playMessageSent, playMentionAlert, playMessageReceived,
   playCallAccepted, playCallEnded,
   playStreamJoin,
+  playScreenShareStart, playScreenShareStop,
 } from './sounds';
 import {
   makePeerConnection, attachRemoteAudio, attachRemoteScreenAudio, detachRemoteAudio,
@@ -12362,6 +12363,7 @@ export default function App() {
       }
       setActiveCall(p => p ? {...p, isScreenSharing: false} : p);
       emitScreenStop();
+      playScreenShareStop();
     } else {
       try {
         // ── Capture screen ────────────────────────────────────────────
@@ -12454,6 +12456,7 @@ export default function App() {
         });
 
         setActiveCall(p => p ? {...p, isScreenSharing: true} : p);
+        playScreenShareStart();
         if (call?.userId)    getSocket().emit('screen_share_start' as any, { to_user_id: call.userId });
         if (call?.channelId) getSocket().emit('screen_share_start' as any, { channel_id: call.channelId });
       } catch { addToast(tl('toast.cannotShareScreen'), 'error'); }
