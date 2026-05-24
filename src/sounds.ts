@@ -128,16 +128,21 @@ export function playVoiceLeave() {
 }
 
 // ── Outgoing call ring ────────────────────────────────────────────────────────
+// Classic telephone ring: two tones mixed (400 + 480 Hz) → characteristic "warble".
+// Pattern: RING-RING … (two bursts of 0.4s, 0.15s apart, then 1.4s silence).
 let ringInterval: ReturnType<typeof setInterval> | null = null;
 export function startRing() {
   stopRing();
+  const burst = (start: number) => {
+    tone(400, 0.38, 0.35, 'sine', start);
+    tone(480, 0.38, 0.28, 'sine', start); // second harmonic — creates the warble
+  };
   const ring = () => {
-    // Classic telephone double-ring — low & warm
-    tone(480, 0.22, 0.25, 'sine', 0);
-    tone(480, 0.22, 0.25, 'sine', 0.35);
+    burst(0);        // first ring
+    burst(0.50);     // second ring (slight gap)
   };
   ring();
-  ringInterval = setInterval(ring, 2000);
+  ringInterval = setInterval(ring, 2300);
 }
 export function stopRing() {
   if (ringInterval) { clearInterval(ringInterval); ringInterval = null; }
@@ -197,17 +202,25 @@ export function playCallEnded() {
 }
 
 // ── Screen share ──────────────────────────────────────────────────────────────
+// Deliberately different from voice join/leave:
+//  • Single continuous glide (not two separate notes)
+//  • Triangle wave (electronic/techy feel, not warm/musical)
+//  • Much shorter (~0.18s total) — sounds like a camera shutter click
 
-/** Screen share started — ascending "on" chime */
+/** Screen share started — fast upward electronic chirp */
 export function playScreenShareStart() {
-  tone(370, 0.12, 0.18, 'sine', 0,    415);
-  tone(494, 0.16, 0.16, 'sine', 0.10, 523);
+  // Low → mid glide: 220 → 680 Hz in 0.17s, triangle wave
+  tone(220, 0.17, 0.24, 'triangle', 0, 680);
+  // Tiny confirmation tick right after
+  tone(680, 0.06, 0.10, 'triangle', 0.16, 700);
 }
 
-/** Screen share stopped — descending "off" chime */
+/** Screen share stopped — fast downward electronic chirp */
 export function playScreenShareStop() {
-  tone(494, 0.12, 0.16, 'sine', 0,    415);
-  tone(370, 0.16, 0.14, 'sine', 0.10, 330);
+  // Mid → low glide: 680 → 220 Hz in 0.17s, triangle wave
+  tone(680, 0.17, 0.22, 'triangle', 0, 220);
+  // Tiny fade-out tick
+  tone(220, 0.06, 0.08, 'triangle', 0.16, 200);
 }
 
 // ── Stream / watch view ────────────────────────────────────────────────────────
