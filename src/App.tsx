@@ -17417,7 +17417,7 @@ export default function App() {
                           )}
 
                           {/* Content column */}
-                          <div className={`flex flex-col min-w-0 ${activeView==='dms'?`max-w-[85%] md:max-w-[72%] ${isOwn?'items-end':'items-start'}`:'flex-1 items-start'}`}>
+                          <div className={`flex flex-col min-w-0 ${activeView==='dms'?`max-w-[85%] md:max-w-[72%] ${isOwn?'items-end':'items-start'}`:'flex-1 min-w-0 overflow-hidden'}`}>
 
                             {/* Meta (name + time) */}
                             {!isGrouped && (
@@ -17620,7 +17620,7 @@ export default function App() {
                                 </div>
                               );
                               return activeView !== 'dms' ? (
-                                <p className={`${msgFontCls} leading-relaxed break-words msg-md text-[#d8d8ec]`} dangerouslySetInnerHTML={{__html: renderMsgHTML(msg.content)}}/>
+                                <p className={`${msgFontCls} leading-relaxed break-words overflow-hidden w-full msg-md text-[#d8d8ec]`} dangerouslySetInnerHTML={{__html: renderMsgHTML(msg.content)}}/>
                               ) : (
                                 <div className={`relative px-4 py-2.5 rounded-2xl max-w-full ${isOwn
                                   ? 'bg-indigo-500/[0.14] border border-indigo-500/20 text-zinc-100 bubble-tail-right'
