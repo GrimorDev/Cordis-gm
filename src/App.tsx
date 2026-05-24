@@ -7976,123 +7976,22 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
 // Detect /join/:code in URL (evaluated once on module load)
 const _inviteCodeFromUrl = (() => { const m = window.location.pathname.match(/^\/join\/([a-f0-9]+)$/i); return m ? m[1] : null; })();
 
-/** Synthesize a built-in soundboard sound via Web Audio API.
- *  Pure function — no React state. Returns an AudioContext so caller can close it to stop. */
-function playBuiltinAudio(id: string, vol = 1.0): AudioContext {
-  const c = new AudioContext();
-  const master = c.createGain();
-  master.gain.value = vol;
-  master.connect(c.destination);
-  const t = c.currentTime;
+/** Built-in Cordyn soundboard sounds — served from /sounds/sb/ */
+const CORDYN_BUILTIN_SOUNDS = [
+  { id: 'sb_claps',  name: 'Oklaski', emoji: '👏', url: '/sounds/sb/claps.wav'  },
+  { id: 'sb_fart',   name: 'Bąk',     emoji: '💨', url: '/sounds/sb/fart.wav'   },
+  { id: 'sb_flute',  name: 'Flet',    emoji: '🎵', url: '/sounds/sb/flute.wav'  },
+  { id: 'sb_kiss',   name: 'Cmok',    emoji: '💋', url: '/sounds/sb/kiss.wav'   },
+  { id: 'sb_retro',  name: 'Retro',   emoji: '👾', url: '/sounds/sb/retro.wav'  },
+  { id: 'sb_ryping', name: 'Pisanie', emoji: '⌨️', url: '/sounds/sb/ryping.wav' },
+] as const;
 
-  if (id === 'sb_quack') {
-    // Duck quack: sawtooth + lowpass filter, frequency scoop
-    const osc = c.createOscillator();
-    const filt = c.createBiquadFilter();
-    filt.type = 'lowpass'; filt.frequency.value = 1800; filt.Q.value = 8;
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(500, t);
-    osc.frequency.exponentialRampToValueAtTime(260, t + 0.08);
-    osc.frequency.exponentialRampToValueAtTime(420, t + 0.14);
-    osc.frequency.exponentialRampToValueAtTime(260, t + 0.22);
-    const env = c.createGain();
-    env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(0.5, t + 0.01);
-    env.gain.setValueAtTime(0.5, t + 0.18); env.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
-    osc.connect(filt); filt.connect(env); env.connect(master);
-    osc.start(t); osc.stop(t + 0.28);
-  } else if (id === 'sb_airhorn') {
-    // Air horn: multiple detuned sawtooth with long sustain
-    [220, 277, 330, 415].forEach((freq, i) => {
-      const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = freq;
-      const g = c.createGain();
-      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.18, t + 0.05);
-      g.gain.setValueAtTime(0.18, t + 1.1); g.gain.exponentialRampToValueAtTime(0.001, t + 1.4);
-      o.connect(g); g.connect(master); o.start(t + i * 0.015); o.stop(t + 1.5);
-    });
-    // Distortion layer
-    const wave = c.createOscillator(); wave.type = 'sawtooth'; wave.frequency.value = 110;
-    const wg = c.createGain(); wg.gain.setValueAtTime(0.06, t); wg.gain.exponentialRampToValueAtTime(0.001, t + 1.3);
-    wave.connect(wg); wg.connect(master); wave.start(t); wave.stop(t + 1.5);
-  } else if (id === 'sb_cricket') {
-    // Cricket chirp: rapid oscillator bursts
-    for (let i = 0; i < 40; i++) {
-      const o = c.createOscillator(); o.type = 'square'; o.frequency.value = 3800 + (i % 3) * 200;
-      const g = c.createGain(); const st = t + i * 0.04;
-      g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(0.06, st + 0.005);
-      g.gain.exponentialRampToValueAtTime(0.001, st + 0.035);
-      o.connect(g); g.connect(master); o.start(st); o.stop(st + 0.04);
-    }
-  } else if (id === 'sb_clap') {
-    // Layered noise clap: 3 bursts
-    [0, 0.02, 0.04].forEach(delay => {
-      const buf = c.createBuffer(1, c.sampleRate * 0.15, c.sampleRate);
-      const d = buf.getChannelData(0);
-      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (c.sampleRate * 0.04));
-      const src = c.createBufferSource(); src.buffer = buf;
-      const filt = c.createBiquadFilter(); filt.type = 'bandpass'; filt.frequency.value = 1200; filt.Q.value = 0.8;
-      const g = c.createGain(); g.gain.value = 0.6;
-      src.connect(filt); filt.connect(g); g.connect(master); src.start(t + delay);
-    });
-  } else if (id === 'sb_badum') {
-    // Ba-dum-tss drum fill
-    // Bass drum × 2 + snare + cymbal
-    const kick = (time: number, freq: number) => {
-      const o = c.createOscillator(); o.type = 'sine';
-      o.frequency.setValueAtTime(freq * 2, time); o.frequency.exponentialRampToValueAtTime(freq * 0.5, time + 0.1);
-      const g = c.createGain(); g.gain.setValueAtTime(0.9, time); g.gain.exponentialRampToValueAtTime(0.001, time + 0.25);
-      o.connect(g); g.connect(master); o.start(time); o.stop(time + 0.3);
-    };
-    kick(t, 60); kick(t + 0.35, 60);
-    // Snare
-    const snBuf = c.createBuffer(1, c.sampleRate * 0.15, c.sampleRate);
-    const snD = snBuf.getChannelData(0);
-    for (let i = 0; i < snD.length; i++) snD[i] = (Math.random() * 2 - 1) * Math.exp(-i / (c.sampleRate * 0.05));
-    const sn = c.createBufferSource(); sn.buffer = snBuf;
-    const snG = c.createGain(); snG.gain.value = 0.5;
-    sn.connect(snG); snG.connect(master); sn.start(t + 0.7);
-    // Hi-hat (cymbal)
-    const cymBuf = c.createBuffer(1, c.sampleRate * 0.4, c.sampleRate);
-    const cymD = cymBuf.getChannelData(0);
-    for (let i = 0; i < cymD.length; i++) cymD[i] = (Math.random() * 2 - 1) * Math.exp(-i / (c.sampleRate * 0.12));
-    const cym = c.createBufferSource(); cym.buffer = cymBuf;
-    const cymFilt = c.createBiquadFilter(); cymFilt.type = 'highpass'; cymFilt.frequency.value = 7000;
-    const cymG = c.createGain(); cymG.gain.value = 0.3;
-    cym.connect(cymFilt); cymFilt.connect(cymG); cymG.connect(master); cym.start(t + 0.78);
-  } else if (id === 'sb_bruh') {
-    // Bruh sound: low formant vowel-like synthesis
-    const osc1 = c.createOscillator(); osc1.type = 'sawtooth'; osc1.frequency.value = 100;
-    const osc2 = c.createOscillator(); osc2.type = 'sawtooth'; osc2.frequency.value = 102; // slight detune
-    const filt = c.createBiquadFilter(); filt.type = 'bandpass'; filt.frequency.value = 700; filt.Q.value = 3;
-    filt.frequency.setValueAtTime(700, t); filt.frequency.linearRampToValueAtTime(400, t + 0.4);
-    const env = c.createGain();
-    env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(0.35, t + 0.05);
-    env.gain.setValueAtTime(0.35, t + 0.45); env.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
-    [osc1, osc2].forEach(o => { o.connect(filt); });
-    filt.connect(env); env.connect(master);
-    osc1.start(t); osc1.stop(t + 0.75);
-    osc2.start(t); osc2.stop(t + 0.75);
-  } else if (id === 'sb_ding') {
-    // Bell/ding: sine with 2nd harmonic decay
-    [[880, 0.4], [1760, 0.15], [2640, 0.06]].forEach(([freq, amp]) => {
-      const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = freq;
-      const g = c.createGain();
-      g.gain.setValueAtTime(amp, t); g.gain.exponentialRampToValueAtTime(0.001, t + 1.8);
-      o.connect(g); g.connect(master); o.start(t); o.stop(t + 1.9);
-    });
-  } else if (id === 'sb_whoosh') {
-    // Whoosh: noise with rising bandpass sweep
-    const buf = c.createBuffer(1, c.sampleRate * 0.6, c.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1);
-    const src = c.createBufferSource(); src.buffer = buf;
-    const filt = c.createBiquadFilter(); filt.type = 'bandpass'; filt.Q.value = 1.5;
-    filt.frequency.setValueAtTime(150, t); filt.frequency.exponentialRampToValueAtTime(5000, t + 0.5);
-    const env = c.createGain();
-    env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(0.5, t + 0.08);
-    env.gain.setValueAtTime(0.5, t + 0.42); env.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
-    src.connect(filt); filt.connect(env); env.connect(master); src.start(t);
-  }
-  return c;
+/** Play a built-in sound from file. Returns the Audio element so caller can stop it. */
+function playBuiltinAudio(url: string, vol = 1.0): HTMLAudioElement {
+  const audio = new Audio(url);
+  audio.volume = Math.min(1, vol);
+  audio.play().catch(() => {});
+  return audio;
 }
 
 export default function App() {
@@ -8679,6 +8578,10 @@ export default function App() {
   const [sbSounds,          setSbSounds]          = useState<ServerSound[]>([]);
   const [soundsLoading,     setSoundsLoading]     = useState(false);
   const [playingSound,      setPlayingSound]      = useState<string|null>(null);
+  // Multi-server soundboard
+  const [sbSelectedServerId, setSbSelectedServerId] = useState<string|null>(null); // null = Cordyn tab
+  const [sbSoundsByServer,   setSbSoundsByServer]   = useState<Record<string, ServerSound[]>>({});
+  const [sbLoadingServer,    setSbLoadingServer]    = useState<string|null>(null);
   // Server settings: sound upload dialog
   const [sbUploadOpen,      setSbUploadOpen]      = useState(false);
   const [sbUploadFile,      setSbUploadFile]      = useState<File|null>(null);
@@ -8692,7 +8595,7 @@ export default function App() {
   const [sbUploadPreviewUrl,setSbUploadPreviewUrl]= useState<string|null>(null);
   const sbUploadAudioRef                          = useRef<HTMLAudioElement|null>(null);
   // Tracks the currently playing soundboard sound so it can be stopped
-  const sbPlayingRef = useRef<{ audio?: HTMLAudioElement; ctx?: AudioContext } | null>(null);
+  const sbPlayingRef = useRef<{ audio: HTMLAudioElement } | null>(null);
 
   // App Settings
   const [appSettOpen, setAppSettOpen]         = useState(false);
@@ -9783,8 +9686,14 @@ export default function App() {
       const startSec  = typeof d.start_trim === 'number' ? d.start_trim : 0;
       const endSec    = typeof d.end_trim   === 'number' && d.end_trim > startSec ? d.end_trim : null;
       if (d.fileUrl?.startsWith?.('builtin:')) {
-        const ctx = playBuiltinAudio(d.fileUrl.replace('builtin:', ''), vol);
-        sbPlayingRef.current = { ctx };
+        // Map legacy builtin: id → real file URL
+        const bid  = d.fileUrl.replace('builtin:', '');
+        const bsnd = CORDYN_BUILTIN_SOUNDS.find(s => s.id === bid);
+        const burl = bsnd?.url ?? null;
+        if (burl) {
+          const audio = playBuiltinAudio(burl, vol);
+          sbPlayingRef.current = { audio };
+        }
       } else {
         const url   = staticUrl(d.fileUrl);
         const audio = new Audio(url);
@@ -12845,9 +12754,6 @@ export default function App() {
     if (sbPlayingRef.current?.audio) {
       try { sbPlayingRef.current.audio.pause(); sbPlayingRef.current.audio.currentTime = 0; } catch {}
     }
-    if (sbPlayingRef.current?.ctx) {
-      try { sbPlayingRef.current.ctx.close(); } catch {}
-    }
     sbPlayingRef.current = null;
     setPlayingSound(null);
     if (activeCall?.channelId) {
@@ -15276,135 +15182,191 @@ export default function App() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-                {/* ── Soundboard panel — absolute overlay, does NOT push content ── */}
+                {/* ── Soundboard panel — absolute overlay ── */}
                 {soundboardOpen && (()=>{
-                  const BUILTIN_SOUNDS = [
-                    { id:'sb_quack',   name:'Kwak',    emoji:'🦆' },
-                    { id:'sb_airhorn', name:'Klakson', emoji:'📯' },
-                    { id:'sb_cricket', name:'Cykady',  emoji:'🦗' },
-                    { id:'sb_clap',    name:'Oklaski', emoji:'👏' },
-                    { id:'sb_badum',   name:'Ba dum',  emoji:'🥁' },
-                    { id:'sb_bruh',    name:'Bruh',    emoji:'😐' },
-                    { id:'sb_ding',    name:'Ding',    emoji:'🔔' },
-                    { id:'sb_whoosh',  name:'Whoosh',  emoji:'💨' },
-                  ];
-
                   const stopCurrentSound = () => {
                     if (sbPlayingRef.current?.audio) {
                       sbPlayingRef.current.audio.pause();
                       sbPlayingRef.current.audio.currentTime = 0;
                     }
-                    if (sbPlayingRef.current?.ctx) {
-                      try { sbPlayingRef.current.ctx.close(); } catch {}
-                    }
                     sbPlayingRef.current = null;
                     setPlayingSound(null);
                   };
 
-                  const playBuiltin = (id: string) => {
+                  const playAudioUrl = (url: string, soundKey: string, vol = 1.0) => {
                     stopCurrentSound();
-                    const ctx = playBuiltinAudio(id, 1.0);
-                    sbPlayingRef.current = { ctx };
-                    setPlayingSound(id);
-                    // Auto-clear after max sound duration (2s)
-                    setTimeout(() => setPlayingSound(p => p === id ? null : p), 2100);
-                    if (activeCall?.channelId) {
-                      try { getSocket().emit('soundboard_play', { channelId: activeCall.channelId, soundId: id, fileUrl: `builtin:${id}`, soundName: id, volume: 100 }); } catch {}
-                    }
-                  };
-
-                  const playServer = (sound: ServerSound) => {
-                    stopCurrentSound();
-                    const url      = staticUrl(sound.file_url);
-                    const audio    = new Audio(url);
-                    const startSec = typeof sound.start_trim === 'number' ? sound.start_trim : 0;
-                    const endSec   = typeof sound.end_trim   === 'number' && sound.end_trim > startSec
-                                       ? sound.end_trim
-                                       : startSec + 10; // hard 10s max fallback
-                    audio.volume   = Math.min(2, sound.volume / 100);
-                    // Seek after data is available
-                    if (startSec > 0) {
-                      audio.addEventListener('canplay', () => { audio.currentTime = startSec; }, { once: true });
-                    }
-                    // Enforce end trim via timeupdate — reliable regardless of buffering delays
-                    audio.addEventListener('timeupdate', () => {
-                      if (audio.currentTime >= endSec) {
-                        audio.pause();
-                        audio.currentTime = 0;
-                        if (sbPlayingRef.current?.audio === audio) { sbPlayingRef.current = null; setPlayingSound(null); }
-                      }
+                    const audio = new Audio(url);
+                    audio.volume = Math.min(1, vol);
+                    audio.addEventListener('ended', () => {
+                      if (sbPlayingRef.current?.audio === audio) { sbPlayingRef.current = null; setPlayingSound(null); }
                     });
                     audio.play().catch(()=>{});
                     sbPlayingRef.current = { audio };
-                    setPlayingSound(sound.id);
-                    const displayMs = (endSec - startSec) * 1000 + 400;
-                    setTimeout(() => setPlayingSound(p => p === sound.id ? null : p), displayMs);
+                    setPlayingSound(soundKey);
+                  };
+
+                  const playBuiltin = (s: typeof CORDYN_BUILTIN_SOUNDS[number]) => {
+                    playAudioUrl(s.url, s.id);
                     if (activeCall?.channelId) {
                       try { getSocket().emit('soundboard_play', {
-                        channelId: activeCall.channelId,
-                        soundId: sound.id,
-                        fileUrl: sound.file_url,
-                        soundName: sound.name,
-                        volume: sound.volume,
-                        start_trim: startSec,
-                        end_trim: endSec,
+                        channelId: activeCall.channelId, soundId: s.id,
+                        fileUrl: s.url, soundName: s.name, volume: 100,
+                        start_trim: 0, end_trim: null,
                       }); } catch {}
                     }
                   };
 
+                  const playServerSound = (sound: ServerSound) => {
+                    const url      = staticUrl(sound.file_url);
+                    const startSec = typeof sound.start_trim === 'number' ? sound.start_trim : 0;
+                    const endSec   = typeof sound.end_trim   === 'number' && sound.end_trim > startSec
+                                       ? sound.end_trim : startSec + 10;
+                    stopCurrentSound();
+                    const audio = new Audio(url);
+                    audio.volume = Math.min(2, sound.volume / 100);
+                    if (startSec > 0) audio.addEventListener('canplay', () => { audio.currentTime = startSec; }, { once: true });
+                    audio.addEventListener('timeupdate', () => {
+                      if (audio.currentTime >= endSec) {
+                        audio.pause(); audio.currentTime = 0;
+                        if (sbPlayingRef.current?.audio === audio) { sbPlayingRef.current = null; setPlayingSound(null); }
+                      }
+                    });
+                    audio.addEventListener('ended', () => {
+                      if (sbPlayingRef.current?.audio === audio) { sbPlayingRef.current = null; setPlayingSound(null); }
+                    });
+                    audio.play().catch(()=>{});
+                    sbPlayingRef.current = { audio };
+                    setPlayingSound(sound.id);
+                    if (activeCall?.channelId) {
+                      try { getSocket().emit('soundboard_play', {
+                        channelId: activeCall.channelId, soundId: sound.id,
+                        fileUrl: sound.file_url, soundName: sound.name, volume: sound.volume,
+                        start_trim: startSec, end_trim: endSec,
+                      }); } catch {}
+                    }
+                  };
+
+                  const loadServerSounds = (srvId: string) => {
+                    if (sbSoundsByServer[srvId] !== undefined) return; // already loaded
+                    setSbLoadingServer(srvId);
+                    soundsApi.list(srvId).then(sounds => {
+                      setSbSoundsByServer(p => ({ ...p, [srvId]: sounds }));
+                    }).catch(() => {
+                      setSbSoundsByServer(p => ({ ...p, [srvId]: [] }));
+                    }).finally(() => setSbLoadingServer(null));
+                  };
+
+                  const selectServer = (srvId: string | null) => {
+                    setSbSelectedServerId(srvId);
+                    if (srvId) loadServerSounds(srvId);
+                  };
+
+                  // Sounds for currently selected tab
+                  const tabSounds: ServerSound[] = sbSelectedServerId
+                    ? (sbSoundsByServer[sbSelectedServerId] ?? [])
+                    : [];
+                  const tabLoading = sbSelectedServerId && sbLoadingServer === sbSelectedServerId;
+
                   return (
-                    /* absolute overlay — sits above call content, bottom-aligned above control pill */
-                    <div className="absolute left-4 right-4 bottom-[96px] z-50 pointer-events-none">
-                      <div className="pointer-events-auto glass-dark rounded-2xl border border-white/[0.12] shadow-2xl p-4 max-h-[50vh] overflow-y-auto custom-scrollbar">
-                        <div className="flex items-center justify-between mb-3">
+                    /* Floating panel — centered above control pill, fixed width */
+                    <div className="absolute bottom-[96px] left-1/2 -translate-x-1/2 z-50 w-[480px] max-w-[calc(100vw-32px)] pointer-events-none">
+                      <div className="pointer-events-auto rounded-2xl border border-white/[0.12] shadow-2xl overflow-hidden"
+                        style={{background:'rgba(10,10,20,0.97)',backdropFilter:'blur(20px)'}}>
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.07]">
                           <div className="flex items-center gap-2">
                             <Music2 size={13} className="text-zinc-400"/>
-                            <p className="text-xs font-bold text-zinc-300 uppercase tracking-widest">Soundboard</p>
+                            <span className="text-[11px] font-bold text-zinc-300 uppercase tracking-widest">Soundboard</span>
                           </div>
                           <div className="flex items-center gap-2">
                             {playingSound && (
                               <button onClick={stopCurrentSound}
-                                title="Zatrzymaj dźwięk"
-                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 text-[10px] font-semibold hover:bg-rose-500/30 transition-all">
-                                <Square size={10} className="fill-rose-300"/>
-                                Stop
+                                className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-500/20 border border-rose-500/40 text-rose-300 text-[10px] font-bold hover:bg-rose-500/30 transition-all">
+                                <Square size={9} className="fill-rose-300"/> Stop
                               </button>
                             )}
-                            <button onClick={()=>setSoundboardOpen(false)} className="text-zinc-600 hover:text-zinc-300 transition-colors p-1"><X size={13}/></button>
+                            <button onClick={()=>setSoundboardOpen(false)} className="text-zinc-600 hover:text-zinc-300 transition-colors p-0.5"><X size={13}/></button>
                           </div>
                         </div>
-                        {/* Built-in Cordyn sounds */}
-                        <p className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 font-bold">Cordyn</p>
-                        <div className="grid grid-cols-4 gap-1.5 mb-3">
-                          {BUILTIN_SOUNDS.map(s=>(
-                            <button key={s.id} onClick={()=>playBuiltin(s.id)}
-                              className={`flex items-center gap-2 px-2.5 py-2 rounded-xl border text-left transition-all active:scale-95 ${playingSound===s.id?'border-indigo-500/60 bg-indigo-500/15 text-white':'border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.08] text-zinc-300'}`}>
-                              <span className="text-base leading-none shrink-0">{s.emoji}</span>
-                              <span className="text-[11px] font-medium truncate">{s.name}</span>
+
+                        {/* Body: left server rail + right sounds */}
+                        <div className="flex" style={{maxHeight:'240px'}}>
+                          {/* Left server selector rail */}
+                          <div className="flex flex-col items-center gap-1.5 py-2 px-1.5 border-r border-white/[0.06] overflow-y-auto custom-scrollbar shrink-0" style={{width:'52px'}}>
+                            {/* Cordyn built-ins tab */}
+                            <button
+                              onClick={()=>selectServer(null)}
+                              title="Cordyn — dźwięki wbudowane"
+                              className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all shrink-0 ${sbSelectedServerId===null?'bg-indigo-600 shadow-lg shadow-indigo-500/30':'bg-white/[0.06] hover:bg-white/[0.1]'}`}>
+                              <Music2 size={16} className={sbSelectedServerId===null?'text-white':'text-zinc-400'}/>
                             </button>
-                          ))}
-                        </div>
-                        {/* Server-specific sounds */}
-                        {activeCall?.serverId && (
-                          <>
-                            <p className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 font-bold">Serwer</p>
-                            {soundsLoading && <p className="text-xs text-zinc-600 italic text-center py-2">Ładowanie...</p>}
-                            {!soundsLoading && sbSounds.length === 0 && (
-                              <p className="text-xs text-zinc-700 italic text-center py-2">Brak własnych dźwięków — dodaj w ustawieniach serwera</p>
-                            )}
-                            {sbSounds.length > 0 && (
-                              <div className="grid grid-cols-4 gap-1.5">
-                                {sbSounds.map(s=>(
-                                  <button key={s.id} onClick={()=>playServer(s)}
-                                    className={`flex items-center gap-2 px-2.5 py-2 rounded-xl border text-left transition-all active:scale-95 ${playingSound===s.id?'border-amber-500/60 bg-amber-500/15 text-white':'border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.08] text-zinc-300'}`}>
+                            {/* Separator */}
+                            <div className="w-6 h-px bg-white/[0.08] shrink-0"/>
+                            {/* Server icons — all servers the user is in */}
+                            {serverList.map(srv => {
+                              const hasSounds = sbSoundsByServer[srv.id]?.length > 0;
+                              const isSelected = sbSelectedServerId === srv.id;
+                              return (
+                                <button key={srv.id}
+                                  onClick={()=>selectServer(srv.id)}
+                                  title={srv.name}
+                                  className={`w-9 h-9 rounded-xl overflow-hidden shrink-0 transition-all relative ${isSelected?'ring-2 ring-indigo-500 ring-offset-1 ring-offset-black/80':'hover:rounded-2xl'}`}>
+                                  {srv.icon_url
+                                    ? <img src={staticUrl(srv.icon_url)} className="w-full h-full object-cover" alt=""/>
+                                    : <div className="w-full h-full bg-indigo-600 flex items-center justify-center text-sm font-bold text-white">{srv.name[0]?.toUpperCase()}</div>
+                                  }
+                                  {/* Green dot if has sounds */}
+                                  {hasSounds && !isSelected && (
+                                    <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-black/80"/>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* Right sounds area */}
+                          <div className="flex-1 overflow-y-auto custom-scrollbar p-3">
+                            {sbSelectedServerId === null ? (
+                              /* Cordyn built-ins */
+                              <div className="grid grid-cols-3 gap-1.5">
+                                {CORDYN_BUILTIN_SOUNDS.map(s => (
+                                  <button key={s.id} onClick={()=>playBuiltin(s)}
+                                    className={`flex items-center gap-2 px-2.5 py-2 rounded-xl border text-left transition-all active:scale-95 ${playingSound===s.id?'border-indigo-500/60 bg-indigo-500/15 text-white':'border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.08] text-zinc-300'}`}>
                                     <span className="text-base leading-none shrink-0">{s.emoji}</span>
                                     <span className="text-[11px] font-medium truncate">{s.name}</span>
                                   </button>
                                 ))}
                               </div>
+                            ) : (
+                              /* Selected server sounds */
+                              <>
+                                {tabLoading && (
+                                  <div className="flex items-center justify-center py-6">
+                                    <Loader2 size={18} className="animate-spin text-zinc-600"/>
+                                  </div>
+                                )}
+                                {!tabLoading && tabSounds.length === 0 && (
+                                  <div className="flex flex-col items-center justify-center py-6 text-zinc-600">
+                                    <Music2 size={20} className="mb-2 opacity-40"/>
+                                    <p className="text-[11px]">Brak dźwięków na tym serwerze</p>
+                                    <p className="text-[10px] mt-0.5 opacity-60">Dodaj je w Ustawieniach serwera</p>
+                                  </div>
+                                )}
+                                {!tabLoading && tabSounds.length > 0 && (
+                                  <div className="grid grid-cols-3 gap-1.5">
+                                    {tabSounds.map(s => (
+                                      <button key={s.id} onClick={()=>playServerSound(s)}
+                                        className={`flex items-center gap-2 px-2.5 py-2 rounded-xl border text-left transition-all active:scale-95 ${playingSound===s.id?'border-amber-500/60 bg-amber-500/15 text-white':'border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.08] text-zinc-300'}`}>
+                                        <span className="text-base leading-none shrink-0">{s.emoji}</span>
+                                        <span className="text-[11px] font-medium truncate">{s.name}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
                             )}
-                          </>
-                        )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   );
@@ -15442,10 +15404,10 @@ export default function App() {
                     <button onClick={()=>{
                       const opening = !soundboardOpen;
                       setSoundboardOpen(opening);
-                      // Always refresh server sounds when opening — picks up newly added sounds
+                      // Pre-load current server's sounds when opening
                       if (opening && activeCall?.serverId) {
-                        setSoundsLoading(true);
-                        soundsApi.list(activeCall.serverId).then(setSbSounds).catch(()=>{}).finally(()=>setSoundsLoading(false));
+                        setSbSelectedServerId(null); // reset to Cordyn tab
+                        setSbSoundsByServer({}); // clear cache so re-opens are fresh
                       }
                     }} title="Soundboard"
                       className={`call-ctrl-btn ${soundboardOpen?'active-orange':''}`}>
