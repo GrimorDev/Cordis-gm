@@ -2973,43 +2973,152 @@ const SB_EMOJI_PICKER = [
   '🔥','💥','⚡','❄️','💨','🌊','🌀','🌈','✨','💫',
   '🚀','🛸','💣','🎯','🏆','🎃','🎄','🎆','🎇','🤡',
 ];
+const SB_MAX_SEC = 10;
 
 function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: boolean; gi: string }) {
-  const [sounds, setSounds]       = React.useState<ServerSound[]>([]);
-  const [loading, setLoading]     = React.useState(true);
+  const [sounds, setSounds]         = React.useState<ServerSound[]>([]);
+  const [loading, setLoading]       = React.useState(true);
   const [uploadOpen, setUploadOpen] = React.useState(false);
-  const [file, setFile]           = React.useState<File|null>(null);
-  const [name, setName]           = React.useState('');
-  const [emoji, setEmoji]         = React.useState('🔊');
+  const [file, setFile]             = React.useState<File|null>(null);
+  const [name, setName]             = React.useState('');
+  const [emoji, setEmoji]           = React.useState('🔊');
   const [emojiPickerOpen, setEmojiPickerOpen] = React.useState(false);
-  const [volume, setVolume]       = React.useState(100);
-  const [startTrim, setStartTrim] = React.useState(0);
-  const [endTrim, setEndTrim]     = React.useState<number|null>(null);
-  const [duration, setDuration]   = React.useState(0);
-  const [saving, setSaving]       = React.useState(false);
+  const [volume, setVolume]         = React.useState(100);
+  const [startTrim, setStartTrim]   = React.useState(0);
+  const [endTrim, setEndTrim]       = React.useState<number>(0);
+  const [duration, setDuration]     = React.useState(0);
+  const [saving, setSaving]         = React.useState(false);
   const [previewUrl, setPreviewUrl] = React.useState<string|null>(null);
-  const audioRef                  = React.useRef<HTMLAudioElement|null>(null);
-  const [deleting, setDeleting]   = React.useState<string|null>(null);
+  const [waveform, setWaveform]     = React.useState<number[]>([]);
+  const [dragging, setDragging]     = React.useState<'start'|'end'|null>(null);
+  const [isPlaying, setIsPlaying]   = React.useState(false);
+  const [deleting, setDeleting]     = React.useState<string|null>(null);
+  const canvasRef   = React.useRef<HTMLCanvasElement|null>(null);
+  const playAudRef  = React.useRef<HTMLAudioElement|null>(null);
+  const wrapRef     = React.useRef<HTMLDivElement|null>(null);
+
+  const trimmedSec = endTrim - startTrim;
+  const isValid    = trimmedSec > 0 && trimmedSec <= SB_MAX_SEC;
 
   React.useEffect(() => {
     soundsApi.list(serverId).then(setSounds).catch(()=>{}).finally(()=>setLoading(false));
   }, [serverId]);
+
+  // Draw waveform on canvas whenever data / trim / validity changes
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || waveform.length === 0 || duration === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    const startFrac = startTrim / duration;
+    const endFrac   = endTrim   / duration;
+    const barW = W / waveform.length;
+    waveform.forEach((amp, i) => {
+      const frac = i / waveform.length;
+      const x    = frac * W;
+      const h    = Math.max(2, amp * H * 0.85);
+      const y    = (H - h) / 2;
+      if (frac >= startFrac && frac < endFrac) {
+        ctx.fillStyle = isValid ? '#22c55e' : '#ef4444';
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.14)';
+      }
+      ctx.fillRect(x, y, Math.max(barW - 1, 1), h);
+    });
+  }, [waveform, startTrim, endTrim, duration, isValid]);
 
   const handleFile = (f: File) => {
     setFile(f);
     setName(prev => prev || f.name.replace(/\.[^.]+$/, '').slice(0, 50));
     const url = URL.createObjectURL(f);
     setPreviewUrl(url);
+    // Get duration
     const a = new Audio(url);
     a.addEventListener('loadedmetadata', () => {
-      setDuration(a.duration);
-      setEndTrim(Math.min(10, a.duration));
+      const dur = a.duration;
+      setDuration(dur);
+      setStartTrim(0);
+      setEndTrim(Math.min(SB_MAX_SEC, dur));
     });
-    audioRef.current = a;
+    // Decode waveform
+    f.arrayBuffer().then(buf => {
+      const ac = new AudioContext();
+      ac.decodeAudioData(buf.slice(0), decoded => {
+        const data  = decoded.getChannelData(0);
+        const bars  = 200;
+        const block = Math.floor(data.length / bars);
+        const vals: number[] = [];
+        for (let i = 0; i < bars; i++) {
+          let s = 0;
+          for (let j = 0; j < block; j++) s += Math.abs(data[i * block + j]);
+          vals.push(s / block);
+        }
+        const mx = Math.max(...vals, 0.0001);
+        setWaveform(vals.map(v => v / mx));
+        ac.close().catch(()=>{});
+      }, () => {});
+    }).catch(() => {});
+  };
+
+  // Mouse drag on waveform container
+  const fracFromEvent = (e: React.MouseEvent | MouseEvent): number => {
+    const el = wrapRef.current;
+    if (!el) return 0;
+    const rect = el.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  };
+
+  const onWrapMouseDown = (e: React.MouseEvent) => {
+    if (duration === 0) return;
+    const frac  = fracFromEvent(e);
+    const sF    = startTrim / duration;
+    const eF    = endTrim   / duration;
+    const dS    = Math.abs(frac - sF);
+    const dE    = Math.abs(frac - eF);
+    setDragging(dS <= dE ? 'start' : 'end');
+  };
+  const onWrapMouseMove = (e: React.MouseEvent) => {
+    if (!dragging || duration === 0) return;
+    const t = fracFromEvent(e) * duration;
+    if (dragging === 'start') {
+      const ns = Math.max(0, Math.min(t, endTrim - 0.1));
+      setStartTrim(parseFloat(ns.toFixed(2)));
+    } else {
+      const ne = Math.max(startTrim + 0.1, Math.min(t, duration));
+      setEndTrim(parseFloat(ne.toFixed(2)));
+    }
+  };
+  const onWrapMouseUp = () => setDragging(null);
+
+  const testPlay = () => {
+    if (!previewUrl) return;
+    if (isPlaying && playAudRef.current) {
+      playAudRef.current.pause();
+      playAudRef.current.currentTime = 0;
+      setIsPlaying(false);
+      return;
+    }
+    const a = new Audio(previewUrl);
+    a.volume = Math.min(2, volume / 100);
+    a.currentTime = startTrim;
+    a.play().catch(()=>{});
+    playAudRef.current = a;
+    setIsPlaying(true);
+    const dur = (endTrim - startTrim) * 1000;
+    setTimeout(() => { a.pause(); a.currentTime = 0; setIsPlaying(false); }, dur);
+  };
+
+  const resetUpload = () => {
+    setFile(null); setPreviewUrl(null); setName(''); setEmoji('🔊');
+    setVolume(100); setStartTrim(0); setEndTrim(0); setDuration(0);
+    setWaveform([]); setEmojiPickerOpen(false); setIsPlaying(false);
+    if (playAudRef.current) { playAudRef.current.pause(); playAudRef.current = null; }
   };
 
   const handleUpload = async () => {
-    if (!file || !name.trim()) return;
+    if (!file || !name.trim() || !isValid) return;
     setSaving(true);
     try {
       const fd = new FormData();
@@ -3018,11 +3127,11 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
       fd.append('emoji', emoji);
       fd.append('volume', String(volume));
       fd.append('start_trim', String(startTrim));
-      if (endTrim !== null) fd.append('end_trim', String(endTrim));
+      fd.append('end_trim', String(endTrim));
       const newSound = await soundsApi.upload(serverId, fd);
       setSounds(p => [...p, newSound]);
       setUploadOpen(false);
-      setFile(null); setName(''); setEmoji('🔊'); setVolume(100); setStartTrim(0); setEndTrim(null); setPreviewUrl(null); setEmojiPickerOpen(false);
+      resetUpload();
     } catch (e: any) { alert(e?.message || 'Błąd przesyłania'); }
     finally { setSaving(false); }
   };
@@ -3034,17 +3143,8 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
     finally { setDeleting(null); }
   };
 
-  const testPlay = () => {
-    if (!previewUrl) return;
-    const a = new Audio(previewUrl);
-    a.volume = Math.min(2, volume / 100);
-    if (startTrim > 0) a.currentTime = startTrim;
-    a.play().catch(()=>{});
-    if (endTrim) setTimeout(() => { a.pause(); }, (endTrim - startTrim) * 1000);
-  };
-
   return (
-    <div className="p-6 max-w-2xl">
+    <div className="p-6 max-w-2xl mx-auto">
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-xl font-bold text-white">Panel dźwięków</h2>
         {canManage && sounds.length < 10 && (
@@ -3061,27 +3161,30 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
       {loading && <p className="text-sm text-zinc-600 italic">Ładowanie...</p>}
       {!loading && sounds.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-zinc-600">
-          <span className="text-5xl mb-3">🎵</span>
+          <Music2 size={36} className="mb-3 opacity-30"/>
           <p className="text-sm font-medium">Brak własnych dźwięków</p>
           <p className="text-xs mt-1">Dodaj pierwszy dźwięk za pomocą przycisku powyżej</p>
         </div>
       )}
       {sounds.length > 0 && (
         <div className="flex flex-col gap-2">
-          <div className="grid grid-cols-3 gap-1.5 text-[10px] text-zinc-600 uppercase tracking-widest font-bold px-2 mb-1">
-            <span>Emoji / Nazwa</span><span>Głośność</span><span>Dodane przez</span>
+          <div className="grid grid-cols-[1fr_80px_100px_32px] gap-2 text-[10px] text-zinc-600 uppercase tracking-widest font-bold px-3 mb-1">
+            <span>Emoji / Nazwa</span><span className="text-center">Głośność</span><span>Dodane przez</span><span/>
           </div>
           {sounds.map(s => (
-            <div key={s.id} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05] transition-colors">
-              <span className="text-2xl leading-none w-8 text-center shrink-0">{s.emoji}</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white truncate">{s.name}</p>
-                {s.added_by_username && <p className="text-[10px] text-zinc-600">dodane przez {s.added_by_username}</p>}
+            <div key={s.id} className="grid grid-cols-[1fr_80px_100px_32px] gap-2 items-center p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05] transition-colors">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="text-2xl leading-none shrink-0">{s.emoji}</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{s.name}</p>
+                  {s.added_by_username && <p className="text-[10px] text-zinc-600 truncate">{s.added_by_username}</p>}
+                </div>
               </div>
-              <span className="text-xs text-zinc-500 shrink-0">{s.volume}%</span>
+              <span className="text-xs text-zinc-500 text-center">{s.volume}%</span>
+              <span className="text-[10px] text-zinc-600 truncate">{s.added_by_username || '—'}</span>
               {canManage && (
                 <button onClick={()=>handleDelete(s.id)} disabled={deleting===s.id}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all shrink-0">
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all">
                   {deleting===s.id ? <span className="text-[10px]">...</span> : <Trash2 size={13}/>}
                 </button>
               )}
@@ -3090,112 +3193,156 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
         </div>
       )}
 
-      {/* Upload dialog */}
+      {/* ── Upload dialog ───────────────────────────────────────────────── */}
       {uploadOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={()=>setUploadOpen(false)}>
-          <div className="bg-[#1a1a2e] rounded-2xl border border-white/[0.1] shadow-2xl p-6 w-full max-w-md" onClick={e=>e.stopPropagation()}>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={()=>{setUploadOpen(false);resetUpload();}}>
+          <div className="bg-[#14141f] rounded-2xl border border-white/[0.1] shadow-2xl p-6 w-full max-w-lg" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-bold text-white">Prześlij dźwięk</h3>
-              <button onClick={()=>setUploadOpen(false)} className="text-zinc-600 hover:text-zinc-300 transition-colors"><X size={16}/></button>
+              <button onClick={()=>{setUploadOpen(false);resetUpload();}} className="text-zinc-600 hover:text-zinc-300 transition-colors"><X size={16}/></button>
             </div>
 
-            {/* Waveform / file picker */}
-            {previewUrl ? (
-              <div className="mb-4 p-3 rounded-xl bg-black/40 border border-white/[0.08] flex items-center gap-3">
-                <button onClick={testPlay} className="w-9 h-9 rounded-xl bg-indigo-600 hover:bg-indigo-500 flex items-center justify-center text-white shrink-0 transition-colors">
-                  <Play size={14}/>
-                </button>
-                <div className="flex-1">
-                  <p className="text-xs text-zinc-300 font-medium truncate">{file?.name}</p>
-                  <p className="text-[10px] text-zinc-600">Czas: {duration.toFixed(1)}s</p>
-                </div>
-                <button onClick={()=>{setFile(null);setPreviewUrl(null);setName('');}} className="text-zinc-600 hover:text-zinc-300"><X size={13}/></button>
-              </div>
-            ) : (
-              <label className={`flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 border-dashed border-white/[0.1] hover:border-indigo-500/50 cursor-pointer transition-colors mb-4 ${gi}`}>
-                <span className="text-3xl">🎵</span>
+            {/* File picker or waveform */}
+            {!previewUrl ? (
+              <label className="flex flex-col items-center justify-center gap-2 p-8 rounded-xl border-2 border-dashed border-white/[0.1] hover:border-indigo-500/50 cursor-pointer transition-colors mb-5">
+                <Music2 size={28} className="text-zinc-500"/>
                 <p className="text-sm text-zinc-400 font-medium">Kliknij aby wybrać plik audio</p>
                 <p className="text-[10px] text-zinc-600">MP3, OGG, WAV, FLAC · maks. 10MB</p>
                 <input type="file" accept="audio/*" className="hidden" onChange={e => { const f=e.target.files?.[0]; if(f) handleFile(f); }}/>
               </label>
+            ) : (
+              <div className="mb-5">
+                {/* File info row */}
+                <div className="flex items-center gap-2 mb-3">
+                  <button onClick={testPlay}
+                    className={`w-8 h-8 rounded-xl flex items-center justify-center text-white shrink-0 transition-colors ${isPlaying?'bg-amber-500 hover:bg-amber-400':'bg-indigo-600 hover:bg-indigo-500'}`}>
+                    {isPlaying ? <Square size={12} className="fill-white"/> : <Play size={12}/>}
+                  </button>
+                  <span className="text-xs text-zinc-300 font-medium truncate flex-1">{file?.name}</span>
+                  <span className="text-[10px] text-zinc-600 shrink-0">{duration.toFixed(1)}s</span>
+                  <button onClick={resetUpload} className="text-zinc-600 hover:text-zinc-300 ml-1"><X size={13}/></button>
+                </div>
+
+                {/* Waveform with drag handles */}
+                <div className="mb-3">
+                  {/* Duration badge */}
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Zaznacz fragment</span>
+                    <span className={`text-[11px] font-bold tabular-nums ${isValid ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {trimmedSec.toFixed(1)}s&nbsp;/&nbsp;{SB_MAX_SEC}s maks
+                      {!isValid && <span className="ml-1 text-[10px] font-normal">— za długi!</span>}
+                    </span>
+                  </div>
+
+                  {/* Canvas + handles wrapper */}
+                  <div
+                    ref={wrapRef}
+                    className="relative h-20 rounded-xl overflow-hidden cursor-col-resize select-none"
+                    style={{background:'rgba(0,0,0,0.45)'}}
+                    onMouseDown={onWrapMouseDown}
+                    onMouseMove={onWrapMouseMove}
+                    onMouseUp={onWrapMouseUp}
+                    onMouseLeave={onWrapMouseUp}
+                  >
+                    <canvas ref={canvasRef} width={500} height={80}
+                      className="absolute inset-0 w-full h-full pointer-events-none"/>
+
+                    {/* Dim overlays outside selection */}
+                    {duration > 0 && <>
+                      <div className="absolute inset-y-0 left-0 bg-black/55 pointer-events-none"
+                        style={{width:`${(startTrim/duration)*100}%`}}/>
+                      <div className="absolute inset-y-0 right-0 bg-black/55 pointer-events-none"
+                        style={{width:`${((duration-endTrim)/duration)*100}%`}}/>
+                    </>}
+
+                    {/* Start handle */}
+                    {duration > 0 && (
+                      <div className="absolute inset-y-0 flex items-center pointer-events-none"
+                        style={{left:`${(startTrim/duration)*100}%`, transform:'translateX(-50%)'}}>
+                        <div className={`w-1 h-full ${isValid?'bg-emerald-400':'bg-red-400'} opacity-90`}/>
+                        <div className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-6 rounded ${isValid?'bg-emerald-400':'bg-red-400'} shadow-lg`}/>
+                      </div>
+                    )}
+                    {/* End handle */}
+                    {duration > 0 && (
+                      <div className="absolute inset-y-0 flex items-center pointer-events-none"
+                        style={{left:`${(endTrim/duration)*100}%`, transform:'translateX(-50%)'}}>
+                        <div className={`w-1 h-full ${isValid?'bg-emerald-400':'bg-red-400'} opacity-90`}/>
+                        <div className={`absolute top-1/2 -translate-y-1/2 translate-x-1/2 w-3.5 h-6 rounded ${isValid?'bg-emerald-400':'bg-red-400'} shadow-lg`}/>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Time axis labels */}
+                  <div className="flex justify-between mt-1 px-0.5">
+                    <span className="text-[10px] text-zinc-600">0s</span>
+                    <span className="text-[10px] text-zinc-500 font-semibold">{startTrim.toFixed(1)}s → {endTrim.toFixed(1)}s</span>
+                    <span className="text-[10px] text-zinc-600">{duration.toFixed(1)}s</span>
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* Name + emoji */}
             <div className="flex gap-3 mb-3">
-              <div className="w-16 relative">
-                <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1 block font-bold">Emoji</label>
+              <div className="w-20 relative">
+                <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Emoji</label>
                 <button type="button" onClick={()=>setEmojiPickerOpen(v=>!v)}
-                  className={`${gi} w-full text-center text-xl rounded-xl px-2 py-2 border border-white/[0.08] text-white hover:border-indigo-500/40 transition-colors`}>
+                  className="w-full text-center text-2xl rounded-xl px-2 py-2.5 bg-white/[0.05] border border-white/[0.08] hover:border-indigo-500/40 transition-colors">
                   {emoji}
                 </button>
                 {emojiPickerOpen && (
-                  <div className="absolute left-0 top-full mt-1 z-50 w-64 bg-[#1a1a2e] border border-white/[0.12] rounded-2xl shadow-2xl p-2">
-                    <div className="grid grid-cols-10 gap-0.5">
-                      {SB_EMOJI_PICKER.map(e => (
-                        <button key={e} type="button" onClick={()=>{ setEmoji(e); setEmojiPickerOpen(false); }}
-                          className={`text-xl rounded-lg p-1 hover:bg-white/10 transition-colors leading-none ${emoji===e?'bg-indigo-500/30':''}`}>
-                          {e}
+                  <div className="absolute left-0 top-full mt-1 z-[300] w-72 bg-[#1a1a2e] border border-white/[0.12] rounded-2xl shadow-2xl p-2">
+                    <div className="grid grid-cols-10 gap-0.5 mb-2">
+                      {SB_EMOJI_PICKER.map(em => (
+                        <button key={em} type="button" onClick={()=>{ setEmoji(em); setEmojiPickerOpen(false); }}
+                          className={`text-xl rounded-lg p-1 hover:bg-white/10 transition-colors leading-none ${emoji===em?'bg-indigo-500/30':''}`}>
+                          {em}
                         </button>
                       ))}
                     </div>
-                    <div className="flex gap-1 mt-2 pt-2 border-t border-white/[0.06]">
+                    <div className="flex gap-1 pt-2 border-t border-white/[0.06]">
                       <input value={emoji} onChange={e=>setEmoji(e.target.value.slice(0,4))} maxLength={4}
                         placeholder="lub wpisz..."
                         className="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-2 py-1 text-sm text-white text-center placeholder-zinc-600 outline-none focus:border-indigo-500/40"/>
                       <button type="button" onClick={()=>setEmojiPickerOpen(false)}
-                        className="px-2 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-zinc-400 text-xs">OK</button>
+                        className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold">OK</button>
                     </div>
                   </div>
                 )}
               </div>
               <div className="flex-1">
-                <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1 block font-bold">Nazwa dźwięku *</label>
-                <input value={name} onChange={e=>setName(e.target.value)} placeholder="Nazwa dźwięku" maxLength={100}
-                  className={`${gi} w-full rounded-xl px-3 py-2 border-white/[0.08] text-white text-sm`}/>
+                <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Nazwa dźwięku *</label>
+                <input value={name} onChange={e=>setName(e.target.value)} placeholder="np. Klakson, Oklaski..." maxLength={100}
+                  className={`${gi} w-full rounded-xl px-3 py-2.5 border-white/[0.08] text-white text-sm`}/>
               </div>
             </div>
 
             {/* Volume */}
-            <div className="mb-3">
-              <div className="flex items-center justify-between mb-1">
+            <div className="mb-5">
+              <div className="flex items-center justify-between mb-1.5">
                 <label className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Głośność</label>
-                <span className="text-xs text-zinc-400 font-semibold">{volume}%</span>
+                <span className="text-xs text-zinc-400 font-semibold tabular-nums">{volume}%</span>
               </div>
               <input type="range" min={10} max={200} step={5} value={volume} onChange={e=>setVolume(parseInt(e.target.value))}
-                className="w-full accent-indigo-500"/>
+                className="w-full accent-indigo-500 h-1.5 cursor-pointer"/>
             </div>
 
-            {/* Trim range — only show if duration > 10s */}
-            {duration > 0 && (
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Przytnij</label>
-                  <span className="text-xs text-zinc-400">{startTrim.toFixed(1)}s – {(endTrim??duration).toFixed(1)}s</span>
-                </div>
-                <div className="flex gap-3">
-                  <div className="flex-1">
-                    <label className="text-[9px] text-zinc-600 mb-0.5 block">Od (s)</label>
-                    <input type="number" min={0} max={(endTrim??duration)-0.5} step={0.1} value={startTrim}
-                      onChange={e=>setStartTrim(parseFloat(e.target.value)||0)}
-                      className={`${gi} w-full rounded-lg px-2 py-1 text-xs border-white/[0.08] text-white`}/>
-                  </div>
-                  <div className="flex-1">
-                    <label className="text-[9px] text-zinc-600 mb-0.5 block">Do (s)</label>
-                    <input type="number" min={startTrim+0.5} max={duration} step={0.1} value={endTrim??duration}
-                      onChange={e=>setEndTrim(parseFloat(e.target.value))}
-                      className={`${gi} w-full rounded-lg px-2 py-1 text-xs border-white/[0.08] text-white`}/>
-                  </div>
-                </div>
+            {/* Validation warning */}
+            {previewUrl && !isValid && (
+              <div className="mb-4 flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30">
+                <AlertCircle size={14} className="text-red-400 shrink-0"/>
+                <p className="text-xs text-red-300">Zaznaczony fragment jest za długi ({trimmedSec.toFixed(1)}s). Przesuń uchwyty na fali dźwiękowej, aby zaznaczyć maks. {SB_MAX_SEC}s.</p>
               </div>
             )}
 
-            <div className="flex gap-3 mt-5">
-              <button onClick={()=>setUploadOpen(false)}
+            <div className="flex gap-3">
+              <button onClick={()=>{setUploadOpen(false);resetUpload();}}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-400 bg-white/[0.05] hover:bg-white/[0.08] transition-colors">
                 Anuluj
               </button>
-              <button onClick={handleUpload} disabled={!file||!name.trim()||saving}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 transition-colors">
+              <button onClick={handleUpload} disabled={!file || !name.trim() || saving || !isValid}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors ${isValid && file && name.trim() ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-zinc-700 opacity-50 cursor-not-allowed'}`}>
                 {saving ? 'Przesyłanie...' : 'Prześlij'}
               </button>
             </div>
@@ -12676,6 +12823,15 @@ export default function App() {
   };
 
   const hangupCall = () => {
+    // Stop any soundboard sound that is playing
+    if (sbPlayingRef.current?.audio) {
+      try { sbPlayingRef.current.audio.pause(); sbPlayingRef.current.audio.currentTime = 0; } catch {}
+    }
+    if (sbPlayingRef.current?.ctx) {
+      try { sbPlayingRef.current.ctx.close(); } catch {}
+    }
+    sbPlayingRef.current = null;
+    setPlayingSound(null);
     if (activeCall?.channelId) {
       leaveVoiceChannel(activeCall.channelId);
       playVoiceLeave();
