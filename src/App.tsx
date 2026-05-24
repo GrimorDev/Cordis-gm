@@ -8225,6 +8225,8 @@ export default function App() {
   const [srvRingActivity, setSrvRingActivity] = useState<Record<string, 'mention'|'unread'>>({});
   // Maps channel_id → server_id, built when any serverFull loads
   const chServerMapRef                         = useRef<Record<string, string>>({});
+  // Index into channelMsgs where new (unread) messages start; -1 = no divider
+  const [unreadJumpIdx, setUnreadJumpIdx]      = useState(-1);
   // Dedup for new_message: backend emits to both channel: and server: rooms,
   // so the same message can arrive twice. Track recently-seen IDs to skip dupes.
   const recentMsgIds                           = useRef(new Set<string>());
@@ -9665,14 +9667,20 @@ export default function App() {
       }
       // Refresh list data
       dmsApi.conversations().then(setDmConvs).catch(console.error);
-      // Reload server (roles/channels may have changed while disconnected)
+      // Reload active server (roles/channels may have changed while disconnected)
       if (activeServerRef.current) {
         serversApi.get(activeServerRef.current).then(s => {
           setServerFull(s);
+          // Update chServerMapRef for active server only (skip N-parallel fetches for all servers)
+          const newMap: Record<string, string> = {};
+          s.categories.flatMap((c: any) => c.channels).forEach((ch: any) => { newMap[ch.id] = s.id; });
+          chServerMapRef.current = { ...chServerMapRef.current, ...newMap };
         }).catch(console.error);
         serversApi.members(activeServerRef.current).then(setMembers).catch(console.error);
       }
-      loadServers();
+      // Lightweight: just refresh server list (names/icons) — skip full per-server detail fetch
+      // Full details are only fetched when the user actually visits a server
+      serversApi.list().then(setServerList).catch(console.error);
       loadFriends();
     });
     sock.on('disconnect', () => {
@@ -9925,6 +9933,9 @@ export default function App() {
   // ── Channel change ──────────────────────────────────────────────
   useEffect(() => {
     if (!activeChannel || activeView !== 'servers') return;
+    // Capture unread count BEFORE clearing — used for "new messages" divider
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const savedUnread = (unreadChs[activeChannel] ?? 0) + (pingChs[activeChannel] ?? 0);
     if (prevChRef.current) leaveChannel(prevChRef.current);
     prevChRef.current = activeChannel;
     joinChannel(activeChannel);
@@ -9932,18 +9943,40 @@ export default function App() {
     setUnreadChs(p => { const n = {...p}; delete n[activeChannel]; return n; });
     setPingChs(p => { const n = {...p}; delete n[activeChannel]; return n; });
     channelsApi.markRead(activeChannel);
+    // ── Clear activity ring if this was the last unread channel on this server ──
+    if (activeServer) {
+      const srvChIds = serverFull?.categories.flatMap(c => c.channels).map(c => c.id) ?? [];
+      const stillHasActivity = srvChIds.some(chId =>
+        chId !== activeChannel && ((unreadChs[chId] ?? 0) > 0 || (pingChs[chId] ?? 0) > 0)
+      );
+      if (!stillHasActivity) {
+        setSrvRingActivity(prev => {
+          if (!prev[activeServer]) return prev;
+          const n = {...prev}; delete n[activeServer]; return n;
+        });
+      }
+    }
     setForumPost(null); setShowNewPost(false); setReplyContent('');
     // Load content based on channel type
     const ch = serverFull?.categories.flatMap(c=>c.channels).find(c=>c.id===activeChannel);
     if (ch?.type === 'forum') {
+      setUnreadJumpIdx(-1);
       setForumPosts([]); setForumLoading(true);
       forumApi.listPosts(activeChannel).then(setForumPosts).catch(console.error).finally(()=>setForumLoading(false));
     } else {
       setChannelMsgs([]); setMsgsLoading(true); setSearchQuery(''); setChHasMore(true);
-      messagesApi.list(activeChannel).then(msgs => { setChannelMsgs(msgs); if (msgs.length < 50) setChHasMore(false); }).catch(console.error).finally(()=>setMsgsLoading(false));
+      setUnreadJumpIdx(-1);
+      messagesApi.list(activeChannel).then(msgs => {
+        setChannelMsgs(msgs);
+        if (msgs.length < 50) setChHasMore(false);
+        // Set divider at start of unread messages (if any)
+        if (savedUnread > 0 && msgs.length > 0) {
+          setUnreadJumpIdx(Math.max(0, msgs.length - savedUnread));
+        }
+      }).catch(console.error).finally(()=>setMsgsLoading(false));
     }
     setReplyTo(null);
-  }, [activeChannel, activeView]);
+  }, [activeChannel, activeView]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── DM change ───────────────────────────────────────────────────
   useEffect(() => {
@@ -10100,7 +10133,17 @@ export default function App() {
   useEffect(() => {
     if (!msgsLoading && scrollToBottomOnLoadRef.current) {
       scrollToBottomOnLoadRef.current = false;
-      requestAnimationFrame(() => requestAnimationFrame(() => scrollToBottom(false)));
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        // If there's an unread divider, scroll to it instead of the bottom
+        const divider = document.querySelector<HTMLElement>('[data-unread-divider]');
+        if (divider) {
+          divider.scrollIntoView({ behavior: 'instant', block: 'center' });
+          // Auto-clear divider after user has had a moment to see it
+          setTimeout(() => setUnreadJumpIdx(-1), 10_000);
+        } else {
+          scrollToBottom(false);
+        }
+      }));
     }
   }, [msgsLoading]); // eslint-disable-line react-hooks/exhaustive-deps
   // SECONDARY: scroll when switching BACK to the same DM (activeView changes but
@@ -16439,6 +16482,8 @@ export default function App() {
 
                   {!activeGroupDm && (messages as (MessageFull|DmMessageFull)[]).map((msg, idx) => {
                     const isOwn = currentUser?.id === msg.sender_id;
+                    // "New messages" divider — shown at the start of unread messages
+                    const showUnreadDivider = unreadJumpIdx >= 0 && idx === unreadJumpIdx;
                     // Date separator
                     const msgDate = new Date(msg.created_at).toDateString();
                     const prevDate = idx>0 ? new Date(messages[idx-1].created_at).toDateString() : null;
@@ -16464,6 +16509,17 @@ export default function App() {
                       const iconColor = isMissed ? 'text-rose-400' : isVideo ? 'text-violet-400' : 'text-emerald-400';
                       return (
                         <React.Fragment key={msg.id}>
+                          {showUnreadDivider && (
+                            <div data-unread-divider className="flex items-center gap-3 my-3 mx-2 select-none">
+                              <div className="flex-1 h-px bg-indigo-500/40"/>
+                              <span className="text-[11px] text-indigo-400 font-semibold px-2 shrink-0 flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 inline-block"/>
+                                Nowe wiadomości
+                                <button onClick={() => setUnreadJumpIdx(-1)} className="ml-1 text-indigo-500 hover:text-indigo-300 transition-colors leading-none" title="Zamknij">×</button>
+                              </span>
+                              <div className="flex-1 h-px bg-indigo-500/40"/>
+                            </div>
+                          )}
                           {showSep&&(
                             <div className="flex items-center gap-3 my-4">
                               <div className="flex-1 h-px" style={{background:'linear-gradient(90deg,transparent,rgba(139,92,246,0.15),transparent)'}}/>
@@ -16483,6 +16539,17 @@ export default function App() {
                     }
                     return (
                       <React.Fragment key={msg.id}>
+                        {showUnreadDivider && (
+                          <div data-unread-divider className="flex items-center gap-3 my-3 mx-2 select-none">
+                            <div className="flex-1 h-px bg-indigo-500/40"/>
+                            <span className="text-[11px] text-indigo-400 font-semibold px-2 shrink-0 flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 inline-block"/>
+                              Nowe wiadomości
+                              <button onClick={() => setUnreadJumpIdx(-1)} className="ml-1 text-indigo-500 hover:text-indigo-300 transition-colors leading-none" title="Zamknij">×</button>
+                            </span>
+                            <div className="flex-1 h-px bg-indigo-500/40"/>
+                          </div>
+                        )}
                         {showSep&&(
                           <div className="flex items-center gap-3 my-5 mx-2">
                             <div className="date-sep-line"/>
@@ -17324,6 +17391,27 @@ export default function App() {
                               if (e.key==='ArrowDown') { e.preventDefault(); setMentionSel(s=>Math.min(mentionSuggestions.length-1,s+1)); return; }
                               if (e.key==='Enter'||e.key==='Tab') { e.preventDefault(); insertMention(mentionSuggestions[mentionSel]?.username||''); return; }
                               if (e.key==='Escape') { setMentionQuery(null); return; }
+                            }
+                            // ↑ with empty input — edit last own message (Discord-standard shortcut)
+                            if (e.key==='ArrowUp' && !msgInput.trim() && !editingMsgId && activeView==='servers' && activeChannel) {
+                              const lastOwn = [...channelMsgs].reverse().find(m =>
+                                m.sender_id === currentUser?.id &&
+                                !m.id.startsWith('temp-') &&
+                                !(m as any).deleted &&
+                                m.content !== '__deleted__' &&
+                                !(m as any).is_automated
+                              );
+                              if (lastOwn) {
+                                e.preventDefault();
+                                setEditingMsgId(lastOwn.id);
+                                setEditingMsgContent(lastOwn.content || '');
+                                // Scroll the message into view
+                                setTimeout(() => {
+                                  const el = document.querySelector(`[data-msg-id="${lastOwn.id}"]`);
+                                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                                }, 50);
+                                return;
+                              }
                             }
                             if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); handleSend(e as any); }
                           }}

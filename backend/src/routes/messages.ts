@@ -497,7 +497,10 @@ async function attachReactions(messages: any[], userId: string) {
 }
 
 async function broadcastReactionUpdate(req: any, messageId: string, emoji: string) {
-  const { rows: [msg] } = await query('SELECT channel_id FROM messages WHERE id=$1', [messageId]);
+  const { rows: [msg] } = await query(
+    'SELECT m.channel_id, c.server_id FROM messages m JOIN channels c ON c.id=m.channel_id WHERE m.id=$1',
+    [messageId]
+  );
   if (!msg) return;
   const { rows: [count] } = await query(
     `SELECT COUNT(*)::int AS cnt, BOOL_OR(user_id=$2) AS mine
@@ -505,13 +508,15 @@ async function broadcastReactionUpdate(req: any, messageId: string, emoji: strin
     [messageId, req.user.id, emoji]
   );
   const io = req.app.get('io');
-  io?.to(`channel:${msg.channel_id}`).emit('reaction_update', {
+  const payload = {
     message_id: messageId,
     emoji,
     count: count?.cnt ?? 0,
     mine: count?.mine ?? false,
     user_id: req.user.id,
-  });
+  };
+  io?.to(`channel:${msg.channel_id}`).emit('reaction_update', payload);
+  if (msg.server_id) io?.to(`server:${msg.server_id}`).emit('reaction_update', payload);
 }
 
 // POST /api/messages/:id/reactions
@@ -560,7 +565,11 @@ router.put('/:id/pin', authMiddleware, async (req: AuthRequest, res: Response) =
     const pinned = req.body.pinned !== false; // default true; send false to unpin
     await query('UPDATE messages SET pinned=$1 WHERE id=$2', [pinned, req.params.id]);
     const io = req.app.get('io');
-    if (io) io.to(`channel:${msg.channel_id}`).emit('message_pinned' as any, { message_id: msg.id, channel_id: msg.channel_id, pinned });
+    const pinPayload = { message_id: msg.id, channel_id: msg.channel_id, pinned };
+    if (io) {
+      io.to(`channel:${msg.channel_id}`).emit('message_pinned' as any, pinPayload);
+      io.to(`server:${access.serverId}`).emit('message_pinned' as any, pinPayload);
+    }
     return res.json({ message: pinned ? 'Message pinned' : 'Message unpinned' });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
