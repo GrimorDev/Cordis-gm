@@ -1,7 +1,5 @@
-import React, { useState, useRef, lazy, Suspense } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence, useScroll, useTransform } from 'motion/react';
-
-const Spline = lazy(() => import('@splinetool/react-spline'));
 
 interface Article { q: string; a: string; }
 interface Category { id: string; icon: string; title: string; desc: string; articles: Article[]; }
@@ -112,6 +110,109 @@ function AuroraBackground() {
   );
 }
 
+// ── Galaxy canvas background ──────────────────────────────────────────────────
+function GalaxyBackground({ hc }: { hc: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (hc) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animId: number;
+    let t = 0;
+
+    const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
+    resize();
+    window.addEventListener('resize', resize);
+
+    const STAR_COLORS = ['200,210,255', '180,200,255', '220,215,255', '255,240,200', '200,230,255'];
+    const stars = Array.from({ length: 260 }, () => ({
+      x: Math.random(), y: Math.random(),
+      r: Math.pow(Math.random(), 2.5) * 2.2 + 0.2,
+      phase: Math.random() * Math.PI * 2,
+      speed: Math.random() * 0.6 + 0.2,
+      bright: Math.random() * 0.55 + 0.25,
+      color: STAR_COLORS[Math.floor(Math.random() * STAR_COLORS.length)],
+    }));
+
+    const blobs = [
+      { cx: 0.1,  cy: 0.18, r: 0.4,  c: [99,102,241]  as [number,number,number], a: 0.13, dx: 0.04,  dy: 0.03,  phase: 0   },
+      { cx: 0.82, cy: 0.12, r: 0.36, c: [139,92,246]  as [number,number,number], a: 0.11, dx: -0.03, dy: 0.035, phase: 1.2 },
+      { cx: 0.52, cy: 0.7,  r: 0.30, c: [59,130,246]  as [number,number,number], a: 0.09, dx: 0.025, dy: -0.04, phase: 2.4 },
+      { cx: 0.9,  cy: 0.6,  r: 0.27, c: [168,85,247]  as [number,number,number], a: 0.10, dx: -0.04, dy: 0.025, phase: 0.7 },
+      { cx: 0.3,  cy: 0.88, r: 0.24, c: [79,70,229]   as [number,number,number], a: 0.08, dx: 0.035, dy: 0.02,  phase: 3.1 },
+    ];
+
+    interface Shoot { x:number; y:number; vx:number; vy:number; len:number; life:number; max:number; }
+    const shoots: Shoot[] = [];
+    let nextShoot = 120 + Math.random() * 180;
+    const spawnShoot = () => {
+      const angle = Math.PI * (0.9 + Math.random() * 0.4);
+      const speed = 8 + Math.random() * 6;
+      shoots.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height * 0.5,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        len: 80 + Math.random() * 60, life: 0, max: 35 + Math.random() * 20 });
+    };
+
+    const draw = () => {
+      t += 0.004;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      blobs.forEach(b => {
+        const bx = (b.cx + Math.sin(t * 0.25 + b.phase) * b.dx) * canvas.width;
+        const by = (b.cy + Math.cos(t * 0.18 + b.phase) * b.dy) * canvas.height;
+        const br = b.r * Math.min(canvas.width, canvas.height);
+        const grd = ctx.createRadialGradient(bx, by, 0, bx, by, br);
+        const [r, g, bl] = b.c;
+        grd.addColorStop(0,   `rgba(${r},${g},${bl},${b.a})`);
+        grd.addColorStop(0.4, `rgba(${r},${g},${bl},${b.a * 0.5})`);
+        grd.addColorStop(1,   `rgba(${r},${g},${bl},0)`);
+        ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill();
+      });
+
+      stars.forEach(s => {
+        const sx = s.x * canvas.width, sy = s.y * canvas.height;
+        const opc = s.bright * (0.45 + 0.55 * Math.sin(t * s.speed + s.phase));
+        if (s.r > 1.4) {
+          const grd = ctx.createRadialGradient(sx, sy, 0, sx, sy, s.r * 3);
+          grd.addColorStop(0, `rgba(${s.color},${opc})`);
+          grd.addColorStop(0.5, `rgba(${s.color},${opc * 0.3})`);
+          grd.addColorStop(1, `rgba(${s.color},0)`);
+          ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(sx, sy, s.r * 3, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.beginPath(); ctx.arc(sx, sy, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${s.color},${opc})`; ctx.fill();
+      });
+
+      nextShoot--;
+      if (nextShoot <= 0) { spawnShoot(); nextShoot = 150 + Math.random() * 200; }
+      for (let i = shoots.length - 1; i >= 0; i--) {
+        const sh = shoots[i];
+        sh.x += sh.vx; sh.y += sh.vy; sh.life++;
+        const prog = sh.life / sh.max;
+        const opc  = prog < 0.5 ? prog * 2 : (1 - prog) * 2;
+        const tx = sh.x - sh.vx * (sh.len / 10), ty = sh.y - sh.vy * (sh.len / 10);
+        const grd = ctx.createLinearGradient(tx, ty, sh.x, sh.y);
+        grd.addColorStop(0, `rgba(200,215,255,0)`);
+        grd.addColorStop(1, `rgba(220,230,255,${opc * 0.8})`);
+        ctx.strokeStyle = grd; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(sh.x, sh.y); ctx.stroke();
+        if (sh.life >= sh.max) shoots.splice(i, 1);
+      }
+
+      animId = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', resize); };
+  }, [hc]);
+
+  if (hc) return null;
+  return <canvas ref={canvasRef} style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', zIndex: 0, pointerEvents: 'none' }}/>;
+}
+
 // ── Stagger container variants ────────────────────────────────────────────────
 const staggerContainer = {
   hidden: {},
@@ -136,10 +237,8 @@ export default function SupportPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [activeArticle, setActiveArticle] = useState<number | null>(null);
   const [search, setSearch]               = useState('');
-  const [hc, setHc]                       = useState(() => localStorage.getItem('cordyn_hc') === '1');
-  const [splineLoaded, setSplineLoaded]   = useState(false);
-  const [splineFailed, setSplineFailed]   = useState(false);
-  const heroRef                           = useRef<HTMLDivElement>(null);
+  const [hc, setHc]   = useState(() => localStorage.getItem('cordyn_hc') === '1');
+  const heroRef       = useRef<HTMLDivElement>(null);
   const { scrollY }                       = useScroll();
   const heroOpacity                       = useTransform(scrollY, [0, 320], [1, 0]);
   const heroY                             = useTransform(scrollY, [0, 320], [0, -60]);
@@ -169,6 +268,7 @@ export default function SupportPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: bg, color: textPrimary, fontFamily: 'Geist, system-ui, sans-serif', overflowX: 'hidden' }}>
+      <GalaxyBackground hc={hc}/>
 
       {/* ── Nav ─────────────────────────────────────────────────────────────── */}
       <motion.nav
@@ -199,21 +299,7 @@ export default function SupportPage() {
 
       {/* ── Hero ────────────────────────────────────────────────────────────── */}
       <div ref={heroRef} style={{ position: 'relative', overflow: 'hidden', paddingBottom: 24 }}>
-        {/* Spline background */}
-        {!splineFailed && (
-          <div style={{ position: 'absolute', inset: 0, opacity: splineLoaded ? 0.35 : 0, transition: 'opacity 1.2s ease', pointerEvents: 'none' }}>
-            <Suspense fallback={null}>
-              <Spline
-                scene="https://prod.spline.design/6Wq1Q7YGyM-iab9i/scene.splinecode"
-                onLoad={() => setSplineLoaded(true)}
-                onError={() => setSplineFailed(true)}
-                style={{ width: '100%', height: '100%' }}
-              />
-            </Suspense>
-          </div>
-        )}
-
-        {/* Aurora always-on */}
+        {/* Aurora overlay */}
         <AuroraBackground />
 
         {/* Hero content */}
