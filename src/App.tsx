@@ -21080,8 +21080,10 @@ export default function App() {
                           const pvEffLabel = CARD_EFFECTS.find(e=>e.key===cardEffect)?.label??'Brak';
                           return (
                             <div className="mb-5 flex items-start gap-5 p-4 rounded-2xl bg-white/[0.025] border border-white/[0.07]">
-                              <div className="relative rounded-2xl overflow-hidden shadow-xl shadow-black/60 shrink-0"
+                              <div className={`relative rounded-2xl overflow-hidden shadow-xl shadow-black/60 shrink-0${profileCardAnim?' '+(CUSTOM_ENTER[cardEffect]??'profile-card-enter'):''}`}
                                 style={{ width:180, backgroundColor:pvBg, fontFamily:pvCfDef.css, fontSize:pvCfDef.size, border:`1px solid ${pvBorder}` }}>
+                                {/* Live effect overlay — same as real profile card */}
+                                <CardEffectOverlay effect={cardEffect} />
                                 <div className="h-14 relative" style={{ background:pvBanner }}>
                                   <div className="absolute -bottom-6 left-3">
                                     <img src={currentUser?ava(currentUser):''} className="w-12 h-12 rounded-xl object-cover border-[3px]" style={{ borderColor:pvBg }} alt=""/>
