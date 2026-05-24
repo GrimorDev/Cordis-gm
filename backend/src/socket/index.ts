@@ -341,6 +341,24 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
       }
     });
 
+    // ── Soundboard play ──────────────────────────────────────────────
+    // Client emits: { channelId, soundId?, fileUrl, soundName, volume }
+    // We broadcast to everyone in the voice room (including sender so they hear it too)
+    socket.on('soundboard_play', async ({ channelId, soundId, fileUrl, soundName, volume }: {
+      channelId: string; soundId?: string; fileUrl: string; soundName: string; volume?: number;
+    }) => {
+      if (!channelId || !fileUrl) return;
+      io.to(`voice:${channelId}`).emit('soundboard_played', {
+        playedBy: user.id,
+        playedByUsername: user.username,
+        channelId,
+        soundId,
+        fileUrl,
+        soundName,
+        volume: volume ?? 100,
+      });
+    });
+
     // ── Spotify now-playing broadcast ────────────────────────────────
     socket.on('spotify_update', async ({ track, progress_captured_at }: { track: any; progress_captured_at?: number }) => {
       // Backend guard: don't broadcast Spotify activity if the user is offline

@@ -1103,4 +1103,96 @@ router.post('/:id/join-public', authMiddleware, joinLimiter, async (req: AuthReq
   } catch (err) { console.error('[join-public]', err); return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// ── Soundboard ───────────────────────────────────────────────────────────────
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { config } from '../config';
+
+const audioFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
+  const ok = ['audio/mpeg','audio/ogg','audio/wav','audio/flac','audio/mp4','audio/aac','audio/opus','audio/x-wav','audio/webm'].includes(file.mimetype);
+  ok ? cb(null, true) : cb(new Error('Dozwolone tylko pliki audio (mp3, ogg, wav, flac)'));
+};
+const diskAudio = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const dir = path.join(config.uploads.dir, 'sounds');
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.mp3';
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+  },
+});
+const uploadAudio = multer({ storage: diskAudio, limits: { fileSize: 10 * 1024 * 1024 }, fileFilter: audioFilter });
+
+// GET /api/servers/:id/sounds
+router.get('/:id/sounds', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const serverId = req.params.id;
+  const userId   = req.user!.id;
+  if (!await isMember(serverId, userId)) return res.status(403).json({ error: 'Not a member' });
+  try {
+    const { rows } = await query(
+      `SELECT ss.id, ss.name, ss.emoji, ss.file_url, ss.volume, ss.start_trim, ss.end_trim, ss.created_at,
+              u.username as added_by_username, u.avatar_url as added_by_avatar
+       FROM server_sounds ss
+       LEFT JOIN users u ON u.id = ss.added_by
+       WHERE ss.server_id = $1
+       ORDER BY ss.created_at ASC`,
+      [serverId]
+    );
+    return res.json(rows);
+  } catch (err) { console.error('[sounds/list]', err); return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// POST /api/servers/:id/sounds  (multipart: file + name + emoji + volume + start_trim + end_trim)
+router.post('/:id/sounds', authMiddleware, async (req: AuthRequest, res: Response, next) => {
+  const serverId = req.params.id;
+  const userId   = req.user!.id;
+  if (!await isAuthorized(serverId, userId, 'manage_server')) return res.status(403).json({ error: 'Insufficient permissions' });
+  // Check limit: 10 per server (free)
+  const { rows: cnt } = await query(`SELECT COUNT(*) as n FROM server_sounds WHERE server_id=$1`, [serverId]);
+  if (parseInt(cnt[0].n) >= 10) return res.status(400).json({ error: 'Osiągnięto limit 10 dźwięków na serwer' });
+
+  uploadAudio.single('file')(req as any, res as any, async (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.file) return res.status(400).json({ error: 'Brak pliku audio' });
+
+    const name       = (req.body.name as string)?.trim()?.slice(0, 100) || req.file.originalname;
+    const emoji      = (req.body.emoji as string)?.slice(0, 20) || '🔊';
+    const volume     = Math.min(200, Math.max(1, parseInt(req.body.volume) || 100));
+    const startTrim  = parseFloat(req.body.start_trim) || 0;
+    const endTrim    = req.body.end_trim ? parseFloat(req.body.end_trim) : null;
+    const fileUrl    = `/uploads/sounds/${req.file.filename}`;
+
+    try {
+      const { rows: [sound] } = await query(
+        `INSERT INTO server_sounds (server_id, name, emoji, file_url, volume, start_trim, end_trim, added_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         RETURNING id, name, emoji, file_url, volume, start_trim, end_trim, created_at`,
+        [serverId, name, emoji, fileUrl, volume, startTrim, endTrim, userId]
+      );
+      return res.json(sound);
+    } catch (err) { console.error('[sounds/add]', err); return res.status(500).json({ error: 'Internal server error' }); }
+  });
+});
+
+// DELETE /api/servers/:id/sounds/:soundId
+router.delete('/:id/sounds/:soundId', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { id: serverId, soundId } = req.params;
+  const userId = req.user!.id;
+  if (!await isAuthorized(serverId, userId, 'manage_server')) return res.status(403).json({ error: 'Insufficient permissions' });
+  try {
+    const { rows: [sound] } = await query(`SELECT file_url FROM server_sounds WHERE id=$1 AND server_id=$2`, [soundId, serverId]);
+    if (!sound) return res.status(404).json({ error: 'Sound not found' });
+    await query(`DELETE FROM server_sounds WHERE id=$1`, [soundId]);
+    // Delete file from disk
+    try {
+      const filePath = path.join(config.uploads.dir, sound.file_url.replace('/uploads/', ''));
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    } catch { /* ignore file deletion errors */ }
+    return res.json({ ok: true });
+  } catch (err) { console.error('[sounds/delete]', err); return res.status(500).json({ error: 'Internal server error' }); }
+});
+
 export default router;

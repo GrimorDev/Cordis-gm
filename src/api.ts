@@ -926,6 +926,20 @@ export const emojisApi = {
     req<{ ok: boolean }>('DELETE', `/servers/${serverId}/emojis/${emojiId}`),
 };
 
+// ── Server Sounds (Soundboard) ────────────────────────────────────────────
+export interface ServerSound {
+  id: string; server_id?: string; name: string; emoji: string;
+  file_url: string; volume: number; start_trim: number; end_trim: number | null;
+  added_by_username?: string; added_by_avatar?: string | null; created_at: string;
+}
+export const soundsApi = {
+  list:   (serverId: string) => req<ServerSound[]>('GET', `/servers/${serverId}/sounds`),
+  upload: (serverId: string, formData: FormData) =>
+    req<ServerSound>('POST', `/servers/${serverId}/sounds`, formData, true),
+  delete: (serverId: string, soundId: string) =>
+    req<{ ok: boolean }>('DELETE', `/servers/${serverId}/sounds/${soundId}`),
+};
+
 // ── User Notes ────────────────────────────────────────────────────────────
 export const notesApi = {
   get:    (userId: string) => req<{ content: string }>('GET', `/users/notes/${userId}`),

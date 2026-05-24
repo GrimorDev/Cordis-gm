@@ -281,6 +281,24 @@ CREATE TABLE IF NOT EXISTS server_emojis (
     UNIQUE(server_id, name)
 );
 
+-- ── Server Sounds (Soundboard) ───────────────────────────────────
+CREATE TABLE IF NOT EXISTS server_sounds (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    server_id   UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+    name        VARCHAR(100) NOT NULL,
+    emoji       VARCHAR(20)  DEFAULT '🔊',
+    file_url    TEXT NOT NULL,
+    volume      INTEGER DEFAULT 100 CHECK (volume BETWEEN 1 AND 200),
+    start_trim  FLOAT DEFAULT 0,
+    end_trim    FLOAT,
+    added_by    UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_server_sounds_server ON server_sounds(server_id);
+-- Migration for existing databases
+ALTER TABLE server_sounds ADD COLUMN IF NOT EXISTS start_trim FLOAT DEFAULT 0;
+ALTER TABLE server_sounds ADD COLUMN IF NOT EXISTS end_trim   FLOAT;
+
 -- ── User notes (private, per-viewer) ──────────────────────────────
 CREATE TABLE IF NOT EXISTS user_notes (
     noter_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

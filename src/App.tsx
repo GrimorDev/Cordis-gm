@@ -51,6 +51,7 @@ import {
   type ChannelPref, type MutualServer, type MutualFriend, type GroupDmConversation, type ServerEvent,
   type DiscoverServer, type ServerOnboarding, type UserSession,
   type VoiceActivityChannel, type EventRsvpUser,
+  type ServerSound, soundsApi,
 } from './api';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -2963,6 +2964,217 @@ function EmojiTab({ serverId, initialEmojis, canManage, gi }: {
   );
 }
 
+// ─── Sounds Tab ──────────────────────────────────────────────────────────────
+function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: boolean; gi: string }) {
+  const [sounds, setSounds]       = React.useState<ServerSound[]>([]);
+  const [loading, setLoading]     = React.useState(true);
+  const [uploadOpen, setUploadOpen] = React.useState(false);
+  const [file, setFile]           = React.useState<File|null>(null);
+  const [name, setName]           = React.useState('');
+  const [emoji, setEmoji]         = React.useState('🔊');
+  const [volume, setVolume]       = React.useState(100);
+  const [startTrim, setStartTrim] = React.useState(0);
+  const [endTrim, setEndTrim]     = React.useState<number|null>(null);
+  const [duration, setDuration]   = React.useState(0);
+  const [saving, setSaving]       = React.useState(false);
+  const [previewUrl, setPreviewUrl] = React.useState<string|null>(null);
+  const audioRef                  = React.useRef<HTMLAudioElement|null>(null);
+  const [deleting, setDeleting]   = React.useState<string|null>(null);
+
+  React.useEffect(() => {
+    soundsApi.list(serverId).then(setSounds).catch(()=>{}).finally(()=>setLoading(false));
+  }, [serverId]);
+
+  const handleFile = (f: File) => {
+    setFile(f);
+    setName(prev => prev || f.name.replace(/\.[^.]+$/, '').slice(0, 50));
+    const url = URL.createObjectURL(f);
+    setPreviewUrl(url);
+    const a = new Audio(url);
+    a.addEventListener('loadedmetadata', () => {
+      setDuration(a.duration);
+      setEndTrim(Math.min(10, a.duration));
+    });
+    audioRef.current = a;
+  };
+
+  const handleUpload = async () => {
+    if (!file || !name.trim()) return;
+    setSaving(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('name', name.trim());
+      fd.append('emoji', emoji);
+      fd.append('volume', String(volume));
+      fd.append('start_trim', String(startTrim));
+      if (endTrim !== null) fd.append('end_trim', String(endTrim));
+      const newSound = await soundsApi.upload(serverId, fd);
+      setSounds(p => [...p, newSound]);
+      setUploadOpen(false);
+      setFile(null); setName(''); setEmoji('🔊'); setVolume(100); setStartTrim(0); setEndTrim(null); setPreviewUrl(null);
+    } catch (e: any) { alert(e?.message || 'Błąd przesyłania'); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeleting(id);
+    try { await soundsApi.delete(serverId, id); setSounds(p => p.filter(s => s.id !== id)); }
+    catch (e: any) { alert(e?.message || 'Błąd usuwania'); }
+    finally { setDeleting(null); }
+  };
+
+  const testPlay = () => {
+    if (!previewUrl) return;
+    const a = new Audio(previewUrl);
+    a.volume = Math.min(2, volume / 100);
+    if (startTrim > 0) a.currentTime = startTrim;
+    a.play().catch(()=>{});
+    if (endTrim) setTimeout(() => { a.pause(); }, (endTrim - startTrim) * 1000);
+  };
+
+  return (
+    <div className="p-6 max-w-2xl">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-xl font-bold text-white">Panel dźwięków</h2>
+        {canManage && sounds.length < 10 && (
+          <button onClick={()=>setUploadOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold rounded-xl transition-colors">
+            <Upload size={14}/> Prześlij dźwięk
+          </button>
+        )}
+      </div>
+      <p className="text-sm text-zinc-500 mb-5">
+        Niestandardowe dźwięki dostępne dla wszystkich podczas rozmów głosowych. Limit: {sounds.length}/10.
+      </p>
+
+      {loading && <p className="text-sm text-zinc-600 italic">Ładowanie...</p>}
+      {!loading && sounds.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 text-zinc-600">
+          <span className="text-5xl mb-3">🎵</span>
+          <p className="text-sm font-medium">Brak własnych dźwięków</p>
+          <p className="text-xs mt-1">Dodaj pierwszy dźwięk za pomocą przycisku powyżej</p>
+        </div>
+      )}
+      {sounds.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-3 gap-1.5 text-[10px] text-zinc-600 uppercase tracking-widest font-bold px-2 mb-1">
+            <span>Emoji / Nazwa</span><span>Głośność</span><span>Dodane przez</span>
+          </div>
+          {sounds.map(s => (
+            <div key={s.id} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05] transition-colors">
+              <span className="text-2xl leading-none w-8 text-center shrink-0">{s.emoji}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white truncate">{s.name}</p>
+                {s.added_by_username && <p className="text-[10px] text-zinc-600">dodane przez {s.added_by_username}</p>}
+              </div>
+              <span className="text-xs text-zinc-500 shrink-0">{s.volume}%</span>
+              {canManage && (
+                <button onClick={()=>handleDelete(s.id)} disabled={deleting===s.id}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all shrink-0">
+                  {deleting===s.id ? <span className="text-[10px]">...</span> : <Trash2 size={13}/>}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Upload dialog */}
+      {uploadOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={()=>setUploadOpen(false)}>
+          <div className="bg-[#1a1a2e] rounded-2xl border border-white/[0.1] shadow-2xl p-6 w-full max-w-md" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold text-white">Prześlij dźwięk</h3>
+              <button onClick={()=>setUploadOpen(false)} className="text-zinc-600 hover:text-zinc-300 transition-colors"><X size={16}/></button>
+            </div>
+
+            {/* Waveform / file picker */}
+            {previewUrl ? (
+              <div className="mb-4 p-3 rounded-xl bg-black/40 border border-white/[0.08] flex items-center gap-3">
+                <button onClick={testPlay} className="w-9 h-9 rounded-xl bg-indigo-600 hover:bg-indigo-500 flex items-center justify-center text-white shrink-0 transition-colors">
+                  <Play size={14}/>
+                </button>
+                <div className="flex-1">
+                  <p className="text-xs text-zinc-300 font-medium truncate">{file?.name}</p>
+                  <p className="text-[10px] text-zinc-600">Czas: {duration.toFixed(1)}s</p>
+                </div>
+                <button onClick={()=>{setFile(null);setPreviewUrl(null);setName('');}} className="text-zinc-600 hover:text-zinc-300"><X size={13}/></button>
+              </div>
+            ) : (
+              <label className={`flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 border-dashed border-white/[0.1] hover:border-indigo-500/50 cursor-pointer transition-colors mb-4 ${gi}`}>
+                <span className="text-3xl">🎵</span>
+                <p className="text-sm text-zinc-400 font-medium">Kliknij aby wybrać plik audio</p>
+                <p className="text-[10px] text-zinc-600">MP3, OGG, WAV, FLAC · maks. 10MB</p>
+                <input type="file" accept="audio/*" className="hidden" onChange={e => { const f=e.target.files?.[0]; if(f) handleFile(f); }}/>
+              </label>
+            )}
+
+            {/* Name + emoji */}
+            <div className="flex gap-3 mb-3">
+              <div className="w-16">
+                <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1 block font-bold">Emoji</label>
+                <input value={emoji} onChange={e=>setEmoji(e.target.value.slice(0,4))} maxLength={4}
+                  className={`${gi} w-full text-center text-xl rounded-xl px-2 py-2 border-white/[0.08] text-white`}/>
+              </div>
+              <div className="flex-1">
+                <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1 block font-bold">Nazwa dźwięku *</label>
+                <input value={name} onChange={e=>setName(e.target.value)} placeholder="Nazwa dźwięku" maxLength={100}
+                  className={`${gi} w-full rounded-xl px-3 py-2 border-white/[0.08] text-white text-sm`}/>
+              </div>
+            </div>
+
+            {/* Volume */}
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Głośność</label>
+                <span className="text-xs text-zinc-400 font-semibold">{volume}%</span>
+              </div>
+              <input type="range" min={10} max={200} step={5} value={volume} onChange={e=>setVolume(parseInt(e.target.value))}
+                className="w-full accent-indigo-500"/>
+            </div>
+
+            {/* Trim range — only show if duration > 10s */}
+            {duration > 0 && (
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Przytnij</label>
+                  <span className="text-xs text-zinc-400">{startTrim.toFixed(1)}s – {(endTrim??duration).toFixed(1)}s</span>
+                </div>
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="text-[9px] text-zinc-600 mb-0.5 block">Od (s)</label>
+                    <input type="number" min={0} max={(endTrim??duration)-0.5} step={0.1} value={startTrim}
+                      onChange={e=>setStartTrim(parseFloat(e.target.value)||0)}
+                      className={`${gi} w-full rounded-lg px-2 py-1 text-xs border-white/[0.08] text-white`}/>
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-[9px] text-zinc-600 mb-0.5 block">Do (s)</label>
+                    <input type="number" min={startTrim+0.5} max={duration} step={0.1} value={endTrim??duration}
+                      onChange={e=>setEndTrim(parseFloat(e.target.value))}
+                      className={`${gi} w-full rounded-lg px-2 py-1 text-xs border-white/[0.08] text-white`}/>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-5">
+              <button onClick={()=>setUploadOpen(false)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-400 bg-white/[0.05] hover:bg-white/[0.08] transition-colors">
+                Anuluj
+              </button>
+              <button onClick={handleUpload} disabled={!file||!name.trim()||saving}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 transition-colors">
+                {saving ? 'Przesyłanie...' : 'Prześlij'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Automations Tab (osobny komponent — hooks mogą być używane tylko w komponentach) ──
 function AutomationsTab({ serverId, gi, roles, channels }: {
   serverId: string; gi: string;
@@ -3502,8 +3714,8 @@ function AutomationsTab({ serverId, gi, roles, channels }: {
 
 interface ServerSettingsPageProps {
   serverFull: ServerFull;
-  tab: 'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots'|'tag'|'events'|'onboarding'|'discovery';
-  setTab: (t: 'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots'|'tag'|'events'|'onboarding'|'discovery') => void;
+  tab: 'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'sounds'|'automations'|'bots'|'tag'|'events'|'onboarding'|'discovery';
+  setTab: (t: 'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'sounds'|'automations'|'bots'|'tag'|'events'|'onboarding'|'discovery') => void;
   roles: ServerRole[];
   members: ServerMember[];
   banList: ServerBan[]; setBanList: (v: ServerBan[]) => void;
@@ -3603,6 +3815,7 @@ function ServerSettingsPage({
     canBanMembers   && { id: 'bans'     as const, label: tl('serverSettings.bans'),        icon: <ShieldCheck size={14}/> },
     canCreateInvites && { id: 'invites' as const, label: tl('serverSettings.invites'),     icon: <UserPlus size={14}/> },
     canManageServer && { id: 'emoji' as const, label: tl('serverSettings.emoji'),          icon: <Smile size={14}/> },
+    canManageServer && { id: 'sounds' as const, label: 'Panel dźwięków',                  icon: <span className="text-sm leading-none">🎵</span> },
     canManageServer && { id: 'automations' as const, label: tl('serverSettings.automations'), icon: <Zap size={14}/> },
     canManageServer && { id: 'bots' as const, label: 'Boty', icon: <Bot size={14}/> },
     canManageServer && { id: 'tag' as const, label: 'Tag serwera', icon: <Hash size={14}/> },
@@ -3869,6 +4082,11 @@ function ServerSettingsPage({
               canManage={canManageServer}
               gi={gi}
             />
+          )}
+
+          {/* ── Panel dźwięków ── */}
+          {tab === 'sounds' && activeServer && (
+            <SoundsTab serverId={activeServer} canManage={canManageServer} gi={gi}/>
           )}
 
           {/* ── Automatyzacje ── */}
@@ -7864,7 +8082,7 @@ export default function App() {
   const [groupCtxMenu, setGroupCtxMenu] = useState<{ x: number; y: number; gc: GroupDmConversation } | null>(null);
 
   const [srvSettOpen, setSrvSettOpen]         = useState(false);
-  const [srvSettTab, setSrvSettTab]           = useState<'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'automations'|'bots'|'tag'|'events'|'onboarding'|'discovery'>('overview');
+  const [srvSettTab, setSrvSettTab]           = useState<'overview'|'roles'|'members'|'bans'|'invites'|'emoji'|'sounds'|'automations'|'bots'|'tag'|'events'|'onboarding'|'discovery'>('overview');
   const [botChannelId, setBotChannelId]       = useState<string|null>(null);
   const [botChLoading, setBotChLoading]       = useState(false);
   // ── Server tag state ─────────────────────────────────────────────
@@ -8159,6 +8377,23 @@ export default function App() {
   const voiceBarRef                            = useRef<HTMLDivElement>(null);
   const notifBellRef                           = useRef<HTMLDivElement>(null);
   const moreMenuRef                            = useRef<HTMLDivElement>(null);
+  // ── Soundboard ──────────────────────────────────────────────────
+  const [soundboardOpen,    setSoundboardOpen]    = useState(false);
+  const [sbSounds,          setSbSounds]          = useState<ServerSound[]>([]);
+  const [soundsLoading,     setSoundsLoading]     = useState(false);
+  const [playingSound,      setPlayingSound]      = useState<string|null>(null);
+  // Server settings: sound upload dialog
+  const [sbUploadOpen,      setSbUploadOpen]      = useState(false);
+  const [sbUploadFile,      setSbUploadFile]      = useState<File|null>(null);
+  const [sbUploadName,      setSbUploadName]      = useState('');
+  const [sbUploadEmoji,     setSbUploadEmoji]     = useState('🔊');
+  const [sbUploadVolume,    setSbUploadVolume]    = useState(100);
+  const [sbUploadStart,     setSbUploadStart]     = useState(0);
+  const [sbUploadEnd,       setSbUploadEnd]       = useState<number|null>(null);
+  const [sbUploadDuration,  setSbUploadDuration]  = useState(0);
+  const [sbUploadSaving,    setSbUploadSaving]    = useState(false);
+  const [sbUploadPreviewUrl,setSbUploadPreviewUrl]= useState<string|null>(null);
+  const sbUploadAudioRef                          = useRef<HTMLAudioElement|null>(null);
 
   // App Settings
   const [appSettOpen, setAppSettOpen]         = useState(false);
@@ -9239,6 +9474,17 @@ export default function App() {
         steamGameStartRef.current.delete(user_id);
       }
       setUserSteamActivities(p => { const n = new Map(p); n.set(user_id, game); return n; });
+    });
+    // Soundboard — play audio for everyone in the channel
+    sock.on('soundboard_played', (d: any) => {
+      if (!d?.fileUrl) return;
+      const url = staticUrl(d.fileUrl);
+      const vol = Math.min(2, Math.max(0, (d.volume ?? 100) / 100));
+      const audio = new Audio(url);
+      audio.volume = vol;
+      audio.play().catch(() => {});
+      setPlayingSound(d.soundId ?? d.soundName ?? null);
+      setTimeout(() => setPlayingSound(null), 3000);
     });
     // Voice channel events (route through voiceHandlerRef for fresh closures)
     sock.on('voice_user_joined', (d: any) => {
@@ -14697,6 +14943,103 @@ export default function App() {
                     </motion.div>
                   )}
                 </AnimatePresence>
+                {/* ── Soundboard panel ─────────────────────────────── */}
+                {soundboardOpen && (()=>{
+                  // 8 built-in Cordyn sounds (synthesized via Web Audio)
+                  const BUILTIN_SOUNDS = [
+                    { id:'sb_quack',    name:'Kwak',     emoji:'🦆' },
+                    { id:'sb_airhorn',  name:'Klakson',  emoji:'📯' },
+                    { id:'sb_cricket',  name:'Cykady',   emoji:'🦗' },
+                    { id:'sb_clap',     name:'Oklaski',  emoji:'👏' },
+                    { id:'sb_badum',    name:'Ba dum',   emoji:'🥁' },
+                    { id:'sb_bruh',     name:'Bruh',     emoji:'😐' },
+                    { id:'sb_ding',     name:'Ding',     emoji:'🔔' },
+                    { id:'sb_whoosh',   name:'Whoosh',   emoji:'💨' },
+                  ];
+                  const playBuiltin = (id: string) => {
+                    const c = new AudioContext();
+                    const g = c.createGain();
+                    g.connect(c.destination);
+                    setPlayingSound(id);
+                    setTimeout(()=>setPlayingSound(null), 2000);
+                    if (id==='sb_quack') {
+                      const o=c.createOscillator(); o.type='sawtooth'; o.frequency.setValueAtTime(280,c.currentTime); o.frequency.exponentialRampToValueAtTime(140,c.currentTime+0.18); g.gain.setValueAtTime(0.3,c.currentTime); g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+0.2); o.connect(g); o.start(); o.stop(c.currentTime+0.22);
+                    } else if (id==='sb_airhorn') {
+                      [220,330,440].forEach((f,i)=>{ const o=c.createOscillator(); o.type='sawtooth'; o.frequency.value=f; const gg=c.createGain(); gg.gain.setValueAtTime(0.18,c.currentTime+i*0.01); gg.gain.exponentialRampToValueAtTime(0.001,c.currentTime+1.2); o.connect(gg); gg.connect(c.destination); o.start(c.currentTime+i*0.01); o.stop(c.currentTime+1.2); });
+                    } else if (id==='sb_cricket') {
+                      for(let i=0;i<30;i++){ const o=c.createOscillator(); o.type='square'; o.frequency.value=4200; const gg=c.createGain(); const t=c.currentTime+i*0.05; gg.gain.setValueAtTime(0,t); gg.gain.linearRampToValueAtTime(0.08,t+0.005); gg.gain.exponentialRampToValueAtTime(0.001,t+0.04); o.connect(gg); gg.connect(c.destination); o.start(t); o.stop(t+0.05); }
+                    } else if (id==='sb_clap') {
+                      const buf=c.createBuffer(1,c.sampleRate*0.6,c.sampleRate); const d=buf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/(c.sampleRate*0.08)); const s=c.createBufferSource(); s.buffer=buf; g.gain.value=0.5; s.connect(g); s.start();
+                    } else if (id==='sb_badum') {
+                      [[60,0],[55,0.3],[50,0.6],[200,0.75],[180,0.78],[400,0.79]].forEach(([f,t])=>{ const o=c.createOscillator(); o.type='sine'; o.frequency.value=f; const gg=c.createGain(); gg.gain.setValueAtTime(0.4,c.currentTime+t); gg.gain.exponentialRampToValueAtTime(0.001,c.currentTime+t+0.15); o.connect(gg); gg.connect(c.destination); o.start(c.currentTime+t); o.stop(c.currentTime+t+0.2); });
+                    } else if (id==='sb_bruh') {
+                      const o=c.createOscillator(); o.type='sawtooth'; o.frequency.setValueAtTime(90,c.currentTime); o.frequency.linearRampToValueAtTime(70,c.currentTime+0.5); g.gain.setValueAtTime(0.28,c.currentTime); g.gain.linearRampToValueAtTime(0.001,c.currentTime+0.7); o.connect(g); o.start(); o.stop(c.currentTime+0.75);
+                    } else if (id==='sb_ding') {
+                      const o=c.createOscillator(); o.type='sine'; o.frequency.value=880; g.gain.setValueAtTime(0.4,c.currentTime); g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+1.2); o.connect(g); o.start(); o.stop(c.currentTime+1.3);
+                    } else if (id==='sb_whoosh') {
+                      const buf=c.createBuffer(1,c.sampleRate*0.5,c.sampleRate); const d=buf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*0.6; const s=c.createBufferSource(); s.buffer=buf; const f=c.createBiquadFilter(); f.type='bandpass'; f.frequency.setValueAtTime(200,c.currentTime); f.frequency.exponentialRampToValueAtTime(4000,c.currentTime+0.4); g.gain.setValueAtTime(0.35,c.currentTime); g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+0.5); s.connect(f); f.connect(g); s.start();
+                    }
+                    // Emit socket event for built-in sounds — use synthetic indicator
+                    if (activeCall?.channelId) {
+                      try { getSocket().emit('soundboard_play', { channelId: activeCall.channelId, soundId: id, fileUrl: `builtin:${id}`, soundName: id, volume: 100 }); } catch {}
+                    }
+                  };
+                  const playServer = (sound: ServerSound) => {
+                    const url = staticUrl(sound.file_url);
+                    const audio = new Audio(url);
+                    audio.volume = Math.min(2, sound.volume / 100);
+                    if (sound.start_trim > 0) audio.currentTime = sound.start_trim;
+                    audio.play().catch(()=>{});
+                    if (sound.end_trim) { setTimeout(()=>{ audio.pause(); audio.currentTime=0; }, (sound.end_trim - sound.start_trim) * 1000); }
+                    setPlayingSound(sound.id);
+                    setTimeout(()=>setPlayingSound(null), ((sound.end_trim??10) - sound.start_trim) * 1000 + 300);
+                    if (activeCall?.channelId) {
+                      try { getSocket().emit('soundboard_play', { channelId: activeCall.channelId, soundId: sound.id, fileUrl: sound.file_url, soundName: sound.name, volume: sound.volume }); } catch {}
+                    }
+                  };
+                  return (
+                    <div className="mx-auto mb-3 w-full max-w-2xl">
+                      <div className="glass-dark rounded-2xl border border-white/[0.1] shadow-2xl p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="text-xs font-bold text-zinc-300 uppercase tracking-widest">🎵 Soundboard</p>
+                          <button onClick={()=>setSoundboardOpen(false)} className="text-zinc-600 hover:text-zinc-300 transition-colors"><X size={14}/></button>
+                        </div>
+                        {/* Built-in sounds */}
+                        <p className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 font-bold">Cordyn</p>
+                        <div className="grid grid-cols-4 gap-1.5 mb-3">
+                          {BUILTIN_SOUNDS.map(s=>(
+                            <button key={s.id} onClick={()=>playBuiltin(s.id)}
+                              className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all ${playingSound===s.id?'border-indigo-500/60 bg-indigo-500/15 text-white':'border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.07] text-zinc-300'}`}>
+                              <span className="text-lg leading-none">{s.emoji}</span>
+                              <span className="text-xs font-medium truncate">{s.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                        {/* Server sounds */}
+                        {activeCall?.serverId && (
+                          <>
+                            <p className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 font-bold">Serwer</p>
+                            {soundsLoading && <p className="text-xs text-zinc-600 italic text-center py-2">Ładowanie...</p>}
+                            {!soundsLoading && sbSounds.length === 0 && (
+                              <p className="text-xs text-zinc-700 italic text-center py-2">Brak własnych dźwięków — dodaj je w ustawieniach serwera</p>
+                            )}
+                            {sbSounds.length > 0 && (
+                              <div className="grid grid-cols-3 gap-1.5">
+                                {sbSounds.map(s=>(
+                                  <button key={s.id} onClick={()=>playServer(s)}
+                                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all ${playingSound===s.id?'border-amber-500/60 bg-amber-500/15 text-white':'border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.07] text-zinc-300'}`}>
+                                    <span className="text-lg leading-none">{s.emoji}</span>
+                                    <span className="text-xs font-medium truncate">{s.name}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {/* Floating control pill */}
                 <div className="flex items-center justify-center">
                   <div className="call-controls-bar">
@@ -14725,6 +15068,17 @@ export default function App() {
                     }} title="Ustawienia urządzeń"
                       className={`call-ctrl-btn ${devicesOpen?'active-orange':''}`}>
                       <Settings size={18}/>
+                    </button>
+                    {/* Soundboard button */}
+                    <button onClick={()=>{
+                      setSoundboardOpen(v=>!v);
+                      if (!soundboardOpen && activeCall?.serverId && sbSounds.length === 0) {
+                        setSoundsLoading(true);
+                        soundsApi.list(activeCall.serverId).then(setSbSounds).catch(()=>{}).finally(()=>setSoundsLoading(false));
+                      }
+                    }} title="Soundboard"
+                      className={`call-ctrl-btn ${soundboardOpen?'active-orange':''}`}>
+                      <span className="text-base leading-none">🎵</span>
                     </button>
                     <div className="call-ctrl-divider"/>
                     <button onClick={hangupCall} title="Rozłącz" className="call-ctrl-btn danger">
@@ -24427,7 +24781,7 @@ export default function App() {
               {preview && (
                 <div className="flex items-start gap-2">
                   <img
-                    src={preview.avatar ?? `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(preview.username)}`}
+                    src={preview.avatar ? staticUrl(preview.avatar) : `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(preview.username)}`}
                     className="w-5 h-5 rounded-full shrink-0 mt-0.5 object-cover"
                     alt=""
                   />
