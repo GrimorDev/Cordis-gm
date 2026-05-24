@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, lazy, Suspense } from 'react';
+import { motion, AnimatePresence, useScroll, useTransform } from 'motion/react';
+
+const Spline = lazy(() => import('@splinetool/react-spline'));
 
 interface Article { q: string; a: string; }
 interface Category { id: string; icon: string; title: string; desc: string; articles: Article[]; }
@@ -80,128 +83,460 @@ const CATEGORIES: Category[] = [
   },
 ];
 
+// ── Animated aurora background ────────────────────────────────────────────────
+function AuroraBackground() {
+  return (
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+      <motion.div
+        animate={{ x: [0, 80, -60, 0], y: [0, -60, 80, 0], scale: [1, 1.2, 0.85, 1] }}
+        transition={{ duration: 26, repeat: Infinity, ease: 'easeInOut' }}
+        style={{ position: 'absolute', top: '-15%', left: '-10%', width: 750, height: 750,
+          background: 'radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%)',
+          filter: 'blur(70px)' }}
+      />
+      <motion.div
+        animate={{ x: [0, -70, 50, 0], y: [0, 90, -50, 0], scale: [1, 0.9, 1.25, 1] }}
+        transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut', delay: 5 }}
+        style={{ position: 'absolute', top: '10%', right: '-15%', width: 650, height: 650,
+          background: 'radial-gradient(circle, rgba(139,92,246,0.12) 0%, transparent 70%)',
+          filter: 'blur(80px)' }}
+      />
+      <motion.div
+        animate={{ x: [0, 40, -80, 0], y: [0, -40, 60, 0], scale: [1, 1.1, 0.95, 1] }}
+        transition={{ duration: 32, repeat: Infinity, ease: 'easeInOut', delay: 10 }}
+        style={{ position: 'absolute', bottom: '5%', left: '30%', width: 500, height: 500,
+          background: 'radial-gradient(circle, rgba(59,130,246,0.1) 0%, transparent 70%)',
+          filter: 'blur(60px)' }}
+      />
+    </div>
+  );
+}
+
+// ── Stagger container variants ────────────────────────────────────────────────
+const staggerContainer = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.07, delayChildren: 0.1 } },
+};
+const fadeUp = {
+  hidden: { opacity: 0, y: 28 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
+};
+
+// ── Category icon map (SVG instead of emoji for cleaner look) ─────────────────
+const CAT_COLORS: Record<string, string> = {
+  start: '#6366f1',
+  messages: '#8b5cf6',
+  voice: '#06b6d4',
+  account: '#10b981',
+  servers: '#f59e0b',
+  technical: '#ef4444',
+};
+
 export default function SupportPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [activeArticle, setActiveArticle] = useState<number | null>(null);
-  const [search, setSearch] = useState('');
+  const [search, setSearch]               = useState('');
+  const [hc, setHc]                       = useState(() => localStorage.getItem('cordyn_hc') === '1');
+  const [splineLoaded, setSplineLoaded]   = useState(false);
+  const [splineFailed, setSplineFailed]   = useState(false);
+  const heroRef                           = useRef<HTMLDivElement>(null);
+  const { scrollY }                       = useScroll();
+  const heroOpacity                       = useTransform(scrollY, [0, 320], [1, 0]);
+  const heroY                             = useTransform(scrollY, [0, 320], [0, -60]);
+
+  const toggleHc = () => {
+    const next = !hc;
+    setHc(next);
+    localStorage.setItem('cordyn_hc', next ? '1' : '0');
+  };
 
   const filtered = search.trim()
-    ? CATEGORIES.flatMap(cat => cat.articles.map(a => ({ ...a, cat: cat.title }))).filter(a =>
+    ? CATEGORIES.flatMap(cat => cat.articles.map(a => ({ ...a, cat: cat.title, catId: cat.id }))).filter(a =>
         a.q.toLowerCase().includes(search.toLowerCase()) || a.a.toLowerCase().includes(search.toLowerCase()))
     : null;
 
   const activeCat = CATEGORIES.find(c => c.id === activeCategory) || null;
 
+  // ── Colors based on high-contrast mode ──────────────────────────────────────
+  const bg          = hc ? '#000'         : '#09090f';
+  const textPrimary = hc ? '#fff'         : '#e4e4f0';
+  const textMuted   = hc ? '#d1d5db'      : '#71717a';
+  const textDim     = hc ? '#9ca3af'      : '#52525b';
+  const cardBg      = hc ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.025)';
+  const cardBorder  = hc ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.07)';
+  const accent      = hc ? '#818cf8'      : '#6366f1';
+  const inputBg     = hc ? 'rgba(255,255,255,0.1)'  : 'rgba(255,255,255,0.05)';
+
   return (
-    <div style={{ minHeight: '100vh', background: '#09090f', color: '#e4e4f0', fontFamily: 'Geist, system-ui, sans-serif' }}>
-      {/* Header */}
-      <div style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)' }}>
-        <div style={{ maxWidth: 900, margin: '0 auto', padding: '18px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+    <div style={{ minHeight: '100vh', background: bg, color: textPrimary, fontFamily: 'Geist, system-ui, sans-serif', overflowX: 'hidden' }}>
+
+      {/* ── Nav ─────────────────────────────────────────────────────────────── */}
+      <motion.nav
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        style={{ position: 'sticky', top: 0, zIndex: 50, borderBottom: `1px solid ${cardBorder}`,
+          background: hc ? 'rgba(0,0,0,0.95)' : 'rgba(9,9,15,0.85)', backdropFilter: 'blur(20px)' }}
+      >
+        <div style={{ maxWidth: 960, margin: '0 auto', padding: '0 28px', height: 58, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-            <img src="/cordyn_logo.png" alt="Cordyn" style={{ width: 28, height: 28, borderRadius: 8 }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}/>
-            <span style={{ color: '#fff', fontWeight: 700, fontSize: 15, letterSpacing: '-0.01em' }}>Cordyn</span>
+            <img src="/cordyn_logo.png" alt="Cordyn" style={{ width: 28, height: 28, borderRadius: 8 }}
+              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}/>
+            <span style={{ color: textPrimary, fontWeight: 700, fontSize: 15, letterSpacing: '-0.01em' }}>Cordyn</span>
             <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 15, margin: '0 2px' }}>/</span>
-            <span style={{ color: '#6366f1', fontWeight: 600, fontSize: 14 }}>Centrum pomocy</span>
+            <span style={{ color: accent, fontWeight: 600, fontSize: 14 }}>Centrum pomocy</span>
           </a>
           <div style={{ display: 'flex', gap: 8 }}>
-            <a href="/blog" style={{ padding: '6px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: '#a1a1aa', fontSize: 13, fontWeight: 500, textDecoration: 'none' }}>
+            <a href="/blog" style={{ padding: '7px 16px', borderRadius: 10, background: cardBg, border: `1px solid ${cardBorder}`, color: textMuted, fontSize: 13, fontWeight: 500, textDecoration: 'none', transition: 'color 0.15s' }}>
               Blog
             </a>
-            <a href="/" style={{ padding: '6px 14px', borderRadius: 10, background: '#6366f1', color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
+            <a href="/" style={{ padding: '7px 16px', borderRadius: 10, background: accent, color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
               Otwórz Cordyn
             </a>
           </div>
         </div>
+      </motion.nav>
+
+      {/* ── Hero ────────────────────────────────────────────────────────────── */}
+      <div ref={heroRef} style={{ position: 'relative', overflow: 'hidden', paddingBottom: 24 }}>
+        {/* Spline background */}
+        {!splineFailed && (
+          <div style={{ position: 'absolute', inset: 0, opacity: splineLoaded ? 0.35 : 0, transition: 'opacity 1.2s ease', pointerEvents: 'none' }}>
+            <Suspense fallback={null}>
+              <Spline
+                scene="https://prod.spline.design/6Wq1Q7YGyM-iab9i/scene.splinecode"
+                onLoad={() => setSplineLoaded(true)}
+                onError={() => setSplineFailed(true)}
+                style={{ width: '100%', height: '100%' }}
+              />
+            </Suspense>
+          </div>
+        )}
+
+        {/* Aurora always-on */}
+        <AuroraBackground />
+
+        {/* Hero content */}
+        <motion.div
+          style={{ opacity: heroOpacity, y: heroY, position: 'relative', zIndex: 2,
+            padding: '80px 28px 56px', textAlign: 'center', maxWidth: 680, margin: '0 auto' }}
+        >
+          <motion.p
+            initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1, duration: 0.5 }}
+            style={{ fontSize: 11, fontWeight: 700, color: accent, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 16 }}
+          >
+            Centrum pomocy
+          </motion.p>
+
+          <motion.h1
+            initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.18, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+            style={{ fontSize: 48, fontWeight: 900, color: textPrimary, margin: '0 0 16px',
+              letterSpacing: '-0.03em', lineHeight: 1.1 }}
+          >
+            Jak możemy{' '}
+            <span style={{ background: `linear-gradient(135deg, ${accent}, #a78bfa)`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              pomóc?
+            </span>
+          </motion.h1>
+
+          <motion.p
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.26, duration: 0.5 }}
+            style={{ fontSize: 17, color: textMuted, margin: '0 0 40px', lineHeight: 1.6 }}
+          >
+            Odpowiedzi na najczęstsze pytania dotyczące Cordyn
+          </motion.p>
+
+          {/* Search */}
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ delay: 0.34, duration: 0.5 }}
+            style={{ position: 'relative', maxWidth: 560, margin: '0 auto' }}
+          >
+            <svg style={{ position: 'absolute', left: 18, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: textDim }}
+              width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input
+              value={search}
+              onChange={e => { setSearch(e.target.value); setActiveCategory(null); setActiveArticle(null); }}
+              placeholder="Szukaj w centrum pomocy…"
+              style={{ width: '100%', padding: '16px 20px 16px 48px', borderRadius: 18,
+                background: inputBg, border: `1.5px solid ${cardBorder}`, color: textPrimary,
+                fontSize: 15, outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.2s, box-shadow 0.2s' }}
+              onFocus={e => { e.currentTarget.style.borderColor = `${accent}80`; e.currentTarget.style.boxShadow = `0 0 0 3px ${accent}18`; }}
+              onBlur={e => { e.currentTarget.style.borderColor = cardBorder; e.currentTarget.style.boxShadow = 'none'; }}
+            />
+          </motion.div>
+        </motion.div>
       </div>
 
-      {/* Hero + search */}
-      <div style={{ background: 'linear-gradient(180deg, rgba(99,102,241,0.08) 0%, transparent 100%)', padding: '56px 24px 40px', textAlign: 'center' }}>
-        <p style={{ fontSize: 12, fontWeight: 700, color: '#6366f1', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 12 }}>Centrum pomocy</p>
-        <h1 style={{ fontSize: 34, fontWeight: 800, color: '#fff', margin: '0 0 12px', letterSpacing: '-0.02em' }}>Jak możemy pomóc?</h1>
-        <p style={{ fontSize: 15, color: '#71717a', margin: '0 0 32px' }}>Odpowiedzi na najczęstsze pytania dotyczące Cordyn</p>
-        <div style={{ maxWidth: 520, margin: '0 auto', position: 'relative' }}>
-          <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: '#52525b', fontSize: 16, pointerEvents: 'none' }}>⌕</span>
-          <input value={search} onChange={e => { setSearch(e.target.value); setActiveCategory(null); setActiveArticle(null); }}
-            placeholder="Szukaj w centrum pomocy..."
-            style={{ width: '100%', padding: '14px 16px 14px 44px', borderRadius: 14, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontSize: 15, outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.2s' }}
-            onFocus={e => { e.currentTarget.style.borderColor = 'rgba(99,102,241,0.5)'; }}
-            onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; }}
-          />
-        </div>
-      </div>
-
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 24px 80px' }}>
+      {/* ── Content ─────────────────────────────────────────────────────────── */}
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: '8px 28px 100px' }}>
 
         {/* Search results */}
-        {filtered && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 40 }}>
-            <p style={{ fontSize: 12, color: '#52525b', marginBottom: 8 }}>{filtered.length} wyników dla „{search}"</p>
-            {filtered.length === 0 && (
-              <div style={{ padding: '32px', textAlign: 'center', color: '#52525b', fontSize: 14 }}>Brak wyników. Spróbuj innego zapytania.</div>
-            )}
-            {filtered.map((a, i) => (
-              <div key={i} style={{ padding: '16px 20px', borderRadius: 14, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', cursor: 'pointer' }}
-                onClick={() => { setSearch(''); const catId = CATEGORIES.find(c => c.title === a.cat)?.id; if (catId) { setActiveCategory(catId); setActiveArticle(CATEGORIES.find(c => c.id === catId)!.articles.findIndex(ar => ar.q === a.q)); } }}>
-                <p style={{ fontSize: 11, color: '#6366f1', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{a.cat}</p>
-                <p style={{ fontSize: 14, fontWeight: 600, color: '#fff', margin: '0 0 4px' }}>{a.q}</p>
-                <p style={{ fontSize: 13, color: '#71717a', margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.a}</p>
-              </div>
-            ))}
-          </div>
-        )}
+        <AnimatePresence mode="wait">
+          {filtered && (
+            <motion.div
+              key="search-results"
+              initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.3 }}
+            >
+              <p style={{ fontSize: 12, color: textDim, marginBottom: 16 }}>
+                {filtered.length} {filtered.length === 1 ? 'wynik' : filtered.length < 5 ? 'wyniki' : 'wyników'} dla „{search}"
+              </p>
+              {filtered.length === 0 ? (
+                <div style={{ padding: '48px 24px', textAlign: 'center', color: textDim, fontSize: 15 }}>
+                  Brak wyników. Spróbuj innego zapytania.
+                </div>
+              ) : (
+                <motion.div variants={staggerContainer} initial="hidden" animate="show"
+                  style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {filtered.map((a, i) => (
+                    <motion.div key={i} variants={fadeUp}
+                      onClick={() => {
+                        setSearch('');
+                        const catId = a.catId;
+                        setActiveCategory(catId);
+                        setActiveArticle(CATEGORIES.find(c => c.id === catId)!.articles.findIndex(ar => ar.q === a.q));
+                      }}
+                      whileHover={{ scale: 1.01, borderColor: `${accent}40` }}
+                      style={{ padding: '20px 24px', borderRadius: 18, background: cardBg,
+                        border: `1px solid ${cardBorder}`, cursor: 'pointer' }}
+                    >
+                      <p style={{ fontSize: 11, color: CAT_COLORS[a.catId] || accent, fontWeight: 700,
+                        textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{a.cat}</p>
+                      <p style={{ fontSize: 15, fontWeight: 700, color: textPrimary, margin: '0 0 6px' }}>{a.q}</p>
+                      <p style={{ fontSize: 14, color: textMuted, margin: 0, lineHeight: 1.6,
+                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.a}</p>
+                    </motion.div>
+                  ))}
+                </motion.div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Category grid */}
-        {!filtered && !activeCategory && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12, marginTop: 8 }}>
-            {CATEGORIES.map(cat => (
-              <button key={cat.id} onClick={() => setActiveCategory(cat.id)}
-                style={{ padding: '20px 20px', borderRadius: 16, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.15s, background 0.15s' }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)'; e.currentTarget.style.background = 'rgba(99,102,241,0.04)'; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)'; e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; }}>
-                <div style={{ fontSize: 28, marginBottom: 12 }}>{cat.icon}</div>
-                <p style={{ fontSize: 15, fontWeight: 700, color: '#fff', margin: '0 0 6px' }}>{cat.title}</p>
-                <p style={{ fontSize: 13, color: '#71717a', margin: '0 0 14px', lineHeight: 1.5 }}>{cat.desc}</p>
-                <p style={{ fontSize: 12, color: '#52525b' }}>{cat.articles.length} artykułów →</p>
-              </button>
-            ))}
-          </div>
-        )}
+        <AnimatePresence mode="wait">
+          {!filtered && !activeCategory && (
+            <motion.div
+              key="cat-grid"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              exit={{ opacity: 0, y: -16 }} transition={{ duration: 0.3 }}
+            >
+              <motion.div
+                variants={staggerContainer} initial="hidden" animate="show"
+                style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14, marginTop: 12 }}
+              >
+                {CATEGORIES.map(cat => {
+                  const color = CAT_COLORS[cat.id] || accent;
+                  return (
+                    <motion.button
+                      key={cat.id}
+                      variants={fadeUp}
+                      onClick={() => setActiveCategory(cat.id)}
+                      whileHover={{ scale: 1.025, y: -2 }}
+                      whileTap={{ scale: 0.98 }}
+                      style={{ padding: '28px 26px', borderRadius: 20, background: cardBg,
+                        border: `1px solid ${cardBorder}`, cursor: 'pointer', textAlign: 'left',
+                        transition: 'border-color 0.2s, background 0.2s', position: 'relative', overflow: 'hidden' }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.borderColor = `${color}40`;
+                        e.currentTarget.style.background = `${color}08`;
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.borderColor = cardBorder;
+                        e.currentTarget.style.background = cardBg;
+                      }}
+                    >
+                      {/* Accent glow top-left */}
+                      <div style={{ position: 'absolute', top: -20, left: -20, width: 120, height: 120,
+                        background: `radial-gradient(circle, ${color}15 0%, transparent 70%)`, pointerEvents: 'none' }}/>
+                      <div style={{ fontSize: 30, marginBottom: 16 }}>{cat.icon}</div>
+                      <p style={{ fontSize: 16, fontWeight: 700, color: textPrimary, margin: '0 0 8px' }}>{cat.title}</p>
+                      <p style={{ fontSize: 14, color: textMuted, margin: '0 0 18px', lineHeight: 1.55 }}>{cat.desc}</p>
+                      <p style={{ fontSize: 12, color: color, fontWeight: 600 }}>{cat.articles.length} artykułów →</p>
+                    </motion.button>
+                  );
+                })}
+              </motion.div>
+
+              {/* Quick help strip */}
+              <motion.div
+                initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.55, duration: 0.5 }}
+                style={{ marginTop: 48, padding: '28px 32px', borderRadius: 20, background: cardBg,
+                  border: `1px solid ${cardBorder}`, display: 'flex', alignItems: 'center',
+                  justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}
+              >
+                <div>
+                  <p style={{ fontSize: 15, fontWeight: 700, color: textPrimary, margin: '0 0 4px' }}>Nie znalazłeś odpowiedzi?</p>
+                  <p style={{ fontSize: 13, color: textMuted, margin: 0 }}>Sprawdź status platformy lub napisz do nas przez Cordyn</p>
+                </div>
+                <a href="/stats" style={{ padding: '10px 20px', borderRadius: 12, background: `${accent}18`,
+                  border: `1px solid ${accent}30`, color: accent, fontSize: 13, fontWeight: 600, textDecoration: 'none',
+                  flexShrink: 0, transition: 'background 0.15s' }}>
+                  Status platformy →
+                </a>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Category articles */}
-        {!filtered && activeCat && (
-          <div style={{ marginTop: 8 }}>
-            <button onClick={() => { setActiveCategory(null); setActiveArticle(null); }}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'transparent', border: 'none', color: '#6366f1', cursor: 'pointer', fontSize: 13, fontWeight: 600, marginBottom: 24, padding: 0 }}>
-              ← Wszystkie kategorie
-            </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
-              <span style={{ fontSize: 24 }}>{activeCat.icon}</span>
-              <h2 style={{ fontSize: 22, fontWeight: 800, color: '#fff', margin: 0 }}>{activeCat.title}</h2>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {activeCat.articles.map((art, i) => (
-                <div key={i} style={{ borderRadius: 14, border: `1px solid ${activeArticle === i ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.07)'}`, background: activeArticle === i ? 'rgba(99,102,241,0.04)' : 'rgba(255,255,255,0.02)', overflow: 'hidden', transition: 'border-color 0.15s' }}>
-                  <button onClick={() => setActiveArticle(activeArticle === i ? null : i)}
-                    style={{ width: '100%', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: activeArticle === i ? '#c7d2fe' : '#e4e4f0' }}>{art.q}</span>
-                    <span style={{ color: '#3f3f46', flexShrink: 0, transform: activeArticle === i ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>▾</span>
-                  </button>
-                  {activeArticle === i && (
-                    <div style={{ padding: '0 20px 18px' }}>
-                      <p style={{ fontSize: 14, color: '#a1a1aa', lineHeight: 1.7, margin: 0 }}>{art.a}</p>
-                    </div>
-                  )}
+        <AnimatePresence mode="wait">
+          {!filtered && activeCat && (
+            <motion.div
+              key={`cat-${activeCat.id}`}
+              initial={{ opacity: 0, x: 32 }} animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -32 }} transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <motion.button
+                onClick={() => { setActiveCategory(null); setActiveArticle(null); }}
+                whileHover={{ x: -3 }}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'transparent',
+                  border: 'none', color: accent, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                  marginBottom: 32, padding: 0, transition: 'color 0.15s' }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6"/>
+                </svg>
+                Wszystkie kategorie
+              </motion.button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 32 }}>
+                <span style={{ fontSize: 28 }}>{activeCat.icon}</span>
+                <div>
+                  <h2 style={{ fontSize: 26, fontWeight: 800, color: textPrimary, margin: '0 0 4px', letterSpacing: '-0.02em' }}>{activeCat.title}</h2>
+                  <p style={{ fontSize: 14, color: textMuted, margin: 0 }}>{activeCat.desc}</p>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+              </div>
+
+              <motion.div
+                variants={staggerContainer} initial="hidden" animate="show"
+                style={{ display: 'flex', flexDirection: 'column', gap: 6 }}
+              >
+                {activeCat.articles.map((art, i) => {
+                  const isOpen = activeArticle === i;
+                  const color  = CAT_COLORS[activeCat.id] || accent;
+                  return (
+                    <motion.div key={i} variants={fadeUp}
+                      style={{ borderRadius: 18, border: `1px solid ${isOpen ? `${color}30` : cardBorder}`,
+                        background: isOpen ? `${color}06` : cardBg, overflow: 'hidden',
+                        transition: 'border-color 0.2s, background 0.2s' }}
+                    >
+                      <button
+                        onClick={() => setActiveArticle(isOpen ? null : i)}
+                        style={{ width: '100%', padding: '20px 24px', display: 'flex',
+                          justifyContent: 'space-between', alignItems: 'center', gap: 16,
+                          background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                      >
+                        <span style={{ fontSize: 15, fontWeight: 600, color: isOpen ? '#c7d2fe' : textPrimary, lineHeight: 1.4 }}>{art.q}</span>
+                        <motion.span
+                          animate={{ rotate: isOpen ? 180 : 0 }}
+                          transition={{ duration: 0.25 }}
+                          style={{ color: textDim, flexShrink: 0, display: 'flex', alignItems: 'center' }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="6 9 12 15 18 9"/>
+                          </svg>
+                        </motion.span>
+                      </button>
+
+                      <AnimatePresence initial={false}>
+                        {isOpen && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+                            style={{ overflow: 'hidden' }}
+                          >
+                            <div style={{ padding: '4px 24px 24px' }}>
+                              <div style={{ height: 1, background: `${cardBorder}`, marginBottom: 18, opacity: 0.6 }}/>
+                              <p style={{ fontSize: 15, color: textMuted, lineHeight: 1.75, margin: 0 }}>{art.a}</p>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
+                  );
+                })}
+              </motion.div>
+
+              {/* Still need help */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.45 }}
+                style={{ marginTop: 40, padding: '24px 28px', borderRadius: 18, background: cardBg,
+                  border: `1px solid ${cardBorder}`, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}
+              >
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: textPrimary, margin: '0 0 4px' }}>Potrzebujesz więcej pomocy?</p>
+                  <p style={{ fontSize: 13, color: textMuted, margin: 0 }}>Sprawdź inne kategorie lub wróć do strony głównej centrum pomocy</p>
+                </div>
+                <button
+                  onClick={() => { setActiveCategory(null); setActiveArticle(null); }}
+                  style={{ padding: '9px 18px', borderRadius: 12, background: `${accent}18`,
+                    border: `1px solid ${accent}30`, color: accent, fontSize: 13, fontWeight: 600,
+                    cursor: 'pointer', flexShrink: 0 }}
+                >
+                  Wszystkie kategorie
+                </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* Footer */}
-      <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '24px', textAlign: 'center' }}>
-        <p style={{ fontSize: 12, color: '#3f3f46', margin: 0 }}>© 2026 Cordyn · <a href="/blog" style={{ color: '#52525b', textDecoration: 'none' }}>Blog</a></p>
-      </div>
+      {/* ── Footer ──────────────────────────────────────────────────────────── */}
+      <motion.footer
+        initial={{ opacity: 0 }} whileInView={{ opacity: 1 }}
+        viewport={{ once: true }} transition={{ duration: 0.5 }}
+        style={{ borderTop: `1px solid ${cardBorder}`, padding: '28px 28px', textAlign: 'center' }}
+      >
+        <p style={{ fontSize: 12, color: textDim, margin: 0 }}>
+          © 2026 Cordyn ·{' '}
+          <a href="/blog" style={{ color: textDim, textDecoration: 'none' }}>Blog</a>
+          {' · '}
+          <a href="/stats" style={{ color: textDim, textDecoration: 'none' }}>Status</a>
+        </p>
+      </motion.footer>
+
+      {/* ── High-contrast toggle ────────────────────────────────────────────── */}
+      <motion.button
+        onClick={toggleHc}
+        initial={{ opacity: 0, scale: 0.8, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ delay: 0.8, duration: 0.45, type: 'spring', bounce: 0.3 }}
+        whileHover={{ scale: 1.06, y: -2 }}
+        whileTap={{ scale: 0.95 }}
+        title={hc ? 'Wyłącz wysoki kontrast' : 'Włącz wysoki kontrast'}
+        style={{
+          position: 'fixed', bottom: 28, right: 28, zIndex: 100,
+          padding: '10px 18px', borderRadius: 999,
+          background: hc ? 'rgba(255,255,255,0.12)' : 'rgba(20,20,30,0.75)',
+          backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
+          border: `1px solid ${hc ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)'}`,
+          color: hc ? '#fff' : '#a1a1aa',
+          fontSize: 12, fontWeight: 600, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 7,
+          boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
+          letterSpacing: '0.02em',
+        }}
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="5"/>
+          <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+          <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+        {hc ? 'Standardowy' : 'Wysoki kontrast'}
+      </motion.button>
     </div>
   );
 }
