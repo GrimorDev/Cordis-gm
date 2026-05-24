@@ -8125,6 +8125,11 @@ export default function App() {
   const [selectedTheme, setSelectedTheme]       = useState<ThemeId>('ayu');
   const [avatarEffect, setAvatarEffect]         = useState<string>('none');
   const [showAllAvatarEffects, setShowAllAvatarEffects] = useState(false);
+  const [showAllCardColors,   setShowAllCardColors]   = useState(false);
+  const [showAllCardFonts,    setShowAllCardFonts]    = useState(false);
+  const [showEffectPicker,    setShowEffectPicker]    = useState(false);
+  const [showColorPicker,     setShowColorPicker]     = useState(false);
+  const [showFontPicker,      setShowFontPicker]      = useState(false);
   const [cardEffect, setCardEffect]             = useState<string>('none');
   const [cardColor, setCardColor]               = useState<CardColorKey>('default');
   const [cardFont, setCardFont]                 = useState<CardFontKey>('default');
@@ -21024,26 +21029,26 @@ export default function App() {
                                 <p className="text-[9px] text-zinc-400 font-medium text-center leading-tight">{AVATAR_EFFECTS.find(e=>e.key===avatarEffect)?.label ?? t('appearance.noEffect')}</p>
                               </div>
                               {/* Picker grid — 8 visible, rest collapsible */}
-                              <div className="flex-1 flex flex-col gap-1.5">
-                                <div className="grid grid-cols-4 gap-1.5">
+                              <div className="flex-1 flex flex-col gap-2">
+                                <div className="grid grid-cols-4 gap-2">
                                   {(showAllAvatarEffects ? AVATAR_EFFECTS : AVATAR_EFFECTS.slice(0,8)).map(ef=>(
                                     <button key={ef.key} onClick={()=>saveAvatarEffect(ef.key)}
-                                      title={ef.label}
-                                      className={`relative flex flex-col items-center gap-1 p-1.5 rounded-xl border transition-all ${avatarEffect===ef.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
+                                      title={ef.desc}
+                                      className={`relative flex flex-col items-center gap-2 p-2.5 rounded-2xl border transition-all ${avatarEffect===ef.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05]'}`}>
                                       <div className="relative av-frozen" style={{'--av-url':`url("${currentUser?ava(currentUser):''}")`} as React.CSSProperties}>
-                                        <img src={currentUser?ava(currentUser):''} className={`w-8 h-8 rounded-xl object-cover av-eff-${ef.key}`} alt=""/>
+                                        <img src={currentUser?ava(currentUser):''} className={`w-12 h-12 rounded-xl object-cover av-eff-${ef.key}`} alt=""/>
                                       </div>
-                                      <span className="text-[8px] text-zinc-400 font-medium leading-tight text-center">{ef.label}</span>
-                                      {avatarEffect===ef.key&&<span className="absolute top-0.5 right-0.5 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={6} className="text-white"/></span>}
+                                      <span className="text-[11px] text-zinc-300 font-medium leading-tight text-center">{ef.label}</span>
+                                      {avatarEffect===ef.key&&<span className="absolute top-1.5 right-1.5 w-4 h-4 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={7} className="text-white"/></span>}
                                     </button>
                                   ))}
                                 </div>
                                 {AVATAR_EFFECTS.length > 8 && (
                                   <button onClick={()=>setShowAllAvatarEffects(p=>!p)}
-                                    className="flex items-center justify-center gap-1.5 py-1.5 text-[10px] text-zinc-500 hover:text-zinc-300 border border-white/[0.05] hover:border-white/[0.1] rounded-xl transition-all bg-white/[0.01] hover:bg-white/[0.03]">
+                                    className="flex items-center justify-center gap-1.5 py-2 text-xs text-zinc-500 hover:text-zinc-300 border border-white/[0.05] hover:border-white/[0.1] rounded-2xl transition-all bg-white/[0.01] hover:bg-white/[0.03]">
                                     {showAllAvatarEffects
-                                      ? <><ChevronUp size={11}/> Zwiń</>
-                                      : <><ChevronDown size={11}/> Pokaż więcej ({AVATAR_EFFECTS.length - 8})</>}
+                                      ? <><ChevronUp size={12}/> Zwiń</>
+                                      : <><ChevronDown size={12}/> Pokaż więcej ({AVATAR_EFFECTS.length - 8})</>}
                                   </button>
                                 )}
                               </div>
@@ -21054,7 +21059,7 @@ export default function App() {
 
                       {/* ══ SEKCJA 3: Karta profilu ════════════════════════════ */}
                       <div id="s-card-effect" className="scroll-mt-4">
-                        <div className="flex items-center gap-2 mb-5">
+                        <div className="flex items-center gap-2 mb-4">
                           <div className="w-6 h-6 rounded-lg bg-indigo-500/15 border border-indigo-500/20 flex items-center justify-center shrink-0">
                             <Image size={12} className="text-indigo-400"/>
                           </div>
@@ -21062,112 +21067,178 @@ export default function App() {
                           <div className="flex-1 h-px bg-white/[0.06] ml-1"/>
                         </div>
 
-                        {/* Two-column layout: left = pickers, right = live preview */}
-                        <div className="flex flex-col lg:flex-row gap-5">
-                          {/* Pickers column */}
-                          <div className="flex-1 flex flex-col gap-5">
-                            {/* Card effect picker */}
-                            <div>
-                              <div className="flex items-center justify-between mb-2">
-                                <label className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Efekt animacji</label>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[10px] text-zinc-500">Podgląd</span>
-                                  <button onClick={() => { const v = !profileCardAnim; setProfileCardAnim(v); localStorage.setItem('cordyn_profile_card_anim', v ? '1' : '0'); }}
-                                    className={`w-8 h-4 rounded-full transition-all shrink-0 relative ${profileCardAnim ? 'bg-indigo-500' : 'bg-zinc-700'}`}>
-                                    <span className="absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-all duration-200"
-                                      style={{left: profileCardAnim ? 'calc(100% - 0.875rem)' : '0.125rem'}}/>
+                        {/* ── Stały podgląd na żywo ── */}
+                        {(()=>{
+                          const pvCcDef = CARD_COLORS.find(c=>c.key===cardColor)??CARD_COLORS[0];
+                          const pvCfDef = CARD_FONTS.find(f=>f.key===cardFont)??CARD_FONTS[0];
+                          const pvBg = pvCcDef.hex;
+                          const pvLight = !pvCcDef.dark;
+                          const pvBanner = pvCcDef.bannerGrad;
+                          const pvText = pvLight?'#1e293b':'#ffffff';
+                          const pvSub  = pvLight?'#475569':'#94a3b8';
+                          const pvBorder = pvLight?'rgba(0,0,0,0.12)':'rgba(255,255,255,0.08)';
+                          const pvEffLabel = CARD_EFFECTS.find(e=>e.key===cardEffect)?.label??'Brak';
+                          return (
+                            <div className="mb-5 flex items-start gap-5 p-4 rounded-2xl bg-white/[0.025] border border-white/[0.07]">
+                              <div className="relative rounded-2xl overflow-hidden shadow-xl shadow-black/60 shrink-0"
+                                style={{ width:180, backgroundColor:pvBg, fontFamily:pvCfDef.css, fontSize:pvCfDef.size, border:`1px solid ${pvBorder}` }}>
+                                <div className="h-14 relative" style={{ background:pvBanner }}>
+                                  <div className="absolute -bottom-6 left-3">
+                                    <img src={currentUser?ava(currentUser):''} className="w-12 h-12 rounded-xl object-cover border-[3px]" style={{ borderColor:pvBg }} alt=""/>
+                                  </div>
+                                </div>
+                                <div className="pt-8 px-3 pb-3">
+                                  <p className="text-sm font-bold leading-tight" style={{ color:pvText }}>{currentUser?.username??'Użytkownik'}</p>
+                                  <p className="text-[10px] mt-0.5" style={{ color:pvSub }}>online</p>
+                                  {currentUser?.bio&&<p className="text-[10px] mt-2 leading-relaxed opacity-70 line-clamp-2" style={{ color:pvSub }}>{currentUser.bio}</p>}
+                                  <div className="mt-2 pt-2 flex items-center gap-1" style={{ borderTop:`1px solid ${pvBorder}` }}>
+                                    <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color:pvSub }}>Efekt:</span>
+                                    <span className="text-[9px] ml-1" style={{ color:pvText }}>{pvEffLabel}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex-1 flex flex-col gap-1.5 pt-1">
+                                <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold mb-1">Podgląd na żywo</p>
+                                <p className="text-sm text-zinc-300"><span className="text-zinc-600 text-xs">Efekt</span> &nbsp;{pvEffLabel}</p>
+                                <p className="text-sm text-zinc-300"><span className="text-zinc-600 text-xs">Kolor</span> &nbsp;{pvCcDef.label}</p>
+                                <p className="text-sm text-zinc-300"><span className="text-zinc-600 text-xs">Czcionka</span> &nbsp;{pvCfDef.label}</p>
+                                <div className="flex items-center gap-2.5 mt-3 pt-3 border-t border-white/[0.05]">
+                                  <span className="text-xs text-zinc-500">Animacja podglądu</span>
+                                  <button onClick={()=>{ const v=!profileCardAnim; setProfileCardAnim(v); localStorage.setItem('cordyn_profile_card_anim',v?'1':'0'); }}
+                                    className={`w-9 h-5 rounded-full transition-all shrink-0 relative ${profileCardAnim?'bg-indigo-500':'bg-zinc-700'}`}>
+                                    <span className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-200" style={{left:profileCardAnim?'calc(100% - 1.125rem)':'0.125rem'}}/>
                                   </button>
                                 </div>
                               </div>
-                              <div className="grid grid-cols-5 gap-1.5">
-                                {CARD_EFFECTS.map(ef=>(
-                                  <button key={ef.key} onClick={()=>saveCardEffect(ef.key)}
-                                    title={ef.label}
-                                    className={`relative flex flex-col items-center gap-1 p-1.5 rounded-xl border transition-all ${cardEffect===ef.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
-                                    <div className="w-8 h-8 rounded-xl bg-[#0f0f1a] border border-white/10 flex items-center justify-center overflow-hidden">
-                                      <span className="text-[7px] leading-tight text-center px-0.5 break-all text-zinc-400">{ef.label}</span>
-                                    </div>
-                                    <span className="text-[8px] text-zinc-400 font-medium leading-tight text-center">{ef.label}</span>
-                                    {cardEffect===ef.key&&<span className="absolute top-0.5 right-0.5 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={6} className="text-white"/></span>}
-                                  </button>
-                                ))}
-                              </div>
                             </div>
+                          );
+                        })()}
 
-                            {/* Card color picker */}
-                            <div>
-                              <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">Kolor tła</label>
-                              <div className="grid grid-cols-6 gap-1.5">
-                                {CARD_COLORS.map(cc=>(
-                                  <button key={cc.key} onClick={()=>saveCardColor(cc.key as CardColorKey)}
-                                    title={cc.label}
-                                    className={`relative flex flex-col items-center gap-0.5 p-1.5 rounded-xl border transition-all ${cardColor===cc.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
-                                    <div className="w-7 h-7 rounded-lg border border-white/10 shrink-0"
-                                      style={{ background: cc.bannerGrad }}/>
-                                    <span className="text-[7px] text-zinc-400 font-medium leading-tight text-center truncate w-full">{cc.label}</span>
-                                    {cardColor===cc.key&&<span className="absolute top-0.5 right-0.5 w-2.5 h-2.5 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={5} className="text-white"/></span>}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-
-                            {/* Card font picker */}
-                            <div>
-                              <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">Czcionka</label>
-                              <div className="grid grid-cols-6 gap-1.5">
-                                {CARD_FONTS.map(cf=>(
-                                  <button key={cf.key} onClick={()=>saveCardFont(cf.key as CardFontKey)}
-                                    title={cf.label}
-                                    className={`relative flex flex-col items-center gap-0.5 p-1.5 rounded-xl border transition-all ${cardFont===cf.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
-                                    <div className="w-7 h-7 rounded-lg bg-[#0f0f1a] border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
-                                      <span style={{ fontFamily: cf.css, fontSize: '12px', color: '#fff', lineHeight: 1 }}>Aa</span>
-                                    </div>
-                                    <span className="text-[7px] text-zinc-400 font-medium leading-tight text-center truncate w-full">{cf.label}</span>
-                                    {cardFont===cf.key&&<span className="absolute top-0.5 right-0.5 w-2.5 h-2.5 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={5} className="text-white"/></span>}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Live preview column — sticky on large screens */}
-                          {(() => {
-                            const pvCcDef = CARD_COLORS.find(c => c.key === cardColor) ?? CARD_COLORS[0];
-                            const pvCfDef = CARD_FONTS.find(f => f.key === cardFont)   ?? CARD_FONTS[0];
-                            const pvBg    = pvCcDef.hex;
-                            const pvLight = !pvCcDef.dark;
-                            const pvBanner = pvCcDef.bannerGrad;
-                            const pvText  = pvLight ? '#1e293b' : '#ffffff';
-                            const pvSub   = pvLight ? '#475569' : '#94a3b8';
-                            const pvBorder= pvLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.08)';
-                            const pvEffLabel = CARD_EFFECTS.find(e=>e.key===cardEffect)?.label ?? 'Brak';
-                            return (
-                              <div className="flex flex-col items-center gap-2 shrink-0">
-                                <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold self-start lg:self-center">Podgląd</p>
-                                <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-black/60"
-                                  style={{ width: 200, backgroundColor: pvBg, fontFamily: pvCfDef.css, fontSize: pvCfDef.size, border: `1px solid ${pvBorder}` }}>
-                                  <div className="h-12 relative" style={{ background: pvBanner }}>
-                                    <div className="absolute -bottom-5 left-3">
-                                      <img src={currentUser ? ava(currentUser) : ''}
-                                        className="w-10 h-10 rounded-xl object-cover border-[3px]"
-                                        style={{ borderColor: pvBg }} alt=""/>
-                                    </div>
-                                  </div>
-                                  <div className="pt-7 px-3 pb-3">
-                                    <p className="text-sm font-bold leading-tight" style={{ color: pvText }}>{currentUser?.username ?? 'Użytkownik'}</p>
-                                    <p className="text-[10px] mt-0.5" style={{ color: pvSub }}>online</p>
-                                    {currentUser?.bio && <p className="text-[10px] mt-2 leading-relaxed opacity-70 line-clamp-2" style={{ color: pvSub }}>{currentUser.bio}</p>}
-                                    <div className="mt-2 pt-2 flex items-center gap-1.5" style={{ borderTop: `1px solid ${pvBorder}` }}>
-                                      <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: pvSub }}>Efekt:</span>
-                                      <span className="text-[9px]" style={{ color: pvText }}>{pvEffLabel}</span>
-                                    </div>
+                        {/* ── Akordeon 1: Efekt animacji ── */}
+                        {(()=>{
+                          const cur = CARD_EFFECTS.find(e=>e.key===cardEffect)??CARD_EFFECTS[0];
+                          const curEmoji = (cur.label.match(/^\p{Emoji_Presentation}/u)??cur.label.match(/^[\u{1F300}-\u{1FAFF}]/u))?.[0]??'✦';
+                          const curName  = cur.label.replace(/^[\p{Emoji_Presentation}\p{Emoji}️\s]+/u,'').trim()||cur.label;
+                          return (
+                            <div className="mb-3 border border-white/[0.07] rounded-2xl overflow-hidden">
+                              <button onClick={()=>setShowEffectPicker(p=>!p)}
+                                className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.03] transition-colors">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-2xl leading-none select-none w-9 text-center">{curEmoji}</span>
+                                  <div className="text-left">
+                                    <p className="text-sm font-semibold text-white">Efekt animacji</p>
+                                    <p className="text-xs text-zinc-500 mt-0.5">Aktualnie: {curName}</p>
                                   </div>
                                 </div>
-                                <p className="text-[9px] text-zinc-600 text-center max-w-[200px] leading-snug">Tak widzą Cię inni użytkownicy</p>
-                              </div>
-                            );
-                          })()}
-                        </div>
+                                <ChevronDown size={18} className={`text-zinc-500 transition-transform duration-200 ${showEffectPicker?'rotate-180':''}`}/>
+                              </button>
+                              {showEffectPicker&&(
+                                <div className="px-4 pb-5 pt-1 border-t border-white/[0.05]">
+                                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 mt-3">
+                                    {CARD_EFFECTS.map(ef=>{
+                                      const em=(ef.label.match(/^\p{Emoji_Presentation}/u)??ef.label.match(/^[\u{1F300}-\u{1FAFF}]/u))?.[0]??'✦';
+                                      const nm=ef.label.replace(/^[\p{Emoji_Presentation}\p{Emoji}️\s]+/u,'').trim()||ef.label;
+                                      return (
+                                        <button key={ef.key} onClick={()=>saveCardEffect(ef.key)} title={ef.desc}
+                                          className={`relative flex flex-col items-center gap-3 p-4 rounded-2xl border transition-all ${cardEffect===ef.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.05]'}`}>
+                                          <span className="text-4xl leading-none select-none">{em}</span>
+                                          <span className="text-xs text-zinc-300 font-medium leading-tight text-center">{nm}</span>
+                                          {cardEffect===ef.key&&<span className="absolute top-2 right-2 w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={9} className="text-white"/></span>}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+
+                        {/* ── Akordeon 2: Kolor tła ── */}
+                        {(()=>{
+                          const cur = CARD_COLORS.find(c=>c.key===cardColor)??CARD_COLORS[0];
+                          return (
+                            <div className="mb-3 border border-white/[0.07] rounded-2xl overflow-hidden">
+                              <button onClick={()=>setShowColorPicker(p=>!p)}
+                                className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.03] transition-colors">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-9 h-9 rounded-xl border border-white/[0.12] shrink-0" style={{ background:cur.bannerGrad }}/>
+                                  <div className="text-left">
+                                    <p className="text-sm font-semibold text-white">Kolor tła karty</p>
+                                    <p className="text-xs text-zinc-500 mt-0.5">Aktualnie: {cur.label}</p>
+                                  </div>
+                                </div>
+                                <ChevronDown size={18} className={`text-zinc-500 transition-transform duration-200 ${showColorPicker?'rotate-180':''}`}/>
+                              </button>
+                              {showColorPicker&&(
+                                <div className="px-4 pb-5 pt-1 border-t border-white/[0.05]">
+                                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 mt-3">
+                                    {(showAllCardColors?CARD_COLORS:CARD_COLORS.slice(0,8)).map(cc=>(
+                                      <button key={cc.key} onClick={()=>saveCardColor(cc.key as CardColorKey)}
+                                        className={`relative flex flex-col items-center gap-2.5 p-3 rounded-2xl border transition-all ${cardColor===cc.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.05]'}`}>
+                                        <div className="w-full h-12 rounded-xl border border-white/[0.08]" style={{ background:cc.bannerGrad }}/>
+                                        <div className="w-full h-5 rounded-lg border border-white/[0.08]" style={{ background:cc.hex }}/>
+                                        <span className="text-xs text-zinc-300 font-medium leading-tight">{cc.label}</span>
+                                        {cardColor===cc.key&&<span className="absolute top-2 right-2 w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={9} className="text-white"/></span>}
+                                      </button>
+                                    ))}
+                                  </div>
+                                  {CARD_COLORS.length>8&&(
+                                    <button onClick={()=>setShowAllCardColors(p=>!p)}
+                                      className="mt-3 flex items-center justify-center gap-1.5 w-full py-3 text-xs text-zinc-500 hover:text-zinc-300 border border-white/[0.05] hover:border-white/[0.1] rounded-2xl transition-all bg-white/[0.01] hover:bg-white/[0.03]">
+                                      {showAllCardColors?<><ChevronUp size={13}/> Zwiń</>:<><ChevronDown size={13}/> Pokaż więcej ({CARD_COLORS.length-8})</>}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+
+                        {/* ── Akordeon 3: Czcionka ── */}
+                        {(()=>{
+                          const cur = CARD_FONTS.find(f=>f.key===cardFont)??CARD_FONTS[0];
+                          return (
+                            <div className="mb-3 border border-white/[0.07] rounded-2xl overflow-hidden">
+                              <button onClick={()=>setShowFontPicker(p=>!p)}
+                                className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.03] transition-colors">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-9 h-9 rounded-xl bg-[#0f0f1a] border border-white/10 flex items-center justify-center shrink-0">
+                                    <span style={{ fontFamily:cur.css, fontSize:'18px', color:'#e4e4e7', lineHeight:1 }}>Aa</span>
+                                  </div>
+                                  <div className="text-left">
+                                    <p className="text-sm font-semibold text-white">Czcionka</p>
+                                    <p className="text-xs text-zinc-500 mt-0.5">Aktualnie: {cur.label}</p>
+                                  </div>
+                                </div>
+                                <ChevronDown size={18} className={`text-zinc-500 transition-transform duration-200 ${showFontPicker?'rotate-180':''}`}/>
+                              </button>
+                              {showFontPicker&&(
+                                <div className="px-4 pb-5 pt-1 border-t border-white/[0.05]">
+                                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 mt-3">
+                                    {(showAllCardFonts?CARD_FONTS:CARD_FONTS.slice(0,8)).map(cf=>(
+                                      <button key={cf.key} onClick={()=>saveCardFont(cf.key as CardFontKey)}
+                                        className={`relative flex flex-col items-center gap-2.5 p-3.5 rounded-2xl border transition-all ${cardFont===cf.key?'border-indigo-500/70 bg-indigo-500/10':'border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.05]'}`}>
+                                        <div className="w-full h-16 rounded-xl bg-[#0f0f1a] border border-white/10 flex items-center justify-center overflow-hidden">
+                                          <span style={{ fontFamily:cf.css, fontSize:'32px', color:'#e4e4e7', lineHeight:1 }}>Aa</span>
+                                        </div>
+                                        <span className="text-xs text-zinc-300 font-medium leading-tight text-center">{cf.label}</span>
+                                        {cardFont===cf.key&&<span className="absolute top-2 right-2 w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center"><Check size={9} className="text-white"/></span>}
+                                      </button>
+                                    ))}
+                                  </div>
+                                  {CARD_FONTS.length>8&&(
+                                    <button onClick={()=>setShowAllCardFonts(p=>!p)}
+                                      className="mt-3 flex items-center justify-center gap-1.5 w-full py-3 text-xs text-zinc-500 hover:text-zinc-300 border border-white/[0.05] hover:border-white/[0.1] rounded-2xl transition-all bg-white/[0.01] hover:bg-white/[0.03]">
+                                      {showAllCardFonts?<><ChevronUp size={13}/> Zwiń</>:<><ChevronDown size={13}/> Pokaż więcej ({CARD_FONTS.length-8})</>}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+
                       </div>{/* end s-card-effect */}
 
                     </motion.div>
