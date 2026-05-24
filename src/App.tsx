@@ -356,6 +356,19 @@ const fmtDateLocale = (iso: string, opts?: Intl.DateTimeFormatOptions): string =
 };
 const fmtDur = (s: number) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
 const fmtGameDur = (startMs: number): string => {
+
+/** Returns true when the current local time falls inside the configured quiet-hours window. */
+function isInQuietHours(cfg: { enabled: boolean; startHour: number; endHour: number; days: number[] }): boolean {
+  if (!cfg.enabled || !cfg.days.length) return false;
+  const now   = new Date();
+  if (!cfg.days.includes(now.getDay())) return false;
+  const cur   = now.getHours() * 60 + now.getMinutes();
+  const start = cfg.startHour * 60;
+  const end   = cfg.endHour   * 60;
+  if (start === end) return true;            // full 24-hour block
+  if (start > end)   return cur >= start || cur < end;  // overnight (e.g. 22:00→08:00)
+  return cur >= start && cur < end;          // same-day (e.g. 09:00→17:00)
+}
   const sec = Math.floor((Date.now() - startMs) / 1000);
   if (sec < 60) return 'Przed chwilą';
   const h = Math.floor(sec / 3600);
@@ -8143,7 +8156,20 @@ export default function App() {
 
   // App Settings
   const [appSettOpen, setAppSettOpen]         = useState(false);
-  const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'devices'|'privacy'|'locale'|'connections'|'theme'|'desktop'|'updates'|'about'>('account');
+  const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'notifications'|'devices'|'privacy'|'locale'|'connections'|'theme'|'desktop'|'updates'|'about'>('account');
+
+  // ── Godziny Ciszy (Quiet Hours) ────────────────────────────────────────────
+  type QuietHoursConfig = { enabled: boolean; startHour: number; endHour: number; days: number[]; allowMentions: boolean; };
+  const QH_DEFAULT: QuietHoursConfig = { enabled: false, startHour: 22, endHour: 8, days: [0,1,2,3,4,5,6], allowMentions: true };
+  const [quietHours, setQuietHours]   = useState<QuietHoursConfig>(() => {
+    try { return { ...QH_DEFAULT, ...JSON.parse(localStorage.getItem('cordyn_quiet_hours') || 'null') }; } catch { return QH_DEFAULT; }
+  });
+  const quietHoursRef = useRef(quietHours);
+  quietHoursRef.current = quietHours;
+  const saveQH = (next: QuietHoursConfig) => {
+    setQuietHours(next);
+    try { localStorage.setItem('cordyn_quiet_hours', JSON.stringify(next)); } catch {}
+  };
   const [sessions, setSessions]               = useState<UserSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   // Globalny hook żeby OAuth callback mógł otworzyć zakładkę połączeń
@@ -9007,8 +9033,11 @@ export default function App() {
           _bgEffPref === 'all' || _bgEffPref === 'default' ||
           (_bgEffPref === 'mentions' && _bgIsMention)
         );
-        // Play notification sound for messages from others (skip if Focus Mode, muted, or pref blocks)
-        if (!isOwnMsg && !focusModeRef.current && _bgNotifAllowed) {
+        // Quiet Hours: block unless the mention exception is set
+        const _bgQHBlocked = isInQuietHours(quietHoursRef.current) &&
+          !(quietHoursRef.current.allowMentions && _bgIsMention);
+        // Play notification sound for messages from others (skip if Focus Mode, muted, QH, or pref blocks)
+        if (!isOwnMsg && !focusModeRef.current && _bgNotifAllowed && !_bgQHBlocked) {
           const cSnd = chCustomSoundsRef.current[chId];
           const sSnd = serverSoundsRef.current[serverFullRef.current?.id || ''];
           if (cSnd) playCustomSound(cSnd);
@@ -9041,7 +9070,8 @@ export default function App() {
           const _curChPref = chNotifPrefRef.current[chId] ?? 'default';
           const _curSrvPref = _curSrvId ? (srvNotifPrefRef.current[_curSrvId] ?? 'default') : 'default';
           const _curEffPref = _curChPref !== 'default' ? _curChPref : _curSrvPref;
-          const _curFullySilenced = _curMuted || _curEffPref === 'nothing';
+          const _curQH = isInQuietHours(quietHoursRef.current);
+          const _curFullySilenced = _curMuted || _curEffPref === 'nothing' || _curQH;
           // Mention alert sound — plays unless fully silenced
           const myUsername = currentUserRef.current?.username;
           if (!_curFullySilenced && myUsername && new RegExp(`!${myUsername}(?:[^a-zA-Z0-9_]|$)`,'i').test(msg.content || '')) {
@@ -9098,7 +9128,7 @@ export default function App() {
           msg.sender_username
         );
         setUnreadDms(p => ({ ...p, [msg.sender_id]: (p[msg.sender_id] || 0) + 1 }));
-        if (!focusModeRef.current) playDmNotification();
+        if (!focusModeRef.current && !isInQuietHours(quietHoursRef.current)) playDmNotification();
         // Desktop push notification when window is not focused (Tauri)
         if (isTauri && !isWindowFocused.current) {
           import('@tauri-apps/plugin-notification').then(async ({ isPermissionGranted, sendNotification }) => {
@@ -9646,6 +9676,8 @@ export default function App() {
         read: false,
       };
       setNotifications(prev => [entry, ...prev].slice(0, 50));
+      // Quiet Hours: block pings unless allowMentions is set
+      const _pngQHBlocked = isInQuietHours(quietHoursRef.current) && !quietHoursRef.current.allowMentions;
       // Check mute/notification prefs — skip sound+notification if channel or server is muted
       const _pngChMuted  = channel_id ? chMutedRef.current[channel_id] : false;
       const _pngSrvMuted = server_id  ? srvMutedRef.current[server_id]  : false;
@@ -9653,7 +9685,7 @@ export default function App() {
       const _pngSrvPref  = server_id  ? (srvNotifPrefRef.current[server_id]  ?? 'default') : 'default';
       const _pngEffPref  = _pngChPref !== 'default' ? _pngChPref : _pngSrvPref;
       // Pings/mentions pass through even with 'mentions' pref; only 'nothing' or explicit mute blocks them
-      const _pngBlocked  = _pngChMuted || _pngSrvMuted || _pngEffPref === 'nothing';
+      const _pngBlocked  = _pngChMuted || _pngSrvMuted || _pngEffPref === 'nothing' || _pngQHBlocked;
       // Push notification — Tauri (native) lub przeglądarka
       const notifTitle = type === 'everyone'
         ? `@everyone na ${server_name ?? 'serwerze'}`
@@ -9799,7 +9831,7 @@ export default function App() {
           msg.sender_username
         );
         setUnreadGroupDms(p => ({ ...p, [gid]: (p[gid] || 0) + 1 }));
-        if (!focusModeRef.current) playDmNotification();
+        if (!focusModeRef.current && !isInQuietHours(quietHoursRef.current)) playDmNotification();
         if (isTauri && !isWindowFocused.current) {
           import('@tauri-apps/plugin-notification').then(async ({ isPermissionGranted, sendNotification }) => {
             if (!await isPermissionGranted()) return;
@@ -12946,8 +12978,8 @@ export default function App() {
               className={`relative w-8 h-8 flex items-center justify-center rounded-xl transition-all ${moreMenuOpen ? 'bg-white/[0.10] text-white' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]'}`}>
               <MoreHorizontal size={16}/>
               {/* Dot when any secondary feature is active */}
-              {(isStreamMode || focusMode) && (
-                <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_4px_rgba(251,191,36,0.8)]"/>
+              {(isStreamMode || focusMode || isInQuietHours(quietHours)) && (
+                <span className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full shadow-[0_0_4px_rgba(139,92,246,0.8)] ${isInQuietHours(quietHours) && !focusMode && !isStreamMode ? 'bg-violet-400' : 'bg-amber-400'}`}/>
               )}
             </button>
             <AnimatePresence>
@@ -12977,6 +13009,34 @@ export default function App() {
                   </button>
 
                   <div className="mx-3 my-1 h-px bg-white/[0.06]"/>
+
+                  {/* Quiet Hours quick toggle */}
+                  {(() => {
+                    const qhActive = isInQuietHours(quietHours);
+                    const qhOn = quietHours.enabled;
+                    return (
+                      <button onClick={() => {
+                        setMoreMenuOpen(false);
+                        if (qhOn) {
+                          // Disable quiet hours entirely
+                          saveQH({ ...quietHours, enabled: false });
+                          addToast('Godziny ciszy wyłączone', 'info');
+                        } else {
+                          // Enable with current schedule (or default)
+                          saveQH({ ...quietHours, enabled: true });
+                          setAppSettTab('notifications');
+                          setAppSettOpen(true);
+                        }
+                      }} className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-sm transition-colors text-left ${qhActive ? 'text-violet-300 hover:bg-violet-500/10' : qhOn ? 'text-zinc-400 hover:bg-white/[0.06]' : 'text-zinc-300 hover:bg-white/[0.06] hover:text-white'}`}>
+                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${qhActive ? 'bg-violet-500/20' : 'bg-white/[0.05]'}`}>
+                          <Moon size={13} className={qhActive ? 'text-violet-400' : 'text-zinc-400'}/>
+                        </div>
+                        <span>Godziny ciszy</span>
+                        {qhActive && <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-violet-500/20 text-violet-400 leading-none">DO {quietHours.endHour.toString().padStart(2,'0')}:00</span>}
+                        {qhOn && !qhActive && <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-zinc-700/80 text-zinc-500 leading-none">ZAŁ.</span>}
+                      </button>
+                    );
+                  })()}
 
                   {/* Focus Mode */}
                   <button onClick={() => {
@@ -20437,6 +20497,8 @@ export default function App() {
                         sections:[{id:'s-profil',label:tl('settings.section.profile')},{id:'s-info',label:tl('settings.section.info')},{id:'s-password',label:tl('settings.section.password')},{id:'s-sessions',label:tl('settings.section.sessions')}]},
                       {id:'appearance',  label:t('settings.appearance'), icon:<Image size={14}/>,
                         sections:[{id:'s-chat',label:tl('settings.section.chat')},{id:'s-accessibility',label:tl('settings.section.profileEffects')},{id:'s-card-effect',label:tl('settings.section.cardEffect')}]},
+                      {id:'notifications', label:'Powiadomienia', icon:<Bell size={14}/>,
+                        sections:[{id:'s-quiet',label:'Godziny ciszy'}]},
                       {id:'theme',       label:tl('settings.theme'),     icon:<Palette size={14}/>, sections:[]},
                       {id:'connections', label:tl('settings.connections'),icon:<Link2 size={14}/>, sections:[]},
                     ]},
@@ -21439,6 +21501,148 @@ export default function App() {
 
                     </motion.div>
                   )}
+
+                  {/* ─── POWIADOMIENIA ─── */}
+                  {appSettTab==='notifications'&&(()=>{
+                    const qhActive = isInQuietHours(quietHours);
+                    const tog = (val: boolean, field: keyof QuietHoursConfig) => saveQH({...quietHours,[field]:val});
+                    const Row = ({label,desc,val,onToggle}:{label:string;desc?:string;val:boolean;onToggle:()=>void}) => (
+                      <div className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-3 hover:border-white/[0.08] transition-colors">
+                        <div className="flex-1 min-w-0 mr-4">
+                          <p className="text-sm font-medium text-white">{label}</p>
+                          {desc&&<p className="text-[11px] text-zinc-500 mt-0.5 leading-snug">{desc}</p>}
+                        </div>
+                        <button onClick={onToggle} className={`w-9 h-5 rounded-full transition-all shrink-0 relative ${val?'bg-indigo-500':'bg-zinc-700'}`}>
+                          <span className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-200" style={{left:val?'calc(100% - 1.125rem)':'0.125rem'}}/>
+                        </button>
+                      </div>
+                    );
+                    return (
+                      <motion.div key="notifications" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
+                        className="flex flex-col gap-8">
+
+                        <div>
+                          <h2 className="text-xl font-bold text-white mb-1">Powiadomienia</h2>
+                          <p className="text-sm text-zinc-500">Kontroluj kiedy i jak Cordyn może Cię powiadomić</p>
+                        </div>
+
+                        {/* ══ GODZINY CISZY ══ */}
+                        <div id="s-quiet" className="scroll-mt-4 flex flex-col gap-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-lg bg-violet-500/15 border border-violet-500/20 flex items-center justify-center shrink-0">
+                              <Moon size={12} className="text-violet-400"/>
+                            </div>
+                            <p className="text-sm font-bold text-white">Godziny ciszy</p>
+                            <div className="flex-1 h-px bg-white/[0.06] ml-1"/>
+                          </div>
+
+                          {/* Active status banner */}
+                          {qhActive&&(
+                            <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-violet-500/10 border border-violet-500/25">
+                              <Moon size={16} className="text-violet-400 shrink-0"/>
+                              <div className="flex-1">
+                                <p className="text-sm font-semibold text-violet-300">Godziny ciszy są aktywne</p>
+                                <p className="text-xs text-violet-400/70 mt-0.5">
+                                  Powiadomienia wyciszone do {quietHours.endHour.toString().padStart(2,'0')}:00
+                                  {quietHours.allowMentions&&' · @wzmianki nadal działają'}
+                                </p>
+                              </div>
+                              <button onClick={()=>saveQH({...quietHours,enabled:false})} className="text-xs px-2.5 py-1 rounded-lg bg-violet-500/20 text-violet-300 hover:bg-violet-500/30 transition-colors">Wyłącz teraz</button>
+                            </div>
+                          )}
+
+                          {/* Master toggle */}
+                          <Row label="Włącz godziny ciszy" desc="Automatycznie wyciszaj powiadomienia i dźwięki w wybranych godzinach"
+                            val={quietHours.enabled} onToggle={()=>saveQH({...quietHours,enabled:!quietHours.enabled})}/>
+
+                          {quietHours.enabled&&(<>
+                            {/* Time range */}
+                            <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-4">
+                              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3">Zakres godzin</p>
+                              <div className="flex items-center gap-3 flex-wrap">
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-[10px] text-zinc-600 font-medium uppercase tracking-widest">Od</label>
+                                  <select value={quietHours.startHour} onChange={e=>saveQH({...quietHours,startHour:Number(e.target.value)})}
+                                    className="bg-white/[0.07] border border-white/[0.1] rounded-xl px-3 py-2 text-sm text-white outline-none cursor-pointer hover:bg-white/[0.1] transition-colors">
+                                    {Array.from({length:24},(_,h)=>(
+                                      <option key={h} value={h} style={{background:'#111'}}>{h.toString().padStart(2,'0')}:00</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <span className="text-zinc-600 mt-5 text-lg">→</span>
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-[10px] text-zinc-600 font-medium uppercase tracking-widest">Do</label>
+                                  <select value={quietHours.endHour} onChange={e=>saveQH({...quietHours,endHour:Number(e.target.value)})}
+                                    className="bg-white/[0.07] border border-white/[0.1] rounded-xl px-3 py-2 text-sm text-white outline-none cursor-pointer hover:bg-white/[0.1] transition-colors">
+                                    {Array.from({length:24},(_,h)=>(
+                                      <option key={h} value={h} style={{background:'#111'}}>{h.toString().padStart(2,'0')}:00</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                {quietHours.startHour > quietHours.endHour&&(
+                                  <span className="mt-5 text-xs font-medium px-2 py-1 rounded-lg bg-violet-500/10 text-violet-400 border border-violet-500/20">Nocne — przechodzi przez północ</span>
+                                )}
+                                {quietHours.startHour === quietHours.endHour&&(
+                                  <span className="mt-5 text-xs font-medium px-2 py-1 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">Cały dzień (24h)</span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Day selector */}
+                            <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-4">
+                              <div className="flex items-center justify-between mb-3">
+                                <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Aktywne dni</p>
+                                <div className="flex gap-2">
+                                  <button onClick={()=>saveQH({...quietHours,days:[1,2,3,4,5]})} className="text-[10px] text-zinc-600 hover:text-zinc-400 px-2 py-0.5 rounded-lg hover:bg-white/[0.05] transition-colors">Tydz. roboczy</button>
+                                  <button onClick={()=>saveQH({...quietHours,days:[0,1,2,3,4,5,6]})} className="text-[10px] text-zinc-600 hover:text-zinc-400 px-2 py-0.5 rounded-lg hover:bg-white/[0.05] transition-colors">Wszystkie</button>
+                                </div>
+                              </div>
+                              <div className="flex gap-2 flex-wrap">
+                                {([{d:1,l:'Pon'},{d:2,l:'Wt'},{d:3,l:'Śr'},{d:4,l:'Czw'},{d:5,l:'Pt'},{d:6,l:'Sob'},{d:0,l:'Nd'}] as {d:number;l:string}[]).map(({d,l})=>{
+                                  const active = quietHours.days.includes(d);
+                                  return (
+                                    <button key={d} onClick={()=>{
+                                      const days = active ? quietHours.days.filter(x=>x!==d) : [...quietHours.days,d];
+                                      saveQH({...quietHours,days});
+                                    }}
+                                    className={`w-14 py-2 rounded-xl text-xs font-bold transition-all border ${active?'bg-violet-500/20 text-violet-300 border-violet-500/30':'bg-white/[0.03] text-zinc-600 border-white/[0.06] hover:text-zinc-400 hover:border-white/[0.1]'}`}>
+                                      {l}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Allow mentions toggle */}
+                            <Row
+                              label="Przepuść @wzmianki"
+                              desc="Bezpośrednie wzmianki @twoja_nazwa i @everyone nadal Cię powiadamiają nawet w godzinach ciszy"
+                              val={quietHours.allowMentions}
+                              onToggle={()=>saveQH({...quietHours,allowMentions:!quietHours.allowMentions})}
+                            />
+
+                            {/* Quick presets */}
+                            <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-4">
+                              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3">Szybkie ustawienia</p>
+                              <div className="flex gap-2 flex-wrap">
+                                {([
+                                  {label:'🌙 Noce (22:00–8:00)', s:22, e:8, days:[0,1,2,3,4,5,6]},
+                                  {label:'📅 Noce robocze',       s:22, e:8, days:[1,2,3,4,5]},
+                                  {label:'😴 Głęboka cisza (23:00–9:00)', s:23, e:9, days:[0,1,2,3,4,5,6]},
+                                  {label:'🏖️ Weekend wolny',   s:0,  e:0, days:[0,6]},
+                                ] as {label:string;s:number;e:number;days:number[]}[]).map(p=>(
+                                  <button key={p.label} onClick={()=>saveQH({...quietHours,startHour:p.s,endHour:p.e,days:p.days})}
+                                    className="px-3 py-1.5 rounded-xl text-xs text-zinc-400 border border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.07] hover:text-white transition-colors">
+                                    {p.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </>)}
+                        </div>
+                      </motion.div>
+                    );
+                  })()}
 
                   {/* ─── MOTYW ─── */}
                   {appSettTab==='theme'&&(
