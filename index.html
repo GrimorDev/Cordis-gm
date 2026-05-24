@@ -26,14 +26,7 @@
       (function () {
         'use strict';
 
-        // ── 1. Block right-click context menu ───────────────────────────
-        document.addEventListener('contextmenu', function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          return false;
-        }, true);
-
-        // ── 2. Block keyboard shortcuts ─────────────────────────────────
+        // ── 1. Block keyboard shortcuts ─────────────────────────────────
         document.addEventListener('keydown', function (e) {
           var k = e.key || '';
           var c = e.code || '';
