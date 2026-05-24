@@ -1,6 +1,6 @@
 [package]
 name = "cordyn"
-version = "0.2.1133"
+version = "0.2.1134"
 description = "Cordyn — platforma dla twórców"
 authors = ["GrimorDev"]
 license = "MIT"
