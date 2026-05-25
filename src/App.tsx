@@ -13291,11 +13291,6 @@ export default function App() {
           <div className="relative" ref={notifBellRef}>
             <button onClick={() => {
               setNotifOpen(p => !p);
-              if (!notifOpen) {
-                if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-                  Notification.requestPermission().catch(() => {});
-                }
-              }
             }} className={`relative w-8 h-8 flex items-center justify-center rounded-xl transition-all ${notifOpen ? 'bg-[rgba(255,143,64,0.15)] text-[#FFB454]' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]'}`}>
               <Bell size={15}/>
               {(()=>{ const u = notifications.filter(n=>!n.read).length; return u>0 ? (
@@ -22197,9 +22192,13 @@ export default function App() {
                               addToast('Twoja przeglądarka nie obsługuje powiadomień push', 'error');
                               return;
                             }
-                            const perm = await Notification.requestPermission();
+                            // Only ask for permission if not already granted
+                            const existingPerm = typeof Notification !== 'undefined' ? Notification.permission : 'denied';
+                            const perm = existingPerm === 'granted'
+                              ? 'granted'
+                              : await Notification.requestPermission();
                             if (perm !== 'granted') {
-                              addToast('Brak zgody na powiadomienia', 'error');
+                              addToast('Brak zgody na powiadomienia. Sprawdź ustawienia przeglądarki.', 'error');
                               return;
                             }
                             try {
