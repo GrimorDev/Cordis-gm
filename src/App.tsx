@@ -13260,10 +13260,10 @@ export default function App() {
           </button>
         </div>
 
-        {/* Center col — server pills (horizontal scrollable, desktop only) */}
-        <div className="hidden md:flex items-center gap-1 min-w-0 overflow-x-hidden px-1 relative"
-          style={{maskImage:'linear-gradient(to right,transparent,black 12px,black calc(100% - 12px),transparent)',WebkitMaskImage:'linear-gradient(to right,transparent,black 12px,black calc(100% - 12px),transparent)'}}>
-          <div className="flex items-center gap-1 overflow-x-auto" style={{scrollbarWidth:'none'}}>
+        {/* Center col — server icons (scrollable, icon-only for space) */}
+        <div className="hidden md:flex items-center min-w-0 overflow-hidden px-1 relative"
+          style={{maskImage:'linear-gradient(to right,transparent 0,black 16px,black calc(100% - 16px),transparent 100%)',WebkitMaskImage:'linear-gradient(to right,transparent 0,black 16px,black calc(100% - 16px),transparent 100%)'}}>
+          <div className="flex items-center gap-0.5 overflow-x-auto" style={{scrollbarWidth:'none',WebkitOverflowScrolling:'touch'}}>
 
             {/* Server pills */}
             {serverList.map(srv=>{
@@ -13275,15 +13275,13 @@ export default function App() {
                   onClick={()=>{if(activeServer===srv.id&&activeView==='servers')return;const same=activeServer===srv.id;setActiveServer(srv.id);setActiveView('servers');setActiveChannel('');setServerFull(null);setProfileViewId(null);setBannerExpanded(false);setFsOpen(false);if(same)setServerReloadKey(k=>k+1);setSrvRingActivity(prev=>{const n={...prev};delete n[srv.id];return n;});}}
                   onContextMenu={e=>{e.preventDefault();setSrvContextMenu({x:e.clientX,y:e.clientY,srv});}}
                   title={srv.name}
-                  className={`flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-xl text-[12px] font-medium whitespace-nowrap transition-all shrink-0 relative border ${isAct?'bg-[rgba(255,143,64,0.12)] text-[#FFB454] border-[rgba(255,143,64,0.22)]':mention?'text-amber-300 border-transparent hover:bg-white/[0.06]':unrd?'text-zinc-200 font-semibold border-transparent hover:bg-white/[0.06]':'text-zinc-400 border-transparent hover:text-white hover:bg-white/[0.06]'}`}>
-                  {/* Mini server icon */}
-                  <span className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 overflow-hidden ${isAct?'ring-1 ring-[rgba(255,143,64,0.5)]':''}`}>
+                  className={`flex items-center justify-center w-8 h-8 rounded-xl transition-all shrink-0 relative border ${isAct?'bg-[rgba(255,143,64,0.12)] border-[rgba(255,143,64,0.22)]':mention?'border-amber-400/30 bg-amber-400/[0.06]':unrd?'border-sky-400/30 bg-sky-400/[0.06]':'border-transparent hover:bg-white/[0.08]'}`}>
+                  {/* Icon only — name is tooltip */}
+                  <span className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 overflow-hidden ${isAct?'ring-1 ring-[rgba(255,143,64,0.5)]':mention?'ring-1 ring-amber-400/50':unrd?'ring-1 ring-sky-400/40':''}`}>
                     {srv.icon_url
                       ? <img src={staticUrl(srv.icon_url)} className="w-full h-full object-cover" alt=""/>
                       : <span className={`w-full h-full flex items-center justify-center text-[10px] font-bold text-white rounded-lg ${isAct?'bg-gradient-to-br from-[#FF8F40] to-[#FFB454]':'bg-[#1a2030]'}`}>{srv.name.charAt(0).toUpperCase()}</span>}
                   </span>
-                  <span className="max-w-[100px] truncate">{srv.name}</span>
-                  {srvMuted[srv.id]&&<BellOff size={9} className="text-zinc-600 ml-0.5"/>}
                   {/* Activity dot */}
                   {mention&&<span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-400 border-2 border-[#0A0E14]"/>}
                   {unrd&&!mention&&<span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-sky-400 border-2 border-[#0A0E14]"/>}
@@ -15694,7 +15692,7 @@ export default function App() {
                         ] as {l:string,v:number,u:string,hi:boolean}[]).map(s=>(
                           <div key={s.l} className="cursor-default"
                             style={{
-                              background:s.hi?'var(--color-indigo-600)':'rgba(255,255,255,0.05)',
+                              background:s.hi?'var(--color-indigo-600)':'#14151A',
                               borderRadius:14,padding:'18px 20px',
                               position:'relative',overflow:'hidden',
                               transition:'transform 220ms'
@@ -15725,7 +15723,7 @@ export default function App() {
                           const notifCnt=notifications.filter(n=>!n.read&&n.server_id===srv.id).length;
                           return (
                             <div key={srv.id} className="cursor-pointer"
-                              style={{position:'relative',padding:22,background:'rgba(255,255,255,0.05)',borderRadius:20,border:'1px solid transparent',transition:'all 220ms cubic-bezier(.22,.61,.36,1)',overflow:'hidden'}}
+                              style={{position:'relative',padding:22,background:'#14151A',borderRadius:20,border:'1px solid transparent',transition:'all 220ms cubic-bezier(.22,.61,.36,1)',overflow:'hidden'}}
                               onMouseEnter={e=>{const el=e.currentTarget as HTMLDivElement;el.style.transform='translateY(-3px)';el.style.borderColor='rgba(255,255,255,0.15)';el.style.boxShadow='0 8px 24px rgba(0,0,0,0.5)';}}
                               onMouseLeave={e=>{const el=e.currentTarget as HTMLDivElement;el.style.transform='';el.style.borderColor='transparent';el.style.boxShadow='';}}
                               onClick={()=>{setActiveServer(srv.id);setActiveView('servers');setActiveChannel('');setServerFull(null);}}>
@@ -15765,9 +15763,9 @@ export default function App() {
                           const sub=fAct?.name?`♫ ${fAct.artists?.[0]?.name||'Spotify'}`:fTw?`▶ ${fTw.game_name}`:f.custom_status||f.status;
                           return (
                             <div key={f.id} className="cursor-pointer"
-                              style={{display:'flex',alignItems:'center',gap:12,padding:12,background:'rgba(255,255,255,0.05)',borderRadius:14,border:'1px solid transparent',transition:'all 120ms'}}
-                              onMouseEnter={e=>{const el=e.currentTarget as HTMLDivElement;el.style.background='rgba(255,255,255,0.09)';el.style.borderColor='rgba(255,255,255,0.1)';}}
-                              onMouseLeave={e=>{const el=e.currentTarget as HTMLDivElement;el.style.background='rgba(255,255,255,0.05)';el.style.borderColor='transparent';}}
+                              style={{display:'flex',alignItems:'center',gap:12,padding:12,background:'#14151A',borderRadius:14,border:'1px solid transparent',transition:'all 120ms'}}
+                              onMouseEnter={e=>{const el=e.currentTarget as HTMLDivElement;el.style.background='#1c1d22';el.style.borderColor='rgba(255,255,255,0.1)';}}
+                              onMouseLeave={e=>{const el=e.currentTarget as HTMLDivElement;el.style.background='#14151A';el.style.borderColor='transparent';}}
                               onClick={()=>openDm(f.id)}>
                               <div style={{position:'relative',flexShrink:0}}>
                                 <img src={ava(f)} style={{width:36,height:36,borderRadius:12,objectFit:'cover',display:'block'}} alt=""/>
@@ -15795,9 +15793,9 @@ export default function App() {
                       Aktywność{' '}
                       <span style={{fontSize:13,color:'rgba(255,255,255,0.4)',fontWeight:500,letterSpacing:0}}>ostatnia godzina</span>
                     </h3>
-                    <div style={{background:'rgba(255,255,255,0.05)',borderRadius:14,padding:8}}>
+                    <div style={{background:'#14151A',borderRadius:14,padding:8}}>
                       {friends.filter(f=>f.status!=='offline').length===0&&homeVoice.length===0 ? (
-                        <div style={{padding:20,color:'rgba(255,255,255,0.3)',fontSize:13,textAlign:'center' as const}}>Brak aktywności</div>
+                        <div style={{padding:20,color:'rgba(255,255,255,0.3)',fontSize:13,textAlign:'center' as const,background:'#14151A',borderRadius:14}}>Brak aktywności</div>
                       ) : (
                         <>
                           {homeVoice.slice(0,2).map(vc=>(
@@ -15852,13 +15850,13 @@ export default function App() {
                     {homeLoading&&homeEvents.length===0 ? (
                       <div style={{textAlign:'center' as const,padding:'32px 0'}}><Loader2 size={18} className="text-indigo-400 animate-spin inline"/></div>
                     ) : homeEvents.length===0 ? (
-                      <div style={{background:'rgba(255,255,255,0.05)',borderRadius:14,padding:24,textAlign:'center' as const}}>
+                      <div style={{background:'#14151A',borderRadius:14,padding:24,textAlign:'center' as const}}>
                         <CalendarDays size={32} className="text-zinc-600 mx-auto mb-2"/>
                         <p className="text-sm text-zinc-500">Brak nadchodzących wydarzeń</p>
                         <p style={{fontSize:10,color:'rgba(255,255,255,0.3)',marginTop:4}}>Stwórz wydarzenie w swoim serwerze!</p>
                       </div>
                     ) : (
-                      <div style={{background:'rgba(255,255,255,0.05)',borderRadius:14,padding:8}}>
+                      <div style={{background:'#14151A',borderRadius:14,padding:8}}>
                         {homeEvents.slice(0,5).map(ev=>{
                           const nowT=Date.now();const startMs=new Date(ev.starts_at).getTime();const diffMs=startMs-nowT;
                           const isLive=ev.status==='active'||(diffMs<=0&&diffMs>-3_600_000);
@@ -17131,20 +17129,23 @@ export default function App() {
                     const dmAvatar = activeDmConv?.other_avatar_url;
                     return (
                       <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
-                        className="relative rounded-2xl p-6 mb-4 border border-white/[0.08] overflow-hidden"
-                        style={{background:'linear-gradient(135deg,rgba(255,255,255,0.035) 0%,rgba(255,255,255,0.015) 100%)'}}>
-                        <div className="absolute top-0 right-0 w-48 h-48 rounded-full pointer-events-none"
-                          style={{background:'radial-gradient(circle,rgba(99,102,241,0.12) 0%,transparent 70%)',filter:'blur(32px)'}}/>
-                        <div className="relative flex items-start gap-4">
-                          <div className="w-14 h-14 rounded-2xl overflow-hidden shrink-0 border-2 border-white/[0.08] shadow-xl">
+                        className="relative overflow-hidden mb-4"
+                        style={{background:'#14151A',borderRadius:20,padding:'32px 40px',border:'1px solid rgba(255,255,255,0.06)'}}>
+                        <div className="absolute pointer-events-none"
+                          style={{top:'-60px',right:'-60px',width:'300px',height:'300px',
+                            background:'var(--color-indigo-500)',
+                            borderRadius:'50%',filter:'blur(60px)',opacity:0.22,
+                            animation:'floatBlob 14s ease-in-out infinite'}}/>
+                        <div className="relative flex items-start gap-5">
+                          <div style={{width:64,height:64,borderRadius:18,overflow:'hidden',flexShrink:0,boxShadow:'0 8px 24px rgba(0,0,0,0.5)'}}>
                             {dmAvatar
-                              ?<img src={ava({avatar_url:dmAvatar,username:dmName})} className="w-full h-full object-cover" alt=""/>
-                              :<div className="w-full h-full bg-gradient-to-br from-indigo-600 to-violet-700 flex items-center justify-center text-white font-bold text-xl">{dmName.charAt(0).toUpperCase()}</div>}
+                              ?<img src={ava({avatar_url:dmAvatar,username:dmName})} style={{width:'100%',height:'100%',objectFit:'cover'}} alt=""/>
+                              :<div style={{width:'100%',height:'100%',background:'linear-gradient(135deg,#4f46e5,#7c3aed)',display:'flex',alignItems:'center',justifyContent:'center',color:'white',fontWeight:700,fontSize:24}}>{dmName.charAt(0).toUpperCase()}</div>}
                           </div>
                           <div>
-                            <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-zinc-500 mb-1">Wiadomość prywatna</div>
-                            <h2 className="text-xl font-extrabold text-white tracking-tight leading-tight mb-1">{dmName}</h2>
-                            <p className="text-sm text-zinc-500">To prywatna rozmowa między tobą a {dmName}.</p>
+                            <div style={{fontFamily:'monospace',fontSize:10.5,letterSpacing:'0.14em',textTransform:'uppercase' as const,color:'rgba(255,255,255,0.35)',marginBottom:10}}>Wiadomość prywatna</div>
+                            <h2 style={{fontWeight:700,fontSize:'clamp(24px,2.5vw,36px)',lineHeight:1,letterSpacing:'-0.025em',color:'white',margin:'0 0 8px'}}>{dmName}</h2>
+                            <p style={{fontSize:14,color:'rgba(255,255,255,0.45)',margin:0}}>Prywatna rozmowa z {dmName}.</p>
                           </div>
                         </div>
                       </motion.div>
@@ -17156,18 +17157,22 @@ export default function App() {
                   if (!ch) return <div className="text-center text-xs text-zinc-700 py-3 select-none">— Początek kanału —</div>;
                   return (
                     <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
-                      className="relative rounded-2xl p-6 mb-4 border border-white/[0.08] overflow-hidden"
-                      style={{background:'linear-gradient(135deg,rgba(255,255,255,0.035) 0%,rgba(255,255,255,0.015) 100%)'}}>
-                      <div className="absolute top-0 right-0 w-48 h-48 rounded-full pointer-events-none"
-                        style={{background:'radial-gradient(circle,rgba(99,102,241,0.12) 0%,transparent 70%)',filter:'blur(32px)'}}/>
+                      className="relative overflow-hidden mb-4"
+                      style={{background:'#14151A',borderRadius:20,padding:'32px 40px',border:'1px solid rgba(255,255,255,0.06)'}}>
+                      {/* Accent blob — matches design's right-side glow */}
+                      <div className="absolute pointer-events-none"
+                        style={{top:'-60px',right:'-60px',width:'300px',height:'300px',
+                          background:'var(--color-indigo-500)',
+                          borderRadius:'50%',filter:'blur(60px)',opacity:0.22,
+                          animation:'floatBlob 14s ease-in-out infinite'}}/>
                       <div className="relative">
-                        <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-zinc-500 mb-1">
+                        <div style={{fontFamily:'monospace',fontSize:10.5,letterSpacing:'0.14em',textTransform:'uppercase' as const,color:'rgba(255,255,255,0.35)',marginBottom:12}}>
                           Początek kanału · {serverFull?.name}
                         </div>
-                        <h2 className="text-2xl font-extrabold text-white tracking-tight leading-tight mb-1">
+                        <h2 style={{fontWeight:700,fontSize:'clamp(28px,3vw,40px)',lineHeight:1,letterSpacing:'-0.025em',color:'white',margin:'0 0 10px'}}>
                           #{ch.name}
                         </h2>
-                        {ch.description&&<p className="text-sm text-zinc-400 max-w-md">{ch.description}</p>}
+                        {ch.description&&<p style={{fontSize:14,color:'rgba(255,255,255,0.45)',maxWidth:500,margin:0}}>{ch.description}</p>}
                       </div>
                     </motion.div>
                   );
@@ -18266,7 +18271,7 @@ export default function App() {
 
         {/* RIGHT — Live voice + Activity — collapsible when in voice call */}
         {/* Collapse toggle button (only when in voice call window) */}
-        {showCallPanel && activeCall && (
+        {showCallPanel && activeCall && activeView!=='home' && (
           <button
             onClick={() => setRightPanelOpen(p => {
               const next = !p;
@@ -18278,7 +18283,7 @@ export default function App() {
             <ChevronRight size={14} className={`transition-transform duration-200 ${rightPanelOpen?'rotate-180':''}`}/>
           </button>
         )}
-        <aside className={`hidden xl:flex shrink-0 flex-col gap-0 glass-panel rounded-2xl overflow-y-auto custom-scrollbar transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] focus-card-dim ${showCallPanel && activeCall && !rightPanelOpen ? 'w-0 opacity-0 overflow-hidden p-0' : 'w-64 opacity-100'}`}>
+        <aside className={`shrink-0 flex-col gap-0 glass-panel rounded-2xl overflow-y-auto custom-scrollbar transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] focus-card-dim ${activeView==='home'?'hidden':'hidden xl:flex'} ${showCallPanel && activeCall && !rightPanelOpen ? 'w-0 opacity-0 overflow-hidden p-0' : 'w-64 opacity-100'}`}>
           {/* ─ ADMIN LIVE METRICS (shown when admin panel is open) ─ */}
           {activeView==='admin'&&(()=>{
             const m = adminMetrics;
