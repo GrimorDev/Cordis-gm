@@ -13307,12 +13307,6 @@ export default function App() {
             title="Szukaj">
             <Search size={15}/>
           </button>
-          {/* Compass / server discovery */}
-          <button onClick={()=>{setDiscoveryCategory('all');setDiscoveryQ('');setDiscoveryLoading(true);discoverApi.list('').then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false));setShowDiscovery(true);}}
-            title="Odkrywaj serwery"
-            className="hidden sm:flex w-8 h-8 items-center justify-center rounded-xl text-zinc-500 hover:text-[#FFB454] hover:bg-[rgba(255,143,64,0.10)] transition-all shrink-0">
-            <Compass size={15}/>
-          </button>
           <div className="relative group hidden sm:flex items-center">
             <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-[#FF8F40] transition-colors pointer-events-none"/>
             <input ref={searchInputRef} placeholder="Szukaj wszędzie — kanały, ludzie, wiadomości" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
@@ -13462,6 +13456,13 @@ export default function App() {
               )}
             </AnimatePresence>
           </div>
+
+          {/* Compass / server discovery — next to bell */}
+          <button onClick={()=>{setDiscoveryCategory('all');setDiscoveryQ('');setDiscoveryLoading(true);discoverApi.list('').then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false));setShowDiscovery(true);}}
+            title="Odkrywaj serwery"
+            className="hidden sm:flex w-8 h-8 items-center justify-center rounded-xl text-zinc-500 hover:text-[#FFB454] hover:bg-[rgba(255,143,64,0.10)] transition-all shrink-0">
+            <Compass size={15}/>
+          </button>
 
           {/* ⋯ More menu — consolidates secondary actions */}
           <div className="relative" ref={moreMenuRef}>
@@ -15623,26 +15624,92 @@ export default function App() {
                HOME ACTIVITY DASHBOARD
                ═══════════════════════════════════════════════════════════ */
             <div className="flex-1 flex flex-col overflow-hidden">
-              {/* Header */}
-              <div className="h-14 border-b border-white/[0.06] flex items-center px-5 shrink-0 gap-3 glass-dark z-10">
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-500/30 to-orange-500/20 flex items-center justify-center border border-amber-500/20 shrink-0">
-                  <LayoutDashboard size={14} className="text-amber-400"/>
-                </div>
-                <h1 className="text-sm font-bold text-white shrink-0">Panel główny</h1>
-                <div className="flex-1"/>
-                <button onClick={loadHomeData}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.07] transition-all"
-                  title="Odśwież">
-                  <RefreshCw size={13}/>
-                </button>
-              </div>
-
-              {/* Body */}
-              <div className="flex-1 overflow-y-auto custom-scrollbar" style={{background:'radial-gradient(ellipse at 60% 0%, rgba(99,102,241,0.04) 0%, transparent 60%)'}}>
+              {/* Body — no tiny header bar, hero replaces it */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar" style={{background:'radial-gradient(ellipse at 70% 0%, rgba(99,102,241,0.05) 0%, transparent 65%)'}}>
                 {(homeLoading && homeEvents.length===0 && homeVoice.length===0) ? (
                   <div className="flex items-center justify-center h-48"><Loader2 size={22} className="text-indigo-400 animate-spin"/></div>
                 ) : (
-                  <div className="p-5 max-w-6xl mx-auto space-y-6">
+                  <div className="p-6 max-w-6xl mx-auto space-y-5">
+
+                    {/* ── HERO SECTION ── */}
+                    {(()=>{
+                      const now = new Date();
+                      const days=['Niedziela','Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota'];
+                      const months=['stycznia','lutego','marca','kwietnia','maja','czerwca','lipca','sierpnia','września','października','listopada','grudnia'];
+                      const timeStr = `${days[now.getDay()]} · ${now.getDate()} ${months[now.getMonth()]} · ${now.toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'})}`;
+                      const unreadAll = (Object.values(unreadDms) as number[]).reduce((a,b)=>a+b,0) + (Object.values(unreadGroupDms) as number[]).reduce((a,b)=>a+b,0);
+                      const onlineF = friends.filter(f=>f.status!=='offline').length;
+                      const nextEv = homeEvents.find(ev=>new Date(ev.starts_at).getTime()>Date.now());
+                      const subtitleParts:string[] = [];
+                      if (unreadAll>0) subtitleParts.push(`${unreadAll} nieprzeczytanych wiadomości`);
+                      if (onlineF>0) subtitleParts.push(`${onlineF} znajomych online`);
+                      if (nextEv) {
+                        const diffMs=new Date(nextEv.starts_at).getTime()-Date.now();
+                        const h=Math.floor(diffMs/3600000); const m=Math.floor((diffMs%3600000)/60000);
+                        if (h<24) subtitleParts.push(`Spotkanie za ${h>0?h+'h ':''} ${m}m`);
+                      }
+                      const subtitle = subtitleParts.length ? subtitleParts.join(' · ')+'.' : 'Reszta dnia jest twoja — zacznij od czegoś prostego.';
+                      const greet = currentUser?.display_name || currentUser?.username || 'Użytkowniku';
+                      return (
+                        <motion.div initial={{opacity:0,y:-12}} animate={{opacity:1,y:0}} transition={{duration:0.45,ease:[0.22,0.61,0.36,1]}}
+                          className="relative rounded-3xl p-8 overflow-hidden border border-white/[0.07]"
+                          style={{background:'linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.02) 50%,rgba(99,102,241,0.04) 100%)'}}>
+                          {/* Glow orb */}
+                          <div className="absolute -top-12 -right-12 w-72 h-72 rounded-full pointer-events-none"
+                            style={{background:'radial-gradient(circle,rgba(99,102,241,0.18) 0%,transparent 70%)',filter:'blur(40px)'}}/>
+                          <div className="relative">
+                            <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-zinc-500 mb-3 select-none">{timeStr}</div>
+                            <h1 className="text-3xl font-extrabold tracking-tight leading-[0.95] mb-2.5">
+                              Dzień dobry,<br/>
+                              <span className="text-zinc-500">{greet}.</span>
+                            </h1>
+                            <p className="text-sm text-zinc-400 mb-6 max-w-md leading-relaxed">{subtitle}</p>
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <button onClick={()=>{setActiveDmUserId('');setActiveGroupDm('');setActiveView('dms');}}
+                                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#FF8F40] hover:bg-[#FFB454] text-black font-bold text-sm transition-all shadow-[0_4px_24px_rgba(255,143,64,0.32)]">
+                                <Plus size={14}/>Nowa wiadomość
+                              </button>
+                              <button onClick={()=>{setDiscoveryCategory('all');setDiscoveryQ('');setDiscoveryLoading(true);discoverApi.list('').then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false));setShowDiscovery(true);}}
+                                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/[0.12] text-zinc-300 hover:text-white hover:bg-white/[0.05] hover:border-white/[0.22] font-medium text-sm transition-all">
+                                <Compass size={14}/>Odkrywaj
+                              </button>
+                              <button onClick={loadHomeData} title="Odśwież"
+                                className="ml-auto w-8 h-8 flex items-center justify-center rounded-xl text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06] transition-all">
+                                <RefreshCw size={13}/>
+                              </button>
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    })()}
+
+                    {/* ── STATS ROW ── */}
+                    {(()=>{
+                      const unreadAll=(Object.values(unreadDms) as number[]).reduce((a,b)=>a+b,0)+(Object.values(unreadGroupDms) as number[]).reduce((a,b)=>a+b,0);
+                      const notifUnread=notifications.filter(n=>!n.read).length;
+                      const onlineF=friends.filter(f=>f.status!=='offline').length;
+                      const stats=[
+                        {label:'Serwerów',value:serverList.length,unit:'aktywnych',glow:false,col:'indigo'},
+                        {label:'Powiadomień',value:notifUnread,unit:'nowych',glow:notifUnread>0,col:'orange'},
+                        {label:'Wiadomości',value:unreadAll,unit:'nieprzecz.',glow:unreadAll>0,col:'orange'},
+                        {label:'Znajomych online',value:onlineF,unit:'teraz',glow:false,col:'green'},
+                      ];
+                      return (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          {stats.map(s=>(
+                            <motion.div key={s.label} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
+                              className={`rounded-2xl p-4 border transition-all ${s.glow?'border-[#FF8F40]/30 shadow-[0_0_28px_-8px_rgba(255,143,64,0.4)]':'border-white/[0.07]'}`}
+                              style={{background:s.glow?'linear-gradient(135deg,rgba(255,143,64,0.1) 0%,rgba(255,143,64,0.04) 100%)':'linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.02) 100%)'}}>
+                              <div className="text-[10px] text-zinc-500 mb-1 truncate">{s.label}</div>
+                              <div className={`text-2xl font-extrabold tracking-tight ${s.glow?'text-[#FFB454]':'text-white'}`}>
+                                {s.value}
+                                <span className={`text-[10px] font-normal ml-1 ${s.glow?'text-[rgba(255,180,84,0.6)]':'text-zinc-600'}`}>{s.unit}</span>
+                              </div>
+                            </motion.div>
+                          ))}
+                        </div>
+                      );
+                    })()}
 
                     {/* ── MOJE ZAPISANE WYDARZENIA (pinned top) ── */}
                     {(() => {
@@ -15728,8 +15795,47 @@ export default function App() {
                     {/* ── MAIN 2-COLUMN GRID ── */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-                      {/* LEFT 2/3: Voice + Friends */}
+                      {/* LEFT 2/3: Servers + Voice + Friends */}
                       <div className="lg:col-span-2 space-y-5">
+
+                        {/* SERVER GRID */}
+                        {serverList.length>0&&(
+                          <section>
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <div className="w-5 h-5 rounded-md bg-indigo-500/20 flex items-center justify-center border border-indigo-500/20 shrink-0">
+                                  <LayoutDashboard size={10} className="text-indigo-400"/>
+                                </div>
+                                <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Twoje serwery</span>
+                                <span className="text-[10px] text-zinc-600 ml-0.5">{serverList.length}</span>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                              {serverList.map(srv=>{
+                                const hasNotif=notifications.some(n=>!n.read&&n.server_id===srv.id);
+                                return (
+                                  <motion.div key={srv.id}
+                                    whileHover={{scale:1.02,y:-1}} whileTap={{scale:0.98}}
+                                    className={`relative rounded-2xl p-4 border transition-all cursor-pointer group ${hasNotif?'border-[#FF8F40]/35 shadow-[0_0_22px_-6px_rgba(255,143,64,0.35)]':'border-white/[0.07] hover:border-white/[0.16]'}`}
+                                    style={{background:hasNotif?'linear-gradient(135deg,rgba(255,143,64,0.07) 0%,rgba(255,255,255,0.02) 100%)':'linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.02) 100%)'}}
+                                    onClick={()=>{setActiveServer(srv.id);setActiveView('servers');setActiveChannel('');setServerFull(null);}}>
+                                    {hasNotif&&(
+                                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-[#FF8F40] border-2 border-zinc-950 animate-pulse shadow-[0_0_8px_rgba(255,143,64,0.8)]"/>
+                                    )}
+                                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold mb-2.5 shrink-0 shadow-md overflow-hidden"
+                                      style={{background:srv.icon?'transparent':'linear-gradient(135deg,#4f46e5,#7c3aed)'}}>
+                                      {srv.icon
+                                        ?<img src={staticUrl(srv.icon)} className="w-full h-full object-cover" alt="" onError={retryImgOnError}/>
+                                        :<span className="text-white text-sm font-bold">{srv.name.charAt(0).toUpperCase()}</span>}
+                                    </div>
+                                    <div className="text-[12px] font-semibold text-zinc-200 group-hover:text-white transition-colors line-clamp-1 mb-0.5">{srv.name}</div>
+                                    <div className="text-[10px] text-zinc-600">{(srv as any).member_count ?? (srv as any).members_count ?? '—'} członków</div>
+                                  </motion.div>
+                                );
+                              })}
+                            </div>
+                          </section>
+                        )}
 
                         {/* VOICE ACTIVITY */}
                         <section>
@@ -15873,6 +15979,43 @@ export default function App() {
                             </div>
                           )}
                         </section>
+                        {/* ONLINE FRIENDS — card row at bottom */}
+                        {friends.filter(f=>f.status!=='offline').length>0&&(
+                          <section>
+                            <div className="flex items-center gap-2 mb-3">
+                              <div className="w-5 h-5 rounded-md bg-emerald-500/20 flex items-center justify-center border border-emerald-500/20 shrink-0">
+                                <Users size={10} className="text-emerald-400"/>
+                              </div>
+                              <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Znajomi online</span>
+                              <span className="ml-1 text-[9px] font-bold text-emerald-400/60">{friends.filter(f=>f.status!=='offline').length}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {friends.filter(f=>f.status!=='offline').slice(0,10).map(f=>{
+                                const act=userActivities.get(f.id); const tw=userTwitchActivities.get(f.id);
+                                return (
+                                  <motion.div key={f.id}
+                                    whileHover={{scale:1.03,y:-1}} whileTap={{scale:0.97}}
+                                    className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/[0.07] hover:border-emerald-500/25 cursor-pointer transition-all"
+                                    style={{background:'linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.02) 100%)'}}
+                                    onClick={()=>openDm(f.id)}>
+                                    <div className="relative shrink-0">
+                                      <img src={ava(f)} className="w-8 h-8 rounded-xl object-cover" alt=""/>
+                                      <StatusBadge status={f.status as any} size={6} className="absolute -bottom-0.5 -right-0.5"/>
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="text-[12px] font-semibold text-white truncate leading-none mb-0.5">{maskName(f.username)}</div>
+                                      {act?.name
+                                        ?<div className="text-[9px] text-[#1DB954] truncate flex items-center gap-1"><Music size={8} className="shrink-0"/>{act.artists?.[0]?.name||'Spotify'}</div>
+                                        :tw
+                                        ?<div className="text-[9px] text-purple-400 truncate flex items-center gap-1"><TwitchIcon size={8} className="shrink-0"/>{tw.game_name}</div>
+                                        :<div className="text-[9px] text-zinc-500 truncate">{f.custom_status||f.status}</div>}
+                                    </div>
+                                  </motion.div>
+                                );
+                              })}
+                            </div>
+                          </section>
+                        )}
                       </div>
 
                       {/* RIGHT 1/3: UPCOMING EVENTS */}
@@ -17186,12 +17329,59 @@ export default function App() {
                     <Loader2 size={12} className="animate-spin"/> Ładowanie starszych wiadomości…
                   </div>
                 )}
-                {/* End of history banner */}
-                {!msgsLoading && !chLoadingMore && !dmLoadingMore &&
-                  ((activeView==='servers' && activeChannel && !chHasMore) ||
-                   (activeView==='dms' && activeDmUserId && !dmHasMore)) && channelMsgs.length + dmMsgs.length > 0 && (
-                  <div className="text-center text-xs text-zinc-700 py-3 select-none">— Początek historii —</div>
-                )}
+                {/* End of history / channel welcome card */}
+                {!msgsLoading && !chLoadingMore && !dmLoadingMore && (()=>{
+                  const showChannel = activeView==='servers' && activeChannel && !chHasMore && channelMsgs.length>0;
+                  const showDm      = activeView==='dms' && activeDmUserId && !dmHasMore && dmMsgs.length>0;
+                  if (!showChannel && !showDm) return null;
+
+                  if (showDm) {
+                    const activeDmConv = dmConvs.find(d=>d.other_user_id===activeDmUserId);
+                    const dmName = activeDmConv?.other_display_name || activeDmConv?.other_username || '?';
+                    const dmAvatar = activeDmConv?.other_avatar_url;
+                    return (
+                      <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
+                        className="relative rounded-2xl p-6 mb-4 border border-white/[0.08] overflow-hidden"
+                        style={{background:'linear-gradient(135deg,rgba(255,255,255,0.035) 0%,rgba(255,255,255,0.015) 100%)'}}>
+                        <div className="absolute top-0 right-0 w-48 h-48 rounded-full pointer-events-none"
+                          style={{background:'radial-gradient(circle,rgba(99,102,241,0.12) 0%,transparent 70%)',filter:'blur(32px)'}}/>
+                        <div className="relative flex items-start gap-4">
+                          <div className="w-14 h-14 rounded-2xl overflow-hidden shrink-0 border-2 border-white/[0.08] shadow-xl">
+                            {dmAvatar
+                              ?<img src={ava({avatar_url:dmAvatar,username:dmName})} className="w-full h-full object-cover" alt=""/>
+                              :<div className="w-full h-full bg-gradient-to-br from-indigo-600 to-violet-700 flex items-center justify-center text-white font-bold text-xl">{dmName.charAt(0).toUpperCase()}</div>}
+                          </div>
+                          <div>
+                            <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-zinc-500 mb-1">Wiadomość prywatna</div>
+                            <h2 className="text-xl font-extrabold text-white tracking-tight leading-tight mb-1">{dmName}</h2>
+                            <p className="text-sm text-zinc-500">To prywatna rozmowa między tobą a {dmName}.</p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  }
+
+                  // Channel welcome
+                  const ch = serverFull?.categories.flatMap(c=>c.channels).find(c=>c.id===activeChannel);
+                  if (!ch) return <div className="text-center text-xs text-zinc-700 py-3 select-none">— Początek kanału —</div>;
+                  return (
+                    <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
+                      className="relative rounded-2xl p-6 mb-4 border border-white/[0.08] overflow-hidden"
+                      style={{background:'linear-gradient(135deg,rgba(255,255,255,0.035) 0%,rgba(255,255,255,0.015) 100%)'}}>
+                      <div className="absolute top-0 right-0 w-48 h-48 rounded-full pointer-events-none"
+                        style={{background:'radial-gradient(circle,rgba(99,102,241,0.12) 0%,transparent 70%)',filter:'blur(32px)'}}/>
+                      <div className="relative">
+                        <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-zinc-500 mb-1">
+                          Początek kanału · {serverFull?.name}
+                        </div>
+                        <h2 className="text-2xl font-extrabold text-white tracking-tight leading-tight mb-1">
+                          #{ch.name}
+                        </h2>
+                        {ch.description&&<p className="text-sm text-zinc-400 max-w-md">{ch.description}</p>}
+                      </div>
+                    </motion.div>
+                  );
+                })()}
                 {/* Loading skeleton */}
                 {msgsLoading&&(
                   <div className="mt-auto flex flex-col gap-3 pb-2">
