@@ -70,29 +70,7 @@ interface StatusData {
 
 const REFRESH_INTERVAL = 10 * 60;
 
-const DEFAULT_PLATFORMS: PlatformStatus[] = [
-  { id: 'web',     name: 'Web',           status: 'operational' },
-  { id: 'windows', name: 'Desktop Win',   status: 'operational' },
-  { id: 'macos',   name: 'Desktop Mac',   status: 'operational' },
-  { id: 'linux',   name: 'Desktop Linux', status: 'operational' },
-  { id: 'android', name: 'Android',       status: 'operational' },
-  { id: 'ios',     name: 'iOS',           status: 'operational' },
-];
-
-const DEFAULT_REGIONS: VoiceRegion[] = [
-  { id: 'warsaw',    name: 'Warszawa',   flag: '🇵🇱', status: 'operational', latency_ms: 12  },
-  { id: 'frankfurt', name: 'Frankfurt',  flag: '🇩🇪', status: 'operational', latency_ms: 28  },
-  { id: 'amsterdam', name: 'Amsterdam',  flag: '🇳🇱', status: 'operational', latency_ms: 34  },
-  { id: 'london',    name: 'Londyn',     flag: '🇬🇧', status: 'operational', latency_ms: 45  },
-  { id: 'paris',     name: 'Paryż',      flag: '🇫🇷', status: 'operational', latency_ms: 39  },
-  { id: 'stockholm', name: 'Sztokholm',  flag: '🇸🇪', status: 'operational', latency_ms: 52  },
-  { id: 'us-east',   name: 'US East',    flag: '🇺🇸', status: 'operational', latency_ms: 110 },
-  { id: 'us-west',   name: 'US West',    flag: '🇺🇸', status: 'operational', latency_ms: 148 },
-  { id: 'brazil',    name: 'Brazylia',   flag: '🇧🇷', status: 'operational', latency_ms: 210 },
-  { id: 'singapore', name: 'Singapur',   flag: '🇸🇬', status: 'operational', latency_ms: 175 },
-  { id: 'japan',     name: 'Japonia',    flag: '🇯🇵', status: 'operational', latency_ms: 190 },
-  { id: 'australia', name: 'Australia',  flag: '🇦🇺', status: 'operational', latency_ms: 230 },
-];
+// No static defaults — all data must come from the real API.
 
 // Service grouping — matches IDs/keywords from the API
 const SERVICE_GROUPS: { label: string; icon: string; color: string; ids: string[] }[] = [
@@ -455,7 +433,7 @@ export default function StatusPage() {
   const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
-  const [showAllRegions, setShowAllRegions] = useState(false);
+  const [showAllRegions, setShowAllRegions] = useState(false); // used only when API returns regions[]
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -541,11 +519,9 @@ export default function StatusPage() {
   const countdownMin = Math.floor(countdown / 60);
   const countdownSec = countdown % 60;
 
-  const platforms = data?.platforms ?? DEFAULT_PLATFORMS.map(p => ({
-    ...p, status: overall === 'outage' ? 'outage' as const : overall === 'degraded' ? ('degraded' as const) : p.status,
-  }));
-  const allRegions = data?.regions ?? DEFAULT_REGIONS;
-  const visibleRegions = showAllRegions ? allRegions : allRegions.slice(0, 6);
+  const platforms = data?.platforms ?? null;          // null = API did not provide → section hidden
+  const allRegions = data?.regions ?? null;           // null = API did not provide → section hidden
+  const visibleRegions = allRegions ? (showAllRegions ? allRegions : allRegions.slice(0, 6)) : [];
 
   const serviceGroups = data ? groupServices(data.services) : {};
   const serviceGroupKeys = Object.keys(serviceGroups);
@@ -631,7 +607,7 @@ export default function StatusPage() {
                 </div>
               </div>
 
-              {/* Quick stats */}
+              {/* Quick stats — only real API data */}
               {data && (
                 <div className="flex gap-6 shrink-0">
                   <div className="text-center">
@@ -641,32 +617,38 @@ export default function StatusPage() {
                   <div className="w-px bg-zinc-800"/>
                   <div className="text-center">
                     <p className="text-2xl font-bold text-white">{avgUptime}%</p>
-                    <p className="text-zinc-500 text-xs">Avg dostępność</p>
+                    <p className="text-zinc-500 text-xs">Śr. dostępność 90d</p>
                   </div>
-                  <div className="w-px bg-zinc-800"/>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-white">{allRegions.filter(r => r.status === 'operational').length}/{allRegions.length}</p>
-                    <p className="text-zinc-500 text-xs">Regiony głosowe</p>
-                  </div>
+                  {allRegions && (
+                    <>
+                      <div className="w-px bg-zinc-800"/>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-white">{allRegions.filter(r => r.status === 'operational').length}/{allRegions.length}</p>
+                        <p className="text-zinc-500 text-xs">Regiony głosowe</p>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
           </div>
         )}
 
-        {/* ── Platform status ── */}
-        <section>
-          <h2 className="text-zinc-400 font-semibold text-xs uppercase tracking-widest mb-3 flex items-center gap-2">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-              <line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
-            </svg>
-            Platformy
-          </h2>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-            {platforms.map(p => <PlatformCard key={p.id} platform={p}/>)}
-          </div>
-        </section>
+        {/* ── Platform status — only when API returns platforms[] ── */}
+        {platforms && platforms.length > 0 && (
+          <section>
+            <h2 className="text-zinc-400 font-semibold text-xs uppercase tracking-widest mb-3 flex items-center gap-2">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                <line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+              </svg>
+              Platformy
+            </h2>
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+              {platforms.map(p => <PlatformCard key={p.id} platform={p}/>)}
+            </div>
+          </section>
+        )}
 
         {/* ── Services grouped ── */}
         {data && serviceGroupKeys.length > 0 && (
@@ -729,104 +711,45 @@ export default function StatusPage() {
           </section>
         )}
 
-        {/* ── Voice & Streaming ── */}
-        <section>
-          <h2 className="text-zinc-400 font-semibold text-xs uppercase tracking-widest mb-3 flex items-center gap-2">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-            </svg>
-            Głos i Streaming
-          </h2>
-          <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/50 overflow-hidden">
-            {/* Quick status row */}
-            {([
-              {
-                label: 'Serwery głosowe',
-                icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>,
-                status: overall,
-              },
-              {
-                label: 'Udostępnianie ekranu',
-                icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 12 17 16 21"/><line x1="12" y1="17" x2="12" y2="21"/><path d="M9 9l3-3 3 3"/><line x1="12" y1="6" x2="12" y2="13"/></svg>,
-                status: overall,
-              },
-              {
-                label: 'Wideo / Kamery',
-                icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>,
-                status: overall,
-              },
-              {
-                label: 'Nagrywanie',
-                icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>,
-                status: overall === 'outage' ? 'degraded' as const : overall,
-              },
-              {
-                label: 'Live Stream',
-                icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor" stroke="none"/></svg>,
-                status: overall,
-              },
-              {
-                label: 'Proxy mediów',
-                icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>,
-                status: overall,
-              },
-            ] as { label: string; icon: React.ReactNode; status: 'operational' | 'degraded' | 'outage' }[]).map((item, idx) => {
-              const dotClass = statusDot(item.status);
-              const textClass = item.status === 'operational' ? 'text-emerald-400' : item.status === 'degraded' ? 'text-amber-400' : 'text-rose-400';
-              return (
-                <div key={idx} className={`flex items-center justify-between px-5 py-3 hover:bg-zinc-800/30 transition-colors ${idx < 5 ? 'border-b border-zinc-800/40' : ''}`}>
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-zinc-500">{item.icon}</span>
-                    <span className="text-zinc-300 text-sm">{item.label}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className={`w-1.5 h-1.5 rounded-full ${dotClass} ${item.status === 'operational' ? 'animate-pulse' : ''}`}/>
-                    <span className={`text-xs ${textClass}`}>{statusLabel(item.status)}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* ── Voice regions ── */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-zinc-400 font-semibold text-xs uppercase tracking-widest flex items-center gap-2">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-              </svg>
-              Regiony głosowe
-            </h2>
-            <span className="text-zinc-500 text-xs">{allRegions.filter(r => r.status === 'operational').length}/{allRegions.length} sprawnych</span>
-          </div>
-          <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/50 overflow-hidden">
-            <div className="grid grid-cols-1 sm:grid-cols-2">
-              {visibleRegions.map((region, idx) => {
-                const isRight = idx % 2 === 1;
-                const isLastRow = idx >= visibleRegions.length - (visibleRegions.length % 2 === 0 ? 2 : 1);
-                return (
-                  <div
-                    key={region.id}
-                    className={`${!isLastRow ? 'border-b border-zinc-800/40' : ''} ${isRight ? 'sm:border-l border-zinc-800/40' : ''}`}
-                  >
-                    <VoiceRegionRow region={region}/>
-                  </div>
-                );
-              })}
+        {/* ── Voice regions — only when API returns regions[] ── */}
+        {allRegions && allRegions.length > 0 && (
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-zinc-400 font-semibold text-xs uppercase tracking-widest flex items-center gap-2">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                </svg>
+                Regiony głosowe
+              </h2>
+              <span className="text-zinc-500 text-xs">{allRegions.filter(r => r.status === 'operational').length}/{allRegions.length} sprawnych</span>
             </div>
-            {allRegions.length > 6 && (
-              <button
-                onClick={() => setShowAllRegions(!showAllRegions)}
-                className="w-full py-2.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors border-t border-zinc-800/40 hover:bg-zinc-800/30"
-              >
-                {showAllRegions ? 'Zwiń ↑' : `Pokaż wszystkie (${allRegions.length}) ↓`}
-              </button>
-            )}
-          </div>
-        </section>
+            <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/50 overflow-hidden">
+              <div className="grid grid-cols-1 sm:grid-cols-2">
+                {visibleRegions.map((region, idx) => {
+                  const isRight = idx % 2 === 1;
+                  const isLastRow = idx >= visibleRegions.length - (visibleRegions.length % 2 === 0 ? 2 : 1);
+                  return (
+                    <div
+                      key={region.id}
+                      className={`${!isLastRow ? 'border-b border-zinc-800/40' : ''} ${isRight ? 'sm:border-l border-zinc-800/40' : ''}`}
+                    >
+                      <VoiceRegionRow region={region}/>
+                    </div>
+                  );
+                })}
+              </div>
+              {allRegions.length > 6 && (
+                <button
+                  onClick={() => setShowAllRegions(!showAllRegions)}
+                  className="w-full py-2.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors border-t border-zinc-800/40 hover:bg-zinc-800/30"
+                >
+                  {showAllRegions ? 'Zwiń ↑' : `Pokaż wszystkie (${allRegions.length}) ↓`}
+                </button>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* ── API Response Time chart ── */}
         {data && (
@@ -918,8 +841,7 @@ export default function StatusPage() {
             <span>Powered by Cordyn</span>
           </div>
           <div className="flex items-center gap-4 text-xs text-zinc-600">
-            <span>{allRegions.length} regionów głosowych</span>
-            <span>·</span>
+            {allRegions && <><span>{allRegions.length} regionów głosowych</span><span>·</span></>}
             <span>Odświeżenie co 10 min</span>
             <span>·</span>
             <a href="/" className="hover:text-zinc-300 transition-colors">Otwórz aplikację →</a>
