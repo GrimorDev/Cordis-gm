@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -205,13 +205,22 @@ function PlatformIcon({ id, size = 20 }: { id: string; size?: number }) {
     </svg>
   );
   if (id === 'linux') return (
-    <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
+    /* Terminal / >_ symbol — universally recognized Linux icon */
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="20" height="16" rx="2"/>
+      <polyline points="7 9 11 12 7 15"/>
+      <line x1="13" y1="15" x2="17" y2="15"/>
     </svg>
   );
   if (id === 'android') return (
-    <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M17.523 15.344l1.046-1.812a.329.329 0 0 0-.119-.449.328.328 0 0 0-.449.12l-1.06 1.836A6.923 6.923 0 0 0 12 14.13a6.92 6.92 0 0 0-2.942.709l-1.06-1.836a.329.329 0 0 0-.449-.12.33.33 0 0 0-.12.449l1.046 1.812C6.6 16.426 5.372 18.17 5.25 20.25h13.5c-.122-2.08-1.35-3.824-3.227-4.906zM9.75 18.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5zm4.5 0a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5zM12 3.75c3.728 0 6.75 3.022 6.75 6.75 0 .828-.15 1.621-.422 2.357A8.04 8.04 0 0 0 12 11.25a8.04 8.04 0 0 0-6.328 1.607A6.718 6.718 0 0 1 5.25 10.5C5.25 6.772 8.272 3.75 12 3.75zm-2.25-2.25a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 0 1.5H12v.75h-.75V2.25A.75.75 0 0 1 9.75 1.5z"/>
+    /* Android robot head — classic two antennae + rectangular head + eyes */
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="8.5" y1="5" x2="6.5" y2="2.5"/>
+      <line x1="15.5" y1="5" x2="17.5" y2="2.5"/>
+      <rect x="5" y="5" width="14" height="10" rx="5"/>
+      <circle cx="9" cy="10" r="1" fill="currentColor" stroke="none"/>
+      <circle cx="15" cy="10" r="1" fill="currentColor" stroke="none"/>
+      <path d="M5 13v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>
     </svg>
   );
   if (id === 'ios') return (
@@ -731,20 +740,44 @@ export default function StatusPage() {
           </h2>
           <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/50 overflow-hidden">
             {/* Quick status row */}
-            {[
-              { label: 'Serwery głosowe', icon: '🎙️', status: overall },
-              { label: 'Udostępnianie ekranu', icon: '🖥️', status: overall },
-              { label: 'Wideo / Kamery', icon: '📹', status: overall },
-              { label: 'Nagrywanie',  icon: '⏺️', status: overall === 'outage' ? 'degraded' as const : overall },
-              { label: 'Live Stream', icon: '📡', status: overall },
-              { label: 'Proxy mediów', icon: '🔀', status: overall },
-            ].map((item, idx) => {
+            {([
+              {
+                label: 'Serwery głosowe',
+                icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>,
+                status: overall,
+              },
+              {
+                label: 'Udostępnianie ekranu',
+                icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 12 17 16 21"/><line x1="12" y1="17" x2="12" y2="21"/><path d="M9 9l3-3 3 3"/><line x1="12" y1="6" x2="12" y2="13"/></svg>,
+                status: overall,
+              },
+              {
+                label: 'Wideo / Kamery',
+                icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>,
+                status: overall,
+              },
+              {
+                label: 'Nagrywanie',
+                icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>,
+                status: overall === 'outage' ? 'degraded' as const : overall,
+              },
+              {
+                label: 'Live Stream',
+                icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor" stroke="none"/></svg>,
+                status: overall,
+              },
+              {
+                label: 'Proxy mediów',
+                icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>,
+                status: overall,
+              },
+            ] as { label: string; icon: React.ReactNode; status: 'operational' | 'degraded' | 'outage' }[]).map((item, idx) => {
               const dotClass = statusDot(item.status);
               const textClass = item.status === 'operational' ? 'text-emerald-400' : item.status === 'degraded' ? 'text-amber-400' : 'text-rose-400';
               return (
                 <div key={idx} className={`flex items-center justify-between px-5 py-3 hover:bg-zinc-800/30 transition-colors ${idx < 5 ? 'border-b border-zinc-800/40' : ''}`}>
                   <div className="flex items-center gap-2.5">
-                    <span className="text-base leading-none">{item.icon}</span>
+                    <span className="text-zinc-500">{item.icon}</span>
                     <span className="text-zinc-300 text-sm">{item.label}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
