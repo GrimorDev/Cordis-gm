@@ -48,7 +48,7 @@ import {
   type BotDefinition, type InstalledBot, type MusicBotState,
   channelPrefsApi, mutualServersApi, mutualFriendsApi, groupDmApi, eventsApi, discoverApi, onboardingApi,
   sessionsApi, activityApi,
-  type ChannelPref, type MutualServer, type MutualFriend, type GroupDmConversation, type ServerEvent,
+  type ChannelPref, type MutualServer, type MutualFriend, type GroupDmConversation, type GroupDmParticipant, type ServerEvent,
   type DiscoverServer, type ServerOnboarding, type UserSession,
   type VoiceActivityChannel, type EventRsvpUser,
   type ServerSound, soundsApi,
@@ -3919,7 +3919,7 @@ interface ServerSettingsPageProps {
   setBotChannelId?: (v: string|null) => void;
   botChLoading?: boolean;
   setBotChLoading?: (v: boolean) => void;
-  addToast?: (msg: string, type?: 'success'|'error'|'info'|'warning') => void;
+  addToast?: (msg: string, type?: 'success'|'error'|'info'|'warn') => string | void;
   // Tag
   serverTag?: string|null;
   serverTagColor?: string|null;
@@ -9830,7 +9830,7 @@ export default function App() {
     });
     // ── Admin broadcast ─────────────────────────────────────────────
     sock.on('admin_broadcast' as any, ({ message, type }: { message: string; type: 'info'|'warning'|'success' }) => {
-      autoToast(`📢 ${message}`, type || 'info');
+      autoToast(`📢 ${message}`, (type === 'warning' ? 'warn' : type) || 'info');
     });
     // ── Force logout (ban) ──────────────────────────────────────────
     sock.on('force_logout' as any, ({ reason }: { reason?: string }) => {
@@ -10763,7 +10763,7 @@ export default function App() {
 
   // Update browser/desktop tab title with total unread count
   useEffect(() => {
-    const total = Object.values(unreadChs).reduce((a, b) => a + b, 0);
+    const total = (Object.values(unreadChs) as number[]).reduce((a, b) => a + b, 0);
     document.title = total > 0 ? `(${total > 99 ? '99+' : total}) Cordyn` : 'Cordyn';
   }, [unreadChs]);
   // Track window focus for desktop push notifications
@@ -12054,7 +12054,7 @@ export default function App() {
 
   const ALLOWED_MIME_PREFIXES = ['image/','video/','audio/','application/pdf','text/','application/zip','application/x-zip','application/json','application/msword','application/vnd.'];
   const handleAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+    const files = Array.from(e.target.files ?? []) as File[];
     if (!files.length) return;
     // Multiple files — all images → image grid (up to 12)
     const allImages = files.every(f => f.type.startsWith('image/'));
@@ -14258,7 +14258,7 @@ export default function App() {
                       }
                     }}
                     onContextMenu={e=>{ e.preventDefault(); setGroupCtxMenu({ x: e.clientX, y: Math.min(e.clientY, window.innerHeight - 160), gc }); }}
-                    className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-200 ${isActive?'text-white border':unread>0?'text-zinc-200 hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]'}`}
+                    className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-200 ${isActive?'text-white border':unreadGc>0?'text-zinc-200 hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]'}`}
                     style={isActive?{background:'linear-gradient(90deg,rgba(255,143,64,0.14) 0%,rgba(255,143,64,0.05) 100%)',borderColor:'rgba(255,143,64,0.32)',boxShadow:'inset 3px 0 0 var(--ayu-orange),0 1px 16px rgba(255,143,64,0.08)'}:{}}>
                     <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 flex items-center justify-center shrink-0 overflow-hidden">
                       {gc.icon_url
@@ -17304,7 +17304,7 @@ export default function App() {
                         const isSearchMatch = searchMatchSet.has(msg.id);
                         const isCurrentMatch = currentSearchId === msg.id;
                         // ── Popular Message Glow — unique feature ──
-                        const totalReactions = (msg.reactions||[]).reduce((s:number,r:any)=>s+(r.count||0),0);
+                        const totalReactions = ((msg as any).reactions||[]).reduce((s:number,r:any)=>s+(r.count||0),0);
                         const isPopular = totalReactions >= 5;
                         const isWarm    = totalReactions >= 2 && totalReactions < 5;
                         return (
@@ -17667,7 +17667,7 @@ export default function App() {
                                 <div className="w-px h-5 mx-0.5 shrink-0" style={{background:'rgba(255,255,255,0.10)'}}/>
                               </>}
                               {/* Thread */}
-                              {activeView!=='dms' && !msg.thread_root_id && (
+                              {activeView!=='dms' && !(msg as any).thread_root_id && (
                                 <button onClick={async()=>{
                                   setThreadRootId(msg.id);
                                   const token = getToken();
@@ -20233,7 +20233,7 @@ export default function App() {
                           ))}
                         </div>
                       </div>
-                      <button onClick={handleSaveProfile}
+                      <button onClick={() => { void handleSaveProfile(); }}
                         className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-indigo-500/25 transition-all mt-1">
                         Zapisz zmiany
                       </button>
