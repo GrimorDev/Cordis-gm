@@ -13226,13 +13226,14 @@ export default function App() {
       {/* TOP NAV — 3-col grid: [left tabs] [Cordyn] [right actions]
            grid-cols: 1fr auto 1fr guarantees center is always truly centered.
            No items-center on nav so children use h-full correctly (stretch). */}
-      <nav className="h-12 shrink-0 z-30 glass-panel rounded-2xl px-2 grid" style={{gridTemplateColumns:'1fr auto 1fr'}}>
-        {/* Left col — active context breadcrumb */}
-        <div className="flex items-center h-full min-w-0 gap-3 pl-1">
-          <button onClick={() => setIsMobileOpen(v => !v)} className="md:hidden w-9 h-9 flex items-center justify-center text-[#626A73] hover:text-white ml-1 shrink-0">
+      <nav className="h-12 shrink-0 z-30 glass-panel rounded-2xl px-2 grid" style={{gridTemplateColumns:'auto minmax(0,1fr) auto'}}>
+        {/* Left col — Logo/brand + Home (desktop) | hamburger+context (mobile) */}
+        <div className="flex items-center h-full gap-1 pl-1 shrink-0">
+          {/* Mobile: hamburger */}
+          <button onClick={() => setIsMobileOpen(v => !v)} className="md:hidden w-9 h-9 flex items-center justify-center text-[#626A73] hover:text-white shrink-0">
             {isMobileOpen ? <X size={18}/> : <Menu size={18}/>}
           </button>
-          {/* Mobile: active context name (channel / server / view) */}
+          {/* Mobile: context name */}
           <div className="flex md:hidden items-center gap-1.5 min-w-0 max-w-[140px]">
             <span className="text-[13px] font-semibold text-white truncate leading-none">
               {activeView==='home' ? 'Dashboard' :
@@ -13242,26 +13243,83 @@ export default function App() {
                (serverFull?.name ?? '')}
             </span>
           </div>
-          {/* Active context name (desktop) */}
-          <div className="hidden md:flex items-center gap-2 min-w-0 pl-1">
-            {activeView==='servers'&&serverFull&&(<>
-              {serverFull.icon_url
-                ? <img src={staticUrl(serverFull.icon_url)} className="w-5 h-5 rounded-lg object-cover shrink-0" alt=""/>
-                : <span className="w-5 h-5 rounded-lg bg-[#1a2030] flex items-center justify-center text-[10px] font-bold text-white shrink-0">{serverFull.name.charAt(0)}</span>}
-              <span className="text-[14px] font-semibold text-white truncate max-w-[160px]">{serverFull.name}</span>
-            </>)}
-            {activeView==='home'&&<span className="text-[14px] font-semibold text-white">Panel główny</span>}
-            {activeView==='dms'&&<span className="text-[14px] font-semibold text-white">Wiadomości prywatne</span>}
-            {activeView==='friends'&&<span className="text-[14px] font-semibold text-white">Znajomi</span>}
-          </div>
-          {/* Server list quick access */}
-          <button onClick={()=>{setSrvListSearch('');setShowSrvListModal(true);}} title="Lista serwerów"
-            className="hidden md:flex items-center justify-center w-7 h-7 rounded-lg text-[#626A73] hover:text-[#FFB454] hover:bg-[rgba(255,143,64,0.10)] transition-all shrink-0">
-            <Layers size={13}/>
+          {/* Desktop: logo mark */}
+          <button onClick={()=>{setActiveView('home');setActiveServer('');setActiveChannel('');}}
+            className="hidden md:flex items-center gap-2 px-2 py-1 rounded-xl hover:bg-white/[0.06] transition-all group shrink-0"
+            title="Strona główna">
+            <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-[13px] shadow-sm shadow-indigo-500/30 group-hover:scale-105 transition-transform select-none">C</div>
+            <span className="text-[14px] font-bold text-white tracking-tight select-none">cordyn</span>
+          </button>
+          {/* Divider */}
+          <div className="hidden md:block w-px h-4 bg-white/[0.10] mx-1 shrink-0"/>
+          {/* Home pill */}
+          <button onClick={()=>{setActiveView('home');setActiveServer('');setActiveChannel('');}}
+            className={`hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[12px] font-semibold transition-all shrink-0 ${activeView==='home'?'bg-[rgba(255,143,64,0.15)] text-[#FFB454]':'text-zinc-400 hover:text-white hover:bg-white/[0.06]'}`}>
+            <LayoutDashboard size={13}/><span>Home</span>
           </button>
         </div>
-        {/* Center col — empty spacer (logo removed per user request) */}
-        <div className="flex items-center justify-center px-4"/>
+
+        {/* Center col — server pills (horizontal scrollable, desktop only) */}
+        <div className="hidden md:flex items-center gap-1 min-w-0 overflow-x-hidden px-1 relative"
+          style={{maskImage:'linear-gradient(to right,transparent,black 12px,black calc(100% - 12px),transparent)',WebkitMaskImage:'linear-gradient(to right,transparent,black 12px,black calc(100% - 12px),transparent)'}}>
+          <div className="flex items-center gap-1 overflow-x-auto" style={{scrollbarWidth:'none'}}>
+            {/* DMs */}
+            {(()=>{
+              const dmUnread=(Object.values(unreadDms) as number[]).reduce((a,b)=>a+b,0)+(Object.values(unreadGroupDms) as number[]).reduce((a,b)=>a+b,0);
+              const isAct=activeView==='dms';
+              return (
+                <button onClick={()=>{setActiveView('dms');setActiveServer('');setActiveChannel('');}}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[12px] font-medium whitespace-nowrap transition-all shrink-0 relative ${isAct?'bg-[rgba(255,143,64,0.15)] text-[#FFB454] border border-[rgba(255,143,64,0.22)]':'text-zinc-400 hover:text-white hover:bg-white/[0.06] border border-transparent'}`}>
+                  <MessageCircle size={12}/>DMs
+                  {dmUnread>0&&!isAct&&<span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 bg-red-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5">{dmUnread>99?'99+':dmUnread}</span>}
+                </button>
+              );
+            })()}
+            {/* Friends */}
+            {(()=>{
+              const isAct=activeView==='friends';
+              return (
+                <button onClick={()=>{setActiveView('friends');setActiveServer('');setActiveChannel('');}}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[12px] font-medium whitespace-nowrap transition-all shrink-0 relative ${isAct?'bg-[rgba(255,143,64,0.15)] text-[#FFB454] border border-[rgba(255,143,64,0.22)]':'text-zinc-400 hover:text-white hover:bg-white/[0.06] border border-transparent'}`}>
+                  <Users size={12}/>Znajomi
+                  {incoming.length>0&&!isAct&&<span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 bg-red-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5">{incoming.length}</span>}
+                </button>
+              );
+            })()}
+            {/* Separator before servers */}
+            {serverList.length>0&&<div className="w-px h-4 bg-white/[0.10] mx-0.5 shrink-0"/>}
+            {/* Server pills */}
+            {serverList.map(srv=>{
+              const isAct=activeServer===srv.id&&activeView==='servers';
+              const mention=!isAct&&srvRingActivity[srv.id]==='mention';
+              const unrd=!isAct&&srvRingActivity[srv.id]==='unread';
+              return (
+                <button key={srv.id}
+                  onClick={()=>{if(activeServer===srv.id&&activeView==='servers')return;const same=activeServer===srv.id;setActiveServer(srv.id);setActiveView('servers');setActiveChannel('');setServerFull(null);setProfileViewId(null);setBannerExpanded(false);setFsOpen(false);if(same)setServerReloadKey(k=>k+1);setSrvRingActivity(prev=>{const n={...prev};delete n[srv.id];return n;});}}
+                  onContextMenu={e=>{e.preventDefault();setSrvContextMenu({x:e.clientX,y:e.clientY,srv});}}
+                  title={srv.name}
+                  className={`flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-xl text-[12px] font-medium whitespace-nowrap transition-all shrink-0 relative border ${isAct?'bg-[rgba(255,143,64,0.12)] text-[#FFB454] border-[rgba(255,143,64,0.22)]':mention?'text-amber-300 border-transparent hover:bg-white/[0.06]':unrd?'text-zinc-200 font-semibold border-transparent hover:bg-white/[0.06]':'text-zinc-400 border-transparent hover:text-white hover:bg-white/[0.06]'}`}>
+                  {/* Mini server icon */}
+                  <span className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 overflow-hidden ${isAct?'ring-1 ring-[rgba(255,143,64,0.5)]':''}`}>
+                    {srv.icon_url
+                      ? <img src={staticUrl(srv.icon_url)} className="w-full h-full object-cover" alt=""/>
+                      : <span className={`w-full h-full flex items-center justify-center text-[10px] font-bold text-white rounded-lg ${isAct?'bg-gradient-to-br from-[#FF8F40] to-[#FFB454]':'bg-[#1a2030]'}`}>{srv.name.charAt(0).toUpperCase()}</span>}
+                  </span>
+                  <span className="max-w-[100px] truncate">{srv.name}</span>
+                  {srvMuted[srv.id]&&<BellOff size={9} className="text-zinc-600 ml-0.5"/>}
+                  {/* Activity dot */}
+                  {mention&&<span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-400 border-2 border-[#0A0E14]"/>}
+                  {unrd&&!mention&&<span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-sky-400 border-2 border-[#0A0E14]"/>}
+                </button>
+              );
+            })}
+            {/* Add server */}
+            <button onClick={()=>setCreateSrvOpen(true)} title="Dodaj serwer"
+              className="flex items-center justify-center w-7 h-7 rounded-xl border border-dashed border-white/[0.15] text-zinc-500 hover:text-white hover:border-white/[0.4] transition-all shrink-0 ml-0.5">
+              <Plus size={13}/>
+            </button>
+          </div>
+        </div>
         {/* Right col — search · bell · ⋯more · avatar */}
         <div className="flex items-center justify-end gap-1 pr-1">
 
@@ -13742,10 +13800,10 @@ export default function App() {
       })()}
 
       {/* WORKSPACE */}
-      <main className="flex-1 flex gap-2 overflow-hidden relative min-h-0 rounded-2xl">
+      <main className="flex-1 flex overflow-hidden relative min-h-0 rounded-2xl">
 
         {/* ── VERTICAL SERVER ICON BAR ─────────────────────────────── */}
-        <aside className="srv-icon-bar hidden md:flex focus-card-dim">
+        <aside className="srv-icon-bar hidden focus-card-dim" aria-hidden="true" style={{display:'none'}}>
           {/* Home / DM / Friends */}
           <div className="flex flex-col items-center gap-1 px-2 pb-2 w-full border-b border-white/[0.07]">
             {([{v:'home' as const,icon:<LayoutDashboard size={16}/>,label:'Panel główny'},{v:'friends' as const,icon:<Users size={16}/>,label:'Znajomi'},{v:'dms' as const,icon:<MessageCircle size={16}/>,label:'Wiadomości'}] as const).map(({v,icon,label})=>{
