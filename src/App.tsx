@@ -8209,6 +8209,7 @@ export default function App() {
   const [streamRevealedConvs, setStreamRevealedConvs] = useState<Set<string>>(new Set());
   // Friends tabs
   const [friendsTab, setFriendsTab]           = useState<'available'|'all'>('available');
+  const [dmSideTab,  setDmSideTab]           = useState<'messages'|'friends'>('messages');
   // ── Locale & time format ──────────────────────────────────────────────────
   const _savedPrefs = loadLocale();
   const [localePref, setLocalePref]     = useState<Locale|'auto'>(_savedPrefs.locale);
@@ -13917,8 +13918,7 @@ export default function App() {
               {/* gradient header bg */}
               <div className="absolute inset-0 pointer-events-none" style={{background:'linear-gradient(180deg,rgba(99,102,241,0.09) 0%,transparent 100%)'}}/>
               <div
-                className="relative px-3 py-3.5 cursor-pointer transition-all duration-200 group overflow-hidden"
-                onClick={() => setSrvDropOpen(p => !p)}
+                className="relative px-3 pt-3 pb-2.5 overflow-hidden"
                 style={{
                   background: 'linear-gradient(135deg, rgba(255,143,64,0.10) 0%, rgba(99,102,241,0.06) 55%, transparent 100%)',
                   borderBottom: '1px solid rgba(255,255,255,0.09)',
@@ -13926,28 +13926,43 @@ export default function App() {
               >
                 {/* Shimmer accent line at top */}
                 <div style={{position:'absolute',top:0,left:0,right:0,height:1,background:'linear-gradient(90deg,transparent 0%,rgba(255,143,64,0.50) 40%,rgba(99,102,241,0.35) 70%,transparent 100%)',pointerEvents:'none'}}/>
-                {/* Hover overlay */}
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200" style={{background:'linear-gradient(135deg,rgba(255,143,64,0.06) 0%,transparent 60%)',pointerEvents:'none'}}/>
-                <div className="flex items-center justify-between gap-2 relative">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    {/* server icon */}
-                    {serverFull?.icon_url
-                      ? <img src={staticUrl(serverFull.icon_url)} className="w-7 h-7 rounded-xl object-cover shrink-0 border border-white/15 shadow-[0_2px_10px_rgba(0,0,0,0.5)]" alt=""/>
-                      : <div className="w-7 h-7 shrink-0 rounded-xl flex items-center justify-center" style={{background:'linear-gradient(135deg,rgba(255,143,64,0.50) 0%,rgba(255,100,20,0.60) 100%)',border:'1px solid rgba(255,143,64,0.40)',boxShadow:'0 0 16px rgba(255,143,64,0.32),inset 0 1px 0 rgba(255,255,255,0.18)'}}>
-                          <span className="text-[11px] font-bold text-white drop-shadow">
-                            {(serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'S').charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                    }
-                    <h2 className="text-sm font-bold text-white truncate group-hover:text-zinc-100 transition-colors">{serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'Serwer'}</h2>
-                  </div>
-                  <motion.div animate={{ rotate: srvDropOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-zinc-600 group-hover:text-[#FF8F40] transition-colors shrink-0">
-                      <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </motion.div>
+                {/* Top row: server logo + gear icon */}
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  {serverFull?.icon_url
+                    ? <img src={staticUrl(serverFull.icon_url)} className="w-9 h-9 rounded-xl object-cover shrink-0 border border-white/15 shadow-[0_2px_10px_rgba(0,0,0,0.5)]" alt=""/>
+                    : <div className="w-9 h-9 shrink-0 rounded-xl flex items-center justify-center" style={{background:'linear-gradient(135deg,rgba(255,143,64,0.50) 0%,rgba(255,100,20,0.60) 100%)',border:'1px solid rgba(255,143,64,0.40)',boxShadow:'0 0 16px rgba(255,143,64,0.32),inset 0 1px 0 rgba(255,255,255,0.18)'}}>
+                        <span className="text-[13px] font-bold text-white drop-shadow">
+                          {(serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'S').charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                  }
+                  {/* gear — settings shortcut */}
+                  {(canManageServer||canManageRoles||canKickMembers)&&(
+                    <button onClick={()=>{setSrvSettTab(canManageServer?'overview':canManageRoles?'roles':'members');setSrvSettOpen(true);setShowCallPanel(false);}} title="Ustawienia serwera"
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.07] transition-all shrink-0">
+                      <Settings size={13}/>
+                    </button>
+                  )}
                 </div>
-                {serverFull?.description&&<p className="text-xs text-zinc-500 mt-0.5 truncate pl-9 relative">{serverFull.description}</p>}
+                {/* Server name + member count (clickable — opens dropdown) */}
+                <div className="cursor-pointer group" onClick={() => setSrvDropOpen(p => !p)}>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <h2 className="text-[14px] font-bold text-white truncate group-hover:text-zinc-100 transition-colors leading-tight">
+                      {serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'Serwer'}
+                    </h2>
+                    <motion.div animate={{ rotate: srvDropOpen ? 180 : 0 }} transition={{ duration: 0.2 }} className="shrink-0">
+                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="text-zinc-600 group-hover:text-[#FF8F40] transition-colors">
+                        <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </motion.div>
+                  </div>
+                  <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">
+                    {serverFull
+                      ? `${serverFull.member_count??members.length} osób · ${members.filter(m=>m.status&&m.status!=='offline').length} online`
+                      : '…'}
+                  </p>
+                  {serverFull?.description&&<p className="text-[11px] text-zinc-600 truncate mt-0.5 leading-tight">{serverFull.description}</p>}
+                </div>
               </div>
               <AnimatePresence>
               {srvDropOpen&&(
@@ -14286,13 +14301,50 @@ export default function App() {
 
           {/* dms */}
           {activeView==='dms'&&<>
-            <div className="px-4 py-4 border-b border-white/[0.06] flex items-center justify-between">
-              <h2 className="text-sm font-bold text-white">{t('nav.dmsTitle')}</h2>
-              <button onClick={()=>setShowGroupDmModal(true)} title="Nowa grupowa wiadomość"
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-indigo-300 hover:bg-indigo-500/10 transition-all">
-                <Users size={13}/>
-              </button>
+            {/* DMs sidebar header with Wiadomości / Znajomi tabs */}
+            <div className="px-3 pt-3.5 pb-0 shrink-0" style={{borderBottom:'1px solid rgba(255,255,255,0.06)'}}>
+              <div className="flex items-center justify-between mb-2.5">
+                <h2 className="text-[13px] font-bold text-white tracking-tight">
+                  {dmSideTab==='messages'?'Wiadomości':'Znajomi'}
+                </h2>
+                {dmSideTab==='messages'&&(
+                  <button onClick={()=>setShowGroupDmModal(true)} title="Nowa grupowa wiadomość"
+                    className="w-6 h-6 rounded-lg flex items-center justify-center text-zinc-500 hover:text-indigo-300 hover:bg-indigo-500/10 transition-all">
+                    <Edit3 size={12}/>
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-0.5">
+                {(['messages','friends'] as const).map(tab=>(
+                  <button key={tab} onClick={()=>setDmSideTab(tab)}
+                    className={`flex-1 py-1.5 text-[11px] font-semibold rounded-t-lg transition-all border-b-2 ${dmSideTab===tab?'text-[#FFB454] border-[#FF8F40]':'text-zinc-500 border-transparent hover:text-zinc-300'}`}>
+                    {tab==='messages'?'Wiadomości':'Znajomi'}
+                  </button>
+                ))}
+              </div>
             </div>
+            {dmSideTab==='friends'?(
+              /* Znajomi tab — compact friend list */
+              <div className="flex-1 overflow-y-auto p-2 custom-scrollbar flex flex-col gap-0.5">
+                {friends.length===0?(
+                  <p className="text-xs text-zinc-600 px-3 py-4">Brak znajomych</p>
+                ):friends.map(f=>(
+                  <button key={f.id}
+                    onClick={()=>{setActiveDmUserId(f.id);setActiveGroupDm(null);setDmSideTab('messages');setIsMobileOpen(false);openGlobalTab({key:`dm:${f.id}`,kind:'dm',name:f.username,userId:f.id,userAvatar:f.avatar_url??undefined,userStatus:f.status});}}
+                    className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-2xl transition-all text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]">
+                    <div className="relative shrink-0">
+                      <img src={ava(f)} className="w-8 h-8 rounded-2xl object-cover" alt=""/>
+                      <StatusBadge status={f.status} size={9} className="absolute -bottom-0.5 -right-0.5"/>
+                    </div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-[13px] font-semibold text-zinc-200 truncate">{maskName(f.username)}</p>
+                      <p className="text-[11px] text-zinc-600 capitalize truncate">{f.status||'offline'}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ):(
+            /* Wiadomości tab — existing DM + group list */
             <div className="flex-1 overflow-y-auto p-2.5 custom-scrollbar flex flex-col gap-0.5">
               {/* Group DM conversations */}
               {groupConvs.map(gc => {
@@ -14360,6 +14412,7 @@ export default function App() {
               })}
               {dmConvs.length===0&&<p className="text-xs text-zinc-700 px-3 py-4">{t('nav.dmsEmpty')}</p>}
             </div>
+            )}
           </>}
 
           {activeView==='friends'&&<div className="p-3.5 border-b border-white/[0.05]"><h2 className="text-sm font-bold text-white">Znajomi</h2></div>}
