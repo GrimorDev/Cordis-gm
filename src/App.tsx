@@ -13245,7 +13245,7 @@ export default function App() {
             </span>
           </div>
           {/* Desktop: logo mark */}
-          <button onClick={()=>{setActiveView('home');setActiveServer('');setActiveChannel('');}}
+          <button onClick={()=>{setActiveView('home');setActiveServer('');setActiveChannel('');setActiveDmUserId('');setActiveGroupDm(null);}}
             className="hidden md:flex items-center gap-2 px-2 py-1 rounded-xl hover:bg-white/[0.06] transition-all group shrink-0"
             title="Strona główna">
             <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-[13px] shadow-sm shadow-indigo-500/30 group-hover:scale-105 transition-transform select-none">C</div>
@@ -13254,7 +13254,7 @@ export default function App() {
           {/* Divider */}
           <div className="hidden md:block w-px h-4 bg-white/[0.10] mx-1 shrink-0"/>
           {/* Home pill */}
-          <button onClick={()=>{setActiveView('home');setActiveServer('');setActiveChannel('');}}
+          <button onClick={()=>{setActiveView('home');setActiveServer('');setActiveChannel('');setActiveDmUserId('');setActiveGroupDm(null);}}
             className={`hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[12px] font-semibold transition-all shrink-0 ${activeView==='home'?'bg-[rgba(255,143,64,0.15)] text-[#FFB454]':'text-zinc-400 hover:text-white hover:bg-white/[0.06]'}`}>
             <LayoutDashboard size={13}/><span>Home</span>
           </button>
@@ -13264,31 +13264,7 @@ export default function App() {
         <div className="hidden md:flex items-center gap-1 min-w-0 overflow-x-hidden px-1 relative"
           style={{maskImage:'linear-gradient(to right,transparent,black 12px,black calc(100% - 12px),transparent)',WebkitMaskImage:'linear-gradient(to right,transparent,black 12px,black calc(100% - 12px),transparent)'}}>
           <div className="flex items-center gap-1 overflow-x-auto" style={{scrollbarWidth:'none'}}>
-            {/* DMs */}
-            {(()=>{
-              const dmUnread=(Object.values(unreadDms) as number[]).reduce((a,b)=>a+b,0)+(Object.values(unreadGroupDms) as number[]).reduce((a,b)=>a+b,0);
-              const isAct=activeView==='dms';
-              return (
-                <button onClick={()=>{setActiveView('dms');setActiveServer('');setActiveChannel('');}}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[12px] font-medium whitespace-nowrap transition-all shrink-0 relative ${isAct?'bg-[rgba(255,143,64,0.15)] text-[#FFB454] border border-[rgba(255,143,64,0.22)]':'text-zinc-400 hover:text-white hover:bg-white/[0.06] border border-transparent'}`}>
-                  <MessageCircle size={12}/>DMs
-                  {dmUnread>0&&!isAct&&<span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 bg-red-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5">{dmUnread>99?'99+':dmUnread}</span>}
-                </button>
-              );
-            })()}
-            {/* Friends */}
-            {(()=>{
-              const isAct=activeView==='friends';
-              return (
-                <button onClick={()=>{setActiveView('friends');setActiveServer('');setActiveChannel('');}}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[12px] font-medium whitespace-nowrap transition-all shrink-0 relative ${isAct?'bg-[rgba(255,143,64,0.15)] text-[#FFB454] border border-[rgba(255,143,64,0.22)]':'text-zinc-400 hover:text-white hover:bg-white/[0.06] border border-transparent'}`}>
-                  <Users size={12}/>Znajomi
-                  {incoming.length>0&&!isAct&&<span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 bg-red-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5">{incoming.length}</span>}
-                </button>
-              );
-            })()}
-            {/* Separator before servers */}
-            {serverList.length>0&&<div className="w-px h-4 bg-white/[0.10] mx-0.5 shrink-0"/>}
+
             {/* Server pills */}
             {serverList.map(srv=>{
               const isAct=activeServer===srv.id&&activeView==='servers';
@@ -13331,9 +13307,15 @@ export default function App() {
             title="Szukaj">
             <Search size={15}/>
           </button>
-          <div className="relative group hidden sm:block">
-            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-[#FF8F40] transition-colors pointer-events-none"/>
-            <input ref={searchInputRef} placeholder="Szukaj…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+          {/* Compass / server discovery */}
+          <button onClick={()=>{setDiscoveryCategory('all');setDiscoveryQ('');setDiscoveryLoading(true);discoverApi.list('').then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false));setShowDiscovery(true);}}
+            title="Odkrywaj serwery"
+            className="hidden sm:flex w-8 h-8 items-center justify-center rounded-xl text-zinc-500 hover:text-[#FFB454] hover:bg-[rgba(255,143,64,0.10)] transition-all shrink-0">
+            <Compass size={15}/>
+          </button>
+          <div className="relative group hidden sm:flex items-center">
+            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-[#FF8F40] transition-colors pointer-events-none"/>
+            <input ref={searchInputRef} placeholder="Szukaj wszędzie — kanały, ludzie, wiadomości" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
               onKeyDown={e => {
                 if (e.key === 'Escape') { setSearchQuery(''); (e.target as HTMLInputElement).blur(); }
                 else if (e.key === 'Enter') {
@@ -13343,7 +13325,8 @@ export default function App() {
                   else setSearchResultIdx(i => (i + 1) % searchMatches.length);
                 }
               }}
-              className="bg-white/[0.05] border border-white/[0.07] text-white placeholder-zinc-600 outline-none focus:border-[rgba(255,143,64,0.45)] focus:shadow-[0_0_0_3px_rgba(255,143,64,0.09)] rounded-xl pl-7 pr-2 py-1.5 text-xs w-32 focus:w-52 transition-all duration-300"/>
+              className="bg-white/[0.05] border border-white/[0.07] text-white placeholder-zinc-600 outline-none focus:border-[rgba(255,143,64,0.45)] focus:shadow-[0_0_0_3px_rgba(255,143,64,0.09)] rounded-xl pl-8 pr-14 py-1.5 text-xs w-44 focus:w-72 transition-all duration-300"/>
+            <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] text-zinc-600 bg-white/[0.06] border border-white/[0.09] rounded px-1.5 py-0.5 pointer-events-none">⌘ K</kbd>
           </div>
 
           {/* Notification bell */}
@@ -13890,7 +13873,7 @@ export default function App() {
         </aside>
 
         {/* LEFT */}
-        <aside className={`absolute md:relative z-30 md:z-0 w-[220px] shrink-0 flex flex-col glass-panel rounded-2xl transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] h-full overflow-hidden focus-card-dim ${isMobileOpen?'translate-x-0':'-translate-x-[120%] md:translate-x-0'}`}>
+        <aside className={`absolute md:relative z-30 md:z-0 w-[260px] shrink-0 flex flex-col glass-panel rounded-2xl transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] h-full overflow-hidden focus-card-dim ${isMobileOpen?'translate-x-0':'-translate-x-[120%] md:translate-x-0'}`}>
           {/* mobile server row */}
           <div className="md:hidden p-2 border-b border-white/[0.05] flex gap-1.5 overflow-x-auto">
             {([{v:'home' as const,i:<LayoutDashboard size={16}/>},{v:'friends' as const,i:<Users size={16}/>},{v:'dms' as const,i:<MessageCircle size={16}/>}]).map(({v,i}) => (
@@ -13915,53 +13898,31 @@ export default function App() {
           {activeView==='servers'&&<>
             {/* Server header with dropdown */}
             <div className="relative border-b border-white/[0.06]">
-              {/* gradient header bg */}
-              <div className="absolute inset-0 pointer-events-none" style={{background:'linear-gradient(180deg,rgba(99,102,241,0.09) 0%,transparent 100%)'}}/>
-              <div
-                className="relative px-3 pt-3 pb-2.5 overflow-hidden"
-                style={{
-                  background: 'linear-gradient(135deg, rgba(255,143,64,0.10) 0%, rgba(99,102,241,0.06) 55%, transparent 100%)',
-                  borderBottom: '1px solid rgba(255,255,255,0.09)',
-                }}
-              >
-                {/* Shimmer accent line at top */}
-                <div style={{position:'absolute',top:0,left:0,right:0,height:1,background:'linear-gradient(90deg,transparent 0%,rgba(255,143,64,0.50) 40%,rgba(99,102,241,0.35) 70%,transparent 100%)',pointerEvents:'none'}}/>
-                {/* Top row: server logo + gear icon */}
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  {serverFull?.icon_url
-                    ? <img src={staticUrl(serverFull.icon_url)} className="w-9 h-9 rounded-xl object-cover shrink-0 border border-white/15 shadow-[0_2px_10px_rgba(0,0,0,0.5)]" alt=""/>
-                    : <div className="w-9 h-9 shrink-0 rounded-xl flex items-center justify-center" style={{background:'linear-gradient(135deg,rgba(255,143,64,0.50) 0%,rgba(255,100,20,0.60) 100%)',border:'1px solid rgba(255,143,64,0.40)',boxShadow:'0 0 16px rgba(255,143,64,0.32),inset 0 1px 0 rgba(255,255,255,0.18)'}}>
-                        <span className="text-[13px] font-bold text-white drop-shadow">
-                          {(serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'S').charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                  }
-                  {/* gear — settings shortcut */}
-                  {(canManageServer||canManageRoles||canKickMembers)&&(
-                    <button onClick={()=>{setSrvSettTab(canManageServer?'overview':canManageRoles?'roles':'members');setSrvSettOpen(true);setShowCallPanel(false);}} title="Ustawienia serwera"
-                      className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.07] transition-all shrink-0">
-                      <Settings size={13}/>
-                    </button>
-                  )}
-                </div>
-                {/* Server name + member count (clickable — opens dropdown) */}
-                <div className="cursor-pointer group" onClick={() => setSrvDropOpen(p => !p)}>
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <h2 className="text-[14px] font-bold text-white truncate group-hover:text-zinc-100 transition-colors leading-tight">
-                      {serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'Serwer'}
-                    </h2>
-                    <motion.div animate={{ rotate: srvDropOpen ? 180 : 0 }} transition={{ duration: 0.2 }} className="shrink-0">
-                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" className="text-zinc-600 group-hover:text-[#FF8F40] transition-colors">
-                        <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </motion.div>
+              {/* Server sb-banner (design handoff style) */}
+              <div className="relative px-5 pt-5 pb-4 overflow-hidden" style={{borderBottom:'1px solid rgba(255,255,255,0.07)'}}>
+                {/* Accent glow orb — top right */}
+                <div className="absolute -top-10 -right-10 w-36 h-36 rounded-full pointer-events-none" style={{background:'rgba(99,102,241,0.6)',filter:'blur(48px)',opacity:0.30}}/>
+                {/* Gear / settings button */}
+                {(canManageServer||canManageRoles||canKickMembers)&&(
+                  <button onClick={()=>{setSrvSettTab(canManageServer?'overview':canManageRoles?'roles':'members');setSrvSettOpen(true);setShowCallPanel(false);}} title="Ustawienia serwera"
+                    className="absolute top-4 right-4 w-8 h-8 rounded-xl flex items-center justify-center text-zinc-500 hover:text-white hover:rotate-45 transition-all"
+                    style={{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.07)'}}>
+                    <Settings size={13}/>
+                  </button>
+                )}
+                {/* Dropdown trigger */}
+                <div className="relative cursor-pointer group" onClick={()=>setSrvDropOpen(p=>!p)}>
+                  <p className="text-[10px] tracking-[0.14em] uppercase mb-1.5" style={{fontFamily:'var(--font-mono,ui-monospace)',color:'rgba(161,161,170,0.7)'}}>Serwer</p>
+                  <h2 className="text-[22px] font-bold text-white leading-[1.05] tracking-tight mb-2 group-hover:text-zinc-100 transition-colors pr-8" style={{letterSpacing:'-0.02em'}}>
+                    {serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'Serwer'}
+                  </h2>
+                  <div className="flex items-center gap-2 text-[11px]" style={{fontFamily:'var(--font-mono,ui-monospace)',color:'rgba(161,161,170,0.7)'}}>
+                    <span>{serverFull ? (serverFull.member_count??members.length) : '…'} osób</span>
+                    {serverFull&&members.filter(m=>m.status&&m.status!=='offline').length>0&&(
+                      <span style={{color:'#4ade80'}}>● {members.filter(m=>m.status&&m.status!=='offline').length} online</span>
+                    )}
                   </div>
-                  <p className="text-[11px] text-zinc-500 mt-0.5 leading-tight">
-                    {serverFull
-                      ? `${serverFull.member_count??members.length} osób · ${members.filter(m=>m.status&&m.status!=='offline').length} online`
-                      : '…'}
-                  </p>
-                  {serverFull?.description&&<p className="text-[11px] text-zinc-600 truncate mt-0.5 leading-tight">{serverFull.description}</p>}
+                  {serverFull?.description&&<p className="text-[11px] text-zinc-600 truncate mt-1 leading-tight">{serverFull.description}</p>}
                 </div>
               </div>
               <AnimatePresence>
@@ -14300,27 +14261,49 @@ export default function App() {
           </>}
 
           {/* dms */}
-          {activeView==='dms'&&<>
-            {/* DMs sidebar header with Wiadomości / Znajomi tabs */}
-            <div className="px-3 pt-3.5 pb-0 shrink-0" style={{borderBottom:'1px solid rgba(255,255,255,0.06)'}}>
-              <div className="flex items-center justify-between mb-2.5">
-                <h2 className="text-[13px] font-bold text-white tracking-tight">
-                  {dmSideTab==='messages'?'Wiadomości':'Znajomi'}
-                </h2>
-                {dmSideTab==='messages'&&(
-                  <button onClick={()=>setShowGroupDmModal(true)} title="Nowa grupowa wiadomość"
-                    className="w-6 h-6 rounded-lg flex items-center justify-center text-zinc-500 hover:text-indigo-300 hover:bg-indigo-500/10 transition-all">
-                    <Edit3 size={12}/>
-                  </button>
-                )}
-              </div>
-              <div className="flex gap-0.5">
-                {(['messages','friends'] as const).map(tab=>(
-                  <button key={tab} onClick={()=>setDmSideTab(tab)}
-                    className={`flex-1 py-1.5 text-[11px] font-semibold rounded-t-lg transition-all border-b-2 ${dmSideTab===tab?'text-[#FFB454] border-[#FF8F40]':'text-zinc-500 border-transparent hover:text-zinc-300'}`}>
-                    {tab==='messages'?'Wiadomości':'Znajomi'}
-                  </button>
-                ))}
+          {(activeView==='dms'||activeView==='home'||activeView==='friends')&&<>
+            {/* DM sidebar — sb-banner style (design handoff) */}
+            <div className="relative shrink-0 px-5 pt-5 pb-4 overflow-hidden" style={{borderBottom:'1px solid rgba(255,255,255,0.07)'}}>
+              {/* Accent glow orb — top right */}
+              <div className="absolute -top-10 -right-10 w-36 h-36 rounded-full pointer-events-none" style={{background:'#FF8F40',filter:'blur(48px)',opacity:0.18}}/>
+              {/* Compose / new group button */}
+              <button onClick={()=>setShowGroupDmModal(true)} title="Nowa grupowa wiadomość"
+                className="absolute top-4 right-4 w-8 h-8 rounded-xl flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.10] transition-all"
+                style={{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.07)'}}>
+                <Edit3 size={13}/>
+              </button>
+              {/* Content */}
+              <div className="relative">
+                <p className="text-[10px] tracking-[0.14em] uppercase mb-1.5" style={{fontFamily:'var(--font-mono,ui-monospace)',color:'rgba(161,161,170,0.7)'}}>Wiadomości</p>
+                <h2 className="text-[26px] font-bold text-white leading-[1] tracking-tight mb-2" style={{letterSpacing:'-0.025em'}}>Skrzynka</h2>
+                <div className="flex items-center gap-2 text-[11px]" style={{fontFamily:'var(--font-mono,ui-monospace)',color:'rgba(161,161,170,0.7)'}}>
+                  {(()=>{
+                    const total = dmConvs.length + groupConvs.length;
+                    const unread = (Object.values(unreadDms) as number[]).reduce((a,b)=>a+b,0) + (Object.values(unreadGroupDms) as number[]).reduce((a,b)=>a+b,0);
+                    return (<>
+                      <span>{total} rozmów</span>
+                      {unread>0&&<span style={{color:'#f87171'}}>● {unread} nieprzecz.</span>}
+                    </>);
+                  })()}
+                </div>
+                {/* Tabs as pills */}
+                <div className="flex gap-1.5 mt-3.5">
+                  {(['messages','friends'] as const).map(tab=>{
+                    const isActive = dmSideTab===tab;
+                    return (
+                      <button key={tab}
+                        onClick={()=>{
+                          setDmSideTab(tab);
+                          if(tab==='friends') setActiveView('friends');
+                          else if(activeView==='friends') setActiveView('dms');
+                        }}
+                        className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-all ${isActive?'text-black':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07]'}`}
+                        style={isActive?{background:'#D6F441',color:'#0C0C0E'}:{border:'1px solid rgba(255,255,255,0.09)'}}>
+                        {tab==='messages'?'Wiadomości':'Znajomi'}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
             {dmSideTab==='friends'?(
@@ -14330,7 +14313,7 @@ export default function App() {
                   <p className="text-xs text-zinc-600 px-3 py-4">Brak znajomych</p>
                 ):friends.map(f=>(
                   <button key={f.id}
-                    onClick={()=>{setActiveDmUserId(f.id);setActiveGroupDm(null);setDmSideTab('messages');setIsMobileOpen(false);openGlobalTab({key:`dm:${f.id}`,kind:'dm',name:f.username,userId:f.id,userAvatar:f.avatar_url??undefined,userStatus:f.status});}}
+                    onClick={()=>{setActiveDmUserId(f.id);setActiveGroupDm(null);setDmSideTab('messages');setActiveView('dms');setIsMobileOpen(false);openGlobalTab({key:`dm:${f.id}`,kind:'dm',name:f.username,userId:f.id,userAvatar:f.avatar_url??undefined,userStatus:f.status});}}
                     className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-2xl transition-all text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]">
                     <div className="relative shrink-0">
                       <img src={ava(f)} className="w-8 h-8 rounded-2xl object-cover" alt=""/>
@@ -14355,6 +14338,7 @@ export default function App() {
                     onClick={async()=>{
                       setActiveGroupDm(gc.id);
                       setActiveDmUserId('');
+                      setActiveView('dms');
                       setUnreadGroupDms(p => ({ ...p, [gc.id]: 0 }));
                       openGlobalTab({key:`gdm:${gc.id}`,kind:'gdm',name:gc.name||'Grupa',groupId:gc.id,groupIcon:gc.icon_url??undefined});
                       if (!groupMessages[gc.id]) {
@@ -14386,7 +14370,7 @@ export default function App() {
                 const unread = unreadDms[dm.other_user_id] || 0;
                 const isActive = activeDmUserId===dm.other_user_id;
                 return (
-                  <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setActiveGroupDm(null); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); setProfileViewId(null); openGlobalTab({key:`dm:${dm.other_user_id}`,kind:'dm',name:dm.other_username,userId:dm.other_user_id,userAvatar:dm.other_avatar??undefined,userStatus:dm.other_status}); }}
+                  <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setActiveGroupDm(null); setActiveView('dms'); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); setProfileViewId(null); openGlobalTab({key:`dm:${dm.other_user_id}`,kind:'dm',name:dm.other_username,userId:dm.other_user_id,userAvatar:dm.other_avatar??undefined,userStatus:dm.other_status}); }}
                     onContextMenu={e => { e.preventDefault(); const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setDmCtxMenu({ x: e.clientX, y: Math.min(e.clientY, window.innerHeight - 300), dm }); }}
                     className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-200 ${isActive?'text-white border':unread>0?'text-zinc-200 hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]'}`}
                     style={isActive?{background:'linear-gradient(90deg,rgba(255,143,64,0.14) 0%,rgba(255,143,64,0.05) 100%)',borderColor:'rgba(255,143,64,0.32)',boxShadow:'inset 3px 0 0 var(--ayu-orange),0 1px 16px rgba(255,143,64,0.08)'}:{}}>
@@ -14415,7 +14399,6 @@ export default function App() {
             )}
           </>}
 
-          {activeView==='friends'&&<div className="p-3.5 border-b border-white/[0.05]"><h2 className="text-sm font-bold text-white">Znajomi</h2></div>}
 
           {/* ── VOICE STATUS BAR — Discord-style, above user bar ──────── */}
           {activeCall&&(
