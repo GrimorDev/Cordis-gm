@@ -11444,7 +11444,9 @@ export default function App() {
         if (existing) {
           // Renegotiation (e.g. remote peer added screen share track)
           await existing.setRemoteDescription(new RTCSessionDescription(sdp));
-          const answer = await existing.createAnswer();
+          const rawAnswer = await existing.createAnswer();
+          const tunedSdp  = preferOpusStereo(preferH264(rawAnswer.sdp ?? ''));
+          const answer    = { ...rawAnswer, sdp: tunedSdp };
           await existing.setLocalDescription(answer);
           getSocket().emit('webrtc_answer', { to: from, sdp: answer });
         } else {

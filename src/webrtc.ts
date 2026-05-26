@@ -165,12 +165,22 @@ function makeAudioEl(): HTMLAudioElement {
 // it primes BOTH contexts so they are in "running" state before any async ops.
 let _playCtx: AudioContext | null = null;
 let _recCtx:  AudioContext | null = null;
-interface AudioPlayNode { source: MediaStreamAudioSourceNode; gain: GainNode; }
+interface AudioPlayNode { source: MediaStreamAudioSourceNode; gain: GainNode; merger?: ChannelMergerNode; }
 const _playNodes   = new Map<string, AudioPlayNode>(); // userId → WebRTC audio nodes
 const _playVolumes = new Map<string, number>();        // userId → volume 0..1
 
 function makeResumedCtx(): AudioContext {
   const ctx = new AudioContext({ sampleRate: 48000 });
+  // ── Force stereo output ────────────────────────────────────────────────────
+  // WebKitGTK on Linux: the AudioContext destination defaults to mono (or to
+  // channelInterpretation='discrete'), which routes a 1-channel stream to the
+  // LEFT speaker only.  Explicitly setting 2-ch + 'speakers' interpretation
+  // causes mono sources to be upmixed symmetrically to both L and R channels.
+  try {
+    ctx.destination.channelCount          = Math.min(2, ctx.destination.maxChannelCount);
+    ctx.destination.channelCountMode      = 'explicit';
+    ctx.destination.channelInterpretation = 'speakers';
+  } catch { /* read-only in some edge cases, ignore */ }
   ctx.resume().catch(() => {});
   // Auto-resume if the browser suspends the context (e.g. WebView2 focus loss)
   ctx.addEventListener('statechange', () => {
@@ -210,15 +220,30 @@ export function attachRemoteAudio(userId: string, stream: MediaStream) {
   // ── AudioContext path ────────────────────────────────────────────────────────
   if (_playCtx && _playCtx.state !== 'closed') {
     const prev = _playNodes.get(userId);
-    if (prev) { try { prev.source.disconnect(); prev.gain.disconnect(); } catch {} _playNodes.delete(userId); }
+    if (prev) { try { prev.source.disconnect(); prev.gain.disconnect(); prev.merger?.disconnect(); } catch {} _playNodes.delete(userId); }
     try {
       _playCtx.resume().catch(() => {});
       const source = _playCtx.createMediaStreamSource(stream);
       const gain   = _playCtx.createGain();
       gain.gain.value = _playVolumes.get(userId) ?? 1.0;
-      source.connect(gain);
-      gain.connect(_playCtx.destination);
-      _playNodes.set(userId, { source, gain });
+      // ── Stereo upmix safety net (Linux/WebKitGTK) ─────────────────────────
+      // createMediaStreamSource on WebKitGTK may produce a 1-ch node even for
+      // stereo streams; without explicit upmix only the left ear gets audio.
+      // We insert a ChannelMergerNode that fans a mono signal to both L and R.
+      // For already-stereo sources (ch=2) the merger passes them unchanged.
+      try {
+        const merger = _playCtx.createChannelMerger(2);
+        source.connect(gain);
+        gain.connect(merger, 0, 0); // gain ch-0 → merger L
+        gain.connect(merger, 0, 1); // gain ch-0 → merger R
+        merger.connect(_playCtx.destination);
+        _playNodes.set(userId, { source, gain, merger });
+      } catch {
+        // Fallback: direct connection without merger
+        source.connect(gain);
+        gain.connect(_playCtx.destination);
+        _playNodes.set(userId, { source, gain });
+      }
       // Keep a muted <audio> element so setSinkId() still routes to the right device
       let el = remoteAudios.get(userId);
       if (!el) { el = makeAudioEl(); remoteAudios.set(userId, el); }
@@ -257,7 +282,7 @@ export function attachRemoteScreenAudio(userId: string, stream: MediaStream) {
 
 export function detachRemoteAudio(userId: string) {
   const node = _playNodes.get(userId);
-  if (node) { try { node.source.disconnect(); node.gain.disconnect(); } catch {} _playNodes.delete(userId); }
+  if (node) { try { node.source.disconnect(); node.gain.disconnect(); node.merger?.disconnect(); } catch {} _playNodes.delete(userId); }
   _playVolumes.delete(userId);
   const el = remoteAudios.get(userId);
   if (el) { el.srcObject = null; el.remove(); remoteAudios.delete(userId); }
