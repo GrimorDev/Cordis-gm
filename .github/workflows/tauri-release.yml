@@ -157,6 +157,28 @@ jobs:
             libsoup-3.0-dev \
             libjavascriptcoregtk-4.1-dev
 
+      # ── Linux: pre-fetch AppRun so Tauri doesn't hit the broken 404 URL ───
+      # tauri-bundler tries to download AppRun from the tag "apprun-old" which
+      # was removed from tauri-apps/binary-releases → HTTP 404 → build fails.
+      # We download the same binary from AppImageKit's authoritative releases
+      # and place it in the Tauri tool-cache path so the bundler finds it there
+      # and skips the network fetch entirely.
+      - name: Pre-fetch AppRun for AppImage bundler
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          APPRUN_URL="https://github.com/AppImage/AppImageKit/releases/download/continuous/AppRun-x86_64"
+          # Tauri CLI caches downloaded tools in $HOME/.cache/tauri/
+          # (dirs::cache_dir() on Linux → ~/.cache, subdirectory "tauri")
+          for DIR in \
+              "$HOME/.cache/tauri" \
+              "$HOME/.local/share/tauri" \
+              "$HOME/.cache/tauri-bundler"; do
+            mkdir -p "$DIR"
+            curl -fsSL -o "$DIR/AppRun-x86_64" "$APPRUN_URL"
+            chmod +x "$DIR/AppRun-x86_64"
+          done
+          echo "AppRun staged at $(ls -lh $HOME/.cache/tauri/AppRun-x86_64)"
+
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 

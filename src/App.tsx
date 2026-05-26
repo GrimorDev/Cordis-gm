@@ -9292,6 +9292,11 @@ export default function App() {
   // ── Auto-update check (Tauri only) ──────────────────────────────
   const [updateAvailable, setUpdateAvailable] = useState<{version:string;body:string|null}|null>(null);
   const [updateInstalling, setUpdateInstalling] = useState(false);
+  // Progress modal state
+  type UpdateStep = 'idle'|'downloading'|'installing'|'done'|'error';
+  const [updateStep, setUpdateStep]     = useState<UpdateStep>('idle');
+  const [updatePercent, setUpdatePercent] = useState(0);
+  const [updateIndeterminate, setUpdateIndeterminate] = useState(false); // true when server omits Content-Length
   useEffect(() => {
     if (!isTauri) return;
     let cancelled = false;
@@ -9431,19 +9436,22 @@ export default function App() {
   const installUpdate = async () => {
     if (!updateAvailable || updateInstalling) return;
     setUpdateInstalling(true);
+    setUpdateStep('downloading');
+    setUpdatePercent(0);
+    setUpdateIndeterminate(false);
     try {
       const { check } = await import('@tauri-apps/plugin-updater');
       const { relaunch, exit } = await import('@tauri-apps/plugin-process');
       const update = await check();
       if (update?.available) {
-        // ── Write localStorage BEFORE downloadAndInstall ──────────────────────
-        // On Windows, NSIS kills the current process during installation so any
-        // code after downloadAndInstall() may never run. Writing the cooldown
-        // flag first ensures the new instance skips the immediate update check.
+        // ── Write localStorage BEFORE downloadAndInstall ────────────────────
+        // On Windows (quiet NSIS), the installer may kill the current process.
+        // Writing the cooldown flag first ensures the new instance skips the
+        // immediate update check (preventing update loops).
         localStorage.setItem('cordis_just_updated', '1');
         localStorage.setItem('cordis_updated_at', String(Date.now()));
-        localStorage.setItem('cordis_updated_ver', updateAvailable?.version ?? '');
-        // Pre-clear caches so the new instance starts fresh (no stale assets).
+        localStorage.setItem('cordis_updated_ver', update.version);
+        // Pre-clear caches so the new instance gets fresh assets.
         try {
           if ('serviceWorker' in navigator) {
             const regs = await navigator.serviceWorker.getRegistrations();
@@ -9453,24 +9461,48 @@ export default function App() {
             const names = await caches.keys();
             await Promise.all(names.map(n => caches.delete(n)));
           }
-        } catch { /* ignore — install will still proceed */ }
+        } catch { /* ignore */ }
 
-        await update.downloadAndInstall();
+        let downloaded = 0;
+        let total = 0;
+
+        await update.downloadAndInstall((evt: any) => {
+          switch (evt.event) {
+            case 'Started':
+              total = evt.data?.contentLength ?? 0;
+              setUpdateIndeterminate(total === 0);
+              setUpdateStep('downloading');
+              break;
+            case 'Progress':
+              downloaded += evt.data?.chunkLength ?? 0;
+              if (total > 0) {
+                setUpdatePercent(Math.min(99, Math.round((downloaded / total) * 100)));
+              }
+              break;
+            case 'Finished':
+              setUpdateStep('installing');
+              setUpdatePercent(100);
+              break;
+          }
+        });
+
+        setUpdateStep('done');
+        // Brief pause so the user sees "Gotowe!" before restart
+        await new Promise(r => setTimeout(r, 1800));
 
         // ── Platform-aware restart ────────────────────────────────────────────
-        // Windows (NSIS installer): call exit(0) so the NSIS process can replace
-        // the .exe. relaunch() starts a new instance of the *old* binary which
-        // keeps the file handle open and causes NSIS to fail silently.
-        // macOS / Linux: the updater patches in-place; relaunch() is required.
+        // Windows with quiet NSIS: exit(0) lets NSIS replace the .exe cleanly.
+        // macOS / Linux: in-place update — relaunch() loads the new binary.
         const isWindows = /windows/i.test(navigator.userAgent);
         if (isWindows) {
-          await exit(0);   // NSIS handles restart on its own
+          await exit(0);
         } else {
           await relaunch();
         }
       }
     } catch (e) {
       console.error('Update failed', e);
+      setUpdateStep('error');
       setUpdateInstalling(false);
     }
   };
@@ -13281,19 +13313,125 @@ export default function App() {
       {/* Tauri frameless window titlebar — only rendered in the desktop app */}
       {isTauri && <TitleBar />}
 
-      {/* Update available banner */}
-      {updateAvailable && (
+      {/* ── Update available banner (slim, dismissible) ─────────────── */}
+      {updateAvailable && updateStep==='idle' && (
         <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-2 rounded-xl bg-indigo-600/20 border border-indigo-500/40 text-sm">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-indigo-300 shrink-0">🚀</span>
             <span className="text-zinc-200">Dostępna aktualizacja <span className="font-semibold text-indigo-300">v{updateAvailable.version}</span></span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button onClick={installUpdate} disabled={updateInstalling}
-              className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors disabled:opacity-60">
-              {updateInstalling ? 'Instalowanie…' : 'Zainstaluj teraz'}
+            <button onClick={installUpdate}
+              className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors">
+              Zainstaluj teraz
             </button>
             <button onClick={() => setUpdateAvailable(null)} className="text-zinc-500 hover:text-zinc-300 transition-colors"><X size={14}/></button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Full-screen update progress modal ────────────────────────── */}
+      {updateStep !== 'idle' && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center"
+          style={{background:'rgba(9,9,11,0.92)',backdropFilter:'blur(20px)'}}>
+          <style>{`@keyframes indeterminate{0%{transform:translateX(-200%)}100%{transform:translateX(400%)}}`}</style>
+          <div className="flex flex-col items-center gap-8 w-full max-w-sm px-6">
+
+            {/* Icon */}
+            <div className="relative">
+              <div className="absolute inset-0 rounded-full blur-2xl opacity-40"
+                style={{background:'var(--color-indigo-500)',transform:'scale(1.6)'}}/>
+              <div className="relative w-16 h-16 rounded-2xl flex items-center justify-center"
+                style={{background:'linear-gradient(135deg,#6366f1,#8b5cf6)'}}>
+                {updateStep==='done'
+                  ? <CheckCircle size={32} className="text-white"/>
+                  : updateStep==='error'
+                    ? <AlertCircle size={32} className="text-white"/>
+                    : <Download size={32} className="text-white animate-bounce"/>
+                }
+              </div>
+            </div>
+
+            {/* Title */}
+            <div className="text-center">
+              <p className="text-xl font-bold text-white mb-1">
+                {updateStep==='downloading' && 'Pobieranie aktualizacji…'}
+                {updateStep==='installing'  && 'Instalowanie…'}
+                {updateStep==='done'        && 'Gotowe!'}
+                {updateStep==='error'       && 'Błąd aktualizacji'}
+              </p>
+              {updateAvailable && (
+                <p className="text-sm text-zinc-500">
+                  {updateStep==='done'
+                    ? 'Aplikacja zaraz się uruchomi ponownie'
+                    : `v${appVersion||'?'} → v${updateAvailable.version}`
+                  }
+                </p>
+              )}
+            </div>
+
+            {/* Step indicators */}
+            <div className="w-full flex flex-col gap-3">
+              {(['downloading','installing','done'] as const).map((step, i) => {
+                const labels: Record<string,string> = {downloading:'Pobieranie',installing:'Instalowanie',done:'Restart'};
+                const isActive  = updateStep === step;
+                const isDone    = ['downloading','installing','done'].indexOf(updateStep) > i;
+                const isError   = updateStep === 'error' && i === 0;
+                return (
+                  <div key={step} className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${
+                    isActive  ? 'border-indigo-500/60 bg-indigo-500/10' :
+                    isDone    ? 'border-emerald-500/30 bg-emerald-500/[0.05]' :
+                    isError   ? 'border-red-500/30 bg-red-500/[0.05]' :
+                                'border-white/[0.05] bg-white/[0.02] opacity-40'
+                  }`}>
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
+                      isDone  ? 'bg-emerald-500' :
+                      isActive ? 'bg-indigo-500' :
+                      isError ? 'bg-red-500' : 'bg-white/10'
+                    }`}>
+                      {isDone  ? <Check size={10} className="text-white"/> :
+                       isActive ? <Loader2 size={10} className="text-white animate-spin"/> :
+                                  <span className="text-[9px] text-zinc-500 font-bold">{i+1}</span>}
+                    </div>
+                    <span className={`text-sm font-medium ${
+                      isActive ? 'text-white' : isDone ? 'text-emerald-400' : 'text-zinc-600'
+                    }`}>{labels[step]}</span>
+                    {/* Percent for download step */}
+                    {step==='downloading' && isActive && !updateIndeterminate && updatePercent > 0 && (
+                      <span className="ml-auto text-xs text-indigo-400 font-mono">{updatePercent}%</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Progress bar (download phase) */}
+            {updateStep==='downloading' && (
+              <div className="w-full">
+                <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                  {updateIndeterminate
+                    ? <div className="h-full w-1/3 rounded-full bg-indigo-500 animate-pulse"
+                        style={{animation:'indeterminate 1.5s ease-in-out infinite'}}/>
+                    : <div className="h-full rounded-full bg-indigo-500 transition-all duration-300"
+                        style={{width:`${updatePercent}%`}}/>
+                  }
+                </div>
+              </div>
+            )}
+
+            {/* Error: retry / dismiss */}
+            {updateStep==='error' && (
+              <div className="flex gap-3">
+                <button onClick={()=>{setUpdateStep('idle');setUpdateInstalling(false);}}
+                  className="px-4 py-2 rounded-xl border border-white/10 text-sm text-zinc-400 hover:text-white transition-colors">
+                  Zamknij
+                </button>
+                <button onClick={()=>{setUpdateStep('idle');setUpdateInstalling(false);setTimeout(installUpdate,100);}}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm text-white font-medium transition-colors">
+                  Spróbuj ponownie
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -23132,13 +23270,11 @@ export default function App() {
                         </button>
                       )}
 
-                      {/* Install button */}
+                      {/* Install button — clicking opens the full-screen progress modal */}
                       {updateAvailable && (
                         <button onClick={installUpdate} disabled={updateInstalling}
                           className="w-full py-2.5 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20">
-                          {updateInstalling
-                            ? <><Loader2 size={14} className="animate-spin"/>Instalowanie…</>
-                            : <><Download size={14}/>Zainstaluj v{updateAvailable.version}</>}
+                          <Download size={14}/>Zainstaluj v{updateAvailable.version}
                         </button>
                       )}
                     </motion.div>
@@ -23172,7 +23308,7 @@ export default function App() {
                       {updateAvailable && (
                         <button onClick={installUpdate} disabled={updateInstalling}
                           className="w-full py-2.5 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
-                          {updateInstalling ? <><Loader2 size={14} className="animate-spin"/>Instalowanie…</> : <>Zainstaluj v{updateAvailable.version}</>}
+                          <Download size={14}/>Zainstaluj v{updateAvailable.version}
                         </button>
                       )}
                     </motion.div>

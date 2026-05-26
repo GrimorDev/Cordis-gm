@@ -36,6 +36,7 @@
     "targets": [
       "nsis",
       "dmg",
+      "app",
       "appimage",
       "deb"
     ],
@@ -71,7 +72,7 @@
         "https://github.com/GrimorDev/Cordis-gm/releases/latest/download/latest.json"
       ],
       "windows": {
-        "installMode": "passive"
+        "installMode": "quiet"
       }
     },
     "shell": {
