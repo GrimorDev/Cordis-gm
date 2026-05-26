@@ -718,8 +718,8 @@ img.av-sc-lg {
 }
 
 /* ── Avatar effects ────────────────────────────────────────────────── */
-/* Base: position:relative so ::before/::after pseudo-elements anchor here */
-.av-frozen { position: relative; }
+/* Base: position:relative, overflow:visible so ring/glow effects paint outside bounds */
+.av-frozen { position: relative; overflow: visible; }
 /* Status badge (SVG) always floats above all ring/overlay effects */
 .av-frozen > svg { z-index: 20; }
 /* Frozen wrappers: pause animations by default, resume on hover */

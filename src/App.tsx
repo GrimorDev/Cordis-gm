@@ -13307,7 +13307,7 @@ export default function App() {
   };
 
   return (
-    <div className={`flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-transparent p-2 gap-1.5${focusCard?' focus-card-active':''}`}>
+    <div className={`flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-transparent p-1 gap-1${focusCard?' focus-card-active':''}`}>
 
 
       {/* Tauri frameless window titlebar — only rendered in the desktop app */}
@@ -14102,7 +14102,7 @@ export default function App() {
         </aside>
 
         {/* LEFT */}
-        <aside className={`absolute md:relative z-30 md:z-0 w-[260px] shrink-0 flex flex-col glass-panel rounded-2xl transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] h-full overflow-hidden focus-card-dim ${isMobileOpen?'translate-x-0':'-translate-x-[120%] md:translate-x-0'}`}>
+        <aside className={`absolute md:relative z-30 md:z-0 w-[260px] shrink-0 flex flex-col glass-panel rounded-2xl transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] h-full focus-card-dim ${isMobileOpen?'translate-x-0':'-translate-x-[120%] md:translate-x-0'}`}>
           {/* mobile server row */}
           <div className="md:hidden p-2 border-b border-white/[0.05] flex gap-1.5 overflow-x-auto">
             {([{v:'home' as const,i:<LayoutDashboard size={16}/>},{v:'friends' as const,i:<Users size={16}/>},{v:'dms' as const,i:<MessageCircle size={16}/>}]).map(({v,i}) => (
@@ -14557,7 +14557,7 @@ export default function App() {
               </div>
             ):(
             /* Wiadomości tab — existing DM + group list */
-            <div className="flex-1 overflow-y-auto p-2.5 custom-scrollbar flex flex-col gap-0.5">
+            <div className="flex-1 overflow-y-auto px-2 py-3 custom-scrollbar flex flex-col gap-0.5">
               {/* Group DM conversations */}
               {groupConvs.map(gc => {
                 const isActive = activeGroupDm===gc.id;
@@ -18856,9 +18856,12 @@ export default function App() {
               const mTwitch = userTwitchActivities.get(m.id);
               const mSteam = userSteamActivities.get(m.id);
               return (
-                <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl relative overflow-hidden transition-all duration-150 hover:bg-white/[0.055] border border-transparent hover:border-white/[0.05]" onClick={e=>opacity?showHoverCard(m.id,e):showHoverCard(m.id,e)} onContextMenu={e=>{e.preventDefault();const menuH=m.id===currentUser?.id?200:canKickMembers||canBanMembers||canManageRoles?370:260;const y=Math.min(e.clientY,window.innerHeight-menuH-8);setMemberCtxMenu({x:Math.min(e.clientX,window.innerWidth-230),y,member:m});}}>
+                <div key={m.id} className="flex items-center gap-3 cursor-pointer group px-2 py-2 rounded-xl relative transition-all duration-150 hover:bg-white/[0.055] border border-transparent hover:border-white/[0.05]" onClick={e=>opacity?showHoverCard(m.id,e):showHoverCard(m.id,e)} onContextMenu={e=>{e.preventDefault();const menuH=m.id===currentUser?.id?200:canKickMembers||canBanMembers||canManageRoles?370:260;const y=Math.min(e.clientY,window.innerHeight-menuH-8);setMemberCtxMenu({x:Math.min(e.clientX,window.innerWidth-230),y,member:m});}}>
+                  {/* Banner in its own overflow-hidden wrapper so avatar effects aren't clipped */}
                   {m.banner_preset && m.banner_preset !== 'none' && !opacity && (
-                    <div className={`bp-banner bp-${m.banner_preset}`} aria-hidden="true"/>
+                    <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none" aria-hidden="true">
+                      <div className={`bp-banner bp-${m.banner_preset}`}/>
+                    </div>
                   )}
                   <div className="relative z-[1] shrink-0 av-frozen" style={{'--av-url':`url("${ava(m)}")`} as React.CSSProperties}>
                     {isNew&&<div className="absolute inset-0 rounded-xl ring-2 ring-emerald-400/60 ring-offset-1 ring-offset-[#1e1e30] pointer-events-none animate-pulse z-10"/>}
@@ -18901,7 +18904,7 @@ export default function App() {
             );
 
             return (
-              <div className="px-3 py-4 flex-1 overflow-y-auto custom-scrollbar">
+              <div className="px-4 py-4 flex-1 overflow-y-auto custom-scrollbar">
                 {/* Role groups — only roles that have online members */}
                 {[...roleGroupMap.entries()].map(([roleName,{role,list}])=>(
                   <div key={roleName} className="mb-4">
