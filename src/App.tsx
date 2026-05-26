@@ -9326,14 +9326,21 @@ export default function App() {
     }).catch(() => {});
   }, [isAuthenticated]);
 
-  // ── macOS: request microphone/camera permissions on first login ──────
+  // ── macOS + Linux: request microphone/camera permissions on first login ──
   useEffect(() => {
     if (!isTauri || !isAuthenticated) return;
-    const isMac = navigator.userAgent.toLowerCase().includes('mac');
-    if (!isMac) return;
-    import('@tauri-apps/api/core').then(({ invoke }) => {
-      invoke('request_media_permissions').catch(() => {});
-    }).catch(() => {});
+    const ua = navigator.userAgent.toLowerCase();
+    const isMac   = ua.includes('mac');
+    const isLinux = ua.includes('linux');
+    if (!isMac && !isLinux) return;
+    // Small delay on Linux so the window is fully shown before the dialog
+    const delay = isLinux ? 1500 : 0;
+    const t = setTimeout(() => {
+      import('@tauri-apps/api/core').then(({ invoke }) => {
+        invoke('request_media_permissions').catch(() => {});
+      }).catch(() => {});
+    }, delay);
+    return () => clearTimeout(t);
   }, [isAuthenticated]);
 
   // ── Autostart: odczytaj stan przy starcie ────────────────────────────
@@ -22077,11 +22084,64 @@ export default function App() {
                     <motion.div key="devices" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
                       className="flex flex-col gap-6">
 
+                      {/* ── Helper: custom select that bypasses GTK native popup on Linux ── */}
+                      {(()=>{
+                        // Native <select> on Linux/WebKitGTK uses GTK theme colors → black on dark theme.
+                        // We use a fully custom JS dropdown instead.
+                        const DeviceSelect = ({value, onChange, options, placeholder='Default'}: {
+                          value: string; onChange:(v:string)=>void;
+                          options:{id:string;label:string}[]; placeholder?:string;
+                        }) => {
+                          const [open, setOpen] = React.useState(false);
+                          const ref = React.useRef<HTMLDivElement>(null);
+                          React.useEffect(()=>{
+                            if (!open) return;
+                            const handler = (e:MouseEvent) => { if(ref.current&&!ref.current.contains(e.target as Node)) setOpen(false); };
+                            document.addEventListener('mousedown', handler);
+                            return ()=>document.removeEventListener('mousedown', handler);
+                          },[open]);
+                          const label = options.find(o=>o.id===value)?.label || placeholder;
+                          return (
+                            <div ref={ref} className="relative w-full">
+                              <button type="button" onClick={()=>setOpen(p=>!p)}
+                                className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm text-white border border-white/[0.08] transition-all"
+                                style={{background:'#18181b',outline:'none'}}>
+                                <span className="truncate text-left">{label}</span>
+                                <ChevronDown size={13} className={`ml-2 shrink-0 text-zinc-500 transition-transform ${open?'rotate-180':''}`}/>
+                              </button>
+                              {open&&(
+                                <div className="absolute left-0 right-0 top-full mt-1 rounded-xl border border-white/[0.10] overflow-hidden z-50 shadow-2xl"
+                                  style={{background:'#18181b',maxHeight:220,overflowY:'auto'}}>
+                                  <div className="py-1">
+                                    <button type="button" onClick={()=>{onChange('');setOpen(false);}}
+                                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${value===''?'text-white bg-indigo-500/20':'text-zinc-300 hover:bg-white/[0.06]'}`}>
+                                      {placeholder}
+                                    </button>
+                                    {options.map(o=>(
+                                      <button key={o.id} type="button" onClick={()=>{onChange(o.id);setOpen(false);}}
+                                        className={`w-full text-left px-4 py-2.5 text-sm transition-colors truncate ${value===o.id?'text-white bg-indigo-500/20':'text-zinc-300 hover:bg-white/[0.06]'}`}>
+                                        {o.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        };
+
+                        return (
+                          <>
                       {/* ── SEKCJA: Wejście ───────────────────────────────── */}
                       <div id="s-input" className="scroll-mt-4 flex flex-col gap-4">
                         <div className="flex items-center justify-between">
                           <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pb-1.5 border-b border-white/[0.06] flex-1">{t('devices.title')} — Wejście</p>
-                          <button onClick={()=>getMediaDevices().then(setDevices).catch(()=>{})}
+                          <button onClick={()=>{
+                            // On Linux request permission first, then enumerate
+                            navigator.mediaDevices?.getUserMedia({audio:true,video:false})
+                              .then(s=>{s.getTracks().forEach(t=>t.stop());getMediaDevices().then(setDevices).catch(()=>{});})
+                              .catch(()=>getMediaDevices().then(setDevices).catch(()=>{}));
+                          }}
                             className={`text-xs ${gb} px-3 py-1.5 rounded-lg flex items-center gap-1.5 ml-3`}>
                             <Loader2 size={11}/> {t('devices.check')}
                           </button>
@@ -22091,16 +22151,15 @@ export default function App() {
                             <AlertCircle size={16} className="text-amber-400 shrink-0"/>
                             <div>
                               <p className="text-sm text-zinc-300 font-medium">{t('devices.noAccess')}</p>
-                              <p className="text-xs text-zinc-500 mt-0.5">{t('devices.noAccess.desc')}</p>
+                              <p className="text-xs text-zinc-500 mt-0.5">{isTauri?'Kliknij "Odśwież" i zezwól na dostęp do mikrofonu w oknie systemowym.':t('devices.noAccess.desc')}</p>
                             </div>
                           </div>
                         )}
                         <div>
                           <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('devices.mic')} ({devices.filter(d=>d.kind==='audioinput').length})</label>
-                          <select value={selMic} onChange={e=>setSelMic(e.target.value)} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}>
-                            <option value="">Default</option>
-                            {devices.filter(d=>d.kind==='audioinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`${t('devices.mic')} ${d.deviceId.slice(0,8)}`}</option>)}
-                          </select>
+                          <DeviceSelect
+                            value={selMic} onChange={v=>setSelMic(v)}
+                            options={devices.filter(d=>d.kind==='audioinput').map(d=>({id:d.deviceId,label:d.label||`${t('devices.mic')} ${d.deviceId.slice(0,8)}`}))}/>
                         </div>
                       </div>
 
@@ -22109,19 +22168,20 @@ export default function App() {
                         <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pb-1.5 border-b border-white/[0.06]">Wyjście</p>
                         <div>
                           <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('devices.speakers')} ({devices.filter(d=>d.kind==='audiooutput').length})</label>
-                          <select value={selSpeaker} onChange={e=>{setSelSpeaker(e.target.value);setOutputDevice(e.target.value).catch(()=>{});}} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}>
-                            <option value="">Default</option>
-                            {devices.filter(d=>d.kind==='audiooutput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`${t('devices.speakers')} ${d.deviceId.slice(0,8)}`}</option>)}
-                          </select>
+                          <DeviceSelect
+                            value={selSpeaker} onChange={v=>{setSelSpeaker(v);setOutputDevice(v).catch(()=>{});}}
+                            options={devices.filter(d=>d.kind==='audiooutput').map(d=>({id:d.deviceId,label:d.label||`${t('devices.speakers')} ${d.deviceId.slice(0,8)}`}))}/>
                         </div>
                         <div>
                           <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('devices.camera')} ({devices.filter(d=>d.kind==='videoinput').length})</label>
-                          <select value={selCamera} onChange={e=>setSelCamera(e.target.value)} className={`w-full ${gi} rounded-xl px-4 py-3 text-sm`}>
-                            <option value="">Default</option>
-                            {devices.filter(d=>d.kind==='videoinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`${t('devices.camera')} ${d.deviceId.slice(0,8)}`}</option>)}
-                          </select>
+                          <DeviceSelect
+                            value={selCamera} onChange={v=>setSelCamera(v)}
+                            options={devices.filter(d=>d.kind==='videoinput').map(d=>({id:d.deviceId,label:d.label||`${t('devices.camera')} ${d.deviceId.slice(0,8)}`}))}/>
                         </div>
                       </div>
+                          </>
+                        ); // end return
+                      })(/* DeviceSelect IIFE */)}
                     </motion.div>
                   )}
 
