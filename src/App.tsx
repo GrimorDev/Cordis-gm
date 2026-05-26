@@ -8051,10 +8051,11 @@ function DeviceSelect({value, onChange, options, placeholder='Default'}: {
 
 export default function App() {
   // OS detection + download URLs (used in the app header download button)
-  const userOs: 'windows' | 'macos' | 'other' = React.useMemo(() => {
+  const userOs: 'windows' | 'macos' | 'linux' | 'other' = React.useMemo(() => {
     const ua = navigator.userAgent;
     if (/Windows/i.test(ua)) return 'windows';
     if (/Mac|iPhone|iPad|iPod/i.test(ua)) return 'macos';
+    if (/Linux/i.test(ua)) return 'linux';
     return 'other';
   }, []);
   const [appDesktopUrl, setAppDesktopUrl] = useState('');
@@ -22326,14 +22327,15 @@ export default function App() {
                             </div>
                           </div>
                         )}
-                      {/* ── Linux: reset cached permission denials ─────────── */}
+                      {/* ── Linux: permissions info + reset ─────────────── */}
                       {isTauri && userOs==='linux' && (
                         <div className="rounded-2xl p-4 border border-indigo-500/20 bg-indigo-500/[0.05] flex items-start gap-3">
                           <AlertCircle size={16} className="text-indigo-400 shrink-0 mt-0.5"/>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm text-indigo-300 font-semibold">Linux — uprawnienia mikrofonu / kamery</p>
+                            <p className="text-sm text-indigo-300 font-semibold">Linux — mikrofon i kamera</p>
                             <p className="text-xs text-indigo-400/70 mt-1 leading-relaxed">
-                              Jeśli wcześniej odmówiłeś dostępu, WebKit mógł zapamiętać "Brak" — kliknij poniżej, żeby wyczyścić tę decyzję i pozwolić na nowe pytanie.
+                              Aplikacja automatycznie udziela dostępu do mikrofonu i kamery przez WebKitGTK.
+                              Jeśli urządzenia nadal nie są widoczne, kliknij poniżej, żeby wyczyścić zapamiętane decyzje i odświeżyć.
                             </p>
                             <button
                               onClick={()=>{

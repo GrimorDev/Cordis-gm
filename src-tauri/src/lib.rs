@@ -283,6 +283,25 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            // ── Linux: auto-allow mic/camera/notification permission requests ──
+            // WebKitGTK DENIES every getUserMedia call by default unless a
+            // PermissionRequest handler explicitly calls allow().
+            // WEBKIT_DISABLE_SANDBOX=1 (set in main.rs) lets the renderer
+            // process open /dev/snd & /dev/video* but does NOT bypass the
+            // WebKit permission gate — we must handle that here.
+            #[cfg(target_os = "linux")]
+            {
+                use webkit2gtk::{WebViewExt, PermissionRequestExt};
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.with_webview(|wv| {
+                        wv.inner().connect_permission_request(|_, req| {
+                            req.allow();
+                            true
+                        });
+                    });
+                }
+            }
+
             // ── Close → hide to tray (nie zamykaj, tylko chowaj) ───────────
             let app_handle = app.handle().clone();
             let main_window = app.get_webview_window("main").unwrap();
