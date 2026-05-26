@@ -13900,11 +13900,11 @@ export default function App() {
               {/* Server sb-banner (design handoff style) */}
               <div className="relative px-5 pt-5 pb-4 overflow-hidden" style={{borderBottom:'1px solid rgba(255,255,255,0.07)'}}>
                 {/* Accent glow orb — top right */}
-                <div className="absolute -top-10 -right-10 w-36 h-36 rounded-full pointer-events-none" style={{background:'rgba(99,102,241,0.6)',filter:'blur(48px)',opacity:0.30}}/>
+                <div className="absolute -top-10 -right-10 w-36 h-36 rounded-full pointer-events-none" style={{background:'var(--color-indigo-500)',filter:'blur(48px)',opacity:0.32}}/>
                 {/* Gear / settings button */}
                 {(canManageServer||canManageRoles||canKickMembers)&&(
                   <button onClick={()=>{setSrvSettTab(canManageServer?'overview':canManageRoles?'roles':'members');setSrvSettOpen(true);setShowCallPanel(false);}} title="Ustawienia serwera"
-                    className="absolute top-4 right-4 w-8 h-8 rounded-xl flex items-center justify-center text-zinc-500 hover:text-white hover:rotate-45 transition-all"
+                    className="absolute top-4 right-4 w-8 h-8 rounded-xl flex items-center justify-center text-zinc-500 hover:text-white hover:rotate-45 transition-all z-10"
                     style={{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.07)'}}>
                     <Settings size={13}/>
                   </button>
@@ -14267,7 +14267,7 @@ export default function App() {
               <div className="absolute -top-10 -right-10 w-36 h-36 rounded-full pointer-events-none" style={{background:'#FF8F40',filter:'blur(48px)',opacity:0.18}}/>
               {/* Compose / new group button */}
               <button onClick={()=>setShowGroupDmModal(true)} title="Nowa grupowa wiadomość"
-                className="absolute top-4 right-4 w-8 h-8 rounded-xl flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.10] transition-all"
+                className="absolute top-4 right-4 w-8 h-8 rounded-xl flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.10] transition-all z-10"
                 style={{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.07)'}}>
                 <Edit3 size={13}/>
               </button>
@@ -17130,7 +17130,7 @@ export default function App() {
                     return (
                       <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
                         className="relative overflow-hidden mb-4"
-                        style={{background:'#14151A',borderRadius:20,padding:'32px 40px',border:'1px solid rgba(255,255,255,0.06)'}}>
+                        style={{background:'#14151A',borderRadius:20,padding:'32px 40px',minHeight:150,border:'1px solid rgba(255,255,255,0.06)'}}>
                         <div className="absolute pointer-events-none"
                           style={{top:'-60px',right:'-60px',width:'300px',height:'300px',
                             background:'var(--color-indigo-500)',
@@ -17158,7 +17158,7 @@ export default function App() {
                   return (
                     <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
                       className="relative overflow-hidden mb-4"
-                      style={{background:'#14151A',borderRadius:20,padding:'32px 40px',border:'1px solid rgba(255,255,255,0.06)'}}>
+                      style={{background:'#14151A',borderRadius:20,padding:'32px 40px',minHeight:150,border:'1px solid rgba(255,255,255,0.06)'}}>
                       {/* Accent blob — matches design's right-side glow */}
                       <div className="absolute pointer-events-none"
                         style={{top:'-60px',right:'-60px',width:'300px',height:'300px',
@@ -17275,7 +17275,7 @@ export default function App() {
                       return (
                         <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
                           className="relative overflow-hidden mb-4"
-                          style={{background:'#14151A',borderRadius:20,padding:'32px 40px',border:'1px solid rgba(255,255,255,0.06)'}}>
+                          style={{background:'#14151A',borderRadius:20,padding:'32px 40px',minHeight:150,border:'1px solid rgba(255,255,255,0.06)'}}>
                           <div className="absolute pointer-events-none"
                             style={{top:'-80px',right:'-80px',width:'360px',height:'360px',
                               background:'var(--color-indigo-500)',borderRadius:'50%',
@@ -17298,7 +17298,7 @@ export default function App() {
                     return (
                       <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
                         className="relative overflow-hidden mb-4"
-                        style={{background:'#14151A',borderRadius:20,padding:'32px 40px',border:'1px solid rgba(255,255,255,0.06)'}}>
+                        style={{background:'#14151A',borderRadius:20,padding:'32px 40px',minHeight:150,border:'1px solid rgba(255,255,255,0.06)'}}>
                         <div className="absolute pointer-events-none"
                           style={{top:'-80px',right:'-80px',width:'360px',height:'360px',
                             background:'var(--color-indigo-500)',borderRadius:'50%',
