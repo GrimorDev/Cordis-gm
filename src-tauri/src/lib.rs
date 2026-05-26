@@ -171,6 +171,14 @@ async fn request_media_permissions(window: tauri::WebviewWindow) -> Result<(), S
 pub fn run() {
     tauri::Builder::default()
         .manage(LoopbackState(std::sync::Mutex::new(None)))
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // Second launch attempt — bring existing window to front
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.show();
+                let _ = win.unminimize();
+                let _ = win.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())

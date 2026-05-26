@@ -22104,8 +22104,8 @@ export default function App() {
                           return (
                             <div ref={ref} className="relative w-full">
                               <button type="button" onClick={()=>setOpen(p=>!p)}
-                                className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm text-white border border-white/[0.08] transition-all"
-                                style={{background:'#18181b',outline:'none'}}>
+                                className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm text-white border border-white/[0.08] transition-all focus:outline-none focus:border-indigo-500/50"
+                                style={{background:'#18181b'}}>
                                 <span className="truncate text-left">{label}</span>
                                 <ChevronDown size={13} className={`ml-2 shrink-0 text-zinc-500 transition-transform ${open?'rotate-180':''}`}/>
                               </button>
