@@ -13440,7 +13440,7 @@ export default function App() {
            grid-cols: 1fr auto 1fr guarantees center is always truly centered.
            No items-center on nav so children use h-full correctly (stretch). */}
       {/* Nav + tabs bar share ONE glass card — no gap, seamless grid */}
-      <div className="shrink-0 z-30 glass-panel rounded-2xl overflow-hidden flex flex-col">
+      <div className="shrink-0 z-30 glass-panel rounded-2xl flex flex-col">
       <nav className="h-12 px-2 grid" style={{gridTemplateColumns:'auto minmax(0,1fr) auto'}}>
         {/* Left col — Logo/brand + Home (desktop) | hamburger+context (mobile) */}
         <div className="flex items-center h-full gap-1 pl-1 shrink-0">

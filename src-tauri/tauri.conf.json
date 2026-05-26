@@ -48,11 +48,6 @@
       "icons/icon.ico"
     ],
     "createUpdaterArtifacts": true,
-    "windows": {
-      "nsis": {
-        "installerMode": "currentUser"
-      }
-    },
     "macOS": {
       "entitlements": "./Entitlements.plist",
       "infoPlist": "./Info.plist"
