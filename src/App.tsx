@@ -9443,6 +9443,13 @@ export default function App() {
 
   const installUpdate = async () => {
     if (!updateAvailable || updateInstalling) return;
+    // On Linux with deb package, in-place updates can't work (dpkg needs root).
+    // Skip the Tauri updater entirely and redirect to the GitHub releases page.
+    if (userOs === 'linux') {
+      setUpdateInstalling(false);
+      setUpdateStep('error'); // show the manual-download UI immediately
+      return;
+    }
     setUpdateInstalling(true);
     setUpdateStep('downloading');
     setUpdatePercent(0);
@@ -11386,18 +11393,68 @@ export default function App() {
       if (s === 'failed') {
         if (isInitiator) {
           console.warn('[Cordis WebRTC] ICE failed — restarting ICE for', remoteUserId);
-          pc.restartIce();
+          pc.restartIce(); // triggers onnegotiationneeded which sends a new offer
+        } else {
+          // Answerer can't restart ICE — close and let the initiator reconnect via voice_user_joined
+          console.warn('[Cordis WebRTC] ICE failed (answerer side) — closing peer', remoteUserId);
+          closePeer(remoteUserId);
         }
       }
       if (s === 'disconnected') {
-        console.warn('[Cordis WebRTC] ICE disconnected from', remoteUserId, '— may recover');
+        console.warn('[Cordis WebRTC] ICE disconnected from', remoteUserId, '— scheduling recovery in 6 s');
+        setTimeout(() => {
+          if (!peerConnsRef.current.has(remoteUserId)) return; // already closed
+          const cur = pc.iceConnectionState;
+          if (cur === 'disconnected' || cur === 'failed') {
+            if (isInitiator) {
+              console.warn('[Cordis WebRTC] ICE still broken after 6 s — restarting for', remoteUserId);
+              pc.restartIce();
+            } else {
+              console.warn('[Cordis WebRTC] ICE still broken after 6 s (answerer) — closing peer', remoteUserId);
+              closePeer(remoteUserId);
+            }
+          }
+        }, 6000);
       }
     };
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState;
       console.log(`[Cordis WebRTC] connection state (${remoteUserId}):`, s);
       if (s === 'failed') {
+        console.warn('[Cordis WebRTC] connection failed — closing peer', remoteUserId);
         addToast(tl('toast.connectionError'), 'error');
+        closePeer(remoteUserId);
+        // Re-open immediately if we are the initiator (answerer will receive new offer)
+        if (isInitiator) {
+          setTimeout(() => {
+            if (!peerConnsRef.current.has(remoteUserId) && activeCallRef.current) {
+              openPeer(remoteUserId, true).catch(console.error);
+            }
+          }, 1000);
+        }
+      }
+    };
+    // Handle renegotiation (ICE restart, adding screen-share tracks, etc.)
+    // The browser fires this event when a new offer must be sent.
+    // Guard with a flag to avoid double-offers when toggleCamera/toggleScreen
+    // already calls createOffer manually for non-initiator peers.
+    (pc as any)._negotiating = false;
+    pc.onnegotiationneeded = async () => {
+      if (!isInitiator) return; // only the initiator creates offers
+      if (pc.signalingState !== 'stable') return; // avoid glare
+      if ((pc as any)._negotiating) return; // already negotiating
+      (pc as any)._negotiating = true;
+      try {
+        const rawOffer = await pc.createOffer();
+        const tunedSdp = preferOpusStereo(preferH264(rawOffer.sdp ?? ''));
+        const offer    = { ...rawOffer, sdp: tunedSdp };
+        await pc.setLocalDescription(offer);
+        getSocket().emit('webrtc_offer', { to: remoteUserId, sdp: offer });
+        console.log(`[Cordis WebRTC] onnegotiationneeded — sent new offer to ${remoteUserId}`);
+      } catch (err) {
+        console.error('[Cordis WebRTC] onnegotiationneeded error:', err);
+      } finally {
+        (pc as any)._negotiating = false;
       }
     };
     if (localStreamRef.current)
@@ -12938,12 +12995,17 @@ export default function App() {
             if (existing) { existing.replaceTrack(t).catch(() => {}); }
             else { pc.addTrack(t, localStreamRef.current!); }
           });
-          if (pc.signalingState === 'stable') {
+          // Only renegotiate if we're the initiator; otherwise onnegotiationneeded on the
+          // remote side will send us an offer and we'll answer it.
+          if (pc.signalingState === 'stable' && !(pc as any)._negotiating) {
+            (pc as any)._negotiating = true;
             try {
-              const offer = await pc.createOffer();
+              const rawOffer = await pc.createOffer();
+              const tunedSdp = preferOpusStereo(preferH264(rawOffer.sdp ?? ''));
+              const offer    = { ...rawOffer, sdp: tunedSdp };
               await pc.setLocalDescription(offer);
               getSocket().emit('webrtc_offer', { to: peerId, sdp: offer });
-            } catch {}
+            } catch {} finally { (pc as any)._negotiating = false; }
           }
         });
         setActiveCall(p => p ? {...p, isCameraOn: true} : p);
@@ -13033,12 +13095,15 @@ export default function App() {
               peerConnsRef.current.forEach(async (pc, peerId) => {
                 try {
                   tuneVideoSenders(pc, stream, shareProfile, screenQuality);
-                  if (pc.signalingState === 'stable') {
-                    const rawOffer = await pc.createOffer();
-                    const tunedSdp = preferOpusStereo(preferH264(rawOffer.sdp ?? ''));
-                    const offer = { ...rawOffer, sdp: tunedSdp };
-                    await pc.setLocalDescription(offer);
-                    getSocket().emit('webrtc_offer', { to: peerId, sdp: offer });
+                  if (pc.signalingState === 'stable' && !(pc as any)._negotiating) {
+                    (pc as any)._negotiating = true;
+                    try {
+                      const rawOffer = await pc.createOffer();
+                      const tunedSdp = preferOpusStereo(preferH264(rawOffer.sdp ?? ''));
+                      const offer = { ...rawOffer, sdp: tunedSdp };
+                      await pc.setLocalDescription(offer);
+                      getSocket().emit('webrtc_offer', { to: peerId, sdp: offer });
+                    } finally { (pc as any)._negotiating = false; }
                   }
                 } catch {}
               });
@@ -13431,15 +13496,31 @@ export default function App() {
 
             {/* Error: retry / dismiss */}
             {updateStep==='error' && (
-              <div className="flex gap-3">
-                <button onClick={()=>{setUpdateStep('idle');setUpdateInstalling(false);}}
-                  className="px-4 py-2 rounded-xl border border-white/10 text-sm text-zinc-400 hover:text-white transition-colors">
-                  Zamknij
-                </button>
-                <button onClick={()=>{setUpdateStep('idle');setUpdateInstalling(false);setTimeout(installUpdate,100);}}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm text-white font-medium transition-colors">
-                  Spróbuj ponownie
-                </button>
+              <div className="flex flex-col gap-3 w-full">
+                {userOs === 'linux' && (
+                  <div className="px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-sm text-amber-300">
+                    Aktualizacja automatyczna nie działa dla wersji .deb (wymaga uprawnień administratora).
+                    Pobierz nową wersję ręcznie i zainstaluj komendą: <code className="font-mono bg-black/30 px-1 rounded">sudo dpkg -i cordyn_*.deb</code>
+                  </div>
+                )}
+                <div className="flex gap-3">
+                  <button onClick={()=>{setUpdateStep('idle');setUpdateInstalling(false);}}
+                    className="px-4 py-2 rounded-xl border border-white/10 text-sm text-zinc-400 hover:text-white transition-colors">
+                    Zamknij
+                  </button>
+                  {userOs === 'linux' ? (
+                    <a href={appLinuxUrl || 'https://github.com/GrimorDev/Cordis-gm/releases/latest'}
+                      target="_blank" rel="noopener noreferrer"
+                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm text-white font-medium transition-colors">
+                      Pobierz .deb ↗
+                    </a>
+                  ) : (
+                    <button onClick={()=>{setUpdateStep('idle');setUpdateInstalling(false);setTimeout(installUpdate,100);}}
+                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm text-white font-medium transition-colors">
+                      Spróbuj ponownie
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
