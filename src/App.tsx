@@ -13307,7 +13307,7 @@ export default function App() {
   };
 
   return (
-    <div className={`flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-transparent p-2 gap-2${focusCard?' focus-card-active':''}`}>
+    <div className={`flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-transparent p-2 gap-1.5${focusCard?' focus-card-active':''}`}>
 
 
       {/* Tauri frameless window titlebar — only rendered in the desktop app */}
@@ -13439,7 +13439,9 @@ export default function App() {
       {/* TOP NAV — 3-col grid: [left tabs] [Cordyn] [right actions]
            grid-cols: 1fr auto 1fr guarantees center is always truly centered.
            No items-center on nav so children use h-full correctly (stretch). */}
-      <nav className="h-12 shrink-0 z-30 glass-panel rounded-2xl px-2 grid" style={{gridTemplateColumns:'auto minmax(0,1fr) auto'}}>
+      {/* Nav + tabs bar share ONE glass card — no gap, seamless grid */}
+      <div className="shrink-0 z-30 glass-panel rounded-2xl overflow-hidden flex flex-col">
+      <nav className="h-12 px-2 grid" style={{gridTemplateColumns:'auto minmax(0,1fr) auto'}}>
         {/* Left col — Logo/brand + Home (desktop) | hamburger+context (mobile) */}
         <div className="flex items-center h-full gap-1 pl-1 shrink-0">
           {/* Mobile: hamburger */}
@@ -13472,10 +13474,17 @@ export default function App() {
           </button>
         </div>
 
-        {/* Center col — server icons (scrollable, icon-only for space) */}
-        <div className="hidden md:flex items-center min-w-0 overflow-hidden px-1 relative"
-          style={{maskImage:'linear-gradient(to right,transparent 0,black 16px,black calc(100% - 16px),transparent 100%)',WebkitMaskImage:'linear-gradient(to right,transparent 0,black 16px,black calc(100% - 16px),transparent 100%)'}}>
-          <div className="flex items-center gap-0.5 overflow-x-auto" style={{scrollbarWidth:'none',WebkitOverflowScrolling:'touch'}}>
+        {/* Center col — server tabs with left/right arrows, fixed + button */}
+        <div className="hidden md:flex items-center min-w-0 gap-0.5 px-1">
+          {/* Left scroll arrow */}
+          <button onClick={()=>srvTabsRef.current?.scrollBy({left:-200,behavior:'smooth'})}
+            className="shrink-0 w-5 h-full flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors">
+            <ChevronLeft size={12}/>
+          </button>
+          {/* Scrollable track with fade mask */}
+          <div className="flex-1 overflow-x-hidden"
+            style={{maskImage:'linear-gradient(to right,transparent 0,black 10px,black calc(100% - 10px),transparent 100%)',WebkitMaskImage:'linear-gradient(to right,transparent 0,black 10px,black calc(100% - 10px),transparent 100%)'}}>
+          <div ref={srvTabsRef} className="flex items-center gap-0.5 overflow-x-auto py-0.5" style={{scrollbarWidth:'none',WebkitOverflowScrolling:'touch'}}>
 
             {/* Server pills */}
             {serverList.map(srv=>{
@@ -13488,11 +13497,13 @@ export default function App() {
                   onContextMenu={e=>{e.preventDefault();setSrvContextMenu({x:e.clientX,y:e.clientY,srv});}}
                   title={srv.name}
                   className={`flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-xl transition-all shrink-0 relative border ${isAct?'bg-[rgba(255,143,64,0.12)] border-[rgba(255,143,64,0.22)]':mention?'border-amber-400/30 bg-amber-400/[0.06]':unrd?'border-sky-400/30 bg-sky-400/[0.06]':'border-transparent hover:bg-white/[0.08]'}`}>
-                  <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 overflow-hidden ${isAct?'ring-1 ring-[rgba(255,143,64,0.5)]':mention?'ring-1 ring-amber-400/50':unrd?'ring-1 ring-sky-400/40':''}`}>
+                  <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 p-px ${isAct?'ring-1 ring-[rgba(255,143,64,0.5)]':mention?'ring-1 ring-amber-400/50':unrd?'ring-1 ring-sky-400/40':''}`}>
+                  <span className="w-full h-full rounded-[7px] overflow-hidden flex items-center justify-center">
                     {srv.icon_url
                       ? <img src={staticUrl(srv.icon_url)} className="w-full h-full object-cover" alt=""/>
-                      : <span className={`w-full h-full flex items-center justify-center text-[10px] font-bold text-white rounded-lg ${isAct?'bg-gradient-to-br from-[#FF8F40] to-[#FFB454]':'bg-[#1a2030]'}`}>{srv.name.charAt(0).toUpperCase()}</span>}
-                  </span>
+                      : <span className={`w-full h-full flex items-center justify-center text-[10px] font-bold text-white rounded-[7px] ${isAct?'bg-gradient-to-br from-[#FF8F40] to-[#FFB454]':'bg-[#1a2030]'}`}>{srv.name.charAt(0).toUpperCase()}</span>}
+                  </span>{/* /overflow-hidden inner */}
+                  </span>{/* /ring outer */}
                   <span className={`text-[11px] font-semibold truncate max-w-[80px] ${isAct?'text-[#FFB454]':mention?'text-amber-400':unrd?'text-sky-400':'text-zinc-300'}`}>{srv.name}</span>
                   {/* Activity dot */}
                   {mention&&<span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-400 border-2 border-[#0A0E14]"/>}
@@ -13500,12 +13511,18 @@ export default function App() {
                 </button>
               );
             })}
-            {/* Add server */}
-            <button onClick={()=>setCreateSrvOpen(true)} title="Dodaj serwer"
-              className="flex items-center justify-center w-7 h-7 rounded-xl border border-dashed border-white/[0.15] text-zinc-500 hover:text-white hover:border-white/[0.4] transition-all shrink-0 ml-0.5">
-              <Plus size={13}/>
-            </button>
-          </div>
+          </div>{/* /scroll track */}
+          </div>{/* /mask wrapper */}
+          {/* Right scroll arrow */}
+          <button onClick={()=>srvTabsRef.current?.scrollBy({left:200,behavior:'smooth'})}
+            className="shrink-0 w-5 h-full flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors">
+            <ChevronRight size={12}/>
+          </button>
+          {/* Add server — fixed outside scroll, always visible */}
+          <button onClick={()=>setCreateSrvOpen(true)} title="Dodaj serwer"
+            className="flex items-center justify-center w-7 h-7 rounded-xl border border-dashed border-white/[0.15] text-zinc-500 hover:text-white hover:border-white/[0.4] transition-all shrink-0">
+            <Plus size={13}/>
+          </button>
         </div>
         {/* Right col — search · bell · ⋯more · avatar */}
         <div className="flex items-center justify-end gap-1 pr-1">
@@ -13801,7 +13818,7 @@ export default function App() {
           </div>
 
           {/* Avatar — own profile */}
-          <button onClick={openOwnProfile} className="w-7 h-7 rounded-full border-2 border-white/[0.08] overflow-hidden hover:border-indigo-500/50 transition-all shrink-0 shadow-sm ml-0.5">
+          <button onClick={openOwnProfile} className="w-7 h-7 rounded-full border-2 border-white/[0.08] overflow-hidden hover:border-indigo-500/50 transition-all shrink-0 shadow-sm ml-0.5 ring-0 hover:ring-2 hover:ring-indigo-500/20">
             <img src={streamerMode ? 'https://api.dicebear.com/7.x/initials/svg?seed=S&backgroundColor=6366f1&fontColor=ffffff' : (currentUser ? ava(currentUser) : '')} alt="" className="w-full h-full object-cover"/>
           </button>
         </div>
@@ -13819,7 +13836,7 @@ export default function App() {
           tabScrollRef.current?.scrollBy({left: dir * 180, behavior:'smooth'});
         };
         return (
-          <div className="shrink-0 glass-panel rounded-2xl overflow-hidden">
+          <div className="border-t border-white/[0.05] overflow-hidden">
             {/* Toggle row */}
             <div className="flex items-center justify-between px-3 py-0.5">
               <span className="text-[9px] font-bold text-zinc-700 uppercase tracking-widest select-none">Otwarte zakładki</span>
@@ -13993,6 +14010,7 @@ export default function App() {
           </div>
         );
       })()}
+      </div>{/* /nav+tabs-wrapper */}
 
       {/* WORKSPACE */}
       <main className="flex-1 flex overflow-hidden relative min-h-0 rounded-2xl">
