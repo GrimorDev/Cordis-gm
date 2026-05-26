@@ -8002,6 +8002,53 @@ function playBuiltinAudio(url: string, vol = 1.0): HTMLAudioElement {
   return audio;
 }
 
+// ── Custom dropdown — bypasses GTK native popup (black on dark theme on Linux) ──
+// MUST be defined at module level. Defining it inside JSX (IIFE or inline arrow)
+// creates a NEW function reference on every parent re-render → React sees a
+// different component type → full unmount+remount → local state (open/closed)
+// resets → dropdown collapses/flickers every keystroke.
+function DeviceSelect({value, onChange, options, placeholder='Default'}: {
+  value: string; onChange:(v:string)=>void;
+  options:{id:string;label:string}[]; placeholder?:string;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+  React.useEffect(()=>{
+    if (!open) return;
+    const handler = (e:MouseEvent) => { if(ref.current&&!ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return ()=>document.removeEventListener('mousedown', handler);
+  },[open]);
+  const label = options.find(o=>o.id===value)?.label || placeholder;
+  return (
+    <div ref={ref} className="relative w-full">
+      <button type="button" onClick={()=>setOpen(p=>!p)}
+        className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm text-white border border-white/[0.08] transition-all focus:outline-none focus:border-indigo-500/50"
+        style={{background:'#18181b'}}>
+        <span className="truncate text-left">{label}</span>
+        <ChevronDown size={13} className={`ml-2 shrink-0 text-zinc-500 transition-transform ${open?'rotate-180':''}`}/>
+      </button>
+      {open&&(
+        <div className="absolute left-0 right-0 top-full mt-1 rounded-xl border border-white/[0.10] overflow-hidden z-50 shadow-2xl"
+          style={{background:'#18181b',maxHeight:220,overflowY:'auto'}}>
+          <div className="py-1">
+            <button type="button" onClick={()=>{onChange('');setOpen(false);}}
+              className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${value===''?'text-white bg-indigo-500/20':'text-zinc-300 hover:bg-white/[0.06]'}`}>
+              {placeholder}
+            </button>
+            {options.map(o=>(
+              <button key={o.id} type="button" onClick={()=>{onChange(o.id);setOpen(false);}}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors truncate ${value===o.id?'text-white bg-indigo-500/20':'text-zinc-300 hover:bg-white/[0.06]'}`}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   // OS detection + download URLs (used in the app header download button)
   const userOs: 'windows' | 'macos' | 'other' = React.useMemo(() => {
@@ -22092,50 +22139,7 @@ export default function App() {
 
                       {/* ── Helper: custom select that bypasses GTK native popup on Linux ── */}
                       {(()=>{
-                        // Native <select> on Linux/WebKitGTK uses GTK theme colors → black on dark theme.
-                        // We use a fully custom JS dropdown instead.
-                        const DeviceSelect = ({value, onChange, options, placeholder='Default'}: {
-                          value: string; onChange:(v:string)=>void;
-                          options:{id:string;label:string}[]; placeholder?:string;
-                        }) => {
-                          const [open, setOpen] = React.useState(false);
-                          const ref = React.useRef<HTMLDivElement>(null);
-                          React.useEffect(()=>{
-                            if (!open) return;
-                            const handler = (e:MouseEvent) => { if(ref.current&&!ref.current.contains(e.target as Node)) setOpen(false); };
-                            document.addEventListener('mousedown', handler);
-                            return ()=>document.removeEventListener('mousedown', handler);
-                          },[open]);
-                          const label = options.find(o=>o.id===value)?.label || placeholder;
-                          return (
-                            <div ref={ref} className="relative w-full">
-                              <button type="button" onClick={()=>setOpen(p=>!p)}
-                                className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm text-white border border-white/[0.08] transition-all focus:outline-none focus:border-indigo-500/50"
-                                style={{background:'#18181b'}}>
-                                <span className="truncate text-left">{label}</span>
-                                <ChevronDown size={13} className={`ml-2 shrink-0 text-zinc-500 transition-transform ${open?'rotate-180':''}`}/>
-                              </button>
-                              {open&&(
-                                <div className="absolute left-0 right-0 top-full mt-1 rounded-xl border border-white/[0.10] overflow-hidden z-50 shadow-2xl"
-                                  style={{background:'#18181b',maxHeight:220,overflowY:'auto'}}>
-                                  <div className="py-1">
-                                    <button type="button" onClick={()=>{onChange('');setOpen(false);}}
-                                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${value===''?'text-white bg-indigo-500/20':'text-zinc-300 hover:bg-white/[0.06]'}`}>
-                                      {placeholder}
-                                    </button>
-                                    {options.map(o=>(
-                                      <button key={o.id} type="button" onClick={()=>{onChange(o.id);setOpen(false);}}
-                                        className={`w-full text-left px-4 py-2.5 text-sm transition-colors truncate ${value===o.id?'text-white bg-indigo-500/20':'text-zinc-300 hover:bg-white/[0.06]'}`}>
-                                        {o.label}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        };
-
+                        // DeviceSelect is defined at module level (stable ref → no flicker).
                         // Detect why media might fail — show actionable hint
                         const isHttpBlocked = !isTauri && location.protocol !== 'https:' && location.hostname !== 'localhost';
                         const requestAllPermissions = () => {
@@ -22163,6 +22167,31 @@ export default function App() {
                             </div>
                           </div>
                         )}
+                      {/* ── Linux: reset cached permission denials ─────────── */}
+                      {isTauri && userOs==='linux' && (
+                        <div className="rounded-2xl p-4 border border-indigo-500/20 bg-indigo-500/[0.05] flex items-start gap-3">
+                          <AlertCircle size={16} className="text-indigo-400 shrink-0 mt-0.5"/>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-indigo-300 font-semibold">Linux — uprawnienia mikrofonu / kamery</p>
+                            <p className="text-xs text-indigo-400/70 mt-1 leading-relaxed">
+                              Jeśli wcześniej odmówiłeś dostępu, WebKit mógł zapamiętać "Brak" — kliknij poniżej, żeby wyczyścić tę decyzję i pozwolić na nowe pytanie.
+                            </p>
+                            <button
+                              onClick={()=>{
+                                import('@tauri-apps/api/core').then(({invoke})=>{
+                                  invoke('reset_webkit_permissions')
+                                    .then(()=>invoke('request_media_permissions').catch(()=>{}))
+                                    .then(()=>{ setTimeout(()=>window.location.reload(),800); })
+                                    .catch(()=>{});
+                                }).catch(()=>{});
+                              }}
+                              className="mt-2.5 text-xs bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/30 text-indigo-300 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5">
+                              <Loader2 size={11}/> Wyczyść uprawnienia i odśwież
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       {/* ── SEKCJA: Wejście ───────────────────────────────── */}
                       <div id="s-input" className="scroll-mt-4 flex flex-col gap-4">
                         <div className="flex items-center justify-between">
@@ -22178,11 +22207,13 @@ export default function App() {
                             <div>
                               <p className="text-sm text-zinc-300 font-medium">{t('devices.noAccess')}</p>
                               <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
-                                {isTauri
-                                  ? 'Kliknij "Sprawdź urządzenia" — pojawi się okno systemowe z prośbą o dostęp. Zezwól na mikrofon i kamerę.'
-                                  : isHttpBlocked
-                                    ? 'Mikrofon działa tylko przez HTTPS. Zainstaluj certyfikat SSL lub użyj aplikacji desktop.'
-                                    : t('devices.noAccess.desc')}
+                                {isTauri && userOs==='linux'
+                                  ? 'Kliknij "Sprawdź urządzenia" — powinno pojawić się okno z pytaniem o mikrofon/kamerę. Jeśli nic się nie pokazuje, użyj przycisku "Wyczyść uprawnienia" powyżej.'
+                                  : isTauri
+                                    ? 'Kliknij "Sprawdź urządzenia" — pojawi się okno systemowe z prośbą o dostęp. Zezwól na mikrofon i kamerę.'
+                                    : isHttpBlocked
+                                      ? 'Mikrofon działa tylko przez HTTPS. Zainstaluj certyfikat SSL lub użyj aplikacji desktop.'
+                                      : t('devices.noAccess.desc')}
                               </p>
                             </div>
                           </div>

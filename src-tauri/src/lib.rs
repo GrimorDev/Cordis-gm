@@ -149,6 +149,46 @@ fn stop_audio_loopback(state: tauri::State<LoopbackState>) {
     }
 }
 
+/// Returns true when running on Linux (used by frontend to show Linux-specific hints).
+#[tauri::command]
+fn is_linux() -> bool {
+    cfg!(target_os = "linux")
+}
+
+/// Clear WebKitGTK's cached permission decisions for microphone/camera.
+/// WebKitGTK stores permission grants/denials in its local storage database.
+/// Deleting it forces fresh permission dialogs the next time getUserMedia is called.
+/// After calling this, the caller should restart the app (via tauri-plugin-process).
+#[tauri::command]
+async fn reset_webkit_permissions(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    let app_data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    // WebKitGTK stores permission/storage data inside the app data dir.
+    // Remove known WebKit data subdirectories to clear cached denials.
+    let webkit_dirs = ["local_storage", "IndexedDB", "databases", "webappsstore.sqlite",
+                       "cookies.sqlite", "storage", ".local_storage"];
+    for dir in &webkit_dirs {
+        let p = app_data.join(dir);
+        if p.exists() {
+            if p.is_dir() {
+                let _ = std::fs::remove_dir_all(&p);
+            } else {
+                let _ = std::fs::remove_file(&p);
+            }
+        }
+    }
+    // Also try the WebKit2GTK data directory which can live next to the app data dir
+    if let Some(parent) = app_data.parent() {
+        for name in &["webkitgtk", "WebKitGTK"] {
+            let p = parent.join(name);
+            if p.exists() {
+                let _ = std::fs::remove_dir_all(&p);
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Request microphone + camera permissions (macOS system dialog, Linux WebKitGTK prompt).
 /// Also enumerates devices so the settings page shows real device names.
 #[tauri::command]
@@ -270,6 +310,8 @@ pub fn run() {
             start_audio_loopback,
             stop_audio_loopback,
             request_media_permissions,
+            reset_webkit_permissions,
+            is_linux,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
