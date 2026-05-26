@@ -729,12 +729,13 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
       .then((data: { assets?: { name: string; browser_download_url: string }[] }) => {
         const exe     = data.assets?.find(a => a.name.endsWith('.exe'));
         const dmg     = data.assets?.find(a => a.name.endsWith('.dmg'));
-        const appimg  = data.assets?.find(a => a.name.endsWith('.AppImage'));
         const deb     = data.assets?.find(a => a.name.endsWith('.deb'));
+        const appimg  = data.assets?.find(a => a.name.endsWith('.AppImage'));
         if (exe && !desktopUrl) setDesktopUrl(exe.browser_download_url);
         if (dmg) setMacUrl(dmg.browser_download_url);
-        if (appimg) setLinuxUrl(appimg.browser_download_url);
-        else if (deb) setLinuxUrl(deb.browser_download_url);
+        // Prefer .deb — integrates with system package manager, no chmod needed
+        if (deb) setLinuxUrl(deb.browser_download_url);
+        else if (appimg) setLinuxUrl(appimg.browser_download_url);
       })
       .catch(() => {
         const fallback = 'https://github.com/GrimorDev/Cordis-gm/releases/latest';
@@ -748,7 +749,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
   const osDownload = React.useMemo(() => {
     if (userOs === 'macos')   return { url: macUrl,     label: tl('menu.downloadMacos'),   ext: 'dmg',      loading: !macUrl };
     if (userOs === 'windows') return { url: desktopUrl, label: tl('menu.downloadWindows'), ext: 'exe',      loading: !desktopUrl };
-    if (userOs === 'linux')   return { url: linuxUrl || 'https://github.com/GrimorDev/Cordis-gm/releases/latest', label: 'Pobierz na Linux', ext: 'AppImage', loading: !linuxUrl };
+    if (userOs === 'linux')   return { url: linuxUrl || 'https://github.com/GrimorDev/Cordis-gm/releases/latest', label: 'Pobierz na Linux', ext: linuxUrl.endsWith('.deb') ? 'deb' : linuxUrl.endsWith('.AppImage') ? 'AppImage' : 'Linux', loading: !linuxUrl };
     // Other OS — link to releases page
     return { url: 'https://github.com/GrimorDev/Cordis-gm/releases/latest', label: tl('menu.downloadDesktop'), ext: '', loading: false };
   }, [userOs, desktopUrl, macUrl, linuxUrl]);
@@ -8060,25 +8061,31 @@ export default function App() {
   }, []);
   const [appDesktopUrl, setAppDesktopUrl] = useState('');
   const [appMacUrl,     setAppMacUrl]     = useState('');
+  const [appLinuxUrl,   setAppLinuxUrl]   = useState('');
   React.useEffect(() => {
     fetch('https://api.github.com/repos/GrimorDev/Cordis-gm/releases/latest')
       .then(r => r.ok ? r.json() : Promise.reject())
       .then((data: { assets?: { name: string; browser_download_url: string }[] }) => {
-        const exe = data.assets?.find(a => a.name.endsWith('.exe'));
-        const dmg = data.assets?.find(a => a.name.endsWith('.dmg'));
+        const exe    = data.assets?.find(a => a.name.endsWith('.exe'));
+        const dmg    = data.assets?.find(a => a.name.endsWith('.dmg'));
+        const deb    = data.assets?.find(a => a.name.endsWith('.deb'));
+        const appimg = data.assets?.find(a => a.name.endsWith('.AppImage'));
         if (exe) setAppDesktopUrl(exe.browser_download_url);
         if (dmg) setAppMacUrl(dmg.browser_download_url);
+        if (deb) setAppLinuxUrl(deb.browser_download_url);
+        else if (appimg) setAppLinuxUrl(appimg.browser_download_url);
       })
       .catch(() => {
         const fb = 'https://github.com/GrimorDev/Cordis-gm/releases/latest';
-        setAppDesktopUrl(fb); setAppMacUrl(fb);
+        setAppDesktopUrl(fb); setAppMacUrl(fb); setAppLinuxUrl(fb);
       });
   }, []);
   const appOsDownload = React.useMemo(() => {
     if (userOs === 'macos')   return { url: appMacUrl,     label: tl('menu.downloadMacos'),   ready: !!appMacUrl };
     if (userOs === 'windows') return { url: appDesktopUrl, label: tl('menu.downloadWindows'), ready: !!appDesktopUrl };
+    if (userOs === 'linux')   return { url: appLinuxUrl || 'https://github.com/GrimorDev/Cordis-gm/releases/latest', label: 'Pobierz na Linux (.deb)', ready: !!appLinuxUrl };
     return { url: appDesktopUrl || appMacUrl, label: tl('menu.downloadDesktop'), ready: !!(appDesktopUrl || appMacUrl) };
-  }, [userOs, appDesktopUrl, appMacUrl]);
+  }, [userOs, appDesktopUrl, appMacUrl, appLinuxUrl]);
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authLoading, setAuthLoading]         = useState(true);
