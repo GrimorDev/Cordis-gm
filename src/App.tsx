@@ -22130,28 +22130,54 @@ export default function App() {
                           );
                         };
 
+                        // Detect why media might fail — show actionable hint
+                        const isHttpBlocked = !isTauri && location.protocol !== 'https:' && location.hostname !== 'localhost';
+                        const requestAllPermissions = () => {
+                          if (!navigator.mediaDevices?.getUserMedia) return;
+                          navigator.mediaDevices.getUserMedia({audio:true,video:false})
+                            .then(s=>{s.getTracks().forEach(t=>t.stop());})
+                            .catch(()=>{})
+                            .finally(()=>{
+                              navigator.mediaDevices.getUserMedia({audio:false,video:true})
+                                .then(s=>{s.getTracks().forEach(t=>t.stop());})
+                                .catch(()=>{})
+                                .finally(()=>getMediaDevices().then(setDevices).catch(()=>{}));
+                            });
+                        };
+
                         return (
                           <>
+                        {/* ── Diagnostics: show why media might not work ── */}
+                        {isHttpBlocked&&(
+                          <div className="rounded-2xl p-4 border border-amber-500/20 bg-amber-500/[0.06] flex items-start gap-3 mb-2">
+                            <AlertCircle size={16} className="text-amber-400 shrink-0 mt-0.5"/>
+                            <div>
+                              <p className="text-sm text-amber-300 font-semibold">Strona nie jest zaszyfrowana (HTTP)</p>
+                              <p className="text-xs text-amber-400/70 mt-1">Przeglądarka blokuje mikrofon i kamerę na stronach HTTP. Otwórz aplikację przez <strong>HTTPS</strong> lub użyj wersji desktop.</p>
+                            </div>
+                          </div>
+                        )}
                       {/* ── SEKCJA: Wejście ───────────────────────────────── */}
                       <div id="s-input" className="scroll-mt-4 flex flex-col gap-4">
                         <div className="flex items-center justify-between">
                           <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pb-1.5 border-b border-white/[0.06] flex-1">{t('devices.title')} — Wejście</p>
-                          <button onClick={()=>{
-                            // On Linux request permission first, then enumerate
-                            navigator.mediaDevices?.getUserMedia({audio:true,video:false})
-                              .then(s=>{s.getTracks().forEach(t=>t.stop());getMediaDevices().then(setDevices).catch(()=>{});})
-                              .catch(()=>getMediaDevices().then(setDevices).catch(()=>{}));
-                          }}
+                          <button onClick={requestAllPermissions}
                             className={`text-xs ${gb} px-3 py-1.5 rounded-lg flex items-center gap-1.5 ml-3`}>
                             <Loader2 size={11}/> {t('devices.check')}
                           </button>
                         </div>
                         {devices.length===0&&(
-                          <div className={`${gi} rounded-2xl p-4 border flex items-center gap-3`}>
-                            <AlertCircle size={16} className="text-amber-400 shrink-0"/>
+                          <div className={`${gi} rounded-2xl p-4 border flex items-start gap-3`}>
+                            <AlertCircle size={16} className="text-amber-400 shrink-0 mt-0.5"/>
                             <div>
                               <p className="text-sm text-zinc-300 font-medium">{t('devices.noAccess')}</p>
-                              <p className="text-xs text-zinc-500 mt-0.5">{isTauri?'Kliknij "Odśwież" i zezwól na dostęp do mikrofonu w oknie systemowym.':t('devices.noAccess.desc')}</p>
+                              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
+                                {isTauri
+                                  ? 'Kliknij "Sprawdź urządzenia" — pojawi się okno systemowe z prośbą o dostęp. Zezwól na mikrofon i kamerę.'
+                                  : isHttpBlocked
+                                    ? 'Mikrofon działa tylko przez HTTPS. Zainstaluj certyfikat SSL lub użyj aplikacji desktop.'
+                                    : t('devices.noAccess.desc')}
+                              </p>
                             </div>
                           </div>
                         )}

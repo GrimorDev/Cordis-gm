@@ -149,19 +149,22 @@ fn stop_audio_loopback(state: tauri::State<LoopbackState>) {
     }
 }
 
-/// Request macOS microphone + camera permissions via a JS getUserMedia call.
-/// Called once on startup so macOS shows the permission dialog on first launch.
+/// Request microphone + camera permissions (macOS system dialog, Linux WebKitGTK prompt).
+/// Also enumerates devices so the settings page shows real device names.
 #[tauri::command]
 async fn request_media_permissions(window: tauri::WebviewWindow) -> Result<(), String> {
-    // Trigger a brief getUserMedia so macOS shows the system permission prompt.
-    // The call is expected to fail (no real stream needed) — we only need the
-    // prompt to fire so the user can grant access in System Settings.
     let js = r#"
         (function() {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+            // Request audio first, then video — each triggers its own dialog on macOS/Linux
             navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-                .then(function(s){ s.getTracks().forEach(function(t){ t.stop(); }); })
-                .catch(function(){});
+                .then(function(s){ s.getTracks().forEach(function(t){ t.stop(); }); return true; })
+                .catch(function(){ return false; })
+                .then(function() {
+                    return navigator.mediaDevices.getUserMedia({ audio: false, video: true })
+                        .then(function(s){ s.getTracks().forEach(function(t){ t.stop(); }); })
+                        .catch(function(){});
+                });
         })();
     "#;
     window.eval(js).map_err(|e| e.to_string())
@@ -169,6 +172,19 @@ async fn request_media_permissions(window: tauri::WebviewWindow) -> Result<(), S
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // ── Linux: disable WebKitGTK sandbox so mic/camera/clipboard work ──────────
+    // WebKit2GTK sandboxes the renderer process, blocking /dev/snd, /dev/video*
+    // and clipboard access. All major Linux desktop apps (Discord, Slack, etc.)
+    // disable it the same way. Without this, getUserMedia always fails on Linux
+    // even after the user clicks "Allow" in the permission dialog.
+    #[cfg(target_os = "linux")]
+    {
+        std::env::set_var("WEBKIT_DISABLE_SANDBOX", "1");
+        std::env::set_var("WEBKIT_FORCE_SANDBOX", "0");
+        // Disable DMABuf renderer — fixes black/corrupted video on some GPUs
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+
     tauri::Builder::default()
         .manage(LoopbackState(std::sync::Mutex::new(None)))
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
