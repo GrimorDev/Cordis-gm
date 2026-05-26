@@ -172,19 +172,6 @@ async fn request_media_permissions(window: tauri::WebviewWindow) -> Result<(), S
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // ── Linux: disable WebKitGTK sandbox so mic/camera/clipboard work ──────────
-    // WebKit2GTK sandboxes the renderer process, blocking /dev/snd, /dev/video*
-    // and clipboard access. All major Linux desktop apps (Discord, Slack, etc.)
-    // disable it the same way. Without this, getUserMedia always fails on Linux
-    // even after the user clicks "Allow" in the permission dialog.
-    #[cfg(target_os = "linux")]
-    {
-        std::env::set_var("WEBKIT_DISABLE_SANDBOX", "1");
-        std::env::set_var("WEBKIT_FORCE_SANDBOX", "0");
-        // Disable DMABuf renderer — fixes black/corrupted video on some GPUs
-        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-    }
-
     tauri::Builder::default()
         .manage(LoopbackState(std::sync::Mutex::new(None)))
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {

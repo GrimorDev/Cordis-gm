@@ -12661,9 +12661,15 @@ export default function App() {
       getMediaDevices().then(setDevices).catch(() => {});
       return sendStream;
     } catch (err: any) {
-      const msg = err?.name === 'NotFoundError' ? 'Nie znaleziono mikrofonu'
-        : err?.name === 'NotAllowedError' ? 'Brak uprawnień do mikrofonu — zezwól w przeglądarce'
-        : 'Brak dostępu do mikrofonu';
+      const msg = err?.name === 'NotFoundError'
+        ? 'Nie znaleziono mikrofonu — sprawdź podłączenie urządzenia'
+        : err?.name === 'NotAllowedError'
+          ? (isTauri
+              ? 'Brak dostępu do mikrofonu — otwórz Ustawienia → Urządzenia i kliknij "Sprawdź urządzenia"'
+              : 'Brak uprawnień do mikrofonu — zezwól w ustawieniach przeglądarki (kłódka przy adresie URL)')
+          : err?.name === 'NotReadableError'
+            ? 'Mikrofon jest używany przez inną aplikację — zamknij Teams, Discord itp.'
+            : 'Brak dostępu do mikrofonu';
       addToast(msg, 'error'); return null;
     }
   };
