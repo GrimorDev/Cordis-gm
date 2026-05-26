@@ -711,39 +711,47 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
   }, []);
 
   // OS detection — used to show correct download button
-  const userOs: 'windows' | 'macos' | 'other' = React.useMemo(() => {
+  const userOs: 'windows' | 'macos' | 'linux' | 'other' = React.useMemo(() => {
     const ua = navigator.userAgent;
     if (/Windows/i.test(ua)) return 'windows';
     if (/Mac|iPhone|iPad|iPod/i.test(ua)) return 'macos';
+    if (/Linux|Ubuntu|Debian|Fedora|CrOS/i.test(ua)) return 'linux';
     return 'other';
   }, []);
 
   // Download URLs — resolved from GitHub Releases API
   const [desktopUrl, setDesktopUrl] = useState(import.meta.env.VITE_DESKTOP_DOWNLOAD_URL || '');
   const [macUrl,     setMacUrl]     = useState('');
+  const [linuxUrl,   setLinuxUrl]   = useState('');
   React.useEffect(() => {
     fetch('https://api.github.com/repos/GrimorDev/Cordis-gm/releases/latest')
       .then(r => r.ok ? r.json() : Promise.reject())
       .then((data: { assets?: { name: string; browser_download_url: string }[] }) => {
-        const exe = data.assets?.find(a => a.name.endsWith('.exe'));
-        const dmg = data.assets?.find(a => a.name.endsWith('.dmg'));
+        const exe     = data.assets?.find(a => a.name.endsWith('.exe'));
+        const dmg     = data.assets?.find(a => a.name.endsWith('.dmg'));
+        const appimg  = data.assets?.find(a => a.name.endsWith('.AppImage'));
+        const deb     = data.assets?.find(a => a.name.endsWith('.deb'));
         if (exe && !desktopUrl) setDesktopUrl(exe.browser_download_url);
         if (dmg) setMacUrl(dmg.browser_download_url);
+        if (appimg) setLinuxUrl(appimg.browser_download_url);
+        else if (deb) setLinuxUrl(deb.browser_download_url);
       })
       .catch(() => {
         const fallback = 'https://github.com/GrimorDev/Cordis-gm/releases/latest';
         if (!desktopUrl) setDesktopUrl(fallback);
         setMacUrl(fallback);
+        setLinuxUrl(fallback);
       });
   }, []);
 
   // Returns OS-appropriate download URL + label
   const osDownload = React.useMemo(() => {
-    if (userOs === 'macos') return { url: macUrl,     label: tl('menu.downloadMacos'),   loading: !macUrl };
-    if (userOs === 'windows') return { url: desktopUrl, label: tl('menu.downloadWindows'), loading: !desktopUrl };
-    // Other OS — prefer Windows, show generic label
-    return { url: desktopUrl || macUrl, label: tl('menu.downloadDesktop'), loading: !desktopUrl && !macUrl };
-  }, [userOs, desktopUrl, macUrl]);
+    if (userOs === 'macos')   return { url: macUrl,     label: tl('menu.downloadMacos'),   ext: 'dmg',      loading: !macUrl };
+    if (userOs === 'windows') return { url: desktopUrl, label: tl('menu.downloadWindows'), ext: 'exe',      loading: !desktopUrl };
+    if (userOs === 'linux')   return { url: linuxUrl || 'https://github.com/GrimorDev/Cordis-gm/releases/latest', label: 'Pobierz na Linux', ext: 'AppImage', loading: !linuxUrl };
+    // Other OS — link to releases page
+    return { url: 'https://github.com/GrimorDev/Cordis-gm/releases/latest', label: tl('menu.downloadDesktop'), ext: '', loading: false };
+  }, [userOs, desktopUrl, macUrl, linuxUrl]);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
 
@@ -2177,12 +2185,18 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
               </p>
 
               {/* Desktop app download link */}
-              <div className="mt-5 pt-4 border-t border-white/[0.06]">
+              <div className="mt-5 pt-4 border-t border-white/[0.06] flex flex-col gap-1.5">
                 <a href={osDownload.url || '#'}
-                  className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-xs font-medium border transition-all group ${!osDownload.loading ? 'text-zinc-500 hover:text-zinc-300 bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.05] hover:border-white/[0.1] cursor-pointer' : 'text-zinc-700 bg-white/[0.02] border-white/[0.03] cursor-wait pointer-events-none'}`}>
+                  className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-xs font-medium border transition-all group ${!osDownload.loading ? 'text-zinc-400 hover:text-white bg-white/[0.03] hover:bg-white/[0.07] border-white/[0.06] hover:border-indigo-500/40 cursor-pointer' : 'text-zinc-700 bg-white/[0.02] border-white/[0.03] cursor-wait pointer-events-none'}`}>
                   {osDownload.loading ? <Loader2 size={13} className="animate-spin"/> : <Monitor size={13} className="group-hover:text-indigo-400 transition-colors"/>}
-                  {osDownload.loading ? tl('landing.loading') : `${tl('landing.downloadApp')} — ${userOs === 'macos' ? 'macOS' : userOs === 'windows' ? 'Windows' : 'Desktop'}`}
+                  {osDownload.loading ? tl('landing.loading') : `${tl('landing.downloadApp')} — ${userOs === 'macos' ? 'macOS' : userOs === 'windows' ? 'Windows' : userOs === 'linux' ? 'Linux' : 'Desktop'}`}
+                  {!osDownload.loading && osDownload.ext && <span className="text-[10px] text-zinc-600 font-mono">.{osDownload.ext}</span>}
                   {!osDownload.loading && <Download size={12} className="group-hover:text-indigo-400 transition-colors"/>}
+                </a>
+                {/* Other platforms link */}
+                <a href="https://github.com/GrimorDev/Cordis-gm/releases/latest" target="_blank" rel="noopener noreferrer"
+                  className="text-center text-[11px] text-zinc-700 hover:text-zinc-500 transition-colors py-0.5">
+                  Inne platformy (Windows · macOS · Linux) →
                 </a>
               </div>
             </motion.div>
