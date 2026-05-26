@@ -13275,13 +13275,13 @@ export default function App() {
                   onClick={()=>{if(activeServer===srv.id&&activeView==='servers')return;const same=activeServer===srv.id;setActiveServer(srv.id);setActiveView('servers');setActiveChannel('');setServerFull(null);setProfileViewId(null);setBannerExpanded(false);setFsOpen(false);if(same)setServerReloadKey(k=>k+1);setSrvRingActivity(prev=>{const n={...prev};delete n[srv.id];return n;});}}
                   onContextMenu={e=>{e.preventDefault();setSrvContextMenu({x:e.clientX,y:e.clientY,srv});}}
                   title={srv.name}
-                  className={`flex items-center justify-center w-8 h-8 rounded-xl transition-all shrink-0 relative border ${isAct?'bg-[rgba(255,143,64,0.12)] border-[rgba(255,143,64,0.22)]':mention?'border-amber-400/30 bg-amber-400/[0.06]':unrd?'border-sky-400/30 bg-sky-400/[0.06]':'border-transparent hover:bg-white/[0.08]'}`}>
-                  {/* Icon only — name is tooltip */}
-                  <span className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 overflow-hidden ${isAct?'ring-1 ring-[rgba(255,143,64,0.5)]':mention?'ring-1 ring-amber-400/50':unrd?'ring-1 ring-sky-400/40':''}`}>
+                  className={`flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-xl transition-all shrink-0 relative border ${isAct?'bg-[rgba(255,143,64,0.12)] border-[rgba(255,143,64,0.22)]':mention?'border-amber-400/30 bg-amber-400/[0.06]':unrd?'border-sky-400/30 bg-sky-400/[0.06]':'border-transparent hover:bg-white/[0.08]'}`}>
+                  <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 overflow-hidden ${isAct?'ring-1 ring-[rgba(255,143,64,0.5)]':mention?'ring-1 ring-amber-400/50':unrd?'ring-1 ring-sky-400/40':''}`}>
                     {srv.icon_url
                       ? <img src={staticUrl(srv.icon_url)} className="w-full h-full object-cover" alt=""/>
                       : <span className={`w-full h-full flex items-center justify-center text-[10px] font-bold text-white rounded-lg ${isAct?'bg-gradient-to-br from-[#FF8F40] to-[#FFB454]':'bg-[#1a2030]'}`}>{srv.name.charAt(0).toUpperCase()}</span>}
                   </span>
+                  <span className={`text-[11px] font-semibold truncate max-w-[80px] ${isAct?'text-[#FFB454]':mention?'text-amber-400':unrd?'text-sky-400':'text-zinc-300'}`}>{srv.name}</span>
                   {/* Activity dot */}
                   {mention&&<span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-400 border-2 border-[#0A0E14]"/>}
                   {unrd&&!mention&&<span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-sky-400 border-2 border-[#0A0E14]"/>}
@@ -17266,35 +17266,55 @@ export default function App() {
                       </>
                     );
                   })()}
-                  {!activeGroupDm && !msgsLoading&&!searchQuery.trim()&&<div className="text-center py-8 mb-3">
-                    {activeView==='dms'&&(activeDm||dmPartnerProfile) ? (
-                      (() => {
-                        const dmName    = activeDm ? activeDm.other_username    : dmPartnerProfile!.username;
-                        const dmAvatar  = activeDm ? activeDm.other_avatar      : dmPartnerProfile!.avatar_url;
-                        const dmOtherId = activeDm ? activeDm.other_user_id     : dmPartnerProfile!.id;
-                        const isFrd     = friends.some(f => f.id === dmOtherId);
-                        return (
-                          <>
-                            <img src={ava({avatar_url:dmAvatar,username:dmName})} className="w-20 h-20 rounded-2xl mx-auto mb-4 border-4 border-zinc-950 object-cover shadow-2xl" alt=""/>
-                            <h1 className="text-2xl font-bold text-white mb-1">{maskName(dmName)}</h1>
-                            {isFrd && messages.length===0 ? (
-                              <p className="text-sm text-zinc-400"><span className="font-medium text-white">{maskName(dmName)}</span> jest Twoim znajomym! Zacznij rozmowę.</p>
-                            ) : (
-                              <p className="text-sm text-zinc-500">Początek Twojej rozmowy z <span className="text-zinc-400 font-medium">{maskName(dmName)}</span>.</p>
-                            )}
-                          </>
-                        );
-                      })()
-                    ) : (
-                      <>
-                        <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-600/20 to-purple-600/10 border border-indigo-500/20 mb-4 shadow-2xl">
-                          <Hash size={30} className="text-indigo-400"/>
+                  {!activeGroupDm && !msgsLoading&&!searchQuery.trim()&&messages.length===0&&(()=>{
+                    if (activeView==='dms'&&(activeDm||dmPartnerProfile)) {
+                      const dmName2   = activeDm ? activeDm.other_username  : dmPartnerProfile!.username;
+                      const dmAvatar2 = activeDm ? activeDm.other_avatar    : dmPartnerProfile!.avatar_url;
+                      const dmOtherId2= activeDm ? activeDm.other_user_id   : dmPartnerProfile!.id;
+                      const isFrd2    = friends.some(f => f.id === dmOtherId2);
+                      return (
+                        <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
+                          className="relative overflow-hidden mb-4"
+                          style={{background:'#14151A',borderRadius:20,padding:'32px 40px',border:'1px solid rgba(255,255,255,0.06)'}}>
+                          <div className="absolute pointer-events-none"
+                            style={{top:'-80px',right:'-80px',width:'360px',height:'360px',
+                              background:'var(--color-indigo-500)',borderRadius:'50%',
+                              filter:'blur(80px)',opacity:0.18,animation:'floatBlob 14s ease-in-out infinite'}}/>
+                          <div className="relative flex items-start gap-5">
+                            <div style={{width:72,height:72,borderRadius:20,overflow:'hidden',flexShrink:0,boxShadow:'0 8px 32px rgba(0,0,0,0.5)'}}>
+                              <img src={ava({avatar_url:dmAvatar2,username:dmName2})} style={{width:'100%',height:'100%',objectFit:'cover'}} alt=""/>
+                            </div>
+                            <div>
+                              <div style={{fontFamily:'monospace',fontSize:10.5,letterSpacing:'0.14em',textTransform:'uppercase' as const,color:'rgba(255,255,255,0.35)',marginBottom:10}}>Wiadomość prywatna</div>
+                              <h2 style={{fontWeight:700,fontSize:'clamp(22px,2.5vw,34px)',lineHeight:1,letterSpacing:'-0.025em',color:'white',margin:'0 0 8px'}}>{maskName(dmName2)}</h2>
+                              <p style={{fontSize:14,color:'rgba(255,255,255,0.45)',margin:0}}>{isFrd2?`${maskName(dmName2)} jest Twoim znajomym — zacznij rozmowę!`:`To jest początek Twojej rozmowy z ${maskName(dmName2)}.`}</p>
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    }
+                    const ch2 = serverFull?.categories.flatMap(c=>c.channels).find(c=>c.id===activeChannel) || activeCh;
+                    if (!activeChannel && activeView!=='servers') return null;
+                    return (
+                      <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
+                        className="relative overflow-hidden mb-4"
+                        style={{background:'#14151A',borderRadius:20,padding:'32px 40px',border:'1px solid rgba(255,255,255,0.06)'}}>
+                        <div className="absolute pointer-events-none"
+                          style={{top:'-80px',right:'-80px',width:'360px',height:'360px',
+                            background:'var(--color-indigo-500)',borderRadius:'50%',
+                            filter:'blur(80px)',opacity:0.18,animation:'floatBlob 14s ease-in-out infinite'}}/>
+                        <div className="relative">
+                          <div style={{fontFamily:'monospace',fontSize:10.5,letterSpacing:'0.14em',textTransform:'uppercase' as const,color:'rgba(255,255,255,0.35)',marginBottom:12}}>
+                            Nowy kanał · {serverFull?.name}
+                          </div>
+                          <h2 style={{fontWeight:700,fontSize:'clamp(26px,3vw,38px)',lineHeight:1,letterSpacing:'-0.025em',color:'white',margin:'0 0 10px'}}>
+                            #{ch2?.name||activeChannel}
+                          </h2>
+                          <p style={{fontSize:14,color:'rgba(255,255,255,0.45)',maxWidth:500,margin:0}}>{ch2?.description||'Bądź pierwszą osobą, która napisze coś tutaj!'}</p>
                         </div>
-                        <h1 className="text-2xl font-bold text-white mb-1"># {activeCh?.name||activeChannel}</h1>
-                        <p className="text-sm text-zinc-500">Początek kanału <span className="text-zinc-400 font-medium">#{activeCh?.name||activeChannel}</span>.</p>
-                      </>
-                    )}
-                  </div>}
+                      </motion.div>
+                    );
+                  })()}
 
                   {!activeGroupDm && (messages as (MessageFull|DmMessageFull)[]).map((msg, idx) => {
                     const isOwn = currentUser?.id === msg.sender_id;
@@ -20487,17 +20507,21 @@ export default function App() {
                       </div>
                     </div>
                     <div>
-                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Ikona</label>
-                      <div className="flex items-center gap-4">
-                        <div className="relative w-14 h-14 rounded-2xl overflow-hidden bg-white/[0.04] border border-white/[0.06]">
-                          {(srvIconFile?URL.createObjectURL(srvIconFile):srvForm.icon_url) ? (
-                            <img src={srvIconFile?URL.createObjectURL(srvIconFile):staticUrl(srvForm.icon_url)} className="w-full h-full object-cover" alt=""/>
-                          ) : <div className="w-full h-full flex items-center justify-center text-xl font-bold text-zinc-600">{serverFull.name.charAt(0)}</div>}
-                        </div>
-                        <label className={`cursor-pointer text-sm font-semibold ${gb} px-3 py-2 rounded-xl flex items-center gap-1.5`}>
-                          <Upload size={13}/> Zmień ikonę
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Ikona serwera</label>
+                      {/* Icon overlapping banner — Discord-style: negative margin pulls it up onto the banner */}
+                      <div className="flex items-center gap-4" style={{marginTop:'-28px',paddingLeft:'16px',position:'relative',zIndex:2}}>
+                        <label className="cursor-pointer group" title="Zmień ikonę">
+                          <div className="relative w-14 h-14 rounded-2xl overflow-hidden border-[3px] border-[#14151A] bg-white/[0.04] shadow-xl">
+                            {(srvIconFile?URL.createObjectURL(srvIconFile):srvForm.icon_url) ? (
+                              <img src={srvIconFile?URL.createObjectURL(srvIconFile):staticUrl(srvForm.icon_url)} className="w-full h-full object-cover" alt=""/>
+                            ) : <div className="w-full h-full flex items-center justify-center text-xl font-bold text-zinc-500">{serverFull.name.charAt(0)}</div>}
+                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <Upload size={14} className="text-white"/>
+                            </div>
+                          </div>
                           <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];(e.target as HTMLInputElement).value='';if(f)openCrop(f,1,'rect','Kadruj ikonę serwera',c=>{setCropPending(null);setSrvIconFile(c);});}} className="hidden"/>
                         </label>
+                        <span className="text-xs text-zinc-500 mt-7">Kliknij ikonę, aby zmienić</span>
                       </div>
                     </div>
                     <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Nazwa</label>
