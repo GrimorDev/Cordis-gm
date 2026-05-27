@@ -226,30 +226,43 @@ export function attachRemoteAudio(userId: string, stream: MediaStream) {
       const source = _playCtx.createMediaStreamSource(stream);
       const gain   = _playCtx.createGain();
       gain.gain.value = _playVolumes.get(userId) ?? 1.0;
-      // ── Stereo upmix safety net (Linux/WebKitGTK) ─────────────────────────
-      // createMediaStreamSource on WebKitGTK may produce a 1-ch node even for
-      // stereo streams; without explicit upmix only the left ear gets audio.
-      // We insert a ChannelMergerNode that fans a mono signal to both L and R.
-      // For already-stereo sources (ch=2) the merger passes them unchanged.
+
+      // ── Route via MediaStreamDestinationNode ────────────────────────────────
+      // AudioContext.destination always plays through the system DEFAULT output.
+      // To honour user-selected speaker (setSinkId), we pipe the graph into a
+      // MediaStreamDestinationNode and feed its stream into an <audio> element.
+      // setSinkId on that element then routes to the selected device correctly.
+      //
+      // Also inserts a ChannelMergerNode (stereo upmix) so a mono WebRTC stream
+      // fills both L and R channels — fixes left-ear-only on Linux/WebKitGTK.
+      let el = remoteAudios.get(userId);
+      if (!el) { el = makeAudioEl(); remoteAudios.set(userId, el); }
+
       try {
-        const merger = _playCtx.createChannelMerger(2);
+        const merger  = _playCtx.createChannelMerger(2);
+        const destNode = _playCtx.createMediaStreamDestination();
         source.connect(gain);
         gain.connect(merger, 0, 0); // gain ch-0 → merger L
         gain.connect(merger, 0, 1); // gain ch-0 → merger R
-        merger.connect(_playCtx.destination);
+        merger.connect(destNode);
+        // Play through <audio> element — setSinkId() on it controls the output device
+        el.muted = false;
+        el.srcObject = destNode.stream;
+        el.play().catch(() => {
+          // Retry on next user interaction (autoplay policy)
+          const retry = () => { el!.play().catch(() => {}); document.removeEventListener('click', retry); };
+          document.addEventListener('click', retry, { once: true });
+        });
         _playNodes.set(userId, { source, gain, merger });
       } catch {
-        // Fallback: direct connection without merger
+        // Fallback: connect directly to ctx.destination (no output device switching)
         source.connect(gain);
         gain.connect(_playCtx.destination);
+        el.muted = true;
+        el.srcObject = stream;
         _playNodes.set(userId, { source, gain });
       }
-      // Keep a muted <audio> element so setSinkId() still routes to the right device
-      let el = remoteAudios.get(userId);
-      if (!el) { el = makeAudioEl(); remoteAudios.set(userId, el); }
-      el.muted = true; // actual audio comes from AudioContext
-      el.srcObject = stream;
-      console.log(`[Cordis] attachRemoteAudio(${userId}): AudioContext path, state=${_playCtx.state}`);
+      console.log(`[Cordis] attachRemoteAudio(${userId}): AudioContext+Dest path, state=${_playCtx.state}`);
       return;
     } catch (err) {
       console.warn('[Cordis] attachRemoteAudio AudioContext path failed, falling back to <audio>:', err);
@@ -337,10 +350,17 @@ export function muteAllRemote(muted: boolean) {
 }
 
 export async function setOutputDevice(deviceId: string) {
+  // Route all <audio> elements (which carry the MediaStreamDestinationNode output)
+  // to the selected device.  This is the primary path for output device switching.
   for (const el of [...remoteAudios.values(), ...remoteScreenAudios.values()]) {
     if ('setSinkId' in el) {
       try { await (el as any).setSinkId(deviceId); } catch {}
     }
+  }
+  // Additionally, try AudioContext.setSinkId if the browser supports it (Chrome 110+).
+  // This covers any audio going directly to ctx.destination (fallback path).
+  if (_playCtx && 'setSinkId' in _playCtx) {
+    try { await (_playCtx as any).setSinkId(deviceId); } catch {}
   }
 }
 
@@ -696,10 +716,17 @@ export async function applyNoiseGate(rawStream: MediaStream): Promise<NoisePipel
 export async function getMediaDevices(): Promise<MediaDeviceInfo[]> {
   if (!navigator.mediaDevices) return [];
   try {
-    // Request mic permission first — without it browsers return devices with empty labels
-    await navigator.mediaDevices.getUserMedia({ audio: true })
+    // Request BOTH audio + video permissions before enumerating.
+    // Linux (WebKitGTK) and macOS return empty labels for ungranted devices.
+    // We stop all tracks immediately — we just need the permission grant.
+    await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
       .then(s => s.getTracks().forEach(t => t.stop()))
-      .catch(() => {});
+      .catch(async () => {
+        // Camera unavailable or denied — try audio-only so mics still get labels
+        await navigator.mediaDevices.getUserMedia({ audio: true })
+          .then(s => s.getTracks().forEach(t => t.stop()))
+          .catch(() => {});
+      });
     return navigator.mediaDevices.enumerateDevices();
   } catch { return []; }
 }

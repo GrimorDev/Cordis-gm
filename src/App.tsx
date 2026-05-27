@@ -720,9 +720,10 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
   }, []);
 
   // Download URLs — resolved from GitHub Releases API
-  const [desktopUrl, setDesktopUrl] = useState(import.meta.env.VITE_DESKTOP_DOWNLOAD_URL || '');
-  const [macUrl,     setMacUrl]     = useState('');
-  const [linuxUrl,   setLinuxUrl]   = useState('');
+  const [desktopUrl,  setDesktopUrl]  = useState(import.meta.env.VITE_DESKTOP_DOWNLOAD_URL || '');
+  const [macUrl,      setMacUrl]      = useState('');
+  const [linuxUrl,    setLinuxUrl]    = useState('');  // .deb (primary)
+  const [appImgUrl,   setAppImgUrl]   = useState('');  // .AppImage (portable fallback)
   React.useEffect(() => {
     fetch('https://api.github.com/repos/GrimorDev/Cordis-gm/releases/latest')
       .then(r => r.ok ? r.json() : Promise.reject())
@@ -733,9 +734,11 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
         const appimg  = data.assets?.find(a => a.name.endsWith('.AppImage'));
         if (exe && !desktopUrl) setDesktopUrl(exe.browser_download_url);
         if (dmg) setMacUrl(dmg.browser_download_url);
-        // Prefer .deb — integrates with system package manager, no chmod needed
+        // Primary: .deb — integrates with system package manager, no chmod needed
         if (deb) setLinuxUrl(deb.browser_download_url);
         else if (appimg) setLinuxUrl(appimg.browser_download_url);
+        // Portable: always store AppImage separately for secondary button
+        if (appimg) setAppImgUrl(appimg.browser_download_url);
       })
       .catch(() => {
         const fallback = 'https://github.com/GrimorDev/Cordis-gm/releases/latest';
@@ -747,12 +750,19 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
 
   // Returns OS-appropriate download URL + label
   const osDownload = React.useMemo(() => {
-    if (userOs === 'macos')   return { url: macUrl,     label: tl('menu.downloadMacos'),   ext: 'dmg',      loading: !macUrl };
-    if (userOs === 'windows') return { url: desktopUrl, label: tl('menu.downloadWindows'), ext: 'exe',      loading: !desktopUrl };
-    if (userOs === 'linux')   return { url: linuxUrl || 'https://github.com/GrimorDev/Cordis-gm/releases/latest', label: 'Pobierz na Linux', ext: linuxUrl.endsWith('.deb') ? 'deb' : linuxUrl.endsWith('.AppImage') ? 'AppImage' : 'Linux', loading: !linuxUrl };
+    if (userOs === 'macos')   return { url: macUrl,     label: tl('menu.downloadMacos'),   ext: 'dmg',      loading: !macUrl,     alt: null };
+    if (userOs === 'windows') return { url: desktopUrl, label: tl('menu.downloadWindows'), ext: 'exe',      loading: !desktopUrl, alt: null };
+    if (userOs === 'linux')   return {
+      url: linuxUrl || 'https://github.com/GrimorDev/Cordis-gm/releases/latest',
+      label: 'Pobierz na Linux (.deb)',
+      ext: 'deb',
+      loading: !linuxUrl,
+      // Secondary portable option — shown only when both URLs available
+      alt: appImgUrl ? { url: appImgUrl, label: 'Portable (.AppImage)' } : null,
+    };
     // Other OS — link to releases page
-    return { url: 'https://github.com/GrimorDev/Cordis-gm/releases/latest', label: tl('menu.downloadDesktop'), ext: '', loading: false };
-  }, [userOs, desktopUrl, macUrl, linuxUrl]);
+    return { url: 'https://github.com/GrimorDev/Cordis-gm/releases/latest', label: tl('menu.downloadDesktop'), ext: '', loading: false, alt: null };
+  }, [userOs, desktopUrl, macUrl, linuxUrl, appImgUrl]);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
 
@@ -2194,6 +2204,13 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   {!osDownload.loading && osDownload.ext && <span className="text-[10px] text-zinc-600 font-mono">.{osDownload.ext}</span>}
                   {!osDownload.loading && <Download size={12} className="group-hover:text-indigo-400 transition-colors"/>}
                 </a>
+                {/* Linux: secondary portable AppImage link */}
+                {!osDownload.loading && osDownload.alt && (
+                  <a href={osDownload.alt.url} target="_blank" rel="noopener noreferrer"
+                    className="text-center text-[11px] text-zinc-600 hover:text-zinc-400 transition-colors py-0.5">
+                    {osDownload.alt.label} (portable, bez instalacji) →
+                  </a>
+                )}
                 {/* Other platforms link */}
                 <a href="https://github.com/GrimorDev/Cordis-gm/releases/latest" target="_blank" rel="noopener noreferrer"
                   className="text-center text-[11px] text-zinc-700 hover:text-zinc-500 transition-colors py-0.5">
@@ -12750,15 +12767,32 @@ export default function App() {
 
       // Acquire raw mic — all three WebRTC filters ON as baseline (echo/gain/noise).
       // AudioWorklet gate runs on top for deeper noise removal — they complement, not conflict.
-      const audioConstraints: MediaTrackConstraints = {
-        ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+      const baseConstraints: MediaTrackConstraints = {
         echoCancellation: true,  // hardware echo cancel — eliminates speaker feedback
         autoGainControl:  true,  // normalize mic level automatically
         noiseSuppression: true,  // browser baseline NS always on; AudioWorklet adds deeper layer
         sampleRate: 48000,       // 48 kHz — standard Opus/WebRTC, najlepsza jakość głosu
         channelCount: 1,         // mono — wystarczy dla głosu, mniejsze opóźnienie
       };
-      const rawStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+      // Try user-selected mic first (ideal, not exact — avoids OverconstrainedError when
+      // the saved deviceId is stale after device changes or between OS sessions).
+      // If that also fails, fall back to browser default mic.
+      let rawStream: MediaStream;
+      try {
+        const audioConstraints: MediaTrackConstraints = {
+          ...(deviceId ? { deviceId: { ideal: deviceId } } : {}),
+          ...baseConstraints,
+        };
+        rawStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+      } catch (firstErr: any) {
+        if (deviceId && (firstErr?.name === 'OverconstrainedError' || firstErr?.name === 'NotFoundError')) {
+          // Saved device gone — silently fall back to system default
+          console.warn('[Cordis] acquireMic: saved device unavailable, using default mic');
+          rawStream = await navigator.mediaDevices.getUserMedia({ audio: baseConstraints });
+        } else {
+          throw firstErr;
+        }
+      }
 
       // Speaking detection on the raw stream (pre-gate) so indicator stays accurate
       if (currentUserRef.current?.id) {
@@ -12986,7 +13020,9 @@ export default function App() {
       setActiveCall(p => p ? {...p, isCameraOn: false} : p);
     } else {
       try {
-        const vs = await navigator.mediaDevices.getUserMedia({ video: selCamera ? { deviceId: { exact: selCamera } } : true });
+        // Use `ideal` (not `exact`) so a stale saved deviceId gracefully falls back
+        // to the first available camera instead of throwing OverconstrainedError.
+        const vs = await navigator.mediaDevices.getUserMedia({ video: selCamera ? { deviceId: { ideal: selCamera } } : true });
         vs.getVideoTracks().forEach(t => { localStreamRef.current?.addTrack(t); });
         // Add video track to each peer connection and renegotiate
         peerConnsRef.current.forEach(async (pc, peerId) => {
@@ -13009,7 +13045,21 @@ export default function App() {
           }
         });
         setActiveCall(p => p ? {...p, isCameraOn: true} : p);
-      } catch { addToast('Brak dostępu do kamery', 'error'); }
+      } catch (camErr: any) {
+        const camName = camErr?.name ?? '';
+        const msg = camName === 'NotAllowedError'
+          ? (isTauri
+              ? (userOs === 'macos'
+                  ? 'Brak dostępu do kamery — otwórz: Ustawienia systemowe → Prywatność → Kamera → włącz Cordyn'
+                  : 'Brak dostępu do kamery — otwórz Ustawienia → Urządzenia i kliknij "Sprawdź urządzenia"')
+              : 'Brak uprawnień do kamery — zezwól w ustawieniach przeglądarki (kłódka przy adresie URL)')
+          : camName === 'NotFoundError'
+            ? 'Nie znaleziono kamery — sprawdź podłączenie urządzenia'
+            : camName === 'NotReadableError'
+              ? 'Kamera jest używana przez inną aplikację — zamknij inne programy'
+              : 'Brak dostępu do kamery';
+        addToast(msg, 'error');
+      }
     }
   };
   const toggleScreen = async () => {
