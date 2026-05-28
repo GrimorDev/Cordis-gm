@@ -9498,6 +9498,8 @@ export default function App() {
         let downloaded = 0;
         let total = 0;
 
+        const isWindows = /windows/i.test(navigator.userAgent);
+
         await update.downloadAndInstall((evt: any) => {
           switch (evt.event) {
             case 'Started':
@@ -9519,16 +9521,15 @@ export default function App() {
         });
 
         setUpdateStep('done');
-        // Brief pause so the user sees "Gotowe!" before restart
-        await new Promise(r => setTimeout(r, 1800));
 
-        // ── Platform-aware restart ────────────────────────────────────────────
-        // Windows with quiet NSIS: exit(0) lets NSIS replace the .exe cleanly.
-        // macOS / Linux: in-place update — relaunch() loads the new binary.
-        const isWindows = /windows/i.test(navigator.userAgent);
         if (isWindows) {
+          // Windows NSIS: downloadAndInstall already launched the silent installer
+          // in the background. It is waiting for us to exit so it can replace the .exe.
+          // Exit immediately — any delay here can cause NSIS to show a "close app" dialog.
           await exit(0);
         } else {
+          // macOS: in-place bundle swap — relaunch() loads the new binary.
+          await new Promise(r => setTimeout(r, 1200));
           await relaunch();
         }
       }
@@ -13445,7 +13446,14 @@ export default function App() {
         <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-2 rounded-xl bg-indigo-600/20 border border-indigo-500/40 text-sm">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-indigo-300 shrink-0">🚀</span>
-            <span className="text-zinc-200">Dostępna aktualizacja <span className="font-semibold text-indigo-300">v{updateAvailable.version}</span></span>
+            <div className="min-w-0">
+              <span className="text-zinc-200">Dostępna aktualizacja <span className="font-semibold text-indigo-300">v{updateAvailable.version}</span></span>
+              {userOs === 'windows' && (
+                <p className="text-[11px] text-zinc-500 leading-tight mt-0.5">
+                  Aplikacja zamknie się i uruchomi ponownie automatycznie — bez okna instalatora.
+                </p>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button onClick={installUpdate}
@@ -13483,14 +13491,16 @@ export default function App() {
             <div className="text-center">
               <p className="text-xl font-bold text-white mb-1">
                 {updateStep==='downloading' && 'Pobieranie aktualizacji…'}
-                {updateStep==='installing'  && 'Instalowanie…'}
-                {updateStep==='done'        && 'Gotowe!'}
+                {updateStep==='installing'  && (userOs==='windows' ? 'Przygotowanie…' : 'Instalowanie…')}
+                {updateStep==='done'        && (userOs==='windows' ? 'Zamykanie…' : 'Gotowe!')}
                 {updateStep==='error'       && 'Błąd aktualizacji'}
               </p>
               {updateAvailable && (
                 <p className="text-sm text-zinc-500">
                   {updateStep==='done'
-                    ? 'Aplikacja zaraz się uruchomi ponownie'
+                    ? (userOs==='windows'
+                        ? 'Cordyn uruchomi się ponownie automatycznie'
+                        : 'Aplikacja zaraz się uruchomi ponownie')
                     : `v${appVersion||'?'} → v${updateAvailable.version}`
                   }
                 </p>
@@ -13500,7 +13510,9 @@ export default function App() {
             {/* Step indicators */}
             <div className="w-full flex flex-col gap-3">
               {(['downloading','installing','done'] as const).map((step, i) => {
-                const labels: Record<string,string> = {downloading:'Pobieranie',installing:'Instalowanie',done:'Restart'};
+                const labels: Record<string,string> = userOs === 'windows'
+                  ? {downloading:'Pobieranie', installing:'Przygotowanie', done:'Restart w tle'}
+                  : {downloading:'Pobieranie', installing:'Instalowanie',  done:'Restart'};
                 const isActive  = updateStep === step;
                 const isDone    = ['downloading','installing','done'].indexOf(updateStep) > i;
                 const isError   = updateStep === 'error' && i === 0;
