@@ -4,10 +4,23 @@ import { getToken, tryRefreshToken } from './api';
 
 // In Tauri desktop context relative paths don't work — connect explicitly.
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+// When Tauri loads from a remote frontendDist URL (e.g. https://cordyn.pl),
+// window.location.origin is that URL — use it as the socket server.
+// Falls back to VITE_API_BASE (baked-in CI secret), then localhost for dev.
+const _origin = typeof window !== 'undefined' ? window.location.origin : '';
+const _isRemoteOrigin = (
+  _origin &&
+  !_origin.startsWith('tauri://') &&
+  !_origin.startsWith('https://tauri.localhost') &&
+  !_origin.includes('localhost')
+);
 const SOCKET_URL = isTauri
-  ? (import.meta.env.VITE_API_BASE
-      ? import.meta.env.VITE_API_BASE.replace(/\/api\/?$/, '')
-      : 'http://localhost:4000')
+  ? (_isRemoteOrigin
+      ? _origin
+      : import.meta.env.VITE_API_BASE
+        ? import.meta.env.VITE_API_BASE.replace(/\/api\/?$/, '')
+        : 'http://localhost:4000')
   : '/';
 
 let socket: Socket | null = null;
