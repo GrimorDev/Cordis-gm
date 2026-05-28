@@ -35,7 +35,6 @@
     "active": true,
     "targets": [
       "nsis",
-      "dmg",
       "app",
       "appimage",
       "deb"

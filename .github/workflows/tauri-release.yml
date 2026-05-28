@@ -116,17 +116,11 @@ jobs:
             bundle_path:    src-tauri/target/release/bundle/nsis
 
           # ── macOS Universal (Intel + Apple Silicon) → DMG + app.tar.gz ─────
-          # bundle_path points to the full bundle root so we capture both
-          # bundle/dmg (installer) and bundle/macos (.app.tar.gz.sig for updater)
-          #
-          # NOTE: macos-13 (Ventura, x86_64) is required instead of macos-latest
-          # (macos-14 = Sonoma, ARM64). On Sonoma, Tauri's bundle_dmg.sh fails
-          # because create-dmg uses osascript for icon positioning which doesn't
-          # work on headless ARM64 runners. macos-13 builds universal binaries
-          # (Intel + Apple Silicon) via cross-compilation — the runner arch only
-          # affects the host tools, not the output targets.
+          # Uses macos-latest (macOS 14 ARM64) — best runner availability.
+          # Tauri builds the .app bundle; DMG is created manually via hdiutil
+          # so we don't depend on create-dmg / osascript (which fail headless).
           - name:           macOS Universal
-            os:             macos-13
+            os:             macos-latest
             rust_targets:   x86_64-apple-darwin aarch64-apple-darwin
             tauri_args:     --target universal-apple-darwin
             artifact_name:  macos
@@ -229,10 +223,7 @@ jobs:
       - name: Install JS dependencies
         run: pnpm install --no-frozen-lockfile
 
-      # macOS: create-dmg is required by Tauri's bundle_dmg.sh but not pre-installed
-      - name: Install macOS DMG tools
-        if: matrix.os == 'macos-13'
-        run: brew install create-dmg
+      # macOS: no extra tools needed — DMG is built via hdiutil (built-in)
 
       - name: Verify VITE_API_BASE
         shell: bash
@@ -248,7 +239,7 @@ jobs:
           VITE_API_BASE:                      ${{ secrets.VITE_API_BASE }}
           TAURI_SIGNING_PRIVATE_KEY:          ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ matrix.os == 'macos-13' && '-' || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ matrix.os == 'macos-latest' && '-' || '' }}
         run: pnpm exec tauri build ${{ matrix.tauri_args }}
 
       - name: List bundle output
@@ -274,13 +265,55 @@ jobs:
           ls -lh linux-dist/
 
       # macOS: collect DMG (installer) + app.tar.gz (updater bundle)
-      - name: Collect macOS artifacts
-        if: matrix.os == 'macos-13'
+      # macOS: Tauri builds .app bundle; we create DMG manually via hdiutil
+      # (no create-dmg / osascript dependency — works on any macOS runner)
+      - name: Build macOS DMG manually
+        if: matrix.os == 'macos-latest'
         run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          BUNDLE_DIR="src-tauri/target/universal-apple-darwin/release/bundle/macos"
+          APP=$(find "$BUNDLE_DIR" -name "*.app" -maxdepth 1 | head -1)
+          if [ -z "$APP" ]; then echo "ERROR: .app not found in $BUNDLE_DIR"; ls "$BUNDLE_DIR" || true; exit 1; fi
+          echo "Found .app: $APP"
+
+          DMG_NAME="Cordyn_${VERSION}_universal.dmg"
+          TMP_DMG="tmp_cordyn.dmg"
+
+          # Create a temporary read-write DMG large enough for the app
+          APP_SIZE_MB=$(du -sm "$APP" | awk '{print $1}')
+          DMG_SIZE_MB=$((APP_SIZE_MB + 80))
+          hdiutil create -size "${DMG_SIZE_MB}m" -volname "Cordyn" -fs HFS+ -ov -format UDRW "$TMP_DMG"
+
+          # Mount it
+          MOUNT_DIR=$(hdiutil attach -readwrite -noverify -noautoopen "$TMP_DMG" \
+            | grep "Apple_HFS" | awk '{print $NF}')
+          echo "Mounted at: $MOUNT_DIR"
+
+          # Copy the .app and add an Applications symlink
+          cp -R "$APP" "${MOUNT_DIR}/"
+          ln -s /Applications "${MOUNT_DIR}/Applications"
+
+          # Detach
+          hdiutil detach "${MOUNT_DIR}" -force
+
+          # Convert to compressed, read-only DMG
+          hdiutil convert "$TMP_DMG" -format UDZO -imagekey zlib-level=9 -o "$DMG_NAME"
+          rm "$TMP_DMG"
+
+          # Ad-hoc sign the DMG (same as the .app)
+          codesign --force --sign "-" "$DMG_NAME" || true
+
+          echo "DMG created: $(ls -lh $DMG_NAME)"
+
+      - name: Collect macOS artifacts
+        if: matrix.os == 'macos-latest'
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
           mkdir -p macos-dist
-          find src-tauri/target/universal-apple-darwin/release/bundle/dmg   -name "*.dmg"          2>/dev/null | xargs -I{} cp {} macos-dist/ || true
-          find src-tauri/target/universal-apple-darwin/release/bundle/dmg   -name "*.dmg.sig"      2>/dev/null | xargs -I{} cp {} macos-dist/ || true
-          find src-tauri/target/universal-apple-darwin/release/bundle/macos -name "*.app.tar.gz"   2>/dev/null | xargs -I{} cp {} macos-dist/ || true
+          # DMG we built manually
+          find . -maxdepth 1 -name "*.dmg" | xargs -I{} cp {} macos-dist/ || true
+          # .app.tar.gz + .sig for the auto-updater (built by Tauri with createUpdaterArtifacts)
+          find src-tauri/target/universal-apple-darwin/release/bundle/macos -name "*.app.tar.gz"     2>/dev/null | xargs -I{} cp {} macos-dist/ || true
           find src-tauri/target/universal-apple-darwin/release/bundle/macos -name "*.app.tar.gz.sig" 2>/dev/null | xargs -I{} cp {} macos-dist/ || true
           ls -lh macos-dist/
 
@@ -301,7 +334,7 @@ jobs:
           retention-days: 7
           path: |
             ${{ matrix.os == 'ubuntu-22.04' && 'linux-dist/*' || '' }}
-            ${{ matrix.os == 'macos-13'  && 'macos-dist/*'   || '' }}
+            ${{ matrix.os == 'macos-latest'  && 'macos-dist/*'   || '' }}
             ${{ matrix.os == 'windows-latest' && 'windows-dist/*' || '' }}
 
 # ═══════════════════════════════════════════════════════════════════════════════
