@@ -12845,7 +12845,9 @@ export default function App() {
         ? 'Nie znaleziono mikrofonu — sprawdź podłączenie urządzenia'
         : err?.name === 'NotAllowedError'
           ? (isTauri
-              ? 'Brak dostępu do mikrofonu — otwórz Ustawienia → Urządzenia i kliknij "Sprawdź urządzenia"'
+              ? (userOs === 'macos'
+                  ? 'Brak dostępu do mikrofonu — otwórz: Ustawienia systemowe → Prywatność → Mikrofon → włącz Cordyn'
+                  : 'Brak dostępu do mikrofonu — otwórz Ustawienia → Urządzenia i kliknij "Sprawdź urządzenia"')
               : 'Brak uprawnień do mikrofonu — zezwól w ustawieniach przeglądarki (kłódka przy adresie URL)')
           : err?.name === 'NotReadableError'
             ? 'Mikrofon jest używany przez inną aplikację — zamknij Teams, Discord itp.'
@@ -18467,7 +18469,7 @@ export default function App() {
                                   onClick={async ()=>{
                                     setPlusMenuOpen(false);
                                     if (!navigator.clipboard?.read) {
-                                      addToast('Twoja przeglądarka nie obsługuje odczytu schowka', 'error'); return;
+                                      addToast('Wklej plik skrótem Ctrl+V lub przeciągnij na okno czatu', 'info'); return;
                                     }
                                     try {
                                       const clipItems = await navigator.clipboard.read();
@@ -18488,7 +18490,9 @@ export default function App() {
                                       }
                                       addToast('Schowek nie zawiera obrazka ani pliku', 'info');
                                     } catch {
-                                      addToast('Brak dostępu do schowka — zezwól w ustawieniach przeglądarki', 'error');
+                                      addToast(isTauri
+                                        ? 'Brak dostępu do schowka — użyj skrótu Ctrl+V aby wkleić'
+                                        : 'Brak dostępu do schowka — zezwól w ustawieniach przeglądarki', 'error');
                                     }
                                   }}
                                   className="flex items-center gap-3 w-full px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
@@ -22702,8 +22706,8 @@ export default function App() {
                         )}
                       </div>
 
-                      {/* ── PUSH NOTIFICATIONS ── */}
-                      <div className="p-4 bg-indigo-500/5 border border-indigo-500/15 rounded-2xl">
+                      {/* ── PUSH NOTIFICATIONS — web only (Tauri uses native notifications) ── */}
+                      {!isTauri && <div className="p-4 bg-indigo-500/5 border border-indigo-500/15 rounded-2xl">
                         <div className="flex items-center gap-2 mb-2">
                           <Bell size={15} className="text-indigo-400"/>
                           <h4 className="text-sm font-bold text-white">{t('privacy.push.title')}</h4>
@@ -22730,7 +22734,7 @@ export default function App() {
                         ) : (
                           <button onClick={async () => {
                             if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-                              addToast('Twoja przeglądarka nie obsługuje powiadomień push', 'error');
+                              addToast('Powiadomienia push wymagają nowoczesnej przeglądarki (Chrome, Firefox, Edge)', 'error');
                               return;
                             }
                             // Only ask for permission if not already granted
@@ -22739,7 +22743,7 @@ export default function App() {
                               ? 'granted'
                               : await Notification.requestPermission();
                             if (perm !== 'granted') {
-                              addToast('Brak zgody na powiadomienia. Sprawdź ustawienia przeglądarki.', 'error');
+                              addToast('Brak zgody na powiadomienia — zezwól w ustawieniach witryny (kłódka przy adresie URL)', 'error');
                               return;
                             }
                             try {
@@ -22766,7 +22770,7 @@ export default function App() {
                             <Bell size={13}/> {t('privacy.push.enable')}
                           </button>
                         )}
-                      </div>
+                      </div>}
 
                       <div className="mt-2 p-4 bg-rose-500/5 border border-rose-500/15 rounded-2xl">
                         <h4 className="text-sm font-bold text-rose-400 mb-1">{t('privacy.dangerZone')}</h4>
