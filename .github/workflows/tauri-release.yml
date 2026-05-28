@@ -277,30 +277,25 @@ jobs:
           echo "Found .app: $APP"
 
           DMG_NAME="Cordyn_${VERSION}_universal.dmg"
-          TMP_DMG="tmp_cordyn.dmg"
 
-          # Create a temporary read-write DMG large enough for the app
-          APP_SIZE_MB=$(du -sm "$APP" | awk '{print $1}')
-          DMG_SIZE_MB=$((APP_SIZE_MB + 80))
-          hdiutil create -size "${DMG_SIZE_MB}m" -volname "Cordyn" -fs HFS+ -ov -format UDRW "$TMP_DMG"
+          # Stage: .app + /Applications symlink in a temp folder
+          mkdir -p dmg_staging
+          cp -R "$APP" dmg_staging/
+          ln -s /Applications dmg_staging/Applications
 
-          # Mount it
-          MOUNT_DIR=$(hdiutil attach -readwrite -noverify -noautoopen "$TMP_DMG" \
-            | grep "Apple_HFS" | awk '{print $NF}')
-          echo "Mounted at: $MOUNT_DIR"
+          # Build compressed DMG directly from the staging folder (no mount needed)
+          hdiutil create \
+            -srcfolder dmg_staging \
+            -volname "Cordyn" \
+            -fs HFS+ \
+            -format UDZO \
+            -imagekey zlib-level=9 \
+            -ov \
+            "$DMG_NAME"
 
-          # Copy the .app and add an Applications symlink
-          cp -R "$APP" "${MOUNT_DIR}/"
-          ln -s /Applications "${MOUNT_DIR}/Applications"
+          rm -rf dmg_staging
 
-          # Detach
-          hdiutil detach "${MOUNT_DIR}" -force
-
-          # Convert to compressed, read-only DMG
-          hdiutil convert "$TMP_DMG" -format UDZO -imagekey zlib-level=9 -o "$DMG_NAME"
-          rm "$TMP_DMG"
-
-          # Ad-hoc sign the DMG (same as the .app)
+          # Ad-hoc sign the DMG
           codesign --force --sign "-" "$DMG_NAME" || true
 
           echo "DMG created: $(ls -lh $DMG_NAME)"
