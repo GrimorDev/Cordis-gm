@@ -719,32 +719,27 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
     return 'other';
   }, []);
 
-  // Download URLs — resolved from GitHub Releases API
+  // Download URLs — stable versionless aliases for Linux (CI uploads Cordyn_amd64.deb);
+  // Windows/macOS resolved from GitHub Releases API (filenames include version).
+  const REPO = 'https://github.com/GrimorDev/Cordis-gm';
   const [desktopUrl,  setDesktopUrl]  = useState(import.meta.env.VITE_DESKTOP_DOWNLOAD_URL || '');
   const [macUrl,      setMacUrl]      = useState('');
-  const [linuxUrl,    setLinuxUrl]    = useState('');  // .deb (primary)
-  const [appImgUrl,   setAppImgUrl]   = useState('');  // .AppImage (portable fallback)
+  // Linux: stable "latest" redirect — no API call, no rate-limit risk, always current
+  const linuxUrl    = `${REPO}/releases/latest/download/Cordyn_amd64.deb`;
+  const appImgUrl   = `${REPO}/releases/latest/download/Cordyn_amd64.AppImage`;
   React.useEffect(() => {
     fetch('https://api.github.com/repos/GrimorDev/Cordis-gm/releases/latest')
       .then(r => r.ok ? r.json() : Promise.reject())
       .then((data: { assets?: { name: string; browser_download_url: string }[] }) => {
-        const exe     = data.assets?.find(a => a.name.endsWith('.exe'));
-        const dmg     = data.assets?.find(a => a.name.endsWith('.dmg'));
-        const deb     = data.assets?.find(a => a.name.endsWith('.deb'));
-        const appimg  = data.assets?.find(a => a.name.endsWith('.AppImage'));
+        const exe = data.assets?.find(a => a.name.endsWith('.exe'));
+        const dmg = data.assets?.find(a => a.name.endsWith('.dmg'));
         if (exe && !desktopUrl) setDesktopUrl(exe.browser_download_url);
         if (dmg) setMacUrl(dmg.browser_download_url);
-        // Primary: .deb — integrates with system package manager, no chmod needed
-        if (deb) setLinuxUrl(deb.browser_download_url);
-        else if (appimg) setLinuxUrl(appimg.browser_download_url);
-        // Portable: always store AppImage separately for secondary button
-        if (appimg) setAppImgUrl(appimg.browser_download_url);
       })
       .catch(() => {
-        const fallback = 'https://github.com/GrimorDev/Cordis-gm/releases/latest';
+        const fallback = `${REPO}/releases/latest`;
         if (!desktopUrl) setDesktopUrl(fallback);
         setMacUrl(fallback);
-        setLinuxUrl(fallback);
       });
   }, []);
 
@@ -8078,29 +8073,27 @@ export default function App() {
   }, []);
   const [appDesktopUrl, setAppDesktopUrl] = useState('');
   const [appMacUrl,     setAppMacUrl]     = useState('');
-  const [appLinuxUrl,   setAppLinuxUrl]   = useState('');
+  // Linux: stable versionless alias — CI uploads Cordyn_amd64.deb each release
+  const _REPO = 'https://github.com/GrimorDev/Cordis-gm';
+  const appLinuxUrl = `${_REPO}/releases/latest/download/Cordyn_amd64.deb`;
   React.useEffect(() => {
     fetch('https://api.github.com/repos/GrimorDev/Cordis-gm/releases/latest')
       .then(r => r.ok ? r.json() : Promise.reject())
       .then((data: { assets?: { name: string; browser_download_url: string }[] }) => {
-        const exe    = data.assets?.find(a => a.name.endsWith('.exe'));
-        const dmg    = data.assets?.find(a => a.name.endsWith('.dmg'));
-        const deb    = data.assets?.find(a => a.name.endsWith('.deb'));
-        const appimg = data.assets?.find(a => a.name.endsWith('.AppImage'));
+        const exe = data.assets?.find(a => a.name.endsWith('.exe'));
+        const dmg = data.assets?.find(a => a.name.endsWith('.dmg'));
         if (exe) setAppDesktopUrl(exe.browser_download_url);
         if (dmg) setAppMacUrl(dmg.browser_download_url);
-        if (deb) setAppLinuxUrl(deb.browser_download_url);
-        else if (appimg) setAppLinuxUrl(appimg.browser_download_url);
       })
       .catch(() => {
-        const fb = 'https://github.com/GrimorDev/Cordis-gm/releases/latest';
-        setAppDesktopUrl(fb); setAppMacUrl(fb); setAppLinuxUrl(fb);
+        const fb = `${_REPO}/releases/latest`;
+        setAppDesktopUrl(fb); setAppMacUrl(fb);
       });
   }, []);
   const appOsDownload = React.useMemo(() => {
     if (userOs === 'macos')   return { url: appMacUrl,     label: tl('menu.downloadMacos'),   ready: !!appMacUrl };
     if (userOs === 'windows') return { url: appDesktopUrl, label: tl('menu.downloadWindows'), ready: !!appDesktopUrl };
-    if (userOs === 'linux')   return { url: appLinuxUrl || 'https://github.com/GrimorDev/Cordis-gm/releases/latest', label: 'Pobierz na Linux (.deb)', ready: !!appLinuxUrl };
+    if (userOs === 'linux')   return { url: appLinuxUrl,   label: 'Pobierz na Linux (.deb)', ready: true };
     return { url: appDesktopUrl || appMacUrl, label: tl('menu.downloadDesktop'), ready: !!(appDesktopUrl || appMacUrl) };
   }, [userOs, appDesktopUrl, appMacUrl, appLinuxUrl]);
 

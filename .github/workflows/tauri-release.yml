@@ -250,6 +250,8 @@ jobs:
         run: ls -lhR "${{ matrix.bundle_path }}/" 2>/dev/null || echo "(bundle directory not found)"
 
       # Linux: collect AppImage + deb from different subdirs
+      # Also create versionless aliases (Cordyn_amd64.deb / Cordyn_amd64.AppImage)
+      # so https://github.com/.../releases/latest/download/Cordyn_amd64.deb always works
       - name: Collect Linux artifacts
         if: matrix.os == 'ubuntu-22.04'
         run: |
@@ -258,6 +260,11 @@ jobs:
           find src-tauri/target/release/bundle/appimage -name "*.AppImage.sig" 2>/dev/null | xargs -I{} cp {} linux-dist/ || true
           find src-tauri/target/release/bundle/deb      -name "*.deb"          2>/dev/null | xargs -I{} cp {} linux-dist/ || true
           find src-tauri/target/release/bundle/deb      -name "*.deb.sig"      2>/dev/null | xargs -I{} cp {} linux-dist/ || true
+          # Versionless aliases — stable URLs for download buttons and docs
+          DEB=$(find linux-dist -name "*.deb" ! -name "*.deb.sig" | head -1)
+          APPIMG=$(find linux-dist -name "*.AppImage" ! -name "*.AppImage.sig" | head -1)
+          [ -n "$DEB" ]    && cp "$DEB"    linux-dist/Cordyn_amd64.deb
+          [ -n "$APPIMG" ] && cp "$APPIMG" linux-dist/Cordyn_amd64.AppImage
           ls -lh linux-dist/
 
       # macOS: collect DMG (installer) + app.tar.gz (updater bundle)
