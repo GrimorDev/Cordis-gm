@@ -2,21 +2,20 @@ name: Release — Windows (.exe) + macOS (.dmg) + Linux (.AppImage/.deb)
 
 # Triggers:
 #   - Manual dispatch (workflow_dispatch) — always builds a release
-#   - Push to main where commit message starts with "release:"
-# Regular feature/fix commits do NOT trigger this workflow at all.
+#   - Push to main that changes BINARY-relevant paths only
+#
+# With frontendDist = "https://cordyn.pl", the UI is loaded from the server at
+# runtime — src/** changes do NOT need a new binary build.  Only src-tauri/**
+# (Rust code, Tauri config, capabilities) actually requires recompiling.
+# This stops constant version bumping from pure UI/CSS/JS commits.
 on:
   push:
     branches: [main]
-    # Narrow the trigger: only paths that matter for a desktop build
-    # This prevents noise from pure backend or CSS-only commits.
-    # The prepare job still guards via commit-message check.
     paths:
-      - 'src/**'
       - 'src-tauri/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - '.npmrc'
-      - 'vite.config.ts'
       - '.github/workflows/tauri-release.yml'
   workflow_dispatch:
     inputs:

@@ -155,6 +155,14 @@ fn is_linux() -> bool {
     cfg!(target_os = "linux")
 }
 
+/// Returns true when the process was launched as an AppImage ($APPIMAGE env var is set).
+/// AppImages support in-place updates via tauri-plugin-updater.
+/// .deb installs do not (dpkg requires root) — they must download manually.
+#[tauri::command]
+fn is_appimage() -> bool {
+    std::env::var("APPIMAGE").is_ok()
+}
+
 /// Clear WebKitGTK's cached permission decisions for microphone/camera.
 /// WebKitGTK stores permission grants/denials in its local storage database.
 /// Deleting it forces fresh permission dialogs the next time getUserMedia is called.
@@ -331,6 +339,7 @@ pub fn run() {
             request_media_permissions,
             reset_webkit_permissions,
             is_linux,
+            is_appimage,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

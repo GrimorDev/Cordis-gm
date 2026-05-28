@@ -9453,12 +9453,24 @@ export default function App() {
 
   const installUpdate = async () => {
     if (!updateAvailable || updateInstalling) return;
-    // On Linux with deb package, in-place updates can't work (dpkg needs root).
-    // Skip the Tauri updater entirely and redirect to the GitHub releases page.
+    // On Linux with .deb package, in-place updates can't work (dpkg needs root).
+    // AppImage users CAN update in-place — Tauri replaces $APPIMAGE automatically.
     if (userOs === 'linux') {
-      setUpdateInstalling(false);
-      setUpdateStep('error'); // show the manual-download UI immediately
-      return;
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const appimage = await invoke<boolean>('is_appimage');
+        if (!appimage) {
+          // .deb install — skip Tauri updater, show manual download link
+          setUpdateInstalling(false);
+          setUpdateStep('error');
+          return;
+        }
+        // AppImage — fall through to normal update flow below
+      } catch {
+        setUpdateInstalling(false);
+        setUpdateStep('error');
+        return;
+      }
     }
     setUpdateInstalling(true);
     setUpdateStep('downloading');
@@ -9521,7 +9533,7 @@ export default function App() {
           // Exit immediately — any delay here can cause NSIS to show a "close app" dialog.
           await exit(0);
         } else {
-          // macOS: in-place bundle swap — relaunch() loads the new binary.
+          // macOS / Linux AppImage: in-place swap — relaunch() loads the new binary.
           await new Promise(r => setTimeout(r, 1200));
           await relaunch();
         }
