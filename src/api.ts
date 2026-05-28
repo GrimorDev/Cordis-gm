@@ -1,16 +1,31 @@
 // Determine the API base URL — priority order:
 // 1. VITE_API_BASE baked in at build time (GitHub Actions secret → always correct)
-// 2. __TAURI_BASE__ global injected below at runtime as fallback for Tauri
+// 2. When Tauri loads from a remote origin (frontendDist = URL) → use that origin + /api
+//    This covers the new architecture where frontendDist = "https://cordyn.pl"
 // 3. Tauri dev fallback (localhost)
 // 4. Web same-origin (/api)
 const _viteBase = (import.meta.env.VITE_API_BASE as string | undefined) || '';
 export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+// When running in Tauri with a remote frontendDist URL (e.g. https://cordyn.pl),
+// window.location.origin is the remote URL, not tauri://localhost. In that case
+// the correct API base is simply <remote-origin>/api — no secret needed.
+const _remoteOrigin = (
+  typeof window !== 'undefined' &&
+  window.location.origin &&
+  !window.location.origin.startsWith('tauri://') &&
+  !window.location.origin.startsWith('https://tauri.localhost') &&
+  !window.location.origin.includes('localhost')
+) ? window.location.origin : '';
+
 const BASE = (
   _viteBase
     ? _viteBase
-    : isTauri
-      ? 'http://localhost:4000/api'
-      : '/api'
+    : _remoteOrigin
+      ? `${_remoteOrigin}/api`
+      : isTauri
+        ? 'http://localhost:4000/api'
+        : '/api'
 ).replace(/\/$/, '');
 
 export const API_BASE = BASE;
