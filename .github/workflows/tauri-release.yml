@@ -118,8 +118,15 @@ jobs:
           # ── macOS Universal (Intel + Apple Silicon) → DMG + app.tar.gz ─────
           # bundle_path points to the full bundle root so we capture both
           # bundle/dmg (installer) and bundle/macos (.app.tar.gz.sig for updater)
+          #
+          # NOTE: macos-13 (Ventura, x86_64) is required instead of macos-latest
+          # (macos-14 = Sonoma, ARM64). On Sonoma, Tauri's bundle_dmg.sh fails
+          # because create-dmg uses osascript for icon positioning which doesn't
+          # work on headless ARM64 runners. macos-13 builds universal binaries
+          # (Intel + Apple Silicon) via cross-compilation — the runner arch only
+          # affects the host tools, not the output targets.
           - name:           macOS Universal
-            os:             macos-latest
+            os:             macos-13
             rust_targets:   x86_64-apple-darwin aarch64-apple-darwin
             tauri_args:     --target universal-apple-darwin
             artifact_name:  macos
@@ -224,7 +231,7 @@ jobs:
 
       # macOS: create-dmg is required by Tauri's bundle_dmg.sh but not pre-installed
       - name: Install macOS DMG tools
-        if: matrix.os == 'macos-latest'
+        if: matrix.os == 'macos-13'
         run: brew install create-dmg
 
       - name: Verify VITE_API_BASE
@@ -241,7 +248,7 @@ jobs:
           VITE_API_BASE:                      ${{ secrets.VITE_API_BASE }}
           TAURI_SIGNING_PRIVATE_KEY:          ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ matrix.os == 'macos-latest' && '-' || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ matrix.os == 'macos-13' && '-' || '' }}
         run: pnpm exec tauri build ${{ matrix.tauri_args }}
 
       - name: List bundle output
@@ -268,7 +275,7 @@ jobs:
 
       # macOS: collect DMG (installer) + app.tar.gz (updater bundle)
       - name: Collect macOS artifacts
-        if: matrix.os == 'macos-latest'
+        if: matrix.os == 'macos-13'
         run: |
           mkdir -p macos-dist
           find src-tauri/target/universal-apple-darwin/release/bundle/dmg   -name "*.dmg"          2>/dev/null | xargs -I{} cp {} macos-dist/ || true
@@ -294,7 +301,7 @@ jobs:
           retention-days: 7
           path: |
             ${{ matrix.os == 'ubuntu-22.04' && 'linux-dist/*' || '' }}
-            ${{ matrix.os == 'macos-latest'  && 'macos-dist/*'   || '' }}
+            ${{ matrix.os == 'macos-13'  && 'macos-dist/*'   || '' }}
             ${{ matrix.os == 'windows-latest' && 'windows-dist/*' || '' }}
 
 # ═══════════════════════════════════════════════════════════════════════════════
