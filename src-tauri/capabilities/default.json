@@ -6,6 +6,10 @@
     "main",
     "splashscreen"
   ],
+  "local": true,
+  "remote": {
+    "urls": ["https://cordyn.pl", "https://cordyn.pl/*"]
+  },
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
