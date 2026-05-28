@@ -13077,6 +13077,11 @@ export default function App() {
       emitScreenStop();
       playScreenShareStop();
     } else {
+      // Screen share via getDisplayMedia() crashes WebKitGTK on Linux — block it
+      if (userOs === 'linux' && isTauri) {
+        addToast('Udostępnianie ekranu nie jest obsługiwane na Linux — użyj wersji web (cordyn.pl) w przeglądarce', 'error');
+        return;
+      }
       try {
         // ── Capture screen ────────────────────────────────────────────
         let stream: MediaStream;
@@ -15493,7 +15498,8 @@ export default function App() {
                         <div>
                           <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Mikrofon</label>
                           <select value={selMic} onChange={async e=>{setSelMic(e.target.value);if(localStreamRef.current)await acquireMic(e.target.value||undefined);}}
-                            className="w-full bg-zinc-800/80 border border-white/[0.07] text-white text-xs rounded-lg px-2.5 py-2 outline-none">
+                            className="w-full appearance-none bg-zinc-800/80 border border-white/[0.07] text-white text-xs rounded-lg px-2.5 py-2 outline-none"
+                            style={{backgroundColor:'#27272a',color:'#fff'}}>
                             <option value="">Domyślny</option>
                             {devices.filter(d=>d.kind==='audioinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`Mikrofon ${d.deviceId.slice(0,6)}`}</option>)}
                           </select>
@@ -15501,7 +15507,8 @@ export default function App() {
                         <div>
                           <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Głośnik</label>
                           <select value={selSpeaker} onChange={async e=>{setSelSpeaker(e.target.value);await setOutputDevice(e.target.value);}}
-                            className="w-full bg-zinc-800/80 border border-white/[0.07] text-white text-xs rounded-lg px-2.5 py-2 outline-none">
+                            className="w-full appearance-none bg-zinc-800/80 border border-white/[0.07] text-white text-xs rounded-lg px-2.5 py-2 outline-none"
+                            style={{backgroundColor:'#27272a',color:'#fff'}}>
                             <option value="">Domyślny</option>
                             {devices.filter(d=>d.kind==='audiooutput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`Głośnik ${d.deviceId.slice(0,6)}`}</option>)}
                           </select>
@@ -15509,7 +15516,8 @@ export default function App() {
                         <div>
                           <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Kamera</label>
                           <select value={selCamera} onChange={e=>setSelCamera(e.target.value)}
-                            className="w-full bg-zinc-800/80 border border-white/[0.07] text-white text-xs rounded-lg px-2.5 py-2 outline-none">
+                            className="w-full appearance-none bg-zinc-800/80 border border-white/[0.07] text-white text-xs rounded-lg px-2.5 py-2 outline-none"
+                            style={{backgroundColor:'#27272a',color:'#fff'}}>
                             <option value="">Domyślna</option>
                             {devices.filter(d=>d.kind==='videoinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`Kamera ${d.deviceId.slice(0,6)}`}</option>)}
                           </select>
@@ -23470,7 +23478,7 @@ export default function App() {
                         </div>
                         <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                           <span className="text-sm text-zinc-400">Platforma</span>
-                          <span className="text-sm text-zinc-300">{userOs === 'macos' ? 'macOS (Desktop)' : 'Windows (Desktop)'}</span>
+                          <span className="text-sm text-zinc-300">{userOs === 'macos' ? 'macOS (Desktop)' : userOs === 'linux' ? 'Linux (Desktop)' : 'Windows (Desktop)'}</span>
                         </div>
                         <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                           <span className="text-sm text-zinc-400">Deweloper</span>
