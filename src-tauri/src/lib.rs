@@ -156,11 +156,61 @@ fn is_linux() -> bool {
 }
 
 /// Returns true when the process was launched as an AppImage ($APPIMAGE env var is set).
-/// AppImages support in-place updates via tauri-plugin-updater.
-/// .deb installs do not (dpkg requires root) — they must download manually.
 #[tauri::command]
 fn is_appimage() -> bool {
     std::env::var("APPIMAGE").is_ok()
+}
+
+/// Install a .deb package using pkexec (graphical privilege escalation).
+/// Shows a system authentication dialog — no terminal required.
+/// Returns Ok(()) on success, Err with message on failure.
+#[cfg(target_os = "linux")]
+#[tauri::command]
+fn install_deb_update(path: String) -> Result<(), String> {
+    use std::process::Command;
+
+    // Verify the file exists before attempting install
+    if !std::path::Path::new(&path).exists() {
+        return Err(format!("File not found: {}", path));
+    }
+
+    // Try pkexec first — shows a native GTK authentication dialog (no terminal)
+    let result = Command::new("pkexec")
+        .args(["dpkg", "-i", &path])
+        .status();
+
+    match result {
+        Ok(status) if status.success() => {
+            // Clean up the temp .deb file
+            let _ = std::fs::remove_file(&path);
+            Ok(())
+        }
+        Ok(status) => {
+            Err(format!("dpkg failed with exit code: {:?}", status.code()))
+        }
+        Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // pkexec not available (minimal/non-GNOME distros) — try sudo as fallback
+            let sudo_result = Command::new("sudo")
+                .args(["-A", "dpkg", "-i", &path]) // -A = use askpass
+                .status();
+            match sudo_result {
+                Ok(s) if s.success() => {
+                    let _ = std::fs::remove_file(&path);
+                    Ok(())
+                }
+                _ => Err(
+                    "pkexec nie jest dostępny — zainstaluj ręcznie: sudo dpkg -i <plik>".to_string()
+                ),
+            }
+        }
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+fn install_deb_update(_path: String) -> Result<(), String> {
+    Err("Tylko na Linuxie".to_string())
 }
 
 /// Clear WebKitGTK's cached permission decisions for microphone/camera.
@@ -340,6 +390,7 @@ pub fn run() {
             reset_webkit_permissions,
             is_linux,
             is_appimage,
+            install_deb_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

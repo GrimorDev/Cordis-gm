@@ -9456,21 +9456,67 @@ export default function App() {
     // On Linux with .deb package, in-place updates can't work (dpkg needs root).
     // AppImage users CAN update in-place — Tauri replaces $APPIMAGE automatically.
     if (userOs === 'linux') {
+      // Linux .deb: download the .deb then install via pkexec (graphical auth dialog)
+      // This works for both .deb and AppImage installs — no terminal, no external windows.
+      setUpdateInstalling(true);
+      setUpdateStep('downloading');
+      setUpdatePercent(0);
+      setUpdateIndeterminate(false);
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        const appimage = await invoke<boolean>('is_appimage');
-        if (!appimage) {
-          // .deb install — skip Tauri updater, show manual download link
-          setUpdateInstalling(false);
-          setUpdateStep('error');
-          return;
+        const { appDataDir } = await import('@tauri-apps/api/path');
+        const { writeFile, mkdir, exists } = await import('@tauri-apps/plugin-fs');
+        const { relaunch } = await import('@tauri-apps/plugin-process');
+
+        const ver = updateAvailable.version;
+        const debUrl = `https://github.com/GrimorDev/Cordis-gm/releases/download/v${ver}/Cordyn_${ver}_amd64.deb`;
+
+        // Download .deb with progress
+        const resp = await fetch(debUrl);
+        if (!resp.ok) throw new Error(`Download failed: ${resp.status}`);
+        const contentLength = parseInt(resp.headers.get('content-length') || '0', 10);
+        setUpdateIndeterminate(contentLength === 0);
+
+        const reader = resp.body!.getReader();
+        const chunks: Uint8Array[] = [];
+        let downloaded = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) { chunks.push(value); downloaded += value.length; }
+          if (contentLength > 0) setUpdatePercent(Math.min(88, Math.round(downloaded / contentLength * 100)));
         }
-        // AppImage — fall through to normal update flow below
-      } catch {
-        setUpdateInstalling(false);
+
+        // Combine chunks → Uint8Array
+        const combined = new Uint8Array(downloaded);
+        let off = 0;
+        for (const c of chunks) { combined.set(c, off); off += c.length; }
+
+        // Write to app data dir (already in fs scope)
+        const dir = await appDataDir();
+        const dirExists = await exists(dir);
+        if (!dirExists) await mkdir(dir, { recursive: true });
+        const debPath = `${dir}/Cordyn_update.deb`;
+        await writeFile(debPath, combined);
+        setUpdatePercent(92);
+
+        // Install via pkexec — shows system auth dialog
+        setUpdateStep('installing');
+        localStorage.setItem('cordis_just_updated', '1');
+        localStorage.setItem('cordis_updated_at', String(Date.now()));
+        localStorage.setItem('cordis_updated_ver', ver);
+        await invoke('install_deb_update', { path: debPath });
+
+        setUpdateStep('done');
+        setUpdatePercent(100);
+        await new Promise(r => setTimeout(r, 1200));
+        await relaunch();
+      } catch (e: any) {
+        console.error('[linux update]', e);
         setUpdateStep('error');
-        return;
+        setUpdateInstalling(false);
       }
+      return;
     }
     setUpdateInstalling(true);
     setUpdateStep('downloading');
@@ -13501,7 +13547,7 @@ export default function App() {
             <div className="text-center">
               <p className="text-xl font-bold text-white mb-1">
                 {updateStep==='downloading' && 'Pobieranie aktualizacji…'}
-                {updateStep==='installing'  && (userOs==='windows' ? 'Przygotowanie…' : 'Instalowanie…')}
+                {updateStep==='installing'  && (userOs==='windows' ? 'Przygotowanie…' : userOs==='linux' ? 'Instalowanie — autoryzuj w oknie systemowym…' : 'Instalowanie…')}
                 {updateStep==='done'        && (userOs==='windows' ? 'Zamykanie…' : 'Gotowe!')}
                 {updateStep==='error'       && 'Błąd aktualizacji'}
               </p>
