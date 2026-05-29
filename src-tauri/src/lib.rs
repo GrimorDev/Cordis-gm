@@ -337,8 +337,7 @@ pub fn run() {
                 .decorations(false)
                 .resizable(true)
                 .center()
-                .fullscreen(false)
-                .drag_drop_enabled(false);
+                .fullscreen(false);
 
                 // Windows: WebView2 DENIES every getUserMedia call by default
                 // unless the host app handles PermissionRequested.
