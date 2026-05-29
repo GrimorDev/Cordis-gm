@@ -142,6 +142,12 @@ export function makePeerConnection(
 // ─── Remote Audio Elements ───────────────────────────────────────────────────
 const remoteAudios = new Map<string, HTMLAudioElement>();       // microphone audio
 const remoteScreenAudios = new Map<string, HTMLAudioElement>(); // screen-share audio (separate element)
+// "Pump" elements: a MUTED <audio> fed the RAW remote stream. Required by a
+// Chromium/WebView bug — a remote WebRTC MediaStream produces SILENCE when fed
+// into a WebAudio MediaStreamAudioSourceNode UNLESS the same stream is also
+// sunk into an HTMLMediaElement. Web (real Chrome) tolerates this; WebView2 and
+// WebKitGTK do NOT, which is why desktop "hears nobody" while web works.
+const remotePumps = new Map<string, HTMLAudioElement>();
 
 function makeAudioEl(): HTMLAudioElement {
   const el = document.createElement('audio');
@@ -243,6 +249,24 @@ export function attachRemoteAudio(userId: string, stream: MediaStream) {
   // Register stream for re-attachment after a suspended context wakes back up.
   // Cleared below if the AudioContext path succeeds while already running.
   _pendingReattach.set(userId, stream);
+
+  // ── Pump: keep the raw remote stream sunk into a MUTED <audio> element ───────
+  // Without this, createMediaStreamSource(remoteStream) below yields SILENCE in
+  // WebView2 / WebKitGTK (the remote track is never "pulled"). The element stays
+  // muted so it produces no audible output of its own — the AudioContext graph
+  // below is what the user actually hears. This is the desktop-receive fix.
+  try {
+    let pump = remotePumps.get(userId);
+    if (!pump) { pump = makeAudioEl(); pump.muted = true; remotePumps.set(userId, pump); }
+    pump.muted = true;
+    pump.srcObject = stream;
+    pump.play().catch(() => {
+      const retry = () => { pump!.play().catch(() => {}); document.removeEventListener('click', retry); document.removeEventListener('keydown', retry); document.removeEventListener('pointerdown', retry); };
+      document.addEventListener('click', retry, { once: true });
+      document.addEventListener('keydown', retry, { once: true });
+      document.addEventListener('pointerdown', retry, { once: true });
+    });
+  } catch {}
 
   // ── AudioContext path ────────────────────────────────────────────────────────
   if (_playCtx && _playCtx.state !== 'closed') {
@@ -346,6 +370,8 @@ export function detachRemoteAudio(userId: string) {
   _playVolumes.delete(userId);
   const el = remoteAudios.get(userId);
   if (el) { el.srcObject = null; el.remove(); remoteAudios.delete(userId); }
+  const pump = remotePumps.get(userId);
+  if (pump) { pump.srcObject = null; pump.remove(); remotePumps.delete(userId); }
   const sel = remoteScreenAudios.get(userId);
   if (sel) { sel.srcObject = null; sel.remove(); remoteScreenAudios.delete(userId); }
 }
