@@ -10,6 +10,24 @@
     "beforeBuildCommand": "pnpm build"
   },
   "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Cordyn",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
+        "decorations": false,
+        "visible": true,
+        "resizable": true,
+        "center": true,
+        "fullscreen": false,
+        "backgroundColor": "#09090b",
+        "dragDropEnabled": false,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --use-fake-ui-for-media-stream"
+      }
+    ],
     "security": {
       "csp": null
     }
