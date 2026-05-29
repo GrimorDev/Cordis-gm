@@ -10913,6 +10913,23 @@ export default function App() {
 
   // Screen share arrives via WebRTC — no SFU retry needed
 
+  // ── Global AudioContext auto-resume ─────────────────────────────────────────
+  // AudioContext can be suspended by the browser/WebView autoplay policy at any
+  // time (e.g. window loses focus, system sleep, WebView2 tab switch).
+  // Capture-phase listener fires before any React handler, ensuring the contexts
+  // are always in "running" state when voice/call UI is interacted with.
+  useEffect(() => {
+    const handler = () => { primePlaybackContext(); };
+    document.addEventListener('click',      handler, { capture: true, passive: true });
+    document.addEventListener('keydown',    handler, { capture: true, passive: true });
+    document.addEventListener('pointerdown',handler, { capture: true, passive: true });
+    return () => {
+      document.removeEventListener('click',      handler, { capture: true });
+      document.removeEventListener('keydown',    handler, { capture: true });
+      document.removeEventListener('pointerdown',handler, { capture: true });
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Update browser/desktop tab title with total unread count
   useEffect(() => {
     const total = (Object.values(unreadChs) as number[]).reduce((a, b) => a + b, 0);

@@ -169,6 +169,9 @@ interface AudioPlayNode { source: MediaStreamAudioSourceNode; gain: GainNode; me
 const _playNodes   = new Map<string, AudioPlayNode>(); // userId → WebRTC audio nodes
 const _playVolumes = new Map<string, number>();        // userId → volume 0..1
 
+// Map from userId → the MediaStream we last attached, so we can re-attach after resume
+const _pendingReattach = new Map<string, MediaStream>();
+
 function makeResumedCtx(): AudioContext {
   const ctx = new AudioContext({ sampleRate: 48000 });
   // ── Force stereo output ────────────────────────────────────────────────────
@@ -183,8 +186,17 @@ function makeResumedCtx(): AudioContext {
   } catch { /* read-only in some edge cases, ignore */ }
   ctx.resume().catch(() => {});
   // Auto-resume if the browser suspends the context (e.g. WebView2 focus loss)
+  // After resume, re-attach any pending audio streams so sound resumes immediately.
   ctx.addEventListener('statechange', () => {
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    } else if (ctx.state === 'running' && _pendingReattach.size > 0) {
+      // Re-attach streams that were attached while context was suspended
+      _pendingReattach.forEach((stream, userId) => {
+        attachRemoteAudio(userId, stream);
+      });
+      _pendingReattach.clear();
+    }
   });
   return ctx;
 }
@@ -217,12 +229,17 @@ export function primePlaybackContext(): void {
  * to bypass autoplay restrictions.
  */
 export function attachRemoteAudio(userId: string, stream: MediaStream) {
+  // Register stream for re-attachment after a suspended context wakes back up.
+  // Cleared below if the AudioContext path succeeds while already running.
+  _pendingReattach.set(userId, stream);
+
   // ── AudioContext path ────────────────────────────────────────────────────────
   if (_playCtx && _playCtx.state !== 'closed') {
+    // Kick resume regardless — harmless if already running, needed if suspended.
+    _playCtx.resume().catch(() => {});
     const prev = _playNodes.get(userId);
     if (prev) { try { prev.source.disconnect(); prev.gain.disconnect(); prev.merger?.disconnect(); } catch {} _playNodes.delete(userId); }
     try {
-      _playCtx.resume().catch(() => {});
       const source = _playCtx.createMediaStreamSource(stream);
       const gain   = _playCtx.createGain();
       gain.gain.value = _playVolumes.get(userId) ?? 1.0;
@@ -262,6 +279,10 @@ export function attachRemoteAudio(userId: string, stream: MediaStream) {
         el.srcObject = stream;
         _playNodes.set(userId, { source, gain });
       }
+      // Nodes are live — audio flows now (running) or will flow on resume (suspended).
+      // Either way the statechange re-attach would just recreate the same nodes,
+      // so we can clear the pending entry.
+      _pendingReattach.delete(userId);
       console.log(`[Cordis] attachRemoteAudio(${userId}): AudioContext+Dest path, state=${_playCtx.state}`);
       return;
     } catch (err) {
@@ -273,15 +294,29 @@ export function attachRemoteAudio(userId: string, stream: MediaStream) {
   let el = remoteAudios.get(userId);
   if (!el) { el = makeAudioEl(); remoteAudios.set(userId, el); }
   el.srcObject = stream;
-  el.muted = true; // muted→play→unmute bypasses autoplay policy
-  el.play()
-    .then(() => { if (el) el.muted = false; })
-    .catch(err => {
-      if (el) el.muted = false;
-      console.warn('[Cordis] attachRemoteAudio play() blocked:', err.name, '— will retry on next user interaction');
-      const retry = () => { el!.play().catch(() => {}); document.removeEventListener('click', retry); };
-      document.addEventListener('click', retry, { once: true });
-    });
+  // muted→play→unmute bypasses autoplay policy on all browsers/WebViews.
+  // After unmute we also attempt to move to AudioContext path on next prime.
+  el.muted = true;
+  const tryPlay = () => {
+    el!.play()
+      .then(() => { if (el) el.muted = false; })
+      .catch(err => {
+        if (el) el.muted = false;
+        console.warn('[Cordis] attachRemoteAudio play() blocked:', err.name, '— retry on next interaction');
+        // Retry on any user interaction
+        const retry = () => {
+          el!.muted = true;
+          el!.play().then(() => { if (el) el!.muted = false; }).catch(() => { if (el) el!.muted = false; });
+          document.removeEventListener('click',      retry);
+          document.removeEventListener('keydown',    retry);
+          document.removeEventListener('pointerdown',retry);
+        };
+        document.addEventListener('click',      retry, { once: true });
+        document.addEventListener('keydown',    retry, { once: true });
+        document.addEventListener('pointerdown',retry, { once: true });
+      });
+  };
+  tryPlay();
   console.log(`[Cordis] attachRemoteAudio(${userId}): <audio> fallback path`);
 }
 
@@ -294,6 +329,7 @@ export function attachRemoteScreenAudio(userId: string, stream: MediaStream) {
 }
 
 export function detachRemoteAudio(userId: string) {
+  _pendingReattach.delete(userId);
   const node = _playNodes.get(userId);
   if (node) { try { node.source.disconnect(); node.gain.disconnect(); node.merger?.disconnect(); } catch {} _playNodes.delete(userId); }
   _playVolumes.delete(userId);
