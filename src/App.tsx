@@ -67,15 +67,7 @@ import {
   startGroupCall, joinGroupCall, leaveGroupCall, dismissGroupCall,
   getSocket,
 } from './socket';
-import {
-  connectRoom as livekitConnectRoom,
-  disconnectRoom as livekitDisconnectRoom,
-  publishScreen as livekitPublishScreen,
-  unpublishScreen as livekitUnpublishScreen,
-  channelRoom as livekitChannelRoom,
-  dmRoom as livekitDmRoom,
-} from './livekit';
-import { Track as LKTrack } from 'livekit-client';
+// LiveKit removed — screen share goes through WebRTC mesh
 import {
   playDmNotification, startRing, stopRing,
   startIncomingRing, stopIncomingRing,
@@ -8582,7 +8574,7 @@ export default function App() {
   const [sharingUserIds, setSharingUserIds]   = useState<Set<string>>(new Set());
   const [screenShareTick, setScreenShareTick] = useState(0); // forces re-render when remote screen streams change
   const [screenQuality, setScreenQuality]     = useState<ScreenQuality>('fhd');
-  const [screenViaSfu, setScreenViaSfu]       = useState(false); // true = stream published via LiveKit SFU
+  // screenViaSfu removed — LiveKit SFU disabled, screen share uses WebRTC mesh
   const [watchingStreamId, setWatchingStreamId] = useState<string|null>(null); // userId whose stream we're watching full-screen
   const [streamWatchers, setStreamWatchers]   = useState<Record<string, {id:string; username:string}[]>>({});
   const [watchersExpanded, setWatchersExpanded] = useState<Record<string, boolean>>({});
@@ -10919,35 +10911,7 @@ export default function App() {
   useEffect(() => { callDurationRef.current   = callDuration;   }, [callDuration]);
   useEffect(() => { serverFullRef.current     = serverFull;     }, [serverFull]);
 
-  // When someone starts sharing in our current channel, ensure we're in the SFU room.
-  // The initial connect (in joinVoiceChannel) may have failed if the SFU was temporarily
-  // unavailable — this retries automatically so the viewer gets TrackSubscribed events.
-  useEffect(() => {
-    const channelId = activeCall?.channelId;
-    if (!channelId || sharingUserIds.size === 0) return;
-    livekitConnectRoom(
-      livekitChannelRoom(channelId),
-      /* canPublish */ false,
-      (track, participant) => {
-        if (track.source !== LKTrack.Source.ScreenShare) return;
-        const stream = new MediaStream([track.mediaStreamTrack]);
-        remoteScreenStreamsRef.current.set(participant.identity, stream);
-        setScreenShareTick(t => t + 1);
-        track.mediaStreamTrack.onended = () => {
-          if (remoteScreenStreamsRef.current.get(participant.identity) === stream) {
-            remoteScreenStreamsRef.current.delete(participant.identity);
-            setScreenShareTick(t => t + 1);
-          }
-        };
-      },
-      (track, participant) => {
-        if (track.source !== LKTrack.Source.ScreenShare) return;
-        remoteScreenStreamsRef.current.delete(participant.identity);
-        setScreenShareTick(t => t + 1);
-      },
-    ).catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sharingUserIds, activeCall?.channelId]);
+  // Screen share arrives via WebRTC — no SFU retry needed
 
   // Update browser/desktop tab title with total unread count
   useEffect(() => {
@@ -12802,8 +12766,6 @@ export default function App() {
     setWatchingStreamId(null);
     setStreamWatchers({});
     setScreenShareTick(t => t + 1);
-    // Disconnect SFU room
-    livekitDisconnectRoom().catch(() => {});
   };
 
   const acquireMic = async (deviceId?: string, noiseCancelOverride?: boolean): Promise<MediaStream|null> => {
@@ -12964,30 +12926,6 @@ export default function App() {
     setShowCallPanel(true);
     // Notify other tabs to leave voice
     try { voiceBcRef.current?.postMessage({ type: 'voice_joined' }); } catch {}
-    // Connect to LiveKit room as subscriber so remote screen shares arrive automatically
-    livekitConnectRoom(
-      livekitChannelRoom(ch.id),
-      /* canPublish */ false,
-      (track, participant) => {
-        if (track.source === LKTrack.Source.ScreenShare) {
-          const stream = new MediaStream([track.mediaStreamTrack]);
-          remoteScreenStreamsRef.current.set(participant.identity, stream);
-          setScreenShareTick(t => t + 1);
-          track.mediaStreamTrack.onended = () => {
-            if (remoteScreenStreamsRef.current.get(participant.identity) === stream) {
-              remoteScreenStreamsRef.current.delete(participant.identity);
-              setScreenShareTick(t => t + 1);
-            }
-          };
-        }
-      },
-      (track, participant) => {
-        if (track.source === LKTrack.Source.ScreenShare) {
-          remoteScreenStreamsRef.current.delete(participant.identity);
-          setScreenShareTick(t => t + 1);
-        }
-      },
-    ).catch(err => console.warn('[LiveKit] channel room connect failed:', err));
   };
 
   const hangupCall = () => {
@@ -13150,7 +13088,6 @@ export default function App() {
 
     if (activeCall?.isScreenSharing) {
       // ── Stop sharing ───────────────────────────────────────────────
-      await livekitUnpublishScreen().catch(() => {});
       screenStreamRef.current?.getTracks().forEach(t => t.stop());
       screenStreamRef.current = null;
       if (isTauri) {
@@ -13189,61 +13126,31 @@ export default function App() {
 
         screenStreamRef.current = stream;
 
-        // ── SFU screen share publish ──────────────────────────────────
-        // Connect to the SFU room as publisher, then push tracks.
-        // This means 1 upload from the sharer regardless of how many viewers watch.
-        const call = activeCallRef.current;
-        const me   = currentUserRef.current;
-        if (call && me) {
-          const roomName = call.channelId
-            ? livekitChannelRoom(call.channelId)
-            : call.userId
-              ? livekitDmRoom(String(me.id), call.userId)
-              : null;
-          if (roomName) {
-            try {
-              await livekitConnectRoom(
-                roomName,
-                /* canPublish */ true,
-                /* onSubscribed   — handled by livekitSetupSubscriptions below */ () => {},
-                /* onUnsubscribed — handled below */ () => {},
-              );
-              await livekitPublishScreen(stream, screenQuality);
-              setScreenViaSfu(true);
-              addToast(`🛰️ SFU aktywne — stream przez serwer (${screenQuality.toUpperCase()}/60fps)`, 'success');
-            } catch (lkErr: any) {
-              const errMsg = lkErr?.message ?? lkErr?.toString?.() ?? 'unknown error';
-              console.error('[LiveKit] publish failed, falling back to mesh:', lkErr);
-              setScreenViaSfu(false);
-              addToast(`⚠️ SFU błąd: ${errMsg.slice(0, 120)}`, 'warn');
-              // Fallback: add tracks to existing peer connections (old mesh approach)
-              stream.getTracks().forEach(t => {
-                peerConnsRef.current.forEach(pc => pc.addTrack(t, stream));
-              });
-              const shareProfile = getBitrateProfile(peerConnsRef.current.size + 1, true, screenQuality);
-              peerConnsRef.current.forEach(async (pc, peerId) => {
-                try {
-                  tuneVideoSenders(pc, stream, shareProfile, screenQuality);
-                  if (pc.signalingState === 'stable' && !(pc as any)._negotiating) {
-                    (pc as any)._negotiating = true;
-                    try {
-                      const rawOffer = await pc.createOffer();
-                      const tunedSdp = preferOpusStereo(preferH264(rawOffer.sdp ?? ''));
-                      const offer = { ...rawOffer, sdp: tunedSdp };
-                      await pc.setLocalDescription(offer);
-                      getSocket().emit('webrtc_offer', { to: peerId, sdp: offer });
-                    } finally { (pc as any)._negotiating = false; }
-                  }
-                } catch {}
-              });
+        // ── WebRTC mesh screen share ──────────────────────────────────
+        // Add screen tracks to all existing peer connections and renegotiate.
+        stream.getTracks().forEach(t => {
+          peerConnsRef.current.forEach(pc => pc.addTrack(t, stream));
+        });
+        const shareProfile = getBitrateProfile(peerConnsRef.current.size + 1, true, screenQuality);
+        peerConnsRef.current.forEach(async (pc, peerId) => {
+          try {
+            tuneVideoSenders(pc, stream, shareProfile, screenQuality);
+            if (pc.signalingState === 'stable' && !(pc as any)._negotiating) {
+              (pc as any)._negotiating = true;
+              try {
+                const rawOffer = await pc.createOffer();
+                const tunedSdp = preferOpusStereo(preferH264(rawOffer.sdp ?? ''));
+                const offer = { ...rawOffer, sdp: tunedSdp };
+                await pc.setLocalDescription(offer);
+                getSocket().emit('webrtc_offer', { to: peerId, sdp: offer });
+              } finally { (pc as any)._negotiating = false; }
             }
-          }
-        }
+          } catch {}
+        });
 
         // Stop when user clicks browser "Stop sharing" button
         stream.getVideoTracks().forEach(t => {
           t.onended = () => {
-            livekitUnpublishScreen().catch(() => {});
             screenStreamRef.current = null;
             if (isTauri) {
               import('./audioLoopback').then(m => m.stopLoopbackCapture()).catch(() => {});
@@ -15535,9 +15442,6 @@ export default function App() {
                                 <div className="absolute bottom-0 left-0 right-0 px-3 py-2 bg-gradient-to-t from-black/80 to-transparent flex items-center justify-between">
                                   <span className="text-[11px] font-semibold text-white truncate">{ownerName}</span>
                                   <div className="flex items-center gap-1.5">
-                                    {isSelf && screenViaSfu && (
-                                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-600/80 text-white tracking-wide" title="Transmisja przez serwer — obsługuje 1000+ widzów jednocześnie">SFU</span>
-                                    )}
                                     {watcherBadge(streamId, true)}
                                   </div>
                                 </div>
