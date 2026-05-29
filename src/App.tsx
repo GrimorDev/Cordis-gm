@@ -9400,11 +9400,14 @@ export default function App() {
   useEffect(() => {
     if (!isTauri || !isAuthenticated) return;
     const ua = navigator.userAgent.toLowerCase();
-    const isMac   = ua.includes('mac');
     const isLinux = ua.includes('linux');
-    if (!isMac && !isLinux) return;
-    // Small delay on Linux so the window is fully shown before the dialog
-    const delay = isLinux ? 1500 : 0;
+    // Request media permissions on ALL Tauri platforms at startup.
+    // Windows WebView2: triggers the native permission bar so the user can Allow.
+    // macOS WKWebView: triggers the system mic/camera dialog.
+    // Linux WebKitGTK: auto-allowed by connect_permission_request in lib.rs,
+    //   but calling this still enumerates devices so selects get proper labels.
+    // Slight delay on Linux so the window is fully shown before any dialog.
+    const delay = isLinux ? 1500 : 800;
     const t = setTimeout(() => {
       import('@tauri-apps/api/core').then(({ invoke }) => {
         invoke('request_media_permissions').catch(() => {});
@@ -12893,18 +12896,30 @@ export default function App() {
       getMediaDevices().then(setDevices).catch(() => {});
       return sendStream;
     } catch (err: any) {
+      const isNotAllowed = err?.name === 'NotAllowedError';
       const msg = err?.name === 'NotFoundError'
         ? 'Nie znaleziono mikrofonu — sprawdź podłączenie urządzenia'
-        : err?.name === 'NotAllowedError'
+        : isNotAllowed
           ? (isTauri
               ? (userOs === 'macos'
-                  ? 'Brak dostępu do mikrofonu — otwórz: Ustawienia systemowe → Prywatność → Mikrofon → włącz Cordyn'
-                  : 'Brak dostępu do mikrofonu — otwórz Ustawienia → Urządzenia i kliknij "Sprawdź urządzenia"')
+                  ? 'Brak dostępu do mikrofonu — otwórz: Ustawienia systemowe → Prywatność i ochrona → Mikrofon → włącz Cordyn'
+                  : userOs === 'linux'
+                    ? 'Brak dostępu do mikrofonu — sprawdź uprawnienia WebKit lub uruchom ponownie aplikację'
+                    : 'Brak dostępu do mikrofonu — kliknij tutaj aby otworzyć Ustawienia prywatności Windows')
               : 'Brak uprawnień do mikrofonu — zezwól w ustawieniach przeglądarki (kłódka przy adresie URL)')
           : err?.name === 'NotReadableError'
             ? 'Mikrofon jest używany przez inną aplikację — zamknij Teams, Discord itp.'
             : 'Brak dostępu do mikrofonu';
-      addToast(msg, 'error'); return null;
+      // On Windows desktop, let the user click the toast to open mic privacy settings
+      if (isTauri && userOs === 'windows' && isNotAllowed) {
+        addToast(msg, 'error', async () => {
+          const { invoke } = await import('@tauri-apps/api/core');
+          invoke('open_mic_privacy_settings').catch(() => {});
+        });
+      } else {
+        addToast(msg, 'error');
+      }
+      return null;
     }
   };
 
@@ -13101,18 +13116,28 @@ export default function App() {
         setActiveCall(p => p ? {...p, isCameraOn: true} : p);
       } catch (camErr: any) {
         const camName = camErr?.name ?? '';
-        const msg = camName === 'NotAllowedError'
+        const isCamNotAllowed = camName === 'NotAllowedError';
+        const msg = isCamNotAllowed
           ? (isTauri
               ? (userOs === 'macos'
                   ? 'Brak dostępu do kamery — otwórz: Ustawienia systemowe → Prywatność → Kamera → włącz Cordyn'
-                  : 'Brak dostępu do kamery — otwórz Ustawienia → Urządzenia i kliknij "Sprawdź urządzenia"')
+                  : userOs === 'linux'
+                    ? 'Brak dostępu do kamery — sprawdź uprawnienia WebKit lub uruchom ponownie aplikację'
+                    : 'Brak dostępu do kamery — kliknij tutaj aby otworzyć Ustawienia prywatności Windows')
               : 'Brak uprawnień do kamery — zezwól w ustawieniach przeglądarki (kłódka przy adresie URL)')
           : camName === 'NotFoundError'
             ? 'Nie znaleziono kamery — sprawdź podłączenie urządzenia'
             : camName === 'NotReadableError'
               ? 'Kamera jest używana przez inną aplikację — zamknij inne programy'
               : 'Brak dostępu do kamery';
-        addToast(msg, 'error');
+        if (isTauri && userOs === 'windows' && isCamNotAllowed) {
+          addToast(msg, 'error', async () => {
+            const { invoke } = await import('@tauri-apps/api/core');
+            invoke('open_mic_privacy_settings').catch(() => {}); // opens camera settings too
+          });
+        } else {
+          addToast(msg, 'error');
+        }
       }
     }
   };
@@ -13135,11 +13160,6 @@ export default function App() {
       emitScreenStop();
       playScreenShareStop();
     } else {
-      // Screen share via getDisplayMedia() crashes WebKitGTK on Linux — block it
-      if (userOs === 'linux' && isTauri) {
-        addToast('Udostępnianie ekranu nie jest obsługiwane na Linux — użyj wersji web (cordyn.pl) w przeglądarce', 'error');
-        return;
-      }
       try {
         // ── Capture screen ────────────────────────────────────────────
         let stream: MediaStream;

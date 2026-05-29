@@ -155,6 +155,28 @@ fn is_linux() -> bool {
     cfg!(target_os = "linux")
 }
 
+/// Returns true when running on Windows.
+#[tauri::command]
+fn is_windows() -> bool {
+    cfg!(target_os = "windows")
+}
+
+/// Open Windows Privacy Settings for microphone access.
+/// Uses the ms-settings: URI scheme which works on Windows 10/11.
+#[cfg(target_os = "windows")]
+#[tauri::command]
+fn open_mic_privacy_settings() {
+    let _ = std::process::Command::new("explorer.exe")
+        .arg("ms-settings:privacy-microphone")
+        .spawn();
+}
+
+#[cfg(not(target_os = "windows"))]
+#[tauri::command]
+fn open_mic_privacy_settings() {
+    // no-op on non-Windows
+}
+
 /// Returns true when the process was launched as an AppImage ($APPIMAGE env var is set).
 #[tauri::command]
 fn is_appimage() -> bool {
@@ -389,8 +411,10 @@ pub fn run() {
             request_media_permissions,
             reset_webkit_permissions,
             is_linux,
+            is_windows,
             is_appimage,
             install_deb_update,
+            open_mic_privacy_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

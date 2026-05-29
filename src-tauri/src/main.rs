@@ -15,6 +15,17 @@ fn main() {
         std::env::set_var("WEBKIT_FORCE_SANDBOX", "0");
         // Keep DMABUF enabled — hardware accelerated rendering (no lag)
         // Only disable it if you see GPU driver crashes: WEBKIT_DISABLE_DMABUF_RENDERER=1
+
+        // Screen sharing via getDisplayMedia:
+        // WebKitGTK uses XDG Desktop Portal (pipewire) for screen capture.
+        // WEBKIT_DISABLE_SANDBOX=1 above lets the renderer access /dev/snd & /dev/video*,
+        // but getDisplayMedia still needs the portal.  Force GDK/X11 backend so WebKitGTK
+        // can fall back to X11 screen capture on systems without a running portal.
+        // This only works on X11 — on Wayland the portal is required regardless.
+        if std::env::var("WAYLAND_DISPLAY").is_err() {
+            // X11 session — allow direct framebuffer capture
+            std::env::set_var("GDK_BACKEND", "x11");
+        }
     }
     app_lib::run();
 }
