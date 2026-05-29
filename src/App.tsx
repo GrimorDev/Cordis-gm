@@ -12828,6 +12828,16 @@ export default function App() {
         }
       }
 
+      // ── Diagnostics: confirm the mic actually produced a live track ───────────
+      // If these logs show readyState='live' & enabled=true on desktop but peers
+      // still hear nothing, the failure is in ICE/receive — NOT in capture.
+      try {
+        rawStream.getAudioTracks().forEach(t =>
+          console.log(`[Cordis] acquireMic: got track "${t.label}" readyState=${t.readyState} enabled=${t.enabled} muted=${t.muted}`));
+        if (rawStream.getAudioTracks().length === 0)
+          console.warn('[Cordis] acquireMic: getUserMedia returned a stream with NO audio tracks!');
+      } catch {}
+
       // Speaking detection on the raw stream (pre-gate) so indicator stays accurate
       if (currentUserRef.current?.id) {
         const uid = currentUserRef.current.id;

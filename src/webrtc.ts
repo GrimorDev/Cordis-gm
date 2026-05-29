@@ -418,6 +418,8 @@ export function watchSpeaking(
 ): () => void {
   let ctx: AudioContext | null = null;
   let rafId: number | null = null;
+  let resumeTimer: ReturnType<typeof setInterval> | null = null;
+  const gestureHandler = () => { ctx?.resume().catch(() => {}); };
 
   try {
     ctx = new AudioContext({ sampleRate: 48000 });
@@ -465,10 +467,34 @@ export function watchSpeaking(
 
     rafId = requestAnimationFrame(tick);
     ctx.resume().catch(() => {});
+
+    // ── Robust resume for WebViews (Windows/Linux/macOS) ──────────────────────
+    // watchSpeaking is invoked AFTER `await getUserMedia`, i.e. OUTSIDE the original
+    // user gesture. In a WebView the new AudioContext therefore starts "suspended"
+    // and the single resume() above is rejected → analyser reads silence forever →
+    // the speaking indicator ("poświata") never lights up even though the mic IS
+    // actually capturing and sending audio. We retry resume on an interval until the
+    // context is running, and also force resume on the next user interaction.
+    if (ctx.state !== 'running') {
+      resumeTimer = setInterval(() => {
+        if (!ctx || ctx.state === 'running' || ctx.state === 'closed') {
+          if (resumeTimer) { clearInterval(resumeTimer); resumeTimer = null; }
+          return;
+        }
+        ctx.resume().catch(() => {});
+      }, 400);
+      document.addEventListener('click',       gestureHandler, { passive: true });
+      document.addEventListener('keydown',     gestureHandler, { passive: true });
+      document.addEventListener('pointerdown', gestureHandler, { passive: true });
+    }
   } catch { /* AudioContext not available, skip */ }
 
   return () => {
     if (rafId !== null) cancelAnimationFrame(rafId);
+    if (resumeTimer) { clearInterval(resumeTimer); resumeTimer = null; }
+    document.removeEventListener('click',       gestureHandler);
+    document.removeEventListener('keydown',     gestureHandler);
+    document.removeEventListener('pointerdown', gestureHandler);
     if (ctx) ctx.close().catch(() => {});
   };
 }
