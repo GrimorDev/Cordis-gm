@@ -321,6 +321,38 @@ pub fn run() {
                 )?;
             }
 
+            // ── Create main window programmatically ──────────────────────────
+            // We create the window in code (not tauri.conf.json) so we can
+            // attach platform-specific handlers at construction time, which is
+            // the only opportunity to set them (builder options, not post-hoc).
+            {
+                let builder = tauri::WebviewWindowBuilder::new(
+                    app,
+                    "main",
+                    tauri::WebviewUrl::App("/".into()),
+                )
+                .title("Cordyn")
+                .inner_size(1280.0, 800.0)
+                .min_inner_size(900.0, 600.0)
+                .decorations(false)
+                .resizable(true)
+                .center()
+                .fullscreen(false)
+                .drag_drop_enabled(false);
+
+                // Windows: WebView2 DENIES every getUserMedia call by default
+                // unless the host app handles PermissionRequested.
+                // permission_handler(|_| true) auto-allows mic/camera/display.
+                // This is the ONLY reliable way to unblock getUserMedia in
+                // a Tauri desktop app targeting https://cordyn.pl.
+                #[cfg(windows)]
+                let builder = builder.permission_handler(|_kind| {
+                    true // allow all — mic, camera, display capture
+                });
+
+                let _win = builder.build()?;
+            }
+
             // ── System tray ─────────────────────────────────────────────────
             let show_i = MenuItem::with_id(app, "show", "Pokaż Cordyn", true, None::<&str>)?;
             let quit_i = MenuItem::with_id(app, "quit", "Zamknij", true, None::<&str>)?;
