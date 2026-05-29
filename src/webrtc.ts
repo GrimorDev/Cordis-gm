@@ -156,15 +156,17 @@ function makeAudioEl(): HTMLAudioElement {
 // arrives but produces no sound. AudioContext.createMediaStreamSource() routes
 // audio through the native pipeline and works reliably.
 //
-// Two shared contexts:
+// Three shared contexts:
 //   _playCtx — for remote audio PLAYBACK (attachRemoteAudio)
 //   _recCtx  — for local mic PROCESSING (applyNoiseGate / noise gate worklet)
+//   _vadCtx  — for speaking detection (watchSpeaking RMS analyser → "poświata")
 //
-// Both MUST be created and resumed inside a user-gesture handler.
+// All MUST be created and resumed inside a user-gesture handler.
 // Call primePlaybackContext() when the user clicks join/accept for a call —
-// it primes BOTH contexts so they are in "running" state before any async ops.
+// it primes ALL contexts so they are in "running" state before any async ops.
 let _playCtx: AudioContext | null = null;
 let _recCtx:  AudioContext | null = null;
+let _vadCtx:  AudioContext | null = null;
 interface AudioPlayNode { source: MediaStreamAudioSourceNode; gain: GainNode; merger?: ChannelMergerNode; }
 const _playNodes   = new Map<string, AudioPlayNode>(); // userId → WebRTC audio nodes
 const _playVolumes = new Map<string, number>();        // userId → volume 0..1
@@ -205,7 +207,8 @@ function makeResumedCtx(): AudioContext {
  * Create / resume the shared playback + recording AudioContexts.
  * MUST be called within a user-gesture handler (button click) so the contexts
  * are allowed to start in the running state.
- * Primes both _playCtx (remote audio) and _recCtx (noise gate / mic processing).
+ * Primes _playCtx (remote audio), _recCtx (noise gate) and _vadCtx (speaking
+ * detection) so all three start in "running" state before any async ops.
  */
 export function primePlaybackContext(): void {
   try {
@@ -215,6 +218,14 @@ export function primePlaybackContext(): void {
   try {
     if (!_recCtx || _recCtx.state === 'closed') _recCtx = makeResumedCtx();
     else _recCtx.resume().catch(() => {});
+  } catch {}
+  try {
+    // VAD context for the speaking indicator. Primed in-gesture so it starts
+    // "running" — otherwise (created later inside watchSpeaking, after the
+    // `await getUserMedia`) WebViews start it "suspended" and the glow never
+    // lights up even though the mic is capturing. This is THE desktop-only bug.
+    if (!_vadCtx || _vadCtx.state === 'closed') _vadCtx = makeResumedCtx();
+    else _vadCtx.resume().catch(() => {});
   } catch {}
 }
 
@@ -417,21 +428,36 @@ export function watchSpeaking(
   startThreshold = 0.012,  // RMS 0..1 — tweak via settings (default ~-38 dBFS)
 ): () => void {
   let ctx: AudioContext | null = null;
+  let ownCtx = false; // true only when we had to create a private fallback context
+  let src: MediaStreamAudioSourceNode | null = null;
+  let analyser: AnalyserNode | null = null;
   let rafId: number | null = null;
   let resumeTimer: ReturnType<typeof setInterval> | null = null;
   const gestureHandler = () => { ctx?.resume().catch(() => {}); };
 
   try {
-    ctx = new AudioContext({ sampleRate: 48000 });
-    const src = ctx.createMediaStreamSource(stream);
+    // ── Prefer the shared VAD context primed inside the join/accept click ─────
+    // _vadCtx was created in primePlaybackContext() during the user gesture, so
+    // it is already "running". Reusing it means the speaking indicator works
+    // IMMEDIATELY on desktop WebViews. Only fall back to a fresh context (which
+    // a WebView would start "suspended") if priming never happened.
+    if (_vadCtx && _vadCtx.state !== 'closed') {
+      ctx = _vadCtx;
+      ownCtx = false;
+    } else {
+      ctx = new AudioContext({ sampleRate: 48000 });
+      ownCtx = true;
+    }
+    src = ctx.createMediaStreamSource(stream);
 
     // Analyser on time-domain for RMS
-    const analyser = ctx.createAnalyser();
+    analyser = ctx.createAnalyser();
     analyser.fftSize = 1024;
     analyser.smoothingTimeConstant = 0.0; // no smoothing — we do it ourselves
     src.connect(analyser);
 
-    const buf = new Float32Array(analyser.fftSize);
+    const an = analyser; // non-null capture for the closure below
+    const buf = new Float32Array(an.fftSize);
 
     let speaking      = false;
     let lastSpeakTime = 0;
@@ -444,7 +470,7 @@ export function watchSpeaking(
     const ALPHA     = 0.15; // EMA coefficient
 
     function tick() {
-      analyser.getFloatTimeDomainData(buf);
+      an.getFloatTimeDomainData(buf);
 
       // RMS over entire frame
       let sumSq = 0;
@@ -495,7 +521,12 @@ export function watchSpeaking(
     document.removeEventListener('click',       gestureHandler);
     document.removeEventListener('keydown',     gestureHandler);
     document.removeEventListener('pointerdown', gestureHandler);
-    if (ctx) ctx.close().catch(() => {});
+    // Always disconnect our nodes (critical when reusing the shared _vadCtx so
+    // sources/analysers don't accumulate across joins). Only CLOSE the context
+    // if it was a private fallback — never close the shared _vadCtx.
+    try { src?.disconnect(); } catch {}
+    try { analyser?.disconnect(); } catch {}
+    if (ownCtx && ctx) ctx.close().catch(() => {});
   };
 }
 
