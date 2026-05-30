@@ -77,13 +77,16 @@ import {
   playScreenShareStart, playScreenShareStop,
 } from './sounds';
 import {
-  makePeerConnection, attachRemoteAudio, attachRemoteScreenAudio, detachRemoteAudio,
-  muteAllRemote, setRemoteVolume, setRemoteScreenVolume, muteRemoteUser, muteRemoteScreenStream,
-  setOutputDevice, watchSpeaking, getMediaDevices, applyNoiseGate, applyDeepFilter, type NoisePipeline,
-  preferH264, preferOpusStereo, tuneAudioSender, tuneVideoSenders, primePlaybackContext,
+  watchSpeaking, getMediaDevices, type NoisePipeline, primePlaybackContext,
   onDeepFilterStatus, type DeepFilterStatus,
-  captureScreen, getBitrateProfile, type BitrateProfile, type ScreenQuality,
+  captureScreen, type ScreenQuality,
 } from './webrtc';
+import {
+  attachRemoteAudio, attachRemoteScreenAudio, detachRemoteAudio, detachAllRemote,
+  muteAllRemote, setRemoteVolume, setRemoteScreenVolume, muteRemoteUser, muteRemoteScreenStream,
+  setOutputDevice,
+} from './rtc/playback';
+import { VoiceEngine } from './rtc/engine';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 // Configure marked once — GFM mode, line-break aware
@@ -8538,7 +8541,7 @@ export default function App() {
   const localStreamRef          = useRef<MediaStream|null>(null);
   const screenStreamRef         = useRef<MediaStream|null>(null);
   const remoteScreenStreamsRef  = useRef(new Map<string, MediaStream>());
-  const peerConnsRef            = useRef(new Map<string, RTCPeerConnection>());
+  const engineRef              = useRef<VoiceEngine | null>(null);
   const speakStopRef     = useRef(new Map<string, ()=>void>()); // speaking detection cleanup
   const screenQualityRef    = useRef<ScreenQuality>('fhd');
   const currentUserRef      = useRef(currentUser);
@@ -8946,7 +8949,7 @@ export default function App() {
 
     // ── WebRTC packet loss (supplementary, no RTT from here) ─────────
     const measurePktLoss = async () => {
-      const pcs = [...peerConnsRef.current.values()];
+      const pcs = engineRef.current?.allPeerConnections() ?? [];
       if (!pcs.length) return;
       let lost = 0, recv = 0;
       await Promise.all(pcs.map(async pc => {
@@ -10152,8 +10155,8 @@ export default function App() {
       // Clean up if we somehow got past the frontend pre-check (race condition)
       if (activeCallRef.current?.channelId === channel_id) {
         leaveVoiceChannel(channel_id);
-        peerConnsRef.current.forEach((pc, uid) => { pc.close(); detachRemoteAudio(uid); });
-        peerConnsRef.current.clear();
+        engineRef.current?.closeAllPeers();
+        detachAllRemote();
         setActiveCall(null);
         setShowCallPanel(false);
       }
@@ -11351,8 +11354,7 @@ export default function App() {
   // ── WebRTC voice signaling handlers ─────────────────────────────
   // These are updated via ref so socket callbacks always get latest version
   const closePeer = (userId: string) => {
-    const pc = peerConnsRef.current.get(userId);
-    if (pc) { pc.close(); peerConnsRef.current.delete(userId); }
+    engineRef.current?.closePeer(userId);
     detachRemoteAudio(userId);
     remoteScreenStreamsRef.current.delete(userId);
     setScreenShareTick(t => t + 1);
@@ -11361,180 +11363,75 @@ export default function App() {
     setSpeakingUsers(p => { const n = new Set(p); n.delete(userId); return n; });
     setVoiceUserStates(p => { const n = {...p}; delete n[userId]; return n; });
   };
-  const openPeer = async (remoteUserId: string, isInitiator: boolean, sdpOffer?: RTCSessionDescriptionInit) => {
-    const existing = peerConnsRef.current.get(remoteUserId);
-    if (existing) return existing;
-    const pc = makePeerConnection(
-      (c) => getSocket().emit('webrtc_ice', { to: remoteUserId, candidate: c }),
-      (e) => {
-        const stream = e.streams[0];
-        console.log(`[Cordis WebRTC] ontrack from ${remoteUserId}: kind=${e.track.kind} streams=${e.streams.length} stream=${stream?.id}`);
-        if (!stream) {
-          console.warn(`[Cordis WebRTC] ontrack: e.streams[0] is empty for ${remoteUserId} — audio will NOT play`);
-          return;
-        }
-        if (e.track.kind === 'video') {
-          // Remote video track (camera or screen share)
+  // ── Perfect-Negotiation engine ────────────────────────────────────
+  // Lazily built. ALL inbound-track routing (remote mic playback, screen
+  // video/audio, speaking indicator) lives in onRemoteTrack. Negotiation,
+  // glare handling and ICE restart are owned by the engine — no manual offers.
+  const ensureEngine = (): VoiceEngine => {
+    if (engineRef.current) return engineRef.current;
+    engineRef.current = new VoiceEngine({
+      selfId: currentUserRef.current?.id ?? '',
+      emitOffer:  (to, sdp) => getSocket().emit('webrtc_offer',  { to, sdp }),
+      emitAnswer: (to, sdp) => getSocket().emit('webrtc_answer', { to, sdp }),
+      emitIce:    (to, candidate) => getSocket().emit('webrtc_ice', { to, candidate }),
+      getParticipantCount: () => (engineRef.current?.peerCount() ?? 0) + 1,
+      getScreenStream:  () => screenStreamRef.current,
+      getScreenQuality: () => screenQualityRef.current,
+      onPeerState: (_peerId, state) => {
+        if (state === 'failed') addToast(tl('toast.connectionError'), 'error');
+      },
+      onRemoteTrack: (remoteUserId, track, stream) => {
+        if (track.kind === 'video') {
+          // Remote camera or screen share
           remoteScreenStreamsRef.current.set(remoteUserId, stream);
           setScreenShareTick(t => t + 1);
-          // Clear frozen frame when remote turns off camera/share
-          e.track.onended = () => {
+          track.onended = () => {
             if (remoteScreenStreamsRef.current.get(remoteUserId) === stream) {
               remoteScreenStreamsRef.current.delete(remoteUserId);
               setScreenShareTick(t => t + 1);
             }
           };
-          e.track.onmute = () => {
+          track.onmute = () => {
             if (remoteScreenStreamsRef.current.get(remoteUserId) === stream) {
               remoteScreenStreamsRef.current.delete(remoteUserId);
               setScreenShareTick(t => t + 1);
             }
           };
-          // Attach screen-share audio — MUTED by default until user clicks "Dołącz do oglądania"
           if (stream.getAudioTracks().length > 0) {
             attachRemoteScreenAudio(remoteUserId, stream);
-            muteRemoteScreenStream(remoteUserId, true); // silent until joined
-            // Restore saved stream volume preference (applied on join, not now)
+            muteRemoteScreenStream(remoteUserId, true); // silent until "join watching"
             try {
               const saved = localStorage.getItem(`cordyn_streamvol_${remoteUserId}`);
-              if (saved !== null) {
-                const vol = parseInt(saved, 10);
-                if (!isNaN(vol)) setStreamVols(p => ({ ...p, [remoteUserId]: vol }));
-              }
+              if (saved !== null) { const vol = parseInt(saved, 10); if (!isNaN(vol)) setStreamVols(p => ({ ...p, [remoteUserId]: vol })); }
             } catch {}
           }
         } else {
-          // Audio track — only attach as mic audio if stream has NO video (not a screen-share stream)
+          // Audio. A stream WITHOUT video = microphone; WITH video = screen-share audio.
           if (stream.getVideoTracks().length === 0) {
             attachRemoteAudio(remoteUserId, stream);
-            // Restore saved volume preference for this user
             try {
               const saved = localStorage.getItem(`cordyn_vol_${remoteUserId}`);
-              if (saved !== null) {
-                const vol = parseInt(saved, 10);
-                if (!isNaN(vol)) {
-                  setUserVols(p => ({ ...p, [remoteUserId]: vol }));
-                  setRemoteVolume(remoteUserId, vol);
-                }
-              }
+              if (saved !== null) { const vol = parseInt(saved, 10); if (!isNaN(vol)) { setUserVols(p => ({ ...p, [remoteUserId]: vol })); setRemoteVolume(remoteUserId, vol); } }
             } catch {}
             const stop = watchSpeaking(stream, (s) =>
               setSpeakingUsers(p => { const n = new Set(p); s ? n.add(remoteUserId) : n.delete(remoteUserId); return n; }));
             const old = speakStopRef.current.get(remoteUserId); if (old) old();
             speakStopRef.current.set(remoteUserId, stop);
-          }
-          // Audio track on a stream that also has video = screen-share audio arriving separately
-          // (race: audio track fires before/after video track; attachRemoteScreenAudio is idempotent)
-          else {
+          } else {
             attachRemoteScreenAudio(remoteUserId, stream);
             try {
               const saved = localStorage.getItem(`cordyn_streamvol_${remoteUserId}`);
-              if (saved !== null) {
-                const vol = parseInt(saved, 10);
-                if (!isNaN(vol)) { setStreamVols(p => ({ ...p, [remoteUserId]: vol })); setRemoteScreenVolume(remoteUserId, vol); }
-              }
+              if (saved !== null) { const vol = parseInt(saved, 10); if (!isNaN(vol)) { setStreamVols(p => ({ ...p, [remoteUserId]: vol })); setRemoteScreenVolume(remoteUserId, vol); } }
             } catch {}
           }
         }
       },
-    );
-    peerConnsRef.current.set(remoteUserId, pc);
-    // ICE + connection state monitoring — critical for diagnosing voice call failures
-    pc.oniceconnectionstatechange = () => {
-      const s = pc.iceConnectionState;
-      console.log(`[Cordis WebRTC] ICE state (${remoteUserId}):`, s);
-      if (s === 'failed') {
-        if (isInitiator) {
-          console.warn('[Cordis WebRTC] ICE failed — restarting ICE for', remoteUserId);
-          pc.restartIce(); // triggers onnegotiationneeded which sends a new offer
-        } else {
-          // Answerer can't restart ICE — close and let the initiator reconnect via voice_user_joined
-          console.warn('[Cordis WebRTC] ICE failed (answerer side) — closing peer', remoteUserId);
-          closePeer(remoteUserId);
-        }
-      }
-      if (s === 'disconnected') {
-        console.warn('[Cordis WebRTC] ICE disconnected from', remoteUserId, '— scheduling recovery in 6 s');
-        setTimeout(() => {
-          if (!peerConnsRef.current.has(remoteUserId)) return; // already closed
-          const cur = pc.iceConnectionState;
-          if (cur === 'disconnected' || cur === 'failed') {
-            if (isInitiator) {
-              console.warn('[Cordis WebRTC] ICE still broken after 6 s — restarting for', remoteUserId);
-              pc.restartIce();
-            } else {
-              console.warn('[Cordis WebRTC] ICE still broken after 6 s (answerer) — closing peer', remoteUserId);
-              closePeer(remoteUserId);
-            }
-          }
-        }, 6000);
-      }
-    };
-    pc.onconnectionstatechange = () => {
-      const s = pc.connectionState;
-      console.log(`[Cordis WebRTC] connection state (${remoteUserId}):`, s);
-      if (s === 'failed') {
-        console.warn('[Cordis WebRTC] connection failed — closing peer', remoteUserId);
-        addToast(tl('toast.connectionError'), 'error');
-        closePeer(remoteUserId);
-        // Re-open immediately if we are the initiator (answerer will receive new offer)
-        if (isInitiator) {
-          setTimeout(() => {
-            if (!peerConnsRef.current.has(remoteUserId) && activeCallRef.current) {
-              openPeer(remoteUserId, true).catch(console.error);
-            }
-          }, 1000);
-        }
-      }
-    };
-    // Handle renegotiation (ICE restart, adding screen-share tracks, etc.)
-    // The browser fires this event when a new offer must be sent.
-    // Guard with a flag to avoid double-offers when toggleCamera/toggleScreen
-    // already calls createOffer manually for non-initiator peers.
-    (pc as any)._negotiating = false;
-    pc.onnegotiationneeded = async () => {
-      if (!isInitiator) return; // only the initiator creates offers
-      if (pc.signalingState !== 'stable') return; // avoid glare
-      if ((pc as any)._negotiating) return; // already negotiating
-      (pc as any)._negotiating = true;
-      try {
-        const rawOffer = await pc.createOffer();
-        const tunedSdp = preferOpusStereo(preferH264(rawOffer.sdp ?? ''));
-        const offer    = { ...rawOffer, sdp: tunedSdp };
-        await pc.setLocalDescription(offer);
-        getSocket().emit('webrtc_offer', { to: remoteUserId, sdp: offer });
-        console.log(`[Cordis WebRTC] onnegotiationneeded — sent new offer to ${remoteUserId}`);
-      } catch (err) {
-        console.error('[Cordis WebRTC] onnegotiationneeded error:', err);
-      } finally {
-        (pc as any)._negotiating = false;
-      }
-    };
-    if (localStreamRef.current)
-      localStreamRef.current.getTracks().forEach(t => pc.addTrack(t, localStreamRef.current!));
-    if (screenStreamRef.current)
-      screenStreamRef.current.getTracks().forEach(t => pc.addTrack(t, screenStreamRef.current!));
-    if (isInitiator) {
-      const rawOffer = await pc.createOffer();
-      const tunedSdp = preferOpusStereo(preferH264(rawOffer.sdp ?? ''));
-      const offer    = { ...rawOffer, sdp: tunedSdp };
-      await pc.setLocalDescription(offer);
-      { const count = peerConnsRef.current.size + 1;
-        const prof: BitrateProfile = getBitrateProfile(count, !!screenStreamRef.current, screenQualityRef.current);
-        tuneAudioSender(pc, prof); tuneVideoSenders(pc, screenStreamRef.current, prof, screenQualityRef.current); }
-      getSocket().emit('webrtc_offer', { to: remoteUserId, sdp: offer });
-    } else if (sdpOffer) {
-      await pc.setRemoteDescription(new RTCSessionDescription(sdpOffer));
-      const rawAnswer = await pc.createAnswer();
-      const tunedSdp  = preferOpusStereo(preferH264(rawAnswer.sdp ?? ''));
-      const answer     = { ...rawAnswer, sdp: tunedSdp };
-      await pc.setLocalDescription(answer);
-      { const count = peerConnsRef.current.size + 1;
-        const prof: BitrateProfile = getBitrateProfile(count, !!screenStreamRef.current, screenQualityRef.current);
-        tuneAudioSender(pc, prof); tuneVideoSenders(pc, screenStreamRef.current, prof, screenQualityRef.current); }
-      getSocket().emit('webrtc_answer', { to: remoteUserId, sdp: answer });
-    }
-    return pc;
+    });
+    return engineRef.current;
+  };
+  // Thin wrapper kept for existing call sites — the engine handles negotiation.
+  const openPeer = async (remoteUserId: string, _isInitiator?: boolean) => {
+    ensureEngine().connect(remoteUserId);
   };
   useEffect(() => {
     voiceHandlerRef.current = {
@@ -11556,28 +11453,15 @@ export default function App() {
         closePeer(user_id);
         retuneAllPeers();
       },
+      // Offers AND answers both flow into the engine's Perfect-Negotiation handler.
       onOffer: async ({ from, sdp }: any) => {
-        const existing = peerConnsRef.current.get(from);
-        if (existing) {
-          // Renegotiation (e.g. remote peer added screen share track)
-          await existing.setRemoteDescription(new RTCSessionDescription(sdp));
-          const rawAnswer = await existing.createAnswer();
-          const tunedSdp  = preferOpusStereo(preferH264(rawAnswer.sdp ?? ''));
-          const answer    = { ...rawAnswer, sdp: tunedSdp };
-          await existing.setLocalDescription(answer);
-          getSocket().emit('webrtc_answer', { to: from, sdp: answer });
-        } else {
-          await openPeer(from, false, sdp);
-        }
+        await ensureEngine().handleDescription(from, sdp);
       },
       onAnswer: async ({ from, sdp }: any) => {
-        const pc = peerConnsRef.current.get(from);
-        if (pc && pc.signalingState !== 'stable')
-          await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        await ensureEngine().handleDescription(from, sdp);
       },
       onIce: async ({ from, candidate }: any) => {
-        const pc = peerConnsRef.current.get(from);
-        if (pc) try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch {}
+        await ensureEngine().handleIce(from, candidate);
       },
       // Called when the DM call recipient accepts — caller initiates WebRTC
       // remoteUserId is passed directly from the socket event to avoid stale ref race condition
@@ -12766,9 +12650,9 @@ export default function App() {
 
   // ── Voice / Call ──────────────────────────────────────────────────
   const cleanupWebRTC = () => {
-    // Stop all peer connections
-    peerConnsRef.current.forEach((pc, uid) => { pc.close(); detachRemoteAudio(uid); });
-    peerConnsRef.current.clear();
+    // Stop all peer connections + forget local tracks
+    engineRef.current?.destroy();
+    detachAllRemote();
     // Stop noise pipeline (closes AudioContext + raw mic)
     if (noisePipelineRef.current) { noisePipelineRef.current.cleanup(); noisePipelineRef.current = null; }
     else { localStreamRef.current?.getTracks().forEach(t => t.stop()); }
@@ -12849,46 +12733,19 @@ export default function App() {
       // Noise suppression: classic noise-gate AudioWorklet only.
       // DeepFilter (AI) disabled — library bypasses nginx proxy and fetches cdn.mezon.ai
       // directly on both web and Tauri, causing CORS failures and confusing UI messages.
-      let sendStream = rawStream;
-      // DESKTOP REGRESSION FIX: on Tauri (WebView2 / WebKitGTK / WKWebView) the
-      // AudioContext worklet pipeline below can output SILENCE even when
-      // ctx.state === 'running' — the MediaStreamDestination simply carries no
-      // samples, so peers hear nothing ("desktop nie zbiera nic", all OSes).
-      // isRunning() can't detect this (it only checks ctx state, not real audio).
-      // The raw getUserMedia track already has echoCancellation + autoGainControl
-      // + noiseSuppression enabled, so we send it directly on desktop — this is
-      // how voice worked before the worklet was introduced. Worklet stays web-only.
-      if (useNoise && !isTauri) {
-        const pipeline = await applyNoiseGate(rawStream);
-        if (pipeline) {
-          // CRITICAL: verify the AudioContext is actually running before using its output.
-          // If the context is suspended (autoplay policy), processedStream
-          // produces silence — remote peers hear nothing from this user.
-          // In that case, discard the pipeline and fall back to the raw mic stream.
-          if (pipeline.isRunning()) {
-            noisePipelineRef.current = pipeline;
-            // Apply saved sensitivity (user-controlled threshold slider)
-            pipeline.setThreshold(ngSensToThreshold(noiseGateSens));
-            sendStream = pipeline.processedStream;
-            console.log('[Cordis] acquireMic: using noise gate pipeline, ctx running ✓');
-          } else {
-            console.warn('[Cordis] acquireMic: noise gate ctx suspended → falling back to raw stream');
-            pipeline.cleanup();
-          }
-        }
-      }
-      if (sendStream === rawStream) {
-        console.log('[Cordis] acquireMic: using raw mic stream (no noise gate)');
-      }
+      // Noise suppression is handled entirely by the browser-native constraints
+      // above (echoCancellation + autoGainControl + noiseSuppression). We do NOT
+      // route the mic through a WebAudio worklet — that pipeline goes SILENT in
+      // WebViews (WebView2 / WebKitGTK / WKWebView), which is what broke desktop
+      // voice. The raw getUserMedia track is sent directly and works everywhere.
+      const sendStream = rawStream;
+      console.log('[Cordis] acquireMic: sending raw mic stream (browser-native NS)');
 
       localStreamRef.current = sendStream;
-      // Pipe processed (or raw) stream to peer connections
-      peerConnsRef.current.forEach(pc =>
-        sendStream.getTracks().forEach(newTrack => {
-          const sender = pc.getSenders().find(s => s.track?.kind === newTrack.kind);
-          if (sender) { sender.replaceTrack(newTrack).catch(console.error); }
-          else { pc.addTrack(newTrack, sendStream); }
-        }));
+      // Register the mic track with the engine: replaceAudioTrack swaps it on every
+      // existing peer and remembers it for peers that connect later.
+      const micTrack = sendStream.getAudioTracks()[0];
+      if (micTrack) ensureEngine().replaceAudioTrack(micTrack, sendStream);
       // Re-enumerate after permission granted — now we get real device labels
       getMediaDevices().then(setDevices).catch(() => {});
       return sendStream;
@@ -13045,18 +12902,9 @@ export default function App() {
     if (activeCall?.isCameraOn) {
       // Stop local video tracks
       localStreamRef.current?.getVideoTracks().forEach(t => { t.stop(); });
-      // Remove video senders from all peer connections and renegotiate
-      peerConnsRef.current.forEach(async (pc, peerId) => {
-        const videoSenders = pc.getSenders().filter(s => s.track?.kind === 'video');
-        videoSenders.forEach(s => { try { pc.removeTrack(s); } catch {} });
-        if (pc.signalingState === 'stable') {
-          try {
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            getSocket().emit('webrtc_offer', { to: peerId, sdp: offer });
-          } catch {}
-        }
-      });
+      // Remove camera video from all peers — engine renegotiates automatically.
+      // Predicate excludes screen video (which lives on screenStreamRef).
+      engineRef.current?.removeLocalTracks(e => e.track.kind === 'video' && e.stream !== screenStreamRef.current);
       localStreamRef.current = localStreamRef.current ?
         new MediaStream(localStreamRef.current.getAudioTracks()) : null;
       setActiveCall(p => p ? {...p, isCameraOn: false} : p);
@@ -13066,26 +12914,10 @@ export default function App() {
         // to the first available camera instead of throwing OverconstrainedError.
         const vs = await navigator.mediaDevices.getUserMedia({ video: selCamera ? { deviceId: { ideal: selCamera } } : true });
         vs.getVideoTracks().forEach(t => { localStreamRef.current?.addTrack(t); });
-        // Add video track to each peer connection and renegotiate
-        peerConnsRef.current.forEach(async (pc, peerId) => {
-          vs.getVideoTracks().forEach(t => {
-            const existing = pc.getSenders().find(s => s.track?.kind === 'video');
-            if (existing) { existing.replaceTrack(t).catch(() => {}); }
-            else { pc.addTrack(t, localStreamRef.current!); }
-          });
-          // Only renegotiate if we're the initiator; otherwise onnegotiationneeded on the
-          // remote side will send us an offer and we'll answer it.
-          if (pc.signalingState === 'stable' && !(pc as any)._negotiating) {
-            (pc as any)._negotiating = true;
-            try {
-              const rawOffer = await pc.createOffer();
-              const tunedSdp = preferOpusStereo(preferH264(rawOffer.sdp ?? ''));
-              const offer    = { ...rawOffer, sdp: tunedSdp };
-              await pc.setLocalDescription(offer);
-              getSocket().emit('webrtc_offer', { to: peerId, sdp: offer });
-            } catch {} finally { (pc as any)._negotiating = false; }
-          }
-        });
+        // Send camera video via the engine — addLocalTrack adds it to every peer
+        // and triggers Perfect-Negotiation renegotiation automatically.
+        const eng = ensureEngine();
+        vs.getVideoTracks().forEach(t => eng.addLocalTrack(t, localStreamRef.current!));
         setActiveCall(p => p ? {...p, isCameraOn: true} : p);
       } catch (camErr: any) {
         const camName = camErr?.name ?? '';
@@ -13123,7 +12955,10 @@ export default function App() {
 
     if (activeCall?.isScreenSharing) {
       // ── Stop sharing ───────────────────────────────────────────────
-      screenStreamRef.current?.getTracks().forEach(t => t.stop());
+      const shareStream = screenStreamRef.current;
+      // Remove screen tracks from all peers — engine renegotiates automatically.
+      engineRef.current?.removeLocalTracks(e => e.stream === shareStream);
+      shareStream?.getTracks().forEach(t => t.stop());
       screenStreamRef.current = null;
       if (isTauri) {
         import('./audioLoopback').then(m => m.stopLoopbackCapture()).catch(() => {});
@@ -13161,27 +12996,13 @@ export default function App() {
 
         screenStreamRef.current = stream;
 
-        // ── WebRTC mesh screen share ──────────────────────────────────
-        // Add screen tracks to all existing peer connections and renegotiate.
-        stream.getTracks().forEach(t => {
-          peerConnsRef.current.forEach(pc => pc.addTrack(t, stream));
-        });
-        const shareProfile = getBitrateProfile(peerConnsRef.current.size + 1, true, screenQuality);
-        peerConnsRef.current.forEach(async (pc, peerId) => {
-          try {
-            tuneVideoSenders(pc, stream, shareProfile, screenQuality);
-            if (pc.signalingState === 'stable' && !(pc as any)._negotiating) {
-              (pc as any)._negotiating = true;
-              try {
-                const rawOffer = await pc.createOffer();
-                const tunedSdp = preferOpusStereo(preferH264(rawOffer.sdp ?? ''));
-                const offer = { ...rawOffer, sdp: tunedSdp };
-                await pc.setLocalDescription(offer);
-                getSocket().emit('webrtc_offer', { to: peerId, sdp: offer });
-              } finally { (pc as any)._negotiating = false; }
-            }
-          } catch {}
-        });
+        // ── WebRTC mesh screen share via engine ───────────────────────
+        // addLocalTrack adds each screen track to every peer and triggers
+        // Perfect-Negotiation renegotiation automatically. retuneAll applies
+        // the screen-share bitrate profile.
+        const eng = ensureEngine();
+        stream.getTracks().forEach(t => eng.addLocalTrack(t, stream));
+        eng.retuneAll();
 
         // Stop when user clicks browser "Stop sharing" button
         stream.getVideoTracks().forEach(t => {
@@ -13205,14 +13026,7 @@ export default function App() {
 
   // ── Adaptive bitrate: re-tune all peer connections when participant count changes ──
   const retuneAllPeers = () => {
-    const count = peerConnsRef.current.size + 1;
-    const hasScreen = !!screenStreamRef.current;
-    const quality   = screenQualityRef.current;
-    const profile   = getBitrateProfile(count, hasScreen, quality);
-    peerConnsRef.current.forEach(pc => {
-      tuneAudioSender(pc, profile);
-      tuneVideoSenders(pc, screenStreamRef.current, profile, quality);
-    });
+    engineRef.current?.retuneAll();
   };
 
   // ── Search computed values — MUST be before early returns (hooks rules) ──
