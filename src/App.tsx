@@ -12850,11 +12850,19 @@ export default function App() {
       // DeepFilter (AI) disabled — library bypasses nginx proxy and fetches cdn.mezon.ai
       // directly on both web and Tauri, causing CORS failures and confusing UI messages.
       let sendStream = rawStream;
-      if (useNoise) {
+      // DESKTOP REGRESSION FIX: on Tauri (WebView2 / WebKitGTK / WKWebView) the
+      // AudioContext worklet pipeline below can output SILENCE even when
+      // ctx.state === 'running' — the MediaStreamDestination simply carries no
+      // samples, so peers hear nothing ("desktop nie zbiera nic", all OSes).
+      // isRunning() can't detect this (it only checks ctx state, not real audio).
+      // The raw getUserMedia track already has echoCancellation + autoGainControl
+      // + noiseSuppression enabled, so we send it directly on desktop — this is
+      // how voice worked before the worklet was introduced. Worklet stays web-only.
+      if (useNoise && !isTauri) {
         const pipeline = await applyNoiseGate(rawStream);
         if (pipeline) {
           // CRITICAL: verify the AudioContext is actually running before using its output.
-          // If the context is suspended (Tauri/WebView2 autoplay policy), processedStream
+          // If the context is suspended (autoplay policy), processedStream
           // produces silence — remote peers hear nothing from this user.
           // In that case, discard the pipeline and fall back to the raw mic stream.
           if (pipeline.isRunning()) {
