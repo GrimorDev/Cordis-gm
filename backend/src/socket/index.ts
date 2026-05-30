@@ -41,9 +41,25 @@ const steamCache   = new Map<string, ActivityEntry<any>>();
 const ACTIVITY_STALE_MS = 30 * 60 * 1000; // 30 min — keep activity visible across brief disconnects
 
 export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerEvents, ServerToClientEvents> {
+  // Allowed origins: the configured web origin(s) PLUS the Tauri desktop origins.
+  // When the desktop app bundles the frontend locally, its origin becomes
+  // tauri://localhost (macOS/Linux) or http(s)://tauri.localhost (Windows) —
+  // these must be whitelisted or Socket.IO rejects the handshake and WebRTC
+  // signalling never connects. JWT (not cookies) is the real auth boundary.
+  const _configured = String(config.cors.origin || '').split(',').map(s => s.trim()).filter(Boolean);
+  const allowedOrigins = new Set<string>([
+    ..._configured,
+    'tauri://localhost',
+    'https://tauri.localhost',
+    'http://tauri.localhost',
+  ]);
   const io = new SocketServer<ClientToServerEvents, ServerToClientEvents>(httpServer, {
     cors: {
-      origin: config.cors.origin,
+      origin: (origin, cb) => {
+        // Allow non-browser clients (no Origin header) and whitelisted origins.
+        if (!origin || allowedOrigins.has(origin)) return cb(null, true);
+        return cb(null, false);
+      },
       methods: ['GET', 'POST'],
       credentials: true,
     },

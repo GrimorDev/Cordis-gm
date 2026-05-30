@@ -1,10 +1,10 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Cordyn",
-  "version": "0.2.1205",
+  "version": "0.2.1206",
   "identifier": "com.cordis.cordyn",
   "build": {
-    "frontendDist": "https://cordyn.pl",
+    "frontendDist": "../dist",
     "devUrl": "http://localhost:3000",
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build"

@@ -4,14 +4,18 @@ name: Release — Windows (.exe) + macOS (.dmg) + Linux (.AppImage/.deb)
 #   - Manual dispatch (workflow_dispatch) — always builds a release
 #   - Push to main that changes BINARY-relevant paths only
 #
-# With frontendDist = "https://cordyn.pl", the UI is loaded from the server at
-# runtime — src/** changes do NOT need a new binary build.  Only src-tauri/**
-# (Rust code, Tauri config, capabilities) actually requires recompiling.
-# This stops constant version bumping from pure UI/CSS/JS commits.
+# The desktop app now BUNDLES the frontend (frontendDist = "../dist"), so the
+# binary contains the JS — fixes ship with the build, no cordyn.pl redeploy.
+# Therefore frontend sources (src/**, index.html, vite config, public/**) DO
+# require a new binary build, alongside src-tauri/** (Rust/Tauri config).
 on:
   push:
     branches: [main]
     paths:
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'vite.config.ts'
       - 'src-tauri/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
