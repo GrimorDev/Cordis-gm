@@ -793,8 +793,25 @@ export async function applyNoiseGate(rawStream: MediaStream): Promise<NoisePipel
     if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
 
     const source  = ctx.createMediaStreamSource(rawStream);
-    const worklet = new AudioWorkletNode(ctx, 'cordis-noise-processor');
+    // Force the worklet to MONO in/out so a stereo mic can't confuse the gate
+    // (which caused word-clipping) and the output is a single clean channel.
+    const worklet = new AudioWorkletNode(ctx, 'cordis-noise-processor', {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [1],
+      channelCount: 1,
+      channelCountMode: 'explicit',
+      channelInterpretation: 'speakers',
+    });
     const dest    = ctx.createMediaStreamDestination();
+    // CRITICAL: force the destination to a single MONO channel. A 1-channel voice
+    // track is rendered CENTERED (both speakers) by <audio>; without this the
+    // gated stream was 2-channel with signal only on ch0 → left-ear-only.
+    try {
+      dest.channelCount = 1;
+      dest.channelCountMode = 'explicit';
+      dest.channelInterpretation = 'speakers';
+    } catch {}
 
     // Voice frequency emphasis: high-pass at 80 Hz (cut rumble) + low-pass at 8 kHz (cut hiss)
     const hpf = ctx.createBiquadFilter();

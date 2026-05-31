@@ -12705,6 +12705,10 @@ export default function App() {
         echoCancellation: true,  // hardware echo cancel — eliminates speaker feedback
         autoGainControl:  true,  // normalize mic level automatically
         noiseSuppression: true,  // browser baseline noise suppression
+        channelCount: 1,         // MONO — clean single channel into the noise gate
+                                 // (a stereo mic confused the gate → word-clipping).
+                                 // NOTE: do NOT add a `sampleRate` constraint here —
+                                 // it silences the stream in WebView2.
       };
       // Try user-selected mic first (ideal, not exact — avoids OverconstrainedError when
       // the saved deviceId is stale after device changes or between OS sessions).
