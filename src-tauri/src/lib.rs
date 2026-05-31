@@ -299,7 +299,10 @@ struct ScreenSource {
 }
 
 /// List shareable monitors and windows for the in-app screen-share picker.
-/// Cross-platform via `xcap` (Windows / Linux / macOS).
+/// Windows + Linux use `xcap`. macOS returns empty (the xcap macOS backend fails
+/// to build on the universal target) → the frontend falls back to the native
+/// getDisplayMedia picker there until native macOS capture is added.
+#[cfg(not(target_os = "macos"))]
 #[tauri::command]
 fn list_screen_sources() -> Result<Vec<ScreenSource>, String> {
     let mut out: Vec<ScreenSource> = Vec::new();
@@ -331,6 +334,12 @@ fn list_screen_sources() -> Result<Vec<ScreenSource>, String> {
     }
 
     Ok(out)
+}
+
+#[cfg(target_os = "macos")]
+#[tauri::command]
+fn list_screen_sources() -> Result<Vec<ScreenSource>, String> {
+    Ok(Vec::new())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
