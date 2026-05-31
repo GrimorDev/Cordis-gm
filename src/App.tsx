@@ -88,8 +88,7 @@ import {
 } from './rtc/playback';
 import { VoiceEngine } from './rtc/engine';
 import VoiceDiagnostics from './VoiceDiagnostics';
-import ScreenPicker from './ScreenPicker';
-import { listScreenSources, captureSourceStream, type ScreenSource } from './rtc/screen';
+import { captureSourceStream } from './rtc/screen';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 // Configure marked once — GFM mode, line-break aware
@@ -8545,7 +8544,6 @@ export default function App() {
   const screenStreamRef         = useRef<MediaStream|null>(null);
   const remoteScreenStreamsRef  = useRef(new Map<string, MediaStream>());
   const engineRef              = useRef<VoiceEngine | null>(null);
-  const [screenSources, setScreenSources] = useState<ScreenSource[] | null>(null); // custom screen-share picker
   const speakStopRef     = useRef(new Map<string, ()=>void>()); // speaking detection cleanup
   const screenQualityRef    = useRef<ScreenQuality>('fhd');
   const currentUserRef      = useRef(currentUser);
@@ -13028,10 +13026,8 @@ export default function App() {
       emitScreenStop();
       playScreenShareStop();
     } else {
-      // Custom in-app source picker (native enumeration via xcap). If unavailable
-      // (web / native command not present), fall back to getDisplayMedia.
-      const sources = await listScreenSources();
-      if (sources && sources.length) { setScreenSources(sources); return; }
+      // Use the platform's native screen picker (WebView2 / WebKit portal /
+      // WKWebView) via getDisplayMedia — the user chooses screen/window/tab there.
       await beginScreenShare(null);
     }
   };
@@ -24008,14 +24004,6 @@ export default function App() {
       {/* On-screen voice diagnostics (Ctrl+Shift+D) */}
       <VoiceDiagnostics engineRef={engineRef} />
 
-      {/* Custom screen-share source picker */}
-      {screenSources && (
-        <ScreenPicker
-          sources={screenSources}
-          onPick={(s) => { setScreenSources(null); beginScreenShare(s); }}
-          onCancel={() => setScreenSources(null)}
-        />
-      )}
 
       {/* ── Toast positioning: bottom on mobile, top-right on sm+ ── */}
       <div className="fixed z-[200] flex flex-col gap-2.5 pointer-events-none

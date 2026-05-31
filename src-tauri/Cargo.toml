@@ -35,13 +35,13 @@ tauri-plugin-single-instance = "2"
 [target.'cfg(windows)'.dependencies]
 wasapi = "0.13"
 base64 = "0.22"
-# Screen/window enumeration for the custom screen-share picker. Windows + Linux
-# only — the macOS xcap backend fails to build on the universal target, so macOS
-# falls back to its native getDisplayMedia picker until native capture lands.
-xcap = "0.0.14"
+# WebView2 COM bindings — used to auto-grant microphone/camera permission so we
+# can drop --use-fake-ui-for-media-stream and let getDisplayMedia show the native
+# screen picker (choose screen/window/tab).
+webview2-com = "0.34"
+windows = { version = "0.61", features = ["Win32_Foundation"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # webkit2gtk is already a transitive dep via wry; we add it explicitly so we
 # can call connect_permission_request to auto-allow mic/camera access.
 webkit2gtk = { version = "2", features = ["v2_2"] }
-xcap = "0.0.14"

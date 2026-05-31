@@ -290,58 +290,6 @@ async fn request_media_permissions(window: tauri::WebviewWindow) -> Result<(), S
     window.eval(js).map_err(|e| e.to_string())
 }
 
-// ── Screen-share source enumeration (custom picker) ──────────────────────────
-#[derive(serde::Serialize)]
-struct ScreenSource {
-    id: String,
-    name: String,
-    kind: String, // "screen" | "window"
-}
-
-/// List shareable monitors and windows for the in-app screen-share picker.
-/// Windows + Linux use `xcap`. macOS returns empty (the xcap macOS backend fails
-/// to build on the universal target) → the frontend falls back to the native
-/// getDisplayMedia picker there until native macOS capture is added.
-#[cfg(not(target_os = "macos"))]
-#[tauri::command]
-fn list_screen_sources() -> Result<Vec<ScreenSource>, String> {
-    let mut out: Vec<ScreenSource> = Vec::new();
-
-    let monitors = xcap::Monitor::all().map_err(|e| e.to_string())?;
-    for m in monitors {
-        out.push(ScreenSource {
-            id: format!("screen:{}", m.id()),
-            name: format!("Ekran: {}", m.name()),
-            kind: "screen".to_string(),
-        });
-    }
-
-    if let Ok(windows) = xcap::Window::all() {
-        for w in windows {
-            if w.is_minimized() {
-                continue;
-            }
-            let title = w.title().to_string();
-            if title.trim().is_empty() {
-                continue;
-            }
-            out.push(ScreenSource {
-                id: format!("window:{}", w.id()),
-                name: title,
-                kind: "window".to_string(),
-            });
-        }
-    }
-
-    Ok(out)
-}
-
-#[cfg(target_os = "macos")]
-#[tauri::command]
-fn list_screen_sources() -> Result<Vec<ScreenSource>, String> {
-    Ok(Vec::new())
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -434,6 +382,44 @@ pub fn run() {
                 }
             }
 
+            // ── Windows: auto-grant mic/camera so we can drop the fake-UI flag ──
+            // Without --use-fake-ui-for-media-stream, WebView2 denies getUserMedia
+            // unless we handle PermissionRequested. We auto-allow Microphone +
+            // Camera here; getDisplayMedia then shows the NATIVE picker (choose
+            // screen / window / tab) instead of grabbing the whole screen.
+            #[cfg(target_os = "windows")]
+            {
+                use webview2_com::Microsoft::Web::WebView2::Win32::{
+                    COREWEBVIEW2_PERMISSION_KIND_MICROPHONE,
+                    COREWEBVIEW2_PERMISSION_KIND_CAMERA,
+                    COREWEBVIEW2_PERMISSION_KIND_UNKNOWN_PERMISSION,
+                    COREWEBVIEW2_PERMISSION_STATE_ALLOW,
+                };
+                use webview2_com::PermissionRequestedEventHandler;
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.with_webview(|webview| unsafe {
+                        if let Ok(core) = webview.controller().CoreWebView2() {
+                            let handler = PermissionRequestedEventHandler::create(Box::new(
+                                move |_sender, args| {
+                                    if let Some(args) = args {
+                                        let mut kind = COREWEBVIEW2_PERMISSION_KIND_UNKNOWN_PERMISSION;
+                                        let _ = args.PermissionKind(&mut kind);
+                                        if kind == COREWEBVIEW2_PERMISSION_KIND_MICROPHONE
+                                            || kind == COREWEBVIEW2_PERMISSION_KIND_CAMERA
+                                        {
+                                            let _ = args.SetState(COREWEBVIEW2_PERMISSION_STATE_ALLOW);
+                                        }
+                                    }
+                                    Ok(())
+                                },
+                            ));
+                            let mut token = Default::default();
+                            let _ = core.add_PermissionRequested(&handler, &mut token);
+                        }
+                    });
+                }
+            }
+
             // ── Close → hide to tray (nie zamykaj, tylko chowaj) ───────────
             let app_handle = app.handle().clone();
             let main_window = app.get_webview_window("main").unwrap();
@@ -467,7 +453,6 @@ pub fn run() {
             is_appimage,
             install_deb_update,
             open_mic_privacy_settings,
-            list_screen_sources,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
