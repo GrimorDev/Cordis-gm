@@ -88,6 +88,8 @@ import {
 } from './rtc/playback';
 import { VoiceEngine } from './rtc/engine';
 import VoiceDiagnostics from './VoiceDiagnostics';
+import ScreenPicker from './ScreenPicker';
+import { listScreenSources, captureSourceStream, type ScreenSource } from './rtc/screen';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 // Configure marked once — GFM mode, line-break aware
@@ -8543,6 +8545,7 @@ export default function App() {
   const screenStreamRef         = useRef<MediaStream|null>(null);
   const remoteScreenStreamsRef  = useRef(new Map<string, MediaStream>());
   const engineRef              = useRef<VoiceEngine | null>(null);
+  const [screenSources, setScreenSources] = useState<ScreenSource[] | null>(null); // custom screen-share picker
   const speakStopRef     = useRef(new Map<string, ()=>void>()); // speaking detection cleanup
   const screenQualityRef    = useRef<ScreenQuality>('fhd');
   const currentUserRef      = useRef(currentUser);
@@ -13025,66 +13028,62 @@ export default function App() {
       emitScreenStop();
       playScreenShareStop();
     } else {
-      try {
-        // ── Capture screen ────────────────────────────────────────────
-        let stream: MediaStream;
+      // Custom in-app source picker (native enumeration via xcap). If unavailable
+      // (web / native command not present), fall back to getDisplayMedia.
+      const sources = await listScreenSources();
+      if (sources && sources.length) { setScreenSources(sources); return; }
+      await beginScreenShare(null);
+    }
+  };
+
+  // Capture a (optionally picked) source and wire it into the call. Shared by the
+  // custom picker (onPick) and the getDisplayMedia fallback.
+  const beginScreenShare = async (source: ScreenSource | null) => {
+    const call = activeCallRef.current;
+    const emitScreenStop = () => {
+      if (call?.userId)    getSocket().emit('screen_share_stop' as any, { to_user_id: call.userId });
+      if (call?.channelId) getSocket().emit('screen_share_stop' as any, { channel_id: call.channelId });
+    };
+    try {
+      const stream = await captureSourceStream(source, screenQuality);
+      // Optimise for text/UI sharpness
+      stream.getVideoTracks().forEach(t => { (t as any).contentHint = 'detail'; });
+
+      // Tauri: WASAPI loopback if WebView2 can't capture system audio
+      if (isTauri && stream.getAudioTracks().length === 0) {
         try {
-          stream = await captureScreen(screenQuality);
-        } catch (audioErr: any) {
-          const name = audioErr?.name ?? '';
-          if (name === 'NotSupportedError' || name === 'TypeError' || name === 'OverconstrainedError') {
-            addToast(tl('toast.cannotShareAudio'), 'info');
-            throw audioErr;
-          } else throw audioErr;
-        }
-        // Optimise for text/UI sharpness
-        stream.getVideoTracks().forEach(t => { (t as any).contentHint = 'detail'; });
+          const { startLoopbackCapture } = await import('./audioLoopback');
+          const loopbackTrack = await startLoopbackCapture();
+          if (loopbackTrack) {
+            (stream as any).addTrack(loopbackTrack);
+            addToast('🎵 Dźwięk systemu: WASAPI loopback aktywny', 'success');
+          }
+        } catch (e) { console.warn('[Loopback] Not available:', e); }
+      }
 
-        // Tauri: WASAPI loopback if WebView2 can't capture system audio
-        if (isTauri && stream.getAudioTracks().length === 0) {
-          try {
-            const { startLoopbackCapture } = await import('./audioLoopback');
-            const loopbackTrack = await startLoopbackCapture();
-            if (loopbackTrack) {
-              (stream as any).addTrack(loopbackTrack);
-              addToast('🎵 Dźwięk systemu: WASAPI loopback aktywny', 'success');
-            }
-          } catch (e) { console.warn('[Loopback] Not available:', e); }
-        }
+      screenStreamRef.current = stream;
+      const eng = ensureEngine();
+      stream.getTracks().forEach(t => eng.addLocalTrack(t, stream));
+      eng.retuneAll();
 
-        screenStreamRef.current = stream;
+      stream.getVideoTracks().forEach(t => {
+        t.onended = () => {
+          screenStreamRef.current = null;
+          if (isTauri) import('./audioLoopback').then(m => m.stopLoopbackCapture()).catch(() => {});
+          emitScreenStop();
+          setActiveCall(p => p ? {...p, isScreenSharing: false} : p);
+        };
+      });
 
-        // ── WebRTC mesh screen share via engine ───────────────────────
-        // addLocalTrack adds each screen track to every peer and triggers
-        // Perfect-Negotiation renegotiation automatically. retuneAll applies
-        // the screen-share bitrate profile.
-        const eng = ensureEngine();
-        stream.getTracks().forEach(t => eng.addLocalTrack(t, stream));
-        eng.retuneAll();
-
-        // Stop when user clicks browser "Stop sharing" button
-        stream.getVideoTracks().forEach(t => {
-          t.onended = () => {
-            screenStreamRef.current = null;
-            if (isTauri) {
-              import('./audioLoopback').then(m => m.stopLoopbackCapture()).catch(() => {});
-            }
-            emitScreenStop();
-            setActiveCall(p => p ? {...p, isScreenSharing: false} : p);
-          };
-        });
-
-        setActiveCall(p => p ? {...p, isScreenSharing: true} : p);
-        playScreenShareStart();
-        if (call?.userId)    getSocket().emit('screen_share_start' as any, { to_user_id: call.userId });
-        if (call?.channelId) getSocket().emit('screen_share_start' as any, { channel_id: call.channelId });
-      } catch (err: any) {
-        console.error('[Cordis] toggleScreen error:', err?.name, err);
-        // NotAllowedError = user cancelled the picker → not an error.
-        // If a stream WAS obtained (share is live), don't show a false failure.
-        if (err?.name !== 'NotAllowedError' && !screenStreamRef.current) {
-          addToast(tl('toast.cannotShareScreen'), 'error');
-        }
+      setActiveCall(p => p ? {...p, isScreenSharing: true} : p);
+      playScreenShareStart();
+      if (call?.userId)    getSocket().emit('screen_share_start' as any, { to_user_id: call.userId });
+      if (call?.channelId) getSocket().emit('screen_share_start' as any, { channel_id: call.channelId });
+    } catch (err: any) {
+      console.error('[Cordis] beginScreenShare error:', err?.name, err);
+      // NotAllowedError = user cancelled → not an error.
+      if (err?.name !== 'NotAllowedError' && !screenStreamRef.current) {
+        addToast(tl('toast.cannotShareScreen'), 'error');
       }
     }
   };
@@ -24006,8 +24005,17 @@ export default function App() {
       </AnimatePresence>
 
       {/* ── TOAST CONTAINER ─────────────────────────────────────────────── */}
-      {/* On-screen voice diagnostics (🔧 bottom-right / Ctrl+Shift+D) */}
+      {/* On-screen voice diagnostics (Ctrl+Shift+D) */}
       <VoiceDiagnostics engineRef={engineRef} />
+
+      {/* Custom screen-share source picker */}
+      {screenSources && (
+        <ScreenPicker
+          sources={screenSources}
+          onPick={(s) => { setScreenSources(null); beginScreenShare(s); }}
+          onCancel={() => setScreenSources(null)}
+        />
+      )}
 
       {/* ── Toast positioning: bottom on mobile, top-right on sm+ ── */}
       <div className="fixed z-[200] flex flex-col gap-2.5 pointer-events-none

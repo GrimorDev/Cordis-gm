@@ -290,6 +290,49 @@ async fn request_media_permissions(window: tauri::WebviewWindow) -> Result<(), S
     window.eval(js).map_err(|e| e.to_string())
 }
 
+// ── Screen-share source enumeration (custom picker) ──────────────────────────
+#[derive(serde::Serialize)]
+struct ScreenSource {
+    id: String,
+    name: String,
+    kind: String, // "screen" | "window"
+}
+
+/// List shareable monitors and windows for the in-app screen-share picker.
+/// Cross-platform via `xcap` (Windows / Linux / macOS).
+#[tauri::command]
+fn list_screen_sources() -> Result<Vec<ScreenSource>, String> {
+    let mut out: Vec<ScreenSource> = Vec::new();
+
+    let monitors = xcap::Monitor::all().map_err(|e| e.to_string())?;
+    for m in monitors {
+        out.push(ScreenSource {
+            id: format!("screen:{}", m.id()),
+            name: format!("Ekran: {}", m.name()),
+            kind: "screen".to_string(),
+        });
+    }
+
+    if let Ok(windows) = xcap::Window::all() {
+        for w in windows {
+            if w.is_minimized() {
+                continue;
+            }
+            let title = w.title().to_string();
+            if title.trim().is_empty() {
+                continue;
+            }
+            out.push(ScreenSource {
+                id: format!("window:{}", w.id()),
+                name: title,
+                kind: "window".to_string(),
+            });
+        }
+    }
+
+    Ok(out)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -415,6 +458,7 @@ pub fn run() {
             is_appimage,
             install_deb_update,
             open_mic_privacy_settings,
+            list_screen_sources,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
