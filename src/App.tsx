@@ -32,7 +32,7 @@ import {
   gamesApi, spotifyApi, twitchApi, steamApi, youtubeApi, kickApi, epicApi, twoFactorApi,
   emojisApi, notesApi, pollsApi, automationsApi, dmPinApi, pushApi, bookmarksApi,
   uploadFile, uploadFileWithProgress, setToken, clearToken, getToken,
-  setRefreshToken, clearRefreshToken, getRefreshToken,
+  setRefreshToken, clearRefreshToken, getRefreshToken, restoreAuthFromFile, tryRefreshToken,
   type BookmarkEntry, type BookmarkFolder,
   type UserProfile, type ServerData, type ServerFull, type ServerRole,
   type ChannelData, type MessageFull, type DmConversation,
@@ -9174,7 +9174,16 @@ export default function App() {
 
   // ── Init ────────────────────────────────────────────────────────
   useEffect(() => {
-    const token = getToken();
+    (async () => {
+    // Desktop: restore tokens from the persisted file if the WebView storage was
+    // wiped (update / origin change) — keeps "remember me" working across updates.
+    await restoreAuthFromFile();
+    let token = getToken();
+    // If the short-lived access token is gone but a refresh token persists,
+    // silently obtain a new access token instead of forcing a re-login.
+    if (!token && getRefreshToken()) {
+      token = await tryRefreshToken();
+    }
     if (!token) { setAuthLoading(false); return; }
     auth.me().then(u => {
       setCurrentUser(u); setEditProf({...u}); setIsAuthenticated(true); applyUserPrefs(u);
@@ -9201,6 +9210,7 @@ export default function App() {
       }).catch(() => {});
     })
       .catch(() => clearToken()).finally(() => setAuthLoading(false));
+    })();
   }, []);
 
   // ── DeepFilter status subscription ──────────────────────────────

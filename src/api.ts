@@ -43,13 +43,54 @@ export class ApiError extends Error {
 }
 
 // ── Token ──────────────────────────────────────────────────────────────────
+// On desktop (Tauri) localStorage lives in a per-origin WebView partition that
+// can be wiped by updates or origin changes (e.g. switching to a bundled build).
+// To keep "remember me" working across updates we MIRROR the tokens into a file
+// in the app's AppData dir (persists regardless of WebView storage). On boot we
+// restore from that file if localStorage is empty (see restoreAuthFromFile).
+const AUTH_FILE = 'auth.json';
+
+async function _persistAuthFile(): Promise<void> {
+  if (!isTauri) return;
+  try {
+    const { writeTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+    await writeTextFile(AUTH_FILE, JSON.stringify({
+      token:   localStorage.getItem('cordyn_token'),
+      refresh: localStorage.getItem('cordyn_refresh_token'),
+    }), { baseDir: BaseDirectory.AppData });
+  } catch { /* best-effort */ }
+}
+
+async function _removeAuthFile(): Promise<void> {
+  if (!isTauri) return;
+  try {
+    const { remove, exists, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+    if (await exists(AUTH_FILE, { baseDir: BaseDirectory.AppData })) {
+      await remove(AUTH_FILE, { baseDir: BaseDirectory.AppData });
+    }
+  } catch { /* best-effort */ }
+}
+
+/** Restore tokens from the Tauri file into localStorage if missing. Call once at boot. */
+export async function restoreAuthFromFile(): Promise<void> {
+  if (!isTauri) return;
+  try {
+    const { readTextFile, exists, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+    if (!(await exists(AUTH_FILE, { baseDir: BaseDirectory.AppData }))) return;
+    const raw = await readTextFile(AUTH_FILE, { baseDir: BaseDirectory.AppData });
+    const { token, refresh } = JSON.parse(raw || '{}');
+    if (token   && !localStorage.getItem('cordyn_token'))         localStorage.setItem('cordyn_token', token);
+    if (refresh && !localStorage.getItem('cordyn_refresh_token')) localStorage.setItem('cordyn_refresh_token', refresh);
+  } catch { /* best-effort */ }
+}
+
 export const getToken         = () => localStorage.getItem('cordyn_token')         || sessionStorage.getItem('cordyn_token');
-export const setToken         = (t: string) => localStorage.setItem('cordyn_token', t);
-export const clearToken       = () => { localStorage.removeItem('cordyn_token'); sessionStorage.removeItem('cordyn_token'); };
+export const setToken         = (t: string) => { localStorage.setItem('cordyn_token', t); void _persistAuthFile(); };
+export const clearToken       = () => { localStorage.removeItem('cordyn_token'); sessionStorage.removeItem('cordyn_token'); void _persistAuthFile(); };
 
 export const getRefreshToken  = () => localStorage.getItem('cordyn_refresh_token');
-export const setRefreshToken  = (t: string) => localStorage.setItem('cordyn_refresh_token', t);
-export const clearRefreshToken = () => localStorage.removeItem('cordyn_refresh_token');
+export const setRefreshToken  = (t: string) => { localStorage.setItem('cordyn_refresh_token', t); void _persistAuthFile(); };
+export const clearRefreshToken = () => { localStorage.removeItem('cordyn_refresh_token'); void _removeAuthFile(); };
 
 // Whether a silent refresh is already in progress (avoid concurrent refresh races)
 let _refreshPromise: Promise<string | null> | null = null;

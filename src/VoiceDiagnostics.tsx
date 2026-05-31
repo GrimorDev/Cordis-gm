@@ -127,19 +127,9 @@ export default function VoiceDiagnostics({ engineRef }: Props) {
     </div>
   );
 
+  // Floating button removed per request — panel still opens with Ctrl+Shift+D.
   return (
     <>
-      <button
-        onClick={() => setOpen(o => !o)}
-        title="Diagnostyka głosu (Ctrl+Shift+D)"
-        style={{
-          position: 'fixed', right: 10, bottom: 10, zIndex: 99998,
-          width: 34, height: 34, borderRadius: 8, border: '1px solid #444',
-          background: open ? '#3b82f6' : 'rgba(20,20,24,.85)', color: '#fff',
-          cursor: 'pointer', fontSize: 16,
-        }}
-      >🔧</button>
-
       {open && (
         <div style={{
           position: 'fixed', right: 10, bottom: 52, zIndex: 99999,
