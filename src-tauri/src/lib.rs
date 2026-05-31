@@ -378,12 +378,13 @@ pub fn run() {
                         let webview = wv.inner();
                         // WebKitGTK ships with WebRTC OFF by default → RTCPeerConnection
                         // is undefined on Linux (getUserMedia works but no peers form).
-                        // Enable it via the glib property so this compiles regardless of
-                        // the webkit2gtk binding feature level (a no-op warning on libs
-                        // that lack the property).
-                        let settings = WebViewExt::settings(&webview);
-                        settings.set_property("enable-webrtc", true);
-                        settings.set_property("enable-media-stream", true);
+                        // settings() returns Option<Settings>; enable via glib property
+                        // so it compiles regardless of the binding feature level (a no-op
+                        // warning on libs that lack the property).
+                        if let Some(settings) = WebViewExt::settings(&webview) {
+                            settings.set_property("enable-webrtc", true);
+                            settings.set_property("enable-media-stream", true);
+                        }
                         webview.connect_permission_request(|_, req| {
                             req.allow();
                             true
