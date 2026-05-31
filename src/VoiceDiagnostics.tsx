@@ -119,6 +119,8 @@ export default function VoiceDiagnostics({ engineRef }: Props) {
   try { sock = getSocket(); } catch {}
   const peers = engineRef.current?.peerDiagnostics() ?? [];
   const localKinds = engineRef.current?.localTrackKinds() ?? [];
+  const st = engineRef.current?.diagnosticsStats?.();
+  const rtcOk = typeof RTCPeerConnection === 'function';
 
   const row = (k: string, v: React.ReactNode) => (
     <div style={{ display: 'flex', gap: 8, fontSize: 11, lineHeight: '16px' }}>
@@ -143,7 +145,7 @@ export default function VoiceDiagnostics({ engineRef }: Props) {
           </div>
 
           <div style={{ fontSize: 11, fontWeight: 700, color: '#60a5fa', margin: '6px 0 2px' }}>Środowisko</div>
-          {row('tryb', bundled ? 'BUNDLED (binarka v1206)' : 'remote (cordyn.pl)')}
+          {row('tryb', bundled ? 'BUNDLED (lokalny JS w binarce)' : 'remote (cordyn.pl)')}
           {row('isTauri', String(isTauri))}
           {row('origin', origin)}
           {row('API_BASE', API_BASE)}
@@ -157,8 +159,12 @@ export default function VoiceDiagnostics({ engineRef }: Props) {
           <div style={{ fontSize: 11, fontWeight: 700, color: '#60a5fa', margin: '8px 0 2px' }}>
             WebRTC ({peers.length} peer{peers.length !== 1 ? 'ów' : ''})
           </div>
+          {row('RTCPeerConn', <b style={{ color: rtcOk ? '#4ade80' : '#f87171' }}>{rtcOk ? 'available' : 'MISSING — WebRTC OFF!'}</b>)}
           {row('local→send', localKinds.length ? localKinds.join(', ') : '— (brak mikrofonu w engine)')}
-          {peers.length === 0 && row('', <i style={{ color: '#888' }}>brak połączeń — nikogo na kanale lub sygnalizacja nie zadziałała</i>)}
+          {st && row('signaling', `offers↓${st.offersRecv} answers↓${st.answersRecv} ice↓${st.iceRecv}`)}
+          {st && row('connect()', `calls=${st.connectCalls} peersMade=${st.peersCreated}`)}
+          {st && st.lastError && row('lastError', <span style={{ color: '#f87171' }}>{st.lastError}</span>)}
+          {peers.length === 0 && row('', <i style={{ color: '#888' }}>brak połączeń — sprawdź powyższe liczniki</i>)}
           {peers.map(p => (
             <div key={p.id} style={{ border: '1px solid #2a2a2a', borderRadius: 6, padding: '4px 6px', margin: '3px 0' }}>
               {row('peer', p.id.slice(0, 8))}

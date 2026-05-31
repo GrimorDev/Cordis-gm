@@ -53,8 +53,17 @@ export class VoiceEngine {
   private peers = new Map<string, Peer>();
   /** Tracks that must be present on every peer (mic, camera, screen). */
   private localTracks: LocalEntry[] = [];
+  /** Diagnostics — surfaced in the on-screen panel to pinpoint failures. */
+  private stats = {
+    rtcAvailable: typeof RTCPeerConnection === 'function',
+    connectCalls: 0, peersCreated: 0,
+    offersRecv: 0, answersRecv: 0, iceRecv: 0,
+    lastError: '',
+  };
 
   constructor(private cfg: EngineConfig) {}
+
+  diagnosticsStats() { return { ...this.stats }; }
 
   private munge(sdp?: string): string {
     return preferOpusStereo(preferH264(sdp ?? ''));
@@ -72,16 +81,31 @@ export class VoiceEngine {
   }
 
   /** Create (or return existing) peer connection and wire Perfect Negotiation. */
-  connect(remoteId: string): RTCPeerConnection {
+  connect(remoteId: string): RTCPeerConnection | undefined {
     const existing = this.peers.get(remoteId);
     if (existing) return existing.pc;
 
-    const pc = new RTCPeerConnection({
-      iceServers: ICE_SERVERS,
-      bundlePolicy: 'max-bundle',
-      rtcpMuxPolicy: 'require',
-      iceCandidatePoolSize: 10,
-    });
+    this.stats.connectCalls++;
+    if (typeof RTCPeerConnection !== 'function') {
+      this.stats.lastError = 'RTCPeerConnection unavailable (WebRTC disabled in this WebView)';
+      console.error('[rtc]', this.stats.lastError);
+      return undefined;
+    }
+
+    let pc: RTCPeerConnection;
+    try {
+      pc = new RTCPeerConnection({
+        iceServers: ICE_SERVERS,
+        bundlePolicy: 'max-bundle',
+        rtcpMuxPolicy: 'require',
+        iceCandidatePoolSize: 10,
+      });
+    } catch (e) {
+      this.stats.lastError = 'new RTCPeerConnection failed: ' + String((e as any)?.message || e);
+      console.error('[rtc]', this.stats.lastError);
+      return undefined;
+    }
+    this.stats.peersCreated++;
 
     // Polite = the lexicographically GREATER id. Both sides compute the same
     // answer, so exactly one peer is polite.
@@ -150,12 +174,14 @@ export class VoiceEngine {
 
   /** Handle an inbound offer OR answer (both routed here). */
   async handleDescription(from: string, description: RTCSessionDescriptionInit): Promise<void> {
+    if (description.type === 'offer') this.stats.offersRecv++; else this.stats.answersRecv++;
     // We must have a peer; if an offer arrives for an unknown peer, create one.
     let peer = this.peers.get(from);
     if (!peer) {
       if (description.type !== 'offer') return; // answer for a peer we don't have — ignore
       this.connect(from);
-      peer = this.peers.get(from)!;
+      peer = this.peers.get(from);
+      if (!peer) return; // connect() failed (WebRTC unavailable) — stats.lastError is set
     }
     const { pc } = peer;
 
@@ -193,6 +219,7 @@ export class VoiceEngine {
   }
 
   async handleIce(from: string, candidate: RTCIceCandidateInit): Promise<void> {
+    this.stats.iceRecv++;
     const peer = this.peers.get(from);
     if (!peer) return;
     try {
