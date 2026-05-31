@@ -12917,9 +12917,19 @@ export default function App() {
       setActiveCall(p => p ? {...p, isCameraOn: false} : p);
     } else {
       try {
-        // Use `ideal` (not `exact`) so a stale saved deviceId gracefully falls back
-        // to the first available camera instead of throwing OverconstrainedError.
-        const vs = await navigator.mediaDevices.getUserMedia({ video: selCamera ? { deviceId: { ideal: selCamera } } : true });
+        // Prefer the chosen camera with `exact` (honoured reliably in WebViews),
+        // falling back to the default camera if that device is gone.
+        let vs: MediaStream;
+        try {
+          vs = await navigator.mediaDevices.getUserMedia({ video: selCamera ? { deviceId: { exact: selCamera } } : true });
+        } catch (e: any) {
+          if (selCamera && (e?.name === 'OverconstrainedError' || e?.name === 'NotFoundError')) {
+            vs = await navigator.mediaDevices.getUserMedia({ video: true });
+          } else throw e;
+        }
+        vs.getVideoTracks().forEach(t => t.getSettings && console.log(`[Cordis] camera on: "${t.label}"`));
+        // Ensure we have a localStream to attach the preview/video track to.
+        if (!localStreamRef.current) localStreamRef.current = new MediaStream();
         vs.getVideoTracks().forEach(t => { localStreamRef.current?.addTrack(t); });
         // Send camera video via the engine — addLocalTrack adds it to every peer
         // and triggers Perfect-Negotiation renegotiation automatically.
@@ -12953,6 +12963,37 @@ export default function App() {
       }
     }
   };
+
+  // Live camera device switch (mid-call, no refresh, no renegotiation).
+  // Acquires the newly-selected camera and swaps the sent track via replaceTrack.
+  const switchCameraDevice = async (deviceId: string) => {
+    if (!activeCallRef.current?.isCameraOn) return; // nothing to switch if camera is off
+    const oldTrack = localStreamRef.current?.getVideoTracks()[0];
+    if (!oldTrack) return;
+    try {
+      let vs: MediaStream;
+      try {
+        vs = await navigator.mediaDevices.getUserMedia({ video: deviceId ? { deviceId: { exact: deviceId } } : true });
+      } catch (e: any) {
+        if (deviceId && (e?.name === 'OverconstrainedError' || e?.name === 'NotFoundError')) {
+          vs = await navigator.mediaDevices.getUserMedia({ video: true });
+        } else throw e;
+      }
+      const newTrack = vs.getVideoTracks()[0];
+      if (!newTrack) return;
+      // Swap on all peers without renegotiation
+      engineRef.current?.replaceTrackByOld(oldTrack, newTrack, localStreamRef.current!);
+      // Update local preview stream
+      try { localStreamRef.current?.removeTrack(oldTrack); } catch {}
+      oldTrack.stop();
+      localStreamRef.current?.addTrack(newTrack);
+      setScreenShareTick(t => t + 1); // force tiles to re-bind srcObject
+      console.log(`[Cordis] camera switched to "${newTrack.label}"`);
+    } catch (e) {
+      addToast('Nie udało się przełączyć kamery', 'error');
+    }
+  };
+
   const toggleScreen = async () => {
     const emitScreenStop = () => {
       const c = activeCallRef.current;
@@ -15353,7 +15394,7 @@ export default function App() {
                         </div>
                         <div>
                           <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Kamera</label>
-                          <select value={selCamera} onChange={e=>setSelCamera(e.target.value)}
+                          <select value={selCamera} onChange={async e=>{setSelCamera(e.target.value); await switchCameraDevice(e.target.value);}}
                             className="w-full appearance-none bg-zinc-800/80 border border-white/[0.07] text-white text-xs rounded-lg px-2.5 py-2 outline-none"
                             style={{backgroundColor:'#27272a',color:'#fff'}}>
                             <option value="">Domyślna</option>
@@ -22377,7 +22418,7 @@ export default function App() {
                         <div>
                           <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('devices.mic')} ({devices.filter(d=>d.kind==='audioinput').length})</label>
                           <DeviceSelect
-                            value={selMic} onChange={v=>setSelMic(v)}
+                            value={selMic} onChange={async v=>{setSelMic(v); if(localStreamRef.current) await acquireMic(v||undefined);}}
                             options={devices.filter(d=>d.kind==='audioinput').map(d=>({id:d.deviceId,label:d.label||`${t('devices.mic')} ${d.deviceId.slice(0,8)}`}))}/>
                         </div>
                       </div>
@@ -22394,7 +22435,7 @@ export default function App() {
                         <div>
                           <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 block font-bold">{t('devices.camera')} ({devices.filter(d=>d.kind==='videoinput').length})</label>
                           <DeviceSelect
-                            value={selCamera} onChange={v=>setSelCamera(v)}
+                            value={selCamera} onChange={async v=>{setSelCamera(v); await switchCameraDevice(v);}}
                             options={devices.filter(d=>d.kind==='videoinput').map(d=>({id:d.deviceId,label:d.label||`${t('devices.camera')} ${d.deviceId.slice(0,8)}`}))}/>
                         </div>
                       </div>

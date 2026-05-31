@@ -227,6 +227,22 @@ export class VoiceEngine {
     });
   }
 
+  /**
+   * Swap a specific already-sent track for a new one on every peer WITHOUT
+   * renegotiation (used for live mic/camera device changes mid-call).
+   * Returns true if at least one sender was updated.
+   */
+  replaceTrackByOld(oldTrack: MediaStreamTrack, newTrack: MediaStreamTrack, stream: MediaStream): boolean {
+    let replaced = false;
+    this.peers.forEach(({ pc }) => {
+      const sender = pc.getSenders().find(s => s.track === oldTrack);
+      if (sender) { sender.replaceTrack(newTrack).catch(() => {}); replaced = true; }
+    });
+    const idx = this.localTracks.findIndex(e => e.track === oldTrack);
+    if (idx >= 0) this.localTracks[idx] = { track: newTrack, stream };
+    return replaced;
+  }
+
   /** Remove every local track matching the predicate (e.g. by kind or stream id). */
   removeLocalTracks(match: (e: LocalEntry) => boolean): void {
     const removed = this.localTracks.filter(match);
