@@ -46,3 +46,6 @@ windows = { version = "0.61", features = ["Win32_Foundation"] }
 # webkit2gtk is already a transitive dep via wry; we add it explicitly so we
 # can call connect_permission_request to auto-allow mic/camera access.
 webkit2gtk = { version = "2", features = ["v2_2"] }
+# glib (same 0.18 line webkit2gtk uses) — for ObjectExt::set_property to toggle
+# the WebKitSettings `enable-webrtc` property (enables RTCPeerConnection).
+glib = "0.18"
