@@ -37,8 +37,9 @@ wasapi = "0.13"
 base64 = "0.22"
 # WebView2 COM bindings — used to auto-grant microphone/camera permission so we
 # can drop --use-fake-ui-for-media-stream and let getDisplayMedia show the native
-# screen picker (choose screen/window/tab).
-webview2-com = "0.34"
+# screen picker (choose screen/window/tab). Version MUST match wry's (^0.38 for
+# Tauri 2.10.x / wry 0.55) or the ICoreWebView2 types won't unify.
+webview2-com = "0.38"
 windows = { version = "0.61", features = ["Win32_Foundation"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
