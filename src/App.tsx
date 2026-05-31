@@ -9941,6 +9941,8 @@ export default function App() {
     sock.on('webrtc_offer',  (d: any) => voiceHandlerRef.current.onOffer?.(d));
     sock.on('webrtc_answer', (d: any) => voiceHandlerRef.current.onAnswer?.(d));
     sock.on('webrtc_ice',    (d: any) => voiceHandlerRef.current.onIce?.(d));
+    // List of users already in the channel when we join — we initiate WebRTC to them.
+    sock.on('voice_existing_users' as any, (d: any) => voiceHandlerRef.current.onExistingUsers?.(d));
     // Voice state of other participants (muted/deafened)
     sock.on('voice_user_state' as any, ({ user_id, muted, deafened }: { user_id: string; muted: boolean; deafened: boolean }) => {
       setVoiceUserStates(p => ({ ...p, [user_id]: { muted, deafened } }));
@@ -11455,6 +11457,16 @@ export default function App() {
           if (!user.is_bot) await openPeer(user.id, true); // bots don't do WebRTC
           retuneAllPeers();
         }
+      },
+      // Sent by the server right after WE join — connect to everyone already there.
+      // This is the side that was missing: a joiner now ALWAYS initiates to existing
+      // peers (Perfect Negotiation dedupes the glare with onUserJoined on their side).
+      onExistingUsers: ({ user_ids }: any) => {
+        const me = currentUserRef.current;
+        (user_ids || []).forEach((id: string) => {
+          if (id && id !== me?.id) { console.log('[rtc] connecting to existing peer', id); openPeer(id, true); }
+        });
+        retuneAllPeers();
       },
       onUserLeft: ({ channel_id, user_id }: any) => {
         setVoiceUsers(p => ({ ...p, [channel_id]: (p[channel_id]||[]).filter((u:VoiceUser)=>u.id!==user_id) }));

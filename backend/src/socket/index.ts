@@ -320,6 +320,15 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
       socket.join(`voice:${channelId}`);
       (socket.data as SocketData & { voiceChannelId?: string }).voiceChannelId = channelId;
 
+      // Tell the joiner who is ALREADY in the channel so THEY initiate WebRTC to
+      // them. The voice_user_joined broadcast below only notifies EXISTING users
+      // about the NEW one — without this list a joiner would never connect to
+      // people who were already in the channel (→ one side stuck at 0 peers).
+      try {
+        const existingIds = (await getVoiceMembers(channelId)).filter(id => id !== user.id);
+        socket.emit('voice_existing_users' as any, { channel_id: channelId, user_ids: existingIds });
+      } catch { /* best-effort */ }
+
       const [{ rows: [u] }, { rows: [ch] }] = await Promise.all([
         query(`SELECT id, username, avatar_url, status FROM users WHERE id = $1`, [user.id]),
         query(`SELECT server_id, name FROM channels WHERE id = $1`, [channelId]),
