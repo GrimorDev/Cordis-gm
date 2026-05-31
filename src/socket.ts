@@ -15,7 +15,7 @@ const _isRemoteOrigin = (
   !_origin.startsWith('https://tauri.localhost') &&
   !_origin.includes('localhost')
 );
-const SOCKET_URL = isTauri
+export const SOCKET_URL = isTauri
   ? (_isRemoteOrigin
       ? _origin
       : import.meta.env.VITE_API_BASE

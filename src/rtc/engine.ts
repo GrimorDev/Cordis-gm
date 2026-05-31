@@ -253,6 +253,28 @@ export class VoiceEngine {
     return [...this.peers.values()].map(p => p.pc);
   }
 
+  /** Human-readable per-peer state for the on-screen diagnostics panel. */
+  peerDiagnostics(): Array<{
+    id: string; polite: boolean;
+    conn: RTCPeerConnectionState; ice: RTCIceConnectionState; sig: RTCSignalingState;
+    send: string[]; recv: string[];
+  }> {
+    return [...this.peers.entries()].map(([id, p]) => ({
+      id,
+      polite: p.polite,
+      conn: p.pc.connectionState,
+      ice:  p.pc.iceConnectionState,
+      sig:  p.pc.signalingState,
+      send: p.pc.getSenders().filter(s => s.track).map(s => s.track!.kind),
+      recv: p.pc.getReceivers().filter(r => r.track).map(r => r.track.kind),
+    }));
+  }
+
+  /** Names of remembered local tracks (mic/camera/screen) the engine will send. */
+  localTrackKinds(): string[] {
+    return this.localTracks.map(e => e.track.kind);
+  }
+
   hasPeer(remoteId: string): boolean {
     return this.peers.has(remoteId);
   }

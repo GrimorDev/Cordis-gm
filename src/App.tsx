@@ -87,6 +87,7 @@ import {
   setOutputDevice,
 } from './rtc/playback';
 import { VoiceEngine } from './rtc/engine';
+import VoiceDiagnostics from './VoiceDiagnostics';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 // Configure marked once — GFM mode, line-break aware
@@ -23941,6 +23942,9 @@ export default function App() {
       </AnimatePresence>
 
       {/* ── TOAST CONTAINER ─────────────────────────────────────────────── */}
+      {/* On-screen voice diagnostics (🔧 bottom-right / Ctrl+Shift+D) */}
+      <VoiceDiagnostics engineRef={engineRef} />
+
       {/* ── Toast positioning: bottom on mobile, top-right on sm+ ── */}
       <div className="fixed z-[200] flex flex-col gap-2.5 pointer-events-none
         bottom-4 left-3 right-3 items-stretch
