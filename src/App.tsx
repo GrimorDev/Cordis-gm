@@ -13078,7 +13078,14 @@ export default function App() {
         playScreenShareStart();
         if (call?.userId)    getSocket().emit('screen_share_start' as any, { to_user_id: call.userId });
         if (call?.channelId) getSocket().emit('screen_share_start' as any, { channel_id: call.channelId });
-      } catch { addToast(tl('toast.cannotShareScreen'), 'error'); }
+      } catch (err: any) {
+        console.error('[Cordis] toggleScreen error:', err?.name, err);
+        // NotAllowedError = user cancelled the picker → not an error.
+        // If a stream WAS obtained (share is live), don't show a false failure.
+        if (err?.name !== 'NotAllowedError' && !screenStreamRef.current) {
+          addToast(tl('toast.cannotShareScreen'), 'error');
+        }
+      }
     }
   };
 
