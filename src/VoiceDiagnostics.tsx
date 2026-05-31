@@ -22,9 +22,18 @@ export default function VoiceDiagnostics({ engineRef }: Props) {
   const [micTesting, setMicTesting] = useState(false);
   const [micLevel, setMicLevel] = useState(0);          // 0..1 RMS
   const [micInfo, setMicInfo] = useState<string>('');
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selDev, setSelDev] = useState<string>('');     // '' = system default
   const micCtxRef = useRef<AudioContext | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const micRafRef = useRef<number | null>(null);
+
+  const enumerate = () => {
+    navigator.mediaDevices?.enumerateDevices?.()
+      .then(list => setDevices(list.filter(d => d.kind === 'audioinput')))
+      .catch(() => {});
+  };
+  useEffect(() => { if (open) enumerate(); }, [open]);
 
   // Toggle via Ctrl+Shift+D
   useEffect(() => {
@@ -60,12 +69,20 @@ export default function VoiceDiagnostics({ engineRef }: Props) {
   const startMicTest = async () => {
     try {
       setMicInfo('proszę o dostęp do mikrofonu…');
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, autoGainControl: true, noiseSuppression: true },
-      });
+      const audio: MediaTrackConstraints = {
+        echoCancellation: true, autoGainControl: true, noiseSuppression: true,
+        ...(selDev ? { deviceId: { exact: selDev } } : {}),
+      };
+      const stream = await navigator.mediaDevices.getUserMedia({ audio });
       micStreamRef.current = stream;
       const tracks = stream.getAudioTracks();
-      setMicInfo(tracks.map(t => `"${t.label || 'mic'}" state=${t.readyState} enabled=${t.enabled} muted=${t.muted}`).join(' | ') || 'BRAK ścieżek audio!');
+      // Show the ACTUAL device that was captured (settings.deviceId) vs what we asked
+      // for — reveals when the WebView ignores deviceId and forces the OS default.
+      const got = tracks[0]?.getSettings?.().deviceId || '?';
+      const wanted = selDev || '(default)';
+      setMicInfo(`chciałem=${wanted.slice(0,8)} dostałem=${String(got).slice(0,8)} | ` +
+        (tracks.map(t => `"${t.label || 'mic'}" state=${t.readyState} muted=${t.muted}`).join(' | ') || 'BRAK ścieżek audio!'));
+      enumerate(); // labels populate after grant
 
       const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
       const ctx = new Ctx({ sampleRate: 48000 });
@@ -162,7 +179,18 @@ export default function VoiceDiagnostics({ engineRef }: Props) {
           ))}
 
           <div style={{ fontSize: 11, fontWeight: 700, color: '#60a5fa', margin: '8px 0 2px' }}>Test mikrofonu</div>
-          <div style={{ fontSize: 10, color: '#aaa', marginBottom: 4 }}>{micInfo || 'kliknij Start i mów do mikrofonu'}</div>
+          <select
+            value={selDev}
+            onChange={e => { setSelDev(e.target.value); if (micTesting) { stopMicTest(); } }}
+            style={{ width: '100%', fontSize: 10, padding: '4px 6px', marginBottom: 5,
+                     background: '#1a1a20', color: '#ddd', border: '1px solid #333', borderRadius: 6 }}
+          >
+            <option value="">— systemowy domyślny —</option>
+            {devices.map(d => (
+              <option key={d.deviceId} value={d.deviceId}>{d.label || d.deviceId.slice(0, 12)}</option>
+            ))}
+          </select>
+          <div style={{ fontSize: 10, color: '#aaa', marginBottom: 4 }}>{micInfo || 'wybierz urządzenie, kliknij Start i mów'}</div>
           <div style={{ height: 14, background: '#222', borderRadius: 7, overflow: 'hidden', marginBottom: 6 }}>
             <div style={{
               height: '100%', width: `${Math.round(micLevel * 100)}%`,
