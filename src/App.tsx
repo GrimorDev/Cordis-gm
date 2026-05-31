@@ -77,7 +77,7 @@ import {
   playScreenShareStart, playScreenShareStop,
 } from './sounds';
 import {
-  watchSpeaking, getMediaDevices, type NoisePipeline, primePlaybackContext,
+  watchSpeaking, getMediaDevices, type NoisePipeline, primePlaybackContext, applyNoiseGate,
   onDeepFilterStatus, type DeepFilterStatus,
   captureScreen, type ScreenQuality,
 } from './webrtc';
@@ -12748,16 +12748,28 @@ export default function App() {
         speakStopRef.current.set('self', stop);
       }
 
-      // Noise suppression: classic noise-gate AudioWorklet only.
-      // DeepFilter (AI) disabled — library bypasses nginx proxy and fetches cdn.mezon.ai
-      // directly on both web and Tauri, causing CORS failures and confusing UI messages.
-      // Noise suppression is handled entirely by the browser-native constraints
-      // above (echoCancellation + autoGainControl + noiseSuppression). We do NOT
-      // route the mic through a WebAudio worklet — that pipeline goes SILENT in
-      // WebViews (WebView2 / WebKitGTK / WKWebView), which is what broke desktop
-      // voice. The raw getUserMedia track is sent directly and works everywhere.
-      const sendStream = rawStream;
-      console.log('[Cordis] acquireMic: sending raw mic stream (browser-native NS)');
+      // ── Noise gate (AudioWorklet) — the "Próg bramki szumów" slider ──────────
+      // Re-enabled on ALL platforms. The earlier desktop SILENCE was caused by the
+      // `sampleRate` getUserMedia constraint (now removed), NOT the worklet itself.
+      // The worklet's AudioContext (_recCtx) is primed in-gesture, so it runs; if
+      // it is somehow suspended we fall back to the raw stream (guarded by
+      // isRunning()) so the mic is never silent.
+      let sendStream = rawStream;
+      if (useNoise) {
+        try {
+          const pipeline = await applyNoiseGate(rawStream);
+          if (pipeline && pipeline.isRunning()) {
+            noisePipelineRef.current = pipeline;
+            pipeline.setThreshold(ngSensToThreshold(noiseGateSens));
+            sendStream = pipeline.processedStream;
+            console.log('[Cordis] acquireMic: noise gate active ✓ (threshold', noiseGateSens, ')');
+          } else {
+            console.warn('[Cordis] acquireMic: noise gate ctx not running → raw stream');
+            pipeline?.cleanup();
+          }
+        } catch (e) { console.warn('[Cordis] acquireMic: noise gate failed → raw stream', e); }
+      }
+      if (sendStream === rawStream) console.log('[Cordis] acquireMic: sending raw mic stream');
 
       localStreamRef.current = sendStream;
       // Register the mic track with the engine: replaceAudioTrack swaps it on every

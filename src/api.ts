@@ -50,23 +50,31 @@ export class ApiError extends Error {
 // restore from that file if localStorage is empty (see restoreAuthFromFile).
 const AUTH_FILE = 'auth.json';
 
+// File lives in a subdir we mkdir(recursive) — that also creates the AppData dir
+// itself (Tauri does NOT auto-create it, and writeTextFile won't create parents),
+// which is why earlier writes silently failed and users kept getting logged out.
+const AUTH_DIR  = 'session';
+const AUTH_PATH = 'session/auth.json';
+
 async function _persistAuthFile(): Promise<void> {
   if (!isTauri) return;
   try {
-    const { writeTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
-    await writeTextFile(AUTH_FILE, JSON.stringify({
+    const { writeTextFile, mkdir, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+    try { await mkdir(AUTH_DIR, { baseDir: BaseDirectory.AppData, recursive: true }); } catch {}
+    await writeTextFile(AUTH_PATH, JSON.stringify({
       token:   localStorage.getItem('cordyn_token'),
       refresh: localStorage.getItem('cordyn_refresh_token'),
     }), { baseDir: BaseDirectory.AppData });
-  } catch { /* best-effort */ }
+    console.log('[auth] tokens persisted to AppData/session/auth.json');
+  } catch (e) { console.warn('[auth] persist failed:', e); }
 }
 
 async function _removeAuthFile(): Promise<void> {
   if (!isTauri) return;
   try {
     const { remove, exists, BaseDirectory } = await import('@tauri-apps/plugin-fs');
-    if (await exists(AUTH_FILE, { baseDir: BaseDirectory.AppData })) {
-      await remove(AUTH_FILE, { baseDir: BaseDirectory.AppData });
+    if (await exists(AUTH_PATH, { baseDir: BaseDirectory.AppData })) {
+      await remove(AUTH_PATH, { baseDir: BaseDirectory.AppData });
     }
   } catch { /* best-effort */ }
 }
@@ -76,12 +84,19 @@ export async function restoreAuthFromFile(): Promise<void> {
   if (!isTauri) return;
   try {
     const { readTextFile, exists, BaseDirectory } = await import('@tauri-apps/plugin-fs');
-    if (!(await exists(AUTH_FILE, { baseDir: BaseDirectory.AppData }))) return;
-    const raw = await readTextFile(AUTH_FILE, { baseDir: BaseDirectory.AppData });
+    // Read new path, falling back to the legacy root file from earlier builds.
+    let raw: string | null = null;
+    if (await exists(AUTH_PATH, { baseDir: BaseDirectory.AppData })) {
+      raw = await readTextFile(AUTH_PATH, { baseDir: BaseDirectory.AppData });
+    } else if (await exists(AUTH_FILE, { baseDir: BaseDirectory.AppData })) {
+      raw = await readTextFile(AUTH_FILE, { baseDir: BaseDirectory.AppData });
+    }
+    if (!raw) { console.log('[auth] no persisted token file'); return; }
     const { token, refresh } = JSON.parse(raw || '{}');
     if (token   && !localStorage.getItem('cordyn_token'))         localStorage.setItem('cordyn_token', token);
     if (refresh && !localStorage.getItem('cordyn_refresh_token')) localStorage.setItem('cordyn_refresh_token', refresh);
-  } catch { /* best-effort */ }
+    console.log('[auth] restored tokens from file (hadToken=' + !!token + ' hadRefresh=' + !!refresh + ')');
+  } catch (e) { console.warn('[auth] restore failed:', e); }
 }
 
 export const getToken         = () => localStorage.getItem('cordyn_token')         || sessionStorage.getItem('cordyn_token');
