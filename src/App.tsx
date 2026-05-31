@@ -12686,20 +12686,26 @@ export default function App() {
 
       // Acquire raw mic — all three WebRTC filters ON as baseline (echo/gain/noise).
       // AudioWorklet gate runs on top for deeper noise removal — they complement, not conflict.
+      // IMPORTANT: keep these constraints MINIMAL. In WebView2 a `sampleRate`
+      // (and to a lesser extent `channelCount`) constraint on getUserMedia can
+      // return a SILENT stream — which is exactly why the call captured nothing
+      // while the diagnostic mic-test (no such constraints) worked at 52%.
       const baseConstraints: MediaTrackConstraints = {
         echoCancellation: true,  // hardware echo cancel — eliminates speaker feedback
         autoGainControl:  true,  // normalize mic level automatically
-        noiseSuppression: true,  // browser baseline NS always on; AudioWorklet adds deeper layer
-        sampleRate: 48000,       // 48 kHz — standard Opus/WebRTC, najlepsza jakość głosu
-        channelCount: 1,         // mono — wystarczy dla głosu, mniejsze opóźnienie
+        noiseSuppression: true,  // browser baseline noise suppression
       };
       // Try user-selected mic first (ideal, not exact — avoids OverconstrainedError when
       // the saved deviceId is stale after device changes or between OS sessions).
       // If that also fails, fall back to browser default mic.
       let rawStream: MediaStream;
       try {
+        // Use `exact` (like the working diagnostic) so the chosen real mic is
+        // actually selected and never silently swapped for a silent default
+        // (e.g. a Voicemod virtual device). OverconstrainedError → caught below
+        // and we retry with the system default.
         const audioConstraints: MediaTrackConstraints = {
-          ...(deviceId ? { deviceId: { ideal: deviceId } } : {}),
+          ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
           ...baseConstraints,
         };
         rawStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
