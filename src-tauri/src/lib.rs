@@ -391,6 +391,7 @@ pub fn run() {
             #[cfg(target_os = "linux")]
             {
                 use webkit2gtk::{WebViewExt, PermissionRequestExt};
+                use webkit2gtk::glib::ObjectExt;
                 if let Some(win) = app.get_webview_window("main") {
                     let _ = win.with_webview(|wv| {
                         let webview = wv.inner();
