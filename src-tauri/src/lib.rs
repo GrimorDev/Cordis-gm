@@ -363,12 +363,31 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // ── Linux: auto-allow mic/camera/notification permission requests ──
-            // WebKitGTK DENIES every getUserMedia call by default unless a
-            // PermissionRequest handler explicitly calls allow().
-            // WEBKIT_DISABLE_SANDBOX=1 (set in main.rs) lets the renderer
-            // process open /dev/snd & /dev/video* but does NOT bypass the
-            // WebKit permission gate — we must handle that here.
+            // ── Linux: enable WebRTC + auto-allow mic/camera/screen permissions ─
+            //
+            // Root cause of "WebRTC OFF" on Linux:
+            //   Tauri's with_webview on Linux (wry/GTK) uses
+            //   glib::MainContext::default().invoke(), which is ASYNCHRONOUS.
+            //   The closure is queued as a GLib idle callback (priority 200) and
+            //   runs AFTER the page has already loaded (WebKit page-load events
+            //   fire at priority 100).  The JS context is therefore created before
+            //   we can set enable-webrtc=true, so RTCPeerConnection stays undefined
+            //   for the entire session.
+            //
+            // Two-part fix:
+            //   1. set_property → try_set_property so a missing property (WebKit
+            //      < 2.38) returns Err instead of panicking.  With set_property, a
+            //      panic on older WebKit silently killed the entire closure before
+            //      connect_permission_request could register, leaving mic/camera/
+            //      WebRTC all broken.
+            //   2. webview.reload() forces a fresh page load AFTER settings are
+            //      applied, so the new JS context picks up enable-webrtc=true.
+            //      The reload is instant for bundled tauri://localhost content and
+            //      happens during the startup window — users don't see a flash.
+            //
+            // WEBKIT_DISABLE_SANDBOX=1 (set in main.rs) lets the renderer process
+            // access /dev/snd and /dev/video*, but does NOT bypass the WebKit
+            // permission gate — connect_permission_request handles that.
             #[cfg(target_os = "linux")]
             {
                 use webkit2gtk::{WebViewExt, PermissionRequestExt};
@@ -376,19 +395,28 @@ pub fn run() {
                 if let Some(win) = app.get_webview_window("main") {
                     let _ = win.with_webview(|wv| {
                         let webview = wv.inner();
-                        // WebKitGTK ships with WebRTC OFF by default → RTCPeerConnection
-                        // is undefined on Linux (getUserMedia works but no peers form).
-                        // settings() returns Option<Settings>; enable via glib property
-                        // so it compiles regardless of the binding feature level (a no-op
-                        // warning on libs that lack the property).
                         if let Some(settings) = WebViewExt::settings(&webview) {
-                            settings.set_property("enable-webrtc", true);
-                            settings.set_property("enable-media-stream", true);
+                            // WebRTC peer connections (RTCPeerConnection) — WebKit 2.38+
+                            // try_set_property returns Err (no panic) on older WebKit.
+                            let _ = settings.try_set_property("enable-webrtc", true);
+                            // getUserMedia (mic + camera) — all WebKit versions
+                            let _ = settings.try_set_property("enable-media-stream", true);
+                            // Allow remote audio autoplay without a gesture
+                            let _ = settings.try_set_property("media-playback-requires-user-gesture", false);
+                            // DTLS / encrypted media — WebKit 2.24+
+                            let _ = settings.try_set_property("enable-encrypted-media", true);
                         }
+                        // Auto-allow ALL permission requests: mic, camera, screen share.
+                        // Registered unconditionally (outside the settings block) so
+                        // it fires even when the properties above returned Err.
                         webview.connect_permission_request(|_, req| {
                             req.allow();
                             true
                         });
+                        // Reload so the new settings take effect in a fresh JS context.
+                        // Without this, the idle callback runs after first page load and
+                        // RTCPeerConnection stays undefined for the entire session.
+                        webview.reload();
                     });
                 }
             }
