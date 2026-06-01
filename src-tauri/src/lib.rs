@@ -391,31 +391,41 @@ pub fn run() {
             #[cfg(target_os = "linux")]
             {
                 use webkit2gtk::{WebViewExt, PermissionRequestExt};
-                use glib::prelude::ObjectExt;
                 if let Some(win) = app.get_webview_window("main") {
                     let _ = win.with_webview(|wv| {
                         let webview = wv.inner();
                         if let Some(settings) = WebViewExt::settings(&webview) {
-                            // WebRTC peer connections (RTCPeerConnection) — WebKit 2.38+
-                            // try_set_property returns Err (no panic) on older WebKit.
-                            let _ = settings.try_set_property("enable-webrtc", true);
-                            // getUserMedia (mic + camera) — all WebKit versions
-                            let _ = settings.try_set_property("enable-media-stream", true);
-                            // Allow remote audio autoplay without a gesture
-                            let _ = settings.try_set_property("media-playback-requires-user-gesture", false);
-                            // DTLS / encrypted media — WebKit 2.24+
-                            let _ = settings.try_set_property("enable-encrypted-media", true);
+                            // glib 0.18 has no try_set_property — set_property panics
+                            // when a property doesn't exist (e.g. "enable-webrtc" on
+                            // WebKit < 2.38).  Wrap each call in catch_unwind so one
+                            // missing property doesn't abort the entire closure.
+                            // Safety: glib's set_property checks property existence in
+                            // pure Rust and panics before any C code runs, so
+                            // catch_unwind does not cross an FFI boundary here.
+                            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                settings.set_property("enable-webrtc", true);
+                            }));
+                            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                settings.set_property("enable-media-stream", true);
+                            }));
+                            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                settings.set_property("media-playback-requires-user-gesture", false);
+                            }));
+                            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                settings.set_property("enable-encrypted-media", true);
+                            }));
                         }
                         // Auto-allow ALL permission requests: mic, camera, screen share.
-                        // Registered unconditionally (outside the settings block) so
-                        // it fires even when the properties above returned Err.
+                        // Registered unconditionally so it fires even if settings failed.
                         webview.connect_permission_request(|_, req| {
                             req.allow();
                             true
                         });
                         // Reload so the new settings take effect in a fresh JS context.
-                        // Without this, the idle callback runs after first page load and
-                        // RTCPeerConnection stays undefined for the entire session.
+                        // with_webview on Linux runs as a GLib idle callback (priority
+                        // 200) AFTER the page loads (WebKit events at priority 100).
+                        // Without this reload RTCPeerConnection stays undefined for the
+                        // entire session.
                         webview.reload();
                     });
                 }
