@@ -209,8 +209,14 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
   getTransceivers(): RTCRtpTransceiver[] { return []; }
 
   restartIce(): void {
-    // Close and signal re-connect (engine.ts will re-negotiate)
-    invoke('rtc_close_pc', { id: this._id }).catch(() => {});
+    // Do NOT close the peer — closing it breaks reconnection because the JS
+    // polyfill object stays in engine.ts's peers map but the Rust peer is gone.
+    // Instead, signal renegotiation so engine.ts creates a fresh offer with
+    // new ICE credentials.  A small delay lets ICE finish its current state
+    // transition before triggering the new negotiation round.
+    setTimeout(() => {
+      this.onnegotiationneeded?.();
+    }, 300);
   }
 
   async close(): Promise<void> {

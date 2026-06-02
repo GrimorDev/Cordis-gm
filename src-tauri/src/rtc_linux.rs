@@ -33,6 +33,7 @@ use webrtc::media::Sample;
 use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
+use webrtc::peer_connection::sdp::sdp_type::RTCSdpType;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
 use webrtc::track::track_local::TrackLocal;
@@ -486,8 +487,8 @@ pub async fn rtc_set_local_description(
 }
 
 /// Set remote description.
-/// For offers: sets remote desc only, moves to "have-remote-offer".
-///   JS then calls createAnswer() → setLocalDescription(answer) → emitAnswer().
+/// For offers: explicit rollback first (fixes "new sdp does not match previous answer"
+///   when both peers offer simultaneously — webrtc-rs's implicit rollback is buggy).
 /// For answers: sets remote desc, moves to "stable".
 /// Always returns "".
 #[tauri::command]
@@ -499,6 +500,17 @@ pub async fn rtc_set_remote_description(
 ) -> Result<String, String> {
     let pc = state.inner().lock().await
         .peers.get(&id).ok_or("peer not found")?.pc.clone();
+
+    if r#type == "offer" {
+        // Explicit rollback before accepting remote offer.
+        // webrtc-rs 0.11 has a bug where the implicit rollback inside
+        // set_remote_description leaves state inconsistent, causing
+        // create_answer() to fail with "new sdp does not match previous answer".
+        // We trigger an explicit rollback first; it's a no-op when stable.
+        let rollback = RTCSessionDescription { sdp_type: RTCSdpType::Rollback, sdp: String::new() };
+        let _ = pc.set_local_description(rollback).await;
+    }
+
     let desc = if r#type == "offer" {
         RTCSessionDescription::offer(sdp).map_err(|e| e.to_string())?
     } else {
