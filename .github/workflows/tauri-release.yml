@@ -493,3 +493,16 @@ jobs:
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
           files:    latest.json
+
+      - name: Delete old releases (keep last 5)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Keep the 5 most recent releases, delete the rest
+          CURRENT_TAG="${{ needs.prepare.outputs.tag }}"
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName,createdAt \
+            | jq -r 'sort_by(.createdAt) | reverse | .[5:] | .[].tagName' \
+            | while read tag; do
+                echo "Deleting old release: $tag"
+                gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+              done

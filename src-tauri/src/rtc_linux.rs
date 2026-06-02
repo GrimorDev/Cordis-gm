@@ -522,14 +522,16 @@ pub async fn rtc_list_audio_devices() -> Vec<serde_json::Value> {
     let host = cpal::default_host();
     let mut result = Vec::new();
 
+    // host.input_devices() → Result<impl Iterator<Item=Device>, _>
+    // After if-let the inner value IS the iterator — no .flatten() needed.
     if let Ok(inputs) = host.input_devices() {
-        for dev in inputs.flatten() {
+        for dev in inputs {
             let name = dev.name().unwrap_or_else(|_| "Unknown".to_owned());
             result.push(serde_json::json!({ "id": name.clone(), "name": name, "kind": "input" }));
         }
     }
     if let Ok(outputs) = host.output_devices() {
-        for dev in outputs.flatten() {
+        for dev in outputs {
             let name = dev.name().unwrap_or_else(|_| "Unknown".to_owned());
             result.push(serde_json::json!({ "id": name.clone(), "name": name, "kind": "output" }));
         }
