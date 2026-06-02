@@ -4,6 +4,18 @@ import App from './App.tsx';
 import StatusPage from './StatusPage.tsx';
 import './index.css';
 
+// ── Ctrl+Shift+M → open DevTools (Windows + Linux) ───────────────────────────
+if ('__TAURI_INTERNALS__' in window) {
+  window.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && (e.key === 'M' || e.key === 'm')) {
+      e.preventDefault();
+      import('@tauri-apps/api/core').then(({ invoke }) => {
+        invoke('open_devtools').catch(() => {});
+      });
+    }
+  });
+}
+
 // ── Linux / Tauri: always use native RTCPeerConnection (webrtc-rs + cpal) ────
 // WebKitGTK's built-in WebRTC is unreliable on Linux even when RTCPeerConnection
 // exists (disabled by default, broken receive path, no output device enumeration).

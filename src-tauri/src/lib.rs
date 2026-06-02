@@ -206,6 +206,13 @@ fn stop_audio_loopback(state: tauri::State<LoopbackState>) {
     }
 }
 
+/// Open the WebView DevTools inspector (Ctrl+Shift+M shortcut in frontend).
+/// Works on Windows (Edge DevTools) and Linux (WebKitGTK Inspector).
+#[tauri::command]
+fn open_devtools(window: tauri::WebviewWindow) {
+    window.open_devtools();
+}
+
 /// Returns true when running on Linux (used by frontend to show Linux-specific hints).
 #[tauri::command]
 fn is_linux() -> bool {
@@ -558,6 +565,7 @@ pub fn run() {
             window_maximize,
             window_close,
             window_quit,
+            open_devtools,
             start_audio_loopback,
             stop_audio_loopback,
             request_media_permissions,
