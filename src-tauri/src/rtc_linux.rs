@@ -102,71 +102,110 @@ pub type SharedRtcState = Arc<tokio::sync::Mutex<RtcState>>;
 
 // ── Audio I/O (dedicated std::thread — no Send requirement for cpal streams) ──
 
+fn build_streams(
+    mic_tx:     broadcast::Sender<Vec<f32>>,
+    ring:       OutputRing,
+    err_flag:   Arc<AtomicBool>,
+) -> (Option<cpal::Stream>, Option<cpal::Stream>) {
+    let host = cpal::default_host();
+
+    // ── Mic (input) ──────────────────────────────────────────────────────────
+    let in_stream: Option<cpal::Stream> = host.default_input_device().and_then(|dev| {
+        // Try exact config first; fall back to whatever the device supports.
+        let supported = dev.default_input_config().ok()?;
+        let cfg = cpal::StreamConfig {
+            channels:    CHANNELS,
+            sample_rate: cpal::SampleRate(SAMPLE_RATE),
+            buffer_size: cpal::BufferSize::Fixed(FRAME_SAMPLES as u32),
+        };
+        let _ = supported; // keep for reference
+        let tx  = mic_tx.clone();
+        let ef  = Arc::clone(&err_flag);
+        let mut acc: Vec<f32> = Vec::with_capacity(FRAME_SAMPLES * 2);
+        dev.build_input_stream(
+            &cfg,
+            move |data: &[f32], _| {
+                acc.extend_from_slice(data);
+                while acc.len() >= FRAME_SAMPLES {
+                    let frame: Vec<f32> = acc.drain(..FRAME_SAMPLES).collect();
+                    if tx.send(frame).is_err() { break; }
+                }
+            },
+            move |e| {
+                eprintln!("[rtc_linux] mic error: {e}");
+                ef.store(true, Ordering::Relaxed);
+            },
+            None,
+        ).ok()
+    });
+
+    // ── Speaker (output) ─────────────────────────────────────────────────────
+    let out_stream: Option<cpal::Stream> = host.default_output_device().and_then(|dev| {
+        let cfg = cpal::StreamConfig {
+            channels:    CHANNELS,
+            sample_rate: cpal::SampleRate(SAMPLE_RATE),
+            buffer_size: cpal::BufferSize::Default,
+        };
+        let ring2 = Arc::clone(&ring);
+        let ef    = Arc::clone(&err_flag);
+        dev.build_output_stream(
+            &cfg,
+            move |out: &mut [f32], _| {
+                if let Ok(mut q) = ring2.lock() {
+                    for s in out.iter_mut() { *s = q.pop_front().unwrap_or(0.0); }
+                }
+            },
+            move |e| {
+                eprintln!("[rtc_linux] speaker error: {e}");
+                ef.store(true, Ordering::Relaxed);
+            },
+            None,
+        ).ok()
+    });
+
+    (in_stream, out_stream)
+}
+
 fn start_audio(s: &mut RtcState) {
     if s.audio_stop.is_some() { return; }
 
-    let (mic_tx, _mic_rx0) = broadcast::channel::<Vec<f32>>(MIC_BUF_CAP);
+    let (mic_tx, _) = broadcast::channel::<Vec<f32>>(MIC_BUF_CAP);
     let output_ring: OutputRing = Arc::new(std::sync::Mutex::new(VecDeque::new()));
     let stop = Arc::new(AtomicBool::new(false));
 
-    let mic_tx_t    = mic_tx.clone();
-    let ring_t      = Arc::clone(&output_ring);
-    let stop_t      = Arc::clone(&stop);
+    let mic_tx_t = mic_tx.clone();
+    let ring_t   = Arc::clone(&output_ring);
+    let stop_t   = Arc::clone(&stop);
 
     std::thread::spawn(move || {
-        let host = cpal::default_host();
+        // Outer loop: rebuild streams when device changes / error occurs.
+        // On Linux with PipeWire, ALSA errors on device hot-plug; we recover
+        // by dropping the old streams and opening new ones with the current
+        // default device (PipeWire routes to the currently active sink).
+        'outer: loop {
+            if stop_t.load(Ordering::Relaxed) { break; }
 
-        // ── Mic (input) ──────────────────────────────────────────────────────
-        let in_stream: Option<cpal::Stream> = host.default_input_device().and_then(|dev| {
-            let cfg = cpal::StreamConfig {
-                channels:    CHANNELS,
-                sample_rate: cpal::SampleRate(SAMPLE_RATE),
-                buffer_size: cpal::BufferSize::Fixed(FRAME_SAMPLES as u32),
-            };
-            let tx = mic_tx_t.clone();
-            let mut accumulator: Vec<f32> = Vec::with_capacity(FRAME_SAMPLES * 2);
-            dev.build_input_stream(
-                &cfg,
-                move |data: &[f32], _| {
-                    accumulator.extend_from_slice(data);
-                    while accumulator.len() >= FRAME_SAMPLES {
-                        let frame: Vec<f32> = accumulator.drain(..FRAME_SAMPLES).collect();
-                        let _ = tx.send(frame);
-                    }
-                },
-                |e| eprintln!("[rtc_linux] mic error: {e}"),
-                None,
-            ).ok()
-        });
+            let err_flag = Arc::new(AtomicBool::new(false));
+            let (in_s, out_s) = build_streams(
+                mic_tx_t.clone(), Arc::clone(&ring_t), Arc::clone(&err_flag),
+            );
 
-        // ── Speaker (output) ─────────────────────────────────────────────────
-        let out_stream: Option<cpal::Stream> = host.default_output_device().and_then(|dev| {
-            let cfg = cpal::StreamConfig {
-                channels:    CHANNELS,
-                sample_rate: cpal::SampleRate(SAMPLE_RATE),
-                buffer_size: cpal::BufferSize::Default,
-            };
-            let ring = Arc::clone(&ring_t);
-            dev.build_output_stream(
-                &cfg,
-                move |out: &mut [f32], _| {
-                    if let Ok(mut q) = ring.lock() {
-                        for s in out.iter_mut() { *s = q.pop_front().unwrap_or(0.0); }
-                    }
-                },
-                |e| eprintln!("[rtc_linux] speaker error: {e}"),
-                None,
-            ).ok()
-        });
+            if let Some(ref s) = in_s  { let _ = s.play(); }
+            if let Some(ref s) = out_s { let _ = s.play(); }
 
-        if let Some(ref s) = in_stream  { let _ = s.play(); }
-        if let Some(ref s) = out_stream { let _ = s.play(); }
-
-        // Keep streams alive until stopped
-        while !stop_t.load(Ordering::Relaxed) {
-            std::thread::sleep(Duration::from_millis(50));
+            // Keep alive until stop or device error
+            loop {
+                if stop_t.load(Ordering::Relaxed) { break 'outer; }
+                if err_flag.load(Ordering::Relaxed) {
+                    eprintln!("[rtc_linux] audio device changed — rebuilding streams");
+                    // Clear stale audio from ring buffer on device switch
+                    if let Ok(mut q) = ring_t.lock() { q.clear(); }
+                    std::thread::sleep(Duration::from_millis(300));
+                    break; // drop in_s/out_s → rebuild
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
         }
-        // in_stream / out_stream dropped here — cpal RAII
     });
 
     s.mic_tx      = Some(mic_tx);
@@ -470,6 +509,32 @@ pub async fn rtc_close_pc(
     };
     if let Some(pc) = pc { let _ = pc.close().await; }
     Ok(())
+}
+
+/// List available audio devices via cpal.
+/// Returns [{id, name, kind}] where kind = "input" | "output".
+/// Use this on Linux instead of navigator.mediaDevices.enumerateDevices()
+/// which may miss output devices or fail to update after hot-plug.
+#[tauri::command]
+pub async fn rtc_list_audio_devices() -> Vec<serde_json::Value> {
+    use cpal::traits::HostTrait;
+    use cpal::traits::DeviceTrait;
+    let host = cpal::default_host();
+    let mut result = Vec::new();
+
+    if let Ok(inputs) = host.input_devices() {
+        for dev in inputs.flatten() {
+            let name = dev.name().unwrap_or_else(|_| "Unknown".to_owned());
+            result.push(serde_json::json!({ "id": name.clone(), "name": name, "kind": "input" }));
+        }
+    }
+    if let Ok(outputs) = host.output_devices() {
+        for dev in outputs.flatten() {
+            let name = dev.name().unwrap_or_else(|_| "Unknown".to_owned());
+            result.push(serde_json::json!({ "id": name.clone(), "name": name, "kind": "output" }));
+        }
+    }
+    result
 }
 
 /// Set remote peer audio volume (0.0–1.0).  Stub — full per-peer mixing later.

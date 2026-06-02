@@ -13,7 +13,8 @@ use rtc_linux::{
     SharedRtcState, RtcState,
     rtc_create_pc, rtc_create_offer, rtc_create_answer,
     rtc_set_local_description, rtc_set_remote_description,
-    rtc_add_ice_candidate, rtc_close_pc, rtc_set_volume, rtc_set_muted,
+    rtc_add_ice_candidate, rtc_close_pc,
+    rtc_set_volume, rtc_set_muted, rtc_list_audio_devices,
 };
 
 // ── Stubs on Windows / macOS (generate_handler! requires all symbols) ─────────
@@ -57,6 +58,9 @@ async fn rtc_set_volume(_id: String, _vol: f32) -> Result<(), String> { Ok(()) }
 #[cfg(not(target_os = "linux"))]
 #[tauri::command]
 async fn rtc_set_muted(_id: String, _muted: bool) -> Result<(), String> { Ok(()) }
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+async fn rtc_list_audio_devices() -> Vec<serde_json::Value> { vec![] }
 
 // ── WASAPI loopback state ────────────────────────────────────────────────────
 struct LoopbackState(std::sync::Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>>);
@@ -573,6 +577,7 @@ pub fn run() {
             rtc_close_pc,
             rtc_set_volume,
             rtc_set_muted,
+            rtc_list_audio_devices,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
