@@ -4,16 +4,15 @@ import App from './App.tsx';
 import StatusPage from './StatusPage.tsx';
 import './index.css';
 
-// ── Linux / Tauri: inject native RTCPeerConnection polyfill ──────────────────
-// On Linux, WebKitGTK may not expose RTCPeerConnection (disabled by default,
-// property doesn't exist on WebKit < 2.38, or compiled without WebRTC).
-// Instead of fighting WebKit settings, we inject a polyfill backed by
-// webrtc-rs (Rust) + cpal (audio I/O).  The existing engine.ts works unchanged.
+// ── Linux / Tauri: always use native RTCPeerConnection (webrtc-rs + cpal) ────
+// WebKitGTK's built-in WebRTC is unreliable on Linux even when RTCPeerConnection
+// exists (disabled by default, broken receive path, no output device enumeration).
+// We ALWAYS replace window.RTCPeerConnection with our Rust-backed polyfill on
+// Linux Tauri — this gives full control regardless of WebKit version.
 {
   const isTauri = '__TAURI_INTERNALS__' in window;
   const isLinux = navigator.userAgent.toLowerCase().includes('linux');
-  if (isTauri && isLinux && typeof RTCPeerConnection !== 'function') {
-    // Async import so main bundle isn't polluted on Windows/macOS
+  if (isTauri && isLinux) {
     import('./rtc/native_linux').then(({ injectNativeRtcPolyfill }) => {
       injectNativeRtcPolyfill();
     }).catch((e) => console.error('[Cordyn] native RTC polyfill load failed:', e));

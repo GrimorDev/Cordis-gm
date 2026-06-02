@@ -140,27 +140,61 @@ fn build_streams(
     });
 
     // ── Speaker (output) ─────────────────────────────────────────────────────
+    // Most Linux audio stacks (PipeWire, PulseAudio, many ALSA devices) require
+    // stereo (2-channel) output; mono fails with "channel count not supported".
+    // Try stereo first (duplicate mono sample to both L+R channels), then fall
+    // back to mono.  If both fail, log the error so we can diagnose.
     let out_stream: Option<cpal::Stream> = host.default_output_device().and_then(|dev| {
-        let cfg = cpal::StreamConfig {
+        let ring_s = Arc::clone(&ring);
+        let ef_s   = Arc::clone(&err_flag);
+        let cfg_stereo = cpal::StreamConfig {
+            channels:    2,
+            sample_rate: cpal::SampleRate(SAMPLE_RATE),
+            buffer_size: cpal::BufferSize::Default,
+        };
+        let stereo = dev.build_output_stream(
+            &cfg_stereo,
+            move |out: &mut [f32], _| {
+                if let Ok(mut q) = ring_s.lock() {
+                    for chunk in out.chunks_mut(2) {
+                        let s = q.pop_front().unwrap_or(0.0);
+                        chunk[0] = s;
+                        if chunk.len() > 1 { chunk[1] = s; }
+                    }
+                }
+            },
+            move |e| {
+                eprintln!("[rtc_linux] speaker stereo error: {e}");
+                ef_s.store(true, Ordering::Relaxed);
+            },
+            None,
+        );
+        if let Ok(s) = stereo { return Some(s); }
+
+        // Fallback: mono
+        let ring_m = Arc::clone(&ring);
+        let ef_m   = Arc::clone(&err_flag);
+        let cfg_mono = cpal::StreamConfig {
             channels:    CHANNELS,
             sample_rate: cpal::SampleRate(SAMPLE_RATE),
             buffer_size: cpal::BufferSize::Default,
         };
-        let ring2 = Arc::clone(&ring);
-        let ef    = Arc::clone(&err_flag);
-        dev.build_output_stream(
-            &cfg,
+        match dev.build_output_stream(
+            &cfg_mono,
             move |out: &mut [f32], _| {
-                if let Ok(mut q) = ring2.lock() {
+                if let Ok(mut q) = ring_m.lock() {
                     for s in out.iter_mut() { *s = q.pop_front().unwrap_or(0.0); }
                 }
             },
             move |e| {
-                eprintln!("[rtc_linux] speaker error: {e}");
-                ef.store(true, Ordering::Relaxed);
+                eprintln!("[rtc_linux] speaker mono error: {e}");
+                ef_m.store(true, Ordering::Relaxed);
             },
             None,
-        ).ok()
+        ) {
+            Ok(s) => Some(s),
+            Err(e) => { eprintln!("[rtc_linux] speaker: could not open output device: {e}"); None }
+        }
     });
 
     (in_stream, out_stream)

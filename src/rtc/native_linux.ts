@@ -76,11 +76,20 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
 
     const u1 = await listen<IceCandidatePayload>('rtc_ice_candidate', (e) => {
       if (e.payload.pc_id !== id) return;
-      const candidate = new RTCIceCandidate({
-        candidate:       e.payload.candidate,
-        sdpMid:          e.payload.sdp_mid ?? null,
-        sdpMLineIndex:   e.payload.sdp_m_line_index ?? null,
-      } as any);
+      // Don't use `new RTCIceCandidate()` — it may not exist in WebKitGTK when
+      // WebRTC is disabled.  Create a plain object with toJSON() so engine.ts
+      // `candidate.toJSON()` call succeeds.
+      // Note: Rust serializes sdp_mline_index (not sdp_m_line_index).
+      const cand = e.payload.candidate;
+      const mid  = e.payload.sdp_mid ?? null;
+      const mli  = e.payload.sdp_mline_index ?? null;
+      const candidate = {
+        candidate:       cand,
+        sdpMid:          mid,
+        sdpMLineIndex:   mli,
+        usernameFragment: null,
+        toJSON: () => ({ candidate: cand, sdpMid: mid, sdpMLineIndex: mli, usernameFragment: null }),
+      } as unknown as RTCIceCandidate;
       this.onicecandidate?.({ candidate } as RTCPeerConnectionIceEvent);
     });
 
@@ -107,10 +116,26 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
 
     const u4 = await listen<TrackPayload>('rtc_track_added', (e) => {
       if (e.payload.pc_id !== id) return;
-      // Create a synthetic MediaStream so engine.ts onRemoteTrack fires.
-      // Audio is played natively via cpal — mark it so App.tsx skips browser attachment.
-      const stream = Object.assign(new MediaStream(), { __nativeRtc: true, __pcId: id });
-      const track  = Object.assign(new MediaStreamTrack(), { kind: e.payload.kind });
+      // Use plain objects — new MediaStream() / new MediaStreamTrack() constructors
+      // may not be available when WebKitGTK has WebRTC disabled.
+      // __nativeRtc: true → App.tsx skips browser audio attachment (cpal plays it).
+      const kind = e.payload.kind;
+      const tid  = `native-${id}-${kind}`;
+      const track: any = {
+        kind, id: tid, enabled: true, muted: false, readyState: 'live', label: tid,
+        onended: null, onmute: null, onunmute: null,
+        stop: () => {}, getSettings: () => ({}), getConstraints: () => ({}),
+        getCapabilities: () => ({}), applyConstraints: async () => {},
+        clone: () => track,
+        addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => true,
+      };
+      const stream: any = {
+        id: `native-stream-${id}`, active: true, __nativeRtc: true, __pcId: id,
+        getTracks: () => [track], getVideoTracks: () => (kind === 'video' ? [track] : []),
+        getAudioTracks: () => (kind === 'audio' ? [track] : []),
+        addTrack: () => {}, removeTrack: () => {},
+        addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => true,
+      };
       this.ontrack?.({ track, streams: [stream] } as unknown as RTCTrackEvent);
     });
 
@@ -132,30 +157,22 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
   }
 
   async setLocalDescription(desc: RTCSessionDescriptionInit): Promise<void> {
-    this.localDescription = desc as RTCSessionDescription;
-    await invoke('rtc_set_local_description', {
-      id:   this._id,
-      type: desc.type,
-      sdp:  desc.sdp ?? '',
-    });
-    // Update signaling state to match webrtc-rs transitions:
-    //   offer  → set_local  → have-local-offer
-    //   answer → set_local  → stable
-    this.signalingState = desc.type === 'offer' ? 'have-local-offer' : 'stable';
+    // engine.ts calls pc.localDescription!.toJSON() after setLocalDescription.
+    // A plain {type, sdp} object doesn't have toJSON() → TypeError → offer never emitted.
+    // We add toJSON() explicitly so the engine's emitOffer/emitAnswer calls work.
+    const sdp  = desc.sdp ?? '';
+    const type = desc.type as RTCSdpType;
+    this.localDescription = { type, sdp, toJSON: () => ({ type, sdp }) } as RTCSessionDescription;
+    await invoke('rtc_set_local_description', { id: this._id, type, sdp });
+    this.signalingState = type === 'offer' ? 'have-local-offer' : 'stable';
   }
 
   async setRemoteDescription(desc: RTCSessionDescriptionInit): Promise<void> {
-    this.remoteDescription = desc as RTCSessionDescription;
-    // Rust only sets remote description here (no implicit answer creation).
-    // JS controls the full offer/answer lifecycle:
-    //   offer  path: setRemoteDescription → createAnswer → setLocalDescription → emitAnswer
-    //   answer path: setRemoteDescription (done)
-    await invoke('rtc_set_remote_description', {
-      id:   this._id,
-      type: desc.type,
-      sdp:  desc.sdp ?? '',
-    });
-    this.signalingState = desc.type === 'offer' ? 'have-remote-offer' : 'stable';
+    const sdp  = desc.sdp ?? '';
+    const type = desc.type as RTCSdpType;
+    this.remoteDescription = { type, sdp, toJSON: () => ({ type, sdp }) } as RTCSessionDescription;
+    await invoke('rtc_set_remote_description', { id: this._id, type, sdp });
+    this.signalingState = type === 'offer' ? 'have-remote-offer' : 'stable';
   }
 
   async addIceCandidate(candidate: RTCIceCandidateInit | null): Promise<void> {
@@ -228,7 +245,9 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
  * existing engine.ts works without any changes.
  */
 export function injectNativeRtcPolyfill(): void {
-  if (typeof RTCPeerConnection === 'function') return; // already available
+  // Always replace — WebKitGTK's built-in WebRTC has a broken receive path on Linux
+  // even when RTCPeerConnection exists (audio only flows one way).  Our Rust polyfill
+  // (webrtc-rs + cpal) is always more reliable than WebKit's partial implementation.
   console.info('[Cordyn] Injecting native RTCPeerConnection polyfill (webrtc-rs + cpal)');
   (window as any).RTCPeerConnection = NativeRTCPeerConnection;
 }
