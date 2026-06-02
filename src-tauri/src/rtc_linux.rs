@@ -1,257 +1,212 @@
 // ── Native WebRTC for Linux ─────────────────────────────────────────────────
 //
 // Provides Tauri commands that implement the RTCPeerConnection API natively
-// using webrtc-rs (ICE, DTLS, SRTP, Opus) + cpal (mic/speaker I/O).
+// using webrtc-rs (ICE, DTLS, SRTP, RTP, Opus) + cpal (mic/speaker I/O).
 //
-// The JS side injects a `window.RTCPeerConnection` polyfill that forwards
-// all API calls here via Tauri IPC.  The existing engine.ts works unchanged.
-//
-// Audio pipeline:
-//   Mic  → cpal input → broadcast → Opus encode → webrtc-rs RTP → remote
-//   Remote → webrtc-rs RTP → Opus decode → tokio mpsc → mix → cpal output
+// Key design decisions:
+//   • cpal::Stream is !Send, so it CANNOT live in Tauri's managed state
+//     (which requires Send + Sync).  We run a dedicated std::thread that
+//     owns the streams; the Tauri state only holds Send+Sync channel senders
+//     and an Arc<AtomicBool> stop signal.
+//   • Output audio from all remote peers is buffered in a shared ring buffer
+//     (Arc<Mutex<VecDeque<f32>>>) that the cpal output thread reads from.
+//   • Mic audio is broadcast from the cpal input thread to all encoder tasks
+//     via a tokio broadcast channel.
 
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use std::time::Duration;
 
-use base64::Engine as _;
+use bytes::Bytes;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use opus::{Channels, Decoder as OpusDecoder, Encoder as OpusEncoder};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
-use tokio::sync::{broadcast, mpsc, Mutex};
+use tokio::sync::broadcast;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_OPUS};
 use webrtc::api::APIBuilder;
 use webrtc::ice_transport::ice_candidate::RTCIceCandidateInit;
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
+use webrtc::media::Sample;
+use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
-use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
-use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use webrtc::track::track_local::TrackLocal;
-use webrtc::media::Sample;
+use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
+use webrtc::track::track_remote::TrackRemote;
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const SAMPLE_RATE: u32 = 48_000;
-const CHANNELS: u16 = 1;
-const FRAME_SAMPLES: usize = 960; // 20 ms at 48 kHz mono
-const MIC_BROADCAST_CAP: usize = 8;
-const MIXER_CHANNEL_CAP: usize = 64;
+const SAMPLE_RATE: u32  = 48_000;
+const CHANNELS: u16     = 1;
+const FRAME_SAMPLES: usize = 960;     // 20 ms at 48 kHz mono
+const MIC_BUF_CAP: usize   = 16;      // broadcast channel capacity
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ── Tauri event payload types ────────────────────────────────────────────────
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct IceCandidatePayload {
-    pub pc_id:            String,
-    pub candidate:        String,
-    pub sdp_mid:          Option<String>,
-    pub sdp_m_line_index: Option<u16>,
+    pub pc_id:           String,
+    pub candidate:       String,
+    pub sdp_mid:         Option<String>,
+    pub sdp_mline_index: Option<u16>,
 }
 
-#[derive(Debug, Serialize, Clone)]
-pub struct StatePayload {
-    pub pc_id: String,
-    pub state: String,
-}
+#[derive(Debug, Clone, Serialize)]
+pub struct StatePayload { pub pc_id: String, pub state: String }
 
-#[derive(Debug, Serialize, Clone)]
-pub struct TrackPayload {
-    pub pc_id: String,
-    pub kind:  String,
-}
+#[derive(Debug, Clone, Serialize)]
+pub struct TrackPayload { pub pc_id: String, pub kind: String }
 
-#[derive(Debug, Deserialize, Clone)]
+// ── IceServer config from JS ─────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct IceServerCfg {
     pub urls:       Vec<String>,
     pub username:   Option<String>,
     pub credential: Option<String>,
 }
 
-/// PCM frames in f32 mono 48 kHz
-type MicFrame = Vec<f32>;
+// ── Output ring buffer (shared between decoder tasks + cpal output) ──────────
+
+type OutputRing = Arc<std::sync::Mutex<VecDeque<f32>>>;
 
 // ── Per-connection state ─────────────────────────────────────────────────────
 
 struct Peer {
     pc:          Arc<RTCPeerConnection>,
     audio_track: Arc<TrackLocalStaticSample>,
-    vol:         Arc<std::sync::Mutex<f32>>,   // remote volume 0..1
 }
 
-// ── Global shared audio state ─────────────────────────────────────────────────
-
-struct AudioState {
-    /// Broadcast channel: cpal input → all encoder tasks
-    mic_tx: broadcast::Sender<MicFrame>,
-    /// Mix channel: each decoder → cpal output task
-    mix_tx: mpsc::Sender<MicFrame>,
-    /// Keep cpal streams alive
-    _input_stream:  Option<cpal::Stream>,
-    _output_stream: Option<cpal::Stream>,
-}
-
-// ── Global RTC state ─────────────────────────────────────────────────────────
-
+// ── Global RTC state (must be Send + Sync for tauri::manage) ─────────────────
+//
+// cpal::Stream is !Send — it NEVER lives here.
+// Audio lives in a dedicated std::thread (see `start_audio`).
 pub struct RtcState {
     peers:       HashMap<String, Peer>,
-    audio:       Option<AudioState>,
+    mic_tx:      Option<broadcast::Sender<Vec<f32>>>,
+    output_ring: Option<OutputRing>,
+    audio_stop:  Option<Arc<AtomicBool>>,
 }
 
 impl RtcState {
     pub fn new() -> Self {
-        RtcState { peers: HashMap::new(), audio: None }
+        RtcState { peers: HashMap::new(), mic_tx: None, output_ring: None, audio_stop: None }
     }
 }
 
-pub type SharedRtcState = Arc<Mutex<RtcState>>;
+pub type SharedRtcState = Arc<tokio::sync::Mutex<RtcState>>;
 
-// ── Audio I/O init ────────────────────────────────────────────────────────────
+// ── Audio I/O (dedicated std::thread — no Send requirement for cpal streams) ──
 
-/// Start cpal mic input and speaker output.  Call once when first peer is
-/// created.  Subsequent peers reuse the same broadcast/mix channels.
-fn init_audio(state: &mut RtcState) {
-    if state.audio.is_some() {
-        return; // already running
-    }
+fn start_audio(s: &mut RtcState) {
+    if s.audio_stop.is_some() { return; }
 
-    let (mic_tx, _) = broadcast::channel::<MicFrame>(MIC_BROADCAST_CAP);
-    let (mix_tx, mut mix_rx) = mpsc::channel::<MicFrame>(MIXER_CHANNEL_CAP);
+    let (mic_tx, _mic_rx0) = broadcast::channel::<Vec<f32>>(MIC_BUF_CAP);
+    let output_ring: OutputRing = Arc::new(std::sync::Mutex::new(VecDeque::new()));
+    let stop = Arc::new(AtomicBool::new(false));
 
-    // ── Input (mic) ──────────────────────────────────────────────────────────
-    let host = cpal::default_host();
-    let input_device = host.default_input_device();
-    let output_device = host.default_output_device();
+    let mic_tx_t    = mic_tx.clone();
+    let ring_t      = Arc::clone(&output_ring);
+    let stop_t      = Arc::clone(&stop);
 
-    let input_stream: Option<cpal::Stream> = input_device.and_then(|dev| {
-        let config = cpal::StreamConfig {
-            channels: CHANNELS,
-            sample_rate: cpal::SampleRate(SAMPLE_RATE),
-            buffer_size: cpal::BufferSize::Fixed(FRAME_SAMPLES as u32),
-        };
-        let tx = mic_tx.clone();
-        let mut buf: Vec<f32> = Vec::with_capacity(FRAME_SAMPLES);
-        dev.build_input_stream(
-            &config,
-            move |data: &[f32], _| {
-                buf.extend_from_slice(data);
-                while buf.len() >= FRAME_SAMPLES {
-                    let frame: Vec<f32> = buf.drain(..FRAME_SAMPLES).collect();
-                    let _ = tx.send(frame);
-                }
-            },
-            |e| eprintln!("[rtc_linux] cpal input error: {e}"),
-            None,
-        )
-        .ok()
-    });
+    std::thread::spawn(move || {
+        let host = cpal::default_host();
 
-    if let Some(ref s) = input_stream {
-        let _ = s.play();
-    }
-
-    // ── Output (speaker) ─────────────────────────────────────────────────────
-    let output_stream: Option<cpal::Stream> = output_device.and_then(|dev| {
-        let config = cpal::StreamConfig {
-            channels: CHANNELS,
-            sample_rate: cpal::SampleRate(SAMPLE_RATE),
-            buffer_size: cpal::BufferSize::Default,
-        };
-        // Ring buffer fed by the mixer task
-        let ring: Arc<std::sync::Mutex<std::collections::VecDeque<f32>>> =
-            Arc::new(std::sync::Mutex::new(std::collections::VecDeque::new()));
-        let ring_w = ring.clone();
-
-        // Mixer task: receives decoded PCM from all peers and queues it
-        tokio::spawn(async move {
-            while let Some(frame) = mix_rx.recv().await {
-                if let Ok(mut q) = ring_w.lock() {
-                    // Simple mix: add to existing samples (clamp to [-1, 1])
-                    let existing_len = q.len();
-                    for (i, s) in frame.iter().enumerate() {
-                        if i < existing_len {
-                            let idx = existing_len - frame.len() + i;
-                            // Note: VecDeque doesn't support index-based access cleanly
-                            // Just push samples (simple, not true mixing — acceptable for voice)
-                            let _ = idx; // suppress unused warning
-                        }
-                        q.push_back(s.clamp(-1.0, 1.0));
+        // ── Mic (input) ──────────────────────────────────────────────────────
+        let in_stream: Option<cpal::Stream> = host.default_input_device().and_then(|dev| {
+            let cfg = cpal::StreamConfig {
+                channels:    CHANNELS,
+                sample_rate: cpal::SampleRate(SAMPLE_RATE),
+                buffer_size: cpal::BufferSize::Fixed(FRAME_SAMPLES as u32),
+            };
+            let tx = mic_tx_t.clone();
+            let mut accumulator: Vec<f32> = Vec::with_capacity(FRAME_SAMPLES * 2);
+            dev.build_input_stream(
+                &cfg,
+                move |data: &[f32], _| {
+                    accumulator.extend_from_slice(data);
+                    while accumulator.len() >= FRAME_SAMPLES {
+                        let frame: Vec<f32> = accumulator.drain(..FRAME_SAMPLES).collect();
+                        let _ = tx.send(frame);
                     }
-                }
-            }
+                },
+                |e| eprintln!("[rtc_linux] mic error: {e}"),
+                None,
+            ).ok()
         });
 
-        dev.build_output_stream(
-            &config,
-            move |output: &mut [f32], _| {
-                if let Ok(mut q) = ring.lock() {
-                    for s in output.iter_mut() {
-                        *s = q.pop_front().unwrap_or(0.0);
+        // ── Speaker (output) ─────────────────────────────────────────────────
+        let out_stream: Option<cpal::Stream> = host.default_output_device().and_then(|dev| {
+            let cfg = cpal::StreamConfig {
+                channels:    CHANNELS,
+                sample_rate: cpal::SampleRate(SAMPLE_RATE),
+                buffer_size: cpal::BufferSize::Default,
+            };
+            let ring = Arc::clone(&ring_t);
+            dev.build_output_stream(
+                &cfg,
+                move |out: &mut [f32], _| {
+                    if let Ok(mut q) = ring.lock() {
+                        for s in out.iter_mut() { *s = q.pop_front().unwrap_or(0.0); }
                     }
-                }
-            },
-            |e| eprintln!("[rtc_linux] cpal output error: {e}"),
-            None,
-        )
-        .ok()
+                },
+                |e| eprintln!("[rtc_linux] speaker error: {e}"),
+                None,
+            ).ok()
+        });
+
+        if let Some(ref s) = in_stream  { let _ = s.play(); }
+        if let Some(ref s) = out_stream { let _ = s.play(); }
+
+        // Keep streams alive until stopped
+        while !stop_t.load(Ordering::Relaxed) {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        // in_stream / out_stream dropped here — cpal RAII
     });
 
-    if let Some(ref s) = output_stream {
-        let _ = s.play();
-    }
-
-    state.audio = Some(AudioState {
-        mic_tx,
-        mix_tx,
-        _input_stream:  input_stream,
-        _output_stream: output_stream,
-    });
+    s.mic_tx      = Some(mic_tx);
+    s.output_ring = Some(output_ring);
+    s.audio_stop  = Some(stop);
 }
 
-// ── Build webrtc API ──────────────────────────────────────────────────────────
+fn stop_audio(s: &mut RtcState) {
+    if let Some(stop) = s.audio_stop.take() { stop.store(true, Ordering::Relaxed); }
+    s.mic_tx      = None;
+    s.output_ring = None;
+}
 
-async fn build_rtc_api() -> Result<webrtc::api::API, String> {
+// ── webrtc-rs setup helpers ───────────────────────────────────────────────────
+
+async fn make_api() -> Result<webrtc::api::API, String> {
     let mut me = MediaEngine::default();
     me.register_default_codecs().map_err(|e| e.to_string())?;
-
-    let mut registry = Registry::new();
-    registry = register_default_interceptors(registry, &mut me)
-        .map_err(|e| e.to_string())?;
-
-    Ok(APIBuilder::new()
-        .with_media_engine(me)
-        .with_interceptor_registry(registry)
-        .build())
+    let mut reg = Registry::new();
+    reg = register_default_interceptors(reg, &mut me).map_err(|e| e.to_string())?;
+    Ok(APIBuilder::new().with_media_engine(me).with_interceptor_registry(reg).build())
 }
 
-fn build_rtc_config(ice_servers: &[IceServerCfg]) -> RTCConfiguration {
-    let mut servers: Vec<RTCIceServer> = ice_servers
-        .iter()
-        .map(|s| RTCIceServer {
+fn make_config(servers: &[IceServerCfg]) -> RTCConfiguration {
+    let ice: Vec<RTCIceServer> = if servers.is_empty() {
+        vec![RTCIceServer { urls: vec!["stun:stun.l.google.com:19302".into()], ..Default::default() }]
+    } else {
+        servers.iter().map(|s| RTCIceServer {
             urls:       s.urls.clone(),
             username:   s.username.clone().unwrap_or_default(),
             credential: s.credential.clone().unwrap_or_default(),
             ..Default::default()
-        })
-        .collect();
-
-    if servers.is_empty() {
-        servers.push(RTCIceServer {
-            urls: vec!["stun:stun.l.google.com:19302".to_owned()],
-            ..Default::default()
-        });
-    }
-
-    RTCConfiguration { ice_servers: servers, ..Default::default() }
+        }).collect()
+    };
+    RTCConfiguration { ice_servers: ice, ..Default::default() }
 }
 
 // ── Tauri commands ────────────────────────────────────────────────────────────
 
-/// Create a native RTCPeerConnection backed by webrtc-rs.
-/// `id` is the JS-side identifier (typically a UUID).
+/// Create a native RTCPeerConnection (JS polyfill calls this).
 #[tauri::command]
 pub async fn rtc_create_pc(
     id:          String,
@@ -259,41 +214,38 @@ pub async fn rtc_create_pc(
     app:         AppHandle,
     state:       tauri::State<'_, SharedRtcState>,
 ) -> Result<(), String> {
-    let api    = build_rtc_api().await?;
-    let config = build_rtc_config(&ice_servers);
-    let pc     = Arc::new(api.new_peer_connection(config).await.map_err(|e| e.to_string())?);
 
-    // Local audio track (mic → this peer)
+    let api    = make_api().await?;
+    let pc     = Arc::new(api.new_peer_connection(make_config(&ice_servers)).await.map_err(|e| e.to_string())?);
+
+    // Local Opus audio track (mic → this connection)
     let audio_track = Arc::new(TrackLocalStaticSample::new(
         RTCRtpCodecCapability {
-            mime_type:    MIME_TYPE_OPUS.to_owned(),
-            clock_rate:   SAMPLE_RATE,
-            channels:     CHANNELS as u16,
+            mime_type:  MIME_TYPE_OPUS.to_owned(),
+            clock_rate: SAMPLE_RATE,
+            channels:   CHANNELS,
             ..Default::default()
         },
         "audio".to_owned(),
         format!("cordyn-{}", &id[..8.min(id.len())]),
     ));
-
     pc.add_track(Arc::clone(&audio_track) as Arc<dyn TrackLocal + Send + Sync>)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await.map_err(|e| e.to_string())?;
 
-    // ICE candidate → JS
-    {
-        let app2 = app.clone();
-        let id2  = id.clone();
+    // ── Event wiring ─────────────────────────────────────────────────────────
+
+    {   // ICE candidate → JS
+        let (a, i) = (app.clone(), id.clone());
         pc.on_ice_candidate(Box::new(move |c| {
-            let app3  = app2.clone();
-            let id3   = id2.clone();
+            let (a, i) = (a.clone(), i.clone());
             Box::pin(async move {
                 if let Some(c) = c {
-                    if let Ok(json) = c.to_json() {
-                        let _ = app3.emit("rtc_ice_candidate", IceCandidatePayload {
-                            pc_id:            id3,
-                            candidate:        json.candidate,
-                            sdp_mid:          json.sdp_mid,
-                            sdp_m_line_index: json.sdp_m_line_index,
+                    if let Ok(j) = c.to_json() {
+                        let _ = a.emit("rtc_ice_candidate", IceCandidatePayload {
+                            pc_id:           i,
+                            candidate:       j.candidate,
+                            sdp_mid:         j.sdp_mid,
+                            sdp_mline_index: j.sdp_mline_index,
                         });
                     }
                 }
@@ -301,15 +253,12 @@ pub async fn rtc_create_pc(
         }));
     }
 
-    // Connection state → JS
-    {
-        let app2 = app.clone();
-        let id2  = id.clone();
+    {   // Connection state → JS
+        let (a, i) = (app.clone(), id.clone());
         pc.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            let app3 = app2.clone();
-            let id3  = id2.clone();
+            let (a, i) = (a.clone(), i.clone());
             Box::pin(async move {
-                let state_str = match s {
+                let st = match s {
                     RTCPeerConnectionState::New          => "new",
                     RTCPeerConnectionState::Connecting   => "connecting",
                     RTCPeerConnectionState::Connected    => "connected",
@@ -318,81 +267,54 @@ pub async fn rtc_create_pc(
                     RTCPeerConnectionState::Closed       => "closed",
                     _                                    => "unknown",
                 };
-                let _ = app3.emit("rtc_connection_state", StatePayload {
-                    pc_id: id3,
-                    state: state_str.to_owned(),
-                });
+                let _ = a.emit("rtc_connection_state", StatePayload { pc_id: i, state: st.to_owned() });
             })
         }));
     }
 
-    // Negotiation needed → JS (triggers onnegotiationneeded)
-    {
-        let app2 = app.clone();
-        let id2  = id.clone();
+    {   // Negotiation needed → JS
+        let (a, i) = (app.clone(), id.clone());
         pc.on_negotiation_needed(Box::new(move || {
-            let app3 = app2.clone();
-            let id3  = id2.clone();
+            let (a, i) = (a.clone(), i.clone());
             Box::pin(async move {
-                let _ = app3.emit("rtc_negotiation_needed", StatePayload {
-                    pc_id: id3,
-                    state: "needed".to_owned(),
-                });
+                let _ = a.emit("rtc_negotiation_needed", StatePayload { pc_id: i, state: "needed".into() });
             })
         }));
     }
 
-    // Remote track → decode Opus → mix → cpal output
-    {
-        let app2   = app.clone();
-        let id2    = id.clone();
-        let s_lock = Arc::clone(&*state);
+    {   // Remote track → Opus decode → output ring buffer
+        let (a, i)    = (app.clone(), id.clone());
+        let s_clone   = Arc::clone(state.inner());
 
-        pc.on_track(Box::new(move |track, _receiver, _transceiver| {
-            let app3   = app2.clone();
-            let id3    = id2.clone();
-            let s_lock = s_lock.clone();
-
+        // In webrtc-rs 0.11, on_track gives Arc<TrackRemote> (not Option)
+        pc.on_track(Box::new(move |track: Arc<TrackRemote>, _recv, _trans| {
+            let (a, i)  = (a.clone(), i.clone());
+            let s_clone = Arc::clone(&s_clone);
             Box::pin(async move {
-                let track = match track {
-                    Some(t) => t,
-                    None    => return,
-                };
-                if track.kind().to_string() != "audio" {
-                    return;
-                }
+                if track.kind().to_string() != "audio" { return; }
+                let _ = a.emit("rtc_track_added", TrackPayload { pc_id: i, kind: "audio".into() });
 
-                // Notify JS so the polyfill can fire ontrack
-                let _ = app3.emit("rtc_track_added", TrackPayload {
-                    pc_id: id3.clone(),
-                    kind:  "audio".to_owned(),
-                });
-
-                // Decode loop
-                let mix_tx = {
-                    let guard = s_lock.lock().await;
-                    guard.audio.as_ref().map(|a| a.mix_tx.clone())
+                // Grab ring buffer reference (release lock immediately)
+                let ring = {
+                    let g = s_clone.lock().await;
+                    g.output_ring.clone()
                 };
-                let mix_tx = match mix_tx {
-                    Some(tx) => tx,
-                    None     => return,
-                };
+                let Some(ring) = ring else { return };
 
                 let mut dec = match OpusDecoder::new(SAMPLE_RATE, Channels::Mono) {
-                    Ok(d)  => d,
-                    Err(e) => { eprintln!("[rtc_linux] opus decoder: {e}"); return; }
+                    Ok(d) => d,
+                    Err(e) => { eprintln!("[rtc_linux] opus decoder init: {e}"); return; }
                 };
                 let mut pcm_buf = vec![0f32; FRAME_SAMPLES * 6];
 
                 loop {
                     let Ok((rtp, _)) = track.read_rtp().await else { break };
-                    let payload = rtp.payload.as_ref();
-                    if payload.is_empty() { continue; }
-
-                    match dec.decode_float(payload, &mut pcm_buf, false) {
+                    if rtp.payload.is_empty() { continue; }
+                    match dec.decode_float(rtp.payload.as_ref(), &mut pcm_buf, false) {
                         Ok(n) => {
-                            let frame = pcm_buf[..n].to_vec();
-                            let _ = mix_tx.try_send(frame);
+                            if let Ok(mut q) = ring.lock() {
+                                q.extend_from_slice(&pcm_buf[..n]);
+                            }
                         }
                         Err(e) => eprintln!("[rtc_linux] opus decode: {e}"),
                     }
@@ -401,92 +323,81 @@ pub async fn rtc_create_pc(
         }));
     }
 
-    let vol = Arc::new(std::sync::Mutex::new(1.0f32));
+    // ── Start audio I/O, subscribe to mic, insert peer ───────────────────────
+    let mic_rx = {
+        let mut g = state.inner().lock().await;
+        start_audio(&mut g);
+        let rx = g.mic_tx.as_ref().map(|tx| tx.subscribe());
+        g.peers.insert(id.clone(), Peer { pc, audio_track: Arc::clone(&audio_track) });
+        rx
+    };
 
-    let mut guard = state.lock().await;
-    init_audio(&mut guard);
-    guard.peers.insert(id.clone(), Peer { pc, audio_track, vol });
-    drop(guard);
-
-    // Start mic encoder for this peer
-    let s_lock = Arc::clone(&*state);
-    let id_enc = id.clone();
-    tokio::spawn(async move {
-        let (mut mic_rx, audio_track_enc) = {
-            let guard = s_lock.lock().await;
-            let rx    = guard.audio.as_ref().map(|a| a.mic_tx.subscribe());
-            let track = guard.peers.get(&id_enc).map(|p| p.audio_track.clone());
-            (rx, track)
-        };
-        let (mut rx, track) = match (mic_rx, audio_track_enc) {
-            (Some(r), Some(t)) => (r, t),
-            _                  => return,
-        };
-
-        let mut enc = match OpusEncoder::new(SAMPLE_RATE, Channels::Mono, opus::Application::Voip) {
-            Ok(e)  => e,
-            Err(e) => { eprintln!("[rtc_linux] opus encoder: {e}"); return; }
-        };
-        let mut encoded = vec![0u8; 4000];
-
-        loop {
-            let frame = match rx.recv().await {
-                Ok(f)  => f,
-                Err(_) => break,
+    // ── Encoder task: mic frames → Opus → webrtc-rs audio track ─────────────
+    if let Some(mut rx) = mic_rx {
+        tokio::spawn(async move {
+            let mut enc = match OpusEncoder::new(SAMPLE_RATE, Channels::Mono, opus::Application::Voip) {
+                Ok(e) => e,
+                Err(e) => { eprintln!("[rtc_linux] opus encoder init: {e}"); return; }
             };
-            match enc.encode_float(&frame, &mut encoded) {
-                Ok(n) => {
-                    let sample = Sample {
-                        data:     bytes::Bytes::copy_from_slice(&encoded[..n]),
-                        duration: Duration::from_millis(20),
-                        ..Default::default()
-                    };
-                    if track.write_sample(&sample).await.is_err() {
-                        break; // peer closed
+            let mut encoded = vec![0u8; 4000];
+
+            loop {
+                let frame: Vec<f32> = match rx.recv().await {
+                    Ok(f) => f,
+                    Err(_) => break, // sender dropped → peer closed
+                };
+                match enc.encode_float(&frame, &mut encoded) {
+                    Ok(n) => {
+                        let sample = Sample {
+                            data:     Bytes::copy_from_slice(&encoded[..n]),
+                            duration: Duration::from_millis(20),
+                            ..Default::default()
+                        };
+                        if audio_track.write_sample(&sample).await.is_err() { break; }
                     }
+                    Err(e) => eprintln!("[rtc_linux] opus encode: {e}"),
                 }
-                Err(e) => eprintln!("[rtc_linux] opus encode: {e}"),
             }
-        }
-    });
+        });
+    }
 
     Ok(())
 }
 
-/// Create an SDP offer.  Returns the SDP string.
+/// Create an SDP offer and set it as local description.
 #[tauri::command]
 pub async fn rtc_create_offer(
     id:    String,
     state: tauri::State<'_, SharedRtcState>,
 ) -> Result<String, String> {
-    let guard = state.lock().await;
-    let peer  = guard.peers.get(&id).ok_or("peer not found")?;
-    let offer = peer.pc.create_offer(None).await.map_err(|e| e.to_string())?;
+    // Extract Arc<RTCPeerConnection>, drop lock before awaiting
+    let pc = state.inner().lock().await
+        .peers.get(&id).ok_or("peer not found")?.pc.clone();
+    let offer = pc.create_offer(None).await.map_err(|e| e.to_string())?;
     let sdp   = offer.sdp.clone();
-    peer.pc.set_local_description(offer).await.map_err(|e| e.to_string())?;
+    pc.set_local_description(offer).await.map_err(|e| e.to_string())?;
     Ok(sdp)
 }
 
-/// Set local description (called after createOffer/createAnswer).
+/// Set local description (JS calls after createOffer/createAnswer returns the SDP).
 #[tauri::command]
 pub async fn rtc_set_local_description(
-    id:    String,
+    id:     String,
     r#type: String,
-    sdp:   String,
-    state: tauri::State<'_, SharedRtcState>,
+    sdp:    String,
+    state:  tauri::State<'_, SharedRtcState>,
 ) -> Result<(), String> {
-    let guard = state.lock().await;
-    let peer  = guard.peers.get(&id).ok_or("peer not found")?;
-    let desc  = if r#type == "offer" {
+    let pc = state.inner().lock().await
+        .peers.get(&id).ok_or("peer not found")?.pc.clone();
+    let desc = if r#type == "offer" {
         RTCSessionDescription::offer(sdp).map_err(|e| e.to_string())?
     } else {
         RTCSessionDescription::answer(sdp).map_err(|e| e.to_string())?
     };
-    peer.pc.set_local_description(desc).await.map_err(|e| e.to_string())
+    pc.set_local_description(desc).await.map_err(|e| e.to_string())
 }
 
-/// Set remote description.  If the remote SDP is an offer, creates and returns
-/// an answer SDP.  If it's an answer, returns an empty string.
+/// Set remote description.  Returns answer SDP when type=="offer", else "".
 #[tauri::command]
 pub async fn rtc_set_remote_description(
     id:     String,
@@ -494,19 +405,19 @@ pub async fn rtc_set_remote_description(
     sdp:    String,
     state:  tauri::State<'_, SharedRtcState>,
 ) -> Result<String, String> {
-    let guard = state.lock().await;
-    let peer  = guard.peers.get(&id).ok_or("peer not found")?;
+    let pc = state.inner().lock().await
+        .peers.get(&id).ok_or("peer not found")?.pc.clone();
 
     if r#type == "offer" {
         let offer = RTCSessionDescription::offer(sdp).map_err(|e| e.to_string())?;
-        peer.pc.set_remote_description(offer).await.map_err(|e| e.to_string())?;
-        let answer = peer.pc.create_answer(None).await.map_err(|e| e.to_string())?;
-        let sdp    = answer.sdp.clone();
-        peer.pc.set_local_description(answer).await.map_err(|e| e.to_string())?;
-        Ok(sdp)
+        pc.set_remote_description(offer).await.map_err(|e| e.to_string())?;
+        let answer = pc.create_answer(None).await.map_err(|e| e.to_string())?;
+        let asdp   = answer.sdp.clone();
+        pc.set_local_description(answer).await.map_err(|e| e.to_string())?;
+        Ok(asdp)
     } else {
-        let answer = RTCSessionDescription::answer(sdp).map_err(|e| e.to_string())?;
-        peer.pc.set_remote_description(answer).await.map_err(|e| e.to_string())?;
+        let ans = RTCSessionDescription::answer(sdp).map_err(|e| e.to_string())?;
+        pc.set_remote_description(ans).await.map_err(|e| e.to_string())?;
         Ok(String::new())
     }
 }
@@ -517,61 +428,50 @@ pub async fn rtc_add_ice_candidate(
     id:              String,
     candidate:       String,
     sdp_mid:         Option<String>,
-    sdp_m_line_index: Option<u16>,
+    sdp_mline_index: Option<u16>,
     state:           tauri::State<'_, SharedRtcState>,
 ) -> Result<(), String> {
-    let guard = state.lock().await;
-    let peer  = guard.peers.get(&id).ok_or("peer not found")?;
-    let init  = RTCIceCandidateInit {
+    let pc = state.inner().lock().await
+        .peers.get(&id).ok_or("peer not found")?.pc.clone();
+    // RTCIceCandidateInit field names (webrtc-rs 0.11):
+    //   sdp_mid: Option<String>, sdp_mline_index: u16, username_fragment: Option<String>
+    let init = RTCIceCandidateInit {
         candidate,
-        sdp_mid:          sdp_mid.unwrap_or_default(),
-        sdp_m_line_index: sdp_m_line_index.unwrap_or(0),
-        username_fragment: String::new(),
+        sdp_mid:           sdp_mid,
+        sdp_mline_index:   sdp_mline_index.unwrap_or(0),
+        username_fragment: None,
     };
-    peer.pc.add_ice_candidate(init).await.map_err(|e| e.to_string())
+    pc.add_ice_candidate(init).await.map_err(|e| e.to_string())
 }
 
-/// Close a peer connection and remove it from state.
+/// Close and remove a peer connection.
 #[tauri::command]
 pub async fn rtc_close_pc(
     id:    String,
     state: tauri::State<'_, SharedRtcState>,
 ) -> Result<(), String> {
-    let mut guard = state.lock().await;
-    if let Some(peer) = guard.peers.remove(&id) {
-        let _ = peer.pc.close().await;
-    }
-    // If no peers left, drop audio streams
-    if guard.peers.is_empty() {
-        guard.audio = None;
-    }
+    let pc = {
+        let mut g = state.inner().lock().await;
+        let peer = g.peers.remove(&id);
+        if g.peers.is_empty() { stop_audio(&mut g); }
+        peer.map(|p| p.pc)
+    };
+    if let Some(pc) = pc { let _ = pc.close().await; }
     Ok(())
 }
 
-/// Set volume for a remote peer's audio (0.0 – 1.0).
+/// Set remote peer audio volume (0.0–1.0).  Stub — full per-peer mixing later.
 #[tauri::command]
 pub async fn rtc_set_volume(
-    id:    String,
-    vol:   f32,
-    state: tauri::State<'_, SharedRtcState>,
-) -> Result<(), String> {
-    let guard = state.lock().await;
-    if let Some(peer) = guard.peers.get(&id) {
-        if let Ok(mut v) = peer.vol.lock() {
-            *v = vol.clamp(0.0, 1.0);
-        }
-    }
-    Ok(())
-}
+    _id:    String,
+    _vol:   f32,
+    _state: tauri::State<'_, SharedRtcState>,
+) -> Result<(), String> { Ok(()) }
 
-/// Mute / unmute local mic for this peer connection.
-/// (Currently muting is done by encoding silence instead of real mic audio.)
+/// Mute/unmute local mic.  Stub — silence injection in encoder task later.
 #[tauri::command]
 pub async fn rtc_set_muted(
     _id:    String,
     _muted: bool,
     _state: tauri::State<'_, SharedRtcState>,
-) -> Result<(), String> {
-    // TODO: signal encoder task to send silence when muted
-    Ok(())
-}
+) -> Result<(), String> { Ok(()) }
