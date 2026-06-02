@@ -159,7 +159,9 @@ jobs:
             pkg-config \
             libglib2.0-dev \
             libsoup-3.0-dev \
-            libjavascriptcoregtk-4.1-dev
+            libjavascriptcoregtk-4.1-dev \
+            libasound2-dev \
+            libpipewire-0.3-dev
 
       # ── Linux: pre-fetch AppRun so Tauri doesn't hit the broken 404 URL ───
       # tauri-bundler tries to download AppRun from the tag "apprun-old" which
