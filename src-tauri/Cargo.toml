@@ -57,7 +57,7 @@ glib = "0.18"
 # the existing engine.ts works on all Linux systems regardless of WebKit version.
 webrtc = "0.11"
 # cpal: cross-platform audio I/O (mic capture + speaker playback)
-cpal = { version = "0.15", features = ["jack"] }
+cpal = "0.15"
 # opus: Opus codec for voice encoding/decoding
 opus = "0.3"
 # tokio channels, etc. (tokio itself comes from tauri)
