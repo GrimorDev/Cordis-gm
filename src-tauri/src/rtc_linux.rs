@@ -313,7 +313,7 @@ pub async fn rtc_create_pc(
                     match dec.decode_float(rtp.payload.as_ref(), &mut pcm_buf, false) {
                         Ok(n) => {
                             if let Ok(mut q) = ring.lock() {
-                                q.extend_from_slice(&pcm_buf[..n]);
+                                q.extend(pcm_buf[..n].iter().copied());
                             }
                         }
                         Err(e) => eprintln!("[rtc_linux] opus decode: {e}"),
@@ -434,11 +434,10 @@ pub async fn rtc_add_ice_candidate(
     let pc = state.inner().lock().await
         .peers.get(&id).ok_or("peer not found")?.pc.clone();
     // RTCIceCandidateInit field names (webrtc-rs 0.11):
-    //   sdp_mid: Option<String>, sdp_mline_index: u16, username_fragment: Option<String>
     let init = RTCIceCandidateInit {
         candidate,
         sdp_mid:           sdp_mid,
-        sdp_mline_index:   sdp_mline_index.unwrap_or(0),
+        sdp_mline_index:   sdp_mline_index,
         username_fragment: None,
     };
     pc.add_ice_candidate(init).await.map_err(|e| e.to_string())
