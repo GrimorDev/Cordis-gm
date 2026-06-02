@@ -11422,15 +11422,19 @@ export default function App() {
         } else {
           // Audio. A stream WITHOUT video = microphone; WITH video = screen-share audio.
           if (stream.getVideoTracks().length === 0) {
-            attachRemoteAudio(remoteUserId, stream);
-            try {
-              const saved = localStorage.getItem(`cordyn_vol_${remoteUserId}`);
-              if (saved !== null) { const vol = parseInt(saved, 10); if (!isNaN(vol)) { setUserVols(p => ({ ...p, [remoteUserId]: vol })); setRemoteVolume(remoteUserId, vol); } }
-            } catch {}
-            const stop = watchSpeaking(stream, (s) =>
-              setSpeakingUsers(p => { const n = new Set(p); s ? n.add(remoteUserId) : n.delete(remoteUserId); return n; }));
-            const old = speakStopRef.current.get(remoteUserId); if (old) old();
-            speakStopRef.current.set(remoteUserId, stop);
+            // __nativeRtc: stream is a placeholder from the Linux native polyfill.
+            // Actual audio is played by Rust/cpal — skip browser audio attachment.
+            if (!(stream as any).__nativeRtc) {
+              attachRemoteAudio(remoteUserId, stream);
+              try {
+                const saved = localStorage.getItem(`cordyn_vol_${remoteUserId}`);
+                if (saved !== null) { const vol = parseInt(saved, 10); if (!isNaN(vol)) { setUserVols(p => ({ ...p, [remoteUserId]: vol })); setRemoteVolume(remoteUserId, vol); } }
+              } catch {}
+              const stop = watchSpeaking(stream, (s) =>
+                setSpeakingUsers(p => { const n = new Set(p); s ? n.add(remoteUserId) : n.delete(remoteUserId); return n; }));
+              const old = speakStopRef.current.get(remoteUserId); if (old) old();
+              speakStopRef.current.set(remoteUserId, stop);
+            }
           } else {
             attachRemoteScreenAudio(remoteUserId, stream);
             try {

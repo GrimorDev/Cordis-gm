@@ -5,6 +5,54 @@ use tauri::{
     Emitter, Manager,
 };
 
+// ── Native WebRTC for Linux (webrtc-rs + cpal) ───────────────────────────────
+#[cfg(target_os = "linux")]
+mod rtc_linux;
+#[cfg(target_os = "linux")]
+use rtc_linux::{
+    SharedRtcState, RtcState,
+    rtc_create_pc, rtc_create_offer, rtc_set_local_description,
+    rtc_set_remote_description, rtc_add_ice_candidate,
+    rtc_close_pc, rtc_set_volume, rtc_set_muted,
+};
+
+// ── Stubs on Windows / macOS (generate_handler! requires all symbols) ─────────
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+async fn rtc_create_pc(_id: String, _ice_servers: Vec<serde_json::Value>) -> Result<(), String> {
+    Err("Native WebRTC only on Linux".to_string())
+}
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+async fn rtc_create_offer(_id: String) -> Result<String, String> {
+    Err("Native WebRTC only on Linux".to_string())
+}
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+async fn rtc_set_local_description(_id: String, _type: String, _sdp: String) -> Result<(), String> {
+    Ok(())
+}
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+async fn rtc_set_remote_description(_id: String, _type: String, _sdp: String) -> Result<String, String> {
+    Ok(String::new())
+}
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+async fn rtc_add_ice_candidate(
+    _id: String, _candidate: String,
+    _sdp_mid: Option<String>, _sdp_m_line_index: Option<u16>,
+) -> Result<(), String> { Ok(()) }
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+async fn rtc_close_pc(_id: String) -> Result<(), String> { Ok(()) }
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+async fn rtc_set_volume(_id: String, _vol: f32) -> Result<(), String> { Ok(()) }
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+async fn rtc_set_muted(_id: String, _muted: bool) -> Result<(), String> { Ok(()) }
+
 // ── WASAPI loopback state ────────────────────────────────────────────────────
 struct LoopbackState(std::sync::Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>>);
 
@@ -294,6 +342,13 @@ async fn request_media_permissions(window: tauri::WebviewWindow) -> Result<(), S
 pub fn run() {
     tauri::Builder::default()
         .manage(LoopbackState(std::sync::Mutex::new(None)))
+        // Native WebRTC state (Linux only — shared Arc<Mutex<RtcState>>)
+        .manage({
+            #[cfg(target_os = "linux")]
+            { std::sync::Arc::new(tokio::sync::Mutex::new(RtcState::new())) as SharedRtcState }
+            #[cfg(not(target_os = "linux"))]
+            { () }
+        })
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // Second launch attempt — bring existing window to front
             if let Some(win) = app.get_webview_window("main") {
@@ -503,6 +558,15 @@ pub fn run() {
             is_appimage,
             install_deb_update,
             open_mic_privacy_settings,
+            // ── Native WebRTC (Linux real impl / other platforms: stub) ───────
+            rtc_create_pc,
+            rtc_create_offer,
+            rtc_set_local_description,
+            rtc_set_remote_description,
+            rtc_add_ice_candidate,
+            rtc_close_pc,
+            rtc_set_volume,
+            rtc_set_muted,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -49,3 +49,18 @@ webkit2gtk = { version = "2", features = ["v2_2"] }
 # glib (same 0.18 line webkit2gtk uses) — for ObjectExt::set_property to toggle
 # the WebKitSettings `enable-webrtc` property (enables RTCPeerConnection).
 glib = "0.18"
+
+# ── Native WebRTC for Linux ────────────────────────────────────────────────────
+# webrtc-rs: full WebRTC stack (ICE, DTLS, SRTP, RTP) — eliminates the
+# dependency on WebKitGTK's built-in WebRTC which is disabled by default.
+# We expose a JS RTCPeerConnection polyfill backed by this native stack so
+# the existing engine.ts works on all Linux systems regardless of WebKit version.
+webrtc = "0.11"
+# cpal: cross-platform audio I/O (mic capture + speaker playback)
+cpal = { version = "0.15", features = ["jack"] }
+# opus: Opus codec for voice encoding/decoding
+opus = "0.3"
+# tokio channels, etc. (tokio itself comes from tauri)
+tokio = { version = "1", features = ["sync", "rt-multi-thread"] }
+# base64 for binary IPC payloads
+base64 = "0.22"
