@@ -370,12 +370,27 @@ pub async fn rtc_create_offer(
     id:    String,
     state: tauri::State<'_, SharedRtcState>,
 ) -> Result<String, String> {
-    // Extract Arc<RTCPeerConnection>, drop lock before awaiting
-    let pc = state.inner().lock().await
+    // Extract Arc<RTCPeerConnection>, drop lock before awaiting.
+    // Do NOT set local description here — JS will call setLocalDescription(mungedSdp)
+    // after munging (preferH264, preferOpusStereo).  Calling set_local_description twice
+    // (once here with original SDP and once from JS with munged SDP) puts webrtc-rs into
+    // an invalid signaling state and breaks the answer flow.
+    let pc  = state.inner().lock().await
         .peers.get(&id).ok_or("peer not found")?.pc.clone();
-    let offer = pc.create_offer(None).await.map_err(|e| e.to_string())?;
-    let sdp   = offer.sdp.clone();
-    pc.set_local_description(offer).await.map_err(|e| e.to_string())?;
+    let sdp = pc.create_offer(None).await.map_err(|e| e.to_string())?.sdp;
+    Ok(sdp)
+}
+
+/// Create an SDP answer (called by JS after setRemoteDescription(offer)).
+/// Returns the raw answer SDP; JS will call setLocalDescription with it.
+#[tauri::command]
+pub async fn rtc_create_answer(
+    id:    String,
+    state: tauri::State<'_, SharedRtcState>,
+) -> Result<String, String> {
+    let pc  = state.inner().lock().await
+        .peers.get(&id).ok_or("peer not found")?.pc.clone();
+    let sdp = pc.create_answer(None).await.map_err(|e| e.to_string())?.sdp;
     Ok(sdp)
 }
 
@@ -397,7 +412,11 @@ pub async fn rtc_set_local_description(
     pc.set_local_description(desc).await.map_err(|e| e.to_string())
 }
 
-/// Set remote description.  Returns answer SDP when type=="offer", else "".
+/// Set remote description.
+/// For offers: sets remote desc only, moves to "have-remote-offer".
+///   JS then calls createAnswer() → setLocalDescription(answer) → emitAnswer().
+/// For answers: sets remote desc, moves to "stable".
+/// Always returns "".
 #[tauri::command]
 pub async fn rtc_set_remote_description(
     id:     String,
@@ -407,19 +426,13 @@ pub async fn rtc_set_remote_description(
 ) -> Result<String, String> {
     let pc = state.inner().lock().await
         .peers.get(&id).ok_or("peer not found")?.pc.clone();
-
-    if r#type == "offer" {
-        let offer = RTCSessionDescription::offer(sdp).map_err(|e| e.to_string())?;
-        pc.set_remote_description(offer).await.map_err(|e| e.to_string())?;
-        let answer = pc.create_answer(None).await.map_err(|e| e.to_string())?;
-        let asdp   = answer.sdp.clone();
-        pc.set_local_description(answer).await.map_err(|e| e.to_string())?;
-        Ok(asdp)
+    let desc = if r#type == "offer" {
+        RTCSessionDescription::offer(sdp).map_err(|e| e.to_string())?
     } else {
-        let ans = RTCSessionDescription::answer(sdp).map_err(|e| e.to_string())?;
-        pc.set_remote_description(ans).await.map_err(|e| e.to_string())?;
-        Ok(String::new())
-    }
+        RTCSessionDescription::answer(sdp).map_err(|e| e.to_string())?
+    };
+    pc.set_remote_description(desc).await.map_err(|e| e.to_string())?;
+    Ok(String::new())
 }
 
 /// Add a remote ICE candidate.

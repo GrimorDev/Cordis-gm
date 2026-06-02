@@ -125,35 +125,37 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
   }
 
   async createAnswer(_options?: RTCAnswerOptions): Promise<RTCSessionDescriptionInit> {
-    // In our flow, createAnswer is implicit in rtc_set_remote_description when type=offer.
-    // Return a placeholder; the real answer SDP was already sent in setRemoteDescription.
-    return { type: 'answer', sdp: this.localDescription?.sdp ?? '' };
+    // Ask Rust to create the answer SDP (peer must be in "have-remote-offer" state).
+    // JS will call setLocalDescription(answer) afterwards, which sets it in webrtc-rs.
+    const sdp = await invoke<string>('rtc_create_answer', { id: this._id });
+    return { type: 'answer', sdp };
   }
 
   async setLocalDescription(desc: RTCSessionDescriptionInit): Promise<void> {
     this.localDescription = desc as RTCSessionDescription;
-    this.signalingState = desc.type === 'offer' ? 'have-local-offer' : 'stable';
     await invoke('rtc_set_local_description', {
       id:   this._id,
       type: desc.type,
       sdp:  desc.sdp ?? '',
     });
+    // Update signaling state to match webrtc-rs transitions:
+    //   offer  → set_local  → have-local-offer
+    //   answer → set_local  → stable
+    this.signalingState = desc.type === 'offer' ? 'have-local-offer' : 'stable';
   }
 
   async setRemoteDescription(desc: RTCSessionDescriptionInit): Promise<void> {
     this.remoteDescription = desc as RTCSessionDescription;
-    // For offers: Rust creates the answer internally and sets it as local description.
-    const answerSdp = await invoke<string>('rtc_set_remote_description', {
+    // Rust only sets remote description here (no implicit answer creation).
+    // JS controls the full offer/answer lifecycle:
+    //   offer  path: setRemoteDescription → createAnswer → setLocalDescription → emitAnswer
+    //   answer path: setRemoteDescription (done)
+    await invoke('rtc_set_remote_description', {
       id:   this._id,
       type: desc.type,
       sdp:  desc.sdp ?? '',
     });
-    if (desc.type === 'offer' && answerSdp) {
-      this.localDescription = { type: 'answer', sdp: answerSdp } as RTCSessionDescription;
-      this.signalingState = 'stable';
-    } else {
-      this.signalingState = 'stable';
-    }
+    this.signalingState = desc.type === 'offer' ? 'have-remote-offer' : 'stable';
   }
 
   async addIceCandidate(candidate: RTCIceCandidateInit | null): Promise<void> {

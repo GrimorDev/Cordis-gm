@@ -11,9 +11,9 @@ mod rtc_linux;
 #[cfg(target_os = "linux")]
 use rtc_linux::{
     SharedRtcState, RtcState,
-    rtc_create_pc, rtc_create_offer, rtc_set_local_description,
-    rtc_set_remote_description, rtc_add_ice_candidate,
-    rtc_close_pc, rtc_set_volume, rtc_set_muted,
+    rtc_create_pc, rtc_create_offer, rtc_create_answer,
+    rtc_set_local_description, rtc_set_remote_description,
+    rtc_add_ice_candidate, rtc_close_pc, rtc_set_volume, rtc_set_muted,
 };
 
 // ── Stubs on Windows / macOS (generate_handler! requires all symbols) ─────────
@@ -25,6 +25,11 @@ async fn rtc_create_pc(_id: String, _ice_servers: Vec<serde_json::Value>) -> Res
 #[cfg(not(target_os = "linux"))]
 #[tauri::command]
 async fn rtc_create_offer(_id: String) -> Result<String, String> {
+    Err("Native WebRTC only on Linux".to_string())
+}
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+async fn rtc_create_answer(_id: String) -> Result<String, String> {
     Err("Native WebRTC only on Linux".to_string())
 }
 #[cfg(not(target_os = "linux"))]
@@ -561,6 +566,7 @@ pub fn run() {
             // ── Native WebRTC (Linux real impl / other platforms: stub) ───────
             rtc_create_pc,
             rtc_create_offer,
+            rtc_create_answer,
             rtc_set_local_description,
             rtc_set_remote_description,
             rtc_add_ice_candidate,
