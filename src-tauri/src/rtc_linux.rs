@@ -346,15 +346,16 @@ pub async fn rtc_create_pc(
         }));
     }
 
-    {   // Negotiation needed → JS
-        let (a, i) = (app.clone(), id.clone());
-        pc.on_negotiation_needed(Box::new(move || {
-            let (a, i) = (a.clone(), i.clone());
-            Box::pin(async move {
-                let _ = a.emit("rtc_negotiation_needed", StatePayload { pc_id: i, state: "needed".into() });
-            })
-        }));
-    }
+    // NOTE: We do NOT wire on_negotiation_needed to a Tauri event here.
+    // Reason: Rust fires this immediately when the audio track is added, before
+    // JS has a chance to call setRemoteDescription (offer).  The premature
+    // onnegotiationneeded causes engine.ts to call setLocalDescription(offer)
+    // which sets current_local_description, and then create_answer() fails with
+    // "new sdp does not match previous answer" because webrtc-rs tries to match
+    // the new answer against the already-cached local offer.
+    //
+    // Instead, onnegotiationneeded is fired from the JS polyfill's addTrack()
+    // which is called synchronously by engine.ts in the correct order.
 
     {   // Remote track → Opus decode → output ring buffer
         let (a, i)    = (app.clone(), id.clone());
@@ -486,11 +487,7 @@ pub async fn rtc_set_local_description(
     pc.set_local_description(desc).await.map_err(|e| e.to_string())
 }
 
-/// Set remote description.
-/// For offers: explicit rollback first (fixes "new sdp does not match previous answer"
-///   when both peers offer simultaneously — webrtc-rs's implicit rollback is buggy).
-/// For answers: sets remote desc, moves to "stable".
-/// Always returns "".
+/// Set remote description.  Always returns "".
 #[tauri::command]
 pub async fn rtc_set_remote_description(
     id:     String,
@@ -500,18 +497,6 @@ pub async fn rtc_set_remote_description(
 ) -> Result<String, String> {
     let pc = state.inner().lock().await
         .peers.get(&id).ok_or("peer not found")?.pc.clone();
-
-    if r#type == "offer" {
-        // Explicit rollback before accepting remote offer.
-        // webrtc-rs 0.11 has a bug where the implicit rollback inside
-        // set_remote_description leaves state inconsistent, causing
-        // create_answer() to fail with "new sdp does not match previous answer".
-        // We trigger an explicit rollback first; it's a no-op when stable.
-        // RTCSessionDescription has private `parsed` field — use Default then patch sdp_type
-        let mut rollback = RTCSessionDescription::default();
-        rollback.sdp_type = RTCSdpType::Rollback;
-        let _ = pc.set_local_description(rollback).await;
-    }
 
     let desc = if r#type == "offer" {
         RTCSessionDescription::offer(sdp).map_err(|e| e.to_string())?

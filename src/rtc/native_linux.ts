@@ -52,6 +52,11 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
 
   private _unlisteners: UnlistenFn[] = [];
   private _closed = false;
+  // Block onnegotiationneeded during _recreatePeer() + retry window to prevent
+  // race condition where the new Rust peer fires negotiation before the remote
+  // offer is processed, causing current_local_description to be set with an
+  // offer — which then makes create_answer() fail with "does not match".
+  private _blockNegotiation = false;
 
   // Store ICE servers so we can recreate the Rust peer when needed
   private readonly _iceServers: object[];
@@ -125,10 +130,9 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
       }
     });
 
-    const u3 = await listen<StatePayload>('rtc_negotiation_needed', (e) => {
-      if (e.payload.pc_id !== id) return;
-      this.onnegotiationneeded?.();
-    });
+    // rtc_negotiation_needed events from Rust are intentionally NOT wired here.
+    // onnegotiationneeded is fired from addTrack() instead, which is called
+    // synchronously by engine.ts — giving us deterministic timing control.
 
     const u4 = await listen<TrackPayload>('rtc_track_added', (e) => {
       if (e.payload.pc_id !== id) return;
@@ -187,17 +191,25 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
     const sdp  = desc.sdp ?? '';
     const type = desc.type as RTCSdpType;
 
-    // webrtc-rs 0.11 cannot re-negotiate on a previously-used PeerConnection —
-    // create_answer() returns "new sdp does not match previous answer" when the
-    // same Rust PC object is reused after a failed ICE round.
-    // Fix: if the Rust call fails, recreate a fresh peer and retry once.
+    // If the Rust peer is in a bad state (prev failed ICE round), recreate it.
+    // _blockNegotiation prevents the onnegotiationneeded race condition:
+    //   rtc_create_pc adds audio track → would normally fire onnegotiationneeded
+    //   → engine creates offer → sets current_local_description
+    //   → create_answer() sees "previous answer" and fails
+    // With _blockNegotiation=true the addTrack() onnegotiationneeded is suppressed
+    // during the recreate+retry window.
     const trySet = () => invoke('rtc_set_remote_description', { id: this._id, type, sdp });
     try {
       await trySet();
     } catch (e) {
       console.warn('[NativeRTC] setRemoteDescription failed, recreating peer:', e);
-      await this._recreatePeer();
-      await trySet(); // retry on fresh peer — throws if still fails
+      this._blockNegotiation = true;
+      try {
+        await this._recreatePeer();
+        await trySet(); // retry on fresh peer
+      } finally {
+        this._blockNegotiation = false;
+      }
     }
 
     this.remoteDescription = { type, sdp, toJSON: () => ({ type, sdp }) } as RTCSessionDescription;
@@ -215,8 +227,14 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
   }
 
   addTrack(_track: MediaStreamTrack, ..._streams: MediaStream[]): RTCRtpSender {
+    // Fire onnegotiationneeded exactly like a real browser does when a track is added.
+    // This is the only place onnegotiationneeded fires — NOT from Rust events.
+    // Using setTimeout(0) so it fires after this synchronous call returns, in the
+    // correct position in engine.ts's execution order.
+    if (!this._blockNegotiation) {
+      setTimeout(() => { this.onnegotiationneeded?.(); }, 0);
+    }
     // Mic capture is started by rtc_create_pc in Rust — no extra action needed.
-    // Return a minimal sender so engine.ts getSenders() works.
     return {
       track:         _track,
       transport:     null,
