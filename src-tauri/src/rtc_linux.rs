@@ -507,7 +507,9 @@ pub async fn rtc_set_remote_description(
         // set_remote_description leaves state inconsistent, causing
         // create_answer() to fail with "new sdp does not match previous answer".
         // We trigger an explicit rollback first; it's a no-op when stable.
-        let rollback = RTCSessionDescription { sdp_type: RTCSdpType::Rollback, sdp: String::new() };
+        // RTCSessionDescription has private `parsed` field — use Default then patch sdp_type
+        let mut rollback = RTCSessionDescription::default();
+        rollback.sdp_type = RTCSdpType::Rollback;
         let _ = pc.set_local_description(rollback).await;
     }
 
