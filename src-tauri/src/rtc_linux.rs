@@ -35,7 +35,8 @@ use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::sdp_type::RTCSdpType;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
-use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
+use webrtc::rtp_transceiver::rtp_codec::{RTCRtpCodecCapability, RTPCodecType};
+use webrtc::rtp_transceiver::{RTCRtpTransceiverDirection, RTCRtpTransceiverInit};
 use webrtc::track::track_local::TrackLocal;
 use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use webrtc::track::track_remote::TrackRemote;
@@ -305,6 +306,18 @@ pub async fn rtc_create_pc(
     ));
     pc.add_track(Arc::clone(&audio_track) as Arc<dyn TrackLocal + Send + Sync>)
         .await.map_err(|e| e.to_string())?;
+
+    // Add a recvonly video transceiver so webrtc-rs can generate valid answers
+    // for Chrome/WebView2 offers that include video m= sections.  Without this,
+    // create_answer() fails because the answer would have fewer m= sections than
+    // the offer (SDP requires matching m= section counts in answer).
+    let _ = pc.add_transceiver_from_kind(
+        RTPCodecType::Video,
+        Some(RTCRtpTransceiverInit {
+            direction:      RTCRtpTransceiverDirection::Recvonly,
+            send_encodings: vec![],
+        }),
+    ).await;
 
     // ── Event wiring ─────────────────────────────────────────────────────────
 

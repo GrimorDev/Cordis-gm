@@ -130,11 +130,9 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
       }
     });
 
-    // rtc_negotiation_needed events from Rust are intentionally NOT wired here.
-    // onnegotiationneeded is fired from addTrack() instead, which is called
-    // synchronously by engine.ts — giving us deterministic timing control.
+    // NOTE: rtc_negotiation_needed Rust events are NOT wired here (see addTrack()).
 
-    const u4 = await listen<TrackPayload>('rtc_track_added', (e) => {
+    const u3 = await listen<TrackPayload>('rtc_track_added', (e) => {
       if (e.payload.pc_id !== id) return;
       // Use plain objects — new MediaStream() / new MediaStreamTrack() constructors
       // may not be available when WebKitGTK has WebRTC disabled.
@@ -159,7 +157,7 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
       this.ontrack?.({ track, streams: [stream] } as unknown as RTCTrackEvent);
     });
 
-    this._unlisteners.push(u1, u2, u3, u4);
+    this._unlisteners.push(u1, u2, u3);
   }
 
   // ── RTCPeerConnection API ─────────────────────────────────────────────────
@@ -198,6 +196,12 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
     //   → create_answer() sees "previous answer" and fails
     // With _blockNegotiation=true the addTrack() onnegotiationneeded is suppressed
     // during the recreate+retry window.
+    // Set signalingState BEFORE the await so that any queued addTrack() setTimeout
+    // sees a non-stable state and suppresses onnegotiationneeded.  This prevents
+    // engine.ts from calling setLocalDescription(offer) during our setRemoteDescription,
+    // which would set current_local_description and make create_answer() fail.
+    if (type === 'offer') this.signalingState = 'have-remote-offer';
+
     const trySet = () => invoke('rtc_set_remote_description', { id: this._id, type, sdp });
     try {
       await trySet();
@@ -228,12 +232,15 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
 
   addTrack(_track: MediaStreamTrack, ..._streams: MediaStream[]): RTCRtpSender {
     // Fire onnegotiationneeded exactly like a real browser does when a track is added.
-    // This is the only place onnegotiationneeded fires — NOT from Rust events.
-    // Using setTimeout(0) so it fires after this synchronous call returns, in the
-    // correct position in engine.ts's execution order.
-    if (!this._blockNegotiation) {
-      setTimeout(() => { this.onnegotiationneeded?.(); }, 0);
-    }
+    // Check INSIDE the callback (not just at call time) so that if setRemoteDescription
+    // starts before the timeout fires, we see the updated signalingState and don't
+    // create a premature offer that would set current_local_description and break
+    // create_answer() with "new sdp does not match previous answer".
+    setTimeout(() => {
+      if (!this._blockNegotiation && this.signalingState === 'stable') {
+        this.onnegotiationneeded?.();
+      }
+    }, 0);
     // Mic capture is started by rtc_create_pc in Rust — no extra action needed.
     return {
       track:         _track,
