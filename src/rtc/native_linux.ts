@@ -168,10 +168,16 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
   }
 
   async createAnswer(_options?: RTCAnswerOptions): Promise<RTCSessionDescriptionInit> {
-    // Ask Rust to create the answer SDP (peer must be in "have-remote-offer" state).
-    // JS will call setLocalDescription(answer) afterwards, which sets it in webrtc-rs.
-    const sdp = await invoke<string>('rtc_create_answer', { id: this._id });
-    return { type: 'answer', sdp };
+    console.log('[NativeRTC] createAnswer called, signalingState:', this.signalingState);
+    try {
+      const sdp = await invoke<string>('rtc_create_answer', { id: this._id });
+      console.log('[NativeRTC] createAnswer SUCCESS, SDP sections:', sdp.match(/^m=\w+/gm)?.join(' '));
+      return { type: 'answer', sdp };
+    } catch (e) {
+      console.error('[NativeRTC] createAnswer FAILED:', e,
+        '| signalingState:', this.signalingState);
+      throw e;
+    }
   }
 
   async setLocalDescription(desc: RTCSessionDescriptionInit): Promise<void> {
@@ -201,6 +207,12 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
     // engine.ts from calling setLocalDescription(offer) during our setRemoteDescription,
     // which would set current_local_description and make create_answer() fail.
     if (type === 'offer') this.signalingState = 'have-remote-offer';
+
+    // Log first 300 chars of offer SDP for debugging (helps diagnose Chrome compatibility)
+    if (type === 'offer') {
+      console.log('[NativeRTC] setRemoteDescription offer, SDP sections:',
+        sdp.match(/^m=\w+/gm)?.join(' ') ?? 'unknown');
+    }
 
     const trySet = () => invoke('rtc_set_remote_description', { id: this._id, type, sdp });
     try {

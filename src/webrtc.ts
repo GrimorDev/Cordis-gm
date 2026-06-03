@@ -850,15 +850,75 @@ export async function applyNoiseGate(rawStream: MediaStream): Promise<NoisePipel
 
 // ─── Device Enumeration ──────────────────────────────────────────────────────
 export async function getMediaDevices(): Promise<MediaDeviceInfo[]> {
+  const isTauri = '__TAURI_INTERNALS__' in window;
+  const isLinux = navigator.userAgent.toLowerCase().includes('linux');
+
+  // On Linux Tauri, WebKitGTK does NOT enumerate audiooutput devices.
+  // Use cpal (via rtc_list_audio_devices Tauri command) which knows all
+  // ALSA/PipeWire devices, and merge with WebKit's audioinput list.
+  if (isTauri && isLinux) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const cpalDevices = await invoke<Array<{id: string; name: string; kind: string}>>(
+        'rtc_list_audio_devices',
+      );
+      // Also try WebKit enumeration for audioinput labels (might have mic names)
+      const webkitDevices: MediaDeviceInfo[] = [];
+      try {
+        if (navigator.mediaDevices) {
+          await navigator.mediaDevices.getUserMedia({ audio: true }).then(s => {
+            s.getTracks().forEach(t => t.stop());
+          }).catch(() => {});
+          webkitDevices.push(...await navigator.mediaDevices.enumerateDevices());
+        }
+      } catch {}
+      // Build merged list: cpal output devices + webkit input devices
+      const result: MediaDeviceInfo[] = [];
+      // Add cpal output devices first
+      for (const d of cpalDevices) {
+        if (d.kind === 'output') {
+          result.push({
+            deviceId:   d.id,
+            groupId:    '',
+            kind:       'audiooutput' as MediaDeviceKind,
+            label:      d.name,
+            toJSON:     () => ({ deviceId: d.id, groupId: '', kind: 'audiooutput', label: d.name }),
+          } as MediaDeviceInfo);
+        }
+      }
+      // Add webkit input devices (have mic labels after permission grant)
+      const webkitInputs = webkitDevices.filter(d => d.kind === 'audioinput');
+      if (webkitInputs.length > 0) {
+        result.push(...webkitInputs);
+      } else {
+        // Fallback: use cpal input devices
+        for (const d of cpalDevices) {
+          if (d.kind === 'input') {
+            result.push({
+              deviceId: d.id,
+              groupId:  '',
+              kind:     'audioinput' as MediaDeviceKind,
+              label:    d.name,
+              toJSON:   () => ({ deviceId: d.id, groupId: '', kind: 'audioinput', label: d.name }),
+            } as MediaDeviceInfo);
+          }
+        }
+      }
+      // Also add videoinput from webkit
+      result.push(...webkitDevices.filter(d => d.kind === 'videoinput'));
+      return result;
+    } catch (e) {
+      console.warn('[getMediaDevices] cpal fallback failed:', e);
+    }
+  }
+
   if (!navigator.mediaDevices) return [];
   try {
     // Request BOTH audio + video permissions before enumerating.
     // Linux (WebKitGTK) and macOS return empty labels for ungranted devices.
-    // We stop all tracks immediately — we just need the permission grant.
     await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
       .then(s => s.getTracks().forEach(t => t.stop()))
       .catch(async () => {
-        // Camera unavailable or denied — try audio-only so mics still get labels
         await navigator.mediaDevices.getUserMedia({ audio: true })
           .then(s => s.getTracks().forEach(t => t.stop()))
           .catch(() => {});
