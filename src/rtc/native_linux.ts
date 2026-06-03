@@ -53,22 +53,38 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
   private _unlisteners: UnlistenFn[] = [];
   private _closed = false;
 
+  // Store ICE servers so we can recreate the Rust peer when needed
+  private readonly _iceServers: object[];
+
   constructor(config?: RTCConfiguration) {
     this._id = genId();
 
-    const iceServers = (config?.iceServers ?? []).map((s: RTCIceServer) => ({
+    this._iceServers = (config?.iceServers ?? []).map((s: RTCIceServer) => ({
       urls:       Array.isArray(s.urls) ? s.urls : [s.urls as string],
       username:   (s as any).username   ?? null,
       credential: (s as any).credential ?? null,
     }));
 
     // Create Rust-side peer connection
-    invoke('rtc_create_pc', { id: this._id, iceServers }).catch((e) =>
+    invoke('rtc_create_pc', { id: this._id, iceServers: this._iceServers }).catch((e) =>
       console.error('[NativeRTC] rtc_create_pc failed:', e)
     );
 
     // Wire Tauri events → JS callbacks
     this._wire();
+  }
+
+  // Re-create the Rust-side peer connection (used when webrtc-rs can't
+  // re-negotiate on a previously-used connection).  Tauri event listeners
+  // (wired in _wire()) use the same ID so they pick up events from the new peer.
+  private async _recreatePeer(): Promise<void> {
+    await invoke('rtc_close_pc', { id: this._id }).catch(() => {});
+    await invoke('rtc_create_pc', { id: this._id, iceServers: this._iceServers });
+    this.signalingState   = 'stable';
+    this.connectionState  = 'new';
+    this.iceConnectionState = 'new';
+    this.localDescription  = null;
+    this.remoteDescription = null;
   }
 
   private async _wire() {
@@ -170,8 +186,21 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
   async setRemoteDescription(desc: RTCSessionDescriptionInit): Promise<void> {
     const sdp  = desc.sdp ?? '';
     const type = desc.type as RTCSdpType;
+
+    // webrtc-rs 0.11 cannot re-negotiate on a previously-used PeerConnection —
+    // create_answer() returns "new sdp does not match previous answer" when the
+    // same Rust PC object is reused after a failed ICE round.
+    // Fix: if the Rust call fails, recreate a fresh peer and retry once.
+    const trySet = () => invoke('rtc_set_remote_description', { id: this._id, type, sdp });
+    try {
+      await trySet();
+    } catch (e) {
+      console.warn('[NativeRTC] setRemoteDescription failed, recreating peer:', e);
+      await this._recreatePeer();
+      await trySet(); // retry on fresh peer — throws if still fails
+    }
+
     this.remoteDescription = { type, sdp, toJSON: () => ({ type, sdp }) } as RTCSessionDescription;
-    await invoke('rtc_set_remote_description', { id: this._id, type, sdp });
     this.signalingState = type === 'offer' ? 'have-remote-offer' : 'stable';
   }
 
@@ -209,14 +238,15 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
   getTransceivers(): RTCRtpTransceiver[] { return []; }
 
   restartIce(): void {
-    // Do NOT close the peer — closing it breaks reconnection because the JS
-    // polyfill object stays in engine.ts's peers map but the Rust peer is gone.
-    // Instead, signal renegotiation so engine.ts creates a fresh offer with
-    // new ICE credentials.  A small delay lets ICE finish its current state
-    // transition before triggering the new negotiation round.
-    setTimeout(() => {
-      this.onnegotiationneeded?.();
-    }, 300);
+    // Close the Rust peer so setRemoteDescription can detect the stale state
+    // and recreate a fresh one (via _recreatePeer) when the remote sends a
+    // new offer.  The JS polyfill object (engine.ts peers map entry) stays
+    // alive — the next setRemoteDescription call auto-recreates the Rust peer.
+    invoke('rtc_close_pc', { id: this._id }).catch(() => {});
+    this.connectionState  = 'closed';
+    this.iceConnectionState = 'closed';
+    this.onconnectionstatechange?.();
+    this.oniceconnectionstatechange?.();
   }
 
   async close(): Promise<void> {
