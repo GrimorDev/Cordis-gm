@@ -7,7 +7,7 @@
  */
 
 import React, {
-  useState, useEffect, useRef, useLayoutEffect, useCallback,
+  useState, useEffect, useRef, useLayoutEffect,
 } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -521,7 +521,12 @@ function VisualFlowEditor({
   const actionRefs   = useRef<Map<number, HTMLDivElement>>(new Map());
   const [arrows, setArrows] = useState<[NodePos, NodePos][]>([]);
 
-  const recomputeArrows = useCallback(() => {
+  // Compute SVG arrow positions after every paint.
+  // IMPORTANT: We use the functional setState form and compare JSON to detect
+  // unchanged positions — when positions didn't change we return `prev` (same
+  // reference), which tells React "nothing changed → skip re-render".
+  // This breaks the naive infinite loop: useLayoutEffect → setArrows → re-render → repeat.
+  useLayoutEffect(() => {
     if (!containerRef.current) return;
     const base = containerRef.current.getBoundingClientRect();
     const getPos = (el: HTMLDivElement | null): NodePos | null => {
@@ -538,11 +543,11 @@ function VisualFlowEditor({
       const ap = getPos(el);
       if (source && ap) connections.push([source, ap]);
     });
-    setArrows(connections);
-  }, [rule.conditions]);
-
-  useLayoutEffect(() => {
-    recomputeArrows();
+    setArrows(prev => {
+      // Same values → same reference → React bails out → no extra render
+      if (JSON.stringify(prev) === JSON.stringify(connections)) return prev;
+      return connections;
+    });
   });
 
   const trigger = rule.trigger_type as ExtTrigger ?? 'member_join';
