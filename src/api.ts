@@ -199,6 +199,7 @@ export interface ServerData {
   icon_url?: string | null; banner_url?: string | null;
   is_official?: boolean;
   owner_id: string; created_at: string;
+  member_count?: number;
 }
 export interface ServerTag {
   server_id: string;

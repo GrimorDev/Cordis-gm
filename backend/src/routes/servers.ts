@@ -102,7 +102,8 @@ async function getRolePosition(serverId: string, userId: string): Promise<number
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { rows } = await query(
-      `SELECT s.id, s.name, s.icon_url, s.banner_url, s.description, s.owner_id, s.is_official, s.created_at
+      `SELECT s.id, s.name, s.icon_url, s.banner_url, s.description, s.owner_id, s.is_official, s.created_at,
+              (SELECT COUNT(*)::int FROM server_members WHERE server_id = s.id) AS member_count
        FROM servers s INNER JOIN server_members sm ON sm.server_id = s.id
        WHERE sm.user_id = $1 ORDER BY s.created_at`,
       [req.user!.id]
