@@ -3995,6 +3995,58 @@ function ServerSettingsPage({
   const [memberQ, setMemberQ] = React.useState('');
   const [isPublicLocal, setIsPublicLocal] = React.useState(!!(serverFull as any).is_public);
   const [discCat, setDiscCat] = React.useState<string>((serverFull as any).discovery_category || '');
+
+  // ── Invite management (local to settings page) ───────────────────────────
+  const [inviteListLocal, setInviteListLocal]           = React.useState<any[]>([]);
+  const [inviteListLoadingLocal, setInviteListLoadingLocal] = React.useState(false);
+  const [inviteGeneratingLocal, setInviteGeneratingLocal]   = React.useState(false);
+  const [inviteMaxUsesLocal, setInviteMaxUsesLocal]     = React.useState('unlimited');
+  const [inviteLoadedFor, setInviteLoadedFor]           = React.useState<string|null>(null);
+
+  React.useEffect(() => {
+    if (tab !== 'invites' || !activeServer) return;
+    if (inviteLoadedFor === activeServer) return;
+    setInviteLoadedFor(activeServer);
+    setInviteListLoadingLocal(true);
+    serversApi.listInvites(activeServer)
+      .then(l => { setInviteListLocal(l); setInviteListLoadingLocal(false); })
+      .catch(() => setInviteListLoadingLocal(false));
+  }, [tab, activeServer, inviteLoadedFor]);
+
+  const handleInviteLocal = async () => {
+    if (!activeServer) return;
+    setInviteGeneratingLocal(true);
+    try {
+      const r = await serversApi.createInvite(activeServer, inviteDur, inviteMaxUsesLocal);
+      setInviteListLocal(p => [{ ...r, creator_username: currentUser?.username ?? '' }, ...p]);
+      addToast?.('Link zaproszeniowy utworzony!', 'success');
+    } catch { addToast?.('Błąd tworzenia zaproszenia', 'error'); }
+    finally { setInviteGeneratingLocal(false); }
+  };
+
+  const delInviteLocal = async (code: string) => {
+    if (!activeServer) return;
+    try {
+      await serversApi.deleteInvite(activeServer, code);
+      setInviteListLocal(p => p.filter(i => i.code !== code));
+      addToast?.('Zaproszenie usunięte', 'info');
+    } catch { addToast?.('Błąd', 'error'); }
+  };
+
+  const copyInviteLink = (code: string) => {
+    navigator.clipboard.writeText(`${APP_ORIGIN}/join/${code}`);
+    addToast?.('Link skopiowany!', 'success');
+  };
+
+  const fmtInvExpiry = (inv: any) => {
+    if (!inv.expires_at) return 'Nigdy';
+    const diff = new Date(inv.expires_at).getTime() - Date.now();
+    if (diff <= 0) return 'Wygasło';
+    const h = Math.floor(diff / 3600000); const d = Math.floor(h / 24);
+    if (d > 0) return `Wygasa za ${d}d`;
+    return `Wygasa za ${h}h`;
+  };
+  // ─────────────────────────────────────────────────────────────────────────
   const DISC_CATS_OPT = [
     { key:'',              label:'Brak kategorii' },
     { key:'gaming',        label:'Gracze' },
@@ -4247,30 +4299,141 @@ function ServerSettingsPage({
           )}
 
           {/* ── Zaproszenia ── */}
-          {tab === 'invites' && (
-            <div className="max-w-xl mx-auto flex flex-col gap-5">
-              <h2 className="text-base font-bold text-white">Zaproszenia</h2>
-              <div>
-                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Ważność zaproszenia</label>
-                <select value={inviteDur} onChange={e => setInviteDur(e.target.value)} className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}>
-                  <option value="1800">30 minut</option>
-                  <option value="3600">1 godzina</option>
-                  <option value="86400">1 dzień</option>
-                  <option value="never">Nigdy</option>
-                </select>
-              </div>
-              <button onClick={handleInvite} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">Generuj zaproszenie</button>
-              {inviteCode && (
-                <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-4">
-                  <p className="text-[10px] text-zinc-600 mb-2">LINK DO ZAPROSZENIA</p>
-                  <div className="flex items-center gap-2">
-                    <code className="text-zinc-300 font-mono text-xs flex-1 bg-black/30 px-3 py-2 rounded-lg truncate">{streamerMode ? '••••••••••' : `${APP_ORIGIN}/join/${inviteCode}`}</code>
-                    <button onClick={() => { navigator.clipboard.writeText(`${APP_ORIGIN}/join/${inviteCode}`); }} className="text-xs text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 px-3 py-2 rounded-lg transition-colors shrink-0">Kopiuj</button>
+          {tab === 'invites' && (() => {
+            const selCls = "px-3 py-2 bg-zinc-800/60 border border-white/[0.08] rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500/50 transition-colors";
+            const permanentInvite = inviteListLocal.find(i => !i.expires_at);
+            return (
+              <div className="space-y-6">
+                {/* Header */}
+                <div>
+                  <h2 className="text-xl font-bold text-white">Zaproszenia</h2>
+                  <p className="text-sm text-zinc-500 mt-0.5">Linki, kody i metody dołączania do <span className="text-zinc-300 font-medium">{serverFull?.name}</span>.</p>
+                </div>
+
+                {/* Permanent invite block */}
+                <div className="rounded-2xl border border-white/[0.07] overflow-hidden">
+                  <div className="px-5 py-3 bg-white/[0.025] border-b border-white/[0.05]">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Stały link zaproszenia</p>
+                  </div>
+                  <div className="p-5">
+                    {permanentInvite ? (
+                      <>
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="flex-1 bg-zinc-900/60 border border-white/[0.07] rounded-xl px-3 py-2.5 font-mono text-sm text-zinc-200 truncate">
+                            {streamerMode ? '••••••••••••••••••' : `${APP_ORIGIN}/join/${permanentInvite.code}`}
+                          </div>
+                          <button onClick={() => copyInviteLink(permanentInvite.code)}
+                            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-zinc-800 hover:bg-zinc-700 border border-white/[0.08] rounded-xl text-sm text-zinc-200 transition-colors shrink-0">
+                            <Copy size={13}/> Kopiuj
+                          </button>
+                          <button onClick={() => { const url=`${APP_ORIGIN}/join/${permanentInvite.code}`; if(navigator.share){navigator.share({url}).catch(()=>copyInviteLink(permanentInvite.code));}else copyInviteLink(permanentInvite.code); }}
+                            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-indigo-500 hover:bg-indigo-400 rounded-xl text-sm text-white font-semibold transition-colors shrink-0">
+                            <ExternalLink size={13}/> Udostępnij
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-zinc-600">
+                          Wygasa: <span className="text-zinc-400">nigdy</span> · Limit: <span className="text-zinc-400">brak</span> · Użyto: <span className="text-zinc-400">{permanentInvite.uses} razy</span>
+                          <button onClick={() => delInviteLocal(permanentInvite.code)} className="ml-3 text-zinc-700 hover:text-rose-400 transition-colors">Usuń</button>
+                        </p>
+                      </>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <p className="text-sm text-zinc-500 flex-1">Brak stałego linku. Utwórz stały link bez daty wygaśnięcia.</p>
+                        <button onClick={async () => {
+                          if (!activeServer) return;
+                          setInviteGeneratingLocal(true);
+                          try { const r = await serversApi.createInvite(activeServer,'never','unlimited'); setInviteListLocal(p=>[{...r,creator_username:currentUser?.username??''},...p]); addToast?.('Stały link utworzony!','success'); }
+                          catch { addToast?.('Błąd','error'); } finally { setInviteGeneratingLocal(false); }
+                        }} disabled={inviteGeneratingLocal}
+                          className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition-colors shrink-0">
+                          {inviteGeneratingLocal ? <Loader2 size={13} className="animate-spin"/> : <Plus size={13}/>} Utwórz stały link
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
-            </div>
-          )}
+
+                {/* Create new temporary invite */}
+                <div className="rounded-2xl border border-white/[0.07] overflow-hidden">
+                  <div className="px-5 py-3 bg-white/[0.025] border-b border-white/[0.05]">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Nowy link tymczasowy</p>
+                  </div>
+                  <div className="p-5 grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">Ważność</label>
+                      <select value={inviteDur} onChange={e => setInviteDur(e.target.value)} className={selCls + ' w-full'}>
+                        <option value="1800">30 minut</option>
+                        <option value="3600">1 godzina</option>
+                        <option value="21600">6 godzin</option>
+                        <option value="86400">1 dzień</option>
+                        <option value="259200">3 dni</option>
+                        <option value="604800">7 dni</option>
+                        <option value="never">Nigdy</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">Limit użyć</label>
+                      <select value={inviteMaxUsesLocal} onChange={e => setInviteMaxUsesLocal(e.target.value)} className={selCls + ' w-full'}>
+                        <option value="unlimited">Bez limitu</option>
+                        <option value="1">1 użycie</option>
+                        <option value="5">5 użyć</option>
+                        <option value="10">10 użyć</option>
+                        <option value="25">25 użyć</option>
+                        <option value="50">50 użyć</option>
+                        <option value="100">100 użyć</option>
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <button onClick={handleInviteLocal} disabled={inviteGeneratingLocal}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors text-sm">
+                        {inviteGeneratingLocal ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>}
+                        Generuj nowy link
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Active invites list */}
+                <div>
+                  <h3 className="text-sm font-bold text-white mb-3">Aktywne linki</h3>
+                  {inviteListLoadingLocal ? (
+                    <div className="space-y-2">
+                      {[1,2,3].map(i => <div key={i} className="h-14 rounded-xl bg-white/[0.02] animate-pulse"/>)}
+                    </div>
+                  ) : inviteListLocal.length === 0 ? (
+                    <div className="flex flex-col items-center py-10 text-center">
+                      <div className="w-12 h-12 rounded-2xl bg-zinc-800/60 flex items-center justify-center mb-3"><UserPlus size={20} className="text-zinc-600"/></div>
+                      <p className="text-sm text-zinc-500">Brak aktywnych linków zaproszeniowych.</p>
+                      <p className="text-xs text-zinc-700 mt-1">Utwórz nowy link powyżej.</p>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-white/[0.07] overflow-hidden divide-y divide-white/[0.05]">
+                      {inviteListLocal.map(inv => (
+                        <div key={inv.code} className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors group">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-mono text-zinc-200 truncate">{streamerMode ? '••••••••••' : `${APP_ORIGIN}/join/${inv.code}`}</p>
+                            <p className="text-[11px] text-zinc-600 mt-0.5 flex items-center gap-2 flex-wrap">
+                              {!inv.expires_at ? (<span className="text-zinc-500">Stały</span>) : <span>{fmtInvExpiry(inv)}</span>}
+                              {inv.max_uses ? (<><span className="text-zinc-800">·</span><span>{inv.uses}/{inv.max_uses} użyć</span></>) : <span className="text-zinc-700">{inv.uses} użyć</span>}
+                              {inv.creator_username && (<><span className="text-zinc-800">·</span><span>przez <span className="text-zinc-400">{inv.creator_username}</span></span></>)}
+                            </p>
+                          </div>
+                          <button onClick={() => copyInviteLink(inv.code)}
+                            className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.05] text-zinc-400 hover:text-white text-xs transition-all">
+                            <Copy size={11}/> Kopiuj
+                          </button>
+                          <button onClick={() => delInviteLocal(inv.code)}
+                            className="opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all">
+                            <Trash2 size={12}/>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* ── Emoji ── */}
           {tab === 'emoji' && activeServer && (
