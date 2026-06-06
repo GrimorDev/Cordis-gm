@@ -11,6 +11,8 @@ const TRIGGER_TYPES = [
   'role_assigned', 'role_removed',
   'message_contains', 'message_sent',
   'reaction_added', 'member_banned',
+  // Extended
+  'voice_join', 'voice_leave', 'message_deleted',
 ] as const;
 
 const ACTION_TYPES = [
@@ -19,6 +21,8 @@ const ACTION_TYPES = [
   'delete_message', 'kick_member', 'ban_member',
   'mute_member', 'log_to_channel', 'warn_user',
   'add_reaction', 'send_webhook', 'pin_message',
+  // Extended
+  'set_nickname', 'timeout_member', 'remove_timeout',
 ] as const;
 
 async function checkManageServerPermission(serverId: string, userId: string): Promise<boolean> {

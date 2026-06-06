@@ -88,6 +88,7 @@ import {
 } from './rtc/playback';
 import { VoiceEngine } from './rtc/engine';
 import VoiceDiagnostics from './VoiceDiagnostics';
+import AutomationsTabNew from './AutomationEditor';
 import { captureSourceStream } from './rtc/screen';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -4287,7 +4288,7 @@ function ServerSettingsPage({
 
           {/* ── Automatyzacje ── */}
           {tab === 'automations' && activeServer && (
-            <AutomationsTab serverId={activeServer} gi={gi} roles={roles} channels={channels||[]}/>
+            <AutomationsTabNew serverId={activeServer} gi={gi} roles={roles} channels={channels||[]}/>
           )}
 
           {/* ── Tag serwera ── */}
