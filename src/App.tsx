@@ -9317,11 +9317,45 @@ export default function App() {
   // ── Auto-update check (Tauri only) ──────────────────────────────
   const [updateAvailable, setUpdateAvailable] = useState<{version:string;body:string|null}|null>(null);
   const [updateInstalling, setUpdateInstalling] = useState(false);
+  // true when running as Linux AppImage ($APPIMAGE env var set by AppImage runtime).
+  // AppImage → silent in-place update (tauri-plugin-updater). .deb → pkexec dialog.
+  const [linuxIsAppImage, setLinuxIsAppImage] = useState(false);
   // Progress modal state
   type UpdateStep = 'idle'|'downloading'|'installing'|'done'|'error';
   const [updateStep, setUpdateStep]     = useState<UpdateStep>('idle');
   const [updatePercent, setUpdatePercent] = useState(0);
-  const [updateIndeterminate, setUpdateIndeterminate] = useState(false); // true when server omits Content-Length
+  const [updateIndeterminate, setUpdateIndeterminate] = useState(false);
+  // Seconds remaining before auto-restart after update completes. -1 = not active.
+  const [restartCountdown, setRestartCountdown] = useState(-1);
+  // Platform-specific restart fn set by installUpdate(); called by countdown + button.
+  const restartFnRef = useRef<(() => void) | null>(null);
+
+  // Detect Linux AppImage vs .deb once on mount
+  useEffect(() => {
+    if (!isTauri || userOs !== 'linux') return;
+    import('@tauri-apps/api/core').then(({ invoke }) =>
+      invoke<boolean>('is_appimage').then(v => setLinuxIsAppImage(!!v)).catch(() => {})
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-restart countdown: fires when updateStep becomes 'done'.
+  // Windows exits quickly (NSIS must overwrite exe), so we use 3 s.
+  // Linux/macOS relaunch() is instant, we give 10 s for user to read.
+  useEffect(() => {
+    if (updateStep !== 'done') return;
+    const initial = userOs === 'windows' ? 3 : 10;
+    setRestartCountdown(initial);
+    let count = initial;
+    const timer = setInterval(() => {
+      count--;
+      setRestartCountdown(count);
+      if (count <= 0) { clearInterval(timer); restartFnRef.current?.(); }
+    }, 1000);
+    return () => clearInterval(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updateStep]);
+
   useEffect(() => {
     if (!isTauri) return;
     let cancelled = false;
@@ -9463,15 +9497,25 @@ export default function App() {
 
   const installUpdate = async () => {
     if (!updateAvailable || updateInstalling) return;
-    // On Linux with .deb package, in-place updates can't work (dpkg needs root).
-    // AppImage users CAN update in-place — Tauri replaces $APPIMAGE automatically.
+    setUpdateInstalling(true);
+    setUpdateStep('downloading');
+    setUpdatePercent(0);
+    setUpdateIndeterminate(false);
+    restartFnRef.current = null;
+
+    // ── Detect Linux AppImage vs .deb ─────────────────────────────────────────
+    // AppImage: Tauri replaces $APPIMAGE in-place → relaunch() → fully internal.
+    // .deb:     dpkg needs root → pkexec system auth dialog (unavoidable).
+    let isAppImage = false;
     if (userOs === 'linux') {
-      // Linux .deb: download the .deb then install via pkexec (graphical auth dialog)
-      // This works for both .deb and AppImage installs — no terminal, no external windows.
-      setUpdateInstalling(true);
-      setUpdateStep('downloading');
-      setUpdatePercent(0);
-      setUpdateIndeterminate(false);
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        isAppImage = await invoke<boolean>('is_appimage');
+      } catch { }
+    }
+
+    // ── Linux .deb path ───────────────────────────────────────────────────────
+    if (userOs === 'linux' && !isAppImage) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         const { appDataDir } = await import('@tauri-apps/api/path');
@@ -9481,7 +9525,6 @@ export default function App() {
         const ver = updateAvailable.version;
         const debUrl = `https://github.com/GrimorDev/Cordis-gm/releases/download/v${ver}/Cordyn_${ver}_amd64.deb`;
 
-        // Download .deb with progress
         const resp = await fetch(debUrl);
         if (!resp.ok) throw new Error(`Download failed: ${resp.status}`);
         const contentLength = parseInt(resp.headers.get('content-length') || '0', 10);
@@ -9489,113 +9532,103 @@ export default function App() {
 
         const reader = resp.body!.getReader();
         const chunks: Uint8Array[] = [];
-        let downloaded = 0;
+        let dlBytes = 0;
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          if (value) { chunks.push(value); downloaded += value.length; }
-          if (contentLength > 0) setUpdatePercent(Math.min(88, Math.round(downloaded / contentLength * 100)));
+          if (value) { chunks.push(value); dlBytes += value.length; }
+          if (contentLength > 0) setUpdatePercent(Math.min(88, Math.round(dlBytes / contentLength * 100)));
         }
+        const combined = new Uint8Array(dlBytes);
+        let off = 0; for (const c of chunks) { combined.set(c, off); off += c.length; }
 
-        // Combine chunks → Uint8Array
-        const combined = new Uint8Array(downloaded);
-        let off = 0;
-        for (const c of chunks) { combined.set(c, off); off += c.length; }
-
-        // Write to app data dir (already in fs scope)
         const dir = await appDataDir();
-        const dirExists = await exists(dir);
-        if (!dirExists) await mkdir(dir, { recursive: true });
+        if (!await exists(dir)) await mkdir(dir, { recursive: true });
         const debPath = `${dir}/Cordyn_update.deb`;
         await writeFile(debPath, combined);
         setUpdatePercent(92);
 
-        // Install via pkexec — shows system auth dialog
         setUpdateStep('installing');
         localStorage.setItem('cordis_just_updated', '1');
         localStorage.setItem('cordis_updated_at', String(Date.now()));
         localStorage.setItem('cordis_updated_ver', ver);
         await invoke('install_deb_update', { path: debPath });
 
-        setUpdateStep('done');
+        // Install done — show countdown then relaunch
         setUpdatePercent(100);
-        await new Promise(r => setTimeout(r, 1200));
-        await relaunch();
+        restartFnRef.current = () => { relaunch(); };
+        setUpdateStep('done');
       } catch (e: any) {
-        console.error('[linux update]', e);
+        console.error('[linux .deb update]', e);
         setUpdateStep('error');
         setUpdateInstalling(false);
       }
       return;
     }
-    setUpdateInstalling(true);
-    setUpdateStep('downloading');
-    setUpdatePercent(0);
-    setUpdateIndeterminate(false);
+
+    // ── Windows / macOS / Linux AppImage: tauri-plugin-updater ───────────────
+    // downloadAndInstall() handles everything:
+    //   Windows   → downloads .nsis.zip, runs installer /S (silent, no window),
+    //               then we call exit(0) so NSIS can replace the exe.
+    //   macOS     → replaces .app bundle in-place, then relaunch().
+    //   AppImage  → replaces $APPIMAGE in-place, then relaunch().
+    // User sees the full modal: Pobieranie → Instalowanie → Gotowe (+ countdown).
     try {
       const { check } = await import('@tauri-apps/plugin-updater');
       const { relaunch, exit } = await import('@tauri-apps/plugin-process');
       const update = await check();
-      if (update?.available) {
-        // ── Write localStorage BEFORE downloadAndInstall ────────────────────
-        // On Windows (quiet NSIS), the installer may kill the current process.
-        // Writing the cooldown flag first ensures the new instance skips the
-        // immediate update check (preventing update loops).
-        localStorage.setItem('cordis_just_updated', '1');
-        localStorage.setItem('cordis_updated_at', String(Date.now()));
-        localStorage.setItem('cordis_updated_ver', update.version);
-        // Pre-clear caches so the new instance gets fresh assets.
-        try {
-          if ('serviceWorker' in navigator) {
-            const regs = await navigator.serviceWorker.getRegistrations();
-            await Promise.all(regs.map(r => r.unregister()));
-          }
-          if ('caches' in window) {
-            const names = await caches.keys();
-            await Promise.all(names.map(n => caches.delete(n)));
-          }
-        } catch { /* ignore */ }
+      if (!update?.available) { setUpdateInstalling(false); setUpdateStep('idle'); return; }
 
-        let downloaded = 0;
-        let total = 0;
-
-        const isWindows = /windows/i.test(navigator.userAgent);
-
-        await update.downloadAndInstall((evt: any) => {
-          switch (evt.event) {
-            case 'Started':
-              total = evt.data?.contentLength ?? 0;
-              setUpdateIndeterminate(total === 0);
-              setUpdateStep('downloading');
-              break;
-            case 'Progress':
-              downloaded += evt.data?.chunkLength ?? 0;
-              if (total > 0) {
-                setUpdatePercent(Math.min(99, Math.round((downloaded / total) * 100)));
-              }
-              break;
-            case 'Finished':
-              setUpdateStep('installing');
-              setUpdatePercent(100);
-              break;
-          }
-        });
-
-        setUpdateStep('done');
-
-        if (isWindows) {
-          // Windows NSIS: downloadAndInstall already launched the silent installer
-          // in the background. It is waiting for us to exit so it can replace the .exe.
-          // Exit immediately — any delay here can cause NSIS to show a "close app" dialog.
-          await exit(0);
-        } else {
-          // macOS / Linux AppImage: in-place swap — relaunch() loads the new binary.
-          await new Promise(r => setTimeout(r, 1200));
-          await relaunch();
+      // Write cooldown flag BEFORE downloadAndInstall — on Windows the process
+      // may be terminated by the NSIS installer before we get a chance to write it.
+      localStorage.setItem('cordis_just_updated', '1');
+      localStorage.setItem('cordis_updated_at', String(Date.now()));
+      localStorage.setItem('cordis_updated_ver', update.version);
+      try {
+        if ('serviceWorker' in navigator) {
+          await Promise.all((await navigator.serviceWorker.getRegistrations()).map(r => r.unregister()));
         }
+        if ('caches' in window) {
+          await Promise.all((await caches.keys()).map(n => caches.delete(n)));
+        }
+      } catch { }
+
+      let dlBytes = 0, total = 0;
+      await update.downloadAndInstall((evt: any) => {
+        switch (evt.event) {
+          case 'Started':
+            total = evt.data?.contentLength ?? 0;
+            setUpdateIndeterminate(total === 0);
+            setUpdateStep('downloading');
+            break;
+          case 'Progress':
+            dlBytes += evt.data?.chunkLength ?? 0;
+            if (total > 0) setUpdatePercent(Math.min(99, Math.round(dlBytes / total * 100)));
+            break;
+          case 'Finished':
+            setUpdateStep('installing');
+            setUpdatePercent(100);
+            break;
+        }
+      });
+
+      // downloadAndInstall() returned — update is staged.
+      // Windows: NSIS installer is running silently in background; we must exit
+      //          quickly so it can overwrite our exe. No countdown possible.
+      // macOS / AppImage: binary replaced; relaunch() loads new version.
+      if (userOs === 'windows') {
+        setUpdatePercent(100);
+        // Windows: NSIS needs us to exit quickly (overwrites exe).
+        // Countdown useEffect starts at 3 s and calls exit(0) via restartFnRef.
+        restartFnRef.current = () => exit(0);
+        setUpdateStep('done');  // triggers 3-s countdown
+      } else {
+        setUpdatePercent(100);
+        restartFnRef.current = () => relaunch();
+        setUpdateStep('done');  // triggers countdown effect
       }
     } catch (e) {
-      console.error('Update failed', e);
+      console.error('[update] downloadAndInstall failed:', e);
       setUpdateStep('error');
       setUpdateInstalling(false);
     }
@@ -13415,65 +13448,59 @@ export default function App() {
             <div className="text-center">
               <p className="text-xl font-bold text-white mb-1">
                 {updateStep==='downloading' && 'Pobieranie aktualizacji…'}
-                {updateStep==='installing'  && (userOs==='windows' ? 'Przygotowanie…' : userOs==='linux' ? 'Instalowanie — autoryzuj w oknie systemowym…' : 'Instalowanie…')}
-                {updateStep==='done'        && (userOs==='windows' ? 'Zamykanie…' : 'Gotowe!')}
-                {updateStep==='error'       && 'Błąd aktualizacji'}
+                {updateStep==='installing'  && (
+                  userOs==='windows' ? 'Przygotowanie…'
+                  : (userOs==='linux' && !linuxIsAppImage) ? 'Instalowanie — autoryzuj w oknie systemowym…'
+                  : 'Instalowanie…'
+                )}
+                {updateStep==='done'  && 'Aktualizacja zakończona!'}
+                {updateStep==='error' && 'Błąd aktualizacji'}
               </p>
-              {updateAvailable && (
-                <p className="text-sm text-zinc-500">
-                  {updateStep==='done'
-                    ? (userOs==='windows'
-                        ? 'Cordyn uruchomi się ponownie automatycznie'
-                        : 'Aplikacja zaraz się uruchomi ponownie')
-                    : `v${appVersion||'?'} → v${updateAvailable.version}`
-                  }
-                </p>
+              {updateAvailable && updateStep !== 'done' && updateStep !== 'error' && (
+                <p className="text-sm text-zinc-500">{`v${appVersion||'?'} → v${updateAvailable.version}`}</p>
               )}
             </div>
 
-            {/* Step indicators */}
-            <div className="w-full flex flex-col gap-3">
-              {(['downloading','installing','done'] as const).map((step, i) => {
-                const labels: Record<string,string> = userOs === 'windows'
-                  ? {downloading:'Pobieranie', installing:'Przygotowanie', done:'Restart w tle'}
-                  : {downloading:'Pobieranie', installing:'Instalowanie',  done:'Restart'};
-                const isActive  = updateStep === step;
-                const isDone    = ['downloading','installing','done'].indexOf(updateStep) > i;
-                const isError   = updateStep === 'error' && i === 0;
-                return (
-                  <div key={step} className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${
-                    isActive  ? 'border-indigo-500/60 bg-indigo-500/10' :
-                    isDone    ? 'border-emerald-500/30 bg-emerald-500/[0.05]' :
-                    isError   ? 'border-red-500/30 bg-red-500/[0.05]' :
-                                'border-white/[0.05] bg-white/[0.02] opacity-40'
-                  }`}>
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
-                      isDone  ? 'bg-emerald-500' :
-                      isActive ? 'bg-indigo-500' :
-                      isError ? 'bg-red-500' : 'bg-white/10'
+            {/* Step indicators (hidden in done/error state — replaced by action block) */}
+            {updateStep !== 'done' && updateStep !== 'error' && (
+              <div className="w-full flex flex-col gap-3">
+                {(['downloading','installing','done'] as const).map((step, i) => {
+                  const labels: Record<string,string> = userOs === 'windows'
+                    ? {downloading:'Pobieranie', installing:'Przygotowanie', done:'Restart'}
+                    : {downloading:'Pobieranie', installing:'Instalowanie',  done:'Restart'};
+                  const isActive = updateStep === step;
+                  const isDone   = ['downloading','installing','done'].indexOf(updateStep) > i;
+                  return (
+                    <div key={step} className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${
+                      isActive ? 'border-indigo-500/60 bg-indigo-500/10' :
+                      isDone   ? 'border-emerald-500/30 bg-emerald-500/[0.05]' :
+                                 'border-white/[0.05] bg-white/[0.02] opacity-40'
                     }`}>
-                      {isDone  ? <Check size={10} className="text-white"/> :
-                       isActive ? <Loader2 size={10} className="text-white animate-spin"/> :
-                                  <span className="text-[9px] text-zinc-500 font-bold">{i+1}</span>}
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
+                        isDone ? 'bg-emerald-500' : isActive ? 'bg-indigo-500' : 'bg-white/10'
+                      }`}>
+                        {isDone  ? <Check size={10} className="text-white"/> :
+                         isActive ? <Loader2 size={10} className="text-white animate-spin"/> :
+                                    <span className="text-[9px] text-zinc-500 font-bold">{i+1}</span>}
+                      </div>
+                      <span className={`text-sm font-medium ${
+                        isActive ? 'text-white' : isDone ? 'text-emerald-400' : 'text-zinc-600'
+                      }`}>{labels[step]}</span>
+                      {step==='downloading' && isActive && !updateIndeterminate && updatePercent > 0 && (
+                        <span className="ml-auto text-xs text-indigo-400 font-mono">{updatePercent}%</span>
+                      )}
                     </div>
-                    <span className={`text-sm font-medium ${
-                      isActive ? 'text-white' : isDone ? 'text-emerald-400' : 'text-zinc-600'
-                    }`}>{labels[step]}</span>
-                    {/* Percent for download step */}
-                    {step==='downloading' && isActive && !updateIndeterminate && updatePercent > 0 && (
-                      <span className="ml-auto text-xs text-indigo-400 font-mono">{updatePercent}%</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Progress bar (download phase) */}
             {updateStep==='downloading' && (
               <div className="w-full">
                 <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
                   {updateIndeterminate
-                    ? <div className="h-full w-1/3 rounded-full bg-indigo-500 animate-pulse"
+                    ? <div className="h-full w-1/3 rounded-full bg-indigo-500"
                         style={{animation:'indeterminate 1.5s ease-in-out infinite'}}/>
                     : <div className="h-full rounded-full bg-indigo-500 transition-all duration-300"
                         style={{width:`${updatePercent}%`}}/>
@@ -13482,13 +13509,47 @@ export default function App() {
               </div>
             )}
 
+            {/* ── Done: countdown + restart button ─────────────────────────── */}
+            {updateStep==='done' && (
+              <div className="w-full flex flex-col items-center gap-4">
+                <p className="text-sm text-zinc-400 text-center">
+                  {userOs === 'windows'
+                    ? 'Aplikacja uruchomi się ponownie automatycznie.'
+                    : 'Nowa wersja jest gotowa. Wymagany restart aplikacji.'}
+                </p>
+                {/* Countdown ring */}
+                {restartCountdown >= 0 && (
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="relative w-14 h-14">
+                      <svg className="w-14 h-14 -rotate-90" viewBox="0 0 56 56">
+                        <circle cx="28" cy="28" r="24" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="4"/>
+                        <circle cx="28" cy="28" r="24" fill="none" stroke="#6366f1" strokeWidth="4"
+                          strokeLinecap="round"
+                          strokeDasharray={`${2 * Math.PI * 24}`}
+                          strokeDashoffset={`${2 * Math.PI * 24 * (1 - restartCountdown / (userOs === 'windows' ? 3 : 10))}`}
+                          style={{transition:'stroke-dashoffset 1s linear'}}/>
+                      </svg>
+                      <span className="absolute inset-0 flex items-center justify-center text-lg font-bold text-white">
+                        {restartCountdown}
+                      </span>
+                    </div>
+                    <span className="text-xs text-zinc-500">sekund do restartu</span>
+                  </div>
+                )}
+                <button
+                  onClick={() => restartFnRef.current?.()}
+                  className="w-full px-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors">
+                  Uruchom ponownie teraz
+                </button>
+              </div>
+            )}
+
             {/* Error: retry / dismiss */}
             {updateStep==='error' && (
               <div className="flex flex-col gap-3 w-full">
-                {userOs === 'linux' && (
+                {userOs === 'linux' && !linuxIsAppImage && (
                   <div className="px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-sm text-amber-300">
-                    Aktualizacja automatyczna nie działa dla wersji .deb (wymaga uprawnień administratora).
-                    Pobierz nową wersję ręcznie i zainstaluj komendą: <code className="font-mono bg-black/30 px-1 rounded">sudo dpkg -i cordyn_*.deb</code>
+                    Wersja .deb wymaga ręcznej instalacji. Pobierz AppImage dla cichych aktualizacji.
                   </div>
                 )}
                 <div className="flex gap-3">
@@ -13496,11 +13557,11 @@ export default function App() {
                     className="px-4 py-2 rounded-xl border border-white/10 text-sm text-zinc-400 hover:text-white transition-colors">
                     Zamknij
                   </button>
-                  {userOs === 'linux' ? (
-                    <a href={appLinuxUrl || 'https://github.com/GrimorDev/Cordis-gm/releases/latest'}
+                  {userOs === 'linux' && !linuxIsAppImage ? (
+                    <a href={'https://github.com/GrimorDev/Cordis-gm/releases/latest'}
                       target="_blank" rel="noopener noreferrer"
                       className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm text-white font-medium transition-colors">
-                      Pobierz .deb ↗
+                      Pobierz AppImage ↗
                     </a>
                   ) : (
                     <button onClick={()=>{setUpdateStep('idle');setUpdateInstalling(false);setTimeout(installUpdate,100);}}
