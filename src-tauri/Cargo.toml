@@ -1,6 +1,10 @@
 [package]
 name = "cordyn"
+<<<<<<< HEAD
 version = "0.2.1247"
+=======
+version = "0.2.1247"
+>>>>>>> origin/claude/ecstatic-dhawan-ccce3e
 description = "Cordyn — platforma dla twórców"
 authors = ["GrimorDev"]
 license = "MIT"
