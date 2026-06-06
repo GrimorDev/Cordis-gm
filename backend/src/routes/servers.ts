@@ -176,7 +176,8 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     const { rows: [server] } = await query(
       `SELECT s.*,
               sm.role_name as my_role,
-              (SELECT COUNT(*)::int FROM server_members WHERE server_id = s.id) as member_count
+              (SELECT COUNT(*)::int FROM server_members WHERE server_id = s.id) as member_count,
+              EXISTS(SELECT 1 FROM server_setup_done WHERE server_id = s.id) as setup_done
        FROM servers s INNER JOIN server_members sm ON sm.server_id = s.id AND sm.user_id = $2
        WHERE s.id = $1`,
       [req.params.id, req.user!.id]
@@ -351,6 +352,22 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
     if (server.owner_id !== req.user!.id) return res.status(403).json({ error: 'Only owner can delete' });
     await query('DELETE FROM servers WHERE id = $1', [req.params.id]);
     return res.json({ message: 'Server deleted' });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// POST /api/servers/:id/setup-done
+// Marks "Pierwsze kroki" as completed for this server.
+// Only the server owner can call this; once set, no one sees the panel again.
+router.post('/:id/setup-done', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { rows: [server] } = await query(`SELECT owner_id FROM servers WHERE id = $1`, [req.params.id]);
+    if (!server) return res.status(404).json({ error: 'Not found' });
+    if (server.owner_id !== req.user!.id) return res.status(403).json({ error: 'Only the server owner can do this' });
+    await query(
+      `INSERT INTO server_setup_done (server_id) VALUES ($1) ON CONFLICT DO NOTHING`,
+      [req.params.id]
+    );
+    return res.json({ ok: true });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 

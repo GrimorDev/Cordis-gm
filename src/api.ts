@@ -628,6 +628,9 @@ export const serversApi = {
   },
   setActiveTag: (serverId: string | null) =>
     req<{ active_tag_server_id: string | null; tag: string | null }>('PUT', '/users/me/active-tag', { server_id: serverId }),
+  // Marks "Pierwsze kroki" (First Steps) as done for a server.
+  // Only the server owner can call this; once set the panel disappears for everyone.
+  markSetupDone: (serverId: string) => req<{ ok: boolean }>('POST', `/servers/${serverId}/setup-done`),
 };
 
 // ── Channels ───────────────────────────────────────────────────────────────

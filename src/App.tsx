@@ -14354,8 +14354,8 @@ export default function App() {
               )}
               </AnimatePresence>
             </div>
-            {/* ── "Pierwsze kroki" button — always at top, below server header ── */}
-            {serverFull && canManageChannels && !fsDismissed[activeServer!] && (() => {
+            {/* ── "Pierwsze kroki" button — only for server owner, one-time ── */}
+            {serverFull && serverFull.owner_id === currentUser?.id && !(serverFull as any).setup_done && !fsDismissed[activeServer!] && (() => {
               const srvSteps = fsSteps[activeServer!] || [false,false,false,false];
               const allChs   = serverFull.categories.flatMap(c=>c.channels);
               const doneCnt  = [
@@ -15828,9 +15828,17 @@ export default function App() {
                 const updated = { ...fsSteps, [srvId]: next };
                 setFsSteps(updated);
                 try { localStorage.setItem('cordyn_fs_steps', JSON.stringify(updated)); } catch {}
-                if (next.filter(Boolean).length === 4 && !computed.every(Boolean)) {
+                // Recompute with new step so we detect completion correctly
+                const newComputed = [computed[0], computed[1], next[2] ?? false, next[3] ?? false];
+                const allDone = newComputed.every(Boolean);
+                if (allDone && !computed.every(Boolean)) {
                   setTimeout(() => setFsCelebrating(true), 300);
                   setTimeout(() => setFsCelebrating(false), 4500);
+                  // Mark done server-side — panel won't reappear for anyone
+                  serversApi.markSetupDone(srvId).catch(()=>{});
+                  setServerFull((prev: any) => prev ? { ...prev, setup_done: true } : prev);
+                  // Close the First Steps view after celebration ends
+                  setTimeout(() => setFsOpen(false), 5000);
                 }
               };
               const steps = [
@@ -15904,7 +15912,11 @@ export default function App() {
                           initial={{width:0}} animate={{width:`${(doneCnt/4)*100}%`}} transition={{duration:0.6,ease:'easeOut'}}/>
                       </div>
                     </div>
-                    <button onClick={()=>{
+                    <button onClick={async ()=>{
+                      // Mark done server-side so it never reappears (any device, any session)
+                      serversApi.markSetupDone(srvId).catch(()=>{});
+                      // Update local state so UI hides immediately without a refetch
+                      setServerFull((prev: any) => prev ? { ...prev, setup_done: true } : prev);
                       const upd = { ...fsDismissed, [srvId]: true };
                       setFsDismissed(upd);
                       try { localStorage.setItem('cordyn_fs_dismissed', JSON.stringify(upd)); } catch {}

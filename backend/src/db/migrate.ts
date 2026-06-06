@@ -1018,6 +1018,17 @@ export async function runMigrations(): Promise<void> {
     console.log('Running database migrations...');
     await client.query(SCHEMA_SQL);
     // ── Incremental migrations (safe to run every startup) ──────────────
+    // ── server_setup_done: tracks when owner dismisses "Pierwsze kroki" ──
+    // One row per server — created when owner clicks "Ukryj" or completes all steps.
+    // Only the server owner (creator) sees "Pierwsze kroki", and once marked done
+    // it disappears for everyone (including future owner logins on other devices).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS server_setup_done (
+        server_id UUID PRIMARY KEY REFERENCES servers(id) ON DELETE CASCADE,
+        done_at   TIMESTAMPTZ DEFAULT NOW()
+      );
+    `).catch(err => console.warn('[migrate] server_setup_done:', err.message));
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS server_sounds (
         id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
