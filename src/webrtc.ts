@@ -772,6 +772,8 @@ export interface NoisePipeline {
   /** Returns true if the underlying AudioContext is actually running (not suspended).
    *  If false, the processedStream is silent — caller should fall back to raw stream. */
   isRunning: () => boolean;
+  /** Resume the underlying AudioContext — call periodically to prevent WebView2 suspension. */
+  resumeCtx?: () => void;
 }
 
 /**
@@ -838,6 +840,15 @@ export async function applyNoiseGate(rawStream: MediaStream): Promise<NoisePipel
         if (ctx !== _recCtx) ctx.close().catch(() => {});
       },
       isRunning: () => ctx.state === 'running',
+      // Resume the AudioContext — must be called periodically on Windows/WebView2 to prevent
+      // automatic suspension (which freezes the AudioWorklet → processedStream goes silent).
+      resumeCtx: () => {
+        if (ctx.state === 'suspended') {
+          ctx.resume().then(() => {
+            console.log('[Cordis] noise gate ctx resumed from suspended state');
+          }).catch(() => {});
+        }
+      },
       setEnabled:   (v) => { if (enabledParam)   enabledParam.setValueAtTime(v ? 1 : 0, ctx.currentTime); },
       setThreshold: (v) => { if (thresholdParam) thresholdParam.setValueAtTime(v, ctx.currentTime); },
     };

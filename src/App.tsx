@@ -8756,6 +8756,9 @@ export default function App() {
   const ngSensToThreshold = (v: number) => 0.005 + (v / 100) * 0.055; // 0→0.005, 100→0.060
   // Active noise gate pipeline (AudioWorklet + AudioContext); cleanup on re-acquire or leave
   const noisePipelineRef = useRef<NoisePipeline | null>(null);
+  // AudioContext keep-alive: resumes _recCtx every 8 s to prevent WebView2 suspension
+  // (a suspended context makes the AudioWorklet stop → processedStream goes silent → peers hear nothing)
+  const audioCtxKeepaliveRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Ref for auto-minimize: becomes true 600ms after call panel opens
   const callSettledRef = useRef(false);
@@ -12723,6 +12726,8 @@ export default function App() {
     // Stop all peer connections + forget local tracks
     engineRef.current?.destroy();
     detachAllRemote();
+    // Stop AudioContext keep-alive interval
+    if (audioCtxKeepaliveRef.current) { clearInterval(audioCtxKeepaliveRef.current); audioCtxKeepaliveRef.current = null; }
     // Stop noise pipeline (closes AudioContext + raw mic)
     if (noisePipelineRef.current) { noisePipelineRef.current.cleanup(); noisePipelineRef.current = null; }
     else { localStreamRef.current?.getTracks().forEach(t => t.stop()); }
@@ -12744,6 +12749,8 @@ export default function App() {
     try {
       // Stop previous speaking detection
       const old = speakStopRef.current.get('self'); if (old) { old(); speakStopRef.current.delete('self'); }
+      // Stop AudioContext keep-alive from the previous pipeline (if any)
+      if (audioCtxKeepaliveRef.current) { clearInterval(audioCtxKeepaliveRef.current); audioCtxKeepaliveRef.current = null; }
       // Clean up previous noise pipeline (this also stops the old raw mic stream)
       if (noisePipelineRef.current) {
         noisePipelineRef.current.cleanup();
@@ -12852,9 +12859,21 @@ export default function App() {
             pipeline.setThreshold(ngSensToThreshold(noiseGateSens));
             sendStream = pipeline.processedStream;
             console.log('[Cordis] acquireMic: noise gate active ✓ (threshold', noiseGateSens, ')');
+            // ── AudioContext keep-alive (WebView2 suspend fix) ──────────────
+            // WebView2 suspends AudioContexts when focus is lost (alt-tab, etc.).
+            // A suspended _recCtx freezes the AudioWorklet → processedStream is
+            // silent → peers hear nothing while the local VAD (rawStream) still
+            // fires and the speaking indicator still lights up. Resume every 8 s.
+            if (audioCtxKeepaliveRef.current) clearInterval(audioCtxKeepaliveRef.current);
+            audioCtxKeepaliveRef.current = setInterval(() => {
+              pipeline.resumeCtx?.();          // resume _recCtx (noise gate)
+              primePlaybackContext();           // resume _playCtx + _vadCtx
+            }, 8000);
           } else {
             console.warn('[Cordis] acquireMic: noise gate ctx not running → raw stream');
-            pipeline?.cleanup();
+            // CRITICAL: do NOT call pipeline.cleanup() here — cleanup() stops rawStream.getTracks()
+            // which we are about to use as sendStream. Let the AudioWorklet graph be GC'd naturally.
+            // (pipeline.cleanup() is only correct when tearing down a RUNNING pipeline on leave/re-acquire)
           }
         } catch (e) { console.warn('[Cordis] acquireMic: noise gate failed → raw stream', e); }
       }
