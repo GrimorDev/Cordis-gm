@@ -445,6 +445,22 @@ const T: Record<string, Record<Locale, string>> = {
   'toast.connectionError':   { pl: 'Problem z połączeniem głosowym — sprawdź konsolę przeglądarki (F12)', en: 'Voice connection issue — check browser console (F12)', cs: 'Problém s hlasovým připojením — zkontrolujte konzolu prohlížeče (F12)', de: 'Probleme mit Sprachverbindung — Browserkonsole prüfen (F12)' },
   'toast.layoutChanged':     { pl: 'Układ wiadomości zmieniony', en: 'Message layout changed', cs: 'Rozvržení zpráv změněno',    de: 'Nachrichtenlayout geändert' },
 
+  // ── Generic confirm/cancel labels ────────────────────────────────────────
+  'confirm.yes':             { pl: 'Tak',                         en: 'Yes',                     cs: 'Ano',                        de: 'Ja'                        },
+  'confirm.no':              { pl: 'Nie',                         en: 'No',                      cs: 'Ne',                         de: 'Nein'                      },
+
+  // ── Backend API error translations (maps English backend messages → locale) ─
+  'apierr.alreadyMember':    { pl: 'Jesteś już członkiem tego serwera', en: 'Already a member',    cs: 'Jste již členem serveru',    de: 'Du bist bereits Mitglied'  },
+  'apierr.invalidInvite':    { pl: 'Nieprawidłowy lub wygasły kod zaproszenia', en: 'Invalid or expired invite', cs: 'Neplatná nebo prošlá pozvánka', de: 'Ungültige oder abgelaufene Einladung' },
+  'apierr.notFound':         { pl: 'Nie znaleziono',              en: 'Not found',               cs: 'Nenalezeno',                  de: 'Nicht gefunden'            },
+  'apierr.forbidden':        { pl: 'Brak uprawnień',              en: 'Forbidden',               cs: 'Zakázáno',                    de: 'Verboten'                  },
+  'apierr.notAuthorized':    { pl: 'Brak autoryzacji',            en: 'Not authorized',          cs: 'Nejste oprávněni',            de: 'Nicht autorisiert'         },
+  'apierr.ownerCannotLeave': { pl: 'Właściciel nie może opuścić serwera — usuń go zamiast tego', en: 'Owner cannot leave – delete the server instead', cs: 'Vlastník nemůže opustit server — místo toho ho smažte', de: 'Besitzer kann den Server nicht verlassen — lösche ihn stattdessen' },
+  'apierr.internalServer':   { pl: 'Błąd serwera. Spróbuj ponownie.',  en: 'Internal server error. Please try again.', cs: 'Chyba serveru. Zkuste to znovu.', de: 'Serverfehler. Bitte erneut versuchen.' },
+  'apierr.invalidCredentials':{ pl: 'Nieprawidłowy email lub hasło', en: 'Invalid credentials',  cs: 'Neplatné přihlašovací údaje', de: 'Ungültige Anmeldedaten'    },
+  'apierr.networkError':     { pl: 'Błąd sieci. Sprawdź połączenie.', en: 'Network error. Check your connection.', cs: 'Chyba sítě. Zkontrolujte připojení.', de: 'Netzwerkfehler. Verbindung prüfen.' },
+  'apierr.noPermNickname':   { pl: 'Brak uprawnienia do zmiany nicku', en: 'No permission to change nickname', cs: 'Nemáte oprávnění změnit přezdívku', de: 'Keine Berechtigung zum Ändern des Nicknamens' },
+
   // ── Connections section ───────────────────────────────────────────────────
   'connections.title':       { pl: 'Połączone konta',           en: 'Connected accounts',      cs: 'Propojené účty',             de: 'Verknüpfte Konten'         },
   'connections.authorizeInBrowser':{ pl: 'Autoryzuj w przeglądarce — aplikacja automatycznie wykryje połączenie', en: 'Authorize in browser — app will automatically detect connection', cs: 'Autorizujte v prohlížeči — aplikace automaticky detekuje připojení', de: 'Im Browser autorisieren — App erkennt Verbindung automatisch' },

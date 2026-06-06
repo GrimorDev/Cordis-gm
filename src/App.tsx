@@ -346,6 +346,25 @@ const tl = (key: string): string => {
   try { return translate(key, resolveLocale(loadLocale().locale)); } catch { return key; }
 };
 
+/**
+ * Translates known English backend error strings into the current locale.
+ * Falls back to the original message when no mapping is found.
+ */
+const translateApiError = (msg: string): string => {
+  const m = (msg || '').toLowerCase();
+  if (m.includes('already a member'))         return tl('apierr.alreadyMember');
+  if (m.includes('invalid invite') || m.includes('invite not found') || m.includes('invalid or expired')) return tl('apierr.invalidInvite');
+  if (m.includes('internal server error'))    return tl('apierr.internalServer');
+  if (m.includes('invalid credentials'))      return tl('apierr.invalidCredentials');
+  if (m.includes('network error'))            return tl('apierr.networkError');
+  if (m.includes('owner cannot leave'))       return tl('apierr.ownerCannotLeave');
+  if (m.includes('not authorized') || m.includes('not authorised')) return tl('apierr.notAuthorized');
+  if (m.includes('forbidden') || m.includes('no access')) return tl('apierr.forbidden');
+  if (m.includes('not found'))                return tl('apierr.notFound');
+  if (m.includes('brak uprawnienia manage_nicknames')) return tl('apierr.noPermNickname');
+  return msg; // already in the user's locale (Polish messages from backend) or unknown
+};
+
 /** Module-level date formatter that respects the saved locale preference. */
 const fmtDateLocale = (iso: string, opts?: Intl.DateTimeFormatOptions): string => {
   try {
@@ -12526,7 +12545,7 @@ export default function App() {
       setServerList(p => [...p, s]); setActiveServer(s.id); setActiveView('servers');
       setCreateSrvOpen(false); setJoinCode('');
       getSocket()?.emit('join_server_room' as any, s.id);
-    } catch (err: any) { addToast(err?.message || tl('toast.invalidInvite'), 'error'); }
+    } catch (err: any) { addToast(translateApiError(err?.message) || tl('toast.invalidInvite'), 'error'); }
   };
   const handleLeaveServer = async (serverId: string) => {
     try {
@@ -12535,7 +12554,7 @@ export default function App() {
       if (activeServer === serverId) { setActiveServer(''); setActiveView('friends'); setServerFull(null); setActiveChannel(''); }
       setSrvContextMenu(null);
       addToast(tl('toast.leftServer'), 'success');
-    } catch (err: any) { addToast(err?.message || 'Błąd opuszczania serwera', 'error'); }
+    } catch (err: any) { addToast(translateApiError(err?.message) || 'Błąd opuszczania serwera', 'error'); }
   };
   const handleDeleteServer = async (serverId: string) => {
     try {
@@ -12544,7 +12563,7 @@ export default function App() {
       if (activeServer === serverId) { setActiveServer(''); setActiveView('friends'); setServerFull(null); setActiveChannel(''); }
       setDeleteSrvConfirm(null);
       addToast(tl('toast.serverDeleted'), 'success');
-    } catch (err: any) { addToast(err?.message || 'Błąd usuwania serwera', 'error'); }
+    } catch (err: any) { addToast(translateApiError(err?.message) || 'Błąd usuwania serwera', 'error'); }
   };
   const handleSaveSrv = async () => {
     if (!activeServer) return;
@@ -24605,57 +24624,67 @@ export default function App() {
 
 
       {/* ── Toast positioning: bottom on mobile, top-right on sm+ ── */}
-      <div className="fixed z-[200] flex flex-col gap-2.5 pointer-events-none
+      <div className="fixed z-[200] flex flex-col gap-2 pointer-events-none
         bottom-4 left-3 right-3 items-stretch
-        sm:bottom-auto sm:top-4 sm:left-auto sm:right-4 sm:items-end sm:min-w-80 sm:max-w-[26rem]">
+        sm:bottom-auto sm:top-5 sm:left-auto sm:right-5 sm:items-end sm:w-[22rem]">
         <AnimatePresence>
           {toasts.map(t => {
             const isDm = !!t.avatar || !!t.senderName;
-            const toastIcon = t.type==='success'?<CheckCircle2 size={15}/>:t.type==='error'?<AlertCircle size={15}/>:t.type==='warn'?<AlertTriangle size={15}/>:<MessageCircle size={15}/>;
-            const toastCls  = t.type==='success'?'bg-emerald-950/90 border-emerald-500/40 text-emerald-100':t.type==='error'?'bg-rose-950/90 border-rose-500/40 text-rose-100':t.type==='warn'?'bg-amber-950/90 border-amber-500/40 text-amber-100':'bg-[#0f0f1e]/95 border-indigo-500/35 text-white';
-            const iconCls   = t.type==='success'?'bg-emerald-500/25 text-emerald-400':t.type==='error'?'bg-rose-500/25 text-rose-400':t.type==='warn'?'bg-amber-500/25 text-amber-400':'bg-indigo-500/25 text-indigo-400';
+            const accentBar  = t.type==='success'?'bg-emerald-400':t.type==='error'?'bg-rose-500':t.type==='warn'?'bg-amber-400':'bg-indigo-500';
+            const iconColor  = t.type==='success'?'text-emerald-400':t.type==='error'?'text-rose-400':t.type==='warn'?'text-amber-400':'text-indigo-400';
+            const toastIcon  = t.type==='success'?<CheckCircle2 size={16}/>:t.type==='error'?<AlertCircle size={16}/>:t.type==='warn'?<AlertTriangle size={16}/>:<Info size={16}/>;
             const isClickable = !!t.onClick && !t.onConfirm;
             return (
               <motion.div key={t.id}
-                initial={{opacity:0,x:40,scale:0.93}}
-                animate={{opacity:1,x:0,scale:1}}
-                exit={{opacity:0,x:32,scale:0.9}}
-                transition={{type:'spring',stiffness:380,damping:28}}
-                className={`pointer-events-auto w-full rounded-2xl border shadow-2xl shadow-black/60 overflow-hidden ${toastCls} ${isClickable?'cursor-pointer':''}`}
+                initial={{opacity:0,y:-12,scale:0.96}}
+                animate={{opacity:1,y:0,scale:1}}
+                exit={{opacity:0,y:-8,scale:0.95}}
+                transition={{type:'spring',stiffness:400,damping:30}}
+                className={`pointer-events-auto w-full overflow-hidden rounded-2xl shadow-xl shadow-black/40 ${isClickable?'cursor-pointer':''}`}
                 onClick={isClickable ? ()=>{t.onClick!();rmToast(t.id);} : undefined}>
-                {/* DM toast: full-width clickable layout */}
-                {isDm ? (
-                  <div className="flex items-start gap-3 px-4 py-3.5">
-                    <div className="relative shrink-0">
-                      <img src={t.avatar||`https://api.dicebear.com/7.x/shapes/svg?seed=${t.senderName}`}
-                        className="w-10 h-10 rounded-xl object-cover ring-2 ring-indigo-500/30" alt=""/>
-                      <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-indigo-500 rounded-full flex items-center justify-center shadow-lg">
-                        <MessageCircle size={8} className="text-white"/>
+                {/* Glass card */}
+                <div className="flex items-stretch bg-zinc-900/95 backdrop-blur-2xl border border-white/[0.08] rounded-2xl overflow-hidden">
+                  {/* Left accent strip */}
+                  <div className={`w-[3px] shrink-0 ${accentBar}`}/>
+                  {/* Content */}
+                  {isDm ? (
+                    <div className="flex items-start gap-3 px-4 py-3.5 flex-1 min-w-0">
+                      <div className="relative shrink-0">
+                        <img src={t.avatar||`https://api.dicebear.com/7.x/shapes/svg?seed=${t.senderName}`}
+                          className="w-9 h-9 rounded-xl object-cover" alt=""/>
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-indigo-500 rounded-full flex items-center justify-center">
+                          <MessageCircle size={7} className="text-white"/>
+                        </div>
                       </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-indigo-300 mb-0.5 truncate">{t.senderName}</p>
+                        <p className="text-sm text-zinc-200 leading-snug line-clamp-2 break-words">{t.msg}</p>
+                        {isClickable && <p className="text-[10px] text-zinc-600 mt-1">{tl('message.clickToOpen')}</p>}
+                      </div>
+                      <button onClick={e=>{e.stopPropagation();rmToast(t.id);}}
+                        className="shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06] transition-all mt-0.5">
+                        <X size={12}/>
+                      </button>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-indigo-300 mb-0.5">{t.senderName}</p>
-                      <p className="text-sm text-zinc-200 leading-snug line-clamp-2 break-words">{t.msg}</p>
+                  ) : (
+                    <div className="flex items-center gap-3 px-4 py-3.5 flex-1 min-w-0">
+                      <span className={`shrink-0 ${iconColor}`}>{toastIcon}</span>
+                      <span className="flex-1 text-sm text-zinc-100 font-medium leading-snug">{t.msg}</span>
+                      {t.onConfirm && <>
+                        <button onClick={()=>{t.onConfirm!();rmToast(t.id);}}
+                          className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors">{tl('confirm.yes')||'Tak'}</button>
+                        <button onClick={()=>rmToast(t.id)}
+                          className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/10 text-zinc-400 transition-colors">{tl('confirm.no')||'Nie'}</button>
+                      </>}
+                      {!t.onConfirm && (
+                        <button onClick={()=>rmToast(t.id)}
+                          className="shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06] transition-all">
+                          <X size={12}/>
+                        </button>
+                      )}
                     </div>
-                    <button onClick={e=>{e.stopPropagation();rmToast(t.id);}} className="shrink-0 text-zinc-600 hover:text-zinc-300 mt-0.5 transition-colors"><X size={13}/></button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-3 px-4 py-3.5">
-                    <span className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center ${iconCls}`}>{toastIcon}</span>
-                    <span className="flex-1 text-sm font-medium leading-snug">{t.msg}</span>
-                    {t.onConfirm && <>
-                      <button onClick={()=>{t.onConfirm!();rmToast(t.id);}} className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition-colors">Tak</button>
-                      <button onClick={()=>rmToast(t.id)} className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/10 transition-colors">Nie</button>
-                    </>}
-                    {!t.onConfirm && <button onClick={()=>rmToast(t.id)} className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-opacity"><X size={14}/></button>}
-                  </div>
-                )}
-                {/* Click hint for DM toasts */}
-                {isDm && isClickable && (
-                  <div className="px-4 pb-2.5 flex items-center gap-1 text-[10px] text-indigo-400/70">
-                    <span>{tl('message.clickToOpen')}</span>
-                  </div>
-                )}
+                  )}
+                </div>
               </motion.div>
             );
           })}
