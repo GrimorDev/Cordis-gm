@@ -46,6 +46,7 @@ async function isAuthorized(serverId: string, userId: string, permission: string
 const SENSITIVE_PERMISSIONS = new Set([
   'mention_everyone', 'manage_messages', 'manage_channels',
   'manage_roles', 'ban_members', 'kick_members', 'administrator',
+  'manage_nicknames',
 ]);
 
 /**
@@ -136,7 +137,7 @@ router.post('/', authMiddleware,
       );
       await client.query(
         `INSERT INTO server_roles (server_id, name, color, permissions, is_default, position)
-         VALUES ($1, 'Member', '#5865f2', ARRAY[]::TEXT[], TRUE, 0) RETURNING id`,
+         VALUES ($1, 'Member', '#5865f2', ARRAY['send_messages','attach_files','read_messages','create_invites']::TEXT[], TRUE, 0) RETURNING id`,
         [server.id]
       );
       // Assign creator to Owner role via member_roles
@@ -409,7 +410,7 @@ router.get('/:id/members', authMiddleware, async (req: AuthRequest, res: Respons
     const { rows } = await query(
       `SELECT u.id, u.username, u.avatar_url, u.status, u.custom_status, u.avatar_effect, u.banner_preset,
               u.is_bot, u.active_tag_server_id, st.tag as active_tag, st.color as active_tag_color, st.icon as active_tag_icon,
-              sm.role_name, sm.joined_at,
+              sm.role_name, sm.joined_at, sm.nickname,
               COALESCE(
                 (SELECT json_agg(json_build_object('id', gb.id, 'name', gb.name, 'label', gb.label, 'color', gb.color, 'icon', gb.icon, 'icon_url', gb.icon_url) ORDER BY gb.position)
                  FROM user_badges ub INNER JOIN global_badges gb ON gb.id = ub.badge_id WHERE ub.user_id = u.id),
@@ -580,6 +581,47 @@ router.delete('/:id/members/:userId', authMiddleware, async (req: AuthRequest, r
       for (const s of sockets) { s.leave(`server:${req.params.id}`); }
     }
     return res.json({ message: 'Member kicked' });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// PATCH /api/servers/:id/members/:userId/nickname
+router.patch('/:id/members/:userId/nickname', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id: serverId, userId } = req.params;
+    const selfId = req.user!.id;
+    const isSelf = userId === selfId;
+
+    // Self can always change own nick; others need manage_nicknames
+    if (!isSelf) {
+      if (!(await isAuthorized(serverId, selfId, 'manage_nicknames'))) {
+        return res.status(403).json({ error: 'Brak uprawnienia manage_nicknames' });
+      }
+    }
+
+    // Validate target is a member
+    const { rows: [member] } = await query(
+      `SELECT user_id FROM server_members WHERE server_id=$1 AND user_id=$2`,
+      [serverId, userId]
+    );
+    if (!member) return res.status(404).json({ error: 'Member not found' });
+
+    const nickname = typeof req.body.nickname === 'string'
+      ? req.body.nickname.trim().slice(0, 32) || null
+      : null;
+
+    await query(
+      `UPDATE server_members SET nickname=$1 WHERE server_id=$2 AND user_id=$3`,
+      [nickname, serverId, userId]
+    );
+    await invalidateServerMembersCache(serverId);
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`server:${serverId}`).emit('member_nickname_changed', {
+        server_id: serverId, user_id: userId, nickname,
+      });
+    }
+    return res.json({ nickname });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 

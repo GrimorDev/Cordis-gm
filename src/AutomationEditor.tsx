@@ -580,7 +580,7 @@ function VisualFlowEditor({
   const selectedRing = "ring-2 ring-indigo-500/60 ring-offset-1 ring-offset-transparent";
 
   return (
-    <div ref={containerRef} className="relative w-full min-h-[520px] p-6 overflow-auto">
+    <div ref={containerRef} className="relative w-full p-8 overflow-auto" style={{minHeight:'max(640px, 62vh)'}}>
       <FlowArrows connections={arrows}/>
 
       {/* Variables hint */}
@@ -679,7 +679,7 @@ function VisualFlowEditor({
       )}
 
       {/* ── Actions row ── */}
-      <div className="flex flex-wrap justify-center gap-3">
+      <div className="flex flex-wrap justify-center gap-4">
         {(rule.actions ?? []).map((a, i) => {
           const am = ACTION_META[a.type as ExtActionType];
           const nodeId = `action-${i}`;

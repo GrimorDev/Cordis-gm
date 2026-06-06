@@ -336,6 +336,7 @@ export interface ServerMember {
   is_bot?: boolean;
   active_tag?: string | null;
   active_tag_server_id?: string | null;
+  nickname?: string | null;
 }
 
 // ── Bot types ──────────────────────────────────────────────────────────────
@@ -598,6 +599,8 @@ export const serversApi = {
     req<void>('PUT', `/servers/${serverId}/members/${userId}/roles`, data),
   kickMember: (serverId: string, userId: string) =>
     req<void>('DELETE', `/servers/${serverId}/members/${userId}`),
+  changeNickname: (serverId: string, userId: string, nickname: string | null) =>
+    req<{ nickname: string | null }>('PATCH', `/servers/${serverId}/members/${userId}/nickname`, { nickname }),
   roles: {
     list: (serverId: string) => req<ServerRole[]>('GET', `/servers/${serverId}/roles`),
     create: (serverId: string, d: { name: string; color: string; permissions: string[] }) =>

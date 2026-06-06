@@ -371,6 +371,7 @@ ALTER TABLE server_tags ADD COLUMN IF NOT EXISTS color         VARCHAR(32);
 ALTER TABLE server_tags ADD COLUMN IF NOT EXISTS icon          VARCHAR(32);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_status VARCHAR(20) DEFAULT 'online';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS card_effect VARCHAR(30) DEFAULT 'none';
+ALTER TABLE server_members ADD COLUMN IF NOT EXISTS nickname VARCHAR(32) DEFAULT NULL;
 
 -- ════════════════════════════════════════════════════════════════════
 --  Performance Indexes (100k-scale hardening)

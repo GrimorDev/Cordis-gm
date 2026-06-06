@@ -49,9 +49,11 @@ CREATE TABLE IF NOT EXISTS server_members (
     server_id  UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
     user_id    UUID NOT NULL REFERENCES users(id)   ON DELETE CASCADE,
     role_name  VARCHAR(50) DEFAULT 'Member',
+    nickname   VARCHAR(32) DEFAULT NULL,
     joined_at  TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (server_id, user_id)
 );
+ALTER TABLE server_members ADD COLUMN IF NOT EXISTS nickname VARCHAR(32) DEFAULT NULL;
 CREATE INDEX IF NOT EXISTS idx_server_members_user   ON server_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_server_members_server ON server_members(server_id);
 

@@ -24,7 +24,7 @@ import {
   Bookmark, BookmarkCheck, Timer, Square, ImageIcon, Moon,
   Keyboard, Radio, Compass, CalendarPlus, Mic2, HelpCircle,
   Home, BookOpen, TrendingUp, Layers, SmilePlus, Smartphone,
-  Clipboard, ScanLine, RefreshCw, ShieldBan, Ban,
+  Clipboard, ScanLine, RefreshCw, ShieldBan, Ban, Pencil,
   type LucideIcon
 } from 'lucide-react';
 import {
@@ -150,6 +150,7 @@ const PERMISSIONS = [
   { id: 'mention_everyone', label: 'Użyj @everyone',          desc: 'Pinguje wszystkich użytkowników na serwerze' },
   { id: 'pin_messages',          label: 'Przypinaj wiadomości',       desc: 'Przypinaj i odpinaj wiadomości na kanałach' },
   { id: 'read_messages',         label: 'Czytaj wiadomości',          desc: 'Dostęp do czytania wiadomości (domyślnie wszyscy)' },
+  { id: 'manage_nicknames',      label: 'Zarządzaj nickami',          desc: 'Zmień nick każdego użytkownika na serwerze' },
   { id: 'view_server_activity',  label: 'Aktywność serwera',          desc: 'Widzi panel Live i historię aktywności serwera (domyślnie tylko admin)' },
 ];
 const ROLE_COLORS = ['#5865f2','#eb459e','#ed4245','#faa61a','#57f287','#1abc9c','#3498db','#9b59b6'];
@@ -8340,6 +8341,8 @@ export default function App() {
   const [showPowerModal, setShowPowerModal]   = useState(false);
   const [srvContextMenu, setSrvContextMenu]   = useState<{ x: number; y: number; srv: ServerData } | null>(null);
   const [memberCtxMenu, setMemberCtxMenu]     = useState<{ x: number; y: number; member: any } | null>(null);
+  const [nickModal, setNickModal]             = useState<{ userId: string; username: string; current: string } | null>(null);
+  const [nickVal, setNickVal]                 = useState('');
   const [deleteSrvConfirm, setDeleteSrvConfirm] = useState<{ id: string; name: string } | null>(null);
   const [dmCtxMenu, setDmCtxMenu] = useState<{ x: number; y: number; dm: typeof dmConvs[0] } | null>(null);
   const [groupCtxMenu, setGroupCtxMenu] = useState<{ x: number; y: number; gc: GroupDmConversation } | null>(null);
@@ -10260,6 +10263,10 @@ export default function App() {
     sock.on('member_left' as any, ({ server_id, user_id }: any) => {
       if (server_id !== activeServerRef.current) return;
       setMembers(p => p.filter(m => m.id !== user_id));
+    });
+    sock.on('member_nickname_changed' as any, ({ server_id, user_id, nickname }: any) => {
+      if (server_id !== activeServerRef.current) return;
+      setMembers(p => p.map(m => m.id === user_id ? { ...m, nickname } : m));
     });
     sock.on('user_updated' as any, (u: any) => {
       // Usuń cache HoverCard — avatar/banner mógł się zmienić
@@ -13258,6 +13265,7 @@ export default function App() {
   const canManageMessages      = hasAdminPerm || myPerms.includes('manage_messages');
   const canSendMessages        = activeView === 'dms' || hasAdminPerm || myPerms.length === 0 || myPerms.includes('send_messages');
   const canBanMembers          = hasAdminPerm || myPerms.includes('ban_members');
+  const canManageNicknames     = hasAdminPerm || myPerms.includes('manage_nicknames');
   const canCreateInvites       = hasAdminPerm || myPerms.length === 0 || myPerms.includes('create_invites');
   // W DM uprawnienia serwera nie obowiązują — zawsze można wysyłać pliki
   const canAttachFiles         = activeView === 'dms' || hasAdminPerm || myPerms.length === 0 || myPerms.includes('attach_files');
@@ -19082,7 +19090,7 @@ export default function App() {
                     <div className="flex items-center gap-1 flex-wrap">
                       <p className={`text-[13px] font-${opacity?'medium':'semibold'} truncate ${opacity?'group-hover:opacity-70':'group-hover:opacity-90'} transition-colors leading-tight`}
                         style={{ color: opacity ? (m.roles?.[0]?.color?`${m.roles[0].color}80`:'#52525b') : (m.roles?.[0]?.color||'#d4d4d8') }}>
-                        {maskName(m.username)}
+                        {maskName(m.nickname ?? m.username)}
                       </p>
                       {isOwner&&<Crown size={11} className={`${opacity?'text-amber-400/50':'text-amber-400'} shrink-0`}/>}
                       {m.is_bot&&<span className={`text-[9px] font-bold px-1 py-0.5 rounded border ${opacity?'border-violet-500/20 text-violet-500/60 bg-violet-500/5 opacity-50':'border-violet-500/40 text-violet-400 bg-violet-500/10'} leading-none select-none shrink-0`}>BOT</span>}
@@ -19874,8 +19882,9 @@ export default function App() {
                   <StatusBadge status={m.status||'offline'} size={9} className="absolute -bottom-0.5 -right-0.5"/>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-semibold text-white truncate leading-tight">{maskName(m.username)}</p>
-                  {m.role_name&&<p className="text-[11px] text-zinc-500 truncate leading-tight">{m.role_name}</p>}
+                  <p className="text-[13px] font-semibold text-white truncate leading-tight">{maskName(m.nickname ?? m.username)}</p>
+                  {m.nickname&&<p className="text-[11px] text-zinc-500 truncate leading-tight">@{m.username}</p>}
+                  {!m.nickname&&m.role_name&&<p className="text-[11px] text-zinc-500 truncate leading-tight">{m.role_name}</p>}
                 </div>
                 {isOwnerOfServer&&<Crown size={12} className="text-amber-400 shrink-0"/>}
                 {m.is_bot&&<span className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-violet-500/40 text-violet-400 bg-violet-500/10 leading-none select-none shrink-0">BOT</span>}
@@ -19902,11 +19911,20 @@ export default function App() {
               {sep}
               {btn(<Copy size={13} className="text-zinc-500 shrink-0"/>,'Kopiuj ID użytkownika', ()=>{ navigator.clipboard.writeText(m.id); addToast('ID skopiowane','success'); })}
 
+              {/* Zmień nick (self) */}
+              {isSelf&&(
+                <>
+                  {sep}
+                  {btn(<Pencil size={13} className="text-zinc-500 shrink-0"/>,'Zmień nick na serwerze', ()=>{ setNickVal(m.nickname??''); setNickModal({userId:m.id,username:m.username,current:m.nickname??''}); })}
+                </>
+              )}
+
               {/* Moderation */}
-              {canTarget&&(canManageRoles||canKickMembers||canBanMembers)&&(
+              {canTarget&&(canManageRoles||canKickMembers||canBanMembers||canManageNicknames)&&(
                 <>
                   {sep}
                   <p className="px-3.5 pt-1 pb-0.5 text-[10px] font-semibold text-zinc-600 uppercase tracking-wider">Moderacja</p>
+                  {canManageNicknames&&btn(<Pencil size={13} className="text-indigo-300 shrink-0"/>,'Zmień nick na serwerze', ()=>{ setNickVal(m.nickname??''); setNickModal({userId:m.id,username:m.username,current:m.nickname??''}); })}
                   {canManageRoles&&btn(<Shield size={13} className="text-indigo-400 shrink-0"/>,'Zarządzaj rolami', ()=>{ setSrvSettTab('members'); setSrvSettOpen(true); })}
                   {canKickMembers&&btn(<LogOut size={13} className="text-amber-400 shrink-0"/>,'Wyrzuć z serwera', ()=>handleKick(m.id))}
                   {canBanMembers&&btn(<ShieldBan size={13} className="shrink-0"/>,'Zbanuj użytkownika', ()=>handleBan(m.id,m.username), true)}
@@ -19919,6 +19937,60 @@ export default function App() {
               {!isSelf&&isBlocked&&btn(<ShieldCheck size={13} className="text-zinc-500 shrink-0"/>,'Odblokuj', ()=>handleUnblockUser(m.id,m.username))}
             </motion.div>
           </>
+        );
+      })()}
+
+      {/* ── Nick modal ───────────────────────────────────────────────────── */}
+      {nickModal&&(()=>{
+        const close = () => setNickModal(null);
+        const submit = async () => {
+          if (!activeServer) return;
+          const val = nickVal.trim() || null;
+          try {
+            await serversApi.changeNickname(activeServer, nickModal.userId, val);
+            setMembers(p => p.map(m => m.id === nickModal.userId ? {...m, nickname: val} : m));
+            addToast('Nick zmieniony','success');
+            close();
+          } catch { addToast('Błąd przy zmianie nicku','error'); }
+        };
+        return ReactDOM.createPortal(
+          <div className="fixed inset-0 z-[210] flex items-center justify-center">
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={close}/>
+            <motion.div initial={{opacity:0,scale:0.95,y:8}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.95}}
+              transition={{duration:0.15}} onClick={e=>e.stopPropagation()}
+              className="relative bg-[#0e0e1c] border border-white/[0.12] rounded-2xl shadow-2xl w-80 p-5">
+              <div className="flex items-center gap-2.5 mb-4">
+                <div className="w-8 h-8 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center">
+                  <Pencil size={14} className="text-indigo-400"/>
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-white leading-tight">Zmień nick na serwerze</p>
+                  <p className="text-[11px] text-zinc-500 leading-tight">dla <span className="text-zinc-300">{nickModal.username}</span></p>
+                </div>
+              </div>
+              <input
+                autoFocus
+                value={nickVal}
+                onChange={e=>setNickVal(e.target.value)}
+                onKeyDown={e=>{ if(e.key==='Enter')submit(); if(e.key==='Escape')close(); }}
+                maxLength={32}
+                placeholder={nickModal.username}
+                className="w-full px-3 py-2.5 bg-zinc-800 border border-white/[0.08] rounded-xl text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500/50 transition-colors mb-1"
+              />
+              <p className="text-[10px] text-zinc-600 mb-3">Puste pole = usuń nick (wróci do nazwy użytkownika)</p>
+              <div className="flex gap-2">
+                <button onClick={close}
+                  className="flex-1 px-3 py-2 rounded-xl text-sm text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors">
+                  Anuluj
+                </button>
+                <button onClick={submit}
+                  className="flex-1 px-3 py-2 rounded-xl text-sm font-semibold bg-indigo-500 hover:bg-indigo-400 text-white transition-colors">
+                  Zapisz
+                </button>
+              </div>
+            </motion.div>
+          </div>,
+          document.body
         );
       })()}
 
