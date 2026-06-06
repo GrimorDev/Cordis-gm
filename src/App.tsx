@@ -9751,8 +9751,13 @@ export default function App() {
           (msg.sender_id === myId && d.other_user_id === activeDmUserIdRef.current)
         );
         if (existing) {
+          const lastMsgText = (() => {
+            const c = msg.content || '';
+            if (c.startsWith('CINV|')) { const p2 = c.split('|'); return `📨 Zaproszenie: ${p2[3] || 'serwer'}`; }
+            return c || (msg.attachment_url ? '📎 Załącznik' : '');
+          })();
           return p.map(d => d.id === existing.id
-            ? { ...d, last_message: msg.content || (msg.attachment_url ? '📎 Załącznik' : ''), last_message_at: msg.created_at }
+            ? { ...d, last_message: lastMsgText, last_message_at: msg.created_at }
             : d
           ).sort((a, b) => new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime());
         }
@@ -9762,9 +9767,13 @@ export default function App() {
       });
       // Toast + unread count + sound only when NOT actively viewing this DM
       if (msg.sender_id !== myId && !isActivelyViewing) {
-        const preview = msg.content
-          ? (msg.content.length > 55 ? msg.content.slice(0, 55) + '…' : msg.content)
-          : msg.attachment_url ? '📎 Załącznik' : '';
+        // CINV|serverId|code|serverName|... → friendly text instead of raw pipe-string
+        const rawContent = msg.content ?? '';
+        const preview = rawContent.startsWith('CINV|')
+          ? (() => { const parts = rawContent.split('|'); return `📨 Zaproszenie na serwer: ${parts[3] || 'serwer'}`; })()
+          : rawContent
+            ? (rawContent.length > 55 ? rawContent.slice(0, 55) + '…' : rawContent)
+            : msg.attachment_url ? '📎 Załącznik' : '';
         autoToast(
           preview,
           'info',
@@ -10358,7 +10367,7 @@ export default function App() {
         server_id: server_id ?? '',
         server_name: server_name ?? 'Serwer',
         channel_id: channel_id ?? '',
-        channel_name: channel_name ? `#${channel_name}` : '#kanał',
+        channel_name: channel_name ?? 'kanał',
         content: (content ?? '').slice(0, 120),
         type: type === 'everyone' ? 'everyone' : 'mention',
         created_at: new Date().toISOString(),
@@ -12787,9 +12796,36 @@ export default function App() {
       // If these logs show readyState='live' & enabled=true on desktop but peers
       // still hear nothing, the failure is in ICE/receive — NOT in capture.
       try {
-        rawStream.getAudioTracks().forEach(t =>
-          console.log(`[Cordis] acquireMic: got track "${t.label}" readyState=${t.readyState} enabled=${t.enabled} muted=${t.muted}`));
-        if (rawStream.getAudioTracks().length === 0)
+        const audioTracks = rawStream.getAudioTracks();
+        audioTracks.forEach(t => {
+          console.log(`[Cordis] acquireMic: got track "${t.label}" readyState=${t.readyState} enabled=${t.enabled} muted=${t.muted}`);
+          // Force enabled=true as a safety measure (should already be true)
+          t.enabled = true;
+          // `muted=true` = OS/system-level mute (not user-controlled).
+          // On Windows this can happen when mic privacy was reset by an OS update
+          // or when another app has exclusive mic access. We can't force it to false,
+          // but we can warn the user and listen for unmute.
+          if (t.muted) {
+            console.warn('[Cordis] acquireMic: track is muted by the OS! Audio will be silent until OS unmutes it.');
+            if (isTauri && userOs === 'windows') {
+              addToast(
+                'Mikrofon jest wyciszony przez system Windows — sprawdź Ustawienia prywatności → Mikrofon lub naciśnij sprzętowy przycisk wyciszenia',
+                'error',
+                async () => { const { invoke } = await import('@tauri-apps/api/core'); invoke('open_mic_privacy_settings').catch(() => {}); }
+              );
+            }
+          }
+          // Listen for mute/unmute events during the call
+          t.addEventListener('mute', () => {
+            console.warn('[Cordis] mic track became MUTED by OS during call');
+            addToast('Mikrofon został wyciszony przez system — inni Cię nie słyszą', 'error');
+          });
+          t.addEventListener('unmute', () => {
+            console.log('[Cordis] mic track UNmuted by OS — audio restored');
+            addToast('Mikrofon został odblokowany przez system', 'success');
+          });
+        });
+        if (audioTracks.length === 0)
           console.warn('[Cordis] acquireMic: getUserMedia returned a stream with NO audio tracks!');
       } catch {}
 
