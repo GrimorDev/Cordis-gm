@@ -112,33 +112,99 @@ fn build_streams(
     let host = cpal::default_host();
 
     // ── Mic (input) ──────────────────────────────────────────────────────────
+    // Build strategy: try mono 48 kHz first (ideal for Opus).  If the device
+    // doesn't support mono or that sample rate (e.g. stereo-only ALSA cards),
+    // try stereo 48 kHz and downmix L+R to mono in the callback.
+    // Use BufferSize::Default — most ALSA/PipeWire devices reject arbitrary
+    // fixed buffer sizes (BufferSize::Fixed) and return an error silently.
     let in_stream: Option<cpal::Stream> = host.default_input_device().and_then(|dev| {
-        // Try exact config first; fall back to whatever the device supports.
-        let supported = dev.default_input_config().ok()?;
-        let cfg = cpal::StreamConfig {
-            channels:    CHANNELS,
-            sample_rate: cpal::SampleRate(SAMPLE_RATE),
-            buffer_size: cpal::BufferSize::Fixed(FRAME_SAMPLES as u32),
-        };
-        let _ = supported; // keep for reference
         let tx  = mic_tx.clone();
         let ef  = Arc::clone(&err_flag);
-        let mut acc: Vec<f32> = Vec::with_capacity(FRAME_SAMPLES * 2);
-        dev.build_input_stream(
-            &cfg,
+
+        // ── Attempt 1: mono 48 kHz ────────────────────────────────────────────
+        let cfg_mono = cpal::StreamConfig {
+            channels:    1,
+            sample_rate: cpal::SampleRate(SAMPLE_RATE),
+            buffer_size: cpal::BufferSize::Default,
+        };
+        {
+            let tx2 = tx.clone(); let ef2 = Arc::clone(&ef);
+            let mut acc: Vec<f32> = Vec::with_capacity(FRAME_SAMPLES * 2);
+            if let Ok(s) = dev.build_input_stream(
+                &cfg_mono,
+                move |data: &[f32], _| {
+                    acc.extend_from_slice(data);
+                    while acc.len() >= FRAME_SAMPLES {
+                        let frame: Vec<f32> = acc.drain(..FRAME_SAMPLES).collect();
+                        if tx2.send(frame).is_err() { break; }
+                    }
+                },
+                move |e| { eprintln!("[rtc_linux] mic mono error: {e}"); ef2.store(true, Ordering::Relaxed); },
+                None,
+            ) { return Some(s); }
+        }
+
+        // ── Attempt 2: stereo 48 kHz → downmix to mono ───────────────────────
+        let cfg_stereo = cpal::StreamConfig {
+            channels:    2,
+            sample_rate: cpal::SampleRate(SAMPLE_RATE),
+            buffer_size: cpal::BufferSize::Default,
+        };
+        {
+            let tx2 = tx.clone(); let ef2 = Arc::clone(&ef);
+            let mut acc: Vec<f32> = Vec::with_capacity(FRAME_SAMPLES * 2);
+            if let Ok(s) = dev.build_input_stream(
+                &cfg_stereo,
+                move |data: &[f32], _| {
+                    // Downmix stereo L+R → mono (average)
+                    let mono: Vec<f32> = data.chunks(2)
+                        .map(|c| (c[0] + c.get(1).copied().unwrap_or(c[0])) * 0.5)
+                        .collect();
+                    acc.extend_from_slice(&mono);
+                    while acc.len() >= FRAME_SAMPLES {
+                        let frame: Vec<f32> = acc.drain(..FRAME_SAMPLES).collect();
+                        if tx2.send(frame).is_err() { break; }
+                    }
+                },
+                move |e| { eprintln!("[rtc_linux] mic stereo error: {e}"); ef2.store(true, Ordering::Relaxed); },
+                None,
+            ) { return Some(s); }
+        }
+
+        // ── Attempt 3: device default config ─────────────────────────────────
+        let default_cfg = dev.default_input_config().ok()?;
+        let ch = default_cfg.channels();
+        let sr = default_cfg.sample_rate().0;
+        let cfg_default = cpal::StreamConfig {
+            channels:    ch,
+            sample_rate: cpal::SampleRate(sr),
+            buffer_size: cpal::BufferSize::Default,
+        };
+        let mut acc: Vec<f32> = Vec::with_capacity(FRAME_SAMPLES * 4);
+        // Accumulate at device sample rate, take FRAME_SAMPLES mono samples at a time.
+        // Very rough resampling: for now just take every Nth sample if sr != 48000.
+        // A proper resampler would need rubato/soxr, so we keep this simple.
+        let step = ((sr as f64) / (SAMPLE_RATE as f64)).ceil() as usize;
+        match dev.build_input_stream(
+            &cfg_default,
             move |data: &[f32], _| {
-                acc.extend_from_slice(data);
+                // Downmix all channels → mono, then subsample to ~48 kHz
+                let mono: Vec<f32> = data.chunks(ch as usize)
+                    .map(|c| c.iter().copied().sum::<f32>() / ch as f32)
+                    .collect();
+                let resampled: Vec<f32> = mono.into_iter().step_by(step.max(1)).collect();
+                acc.extend_from_slice(&resampled);
                 while acc.len() >= FRAME_SAMPLES {
                     let frame: Vec<f32> = acc.drain(..FRAME_SAMPLES).collect();
                     if tx.send(frame).is_err() { break; }
                 }
             },
-            move |e| {
-                eprintln!("[rtc_linux] mic error: {e}");
-                ef.store(true, Ordering::Relaxed);
-            },
+            move |e| { eprintln!("[rtc_linux] mic default error: {e}"); ef.store(true, Ordering::Relaxed); },
             None,
-        ).ok()
+        ) {
+            Ok(s) => Some(s),
+            Err(e) => { eprintln!("[rtc_linux] mic: all configs failed: {e}"); None }
+        }
     });
 
     // ── Speaker (output) ─────────────────────────────────────────────────────
@@ -453,32 +519,44 @@ pub async fn rtc_create_pc(
 }
 
 /// Create an SDP offer and set it as local description.
+///
+/// Sets local description internally so webrtc-rs receives its own original SDP
+/// (not the JS-munged version that engine.ts creates for the remote peer).
+/// The JS polyfill's setLocalDescription() no longer calls rtc_set_local_description —
+/// it only updates the JS-side localDescription object that emitOffer/emitAnswer use.
 #[tauri::command]
 pub async fn rtc_create_offer(
     id:    String,
     state: tauri::State<'_, SharedRtcState>,
 ) -> Result<String, String> {
-    // Extract Arc<RTCPeerConnection>, drop lock before awaiting.
-    // Do NOT set local description here — JS will call setLocalDescription(mungedSdp)
-    // after munging (preferH264, preferOpusStereo).  Calling set_local_description twice
-    // (once here with original SDP and once from JS with munged SDP) puts webrtc-rs into
-    // an invalid signaling state and breaks the answer flow.
-    let pc  = state.inner().lock().await
+    let pc = state.inner().lock().await
         .peers.get(&id).ok_or("peer not found")?.pc.clone();
-    let sdp = pc.create_offer(None).await.map_err(|e| e.to_string())?.sdp;
+    let offer = pc.create_offer(None).await.map_err(|e| e.to_string())?;
+    let sdp   = offer.sdp.clone();
+    // Set local description in Rust immediately with the original (unmunged) SDP.
+    // ICE gathering starts here.  The JS side will munge the SDP for the remote
+    // peer only — setLocalDescription in the polyfill no longer calls this command.
+    pc.set_local_description(offer).await.map_err(|e| e.to_string())?;
     Ok(sdp)
 }
 
 /// Create an SDP answer (called by JS after setRemoteDescription(offer)).
-/// Returns the raw answer SDP; JS will call setLocalDescription with it.
+///
+/// Sets local description internally with the original (unmunged) SDP so webrtc-rs
+/// is happy.  Returns the raw SDP to JS which will munge it (preferH264, preferOpusStereo)
+/// only for transmission to the remote peer.  The JS polyfill's setLocalDescription()
+/// no longer calls rtc_set_local_description.
 #[tauri::command]
 pub async fn rtc_create_answer(
     id:    String,
     state: tauri::State<'_, SharedRtcState>,
 ) -> Result<String, String> {
-    let pc  = state.inner().lock().await
+    let pc     = state.inner().lock().await
         .peers.get(&id).ok_or("peer not found")?.pc.clone();
-    let sdp = pc.create_answer(None).await.map_err(|e| e.to_string())?.sdp;
+    let answer = pc.create_answer(None).await.map_err(|e| e.to_string())?;
+    let sdp    = answer.sdp.clone();
+    // Set local description immediately with the original SDP.  ICE gathering starts here.
+    pc.set_local_description(answer).await.map_err(|e| e.to_string())?;
     Ok(sdp)
 }
 

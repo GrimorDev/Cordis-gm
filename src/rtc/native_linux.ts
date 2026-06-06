@@ -184,10 +184,20 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
     // engine.ts calls pc.localDescription!.toJSON() after setLocalDescription.
     // A plain {type, sdp} object doesn't have toJSON() → TypeError → offer never emitted.
     // We add toJSON() explicitly so the engine's emitOffer/emitAnswer calls work.
+    //
+    // IMPORTANT: Do NOT call rtc_set_local_description in Rust here.
+    // rtc_create_offer / rtc_create_answer already call set_local_description internally
+    // with the ORIGINAL (unmunged) SDP that webrtc-rs generated.  If we called
+    // rtc_set_local_description again with the JS-munged SDP (preferH264 + preferOpusStereo),
+    // webrtc-rs would reject it because the munged SDP no longer matches its internal state
+    // (reordered video payload types, added Opus fmtp fields, etc.) → ICE never starts
+    // → connection stays at "new" forever.
+    //
+    // We update only the JS-side localDescription so emitOffer/emitAnswer send the
+    // munged SDP to the remote peer (which is correct — Chrome handles Opus stereo hints).
     const sdp  = desc.sdp ?? '';
     const type = desc.type as RTCSdpType;
     this.localDescription = { type, sdp, toJSON: () => ({ type, sdp }) } as RTCSessionDescription;
-    await invoke('rtc_set_local_description', { id: this._id, type, sdp });
     this.signalingState = type === 'offer' ? 'have-local-offer' : 'stable';
   }
 
@@ -234,11 +244,14 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
 
   async addIceCandidate(candidate: RTCIceCandidateInit | null): Promise<void> {
     if (!candidate?.candidate) return;
+    // Key naming: Tauri serializes camelCase JS keys to snake_case Rust params via
+    // serde rename_all="camelCase".  The Rust param `sdp_mline_index` converts to
+    // camelCase as `sdpMlineIndex` (mline = one word) — NOT `sdpMLineIndex` (capital L).
     await invoke('rtc_add_ice_candidate', {
       id:              this._id,
       candidate:       candidate.candidate,
       sdpMid:          candidate.sdpMid ?? null,
-      sdpMLineIndex:   candidate.sdpMLineIndex ?? null,
+      sdpMlineIndex:   candidate.sdpMLineIndex ?? null,  // was: sdpMLineIndex (wrong key)
     });
   }
 
