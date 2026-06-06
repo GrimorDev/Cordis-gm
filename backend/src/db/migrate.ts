@@ -193,9 +193,15 @@ CREATE TABLE IF NOT EXISTS server_invites (
     server_id  UUID NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
     creator_id UUID NOT NULL REFERENCES users(id)   ON DELETE CASCADE,
     expires_at TIMESTAMPTZ,
+    uses       INTEGER DEFAULT 0,
+    max_uses   INTEGER DEFAULT NULL,
+    label      VARCHAR(64) DEFAULT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_invites_server ON server_invites(server_id);
+DO $$ BEGIN ALTER TABLE server_invites ADD COLUMN uses     INTEGER DEFAULT 0;    EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE server_invites ADD COLUMN max_uses INTEGER DEFAULT NULL;  EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE server_invites ADD COLUMN label    VARCHAR(64) DEFAULT NULL; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 
 -- Add columns for existing deployments (idempotent via exception handling)
 DO $$ BEGIN ALTER TABLE users       ADD COLUMN banner_url    TEXT;                                                          EXCEPTION WHEN duplicate_column THEN NULL; END $$;

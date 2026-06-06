@@ -610,8 +610,17 @@ export const serversApi = {
     delete: (serverId: string, roleId: string) =>
       req<void>('DELETE', `/servers/${serverId}/roles/${roleId}`),
   },
-  createInvite: (serverId: string, expiresIn: string) =>
-    req<{ code: string; expires_at: string | null }>('POST', '/servers/invite/create', { server_id: serverId, expires_in: expiresIn }),
+  createInvite: (serverId: string, expiresIn: string, maxUses?: string, label?: string) =>
+    req<{ code: string; expires_at: string | null; uses: number; max_uses: number | null; label: string | null; creator_username: string }>(
+      'POST', '/servers/invite/create',
+      { server_id: serverId, expires_in: expiresIn, max_uses: maxUses, label }
+    ),
+  listInvites: (serverId: string) =>
+    req<{ code: string; expires_at: string | null; uses: number; max_uses: number | null; label: string | null; creator_username: string; created_at: string }[]>(
+      'GET', `/servers/${serverId}/invites`
+    ),
+  deleteInvite: (serverId: string, code: string) =>
+    req<{ ok: boolean }>('DELETE', `/servers/${serverId}/invites/${code}`),
   inviteInfo: (code: string) =>
     req<{ code: string; server_id: string; server_name: string; icon_url: string | null; creator_username: string; creator_avatar: string | null }>('GET', `/servers/invite/${code}/info`),
   join: (code: string) => req<ServerData>('POST', `/servers/join/${code}`),

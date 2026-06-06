@@ -828,9 +828,44 @@ router.get('/invite/:code/info', async (req: Request, res: Response) => {
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// GET /api/servers/:id/invites — list all active invites for a server
+router.get('/:id/invites', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!(await isAuthorized(req.params.id, req.user!.id, 'create_invites'))) {
+      return res.status(403).json({ error: 'Brak uprawnień' });
+    }
+    const { rows } = await query(
+      `SELECT si.code, si.server_id, si.expires_at, si.uses, si.max_uses, si.label, si.created_at,
+              u.username AS creator_username, u.id AS creator_id
+       FROM server_invites si
+       JOIN users u ON u.id = si.creator_id
+       WHERE si.server_id = $1
+         AND (si.expires_at IS NULL OR si.expires_at > NOW())
+         AND (si.max_uses IS NULL OR si.uses < si.max_uses)
+       ORDER BY si.created_at DESC`,
+      [req.params.id]
+    );
+    return res.json(rows);
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// DELETE /api/servers/:id/invites/:code — revoke an invite
+router.delete('/:id/invites/:code', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!(await isAuthorized(req.params.id, req.user!.id, 'create_invites'))) {
+      return res.status(403).json({ error: 'Brak uprawnień' });
+    }
+    await query(
+      `DELETE FROM server_invites WHERE code=$1 AND server_id=$2`,
+      [req.params.code, req.params.id]
+    );
+    return res.json({ ok: true });
+  } catch { return res.status(500).json({ error: 'Internal server error' }); }
+});
+
 // POST /api/servers/invite/create
 router.post('/invite/create', authMiddleware, inviteCreateLimiter, async (req: AuthRequest, res: Response) => {
-  const { server_id, expires_in } = req.body;
+  const { server_id, expires_in, max_uses, label } = req.body;
   try {
     if (!(await hasMemberPermission(server_id, req.user!.id, 'create_invites'))) {
       return res.status(403).json({ error: 'Nie masz uprawnień do tworzenia zaproszeń' });
@@ -840,11 +875,14 @@ router.post('/invite/create', authMiddleware, inviteCreateLimiter, async (req: A
     if (expires_in && expires_in !== 'never') {
       expiresAt = new Date(Date.now() + parseInt(expires_in) * 1000);
     }
-    await query(
-      `INSERT INTO server_invites (code, server_id, creator_id, expires_at) VALUES ($1, $2, $3, $4)`,
-      [code, server_id, req.user!.id, expiresAt]
+    const maxUsesVal = max_uses && max_uses !== 'unlimited' ? parseInt(max_uses) : null;
+    const labelVal   = typeof label === 'string' ? label.trim().slice(0, 64) || null : null;
+    const { rows: [inv] } = await query(
+      `INSERT INTO server_invites (code, server_id, creator_id, expires_at, max_uses, label)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [code, server_id, req.user!.id, expiresAt, maxUsesVal, labelVal]
     );
-    return res.json({ code, expires_at: expiresAt });
+    return res.json({ ...inv, creator_username: '' });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
@@ -869,6 +907,8 @@ router.post('/join/:code', authMiddleware, joinLimiter, async (req: AuthRequest,
       [invite.server_id, req.user!.id]
     );
     if (existing.rowCount) return res.status(409).json({ error: 'Already a member' });
+    // Increment uses counter
+    await query(`UPDATE server_invites SET uses = uses + 1 WHERE code = $1`, [req.params.code]);
     await query(
       `INSERT INTO server_members (server_id, user_id, role_name) VALUES ($1, $2, 'Member')`,
       [invite.server_id, req.user!.id]
