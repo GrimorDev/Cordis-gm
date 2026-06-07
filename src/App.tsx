@@ -5,7 +5,7 @@ import ImageCropModal, { type CropShape } from './ImageCropModal';
 import { translate, resolveLocale, bcp47 as localeBcp47, loadLocale, detectLocale, LOCALES, type Locale, type TimeFormat } from './i18n';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Hash, Volume2, Video, Settings, Plus, Search, Bell, BellOff, Users,
+  Hash, Volume2, Video, Settings, Plus, Search, Bell, BellOff, Users, UsersRound,
   Mic, MicOff, VolumeX, Smile, Paperclip, Send, Image, Reply,
   Menu, X, Edit3, MessageCircle, Minimize2, Maximize2,
   Shield, Trash2, Settings2, UserPlus, Check, X as XIcon,
@@ -6676,17 +6676,24 @@ type AchievementDef = {
   id: string; name: string; desc: string; icon: LucideIcon; color: string;
   group: 'tenure' | 'activity' | 'community'; target: number; unit: string;
   metric: (s: UserStatsShape, daysSince: number) => number;
+  // Tenure badges all share ONE glyph — a calendar with a number baked in
+  // (see <CalendarTierIcon>) — instead of 8 unrelated icons. The number
+  // restarts per "era" (1-4 for months, then 1/2/3/5 for years) so it reads
+  // as "which milestone in this league", while `color` marks the league
+  // itself: steel-blue for the month badges, gold for years 1-3, platinum
+  // for the 5-year "legend" badge — exactly the tiered look that was asked for.
+  calNumber?: number;
 };
 const ACHIEVEMENTS: AchievementDef[] = [
-  // ── Czas na Cordyn — odznaki za staż konta: co miesiąc do 4 m-cy, później co rok ──
-  { id:'tenure_30',   name:'Pierwszy miesiąc',  desc:'Jesteś na Cordyn od 30 dni — witamy na pokładzie!',          icon:CalendarDays,  color:'#a5b4fc', group:'tenure',   target:30,   unit:'dni',       metric:(_,d)=>d },
-  { id:'tenure_60',   name:'Stały bywalec',     desc:'Jesteś na Cordyn od 60 dni (2 miesiące).',                   icon:Star,          color:'#fbbf24', group:'tenure',   target:60,   unit:'dni',       metric:(_,d)=>d },
-  { id:'tenure_90',   name:'Rezydent',          desc:'Jesteś na Cordyn od 90 dni (3 miesiące) — czujesz się tu jak w domu.', icon:Award, color:'#34d399', group:'tenure',   target:90,   unit:'dni',       metric:(_,d)=>d },
-  { id:'tenure_120',  name:'Weteran',           desc:'Jesteś na Cordyn od 120 dni (4 miesiące).',                  icon:BadgeCheck,    color:'#60a5fa', group:'tenure',   target:120,  unit:'dni',       metric:(_,d)=>d },
-  { id:'tenure_365',  name:'Rocznik',           desc:'Minął rok odkąd dołączyłeś/aś do Cordyn — pierwsza rocznica!', icon:Trophy,      color:'#f59e0b', group:'tenure',   target:365,  unit:'dni',       metric:(_,d)=>d },
-  { id:'tenure_730',  name:'Dwulatek',          desc:'Jesteś z nami już 2 lata.',                                  icon:Crown,         color:'#c084fc', group:'tenure',   target:730,  unit:'dni',       metric:(_,d)=>d },
-  { id:'tenure_1095', name:'Trzylatek',         desc:'Jesteś z nami już 3 lata.',                                  icon:Gem,           color:'#22d3ee', group:'tenure',   target:1095, unit:'dni',       metric:(_,d)=>d },
-  { id:'tenure_1825', name:'Legenda Cordyna',   desc:'5 lat na Cordyn — jesteś żywą legendą tej platformy.',       icon:Rocket,        color:'#fb7185', group:'tenure',   target:1825, unit:'dni',       metric:(_,d)=>d },
+  // ── Czas na Cordyn — wspólna ikona kalendarza z cyfrą; kolor = liga, cyfra = numer w lidze ──
+  { id:'tenure_30',   name:'Pierwszy miesiąc',  desc:'Jesteś na Cordyn od 30 dni — witamy na pokładzie!',          icon:CalendarDays, color:'#7dd3fc', group:'tenure', target:30,   unit:'dni', calNumber:1, metric:(_,d)=>d },
+  { id:'tenure_60',   name:'Stały bywalec',     desc:'Jesteś na Cordyn od 60 dni (2 miesiące).',                   icon:CalendarDays, color:'#7dd3fc', group:'tenure', target:60,   unit:'dni', calNumber:2, metric:(_,d)=>d },
+  { id:'tenure_90',   name:'Rezydent',          desc:'Jesteś na Cordyn od 90 dni (3 miesiące) — czujesz się tu jak w domu.', icon:CalendarDays, color:'#7dd3fc', group:'tenure', target:90,  unit:'dni', calNumber:3, metric:(_,d)=>d },
+  { id:'tenure_120',  name:'Weteran',           desc:'Jesteś na Cordyn od 120 dni (4 miesiące).',                  icon:CalendarDays, color:'#7dd3fc', group:'tenure', target:120,  unit:'dni', calNumber:4, metric:(_,d)=>d },
+  { id:'tenure_365',  name:'Rocznik',           desc:'Minął rok odkąd dołączyłeś/aś do Cordyn — pierwsza rocznica! (odznaka złotej ligi)', icon:CalendarDays, color:'#f5b942', group:'tenure', target:365,  unit:'dni', calNumber:1, metric:(_,d)=>d },
+  { id:'tenure_730',  name:'Dwulatek',          desc:'Jesteś z nami już 2 lata. (odznaka złotej ligi)',            icon:CalendarDays, color:'#f5b942', group:'tenure', target:730,  unit:'dni', calNumber:2, metric:(_,d)=>d },
+  { id:'tenure_1095', name:'Trzylatek',         desc:'Jesteś z nami już 3 lata. (odznaka złotej ligi)',            icon:CalendarDays, color:'#f5b942', group:'tenure', target:1095, unit:'dni', calNumber:3, metric:(_,d)=>d },
+  { id:'tenure_1825', name:'Legenda Cordyna',   desc:'5 lat na Cordyn — jesteś żywą legendą tej platformy. (odznaka platynowej ligi)', icon:CalendarDays, color:'#dbe4ef', group:'tenure', target:1825, unit:'dni', calNumber:5, metric:(_,d)=>d },
   // ── Aktywność — odznaki za udział w rozmowach i odbiór społeczności ──
   { id:'msgs_100',       name:'Gaduła',          desc:'Wyślij 100 wiadomości na serwerach.',                          icon:MessageSquare, color:'#818cf8', group:'activity', target:100,  unit:'wiadomości',     metric:s=>s.messages_sent },
   { id:'msgs_1000',      name:'Mówca',           desc:'Wyślij 1000 wiadomości na serwerach.',                         icon:Megaphone,     color:'#fb923c', group:'activity', target:1000, unit:'wiadomości',     metric:s=>s.messages_sent },
@@ -6694,12 +6701,32 @@ const ACHIEVEMENTS: AchievementDef[] = [
   { id:'dms_250',        name:'Powiernik',       desc:'Wyślij 250 prywatnych wiadomości.',                            icon:Send,          color:'#34d399', group:'activity', target:250,  unit:'wiadomości DM',  metric:s=>s.dms_sent },
   { id:'react_recv_50',  name:'Lubiany',         desc:'Otrzymaj 50 reakcji pod swoimi wiadomościami.',                icon:Heart,         color:'#fb7185', group:'activity', target:50,   unit:'reakcji',        metric:s=>s.reactions_received },
   { id:'react_recv_250', name:'Na fali',         desc:'Otrzymaj 250 reakcji — Twoje wiadomości robią wrażenie.',      icon:Flame,         color:'#f97316', group:'activity', target:250,  unit:'reakcji',        metric:s=>s.reactions_received },
-  { id:'react_give_100', name:'Hojny',           desc:'Dodaj 100 reakcji pod cudzymi wiadomościami.',                 icon:PartyPopper,   color:'#facc15', group:'activity', target:100,  unit:'reakcji',        metric:s=>s.reactions_given },
+  { id:'react_give_100', name:'Hojny',           desc:'Dodaj 100 reakcji pod cudzymi wiadomościami.',                 icon:SmilePlus,     color:'#facc15', group:'activity', target:100,  unit:'reakcji',        metric:s=>s.reactions_given },
   // ── Społeczność — odznaki za relacje i obecność na serwerach ──
-  { id:'servers_5',  name:'Odkrywca serwerów', desc:'Dołącz do co najmniej 5 serwerów.',         icon:Compass,   color:'#38bdf8', group:'community', target:5,  unit:'serwerów',  metric:s=>s.servers_joined },
-  { id:'friends_10', name:'Towarzyski',        desc:'Zbuduj listę co najmniej 10 znajomych.',    icon:Users,     color:'#a78bfa', group:'community', target:10, unit:'znajomych', metric:s=>s.friends_count },
-  { id:'friends_25', name:'Dusza towarzystwa', desc:'Zbuduj listę co najmniej 25 znajomych.',    icon:SmilePlus, color:'#4ade80', group:'community', target:25, unit:'znajomych', metric:s=>s.friends_count },
+  { id:'servers_5',  name:'Odkrywca serwerów', desc:'Dołącz do co najmniej 5 serwerów.',         icon:Compass,    color:'#38bdf8', group:'community', target:5,  unit:'serwerów',  metric:s=>s.servers_joined },
+  { id:'friends_10', name:'Towarzyski',        desc:'Zbuduj listę co najmniej 10 znajomych.',    icon:Users,      color:'#a78bfa', group:'community', target:10, unit:'znajomych', metric:s=>s.friends_count },
+  { id:'friends_25', name:'Dusza towarzystwa', desc:'Zbuduj listę co najmniej 25 znajomych.',    icon:UsersRound, color:'#4ade80', group:'community', target:25, unit:'znajomych', metric:s=>s.friends_count },
 ];
+
+// A Lucide-styled calendar glyph with a number baked into its body — gives all
+// "Czas na Cordyn" badges one shared, instantly-recognisable shape (a calendar)
+// while the digit communicates *which* tenure milestone it is (1st/2nd/3rd…
+// month, then 1st/2nd/3rd/5th year). Drawn by hand (not from Lucide, which has
+// no numbered-calendar icon) but matched stroke-for-stroke to Lucide's
+// `CalendarDays` outline so it sits naturally next to the other badge icons.
+function CalendarTierIcon({ n, size = 22, strokeWidth = 2, className, style }: { n: number; size?: number; strokeWidth?: number; className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
+      className={className} style={style} aria-hidden="true">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+      <line x1="16" y1="2" x2="16" y2="6"/>
+      <line x1="8" y1="2" x2="8" y2="6"/>
+      <line x1="3" y1="10" x2="21" y2="10"/>
+      <text x="12" y="18.5" fontFamily="system-ui, sans-serif" fontSize="9" fontWeight="700" textAnchor="middle" fill="currentColor" stroke="none">{n}</text>
+    </svg>
+  );
+}
 
 // Compact, scrollable trophy case — earned badges glow in their signature
 // colour, locked ones sit dimmed with a small lock + live progress bar.
@@ -6770,7 +6797,9 @@ function AchievementsBar({ stats, daysSince, loading }: { stats: UserStatsShape 
               onClick={(e) => { e.stopPropagation(); setPinnedId(p => (p === a.id ? null : a.id)); }}
               className={`relative shrink-0 w-14 h-14 rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${earned ? 'border-white/[0.10] bg-white/[0.04] hover:bg-white/[0.07]' : 'border-white/[0.04] bg-white/[0.015] hover:bg-white/[0.03]'}`}
               style={earned ? { boxShadow: `0 0 0 1px ${a.color}26, 0 6px 18px -4px ${a.color}33` } : undefined}>
-              <Icon size={22} style={{ color: earned ? a.color : '#52525b' }} strokeWidth={earned ? 2 : 1.6} className={earned ? '' : 'opacity-60'}/>
+              {a.calNumber !== undefined
+                ? <CalendarTierIcon n={a.calNumber} size={22} strokeWidth={earned ? 2 : 1.6} style={{ color: earned ? a.color : '#52525b' }} className={earned ? '' : 'opacity-60'}/>
+                : <Icon size={22} style={{ color: earned ? a.color : '#52525b' }} strokeWidth={earned ? 2 : 1.6} className={earned ? '' : 'opacity-60'}/>}
               {!earned && (
                 <span className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full bg-[#0d0d15] border border-white/[0.08] flex items-center justify-center">
                   <Lock size={9} className="text-zinc-600"/>
@@ -6794,7 +6823,9 @@ function AchievementsBar({ stats, daysSince, loading }: { stats: UserStatsShape 
           >
             <div className="flex items-center gap-2 mb-1">
               <span className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${active.a.color}1f` }}>
-                {(() => { const AIcon = active.a.icon; return <AIcon size={13} style={{ color: active.earned ? active.a.color : '#a1a1aa' }}/>; })()}
+                {active.a.calNumber !== undefined
+                  ? <CalendarTierIcon n={active.a.calNumber} size={13} style={{ color: active.earned ? active.a.color : '#a1a1aa' }}/>
+                  : (() => { const AIcon = active.a.icon; return <AIcon size={13} style={{ color: active.earned ? active.a.color : '#a1a1aa' }}/>; })()}
               </span>
               <p className="text-xs font-bold text-white truncate">{active.a.name}</p>
               {active.earned && <Check size={12} className="text-emerald-400 ml-auto shrink-0"/>}
