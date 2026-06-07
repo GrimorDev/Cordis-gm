@@ -6756,10 +6756,37 @@ function AchievementsBar({ stats, daysSince, loading }: { stats: UserStatsShape 
     return () => { scroller?.removeEventListener('scroll', close); window.removeEventListener('resize', close); };
   }, [activeId]);
 
+  // ── Custom slider controls — replaces the native scrollbar entirely ───────
+  // (the native one looked out of place against the dark UI, per feedback:
+  // "takiego brzydkiego suwaka nie bylo"). Arrows page the strip by ~80% of
+  // its visible width and fade out at each end so it's obvious there's
+  // nothing more to scroll to in that direction.
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const updateScrollEdges = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  };
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    updateScrollEdges();
+    el.addEventListener('scroll', updateScrollEdges, { passive: true });
+    window.addEventListener('resize', updateScrollEdges);
+    return () => { el.removeEventListener('scroll', updateScrollEdges); window.removeEventListener('resize', updateScrollEdges); };
+  }, [stats]);
+  const page = (dir: 1 | -1) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * Math.round(el.clientWidth * 0.8), behavior: 'smooth' });
+  };
+
   if (loading) {
     return (
-      <div className="flex items-center gap-2.5 overflow-hidden">
-        {[0,1,2,3,4,5].map(i => <div key={i} className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/[0.05] animate-pulse shrink-0"/>)}
+      <div className="flex items-center gap-2 overflow-hidden">
+        {[0,1,2,3,4,5,6].map(i => <div key={i} className="w-12 h-12 rounded-xl bg-white/[0.03] border border-white/[0.05] animate-pulse shrink-0"/>)}
       </div>
     );
   }
@@ -6786,28 +6813,48 @@ function AchievementsBar({ stats, daysSince, loading }: { stats: UserStatsShape 
         </h3>
         <span className="text-[11px] text-zinc-600 font-medium tabular-nums">{earnedCount}/{ACHIEVEMENTS.length} odblokowanych</span>
       </div>
-      <div ref={scrollRef} className="flex gap-2.5 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: 'thin' }}>
-        {sorted.map(({ a, current, earned }) => {
-          const Icon = a.icon;
-          return (
-            <button key={a.id} type="button"
-              ref={el => { badgeElsRef.current[a.id] = el; }}
-              onMouseEnter={() => setHoverId(a.id)}
-              onMouseLeave={() => setHoverId(h => (h === a.id ? null : h))}
-              onClick={(e) => { e.stopPropagation(); setPinnedId(p => (p === a.id ? null : a.id)); }}
-              className={`relative shrink-0 w-14 h-14 rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${earned ? 'border-white/[0.10] bg-white/[0.04] hover:bg-white/[0.07]' : 'border-white/[0.04] bg-white/[0.015] hover:bg-white/[0.03]'}`}
-              style={earned ? { boxShadow: `0 0 0 1px ${a.color}26, 0 6px 18px -4px ${a.color}33` } : undefined}>
-              {a.calNumber !== undefined
-                ? <CalendarTierIcon n={a.calNumber} size={22} strokeWidth={earned ? 2 : 1.6} style={{ color: earned ? a.color : '#52525b' }} className={earned ? '' : 'opacity-60'}/>
-                : <Icon size={22} style={{ color: earned ? a.color : '#52525b' }} strokeWidth={earned ? 2 : 1.6} className={earned ? '' : 'opacity-60'}/>}
-              {!earned && (
-                <span className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full bg-[#0d0d15] border border-white/[0.08] flex items-center justify-center">
-                  <Lock size={9} className="text-zinc-600"/>
-                </span>
-              )}
-            </button>
-          );
-        })}
+      <div className="relative group/slider">
+        {/* Edge fades hint there's more to scroll — fully replaces the native scrollbar look */}
+        <div className={`pointer-events-none absolute inset-y-0 left-0 w-8 z-10 bg-gradient-to-r from-[#0d0d15] to-transparent transition-opacity duration-200 ${canScrollLeft ? 'opacity-100' : 'opacity-0'}`}/>
+        <div className={`pointer-events-none absolute inset-y-0 right-0 w-8 z-10 bg-gradient-to-l from-[#0d0d15] to-transparent transition-opacity duration-200 ${canScrollRight ? 'opacity-100' : 'opacity-0'}`}/>
+
+        <div ref={scrollRef} className="scrollbar-hide flex gap-2 overflow-x-auto -mx-1 px-1 py-0.5 scroll-smooth">
+          {sorted.map(({ a, current, earned }) => {
+            const Icon = a.icon;
+            return (
+              <button key={a.id} type="button"
+                ref={el => { badgeElsRef.current[a.id] = el; }}
+                onMouseEnter={() => setHoverId(a.id)}
+                onMouseLeave={() => setHoverId(h => (h === a.id ? null : h))}
+                onClick={(e) => { e.stopPropagation(); setPinnedId(p => (p === a.id ? null : a.id)); }}
+                className={`relative shrink-0 w-12 h-12 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${earned ? 'border-white/[0.10] bg-white/[0.04] hover:bg-white/[0.07]' : 'border-white/[0.04] bg-white/[0.015] hover:bg-white/[0.03]'}`}
+                style={earned ? { boxShadow: `0 0 0 1px ${a.color}26, 0 6px 18px -4px ${a.color}33` } : undefined}>
+                {a.calNumber !== undefined
+                  ? <CalendarTierIcon n={a.calNumber} size={19} strokeWidth={earned ? 2 : 1.6} style={{ color: earned ? a.color : '#52525b' }} className={earned ? '' : 'opacity-60'}/>
+                  : <Icon size={19} style={{ color: earned ? a.color : '#52525b' }} strokeWidth={earned ? 2 : 1.6} className={earned ? '' : 'opacity-60'}/>}
+                {!earned && (
+                  <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#0d0d15] border border-white/[0.08] flex items-center justify-center">
+                    <Lock size={8} className="text-zinc-600"/>
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Slider arrows — only appear when there's somewhere to go, fade in on hover */}
+        {canScrollLeft && (
+          <button type="button" onClick={() => page(-1)} aria-label="Przewiń w lewo"
+            className="absolute z-20 left-0 top-1/2 -translate-y-1/2 -translate-x-1/3 w-7 h-7 rounded-full border border-white/[0.10] bg-[#15151f]/90 backdrop-blur flex items-center justify-center text-zinc-400 hover:text-white hover:bg-[#1c1c2a] shadow-lg opacity-0 group-hover/slider:opacity-100 transition-opacity">
+            <ChevronLeft size={14}/>
+          </button>
+        )}
+        {canScrollRight && (
+          <button type="button" onClick={() => page(1)} aria-label="Przewiń w prawo"
+            className="absolute z-20 right-0 top-1/2 -translate-y-1/2 translate-x-1/3 w-7 h-7 rounded-full border border-white/[0.10] bg-[#15151f]/90 backdrop-blur flex items-center justify-center text-zinc-400 hover:text-white hover:bg-[#1c1c2a] shadow-lg opacity-0 group-hover/slider:opacity-100 transition-opacity">
+            <ChevronRight size={14}/>
+          </button>
+        )}
       </div>
 
       {/* ── Tooltip "chmurka" — hover OR click reveals it; portal escapes the
