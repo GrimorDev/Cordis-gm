@@ -76,28 +76,48 @@ router.get('/me/unread-counts', authMiddleware, async (req: AuthRequest, res: Re
   }
 });
 
+// Shared by /me/stats and /:id/stats — achievement badges read the exact same
+// counters regardless of whose profile is open, so the query lives in one place.
+async function fetchUserStats(userId: string) {
+  const { rows } = await query(
+    `SELECT
+      (SELECT COUNT(*)::int FROM messages    WHERE sender_id=$1 AND content != '__deleted__') AS messages_sent,
+      (SELECT COUNT(*)::int FROM messages    WHERE sender_id=$1 AND content != '__deleted__'
+                                             AND created_at >= NOW() - INTERVAL '30 days')   AS messages_this_month,
+      (SELECT COUNT(*)::int FROM dm_messages WHERE sender_id=$1)                             AS dms_sent,
+      (SELECT COUNT(*)::int FROM server_members WHERE user_id=$1)                            AS servers_joined,
+      (SELECT COUNT(*)::int FROM friends
+        WHERE (requester_id=$1 OR addressee_id=$1) AND status='accepted')                    AS friends_count,
+      (SELECT COUNT(*)::int FROM message_reactions WHERE user_id=$1)                        AS reactions_given,
+      (SELECT COUNT(*)::int FROM message_reactions mr
+        JOIN messages m ON m.id = mr.message_id WHERE m.sender_id=$1)                        AS reactions_received,
+      (SELECT created_at FROM users WHERE id=$1)                                             AS account_created`,
+    [userId]
+  );
+  return rows[0];
+}
+
 // GET /api/users/me/stats
 router.get('/me/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const uid = req.user!.id;
-    const { rows } = await query(
-      `SELECT
-        (SELECT COUNT(*)::int FROM messages    WHERE sender_id=$1 AND content != '__deleted__') AS messages_sent,
-        (SELECT COUNT(*)::int FROM messages    WHERE sender_id=$1 AND content != '__deleted__'
-                                               AND created_at >= NOW() - INTERVAL '30 days')   AS messages_this_month,
-        (SELECT COUNT(*)::int FROM dm_messages WHERE sender_id=$1)                             AS dms_sent,
-        (SELECT COUNT(*)::int FROM server_members WHERE user_id=$1)                            AS servers_joined,
-        (SELECT COUNT(*)::int FROM friends
-          WHERE (requester_id=$1 OR addressee_id=$1) AND status='accepted')                    AS friends_count,
-        (SELECT COUNT(*)::int FROM message_reactions WHERE user_id=$1)                        AS reactions_given,
-        (SELECT COUNT(*)::int FROM message_reactions mr
-          JOIN messages m ON m.id = mr.message_id WHERE m.sender_id=$1)                        AS reactions_received,
-        (SELECT created_at FROM users WHERE id=$1)                                             AS account_created`,
-      [uid]
-    );
-    res.json(rows[0]);
+    res.json(await fetchUserStats(req.user!.id));
   } catch (err) {
     console.error('GET /me/stats error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/users/:id/stats — same counters, for any profile. Achievement badges
+// are meant to be shown publicly (tenure/activity/community trophies, not
+// sensitive data), so any authenticated user can view another member's stats —
+// mirrors the existing GET /:id profile route which already works this way.
+router.get('/:id/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const row = await fetchUserStats(req.params.id);
+    if (!row || !row.account_created) return res.status(404).json({ error: 'User not found' });
+    res.json(row);
+  } catch (err) {
+    console.error('GET /:id/stats error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

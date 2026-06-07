@@ -6679,7 +6679,7 @@ type AchievementDef = {
 };
 const ACHIEVEMENTS: AchievementDef[] = [
   // ── Czas na Cordyn — odznaki za staż konta: co miesiąc do 4 m-cy, później co rok ──
-  { id:'tenure_30',   name:'Pierwszy miesiąc',  desc:'Jesteś na Cordyn od 30 dni — witamy na pokładzie!',          icon:Sparkles,      color:'#a5b4fc', group:'tenure',   target:30,   unit:'dni',       metric:(_,d)=>d },
+  { id:'tenure_30',   name:'Pierwszy miesiąc',  desc:'Jesteś na Cordyn od 30 dni — witamy na pokładzie!',          icon:CalendarDays,  color:'#a5b4fc', group:'tenure',   target:30,   unit:'dni',       metric:(_,d)=>d },
   { id:'tenure_60',   name:'Stały bywalec',     desc:'Jesteś na Cordyn od 60 dni (2 miesiące).',                   icon:Star,          color:'#fbbf24', group:'tenure',   target:60,   unit:'dni',       metric:(_,d)=>d },
   { id:'tenure_90',   name:'Rezydent',          desc:'Jesteś na Cordyn od 90 dni (3 miesiące) — czujesz się tu jak w domu.', icon:Award, color:'#34d399', group:'tenure',   target:90,   unit:'dni',       metric:(_,d)=>d },
   { id:'tenure_120',  name:'Weteran',           desc:'Jesteś na Cordyn od 120 dni (4 miesiące).',                  icon:BadgeCheck,    color:'#60a5fa', group:'tenure',   target:120,  unit:'dni',       metric:(_,d)=>d },
@@ -6705,7 +6705,30 @@ const ACHIEVEMENTS: AchievementDef[] = [
 // colour, locked ones sit dimmed with a small lock + live progress bar.
 // Hover OR click reveals the explainer "chmurka" (works on touch too).
 function AchievementsBar({ stats, daysSince, loading }: { stats: UserStatsShape | null | undefined; daysSince: number; loading?: boolean }) {
-  const [openTip, setOpenTip] = useState<string | null>(null);
+  // Tooltip is rendered through a portal at `position: fixed`, anchored to the
+  // hovered/clicked badge's live bounding rect. This is intentional — the strip
+  // below is horizontally scrollable (`overflow-x-auto`), and per the CSS spec
+  // setting overflow-x to anything but `visible` forces overflow-y to `auto`
+  // too, so a tooltip absolutely-positioned *inside* the strip (popping up
+  // above the badge) was being silently clipped by the scroll container and
+  // never appeared — exactly the "najeżdżam i nic się nie pokazuje" bug.
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  const [pinnedId, setPinnedId] = useState<string | null>(null);
+  const badgeElsRef = useRef<Record<string, HTMLButtonElement | null>>({});
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const activeId = pinnedId ?? hoverId;
+
+  // If the strip scrolls or the window resizes, the anchor moved — close
+  // rather than let the bubble drift away from its badge.
+  useEffect(() => {
+    if (!activeId) return;
+    const close = () => { setHoverId(null); setPinnedId(null); };
+    const scroller = scrollRef.current;
+    scroller?.addEventListener('scroll', close, { passive: true });
+    window.addEventListener('resize', close);
+    return () => { scroller?.removeEventListener('scroll', close); window.removeEventListener('resize', close); };
+  }, [activeId]);
+
   if (loading) {
     return (
       <div className="flex items-center gap-2.5 overflow-hidden">
@@ -6724,57 +6747,73 @@ function AchievementsBar({ stats, daysSince, loading }: { stats: UserStatsShape 
   // Earned badges first (the trophy case you've actually filled), then the rest
   // in definition order so "what's coming next" stays predictable.
   const sorted = [...computed].sort((x, y) => (x.earned === y.earned ? 0 : x.earned ? -1 : 1));
+  const active = activeId ? computed.find(c => c.a.id === activeId) : null;
+  const activeEl = activeId ? badgeElsRef.current[activeId] : null;
+  const rect = activeEl?.getBoundingClientRect();
 
   return (
-    <div onClick={() => setOpenTip(null)}>
+    <div>
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
           <Trophy size={13} className="text-zinc-600"/>Osiągnięcia
         </h3>
         <span className="text-[11px] text-zinc-600 font-medium tabular-nums">{earnedCount}/{ACHIEVEMENTS.length} odblokowanych</span>
       </div>
-      <div className="flex gap-2.5 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: 'thin' }}>
-        {sorted.map(({ a, current, earned, pct }) => {
+      <div ref={scrollRef} className="flex gap-2.5 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: 'thin' }}>
+        {sorted.map(({ a, current, earned }) => {
           const Icon = a.icon;
-          const open = openTip === a.id;
           return (
-            <div key={a.id} className="relative shrink-0"
-              onClick={(e) => { e.stopPropagation(); setOpenTip(p => p === a.id ? null : a.id); }}>
-              <button type="button"
-                className={`group relative w-14 h-14 rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${earned ? 'border-white/[0.10] bg-white/[0.04] hover:bg-white/[0.07]' : 'border-white/[0.04] bg-white/[0.015] hover:bg-white/[0.03]'}`}
-                style={earned ? { boxShadow: `0 0 0 1px ${a.color}26, 0 6px 18px -4px ${a.color}33` } : undefined}>
-                <Icon size={22} style={{ color: earned ? a.color : '#52525b' }} strokeWidth={earned ? 2 : 1.6} className={earned ? '' : 'opacity-60'}/>
-                {!earned && (
-                  <span className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full bg-[#0d0d15] border border-white/[0.08] flex items-center justify-center">
-                    <Lock size={9} className="text-zinc-600"/>
-                  </span>
-                )}
-                {/* ── Tooltip "chmurka" — hover reveals it; click pins it open ── */}
-                <div className={`absolute z-30 bottom-full left-1/2 -translate-x-1/2 mb-2.5 w-56 p-3 rounded-xl border border-white/[0.08] bg-[#0d0d15]/[0.98] backdrop-blur-xl shadow-2xl text-left transition-all duration-150 ${open ? 'opacity-100 translate-y-0 visible pointer-events-auto' : 'opacity-0 translate-y-1 invisible pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:visible'}`}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${a.color}1f` }}>
-                      <Icon size={13} style={{ color: earned ? a.color : '#a1a1aa' }}/>
-                    </span>
-                    <p className="text-xs font-bold text-white truncate">{a.name}</p>
-                    {earned && <Check size={12} className="text-emerald-400 ml-auto shrink-0"/>}
-                  </div>
-                  <p className="text-[11px] text-zinc-400 leading-relaxed">{a.desc}</p>
-                  {!earned && (
-                    <div className="mt-2">
-                      <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-300" style={{ width: `${pct}%`, background: a.color }}/>
-                      </div>
-                      <p className="text-[10px] text-zinc-500 mt-1 tabular-nums">{Math.min(current, a.target).toLocaleString('pl-PL')} / {a.target.toLocaleString('pl-PL')} {a.unit}</p>
-                    </div>
-                  )}
-                  {earned && <p className="text-[10px] text-emerald-400/80 font-semibold mt-1.5 uppercase tracking-wide">Odblokowano ✓</p>}
-                  <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-[5px] w-2.5 h-2.5 rotate-45 bg-[#0d0d15] border-r border-b border-white/[0.08]"/>
-                </div>
-              </button>
-            </div>
+            <button key={a.id} type="button"
+              ref={el => { badgeElsRef.current[a.id] = el; }}
+              onMouseEnter={() => setHoverId(a.id)}
+              onMouseLeave={() => setHoverId(h => (h === a.id ? null : h))}
+              onClick={(e) => { e.stopPropagation(); setPinnedId(p => (p === a.id ? null : a.id)); }}
+              className={`relative shrink-0 w-14 h-14 rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${earned ? 'border-white/[0.10] bg-white/[0.04] hover:bg-white/[0.07]' : 'border-white/[0.04] bg-white/[0.015] hover:bg-white/[0.03]'}`}
+              style={earned ? { boxShadow: `0 0 0 1px ${a.color}26, 0 6px 18px -4px ${a.color}33` } : undefined}>
+              <Icon size={22} style={{ color: earned ? a.color : '#52525b' }} strokeWidth={earned ? 2 : 1.6} className={earned ? '' : 'opacity-60'}/>
+              {!earned && (
+                <span className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full bg-[#0d0d15] border border-white/[0.08] flex items-center justify-center">
+                  <Lock size={9} className="text-zinc-600"/>
+                </span>
+              )}
+            </button>
           );
         })}
       </div>
+
+      {/* ── Tooltip "chmurka" — hover OR click reveals it; portal escapes the
+            scroll container so it's never clipped, no matter where the badge sits ── */}
+      {active && rect && ReactDOM.createPortal(
+        <>
+          {pinnedId && <div className="fixed inset-0 z-[200]" onClick={() => setPinnedId(null)}/>}
+          <div
+            className="fixed z-[201] w-56 p-3 rounded-xl border border-white/[0.08] bg-[#0d0d15]/[0.98] backdrop-blur-xl shadow-2xl text-left animate-in fade-in zoom-in-95 duration-100"
+            style={{ top: rect.top - 10, left: rect.left + rect.width / 2, transform: 'translate(-50%, -100%)' }}
+            onMouseEnter={() => setHoverId(active.a.id)}
+            onMouseLeave={() => setHoverId(h => (h === active.a.id ? null : h))}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${active.a.color}1f` }}>
+                {(() => { const AIcon = active.a.icon; return <AIcon size={13} style={{ color: active.earned ? active.a.color : '#a1a1aa' }}/>; })()}
+              </span>
+              <p className="text-xs font-bold text-white truncate">{active.a.name}</p>
+              {active.earned && <Check size={12} className="text-emerald-400 ml-auto shrink-0"/>}
+            </div>
+            <p className="text-[11px] text-zinc-400 leading-relaxed">{active.a.desc}</p>
+            {!active.earned && (
+              <div className="mt-2">
+                <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-300" style={{ width: `${active.pct}%`, background: active.a.color }}/>
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-1 tabular-nums">{Math.min(active.current, active.a.target).toLocaleString('pl-PL')} / {active.a.target.toLocaleString('pl-PL')} {active.a.unit}</p>
+              </div>
+            )}
+            {active.earned && <p className="text-[10px] text-emerald-400/80 font-semibold mt-1.5 uppercase tracking-wide">Odblokowano ✓</p>}
+            <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-[5px] w-2.5 h-2.5 rotate-45 bg-[#0d0d15] border-r border-b border-white/[0.08]"/>
+          </div>
+        </>,
+        document.body
+      )}
     </div>
   );
 }
@@ -6796,7 +6835,7 @@ function ProfilePage({
   friends, blockedUsers, addToast,
   myJam, jamLoading, onJamStart, onJamStop, onJamJoin, onJamLeave, viewedUserJam,
   steamGameStartedAt, liveSpotifyTrack, mutualServers,
-  userStats, statsLoading,
+  achievementStats, achievementStatsLoading,
 }: {
   viewUserId: string; profileData: UserProfile|null; games: FavoriteGame[];
   mutualServers?: MutualServer[];
@@ -6832,8 +6871,10 @@ function ProfilePage({
   onJamStart: ()=>void; onJamStop: ()=>void;
   onJamJoin: (hostId:string)=>void; onJamLeave: ()=>void;
   viewedUserJam?: { jam_id: string; host: any; members: any[] } | null;
-  userStats?: {messages_sent:number;messages_this_month:number;dms_sent:number;servers_joined:number;friends_count:number;reactions_given:number;reactions_received:number;account_created:string} | null;
-  statsLoading?: boolean;
+  // Achievement counters for the profile being VIEWED (own or someone else's —
+  // badges are public, GET /users/:id/stats backs this for any member).
+  achievementStats?: UserStatsShape | null;
+  achievementStatsLoading?: boolean;
 }) {
   const [showBannerPresetPicker, setShowBannerPresetPicker] = useState(false);
   const isOwn   = currentUser?.id === viewUserId;
@@ -7180,12 +7221,14 @@ function ProfilePage({
             {/* ── Main content ── */}
             <div className="flex-1 flex flex-col gap-6 min-w-0">
 
-              {/* Achievements bar — graficzne odznaki za staż i aktywność na Cordyn */}
-              {isOwn && (userStats || statsLoading) && (
+              {/* Achievements bar — graficzne odznaki za staż i aktywność na Cordyn.
+                  Publiczne: widoczne na każdym profilu, nie tylko własnym —
+                  GET /users/:id/stats dostarcza te same liczniki dla każdego. */}
+              {(achievementStats || achievementStatsLoading) && (
                 <AchievementsBar
-                  stats={userStats ?? null}
-                  loading={statsLoading && !userStats}
-                  daysSince={userStats ? Math.floor((Date.now() - new Date(userStats.account_created).getTime()) / (1000*60*60*24)) : 0}
+                  stats={achievementStats ?? null}
+                  loading={!!achievementStatsLoading && !achievementStats}
+                  daysSince={achievementStats ? Math.floor((Date.now() - new Date(achievementStats.account_created).getTime()) / (1000*60*60*24)) : 0}
                 />
               )}
 
@@ -9053,6 +9096,13 @@ export default function App() {
   const [userStats, setUserStats]             = useState<{messages_sent:number;messages_this_month:number;dms_sent:number;servers_joined:number;friends_count:number;reactions_given:number;reactions_received:number;account_created:string}|null>(null);
   const [statsLoading, setStatsLoading]       = useState(false);
 
+  // ── Achievement stats cache, keyed by profile id (own AND others') ────────
+  // Badges are public — anyone's "Osiągnięcia" bar should render on their
+  // profile, not just your own — so this is a small id→stats cache fed by
+  // GET /users/:id/stats, independent from `userStats` above (which only ever
+  // holds *your own* numbers, for the Settings → Statystyki tab).
+  const [achievementStats, setAchievementStats] = useState<Record<string, UserStatsShape | 'loading' | 'error'>>({});
+
   // ── Godziny Ciszy (Quiet Hours) ────────────────────────────────────────────
   type QuietHoursConfig = { enabled: boolean; startHour: number; endHour: number; days: number[]; allowMentions: boolean; };
   const QH_DEFAULT: QuietHoursConfig = { enabled: false, startHour: 22, endHour: 8, days: [0,1,2,3,4,5,6], allowMentions: true };
@@ -9069,16 +9119,25 @@ export default function App() {
   const [sessionsLoading, setSessionsLoading] = useState(false);
   // Globalny hook żeby OAuth callback mógł otworzyć zakładkę połączeń
   useEffect(() => { (window as any).__cordisGoToSettingsTab = (tab: typeof appSettTab) => setAppSettTab(tab); }, []);
-  // Load stats when the Stats settings tab opens — OR when the user opens their
-  // own profile page (the achievements bar there is computed from these same
-  // numbers, so we need them ready there too — see ProfilePage's <Achievements>).
+  // Load stats when the Stats settings tab opens (own numbers only).
   useEffect(() => {
-    const ownProfileOpen = !!profileViewId && !!currentUser && profileViewId === currentUser.id;
-    if (((appSettTab === 'stats' && appSettOpen) || ownProfileOpen) && !userStats && !statsLoading) {
+    if (appSettTab === 'stats' && appSettOpen && !userStats && !statsLoading) {
       setStatsLoading(true);
       users.getStats().then(s => { setUserStats(s); setStatsLoading(false); }).catch(() => setStatsLoading(false));
     }
-  }, [appSettTab, appSettOpen, profileViewId, currentUser, userStats, statsLoading]);
+  }, [appSettTab, appSettOpen, userStats, statsLoading]);
+
+  // Load (and cache) achievement stats for whichever profile is currently open
+  // — own or someone else's. The "Osiągnięcia" bar is public by design (the
+  // user explicitly asked: "powinienem widzieć osiągnięcia innych… nie trzeba
+  // tego ukrywać"), backed by GET /users/:id/stats for any member.
+  useEffect(() => {
+    if (!profileViewId || achievementStats[profileViewId] !== undefined) return;
+    setAchievementStats(prev => ({ ...prev, [profileViewId]: 'loading' }));
+    users.getStats(profileViewId)
+      .then(s => setAchievementStats(prev => ({ ...prev, [profileViewId]: s })))
+      .catch(() => setAchievementStats(prev => ({ ...prev, [profileViewId]: 'error' })));
+  }, [profileViewId, achievementStats]);
   const [appVersion, setAppVersion]           = useState<string>('');
   const [autostartEnabled, setAutostartEnabled] = useState<boolean>(false);
   const [pushSubscribed, setPushSubscribed]     = useState<boolean>(false);
@@ -16976,8 +17035,14 @@ export default function App() {
               ownEpic={ownEpic}
               steamGameStartedAt={profileViewId ? (steamGameStartRef.current.get(profileViewId) ?? null) : null}
               liveSpotifyTrack={profileViewId ? (userActivities.get(profileViewId) ?? null) : null}
-              userStats={userStats}
-              statsLoading={statsLoading}
+              achievementStats={(() => {
+                const e = profileViewId ? achievementStats[profileViewId] : undefined;
+                return (e && e !== 'loading' && e !== 'error') ? e : null;
+              })()}
+              achievementStatsLoading={(() => {
+                const e = profileViewId ? achievementStats[profileViewId] : undefined;
+                return e === undefined || e === 'loading';
+              })()}
               loading={profileLoading}
               currentUser={currentUser}
               editProf={editProf}

@@ -558,7 +558,9 @@ export const users = {
   },
   requestDeletion: () => req<{ message: string }>('POST', '/users/me/request-deletion'),
   confirmDeletion: (code: string) => req<{ message: string }>('DELETE', '/users/me', { code }),
-  getStats: () => req<{
+  // Pass a userId to fetch another member's public achievement stats
+  // (GET /users/:id/stats); omit it to fetch your own (GET /users/me/stats).
+  getStats: (userId?: string) => req<{
     messages_sent: number;
     messages_this_month: number;
     dms_sent: number;
@@ -567,7 +569,7 @@ export const users = {
     reactions_given: number;
     reactions_received: number;
     account_created: string;
-  }>('GET', '/users/me/stats'),
+  }>('GET', userId ? `/users/${userId}/stats` : '/users/me/stats'),
 };
 
 // ── Two-Factor Auth ────────────────────────────────────────────────────────
