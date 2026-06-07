@@ -290,19 +290,40 @@ const BANNER_PRESETS = [
 type BannerPresetKey = typeof BANNER_PRESETS[number]['key'];
 
 // ─── Theme system ──────────────────────────────────────────────────────────────
+// Each theme drives: surface colours (--app-bg/sidebar/card/surface), an accent
+// colour that replaces hardcoded indigo/violet Tailwind classes app-wide (so the
+// WHOLE app — not just backgrounds — actually changes look), and an optional CSS
+// gradient painted behind the app for atmosphere. Applied live via the
+// `applyThemeVars` effect below (no refresh needed) and persisted to the account
+// through users.theme_id — keep the id list in sync with the backend whitelist
+// in backend/src/routes/users.ts (`body('theme_id').isIn([...])`).
+const hexToRgb = (hex: string): string => {
+  const h = hex.replace('#', '');
+  const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  const n = parseInt(full, 16) || 0;
+  return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+};
+
 const THEMES = [
-  { id: 'system',   name: 'Systemowy',      desc: 'Dopasowuje się do ustawień systemu (ciemny/jasny)', vars: {}, isSystem: true },
-  { id: 'ayu',      name: 'Ayu Dark',       desc: 'Ciepły ciemny motyw z pomarańczowymi akcentami',   vars: { '--app-bg': '#0A0E14', '--app-sidebar': '#0D1017', '--app-card': '#131a24', '--app-surface': '#1a2535' } },
-  { id: 'default',  name: 'Ciemny',         desc: 'Klasyczny ciemny motyw Cordyna',                    vars: {} },
-  { id: 'midnight', name: 'Midnight',        desc: 'Głęboki granat nocnego nieba', vars: { '--app-bg': '#030310', '--app-sidebar': '#05051a', '--app-card': '#0a0a25', '--app-surface': '#0f0f30' } },
-  { id: 'amoled',   name: 'AMOLED',          desc: 'Czysta czerń, max oszczędność baterii', vars: { '--app-bg': '#000000', '--app-sidebar': '#040404', '--app-card': '#080808', '--app-surface': '#0e0e0e' } },
-  { id: 'forest',   name: 'Las',             desc: 'Mroczna zieleń leśna',       vars: { '--app-bg': '#030d06', '--app-sidebar': '#05150a', '--app-card': '#091a0f', '--app-surface': '#0e2416' } },
-  { id: 'sakura',   name: 'Sakura',          desc: 'Różowe wiśniowe akcenty',    vars: { '--app-bg': '#0d0408', '--app-sidebar': '#170610', '--app-card': '#200a18', '--app-surface': '#2b1020' } },
-  { id: 'sunset',   name: 'Zachód słońca',   desc: 'Ciepłe brązowo-pomarańczowe', vars: { '--app-bg': '#0d0703', '--app-sidebar': '#160d05', '--app-card': '#1d1208', '--app-surface': '#261a0d' } },
-  { id: 'ocean',    name: 'Ocean',           desc: 'Głębiny błękitu oceanu',       vars: { '--app-bg': '#020d1a', '--app-sidebar': '#041627', '--app-card': '#071e34', '--app-surface': '#0c2844' } },
-  { id: 'neon',     name: 'Neon',            desc: 'Mroczne tło z cyberpunkowym blaskiem', vars: { '--app-bg': '#01080f', '--app-sidebar': '#030f1c', '--app-card': '#051629', '--app-surface': '#091f38' } },
-  { id: 'rose',     name: 'Róż',             desc: 'Subtelna elegancja różowych akcentów', vars: { '--app-bg': '#0e0308', '--app-sidebar': '#180510', '--app-card': '#21071a', '--app-surface': '#2e0d25' } },
-  { id: 'coffee',   name: 'Kawa',            desc: 'Ciepłe odcienie czekolady i espresso', vars: { '--app-bg': '#0b0603', '--app-sidebar': '#150e07', '--app-card': '#1e150a', '--app-surface': '#281d10' } },
+  { id: 'system',   name: 'Systemowy', desc: 'Dopasowuje się do ustawień systemu — Cordyn jest zaprojektowany pod ciemny motyw', vars: {}, isSystem: true },
+  { id: 'default',  name: 'Cordyn',    desc: 'Domyślny ciemny motyw z fioletowym akcentem marki',
+    bg: '#0a0a10', sidebar: '#0d0d15', card: '#15151f', surface: '#1c1c2a', accent: '#6366f1', accentSoft: '#a5b4fc' },
+  { id: 'ayu',      name: 'Ayu Dark',  desc: 'Ciepły grafit z bursztynowym akcentem',
+    bg: '#0A0E14', sidebar: '#0D1017', card: '#131a24', surface: '#1a2535', accent: '#FF8F40', accentSoft: '#FFB454' },
+  { id: 'aurora',   name: 'Aurora',    desc: 'Gradientowa zorza polarna — fiolet przenikający w błękit',
+    bg: '#0b0a18', sidebar: '#100e24', card: '#171430', surface: '#1f1a3d', accent: '#8b5cf6', accentSoft: '#c4b5fd',
+    gradient: 'radial-gradient(120% 80% at 18% -12%, rgba(139,92,246,0.22), transparent 56%), radial-gradient(110% 75% at 105% 8%, rgba(56,189,248,0.16), transparent 52%), linear-gradient(180deg, #0c0a1a 0%, #07060f 100%)' },
+  { id: 'obsidian', name: 'Obsidian',  desc: 'Czysta czerń — eleganckie i oszczędne dla wyświetlaczy AMOLED',
+    bg: '#000000', sidebar: '#050505', card: '#0a0a0a', surface: '#101010', accent: '#818cf8', accentSoft: '#c7d2fe' },
+  { id: 'nordic',   name: 'Nordic',    desc: 'Chłodna, skandynawska szarość z lodowym błękitnym akcentem',
+    bg: '#0b0f15', sidebar: '#10151d', card: '#161c27', surface: '#1e2632', accent: '#5eb4f0', accentSoft: '#aedcf9' },
+  { id: 'emerald',  name: 'Emerald',   desc: 'Stonowana szmaragdowa zieleń z turkusowym blaskiem',
+    bg: '#070f0d', sidebar: '#0a1714', card: '#0f1f1a', surface: '#152a23', accent: '#10b981', accentSoft: '#6ee7b7' },
+  { id: 'sunset',   name: 'Sunset',    desc: 'Gradient zachodzącego słońca — bursztyn przenikający w róż',
+    bg: '#160d12', sidebar: '#1c0f15', card: '#26131c', surface: '#321a24', accent: '#fb7185', accentSoft: '#fda4af',
+    gradient: 'radial-gradient(115% 70% at 84% -8%, rgba(251,146,60,0.18), transparent 56%), radial-gradient(100% 70% at -5% 105%, rgba(244,63,94,0.16), transparent 52%), linear-gradient(170deg, #170d12 0%, #0c0709 100%)' },
+  { id: 'crimson',  name: 'Crimson',   desc: 'Głęboka czerwień z ciepłym, eleganckim akcentem',
+    bg: '#0f0507', sidebar: '#170709', card: '#200a0d', surface: '#2b0e12', accent: '#ef4444', accentSoft: '#fca5a5' },
 ] as const;
 type ThemeId = typeof THEMES[number]['id'];
 
@@ -8834,7 +8855,7 @@ export default function App() {
 
   // App preferences — initialized from currentUser (DB), updated via users.updateMe()
   const [accentColor, setAccentColor]           = useState<string>('indigo');
-  const [selectedTheme, setSelectedTheme]       = useState<ThemeId>('ayu');
+  const [selectedTheme, setSelectedTheme]       = useState<ThemeId>('default');
   const [avatarEffect, setAvatarEffect]         = useState<string>('none');
   const [showAllAvatarEffects, setShowAllAvatarEffects] = useState(false);
   const [showAllCardColors,   setShowAllCardColors]   = useState(false);
@@ -11324,57 +11345,56 @@ export default function App() {
   // throughout the app, so ALL elements change without touching JSX.
   useEffect(() => {
     const applyThemeVars = (themeId: string) => {
-      const theme = THEMES.find(t => t.id === themeId) ?? THEMES.find(t => t.id === 'ayu')!;
-      document.documentElement.setAttribute('data-theme', themeId);
+      const theme = (THEMES.find(t => t.id === themeId) ?? THEMES.find(t => t.id === 'default')!) as any;
+      // 'system' has no own palette — it always resolves to the Cordyn default
+      // (the app is dark-only by design, so "match system" simply means "default").
+      const resolvedId = theme.isSystem ? 'default' : theme.id;
+      const palette = theme.isSystem ? (THEMES.find(t => t.id === 'default')! as any) : theme;
+      document.documentElement.setAttribute('data-theme', resolvedId);
+
       let styleTag = document.getElementById('cordyn-theme-override') as HTMLStyleElement | null;
       if (!styleTag) {
         styleTag = document.createElement('style');
         styleTag.id = 'cordyn-theme-override';
         document.head.appendChild(styleTag);
       }
-      if (!theme || Object.keys(theme.vars).length === 0) {
-        // 'default' theme — no custom vars, reset to Ayu Dark baseline
-        const root = document.documentElement;
-        root.style.setProperty('--ayu-bg',      '#0A0E14');
-        root.style.setProperty('--ayu-panel',    '#0D1017');
-        root.style.setProperty('--ayu-elevated', '#131a24');
-        root.style.setProperty('--app-bg',       '#0A0E14');
-        root.style.setProperty('--app-sidebar',  '#0D1017');
-        root.style.setProperty('--app-card',     '#131a24');
-        root.style.setProperty('--app-surface',  '#1a2535');
-        styleTag.textContent = `
-          body, #root { background-color: #0A0E14 !important; }
-          .glass-panel  { background: #0D1017 !important; }
-          .glass-modal  { background: #0D1017 !important; }
-          .glass-dark   { background: #0A0E14 !important; }
-          .srv-icon-bar { background: #0D1017 !important; }
-          .msg-input-wrap { background: #0D1017 !important; }
-          .sidebar-userbar { background: #0A0E14 !important; }
-        `;
-        return;
-      }
-      const v = theme.vars as Record<string, string>;
-      const bg      = v['--app-bg']      || '#0A0E14';
-      const sidebar = v['--app-sidebar'] || '#0D1017';
-      const card    = v['--app-card']    || '#131a24';
-      const surface = v['--app-surface'] || '#1a2535';
+
+      const bg        = palette.bg        || '#0a0a10';
+      const sidebar   = palette.sidebar   || '#0d0d15';
+      const card      = palette.card      || '#15151f';
+      const surface   = palette.surface   || '#1c1c2a';
+      const accent    = palette.accent     || '#6366f1';
+      const soft      = palette.accentSoft || '#a5b4fc';
+      const gradient  = palette.gradient as string | undefined;
+      const rgb       = hexToRgb(accent);
+      const softRgb   = hexToRgb(soft);
+      const sel       = `[data-theme="${resolvedId}"]`;
+
       // Update ALL CSS custom properties — both --app-* and --ayu-* so every
-      // component (srv-icon-bar, msg-input-wrap, etc.) picks up the theme colour.
+      // component (srv-icon-bar, msg-input-wrap, etc.) picks up the theme colour,
+      // plus a fresh --app-accent pair other components can opt into.
       const root = document.documentElement;
-      root.style.setProperty('--app-bg',       bg);
-      root.style.setProperty('--app-sidebar',   sidebar);
-      root.style.setProperty('--app-card',      card);
-      root.style.setProperty('--app-surface',   surface);
-      // Mirror into --ayu-* so CSS that references var(--ayu-panel) also updates
-      root.style.setProperty('--ayu-bg',        bg);
-      root.style.setProperty('--ayu-panel',      sidebar);
-      root.style.setProperty('--ayu-elevated',   card);
+      root.style.setProperty('--app-bg',           bg);
+      root.style.setProperty('--app-sidebar',      sidebar);
+      root.style.setProperty('--app-card',         card);
+      root.style.setProperty('--app-surface',      surface);
+      root.style.setProperty('--app-accent',       accent);
+      root.style.setProperty('--app-accent-soft',  soft);
+      root.style.setProperty('--app-accent-rgb',   rgb);
+      root.style.setProperty('--ayu-bg',           bg);
+      root.style.setProperty('--ayu-panel',        sidebar);
+      root.style.setProperty('--ayu-elevated',     card);
+
       styleTag.textContent = `
-        body, #root { background-color: ${bg} !important; }
+        /* ── Surfaces (live — no refresh needed) ───────────────────────── */
+        body, #root {
+          background-color: ${bg} !important;
+          background-image: ${gradient ? gradient : 'none'} !important;
+          background-attachment: fixed !important;
+        }
         .bg-\\[\\#07070f\\], .bg-\\[\\#08080f\\], .bg-\\[\\#09090b\\] { background-color: ${bg} !important; }
         .bg-\\[\\#0d0d18\\] { background-color: ${sidebar} !important; }
-        .bg-\\[\\#0e0e1c\\] { background-color: ${card} !important; }
-        .bg-\\[\\#141420\\], .bg-\\[\\#16161f\\], .bg-\\[\\#161622\\] { background-color: ${card} !important; }
+        .bg-\\[\\#0e0e1c\\], .bg-\\[\\#141420\\], .bg-\\[\\#16161f\\], .bg-\\[\\#161622\\] { background-color: ${card} !important; }
         .bg-\\[\\#18182a\\], .bg-\\[\\#1a1a2e\\] { background-color: ${surface} !important; }
         .glass-panel  { background: ${sidebar} !important; }
         .glass-modal  { background: ${sidebar} !important; }
@@ -11382,19 +11402,41 @@ export default function App() {
         .srv-icon-bar { background: ${sidebar} !important; }
         .msg-input-wrap { background: ${sidebar} !important; }
         .sidebar-userbar { background: ${bg} !important; }
+
+        /* ── Accent — replaces every hardcoded indigo/violet/purple Tailwind
+           utility app-wide, so the WHOLE interface (buttons, badges, borders,
+           focus rings, selection states…) takes on the theme's signature colour,
+           not just background panels. Generalises what used to be an 'ayu'-only
+           override block into a per-theme, dynamically generated ruleset. ── */
+        ${sel} .text-indigo-300, ${sel} .text-indigo-400, ${sel} .text-indigo-500 { color: ${soft} !important; }
+        ${sel} .text-violet-400, ${sel} .text-purple-400 { color: ${soft} !important; }
+        ${sel} .bg-indigo-500\\/10 { background-color: rgba(${rgb},0.10) !important; }
+        ${sel} .bg-indigo-500\\/15 { background-color: rgba(${rgb},0.14) !important; }
+        ${sel} .bg-indigo-500\\/20 { background-color: rgba(${rgb},0.18) !important; }
+        ${sel} .bg-indigo-600\\/20 { background-color: rgba(${rgb},0.18) !important; }
+        ${sel} .bg-indigo-400\\/10 { background-color: rgba(${rgb},0.10) !important; }
+        ${sel} .bg-indigo-400\\/15 { background-color: rgba(${rgb},0.14) !important; }
+        ${sel} .bg-indigo-500     { background-color: ${accent} !important; }
+        ${sel} .bg-indigo-600     { background-color: ${accent} !important; }
+        ${sel} .bg-violet-500\\/15 { background-color: rgba(${softRgb},0.14) !important; }
+        ${sel} .bg-violet-500\\/10 { background-color: rgba(${softRgb},0.10) !important; }
+        ${sel} .border-indigo-500\\/30 { border-color: rgba(${rgb},0.30) !important; }
+        ${sel} .border-indigo-500\\/40 { border-color: rgba(${rgb},0.40) !important; }
+        ${sel} .border-indigo-500\\/60 { border-color: rgba(${rgb},0.60) !important; }
+        ${sel} .border-violet-500\\/30 { border-color: rgba(${softRgb},0.30) !important; }
+        ${sel} .shadow-\\[0_0_20px_rgba\\(99\\,102\\,241\\,0\\.1\\)\\] { box-shadow: 0 0 20px rgba(${rgb},0.10) !important; }
+        ${sel} .shadow-\\[0_0_0_3px_rgba\\(99\\,102\\,241\\,0\\.08\\)\\] { box-shadow: 0 0 0 3px rgba(${rgb},0.08) !important; }
+        ${sel} .focus\\:border-indigo-500\\/40:focus { border-color: rgba(${rgb},0.40) !important; }
+        ${sel} .focus\\:border-indigo-500\\/60:focus { border-color: rgba(${rgb},0.60) !important; }
+        ${sel} .border-indigo-500\\/60.bg-indigo-500\\/10 { border-color: rgba(${rgb},0.60) !important; background-color: rgba(${rgb},0.10) !important; }
+        ${sel} .bg-indigo-500\\/20.text-indigo-300 { background-color: rgba(${rgb},0.16) !important; color: ${soft} !important; }
+        ${sel} .hover\\:bg-indigo-500\\/20:hover { background-color: rgba(${rgb},0.18) !important; }
+        ${sel} .hover\\:text-indigo-300:hover { color: ${soft} !important; }
+        ${sel} .hover\\:text-indigo-400:hover { color: ${accent} !important; }
       `;
     };
 
-    if (selectedTheme === 'system') {
-      const mq = window.matchMedia('(prefers-color-scheme: dark)');
-      // Cordyn only has dark themes — system dark → 'ayu', system light → 'ayu' (all dark)
-      const resolve = () => applyThemeVars(mq.matches ? 'ayu' : 'ayu');
-      resolve();
-      mq.addEventListener('change', resolve);
-      return () => mq.removeEventListener('change', resolve);
-    } else {
-      applyThemeVars(selectedTheme);
-    }
+    applyThemeVars(selectedTheme);
   }, [selectedTheme]);
 
   // ── Game session timer tick (refresh elapsed time display every minute) ──
@@ -12034,8 +12076,15 @@ export default function App() {
     else addToast(tl('appearance.error.save'), 'error');
   };
   const saveTheme = async (themeId: ThemeId) => {
-    setSelectedTheme(themeId);
-    try { await users.updateMe({ theme_id: themeId }); } catch { /* silent */ }
+    const previous = selectedTheme;
+    setSelectedTheme(themeId); // apply instantly — the live-preview effect picks this up with no refresh
+    try {
+      const upd = await users.updateMe({ theme_id: themeId });
+      if (upd) setCurrentUser(upd); // keep currentUser.theme_id in sync so re-login/other devices load the right theme immediately
+    } catch {
+      setSelectedTheme(previous); // persistence failed server-side — roll back so the UI doesn't lie about what's saved
+      addToast('Nie udało się zapisać motywu — spróbuj ponownie', 'error');
+    }
   };
   // ── Global tab bar helpers ────────────────────────────────────────────────
   const MAX_UNPINNED_TABS = currentUser?.tab_limit ?? 20;
@@ -12206,7 +12255,7 @@ export default function App() {
     setShowChatAvatars(u.show_chat_avatars !== false); // default true
     setMessageAnimations(u.message_animations !== false); // default true
     setShowLinkPreviews(u.show_link_previews !== false); // default true
-    setSelectedTheme((u.theme_id as ThemeId) || 'ayu');
+    setSelectedTheme((u.theme_id as ThemeId) || 'default');
   };
   const [showWelcome, setShowWelcome] = useState(false);
   const handleAuth = (u: UserProfile, _t: string, isNew = false) => {
@@ -23722,41 +23771,33 @@ export default function App() {
                       className="flex flex-col gap-5">
                       <div>
                         <h3 className="text-sm font-bold text-white mb-1">Motyw interfejsu</h3>
-                        <p className="text-xs text-zinc-500 leading-relaxed">Zmień wygląd Cordyna. Motyw jest przypisany do Twojego konta — będzie działał na wszystkich urządzeniach.</p>
+                        <p className="text-xs text-zinc-500 leading-relaxed">Zmień wygląd Cordyna — zmiana stosuje się natychmiast, bez odświeżania strony. Motyw jest przypisany do Twojego konta, więc będzie czekał na Ciebie po zalogowaniu na każdym urządzeniu.</p>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         {THEMES.map(theme => {
-                          const isSystem = (theme as any).isSystem;
-                          const sysDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                          const t = theme as any;
+                          const isSystem = !!t.isSystem;
+                          const palette = isSystem ? (THEMES.find(x => x.id === 'default')! as any) : t;
+                          const previewBg = palette.gradient || palette.bg || '#0a0a10';
                           return (
                             <button key={theme.id}
                               onClick={() => saveTheme(theme.id as ThemeId)}
                               className={`relative flex flex-col gap-2 p-4 rounded-2xl border transition-all text-left ${selectedTheme === theme.id ? 'border-indigo-500/60 bg-indigo-500/10 shadow-[0_0_20px_rgba(99,102,241,0.1)]' : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/[0.1]'}`}>
-                              {/* Theme preview */}
-                              {isSystem ? (
-                                <div className="w-full h-16 rounded-xl overflow-hidden flex">
-                                  <div className="w-1/2 h-full flex gap-0.5 p-1.5" style={{background:'#07070f'}}>
-                                    <div className="w-3 h-full rounded-md" style={{background:'#0d0d18'}}/>
-                                    <div className="flex-1 h-full rounded-md" style={{background:'#161622'}}/>
-                                  </div>
-                                  <div className="w-1/2 h-full flex gap-0.5 p-1.5" style={{background:'#f8fafc'}}>
-                                    <div className="w-3 h-full rounded-md" style={{background:'#e2e8f0'}}/>
-                                    <div className="flex-1 h-full rounded-md" style={{background:'#ffffff'}}/>
-                                  </div>
+                              {/* Theme preview — mirrors exactly what applyThemeVars paints live */}
+                              <div className="w-full h-16 rounded-xl overflow-hidden flex gap-1 p-1.5"
+                                style={{ background: previewBg, backgroundColor: palette.bg || '#0a0a10' }}>
+                                <div className="w-5 h-full rounded-lg flex-shrink-0"
+                                  style={{ backgroundColor: palette.sidebar || '#0d0d15' }}/>
+                                <div className="flex-1 h-full rounded-lg flex items-end justify-end p-1.5"
+                                  style={{ backgroundColor: palette.card || '#15151f' }}>
+                                  <span className="w-2.5 h-2.5 rounded-full ring-2 ring-black/30" style={{ background: palette.accent || '#6366f1' }}/>
                                 </div>
-                              ) : (
-                                <div className="w-full h-16 rounded-xl overflow-hidden flex gap-1 p-1.5"
-                                  style={{ backgroundColor: (theme.vars as any)['--app-bg'] || '#07070f' }}>
-                                  <div className="w-5 h-full rounded-lg flex-shrink-0"
-                                    style={{ backgroundColor: (theme.vars as any)['--app-sidebar'] || '#0d0d18' }}/>
-                                  <div className="flex-1 h-full rounded-lg"
-                                    style={{ backgroundColor: (theme.vars as any)['--app-card'] || '#161622' }}/>
-                                </div>
-                              )}
+                              </div>
                               <div>
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1.5 flex-wrap">
                                   <p className="text-sm font-semibold text-white">{theme.name}</p>
                                   {isSystem && <span className="text-[9px] text-indigo-400 bg-indigo-500/15 border border-indigo-500/20 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">Auto</span>}
+                                  {!!t.gradient && <span className="text-[9px] text-fuchsia-300 bg-fuchsia-500/10 border border-fuchsia-500/20 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">Gradient</span>}
                                 </div>
                                 <p className="text-[10px] text-zinc-500 mt-0.5 leading-relaxed">{theme.desc}</p>
                               </div>

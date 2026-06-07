@@ -1746,72 +1746,11 @@ img.av-eff-arcade-coin { transition: filter 0.3s; }
 .theme-card    { background-color: var(--app-card) !important; }
 .theme-surface { background-color: var(--app-surface) !important; }
 
-/* ─────────────────────────────────────────────────────────────────────────
-   Ayu Dark — global accent color overrides
-   Applies when data-theme="ayu" (set on <html> by applyThemeVars).
-   Replaces all hardcoded indigo/violet/purple Tailwind classes app-wide.
-───────────────────────────────────────────────────────────────────────── */
-[data-theme="ayu"] .text-indigo-300,
-[data-theme="ayu"] .text-indigo-400,
-[data-theme="ayu"] .text-indigo-500 { color: #FFB454 !important; }
-
-[data-theme="ayu"] .text-violet-400,
-[data-theme="ayu"] .text-purple-400  { color: #95E6CB !important; }
-
-/* backgrounds */
-[data-theme="ayu"] .bg-indigo-500\/10 { background-color: rgba(255,143,64,0.10) !important; }
-[data-theme="ayu"] .bg-indigo-500\/15 { background-color: rgba(255,143,64,0.13) !important; }
-[data-theme="ayu"] .bg-indigo-500\/20 { background-color: rgba(255,143,64,0.16) !important; }
-[data-theme="ayu"] .bg-indigo-600\/20 { background-color: rgba(255,143,64,0.16) !important; }
-[data-theme="ayu"] .bg-indigo-400\/10 { background-color: rgba(255,143,64,0.10) !important; }
-[data-theme="ayu"] .bg-indigo-400\/15 { background-color: rgba(255,143,64,0.13) !important; }
-[data-theme="ayu"] .bg-indigo-500     { background-color: #FF8F40 !important; }
-[data-theme="ayu"] .bg-indigo-600     { background-color: #e8832a !important; }
-[data-theme="ayu"] .bg-violet-500\/15 { background-color: rgba(149,230,203,0.12) !important; }
-[data-theme="ayu"] .bg-violet-500\/10 { background-color: rgba(149,230,203,0.08) !important; }
-
-/* borders */
-[data-theme="ayu"] .border-indigo-500\/30  { border-color: rgba(255,143,64,0.30) !important; }
-[data-theme="ayu"] .border-indigo-500\/40  { border-color: rgba(255,143,64,0.40) !important; }
-[data-theme="ayu"] .border-indigo-500\/60  { border-color: rgba(255,143,64,0.60) !important; }
-[data-theme="ayu"] .border-violet-500\/30  { border-color: rgba(149,230,203,0.30) !important; }
-
-/* shadows */
-[data-theme="ayu"] .shadow-\[0_0_20px_rgba\(99\,102\,241\,0\.1\)\] { box-shadow: 0 0 20px rgba(255,143,64,0.10) !important; }
-[data-theme="ayu"] .shadow-\[0_0_0_3px_rgba\(99\,102\,241\,0\.08\)\] { box-shadow: 0 0 0 3px rgba(255,143,64,0.08) !important; }
-
-/* focus rings */
-[data-theme="ayu"] .focus\:border-indigo-500\/40:focus  { border-color: rgba(255,143,64,0.40) !important; }
-[data-theme="ayu"] .focus\:border-indigo-500\/60:focus  { border-color: rgba(255,143,64,0.60) !important; }
-
-/* settings panel selected theme card */
-[data-theme="ayu"] .border-indigo-500\/60.bg-indigo-500\/10 {
-  border-color: rgba(255,143,64,0.60) !important;
-  background-color: rgba(255,143,64,0.10) !important;
-}
-
-/* notification/bell active state */
-[data-theme="ayu"] .bg-indigo-500\/20.text-indigo-300 {
-  background-color: rgba(255,143,64,0.15) !important;
-  color: #FFB454 !important;
-}
-
-/* hover:bg-indigo-500\/20 */
-[data-theme="ayu"] .hover\:bg-indigo-500\/20:hover { background-color: rgba(255,143,64,0.16) !important; }
-[data-theme="ayu"] .hover\:text-indigo-300:hover   { color: #FFB454 !important; }
-[data-theme="ayu"] .hover\:text-indigo-400:hover   { color: #FF8F40 !important; }
-
-/* hardcoded bg colors → Ayu palette */
-[data-theme="ayu"] .bg-\[\#07070f\],
-[data-theme="ayu"] .bg-\[\#08080f\],
-[data-theme="ayu"] .bg-\[\#09090b\]  { background-color: #0A0E14 !important; }
-[data-theme="ayu"] .bg-\[\#0d0d18\]  { background-color: #0D1017 !important; }
-[data-theme="ayu"] .bg-\[\#0e0e1c\],
-[data-theme="ayu"] .bg-\[\#141420\],
-[data-theme="ayu"] .bg-\[\#16161f\],
-[data-theme="ayu"] .bg-\[\#161622\]  { background-color: #131a24 !important; }
-[data-theme="ayu"] .bg-\[\#18182a\],
-[data-theme="ayu"] .bg-\[\#1a1a2e\]  { background-color: #1a2535 !important; }
+/* NOTE: Per-theme accent overrides (incl. what used to live here as a static
+   "Ayu Dark only" block) are now generated dynamically — for EVERY theme, not
+   just one — by the `applyThemeVars` effect in App.tsx. That keeps the override
+   ruleset and the THEMES palette data as a single source of truth, and is what
+   makes switching themes change the WHOLE interface live, with no refresh. */
 
 /* ── Focus Card — dims sidebars, highlights chat panel ───────────────────── */
 .focus-card-dim {

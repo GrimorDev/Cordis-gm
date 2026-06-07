@@ -169,7 +169,12 @@ router.put('/me', authMiddleware,
     body('card_effect').optional().isIn(['none','fire','hologram','rainbow','aurora','smoke','ink','teleport','matrix','vortex','glitch','lava','ice']),
     body('card_color').optional().isIn(['default','slate','midnight','crimson','forest','ocean','neon','copper','violet','teal','charcoal','olive','rose','white','sky','lavender','cream','coral','mint','sand']),
     body('card_font').optional().isIn(['default','mono','serif','nunito','raleway','josefin','exo','ubuntu','pixel','orbitron','bebas','cinzel','playfair','caveat','dancing','pacifico','righteous','comic']),
-    body('theme_id').optional().isIn(['default','midnight','amoled','forest','sakura','sunset']),
+    // Keep this list in lockstep with the THEMES array in src/App.tsx — a
+    // mismatch here makes theme selection silently fail to persist (the UI
+    // applies it locally, but users.updateMe() 400s and the choice reverts on
+    // next login), which is exactly the "theme doesn't stick / needs a refresh"
+    // bug this whitelist used to cause for half the available themes.
+    body('theme_id').optional().isIn(['system','default','ayu','aurora','obsidian','nordic','emerald','sunset','crimson']),
     body('banner_preset').optional().isIn(['none','aurora','violet','fire','ocean','neon-pink','matrix','gold','galaxy','ice','sakura','cyber','city','space','forest','mountains','rain','lava','misty-forest','deep-space','night-city','lava-lamp','retro-sunset','this-is-fine','nyan-cat','homer-bush','rickroll']),
     body('tab_limit').optional().isInt({ min: 10, max: 30 }),
     body('tabs_enabled').optional().isBoolean(),
