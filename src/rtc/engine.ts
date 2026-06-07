@@ -132,6 +132,31 @@ export class VoiceEngine {
       try {
         peer.makingOffer = true;
         const offer = await pc.createOffer();
+        // ── Glare guard ───────────────────────────────────────────────────
+        // createOffer() above is async — a remote offer can arrive and be
+        // applied (via handleDescription's setRemoteDescription, with implicit
+        // rollback when we're polite) WHILE we're waiting for it. If that
+        // happened, signalingState is no longer 'stable' and the `offer` we
+        // just captured is stale: calling setLocalDescription(offer) throws
+        // "InvalidStateError: Called in wrong state: have-remote-offer" —
+        // exactly the error that was flooding the console here.
+        // Worse than the noisy log: a thrown setLocalDescription means OUR
+        // side's audio sender/transceiver direction is never (re)applied to
+        // the local description for this round — the connection still reaches
+        // "connected" (ICE/DTLS came up via the OTHER peer's offer→answer
+        // exchange), but our m-line can end up missing/misdirected, so zero
+        // audio bytes actually leave while everything *looks* fine. This is
+        // consistent with the "I light up but nobody hears me" reports.
+        // Fix: bail out cleanly when we detect the race (synchronously, so no
+        // further state change can sneak in before setLocalDescription). The
+        // incoming offer is already being handled by handleDescription, whose
+        // createAnswer() reflects our CURRENT senders (including this track) —
+        // nothing is lost, and the browser will re-fire negotiationneeded once
+        // back to 'stable' if anything still needs (re)negotiating.
+        if (pc.signalingState !== 'stable') {
+          console.log(`[rtc] onnegotiationneeded(${remoteId}): collision — state is ${pc.signalingState}, yielding to incoming offer (no audio dropped)`);
+          return;
+        }
         offer.sdp = this.munge(offer.sdp);
         await pc.setLocalDescription(offer);
         this.tune(pc);
