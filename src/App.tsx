@@ -14708,10 +14708,12 @@ export default function App() {
                   </button>
                 )}
                 {/* Dropdown trigger */}
-                <div className="relative cursor-pointer group" onClick={()=>setSrvDropOpen(p=>!p)}>
+                <div className="relative cursor-pointer group" onClick={()=>setSrvDropOpen(p=>!p)} title="Kliknij, aby otworzyć menu serwera">
                   <p className="text-[10px] tracking-[0.14em] uppercase mb-1.5" style={{fontFamily:'var(--font-mono,ui-monospace)',color:'rgba(161,161,170,0.7)'}}>Serwer</p>
-                  <h2 className="text-[22px] font-bold text-white leading-[1.05] tracking-tight mb-2 group-hover:text-zinc-100 transition-colors pr-8" style={{letterSpacing:'-0.02em'}}>
-                    {serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'Serwer'}
+                  <h2 className="text-[22px] font-bold text-white leading-[1.05] tracking-tight mb-2 group-hover:text-zinc-100 transition-colors pr-8 flex items-center gap-1.5" style={{letterSpacing:'-0.02em'}}>
+                    <span className="truncate">{serverFull?.name||serverList.find(s=>s.id===activeServer)?.name||'Serwer'}</span>
+                    <ChevronDown size={17} strokeWidth={2.5}
+                      className={`shrink-0 text-zinc-500 group-hover:text-zinc-300 transition-all duration-200 ${srvDropOpen?'rotate-180 text-zinc-300':''}`}/>
                   </h2>
                   <div className="flex items-center gap-2 text-[11px]" style={{fontFamily:'var(--font-mono,ui-monospace)',color:'rgba(161,161,170,0.7)'}}>
                     <span>{serverFull ? (serverFull.member_count??members.length) : '…'} osób</span>
