@@ -318,6 +318,40 @@ export class VoiceEngine {
     return this.localTracks.map(e => e.track.kind);
   }
 
+  /**
+   * Live state of the local microphone track for diagnostics — lets the on-screen
+   * panel distinguish "track exists but enabled=false / not live" (silence is
+   * being sent on purpose or the device died) from "no track at all".
+   */
+  localAudioTrackInfo(): { label: string; enabled: boolean; muted: boolean; readyState: MediaStreamTrackState } | null {
+    const entry = this.localTracks.find(e => e.track.kind === 'audio');
+    if (!entry) return null;
+    const t = entry.track;
+    return { label: t.label, enabled: t.enabled, muted: t.muted, readyState: t.readyState };
+  }
+
+  /**
+   * Per-peer outbound/inbound audio RTP byte counters straight from getStats() —
+   * the ground truth for "is audio actually flowing", independent of connectionState
+   * (which can read "connected" while the media path is silently dead).
+   */
+  async audioRtpStats(): Promise<Array<{ id: string; outBytes: number; outPackets: number; inBytes: number; inPackets: number }>> {
+    const results: Array<{ id: string; outBytes: number; outPackets: number; inBytes: number; inPackets: number }> = [];
+    for (const [id, p] of this.peers.entries()) {
+      let outBytes = 0, outPackets = 0, inBytes = 0, inPackets = 0;
+      try {
+        const report = await p.pc.getStats();
+        report.forEach(stat => {
+          if (stat.kind !== 'audio') return;
+          if (stat.type === 'outbound-rtp') { outBytes += stat.bytesSent || 0; outPackets += stat.packetsSent || 0; }
+          else if (stat.type === 'inbound-rtp') { inBytes += stat.bytesReceived || 0; inPackets += stat.packetsReceived || 0; }
+        });
+      } catch { /* ignore */ }
+      results.push({ id, outBytes, outPackets, inBytes, inPackets });
+    }
+    return results;
+  }
+
   hasPeer(remoteId: string): boolean {
     return this.peers.has(remoteId);
   }

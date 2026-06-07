@@ -18,6 +18,41 @@ export default function VoiceDiagnostics({ engineRef }: Props) {
   const [open, setOpen] = useState(false);
   const [, force] = useState(0);
 
+  // ── Real outbound/inbound audio RTP byte counters (ground truth) ─────────
+  // connectionState can read "connected" while the actual media path is dead
+  // silent (exactly the "I light up but nobody hears me" desktop bug). Polling
+  // getStats() and showing the byte-rate makes that distinction visible:
+  //   rate > 0   → audio genuinely flows
+  //   rate == 0  → connection is up but NO audio data is leaving/arriving
+  const [rtpStats, setRtpStats] = useState<Record<string, { outRate: number; outPackets: number; inRate: number; inPackets: number }>>({});
+  const prevRtpRef = useRef<Record<string, { outBytes: number; inBytes: number; ts: number }>>({});
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const poll = async () => {
+      const eng = engineRef.current;
+      if (!eng) return;
+      const stats = await eng.audioRtpStats();
+      if (cancelled) return;
+      const now = Date.now();
+      const next: typeof rtpStats = {};
+      for (const s of stats) {
+        const prev = prevRtpRef.current[s.id];
+        const dt = prev ? Math.max(0.25, (now - prev.ts) / 1000) : 1;
+        next[s.id] = {
+          outRate: prev ? Math.max(0, (s.outBytes - prev.outBytes) / dt) : 0,
+          inRate:  prev ? Math.max(0, (s.inBytes  - prev.inBytes ) / dt) : 0,
+          outPackets: s.outPackets, inPackets: s.inPackets,
+        };
+        prevRtpRef.current[s.id] = { outBytes: s.outBytes, inBytes: s.inBytes, ts: now };
+      }
+      setRtpStats(next);
+    };
+    poll();
+    const id = setInterval(poll, 1500);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [open, engineRef]);
+
   // Mic test state
   const [micTesting, setMicTesting] = useState(false);
   const [micLevel, setMicLevel] = useState(0);          // 0..1 RMS
@@ -161,18 +196,42 @@ export default function VoiceDiagnostics({ engineRef }: Props) {
           </div>
           {row('RTCPeerConn', <b style={{ color: rtcOk ? '#4ade80' : '#f87171' }}>{rtcOk ? 'available' : 'MISSING — WebRTC OFF!'}</b>)}
           {row('local→send', localKinds.length ? localKinds.join(', ') : '— (brak mikrofonu w engine)')}
+          {(() => {
+            const mic = engineRef.current?.localAudioTrackInfo?.();
+            if (!mic) return null;
+            const ok = mic.enabled && mic.readyState === 'live' && !mic.muted;
+            return row('mic track', <span>
+              "{mic.label || '?'}" enabled=<b style={{ color: mic.enabled ? '#4ade80' : '#f87171' }}>{String(mic.enabled)}</b>{' '}
+              state={mic.readyState} muted={String(mic.muted)}{' '}
+              {!ok && <b style={{ color: '#f87171' }}>← TU JEST PROBLEM (track nie transmituje!)</b>}
+            </span>);
+          })()}
           {st && row('signaling', `offers↓${st.offersRecv} answers↓${st.answersRecv} ice↓${st.iceRecv}`)}
           {st && row('connect()', `calls=${st.connectCalls} peersMade=${st.peersCreated}`)}
           {st && st.lastError && row('lastError', <span style={{ color: '#f87171' }}>{st.lastError}</span>)}
           {peers.length === 0 && row('', <i style={{ color: '#888' }}>brak połączeń — sprawdź powyższe liczniki</i>)}
-          {peers.map(p => (
+          {peers.map(p => {
+            const rtp = rtpStats[p.id];
+            const sendingAudio = p.send.includes('audio');
+            const outDead = sendingAudio && p.conn === 'connected' && rtp && rtp.outPackets > 0 && rtp.outRate < 50;
+            return (
             <div key={p.id} style={{ border: '1px solid #2a2a2a', borderRadius: 6, padding: '4px 6px', margin: '3px 0' }}>
               {row('peer', p.id.slice(0, 8))}
               {row('conn', <b style={{ color: p.conn === 'connected' ? '#4ade80' : p.conn === 'failed' ? '#f87171' : '#fbbf24' }}>{p.conn}</b>)}
               {row('ice/sig', `${p.ice} / ${p.sig}`)}
               {row('send/recv', `[${p.send.join(',') || '∅'}] / [${p.recv.join(',') || '∅'}]`)}
+              {sendingAudio && row('audio ↑ (realnie)', rtp
+                ? <span>
+                    <b style={{ color: rtp.outRate >= 50 ? '#4ade80' : '#f87171' }}>{(rtp.outRate / 1000).toFixed(2)} KB/s</b>
+                    {' · '}{rtp.outPackets} pakietów
+                    {outDead && <b style={{ color: '#f87171' }}> ← WYSYŁA 0 BAJTÓW! (cisza mimo "connected")</b>}
+                  </span>
+                : 'mierzę…')}
+              {p.recv.includes('audio') && row('audio ↓ (realnie)', rtp
+                ? <span><b style={{ color: rtp.inRate >= 50 ? '#4ade80' : '#fbbf24' }}>{(rtp.inRate / 1000).toFixed(2)} KB/s</b>{' · '}{rtp.inPackets} pakietów</span>
+                : 'mierzę…')}
             </div>
-          ))}
+          );})}
 
           <div style={{ fontSize: 11, fontWeight: 700, color: '#60a5fa', margin: '8px 0 2px' }}>Test mikrofonu</div>
           <select
