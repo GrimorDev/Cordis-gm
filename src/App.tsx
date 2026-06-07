@@ -6661,6 +6661,124 @@ function mergeSpotifyLive(
   };
 }
 
+// ─── Achievements ─────────────────────────────────────────────────────────────
+// Computed entirely client-side from the same numbers already shown on the
+// "Statystyki" settings page (users.getStats()) — no new backend endpoint or DB
+// migration needed. Each definition states exactly which stat it tracks and the
+// threshold that unlocks it; this single list drives both the earned badges and
+// the "X / target" progress shown for locked ones.
+type UserStatsShape = {
+  messages_sent: number; messages_this_month: number; dms_sent: number;
+  servers_joined: number; friends_count: number;
+  reactions_given: number; reactions_received: number; account_created: string;
+};
+type AchievementDef = {
+  id: string; name: string; desc: string; icon: LucideIcon; color: string;
+  group: 'tenure' | 'activity' | 'community'; target: number; unit: string;
+  metric: (s: UserStatsShape, daysSince: number) => number;
+};
+const ACHIEVEMENTS: AchievementDef[] = [
+  // ── Czas na Cordyn — odznaki za staż konta: co miesiąc do 4 m-cy, później co rok ──
+  { id:'tenure_30',   name:'Pierwszy miesiąc',  desc:'Jesteś na Cordyn od 30 dni — witamy na pokładzie!',          icon:Sparkles,      color:'#a5b4fc', group:'tenure',   target:30,   unit:'dni',       metric:(_,d)=>d },
+  { id:'tenure_60',   name:'Stały bywalec',     desc:'Jesteś na Cordyn od 60 dni (2 miesiące).',                   icon:Star,          color:'#fbbf24', group:'tenure',   target:60,   unit:'dni',       metric:(_,d)=>d },
+  { id:'tenure_90',   name:'Rezydent',          desc:'Jesteś na Cordyn od 90 dni (3 miesiące) — czujesz się tu jak w domu.', icon:Award, color:'#34d399', group:'tenure',   target:90,   unit:'dni',       metric:(_,d)=>d },
+  { id:'tenure_120',  name:'Weteran',           desc:'Jesteś na Cordyn od 120 dni (4 miesiące).',                  icon:BadgeCheck,    color:'#60a5fa', group:'tenure',   target:120,  unit:'dni',       metric:(_,d)=>d },
+  { id:'tenure_365',  name:'Rocznik',           desc:'Minął rok odkąd dołączyłeś/aś do Cordyn — pierwsza rocznica!', icon:Trophy,      color:'#f59e0b', group:'tenure',   target:365,  unit:'dni',       metric:(_,d)=>d },
+  { id:'tenure_730',  name:'Dwulatek',          desc:'Jesteś z nami już 2 lata.',                                  icon:Crown,         color:'#c084fc', group:'tenure',   target:730,  unit:'dni',       metric:(_,d)=>d },
+  { id:'tenure_1095', name:'Trzylatek',         desc:'Jesteś z nami już 3 lata.',                                  icon:Gem,           color:'#22d3ee', group:'tenure',   target:1095, unit:'dni',       metric:(_,d)=>d },
+  { id:'tenure_1825', name:'Legenda Cordyna',   desc:'5 lat na Cordyn — jesteś żywą legendą tej platformy.',       icon:Rocket,        color:'#fb7185', group:'tenure',   target:1825, unit:'dni',       metric:(_,d)=>d },
+  // ── Aktywność — odznaki za udział w rozmowach i odbiór społeczności ──
+  { id:'msgs_100',       name:'Gaduła',          desc:'Wyślij 100 wiadomości na serwerach.',                          icon:MessageSquare, color:'#818cf8', group:'activity', target:100,  unit:'wiadomości',     metric:s=>s.messages_sent },
+  { id:'msgs_1000',      name:'Mówca',           desc:'Wyślij 1000 wiadomości na serwerach.',                         icon:Megaphone,     color:'#fb923c', group:'activity', target:1000, unit:'wiadomości',     metric:s=>s.messages_sent },
+  { id:'msgs_5000',      name:'Orator',          desc:'Wyślij 5000 wiadomości — Twój głos jest wszędzie słyszalny.',  icon:Mic2,          color:'#f472b6', group:'activity', target:5000, unit:'wiadomości',     metric:s=>s.messages_sent },
+  { id:'dms_250',        name:'Powiernik',       desc:'Wyślij 250 prywatnych wiadomości.',                            icon:Send,          color:'#34d399', group:'activity', target:250,  unit:'wiadomości DM',  metric:s=>s.dms_sent },
+  { id:'react_recv_50',  name:'Lubiany',         desc:'Otrzymaj 50 reakcji pod swoimi wiadomościami.',                icon:Heart,         color:'#fb7185', group:'activity', target:50,   unit:'reakcji',        metric:s=>s.reactions_received },
+  { id:'react_recv_250', name:'Na fali',         desc:'Otrzymaj 250 reakcji — Twoje wiadomości robią wrażenie.',      icon:Flame,         color:'#f97316', group:'activity', target:250,  unit:'reakcji',        metric:s=>s.reactions_received },
+  { id:'react_give_100', name:'Hojny',           desc:'Dodaj 100 reakcji pod cudzymi wiadomościami.',                 icon:PartyPopper,   color:'#facc15', group:'activity', target:100,  unit:'reakcji',        metric:s=>s.reactions_given },
+  // ── Społeczność — odznaki za relacje i obecność na serwerach ──
+  { id:'servers_5',  name:'Odkrywca serwerów', desc:'Dołącz do co najmniej 5 serwerów.',         icon:Compass,   color:'#38bdf8', group:'community', target:5,  unit:'serwerów',  metric:s=>s.servers_joined },
+  { id:'friends_10', name:'Towarzyski',        desc:'Zbuduj listę co najmniej 10 znajomych.',    icon:Users,     color:'#a78bfa', group:'community', target:10, unit:'znajomych', metric:s=>s.friends_count },
+  { id:'friends_25', name:'Dusza towarzystwa', desc:'Zbuduj listę co najmniej 25 znajomych.',    icon:SmilePlus, color:'#4ade80', group:'community', target:25, unit:'znajomych', metric:s=>s.friends_count },
+];
+
+// Compact, scrollable trophy case — earned badges glow in their signature
+// colour, locked ones sit dimmed with a small lock + live progress bar.
+// Hover OR click reveals the explainer "chmurka" (works on touch too).
+function AchievementsBar({ stats, daysSince, loading }: { stats: UserStatsShape | null | undefined; daysSince: number; loading?: boolean }) {
+  const [openTip, setOpenTip] = useState<string | null>(null);
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2.5 overflow-hidden">
+        {[0,1,2,3,4,5].map(i => <div key={i} className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/[0.05] animate-pulse shrink-0"/>)}
+      </div>
+    );
+  }
+  if (!stats) return null;
+  const computed = ACHIEVEMENTS.map(a => {
+    const current = Math.max(0, a.metric(stats, daysSince));
+    const earned = current >= a.target;
+    const pct = Math.max(2, Math.min(100, Math.round((current / a.target) * 100)));
+    return { a, current, earned, pct };
+  });
+  const earnedCount = computed.filter(c => c.earned).length;
+  // Earned badges first (the trophy case you've actually filled), then the rest
+  // in definition order so "what's coming next" stays predictable.
+  const sorted = [...computed].sort((x, y) => (x.earned === y.earned ? 0 : x.earned ? -1 : 1));
+
+  return (
+    <div onClick={() => setOpenTip(null)}>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+          <Trophy size={13} className="text-zinc-600"/>Osiągnięcia
+        </h3>
+        <span className="text-[11px] text-zinc-600 font-medium tabular-nums">{earnedCount}/{ACHIEVEMENTS.length} odblokowanych</span>
+      </div>
+      <div className="flex gap-2.5 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: 'thin' }}>
+        {sorted.map(({ a, current, earned, pct }) => {
+          const Icon = a.icon;
+          const open = openTip === a.id;
+          return (
+            <div key={a.id} className="relative shrink-0"
+              onClick={(e) => { e.stopPropagation(); setOpenTip(p => p === a.id ? null : a.id); }}>
+              <button type="button"
+                className={`group relative w-14 h-14 rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${earned ? 'border-white/[0.10] bg-white/[0.04] hover:bg-white/[0.07]' : 'border-white/[0.04] bg-white/[0.015] hover:bg-white/[0.03]'}`}
+                style={earned ? { boxShadow: `0 0 0 1px ${a.color}26, 0 6px 18px -4px ${a.color}33` } : undefined}>
+                <Icon size={22} style={{ color: earned ? a.color : '#52525b' }} strokeWidth={earned ? 2 : 1.6} className={earned ? '' : 'opacity-60'}/>
+                {!earned && (
+                  <span className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full bg-[#0d0d15] border border-white/[0.08] flex items-center justify-center">
+                    <Lock size={9} className="text-zinc-600"/>
+                  </span>
+                )}
+                {/* ── Tooltip "chmurka" — hover reveals it; click pins it open ── */}
+                <div className={`absolute z-30 bottom-full left-1/2 -translate-x-1/2 mb-2.5 w-56 p-3 rounded-xl border border-white/[0.08] bg-[#0d0d15]/[0.98] backdrop-blur-xl shadow-2xl text-left transition-all duration-150 ${open ? 'opacity-100 translate-y-0 visible pointer-events-auto' : 'opacity-0 translate-y-1 invisible pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:visible'}`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${a.color}1f` }}>
+                      <Icon size={13} style={{ color: earned ? a.color : '#a1a1aa' }}/>
+                    </span>
+                    <p className="text-xs font-bold text-white truncate">{a.name}</p>
+                    {earned && <Check size={12} className="text-emerald-400 ml-auto shrink-0"/>}
+                  </div>
+                  <p className="text-[11px] text-zinc-400 leading-relaxed">{a.desc}</p>
+                  {!earned && (
+                    <div className="mt-2">
+                      <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-300" style={{ width: `${pct}%`, background: a.color }}/>
+                      </div>
+                      <p className="text-[10px] text-zinc-500 mt-1 tabular-nums">{Math.min(current, a.target).toLocaleString('pl-PL')} / {a.target.toLocaleString('pl-PL')} {a.unit}</p>
+                    </div>
+                  )}
+                  {earned && <p className="text-[10px] text-emerald-400/80 font-semibold mt-1.5 uppercase tracking-wide">Odblokowano ✓</p>}
+                  <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-[5px] w-2.5 h-2.5 rotate-45 bg-[#0d0d15] border-r border-b border-white/[0.08]"/>
+                </div>
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── ProfilePage ──────────────────────────────────────────────────────────────
 function ProfilePage({
   viewUserId, profileData, games, spotify, ownSpotify, twitch, ownTwitch, steam, ownSteam,
@@ -6678,6 +6796,7 @@ function ProfilePage({
   friends, blockedUsers, addToast,
   myJam, jamLoading, onJamStart, onJamStop, onJamJoin, onJamLeave, viewedUserJam,
   steamGameStartedAt, liveSpotifyTrack, mutualServers,
+  userStats, statsLoading,
 }: {
   viewUserId: string; profileData: UserProfile|null; games: FavoriteGame[];
   mutualServers?: MutualServer[];
@@ -6713,6 +6832,8 @@ function ProfilePage({
   onJamStart: ()=>void; onJamStop: ()=>void;
   onJamJoin: (hostId:string)=>void; onJamLeave: ()=>void;
   viewedUserJam?: { jam_id: string; host: any; members: any[] } | null;
+  userStats?: {messages_sent:number;messages_this_month:number;dms_sent:number;servers_joined:number;friends_count:number;reactions_given:number;reactions_received:number;account_created:string} | null;
+  statsLoading?: boolean;
 }) {
   const [showBannerPresetPicker, setShowBannerPresetPicker] = useState(false);
   const isOwn   = currentUser?.id === viewUserId;
@@ -7058,6 +7179,15 @@ function ProfilePage({
 
             {/* ── Main content ── */}
             <div className="flex-1 flex flex-col gap-6 min-w-0">
+
+              {/* Achievements bar — graficzne odznaki za staż i aktywność na Cordyn */}
+              {isOwn && (userStats || statsLoading) && (
+                <AchievementsBar
+                  stats={userStats ?? null}
+                  loading={statsLoading && !userStats}
+                  daysSince={userStats ? Math.floor((Date.now() - new Date(userStats.account_created).getTime()) / (1000*60*60*24)) : 0}
+                />
+              )}
 
               {/* Games section */}
               <div>
@@ -8939,13 +9069,16 @@ export default function App() {
   const [sessionsLoading, setSessionsLoading] = useState(false);
   // Globalny hook żeby OAuth callback mógł otworzyć zakładkę połączeń
   useEffect(() => { (window as any).__cordisGoToSettingsTab = (tab: typeof appSettTab) => setAppSettTab(tab); }, []);
-  // Load stats when tab opens
+  // Load stats when the Stats settings tab opens — OR when the user opens their
+  // own profile page (the achievements bar there is computed from these same
+  // numbers, so we need them ready there too — see ProfilePage's <Achievements>).
   useEffect(() => {
-    if (appSettTab === 'stats' && appSettOpen && !userStats && !statsLoading) {
+    const ownProfileOpen = !!profileViewId && !!currentUser && profileViewId === currentUser.id;
+    if (((appSettTab === 'stats' && appSettOpen) || ownProfileOpen) && !userStats && !statsLoading) {
       setStatsLoading(true);
       users.getStats().then(s => { setUserStats(s); setStatsLoading(false); }).catch(() => setStatsLoading(false));
     }
-  }, [appSettTab, appSettOpen]);
+  }, [appSettTab, appSettOpen, profileViewId, currentUser, userStats, statsLoading]);
   const [appVersion, setAppVersion]           = useState<string>('');
   const [autostartEnabled, setAutostartEnabled] = useState<boolean>(false);
   const [pushSubscribed, setPushSubscribed]     = useState<boolean>(false);
@@ -16843,6 +16976,8 @@ export default function App() {
               ownEpic={ownEpic}
               steamGameStartedAt={profileViewId ? (steamGameStartRef.current.get(profileViewId) ?? null) : null}
               liveSpotifyTrack={profileViewId ? (userActivities.get(profileViewId) ?? null) : null}
+              userStats={userStats}
+              statsLoading={statsLoading}
               loading={profileLoading}
               currentUser={currentUser}
               editProf={editProf}
