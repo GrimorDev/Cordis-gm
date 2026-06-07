@@ -365,6 +365,27 @@ const translateApiError = (msg: string): string => {
   return msg; // already in the user's locale (Polish messages from backend) or unknown
 };
 
+/**
+ * Renders a `KeyboardEvent.code` value as a short human-readable label for the
+ * Push-to-Talk key-binding button (e.g. "KeyV" → "V", "ControlLeft" → "Ctrl (L)").
+ */
+const formatKeyCode = (code: string): string => {
+  if (!code) return 'V';
+  if (code.startsWith('Key'))   return code.slice(3);
+  if (code.startsWith('Digit')) return code.slice(5);
+  if (code.startsWith('Numpad')) return `Num ${code.slice(6)}`;
+  const map: Record<string, string> = {
+    Space: 'Spacja', Enter: 'Enter', Tab: 'Tab', Escape: 'Esc', Backspace: 'Backspace',
+    CapsLock: 'Caps Lock', Backquote: '`',
+    ControlLeft: 'Ctrl (L)', ControlRight: 'Ctrl (P)',
+    ShiftLeft: 'Shift (L)', ShiftRight: 'Shift (P)',
+    AltLeft: 'Alt (L)', AltRight: 'Alt (P)',
+    MetaLeft: 'Win (L)', MetaRight: 'Win (P)',
+    ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→',
+  };
+  return map[code] || code;
+};
+
 /** Module-level date formatter that respects the saved locale preference. */
 const fmtDateLocale = (iso: string, opts?: Intl.DateTimeFormatOptions): string => {
   try {
@@ -8967,6 +8988,29 @@ export default function App() {
   const ngSensToThreshold = (v: number) => 0.005 + (v / 100) * 0.055; // 0→0.005, 100→0.060
   // Active noise gate pipeline (AudioWorklet + AudioContext); cleanup on re-acquire or leave
   const noisePipelineRef = useRef<NoisePipeline | null>(null);
+
+  // ── Voice activation mode: "continuous" (always transmits, like before) or
+  // "push_to_talk" (mic stays muted until the bound key is held down). This is
+  // a per-device preference (key bindings differ per keyboard/layout), so it's
+  // stored locally rather than synced through the account.
+  const [voiceActivationMode, setVoiceActivationMode] = useState<'continuous'|'push_to_talk'>(() => {
+    try { return localStorage.getItem('cordyn_voice_mode') === 'push_to_talk' ? 'push_to_talk' : 'continuous'; } catch { return 'continuous'; }
+  });
+  // KeyboardEvent.code of the PTT bind (layout-independent); default "V"
+  const [pttKey, setPttKey] = useState<string>(() => {
+    try { return localStorage.getItem('cordyn_ptt_key') || 'KeyV'; } catch { return 'KeyV'; }
+  });
+  // True while the settings UI is waiting for the user to press a new bind key
+  const [pttCapturing, setPttCapturing] = useState(false);
+  // Live "is the PTT key currently held down" flag — drives mic gating directly
+  // (kept as a ref, not state, so keydown/keyup don't trigger re-renders on the
+  // hot path). `pttActive` mirrors it purely for the in-call visual indicator.
+  const pttHeldRef = useRef(false);
+  const [pttActive, setPttActive] = useState(false);
+  const voiceActivationModeRef = useRef(voiceActivationMode);
+  useEffect(() => { voiceActivationModeRef.current = voiceActivationMode; }, [voiceActivationMode]);
+  useEffect(() => { try { localStorage.setItem('cordyn_voice_mode', voiceActivationMode); } catch {} }, [voiceActivationMode]);
+  useEffect(() => { try { localStorage.setItem('cordyn_ptt_key', pttKey); } catch {} }, [pttKey]);
   // AudioContext keep-alive: resumes _recCtx every 8 s to prevent WebView2 suspension
   // (a suspended context makes the AudioWorklet stop → processedStream goes silent → peers hear nothing)
   const audioCtxKeepaliveRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -13073,13 +13117,18 @@ export default function App() {
       }
 
       // ── Noise gate (AudioWorklet) — the "Próg bramki szumów" slider ──────────
-      // Re-enabled on ALL platforms. The earlier desktop SILENCE was caused by the
-      // `sampleRate` getUserMedia constraint (now removed), NOT the worklet itself.
-      // The worklet's AudioContext (_recCtx) is primed in-gesture, so it runs; if
-      // it is somehow suspended we fall back to the raw stream (guarded by
-      // isRunning()) so the mic is never silent.
+      // DESKTOP (Tauri/WebView2 on Windows, WebKitGTK on Linux): SKIP the AudioWorklet
+      // pipeline entirely. Both runtimes are known to suspend/garbage-collect secondary
+      // AudioContexts (especially on focus loss), which silently freezes the worklet →
+      // processedStream goes silent → peers hear NOTHING, while the separate raw-stream
+      // VAD (watchSpeaking above) keeps firing — exactly the "I light up but no audio
+      // reaches anyone" bug reported on both Windows and Linux desktop builds.
+      // The 8-second keep-alive resume was not sufficient (suspension can re-occur
+      // mid-utterance). Sending the raw stream sidesteps the fragile worklet entirely —
+      // browser-level echoCancellation/noiseSuppression/autoGainControl (set in
+      // baseConstraints above) remain active, so audio quality stays solid.
       let sendStream = rawStream;
-      if (useNoise) {
+      if (useNoise && !isTauri) {
         try {
           const pipeline = await applyNoiseGate(rawStream);
           if (pipeline && pipeline.isRunning()) {
@@ -13104,6 +13153,8 @@ export default function App() {
             // (pipeline.cleanup() is only correct when tearing down a RUNNING pipeline on leave/re-acquire)
           }
         } catch (e) { console.warn('[Cordis] acquireMic: noise gate failed → raw stream', e); }
+      } else if (useNoise && isTauri) {
+        console.log('[Cordis] acquireMic: desktop build — sending raw mic stream directly (AudioWorklet noise gate skipped, browser-level echo/noise/gain still active)');
       }
       if (sendStream === rawStream) console.log('[Cordis] acquireMic: sending raw mic stream');
 
@@ -13112,6 +13163,9 @@ export default function App() {
       // existing peer and remembers it for peers that connect later.
       const micTrack = sendStream.getAudioTracks()[0];
       if (micTrack) ensureEngine().replaceAudioTrack(micTrack, sendStream);
+      // Apply the current mute / Push-to-Talk gate to the freshly (re)acquired
+      // track — e.g. in PTT mode the mic must start SILENT until the bind is held.
+      updateMicGate();
       // Re-enumerate after permission granted — now we get real device labels
       getMediaDevices().then(setDevices).catch(() => {});
       return sendStream;
@@ -13241,9 +13295,28 @@ export default function App() {
     try { voiceBcRef.current?.postMessage({ type: 'voice_joined' }); } catch {}
   };
 
+  // ── Mic transmission gate ─────────────────────────────────────────────────
+  // Single source of truth for whether the local mic track should actually
+  // transmit audio (`track.enabled`). Combines manual mute state with the
+  // Push-to-Talk gate so the two interact correctly:
+  //   • manually muted        → never transmits, regardless of PTT key state
+  //   • continuous mode       → transmits whenever not manually muted (old behavior)
+  //   • push-to-talk mode     → transmits only while the bound key is held AND
+  //                             the user hasn't manually muted themselves
+  // `manuallyMuted` can be passed explicitly to avoid relying on state/refs that
+  // haven't re-synced yet right after a `setActiveCall`/`setActiveGroupCall`.
+  const updateMicGate = (manuallyMutedOverride?: boolean) => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    const manuallyMuted = manuallyMutedOverride ?? (!!activeCallRef.current?.isMuted || !!(activeGroupCallRef.current?.isMuted));
+    const isPtt = voiceActivationModeRef.current === 'push_to_talk';
+    const shouldTransmit = !manuallyMuted && (!isPtt || pttHeldRef.current);
+    stream.getAudioTracks().forEach(t => { t.enabled = shouldTransmit; });
+  };
+
   const toggleMute = () => {
     const muted = !activeCall?.isMuted;
-    localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !muted; });
+    updateMicGate(muted);
     setActiveCall(p => p ? {...p, isMuted: muted} : p);
     const call = activeCallRef.current;
     if (call?.channelId) getSocket().emit('voice_state' as any, { muted, deafened: call.isDeafened, channel_id: call.channelId });
@@ -13251,11 +13324,82 @@ export default function App() {
   };
   const toggleGroupCallMute = () => {
     const muted = !(activeGroupCallRef.current?.isMuted ?? false);
-    localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !muted; });
+    updateMicGate(muted);
     setActiveGroupCall(p => p ? { ...p, isMuted: muted } : p);
     const gc = activeGroupCallRef.current;
     if (gc) getSocket().emit('voice_state' as any, { muted, deafened: false, channel_id: undefined, to_user_id: undefined });
   };
+
+  // ── Push-to-Talk: global key listeners (active only while in PTT mode) ───
+  // Holds the bound key down → mic transmits; release → mic goes silent again.
+  // Ignored while typing in inputs/textareas/contentEditable so PTT doesn't
+  // hijack chat composition (e.g. default bind "V" while writing a message).
+  useEffect(() => {
+    if (voiceActivationMode !== 'push_to_talk') {
+      // Switched back to continuous — make sure the gate re-opens immediately
+      pttHeldRef.current = false;
+      setPttActive(false);
+      updateMicGate();
+      return;
+    }
+    const isTypingTarget = (el: EventTarget | null): boolean => {
+      const node = el as HTMLElement | null;
+      if (!node) return false;
+      const tag = node.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || !!node.isContentEditable;
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (pttCapturing || e.code !== pttKey) return;
+      if (!localStreamRef.current) return;        // no active call → nothing to gate
+      if (isTypingTarget(e.target)) return;
+      if (!pttHeldRef.current) {
+        pttHeldRef.current = true;
+        setPttActive(true);
+        updateMicGate();
+      }
+      e.preventDefault();
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code !== pttKey) return;
+      if (pttHeldRef.current) {
+        pttHeldRef.current = false;
+        setPttActive(false);
+        updateMicGate();
+      }
+    };
+    // Safety net: release the gate if the window loses focus while the key is held
+    // (e.g. alt-tabbing away mid-keypress would otherwise leave the mic "stuck open")
+    const onBlur = () => {
+      if (pttHeldRef.current) { pttHeldRef.current = false; setPttActive(false); updateMicGate(); }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+      pttHeldRef.current = false;
+      setPttActive(false);
+      updateMicGate();
+    };
+  }, [voiceActivationMode, pttKey, pttCapturing]);
+
+  // ── Push-to-Talk key-bind capture: listens for the next keydown while the
+  // settings UI is in "press a key…" mode, then saves it as the new bind.
+  useEffect(() => {
+    if (!pttCapturing) return;
+    const onCapture = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.code === 'Escape') { setPttCapturing(false); return; }
+      setPttKey(e.code);
+      setPttCapturing(false);
+    };
+    window.addEventListener('keydown', onCapture, true);
+    return () => window.removeEventListener('keydown', onCapture, true);
+  }, [pttCapturing]);
+
   const toggleDeafen = () => {
     const deaf = !activeCall?.isDeafened;
     muteAllRemote(deaf);
@@ -15825,8 +15969,16 @@ export default function App() {
                             <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${noiseCancel ? 'translate-x-5' : 'translate-x-0'}`}/>
                           </button>
                         </div>
-                        {/* Noise gate sensitivity slider — only visible when noise cancel is ON */}
-                        {noiseCancel && (
+                        {/* Noise gate sensitivity slider — only on web (the AudioWorklet pipeline
+                            is skipped on desktop builds; see acquireMic comment for why) */}
+                        {noiseCancel && isTauri && (
+                          <div className="sm:col-span-3 px-0.5 pt-1">
+                            <p className="text-[10px] text-zinc-500 leading-relaxed">
+                              Na aplikacji desktopowej redukcja szumów działa na poziomie systemu/przeglądarki (echo, AGC, tłumienie szumów) — dodatkowa bramka szumów jest wyłączona, by zagwarantować stabilne przesyłanie dźwięku.
+                            </p>
+                          </div>
+                        )}
+                        {noiseCancel && !isTauri && (
                           <div className="sm:col-span-3 px-0.5 pt-2">
                             <div className="flex items-center justify-between mb-1.5">
                               <span className="text-[11px] font-semibold text-white">Próg bramki szumów</span>
@@ -16046,10 +16198,22 @@ export default function App() {
                 {/* Floating control pill */}
                 <div className="flex items-center justify-center">
                   <div className="call-controls-bar">
-                    <button onClick={toggleMute} title={activeCall.isMuted?'Włącz mikrofon':'Wycisz mikrofon'}
-                      className={`call-ctrl-btn ${activeCall.isMuted?'active-red':''}`}>
-                      {activeCall.isMuted?<MicOff size={18}/>:<Mic size={18}/>}
-                    </button>
+                    <div className="relative">
+                      <button onClick={toggleMute} title={activeCall.isMuted?'Włącz mikrofon':'Wycisz mikrofon'}
+                        className={`call-ctrl-btn ${activeCall.isMuted?'active-red':''}`}>
+                        {activeCall.isMuted?<MicOff size={18}/>:<Mic size={18}/>}
+                      </button>
+                      {voiceActivationMode==='push_to_talk' && !activeCall.isMuted && (
+                        <span title={`Push-to-Talk — przytrzymaj „${formatKeyCode(pttKey)}”, by mówić`}
+                          className={`absolute -bottom-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center border transition-colors ${
+                            pttActive
+                              ? 'bg-[#7FD962] border-[#7FD962] text-zinc-900 shadow-[0_0_6px_rgba(127,217,98,0.7)]'
+                              : 'bg-zinc-800 border-white/20 text-zinc-300'
+                          }`}>
+                          {formatKeyCode(pttKey)}
+                        </span>
+                      )}
+                    </div>
                     <button onClick={toggleDeafen} title={activeCall.isDeafened?'Włącz głośnik':'Wycisz głośnik'}
                       className={`call-ctrl-btn ${activeCall.isDeafened?'active-red':''}`}>
                       {activeCall.isDeafened?<VolumeX size={18}/>:<Volume2 size={18}/>}
@@ -17689,14 +17853,26 @@ export default function App() {
                               className="w-12 h-12 rounded-2xl bg-white/[0.08] text-zinc-400 hover:text-white hover:bg-white/[0.14] flex items-center justify-center transition-all active:scale-90">
                               <Minimize2 size={18}/>
                             </button>
-                            <button onClick={toggleGroupCallMute} title={activeGroupCall?.isMuted ? 'Włącz mikrofon' : 'Wycisz'}
-                              className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all active:scale-90 ${
-                                activeGroupCall?.isMuted
-                                  ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30 hover:bg-rose-400'
-                                  : 'bg-white/[0.08] text-zinc-300 hover:bg-white/[0.14] hover:text-white'
-                              }`}>
-                              {activeGroupCall?.isMuted ? <MicOff size={18}/> : <Mic size={18}/>}
-                            </button>
+                            <div className="relative">
+                              <button onClick={toggleGroupCallMute} title={activeGroupCall?.isMuted ? 'Włącz mikrofon' : 'Wycisz'}
+                                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all active:scale-90 ${
+                                  activeGroupCall?.isMuted
+                                    ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30 hover:bg-rose-400'
+                                    : 'bg-white/[0.08] text-zinc-300 hover:bg-white/[0.14] hover:text-white'
+                                }`}>
+                                {activeGroupCall?.isMuted ? <MicOff size={18}/> : <Mic size={18}/>}
+                              </button>
+                              {voiceActivationMode==='push_to_talk' && !activeGroupCall?.isMuted && (
+                                <span title={`Push-to-Talk — przytrzymaj „${formatKeyCode(pttKey)}”, by mówić`}
+                                  className={`absolute -bottom-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center border transition-colors ${
+                                    pttActive
+                                      ? 'bg-[#7FD962] border-[#7FD962] text-zinc-900 shadow-[0_0_6px_rgba(127,217,98,0.7)]'
+                                      : 'bg-zinc-800 border-white/20 text-zinc-300'
+                                  }`}>
+                                  {formatKeyCode(pttKey)}
+                                </span>
+                              )}
+                            </div>
                             <button onClick={leaveCall} title="Rozłącz"
                               className="w-14 h-12 rounded-2xl bg-rose-500 hover:bg-rose-400 active:scale-90 flex items-center justify-center text-white transition-all shadow-lg shadow-rose-500/30">
                               <PhoneOff size={18}/>
@@ -23051,6 +23227,46 @@ export default function App() {
                             value={selMic} onChange={async v=>{setSelMic(v); if(localStreamRef.current) await acquireMic(v||undefined);}}
                             options={devices.filter(d=>d.kind==='audioinput').map(d=>({id:d.deviceId,label:d.label||`${t('devices.mic')} ${d.deviceId.slice(0,8)}`}))}/>
                         </div>
+
+                        {/* ── Tryb aktywacji mikrofonu: ciągły / Push-to-Talk ── */}
+                        <div className="flex items-center justify-between gap-3 pt-2 border-t border-white/[0.05]">
+                          <div className="flex flex-col">
+                            <span className="text-xs font-semibold text-white">Tryb aktywacji mikrofonu</span>
+                            <span className="text-[10px] text-zinc-500 mt-0.5 leading-relaxed">
+                              {voiceActivationMode==='push_to_talk'
+                                ? 'Mikrofon przesyła dźwięk tylko, gdy przytrzymasz wybrany klawisz'
+                                : 'Mikrofon przesyła dźwięk cały czas (gdy nie jest wyciszony)'}
+                            </span>
+                          </div>
+                          <div className="flex rounded-lg overflow-hidden border border-white/10 text-[11px] font-semibold shrink-0">
+                            <button onClick={() => setVoiceActivationMode('continuous')}
+                              className={`px-3 py-1.5 transition-colors ${voiceActivationMode==='continuous' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-white/40 hover:bg-white/10'}`}>
+                              Głos ciągły
+                            </button>
+                            <button onClick={() => setVoiceActivationMode('push_to_talk')}
+                              className={`px-3 py-1.5 transition-colors ${voiceActivationMode==='push_to_talk' ? 'bg-indigo-600 text-white' : 'bg-white/5 text-white/40 hover:bg-white/10'}`}>
+                              Push-to-Talk
+                            </button>
+                          </div>
+                        </div>
+                        {voiceActivationMode==='push_to_talk' && (
+                          <div className="flex items-center justify-between gap-3 pt-1">
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold text-white">Przycisk Push-to-Talk</span>
+                              <span className="text-[10px] text-zinc-500 mt-0.5">Przytrzymaj go, by mówić — puść, by wyciszyć mikrofon (działa w trakcie rozmowy)</span>
+                            </div>
+                            <button
+                              onClick={() => setPttCapturing(true)}
+                              title="Kliknij i naciśnij nowy klawisz"
+                              className={`px-4 py-1.5 rounded-lg text-[11px] font-bold border transition-colors shrink-0 min-w-[92px] text-center ${
+                                pttCapturing
+                                  ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300 animate-pulse'
+                                  : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
+                              }`}>
+                              {pttCapturing ? 'Naciśnij klawisz…' : formatKeyCode(pttKey)}
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       {/* ── SEKCJA: Wyjście ───────────────────────────────── */}
