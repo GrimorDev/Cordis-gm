@@ -12,6 +12,11 @@ version: "3.9"
 #    JWT_REFRESH_SECRET – sekret refresh token (min. 32 znaki)
 #    CORS_ORIGIN        – URL frontendu np. https://twoja-domena.com
 #
+#  TURN relay dla połączeń głosowych/wideo (bez tego część połączeń WebRTC
+#  nigdy się nie nawiąże — patrz komentarz przy usłudze `coturn` niżej):
+#    TURN_USERNAME / TURN_PASSWORD – poświadczenia coturn (min. 16 znaków hasła)
+#    VITE_TURN_URL                 – turn:<publiczny-ip-lub-domena>:3478
+#
 #  Cloudflare R2 (opcjonalne — bez tych zmiennych pliki idą na dysk):
 #    R2_ACCESS_KEY_ID     – z CF Dashboard → R2 → Manage R2 API Tokens
 #    R2_SECRET_ACCESS_KEY – j.w.
@@ -32,6 +37,14 @@ services:
         VITE_API_URL: /api
         VITE_SOCKET_URL: ""
         VITE_VAPID_PUBLIC_KEY: "BLW91bYO5prQrQtHpsE_6dJQVi3jQvGmD5MJbj8oRQ6aesobJm4GLzBTq_DyEfsFoi5yLJeGenO-27FoOe8w06I"
+        # ── TURN relay (see `coturn` service below) ─────────────────────
+        # VITE_TURN_URL must point at this server's PUBLIC address, e.g.
+        # turn:turn.twoja-domena.com:3478  or  turn:1.2.3.4:3478
+        # Username/credential default to TURN_USERNAME / TURN_PASSWORD so the
+        # browser and the coturn server always agree — just set those two once.
+        VITE_TURN_URL: ${VITE_TURN_URL:-}
+        VITE_TURN_USERNAME: ${TURN_USERNAME:-cordis}
+        VITE_TURN_CREDENTIAL: ${TURN_PASSWORD:-change_me_turn_password_min16ch}
     container_name: cordis-frontend
     restart: unless-stopped
     ports:
@@ -198,6 +211,43 @@ services:
         reservations:
           cpus: "0.25"
           memory: 128M
+
+  # ── coturn — TURN/STUN relay for the WebRTC mesh (voice/video calls) ─
+  # Without a TURN server, two peers behind symmetric NAT / CGNAT / a strict
+  # corporate firewall cannot establish a direct P2P connection — STUN alone
+  # is not enough and ICE simply fails (this looks like "random" connect
+  # failures that depend on which two networks happen to be talking).
+  # TURN relays the media as a last resort so the call still goes through.
+  #
+  # Required: set TURN_USERNAME / TURN_PASSWORD and VITE_TURN_URL in your .env
+  # (VITE_TURN_URL = turn:<public-ip-or-domain>:3478 — must be reachable from
+  # the internet, both the TCP/UDP 3478 port AND the relay UDP range below).
+  # network_mode: host is used because TURN relay candidates must carry the
+  # server's real public IP — Docker's bridge NAT would break that.
+  coturn:
+    image: coturn/coturn:4.6-alpine
+    container_name: cordis-coturn
+    restart: unless-stopped
+    network_mode: host
+    command: >
+      turnserver
+      --listening-port=3478
+      --min-port=49160
+      --max-port=49360
+      --realm=${TURN_REALM:-cordis.turn}
+      --user=${TURN_USERNAME:-cordis}:${TURN_PASSWORD:-change_me_turn_password_min16ch}
+      --no-cli
+      --fingerprint
+      --no-multicast-peers
+      --log-file=stdout
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 32M
 
   # ── PostgreSQL (tuned for high concurrency) ───────────────────────
   # PgBouncer zostanie dodany gdy będzie potrzeba skalowania horyzontalnego

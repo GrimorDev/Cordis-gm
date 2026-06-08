@@ -23,11 +23,20 @@ ARG VITE_VAPID_PUBLIC_KEY=
 # LiveKit WS URL — leave empty to auto-derive from window.location (recommended)
 # Set explicitly only if LiveKit is behind a different domain/port than the frontend.
 ARG VITE_LIVEKIT_URL=
+# TURN relay for the WebRTC mesh — see docker-compose.yml `coturn` service.
+# Without this, calls between peers behind symmetric NAT/CGNAT/strict
+# firewalls fail to connect (STUN alone isn't enough).
+ARG VITE_TURN_URL=
+ARG VITE_TURN_USERNAME=
+ARG VITE_TURN_CREDENTIAL=
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_SOCKET_URL=$VITE_SOCKET_URL
 ENV VITE_DESKTOP_DOWNLOAD_URL=$VITE_DESKTOP_DOWNLOAD_URL
 ENV VITE_VAPID_PUBLIC_KEY=$VITE_VAPID_PUBLIC_KEY
 ENV VITE_LIVEKIT_URL=$VITE_LIVEKIT_URL
+ENV VITE_TURN_URL=$VITE_TURN_URL
+ENV VITE_TURN_USERNAME=$VITE_TURN_USERNAME
+ENV VITE_TURN_CREDENTIAL=$VITE_TURN_CREDENTIAL
 
 RUN pnpm build
 
