@@ -243,6 +243,14 @@ jobs:
       - name: Build Tauri app
         env:
           VITE_API_BASE:                      ${{ secrets.VITE_API_BASE }}
+          # TURN relay for the WebRTC mesh (see docker-compose.yml `coturn` service).
+          # Desktop apps BUNDLE the frontend (frontendDist = ../dist), so this must be
+          # baked in here too — setting it only in the Portainer/.env web build does
+          # NOT reach desktop binaries, they'd silently keep using STUN-only ICE servers.
+          # Optional: leave the secrets unset to keep current STUN-only behaviour.
+          VITE_TURN_URL:                      ${{ secrets.VITE_TURN_URL }}
+          VITE_TURN_USERNAME:                 ${{ secrets.VITE_TURN_USERNAME }}
+          VITE_TURN_CREDENTIAL:               ${{ secrets.VITE_TURN_CREDENTIAL }}
           TAURI_SIGNING_PRIVATE_KEY:          ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ matrix.os == 'macos-latest' && '-' || '' }}
