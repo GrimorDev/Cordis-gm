@@ -16803,7 +16803,7 @@ export default function App() {
                       </h1>
                       <p style={{fontSize:16,color:'rgba(255,255,255,0.5)',maxWidth:560,marginTop:18,marginBottom:26,lineHeight:1.5}}>{subtitle}</p>
                       <div className="flex items-center gap-2.5 flex-wrap">
-                        <button onClick={()=>{setActiveDmUserId('');setActiveGroupDm('');setActiveView('dms');}}
+                        <button onClick={()=>{setShowCallPanel(false);setProfileViewId(null);setActiveServer('');setActiveChannel('');setSrvSettOpen(false);setDmPartnerProfile(null);setActiveDmUserId('');setActiveGroupDm(null);setActiveView('dms');}}
                           className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all"
                           style={{background:'white',color:'black',boxShadow:'0 4px 20px rgba(0,0,0,0.4)'}}>
                           <Plus size={15}/>Nowa wiadomość
@@ -18465,7 +18465,11 @@ export default function App() {
                       );
                     }
                     const ch2 = serverFull?.categories.flatMap(c=>c.channels).find(c=>c.id===activeChannel) || activeCh;
-                    if (!activeChannel && activeView!=='servers') return null;
+                    if (!activeChannel && activeView!=='servers') return (
+                      <div className="flex-1 flex items-center justify-center py-10">
+                        <Loader2 size={22} className="animate-spin text-zinc-600"/>
+                      </div>
+                    );
                     return (
                       <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
                         className="relative overflow-hidden mb-4"
