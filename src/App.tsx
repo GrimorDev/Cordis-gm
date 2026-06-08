@@ -13338,25 +13338,21 @@ export default function App() {
   const acquireMic = async (deviceId?: string, noiseCancelOverride?: boolean): Promise<MediaStream|null> => {
     const useNoise = noiseCancelOverride !== undefined ? noiseCancelOverride : noiseCancel;
     try {
-      // Stop previous speaking detection
+      // Stop previous speaking detection (doesn't release the mic device)
       const old = speakStopRef.current.get('self'); if (old) { old(); speakStopRef.current.delete('self'); }
-      // Stop AudioContext keep-alive from the previous pipeline (if any)
-      if (audioCtxKeepaliveRef.current) { clearInterval(audioCtxKeepaliveRef.current); audioCtxKeepaliveRef.current = null; }
-      // Clean up previous noise pipeline (this also stops the old raw mic stream)
-      if (noisePipelineRef.current) {
-        noisePipelineRef.current.cleanup();
-        noisePipelineRef.current = null;
-      } else {
-        localStreamRef.current?.getTracks().forEach(t => t.stop());
-      }
-      localStreamRef.current = null;
 
-      // Acquire raw mic — all three WebRTC filters ON as baseline (echo/gain/noise).
-      // AudioWorklet gate runs on top for deeper noise removal — they complement, not conflict.
-      // IMPORTANT: keep these constraints MINIMAL. In WebView2 a `sampleRate`
-      // (and to a lesser extent `channelCount`) constraint on getUserMedia can
-      // return a SILENT stream — which is exactly why the call captured nothing
-      // while the diagnostic mic-test (no such constraints) worked at 52%.
+      // ── ACQUIRE NEW MIC FIRST — then release old one ─────────────────────
+      // CRITICAL ordering fix: previously we stopped the old track BEFORE calling
+      // getUserMedia. On Windows/WebView2 the OS device takes a moment to release
+      // after t.stop() — a getUserMedia immediately after would throw NotReadableError
+      // ("device in use"). This left the engine with NO mic track at all, causing:
+      //   • silence until app restart (localTracks had the old ended track → silence)
+      //   • after leave/rejoin: localTracks empty → connect() seeds PC with nothing
+      //     → onnegotiationneeded never fires → peer stays in "conn new 0.00 KB/s"
+      //     → reconnecting doesn't help, only app restart (full device release) did.
+      // Fix: acquire the new stream first, THEN stop old. The two streams overlap
+      // for milliseconds — both OS mic handles open briefly — which all platforms
+      // handle fine, and we close the old one immediately after.
       const baseConstraints: MediaTrackConstraints = {
         echoCancellation: true,  // hardware echo cancel — eliminates speaker feedback
         autoGainControl:  true,  // normalize mic level automatically
@@ -13389,6 +13385,18 @@ export default function App() {
           throw firstErr;
         }
       }
+
+      // New stream is live — NOW safely release the old pipeline/tracks.
+      // Stop AudioContext keep-alive from the previous pipeline (if any)
+      if (audioCtxKeepaliveRef.current) { clearInterval(audioCtxKeepaliveRef.current); audioCtxKeepaliveRef.current = null; }
+      // Clean up previous noise pipeline (this also stops the old raw mic stream)
+      if (noisePipelineRef.current) {
+        noisePipelineRef.current.cleanup();
+        noisePipelineRef.current = null;
+      } else {
+        localStreamRef.current?.getTracks().forEach(t => t.stop());
+      }
+      localStreamRef.current = null;
 
       // ── Diagnostics: confirm the mic actually produced a live track ───────────
       // If these logs show readyState='live' & enabled=true on desktop but peers
@@ -16540,12 +16548,26 @@ export default function App() {
                       {activeCall.isDeafened?<VolumeX size={18}/>:<Volume2 size={18}/>}
                     </button>
                     <div className="call-ctrl-divider"/>
-                    <button onClick={toggleCamera} title={activeCall.isCameraOn?'Wyłącz kamerę':'Włącz kamerę'}
-                      className={`call-ctrl-btn ${activeCall.isCameraOn?'active-orange':''}`}>
+                    {/* Camera — disabled on Linux desktop: native WebRTC polyfill is audio-only;
+                        addTrack() is a no-op so video is never transmitted or received */}
+                    <button
+                      onClick={isTauri && userOs === 'linux' ? undefined : toggleCamera}
+                      disabled={isTauri && userOs === 'linux'}
+                      title={isTauri && userOs === 'linux'
+                        ? 'Kamera niedostępna na Linuksie — natywny silnik WebRTC obsługuje tylko audio'
+                        : activeCall.isCameraOn ? 'Wyłącz kamerę' : 'Włącz kamerę'}
+                      className={`call-ctrl-btn ${activeCall.isCameraOn?'active-orange':''} ${isTauri&&userOs==='linux'?'opacity-30 cursor-not-allowed':''}`}>
                       <Video size={18}/>
                     </button>
-                    <button onClick={toggleScreen} title={activeCall.isScreenSharing?'Zatrzymaj udostępnianie':'Udostępnij ekran'}
-                      className={`call-ctrl-btn ${activeCall.isScreenSharing?'active-orange':''}`}>
+                    {/* Screen share — disabled on Linux desktop: same native polyfill limitation;
+                        even if getDisplayMedia succeeds (needs portal/PipeWire), track is dropped */}
+                    <button
+                      onClick={isTauri && userOs === 'linux' ? undefined : toggleScreen}
+                      disabled={isTauri && userOs === 'linux'}
+                      title={isTauri && userOs === 'linux'
+                        ? 'Udostępnianie ekranu niedostępne na Linuksie — natywny silnik WebRTC obsługuje tylko audio'
+                        : activeCall.isScreenSharing ? 'Zatrzymaj udostępnianie' : 'Udostępnij ekran'}
+                      className={`call-ctrl-btn ${activeCall.isScreenSharing?'active-orange':''} ${isTauri&&userOs==='linux'?'opacity-30 cursor-not-allowed':''}`}>
                       <ScreenShare size={18}/>
                     </button>
                     <button onClick={async()=>{
