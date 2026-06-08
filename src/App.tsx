@@ -10818,7 +10818,7 @@ export default function App() {
       setDmConvs(p => p.map(d => d.other_user_id === u.id
         ? { ...d,
             other_username: u.username ?? d.other_username,
-            other_avatar_url: u.avatar_url ?? d.other_avatar_url,
+            other_avatar: u.avatar_url ?? d.other_avatar,
             ...(u.active_tag !== undefined ? { other_tag: u.active_tag ?? null } : {}),
           }
         : d));
@@ -18296,8 +18296,8 @@ export default function App() {
 
                   if (showDm) {
                     const activeDmConv = dmConvs.find(d=>d.other_user_id===activeDmUserId);
-                    const dmName = activeDmConv?.other_display_name || activeDmConv?.other_username || '?';
-                    const dmAvatar = activeDmConv?.other_avatar_url;
+                    const dmName = activeDmConv?.other_username || '?';
+                    const dmAvatar = activeDmConv?.other_avatar;
                     return (
                       <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}}
                         className="relative overflow-hidden mb-4"
