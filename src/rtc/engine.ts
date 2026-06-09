@@ -45,12 +45,35 @@ interface Peer {
   polite: boolean;
   makingOffer: boolean;
   ignoreOffer: boolean;
+  /** True once setRemoteDescription has been called at least once. */
+  hasRemoteDesc: boolean;
+  /**
+   * ICE candidates that arrived before setRemoteDescription was called.
+   * Chrome/WebKit throw "Cannot add ICE candidate when there is no remote SDP"
+   * if addIceCandidate is called before setRemoteDescription, so we buffer them
+   * here and flush them immediately after setRemoteDescription completes.
+   *
+   * This is the most common cause of "conn new" staying forever: the remote peer
+   * gathers and emits ICE candidates in parallel with sending the offer, so
+   * candidates often arrive at the JS bridge before the offer has been processed
+   * and setRemoteDescription called.  Without queuing, all those candidates are
+   * silently dropped → no usable ICE pair → connection stays at "new" / "checking".
+   */
+  iceCandidateQueue: RTCIceCandidateInit[];
 }
 
 interface LocalEntry { track: MediaStreamTrack; stream: MediaStream; }
 
 export class VoiceEngine {
   private peers = new Map<string, Peer>();
+  /**
+   * ICE candidates that arrived for a remoteId BEFORE connect() was called
+   * (i.e. before the RTCPeerConnection object even exists yet).  This happens
+   * when the signaling server delivers candidates faster than we create peers —
+   * e.g. the answerer receives ICE candidates before the offer is processed.
+   * Flushed into Peer.iceCandidateQueue when connect() creates the peer.
+   */
+  private pendingCandidates = new Map<string, RTCIceCandidateInit[]>();
   /** Tracks that must be present on every peer (mic, camera, screen). */
   private localTracks: LocalEntry[] = [];
   /** Diagnostics — surfaced in the on-screen panel to pinpoint failures. */
@@ -114,8 +137,21 @@ export class VoiceEngine {
       polite: this.cfg.selfId > remoteId,
       makingOffer: false,
       ignoreOffer: false,
+      hasRemoteDesc: false,
+      iceCandidateQueue: [],
     };
     this.peers.set(remoteId, peer);
+
+    // Flush any ICE candidates that arrived before the peer object was created.
+    // This is common: the remote side sends offer + ICE candidates in rapid
+    // succession; the candidates hit handleIce() first and get buffered in
+    // pendingCandidates.  Move them to iceCandidateQueue so they are applied
+    // once setRemoteDescription completes (see handleDescription below).
+    const prePeer = this.pendingCandidates.get(remoteId);
+    if (prePeer?.length) {
+      peer.iceCandidateQueue.push(...prePeer);
+      this.pendingCandidates.delete(remoteId);
+    }
 
     pc.onicecandidate = ({ candidate }) => {
       if (candidate) this.cfg.emitIce(remoteId, candidate.toJSON());
@@ -229,6 +265,19 @@ export class VoiceEngine {
       return;
     }
 
+    // ── Flush queued ICE candidates ───────────────────────────────────────────
+    // Any candidate that arrived before (or during) setRemoteDescription was
+    // buffered in peer.iceCandidateQueue to avoid the "no remote SDP" error.
+    // Now that the remote description is set, apply them all.
+    peer.hasRemoteDesc = true;
+    if (peer.iceCandidateQueue.length) {
+      const queued = peer.iceCandidateQueue.splice(0);
+      console.log(`[rtc] flushing ${queued.length} queued ICE candidate(s) for ${from}`);
+      for (const c of queued) {
+        try { await pc.addIceCandidate(c); } catch { /* ignore stale candidates */ }
+      }
+    }
+
     if (description.type === 'offer') {
       try {
         const answer = await pc.createAnswer();
@@ -246,7 +295,24 @@ export class VoiceEngine {
   async handleIce(from: string, candidate: RTCIceCandidateInit): Promise<void> {
     this.stats.iceRecv++;
     const peer = this.peers.get(from);
-    if (!peer) return;
+
+    if (!peer) {
+      // Peer object doesn't exist yet (offer not received / processed yet).
+      // Buffer the candidate — it will be moved to peer.iceCandidateQueue when
+      // connect() creates the peer, and then applied after setRemoteDescription.
+      const q = this.pendingCandidates.get(from) ?? [];
+      q.push(candidate);
+      this.pendingCandidates.set(from, q);
+      return;
+    }
+
+    if (!peer.hasRemoteDesc) {
+      // Peer exists but setRemoteDescription hasn't been called yet.
+      // Buffer until handleDescription flushes the queue.
+      peer.iceCandidateQueue.push(candidate);
+      return;
+    }
+
     try {
       await peer.pc.addIceCandidate(candidate);
     } catch (err) {

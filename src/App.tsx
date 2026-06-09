@@ -10101,11 +10101,14 @@ export default function App() {
         localStorage.setItem('cordis_just_updated', '1');
         localStorage.setItem('cordis_updated_at', String(Date.now()));
         localStorage.setItem('cordis_updated_ver', ver);
+        // xdg-open fires the system package manager and returns immediately.
+        // Installation is asynchronous — we don't auto-relaunch here.
         await invoke('install_deb_update', { path: debPath });
 
-        // Install done — show countdown then relaunch
         setUpdatePercent(100);
-        restartFnRef.current = () => { relaunch(); };
+        // Do NOT set restartFnRef — for .deb the user must complete the
+        // installation in GDebi / GNOME Software first, THEN restart manually.
+        // The countdown useEffect will tick to 0 and call null (no-op).
         setUpdateStep('done');
       } catch (e: any) {
         console.error('[linux .deb update]', e);
@@ -14267,35 +14270,53 @@ export default function App() {
             {/* ── Done: countdown + restart button ─────────────────────────── */}
             {updateStep==='done' && (
               <div className="w-full flex flex-col items-center gap-4">
-                <p className="text-sm text-zinc-400 text-center">
-                  {userOs === 'windows'
-                    ? 'Aplikacja uruchomi się ponownie automatycznie.'
-                    : 'Nowa wersja jest gotowa. Wymagany restart aplikacji.'}
-                </p>
-                {/* Countdown ring */}
-                {restartCountdown >= 0 && (
-                  <div className="flex flex-col items-center gap-1">
-                    <div className="relative w-14 h-14">
-                      <svg className="w-14 h-14 -rotate-90" viewBox="0 0 56 56">
-                        <circle cx="28" cy="28" r="24" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="4"/>
-                        <circle cx="28" cy="28" r="24" fill="none" stroke="#6366f1" strokeWidth="4"
-                          strokeLinecap="round"
-                          strokeDasharray={`${2 * Math.PI * 24}`}
-                          strokeDashoffset={`${2 * Math.PI * 24 * (1 - restartCountdown / (userOs === 'windows' ? 3 : 10))}`}
-                          style={{transition:'stroke-dashoffset 1s linear'}}/>
-                      </svg>
-                      <span className="absolute inset-0 flex items-center justify-center text-lg font-bold text-white">
-                        {restartCountdown}
-                      </span>
+                {/* .deb path: xdg-open fired the package manager; install is async */}
+                {userOs === 'linux' && !linuxIsAppImage ? (
+                  <>
+                    <div className="px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-sm text-emerald-300 text-center w-full">
+                      Menedżer pakietów został otwarty w tle.<br/>
+                      <span className="text-emerald-400/70">Kliknij <strong>„Zainstaluj"</strong> w GDebi / GNOME Software,
+                      a następnie zamknij i uruchom ponownie Cordyna.</span>
                     </div>
-                    <span className="text-xs text-zinc-500">sekund do restartu</span>
-                  </div>
+                    <button
+                      onClick={() => { setUpdateStep('idle'); setUpdateInstalling(false); }}
+                      className="w-full px-4 py-3 rounded-xl bg-zinc-700 hover:bg-zinc-600 text-white font-semibold transition-colors">
+                      OK, rozumiem
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-zinc-400 text-center">
+                      {userOs === 'windows'
+                        ? 'Aplikacja uruchomi się ponownie automatycznie.'
+                        : 'Nowa wersja jest gotowa. Wymagany restart aplikacji.'}
+                    </p>
+                    {/* Countdown ring — Windows/macOS/AppImage auto-restart */}
+                    {restartCountdown >= 0 && (
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="relative w-14 h-14">
+                          <svg className="w-14 h-14 -rotate-90" viewBox="0 0 56 56">
+                            <circle cx="28" cy="28" r="24" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="4"/>
+                            <circle cx="28" cy="28" r="24" fill="none" stroke="#6366f1" strokeWidth="4"
+                              strokeLinecap="round"
+                              strokeDasharray={`${2 * Math.PI * 24}`}
+                              strokeDashoffset={`${2 * Math.PI * 24 * (1 - restartCountdown / (userOs === 'windows' ? 3 : 10))}`}
+                              style={{transition:'stroke-dashoffset 1s linear'}}/>
+                          </svg>
+                          <span className="absolute inset-0 flex items-center justify-center text-lg font-bold text-white">
+                            {restartCountdown}
+                          </span>
+                        </div>
+                        <span className="text-xs text-zinc-500">sekund do restartu</span>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => restartFnRef.current?.()}
+                      className="w-full px-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors">
+                      Uruchom ponownie teraz
+                    </button>
+                  </>
                 )}
-                <button
-                  onClick={() => restartFnRef.current?.()}
-                  className="w-full px-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors">
-                  Uruchom ponownie teraz
-                </button>
               </div>
             )}
 
@@ -14304,7 +14325,7 @@ export default function App() {
               <div className="flex flex-col gap-3 w-full">
                 {userOs === 'linux' && !linuxIsAppImage && (
                   <div className="px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-sm text-amber-300">
-                    Wersja .deb wymaga ręcznej instalacji. Pobierz AppImage dla cichych aktualizacji.
+                    Nie udało się pobrać aktualizacji. Spróbuj ponownie lub pobierz plik .deb bezpośrednio.
                   </div>
                 )}
                 <div className="flex gap-3">
@@ -14313,10 +14334,10 @@ export default function App() {
                     Zamknij
                   </button>
                   {userOs === 'linux' && !linuxIsAppImage ? (
-                    <a href={'https://github.com/GrimorDev/Cordis-gm/releases/latest'}
-                      target="_blank" rel="noopener noreferrer"
+                    <a href={`https://github.com/GrimorDev/Cordis-gm/releases/download/v${updateAvailable?.version ?? 'latest'}/Cordyn_${updateAvailable?.version ?? ''}_amd64.deb`}
+                      download
                       className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm text-white font-medium transition-colors">
-                      Pobierz AppImage ↗
+                      Pobierz .deb ↓
                     </a>
                   ) : (
                     <button onClick={()=>{setUpdateStep('idle');setUpdateInstalling(false);setTimeout(installUpdate,100);}}

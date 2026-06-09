@@ -247,50 +247,34 @@ fn is_appimage() -> bool {
     std::env::var("APPIMAGE").is_ok()
 }
 
-/// Install a .deb package using pkexec (graphical privilege escalation).
-/// Shows a system authentication dialog — no terminal required.
-/// Returns Ok(()) on success, Err with message on failure.
+/// Open a downloaded .deb package with the system package manager via xdg-open.
+///
+/// Previous approach (pkexec dpkg -i) required a custom PolicyKit policy and
+/// failed silently on many distros → the update dialog fell back to a GitHub link.
+///
+/// xdg-open is universally available on Linux desktops and hands the file to
+/// whatever handler the distro registered for .deb files:
+///   • Ubuntu / Debian  → GDebi or GNOME Software (shows "Install" button + auth dialog)
+///   • Fedora / openSUSE → GNOME Software / KDE Discover
+///   • Arch, Manjaro    → shows file manager or triggers default handler
+///
+/// We spawn (fire-and-forget) and return Ok immediately — the installation happens
+/// asynchronously inside the package manager.  The UI switches to the "done" state
+/// and instructs the user to complete installation there, then restart Cordyn.
 #[cfg(target_os = "linux")]
 #[tauri::command]
 fn install_deb_update(path: String) -> Result<(), String> {
     use std::process::Command;
 
-    // Verify the file exists before attempting install
     if !std::path::Path::new(&path).exists() {
-        return Err(format!("File not found: {}", path));
+        return Err(format!("Plik nie istnieje: {path}"));
     }
 
-    // Try pkexec first — shows a native GTK authentication dialog (no terminal)
-    let result = Command::new("pkexec")
-        .args(["dpkg", "-i", &path])
-        .status();
-
-    match result {
-        Ok(status) if status.success() => {
-            // Clean up the temp .deb file
-            let _ = std::fs::remove_file(&path);
-            Ok(())
-        }
-        Ok(status) => {
-            Err(format!("dpkg failed with exit code: {:?}", status.code()))
-        }
-        Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => {
-            // pkexec not available (minimal/non-GNOME distros) — try sudo as fallback
-            let sudo_result = Command::new("sudo")
-                .args(["-A", "dpkg", "-i", &path]) // -A = use askpass
-                .status();
-            match sudo_result {
-                Ok(s) if s.success() => {
-                    let _ = std::fs::remove_file(&path);
-                    Ok(())
-                }
-                _ => Err(
-                    "pkexec nie jest dostępny — zainstaluj ręcznie: sudo dpkg -i <plik>".to_string()
-                ),
-            }
-        }
-        Err(e) => Err(e.to_string()),
-    }
+    Command::new("xdg-open")
+        .arg(&path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("Nie można otworzyć menedżera pakietów (xdg-open): {e}"))
 }
 
 #[cfg(not(target_os = "linux"))]
