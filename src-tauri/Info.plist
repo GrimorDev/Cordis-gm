@@ -7,6 +7,8 @@
   <string>Cordyn potrzebuje dostępu do mikrofonu, aby korzystać z kanałów głosowych i rozmów.</string>
   <key>NSCameraUsageDescription</key>
   <string>Cordyn potrzebuje dostępu do kamery, aby korzystać z rozmów wideo.</string>
+  <key>NSScreenCaptureUsageDescription</key>
+  <string>Cordyn potrzebuje dostępu do nagrywania ekranu, aby udostępniać ekran podczas rozmów.</string>
   <key>NSBluetoothAlwaysUsageDescription</key>
   <string>Cordyn może korzystać z urządzeń Bluetooth (słuchawki, głośniki) do rozmów głosowych.</string>
 

@@ -326,14 +326,18 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
 // ── Injection ─────────────────────────────────────────────────────────────────
 
 /**
- * Call once in main.tsx on Linux Tauri when RTCPeerConnection is missing.
- * Injects NativeRTCPeerConnection as window.RTCPeerConnection so the entire
- * existing engine.ts works without any changes.
+ * Called by main.tsx on Linux Tauri ONLY when WebKitGTK lacks RTCPeerConnection
+ * (i.e. the very first page load before lib.rs applies enable-webrtc and reloads).
+ *
+ * After the settings reload, WebKitGTK exposes a native RTCPeerConnection with
+ * full video support, so this polyfill is NOT injected on subsequent loads.
+ *
+ * Sets window.__nativeRtcPolyfill = true so App.tsx knows the video/screen-share
+ * buttons should be disabled (this path is audio-only — video tracks are no-ops).
  */
 export function injectNativeRtcPolyfill(): void {
-  // Always replace — WebKitGTK's built-in WebRTC has a broken receive path on Linux
-  // even when RTCPeerConnection exists (audio only flows one way).  Our Rust polyfill
-  // (webrtc-rs + cpal) is always more reliable than WebKit's partial implementation.
-  console.info('[Cordyn] Injecting native RTCPeerConnection polyfill (webrtc-rs + cpal)');
+  console.info('[Cordyn] Injecting native RTCPeerConnection polyfill (webrtc-rs + cpal, audio only)');
   (window as any).RTCPeerConnection = NativeRTCPeerConnection;
+  // Signal to App.tsx that video cannot be transmitted in this fallback path.
+  (window as any).__nativeRtcPolyfill = true;
 }

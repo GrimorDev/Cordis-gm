@@ -16548,26 +16548,28 @@ export default function App() {
                       {activeCall.isDeafened?<VolumeX size={18}/>:<Volume2 size={18}/>}
                     </button>
                     <div className="call-ctrl-divider"/>
-                    {/* Camera — disabled on Linux desktop: native WebRTC polyfill is audio-only;
-                        addTrack() is a no-op so video is never transmitted or received */}
+                    {/* Camera — disabled only when the Rust/cpal polyfill is active
+                        (audio-only fallback path, fires only on the very first load
+                        before WebKitGTK WebRTC is enabled by lib.rs + reload).
+                        After the settings reload, WebKitGTK RTCPeerConnection is
+                        available and video works natively — button is fully enabled. */}
                     <button
-                      onClick={isTauri && userOs === 'linux' ? undefined : toggleCamera}
-                      disabled={isTauri && userOs === 'linux'}
-                      title={isTauri && userOs === 'linux'
-                        ? 'Kamera niedostępna na Linuksie — natywny silnik WebRTC obsługuje tylko audio'
+                      onClick={(window as any).__nativeRtcPolyfill ? undefined : toggleCamera}
+                      disabled={(window as any).__nativeRtcPolyfill === true}
+                      title={(window as any).__nativeRtcPolyfill
+                        ? 'Kamera niedostępna — WebKitGTK WebRTC nie jest jeszcze aktywne (uruchom aplikację ponownie)'
                         : activeCall.isCameraOn ? 'Wyłącz kamerę' : 'Włącz kamerę'}
-                      className={`call-ctrl-btn ${activeCall.isCameraOn?'active-orange':''} ${isTauri&&userOs==='linux'?'opacity-30 cursor-not-allowed':''}`}>
+                      className={`call-ctrl-btn ${activeCall.isCameraOn?'active-orange':''} ${(window as any).__nativeRtcPolyfill?'opacity-30 cursor-not-allowed':''}`}>
                       <Video size={18}/>
                     </button>
-                    {/* Screen share — disabled on Linux desktop: same native polyfill limitation;
-                        even if getDisplayMedia succeeds (needs portal/PipeWire), track is dropped */}
+                    {/* Screen share — same condition as camera above */}
                     <button
-                      onClick={isTauri && userOs === 'linux' ? undefined : toggleScreen}
-                      disabled={isTauri && userOs === 'linux'}
-                      title={isTauri && userOs === 'linux'
-                        ? 'Udostępnianie ekranu niedostępne na Linuksie — natywny silnik WebRTC obsługuje tylko audio'
+                      onClick={(window as any).__nativeRtcPolyfill ? undefined : toggleScreen}
+                      disabled={(window as any).__nativeRtcPolyfill === true}
+                      title={(window as any).__nativeRtcPolyfill
+                        ? 'Udostępnianie ekranu niedostępne — WebKitGTK WebRTC nie jest jeszcze aktywne (uruchom aplikację ponownie)'
                         : activeCall.isScreenSharing ? 'Zatrzymaj udostępnianie' : 'Udostępnij ekran'}
-                      className={`call-ctrl-btn ${activeCall.isScreenSharing?'active-orange':''} ${isTauri&&userOs==='linux'?'opacity-30 cursor-not-allowed':''}`}>
+                      className={`call-ctrl-btn ${activeCall.isScreenSharing?'active-orange':''} ${(window as any).__nativeRtcPolyfill?'opacity-30 cursor-not-allowed':''}`}>
                       <ScreenShare size={18}/>
                     </button>
                     <button onClick={async()=>{
