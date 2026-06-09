@@ -4,18 +4,6 @@ import App from './App.tsx';
 import StatusPage from './StatusPage.tsx';
 import './index.css';
 
-// ── Ctrl+Shift+M → open DevTools (Windows + Linux) ───────────────────────────
-if ('__TAURI_INTERNALS__' in window) {
-  window.addEventListener('keydown', (e) => {
-    if (e.ctrlKey && e.shiftKey && (e.key === 'M' || e.key === 'm')) {
-      e.preventDefault();
-      import('@tauri-apps/api/core').then(({ invoke }) => {
-        invoke('open_devtools').catch(() => {});
-      });
-    }
-  });
-}
-
 // ── Linux / Tauri: conditional RTCPeerConnection polyfill ────────────────────
 // lib.rs applies `settings.set_property("enable-webrtc", true)` then calls
 // `webview.reload()` at startup.  After that reload, WebKitGTK exposes a native

@@ -61,6 +61,17 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
   // Store ICE servers so we can recreate the Rust peer when needed
   private readonly _iceServers: object[];
 
+  /**
+   * Promise that resolves when the Rust-side peer has been successfully created
+   * via rtc_create_pc.  The constructor fires that IPC call without await, so any
+   * subsequent setRemoteDescription call MUST await this before invoking the Rust
+   * command — otherwise rtc_set_remote_description arrives before rtc_create_pc
+   * has been processed and Rust returns "peer not found".
+   *
+   * _recreatePeer() resets this field with the new creation promise.
+   */
+  private _peerReady: Promise<void>;
+
   constructor(config?: RTCConfiguration) {
     this._id = genId();
 
@@ -70,10 +81,12 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
       credential: (s as any).credential ?? null,
     }));
 
-    // Create Rust-side peer connection
-    invoke('rtc_create_pc', { id: this._id, iceServers: this._iceServers }).catch((e) =>
-      console.error('[NativeRTC] rtc_create_pc failed:', e)
-    );
+    // Create Rust-side peer connection.  Store the promise in _peerReady so that
+    // setRemoteDescription can await it — otherwise "peer not found" from Rust
+    // occurs when JS calls rtc_set_remote_description before the IPC roundtrip for
+    // rtc_create_pc has returned (very common when the first offer arrives quickly).
+    this._peerReady = (invoke('rtc_create_pc', { id: this._id, iceServers: this._iceServers }) as Promise<void>)
+      .catch((e) => { console.error('[NativeRTC] rtc_create_pc failed:', e); });
 
     // Wire Tauri events → JS callbacks
     this._wire();
@@ -84,7 +97,11 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
   // (wired in _wire()) use the same ID so they pick up events from the new peer.
   private async _recreatePeer(): Promise<void> {
     await invoke('rtc_close_pc', { id: this._id }).catch(() => {});
-    await invoke('rtc_create_pc', { id: this._id, iceServers: this._iceServers });
+    // Reset _peerReady so subsequent callers (incl. the retry in setRemoteDescription)
+    // wait for this new creation before making any other Rust calls.
+    this._peerReady = (invoke('rtc_create_pc', { id: this._id, iceServers: this._iceServers }) as Promise<void>)
+      .catch(() => {});
+    await this._peerReady;
     this.signalingState   = 'stable';
     this.connectionState  = 'new';
     this.iceConnectionState = 'new';
@@ -224,6 +241,12 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
         sdp.match(/^m=\w+/gm)?.join(' ') ?? 'unknown');
     }
 
+    // Ensure the Rust peer exists before calling rtc_set_remote_description.
+    // The constructor fires rtc_create_pc without await — if an offer arrives
+    // before the IPC roundtrip returns (very common), Rust would return
+    // "peer not found" causing a spurious _recreatePeer() cascade.
+    await this._peerReady;
+
     const trySet = () => invoke('rtc_set_remote_description', { id: this._id, type, sdp });
     try {
       await trySet();
@@ -231,7 +254,7 @@ class NativeRTCPeerConnection implements Partial<RTCPeerConnection> {
       console.warn('[NativeRTC] setRemoteDescription failed, recreating peer:', e);
       this._blockNegotiation = true;
       try {
-        await this._recreatePeer();
+        await this._recreatePeer(); // _peerReady is reset + awaited inside _recreatePeer
         await trySet(); // retry on fresh peer
       } finally {
         this._blockNegotiation = false;

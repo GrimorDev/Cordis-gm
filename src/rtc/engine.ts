@@ -60,6 +60,14 @@ interface Peer {
    * silently dropped → no usable ICE pair → connection stays at "new" / "checking".
    */
   iceCandidateQueue: RTCIceCandidateInit[];
+  /**
+   * Rolling failure counter reset whenever more than FAIL_WINDOW_MS passes between
+   * failures.  Used to detect "rapid failure storm" and escalate from restartIce()
+   * (cheap but keeps broken DTLS credentials) to a full PC teardown+reconnect
+   * (new RTCPeerConnection = new DTLS certificate = clean slate).
+   */
+  failCount: number;
+  lastFailTime: number;
 }
 
 interface LocalEntry { track: MediaStreamTrack; stream: MediaStream; }
@@ -139,6 +147,8 @@ export class VoiceEngine {
       ignoreOffer: false,
       hasRemoteDesc: false,
       iceCandidateQueue: [],
+      failCount: 0,
+      lastFailTime: 0,
     };
     this.peers.set(remoteId, peer);
 
@@ -158,9 +168,18 @@ export class VoiceEngine {
     };
 
     pc.ontrack = ({ track, streams }) => {
-      const stream = streams[0];
-      console.log(`[rtc] ontrack from ${remoteId}: kind=${track.kind} stream=${stream?.id ?? 'none'}`);
-      if (!stream) return;
+      let stream = streams[0];
+      if (!stream) {
+        // Some implementations (webrtc-rs polyfill, older WebKit builds) send
+        // tracks that aren't associated with any stream.  Create a synthetic
+        // MediaStream so the app can attach and display/play the track.
+        // Without this, the track is silently dropped and the entire m-line
+        // is left with no receiver, which forces unnecessary renegotiations.
+        stream = new MediaStream([track]);
+        console.log(`[rtc] ontrack from ${remoteId}: kind=${track.kind} stream=none — created synthetic stream`);
+      } else {
+        console.log(`[rtc] ontrack from ${remoteId}: kind=${track.kind} stream=${stream.id}`);
+      }
       this.cfg.onRemoteTrack(remoteId, track, stream);
     };
 
@@ -194,7 +213,21 @@ export class VoiceEngine {
           return;
         }
         offer.sdp = this.munge(offer.sdp);
-        await pc.setLocalDescription(offer);
+        try {
+          await pc.setLocalDescription(offer);
+        } catch (sldErr: any) {
+          // Micro-race: a remote offer arrived and was applied by handleDescription()
+          // in the gap between the signalingState guard above and this setLocalDescription
+          // call, flipping the state from 'stable' to 'have-remote-offer'.
+          // setLocalDescription throws InvalidStateError in that state.
+          // handleDescription is already processing the other side's offer and will
+          // call createAnswer() — nothing is lost on our end; just bail quietly.
+          if (sldErr?.name === 'InvalidStateError') {
+            console.log(`[rtc] onnegotiationneeded(${remoteId}): setLocalDescription micro-race — yielding`);
+            return;
+          }
+          throw sldErr; // unexpected error — rethrow to outer catch
+        }
         this.tune(pc);
         console.log(`[rtc] negotiation → offer to ${remoteId}`);
         this.cfg.emitOffer(remoteId, pc.localDescription!.toJSON());
@@ -219,8 +252,59 @@ export class VoiceEngine {
       console.log(`[rtc] connection (${remoteId}):`, s);
       this.cfg.onPeerState?.(remoteId, s);
       if (s === 'failed') {
-        // Recover by forcing a fresh ICE gathering cycle.
-        try { pc.restartIce(); } catch {}
+        // ── Failure escalation strategy ───────────────────────────────────────
+        //
+        // Two-tier recovery:
+        //
+        // Tier 1 — restartIce() (cheap): re-gathers ICE candidates, keeps the
+        //   existing RTCPeerConnection (and its DTLS session) alive.  Works when
+        //   the failure was a transient network hiccup.
+        //
+        // Tier 2 — full reconnect (expensive but necessary): closes the entire
+        //   RTCPeerConnection and opens a brand-new one.  This generates fresh
+        //   DTLS credentials.  Required when the remote peer (e.g. Linux with the
+        //   Rust polyfill) recreated its peer during the last cycle, making its
+        //   DTLS fingerprint diverge from what was negotiated.  In that case
+        //   DTLS will never succeed on the old PC regardless of ICE restarts.
+        //
+        // We escalate to Tier 2 after ≥ 2 failures within FAIL_WINDOW_MS (8 s).
+        // The window resets whenever more than 8 s pass between failures, so a
+        // single-blip failure doesn't permanently raise the counter.
+        //
+        const FAIL_WINDOW_MS       = 8_000;
+        const RESTART_DELAY_MS     = 1_200; // let transient signals clear
+        const FULL_RECONNECT_DELAY = 1_500;
+
+        const now = Date.now();
+        const gap = now - peer.lastFailTime;
+
+        if (gap > FAIL_WINDOW_MS) {
+          // First failure (or first in a long time) → reset counter
+          peer.failCount = 1;
+        } else {
+          peer.failCount++;
+        }
+        peer.lastFailTime = now;
+
+        if (peer.failCount >= 2) {
+          // Rapid storm — escalate to full reconnect with fresh DTLS
+          console.warn(`[rtc] ${remoteId}: rapid failure #${peer.failCount} (${gap} ms since last) — full reconnect`);
+          this.peers.delete(remoteId);
+          try { pc.close(); } catch {}
+          setTimeout(() => {
+            if (this.peers.has(remoteId)) return; // another code path already reconnected
+            console.log(`[rtc] ${remoteId}: full reconnect — opening fresh peer`);
+            this.connect(remoteId);
+          }, FULL_RECONNECT_DELAY);
+        } else {
+          // First failure → gentle ICE restart
+          console.warn(`[rtc] ${remoteId}: failure #${peer.failCount} — restartIce in ${RESTART_DELAY_MS} ms`);
+          setTimeout(() => {
+            // Guard: may have been superseded by a full reconnect
+            if (this.peers.get(remoteId)?.pc !== pc) return;
+            try { pc.restartIce(); } catch {}
+          }, RESTART_DELAY_MS);
+        }
       }
     };
 
