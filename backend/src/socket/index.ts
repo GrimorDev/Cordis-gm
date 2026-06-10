@@ -652,9 +652,9 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
     });
 
     // ── Screen share signaling ────────────────────────────────────────
-    socket.on('screen_share_start', ({ to_user_id, channel_id }) => {
-      if (to_user_id) io.to(`user:${to_user_id}`).emit('screen_share_start', { from: user.id });
-      if (channel_id) socket.to(`voice:${channel_id}`).emit('screen_share_start', { from: user.id });
+    socket.on('screen_share_start', ({ to_user_id, channel_id, stream_id }) => {
+      if (to_user_id) io.to(`user:${to_user_id}`).emit('screen_share_start', { from: user.id, stream_id });
+      if (channel_id) socket.to(`voice:${channel_id}`).emit('screen_share_start', { from: user.id, stream_id });
     });
 
     socket.on('screen_share_stop', async ({ to_user_id, channel_id }) => {
@@ -662,6 +662,17 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
       if (channel_id) socket.to(`voice:${channel_id}`).emit('screen_share_stop', { from: user.id });
       // Clean up watchers for this stream in Redis
       if (channel_id) await clearStreamWatchers(channel_id, user.id);
+    });
+
+    // ── Camera signaling ──────────────────────────────────────────────
+    socket.on('camera_on', ({ to_user_id, channel_id, stream_id }) => {
+      if (to_user_id) io.to(`user:${to_user_id}`).emit('camera_on', { from: user.id, stream_id });
+      if (channel_id) socket.to(`voice:${channel_id}`).emit('camera_on', { from: user.id, stream_id });
+    });
+
+    socket.on('camera_off', ({ to_user_id, channel_id }) => {
+      if (to_user_id) io.to(`user:${to_user_id}`).emit('camera_off', { from: user.id });
+      if (channel_id) socket.to(`voice:${channel_id}`).emit('camera_off', { from: user.id });
     });
 
     // ── Stream viewer tracking (Redis-backed) ────────────────────────

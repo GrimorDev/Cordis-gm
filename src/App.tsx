@@ -9046,7 +9046,11 @@ export default function App() {
   // WebRTC refs
   const localStreamRef          = useRef<MediaStream|null>(null);
   const screenStreamRef         = useRef<MediaStream|null>(null);
+  const cameraStreamRef         = useRef<MediaStream|null>(null);
   const remoteScreenStreamsRef  = useRef(new Map<string, MediaStream>());
+  const remoteCameraStreamsRef  = useRef(new Map<string, MediaStream>());
+  const peerCameraStreamIdRef   = useRef(new Map<string, string>()); // remoteUserId -> camera MediaStream.id
+  const peerScreenStreamIdRef   = useRef(new Map<string, string>()); // remoteUserId -> screen MediaStream.id
   const engineRef              = useRef<VoiceEngine | null>(null);
   const speakStopRef     = useRef(new Map<string, ()=>void>()); // speaking detection cleanup
   const screenQualityRef    = useRef<ScreenQuality>('fhd');
@@ -9081,6 +9085,7 @@ export default function App() {
 
   // Screen share state — supports multiple simultaneous streams
   const [sharingUserIds, setSharingUserIds]   = useState<Set<string>>(new Set());
+  const [cameraOnUserIds, setCameraOnUserIds] = useState<Set<string>>(new Set()); // remote users with camera enabled
   const [screenShareTick, setScreenShareTick] = useState(0); // forces re-render when remote screen streams change
   const [screenQuality, setScreenQuality]     = useState<ScreenQuality>('fhd');
   // screenViaSfu removed — LiveKit SFU disabled, screen share uses WebRTC mesh
@@ -10542,17 +10547,33 @@ export default function App() {
       setVoiceUserStates(p => ({ ...p, [user_id]: { muted, deafened } }));
     });
     // Screen share signaling — multiple concurrent streams supported
-    sock.on('screen_share_start' as any, ({ from }: { from: string }) => {
-      setSharingUserIds(s => new Set([...s, String(from)]));
+    sock.on('screen_share_start' as any, ({ from, stream_id }: { from: string; stream_id?: string }) => {
+      const sid = String(from);
+      if (stream_id) peerScreenStreamIdRef.current.set(sid, stream_id);
+      setSharingUserIds(s => new Set([...s, sid]));
     });
     sock.on('screen_share_stop' as any, ({ from }: { from: string }) => {
       const sid = String(from);
       setSharingUserIds(s => { const n = new Set(s); n.delete(sid); return n; });
       remoteScreenStreamsRef.current.delete(sid);
+      peerScreenStreamIdRef.current.delete(sid);
       muteRemoteScreenStream(sid, true); // ensure audio stops when stream ends
       setScreenShareTick(t => t + 1);
       setWatchingStreamId(p => p === sid ? null : p);
       setStreamWatchers(p => { const n = {...p}; delete n[sid]; return n; });
+    });
+    // Camera signaling — live camera feeds auto-display as participant tiles
+    sock.on('camera_on' as any, ({ from, stream_id }: { from: string; stream_id?: string }) => {
+      const sid = String(from);
+      if (stream_id) peerCameraStreamIdRef.current.set(sid, stream_id);
+      setCameraOnUserIds(s => new Set([...s, sid]));
+    });
+    sock.on('camera_off' as any, ({ from }: { from: string }) => {
+      const sid = String(from);
+      setCameraOnUserIds(s => { const n = new Set(s); n.delete(sid); return n; });
+      remoteCameraStreamsRef.current.delete(sid);
+      peerCameraStreamIdRef.current.delete(sid);
+      setScreenShareTick(t => t + 1);
     });
     sock.on('stream_watchers_update' as any, ({ streamer_id, watchers }: { streamer_id: string; watchers: {id:string; username:string}[] }) => {
       setStreamWatchers(p => {
@@ -12017,22 +12038,25 @@ export default function App() {
       },
       onRemoteTrack: (remoteUserId, track, stream) => {
         if (track.kind === 'video') {
-          // Remote camera or screen share
-          remoteScreenStreamsRef.current.set(remoteUserId, stream);
+          // Remote camera or screen share — distinguish by the sender's MediaStream.id,
+          // communicated ahead of time via the camera_on/screen_share_start signals.
+          const isCamera = peerCameraStreamIdRef.current.get(remoteUserId) === stream.id;
+          const targetRef = isCamera ? remoteCameraStreamsRef : remoteScreenStreamsRef;
+          targetRef.current.set(remoteUserId, stream);
           setScreenShareTick(t => t + 1);
           track.onended = () => {
-            if (remoteScreenStreamsRef.current.get(remoteUserId) === stream) {
-              remoteScreenStreamsRef.current.delete(remoteUserId);
+            if (targetRef.current.get(remoteUserId) === stream) {
+              targetRef.current.delete(remoteUserId);
               setScreenShareTick(t => t + 1);
             }
           };
           track.onmute = () => {
-            if (remoteScreenStreamsRef.current.get(remoteUserId) === stream) {
-              remoteScreenStreamsRef.current.delete(remoteUserId);
+            if (targetRef.current.get(remoteUserId) === stream) {
+              targetRef.current.delete(remoteUserId);
               setScreenShareTick(t => t + 1);
             }
           };
-          if (stream.getAudioTracks().length > 0) {
+          if (!isCamera && stream.getAudioTracks().length > 0) {
             attachRemoteScreenAudio(remoteUserId, stream);
             muteRemoteScreenStream(remoteUserId, true); // silent until "join watching"
             try {
@@ -12081,6 +12105,14 @@ export default function App() {
           playVoiceJoin();
           if (!user.is_bot) await openPeer(user.id, true); // bots don't do WebRTC
           retuneAllPeers();
+          // Late-join sync: tell the newcomer about our currently-active camera/
+          // screen streams (they weren't listening when we first broadcast these).
+          if (call.isCameraOn && cameraStreamRef.current) {
+            getSocket().emit('camera_on' as any, { to_user_id: user.id, stream_id: cameraStreamRef.current.id });
+          }
+          if (call.isScreenSharing && screenStreamRef.current) {
+            getSocket().emit('screen_share_start' as any, { to_user_id: user.id, stream_id: screenStreamRef.current.id });
+          }
         }
       },
       // Sent by the server right after WE join — connect to everyone already there.
@@ -13327,12 +13359,17 @@ export default function App() {
     else { localStreamRef.current?.getTracks().forEach(t => t.stop()); }
     localStreamRef.current = null;
     screenStreamRef.current?.getTracks().forEach(t => t.stop()); screenStreamRef.current = null;
+    cameraStreamRef.current?.getTracks().forEach(t => t.stop()); cameraStreamRef.current = null;
     // Stop speaking detection
     speakStopRef.current.forEach(fn => fn()); speakStopRef.current.clear();
     setSpeakingUsers(new Set());
-    // Clear remote screen streams — prevents ghost tiles after rejoin
+    // Clear remote screen + camera streams — prevents ghost tiles after rejoin
     remoteScreenStreamsRef.current.clear();
+    remoteCameraStreamsRef.current.clear();
+    peerCameraStreamIdRef.current.clear();
+    peerScreenStreamIdRef.current.clear();
     setSharingUserIds(new Set());
+    setCameraOnUserIds(new Set());
     setWatchingStreamId(null);
     setStreamWatchers({});
     setScreenShareTick(t => t + 1);
@@ -13740,14 +13777,16 @@ export default function App() {
   };
   const toggleCamera = async () => {
     if (activeCall?.isCameraOn) {
-      // Stop local video tracks
-      localStreamRef.current?.getVideoTracks().forEach(t => { t.stop(); });
+      // Stop local video tracks (own dedicated stream, separate from mic audio)
+      cameraStreamRef.current?.getVideoTracks().forEach(t => { t.stop(); });
       // Remove camera video from all peers — engine renegotiates automatically.
-      // Predicate excludes screen video (which lives on screenStreamRef).
-      engineRef.current?.removeLocalTracks(e => e.track.kind === 'video' && e.stream !== screenStreamRef.current);
-      localStreamRef.current = localStreamRef.current ?
-        new MediaStream(localStreamRef.current.getAudioTracks()) : null;
+      engineRef.current?.removeLocalTracks(e => e.track.kind === 'video' && e.stream === cameraStreamRef.current);
+      cameraStreamRef.current = null;
       setActiveCall(p => p ? {...p, isCameraOn: false} : p);
+      setScreenShareTick(t => t + 1); // remove self camera preview tile
+      const c = activeCallRef.current;
+      if (c?.userId)    getSocket().emit('camera_off' as any, { to_user_id: c.userId });
+      if (c?.channelId) getSocket().emit('camera_off' as any, { channel_id: c.channelId });
     } else {
       try {
         // Prefer the chosen camera with `exact` (honoured reliably in WebViews),
@@ -13761,14 +13800,21 @@ export default function App() {
           } else throw e;
         }
         vs.getVideoTracks().forEach(t => t.getSettings && console.log(`[Cordis] camera on: "${t.label}"`));
-        // Ensure we have a localStream to attach the preview/video track to.
-        if (!localStreamRef.current) localStreamRef.current = new MediaStream();
-        vs.getVideoTracks().forEach(t => { localStreamRef.current?.addTrack(t); });
+        // Camera video lives on its own MediaStream — kept separate from the mic
+        // audio stream so remote peers can tell camera and screen-share apart by
+        // MediaStream.id, and so we can render a local self-preview.
+        cameraStreamRef.current = new MediaStream();
+        vs.getVideoTracks().forEach(t => { cameraStreamRef.current?.addTrack(t); });
         // Send camera video via the engine — addLocalTrack adds it to every peer
         // and triggers Perfect-Negotiation renegotiation automatically.
         const eng = ensureEngine();
-        vs.getVideoTracks().forEach(t => eng.addLocalTrack(t, localStreamRef.current!));
+        vs.getVideoTracks().forEach(t => eng.addLocalTrack(t, cameraStreamRef.current!));
         setActiveCall(p => p ? {...p, isCameraOn: true} : p);
+        setScreenShareTick(t => t + 1); // show self camera preview tile
+        const c = activeCallRef.current;
+        const streamId = cameraStreamRef.current.id;
+        if (c?.userId)    getSocket().emit('camera_on' as any, { to_user_id: c.userId, stream_id: streamId });
+        if (c?.channelId) getSocket().emit('camera_on' as any, { channel_id: c.channelId, stream_id: streamId });
       } catch (camErr: any) {
         const camName = camErr?.name ?? '';
         const isCamNotAllowed = camName === 'NotAllowedError';
@@ -13801,7 +13847,7 @@ export default function App() {
   // Acquires the newly-selected camera and swaps the sent track via replaceTrack.
   const switchCameraDevice = async (deviceId: string) => {
     if (!activeCallRef.current?.isCameraOn) return; // nothing to switch if camera is off
-    const oldTrack = localStreamRef.current?.getVideoTracks()[0];
+    const oldTrack = cameraStreamRef.current?.getVideoTracks()[0];
     if (!oldTrack) return;
     try {
       let vs: MediaStream;
@@ -13815,11 +13861,11 @@ export default function App() {
       const newTrack = vs.getVideoTracks()[0];
       if (!newTrack) return;
       // Swap on all peers without renegotiation
-      engineRef.current?.replaceTrackByOld(oldTrack, newTrack, localStreamRef.current!);
+      engineRef.current?.replaceTrackByOld(oldTrack, newTrack, cameraStreamRef.current!);
       // Update local preview stream
-      try { localStreamRef.current?.removeTrack(oldTrack); } catch {}
+      try { cameraStreamRef.current?.removeTrack(oldTrack); } catch {}
       oldTrack.stop();
-      localStreamRef.current?.addTrack(newTrack);
+      cameraStreamRef.current?.addTrack(newTrack);
       setScreenShareTick(t => t + 1); // force tiles to re-bind srcObject
       console.log(`[Cordis] camera switched to "${newTrack.label}"`);
     } catch (e) {
@@ -13895,8 +13941,8 @@ export default function App() {
 
       setActiveCall(p => p ? {...p, isScreenSharing: true} : p);
       playScreenShareStart();
-      if (call?.userId)    getSocket().emit('screen_share_start' as any, { to_user_id: call.userId });
-      if (call?.channelId) getSocket().emit('screen_share_start' as any, { channel_id: call.channelId });
+      if (call?.userId)    getSocket().emit('screen_share_start' as any, { to_user_id: call.userId, stream_id: stream.id });
+      if (call?.channelId) getSocket().emit('screen_share_start' as any, { channel_id: call.channelId, stream_id: stream.id });
     } catch (err: any) {
       console.error('[Cordis] beginScreenShare error:', err?.name, err);
       // NotAllowedError = user cancelled → not an error.
@@ -15949,6 +15995,24 @@ export default function App() {
                         <div className="cpc-avatar-bg" style={{backgroundImage:`url(${avatarSrc})`}}/>
                         {/* Main avatar */}
                         <img src={avatarSrc} alt="" className=""/>
+                        {/* Live camera feed — shown automatically like a normal video-call tile */}
+                        {(() => {
+                          const camStream = isSelf2
+                            ? (activeCall.isCameraOn ? cameraStreamRef.current : null)
+                            : (cameraOnUserIds.has(u.id) ? remoteCameraStreamsRef.current.get(u.id) : null);
+                          if (!camStream) return null;
+                          return (
+                            <video
+                              key={camStream.id}
+                              className="cpc-cam"
+                              autoPlay
+                              playsInline
+                              muted
+                              style={isSelf2 ? {transform:'scaleX(-1)'} : undefined}
+                              ref={el => { if (el && el.srcObject !== camStream) el.srcObject = camStream; }}
+                            />
+                          );
+                        })()}
                         {/* Muted-by-me overlay */}
                         {!isSelf2&&uMutedByMe&&(
                           <div className="absolute inset-0 flex items-center justify-center z-10" style={{background:'rgba(0,0,0,0.50)'}}>

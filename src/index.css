@@ -2421,6 +2421,16 @@ img.av-eff-arcade-coin { transition: filter 0.3s; }
   box-shadow: 0 4px 20px rgba(0,0,0,0.60);
   transition: transform 0.2s ease;
 }
+/* Live camera feed — covers the whole tile like a normal video-call frame */
+.call-participant-card .cpc-avatar-wrap video.cpc-cam {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+  z-index: 3;
+}
 /* Blurred bg copy of avatar */
 .call-participant-card .cpc-avatar-bg {
   position: absolute;

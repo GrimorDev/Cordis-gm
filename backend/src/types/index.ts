@@ -116,8 +116,10 @@ export interface ServerToClientEvents {
   webrtc_ice: (data: { from: string; candidate: RTCIceCandidateInit }) => void;
   friend_request: (data: { from: UserPublic }) => void;
   friend_accepted: (data: { user: UserPublic }) => void;
-  screen_share_start: (data: { from: string }) => void;
+  screen_share_start: (data: { from: string; stream_id?: string }) => void;
   screen_share_stop: (data: { from: string }) => void;
+  camera_on: (data: { from: string; stream_id?: string }) => void;
+  camera_off: (data: { from: string }) => void;
   voice_user_state: (data: { user_id: string; muted: boolean; deafened: boolean }) => void;
   server_activity: (data: { id: string; server_id: string; type: string; icon: string; text: string; time: string }) => void;
   channel_created: (data: any) => void;
@@ -169,8 +171,10 @@ export interface ClientToServerEvents {
   webrtc_offer: (data: { to: string; sdp: RTCSessionDescriptionInit }) => void;
   webrtc_answer: (data: { to: string; sdp: RTCSessionDescriptionInit }) => void;
   webrtc_ice: (data: { to: string; candidate: RTCIceCandidateInit }) => void;
-  screen_share_start: (data: { to_user_id?: string; channel_id?: string }) => void;
+  screen_share_start: (data: { to_user_id?: string; channel_id?: string; stream_id?: string }) => void;
   screen_share_stop: (data: { to_user_id?: string; channel_id?: string }) => void;
+  camera_on: (data: { to_user_id?: string; channel_id?: string; stream_id?: string }) => void;
+  camera_off: (data: { to_user_id?: string; channel_id?: string }) => void;
   voice_state: (data: { muted: boolean; deafened: boolean; channel_id?: string; to_user_id?: string }) => void;
   spotify_update: (data: { track: { name: string; artists: string; album_cover: string | null; external_url: string | null } | null }) => void;
   twitch_update: (data: { stream: { title: string; game_name: string; viewer_count: number; login: string } | null }) => void;
