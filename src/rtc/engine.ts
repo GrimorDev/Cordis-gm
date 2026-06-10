@@ -111,6 +111,78 @@ export class VoiceEngine {
     } catch { /* best-effort */ }
   }
 
+  /**
+   * Create and send an offer if renegotiation is needed. Shared by
+   * pc.onnegotiationneeded AND explicit calls after addLocalTrack/removeLocalTracks.
+   *
+   * Some WebViews (WKWebView on macOS, WebView2 on Windows, WebKitGTK on Linux)
+   * do not reliably fire onnegotiationneeded for addTrack()/removeTrack() on an
+   * ALREADY-CONNECTED RTCPeerConnection — only for the very first negotiation.
+   * Without this, camera/screen tracks added mid-call are sent to the local
+   * RTCPeerConnection but the remote side's SDP is never updated, so the new
+   * m-line never reaches them. Callers therefore also invoke negotiate()
+   * directly as a fallback; the guards below make overlapping calls (native
+   * event + manual trigger both firing) a harmless no-op.
+   */
+  private async negotiate(remoteId: string): Promise<void> {
+    const peer = this.peers.get(remoteId);
+    if (!peer) return;
+    const { pc } = peer;
+    if (peer.makingOffer || pc.signalingState !== 'stable') return;
+    try {
+      peer.makingOffer = true;
+      const offer = await pc.createOffer();
+      // ── Glare guard ───────────────────────────────────────────────────
+      // createOffer() above is async — a remote offer can arrive and be
+      // applied (via handleDescription's setRemoteDescription, with implicit
+      // rollback when we're polite) WHILE we're waiting for it. If that
+      // happened, signalingState is no longer 'stable' and the `offer` we
+      // just captured is stale: calling setLocalDescription(offer) throws
+      // "InvalidStateError: Called in wrong state: have-remote-offer" —
+      // exactly the error that was flooding the console here.
+      // Worse than the noisy log: a thrown setLocalDescription means OUR
+      // side's audio sender/transceiver direction is never (re)applied to
+      // the local description for this round — the connection still reaches
+      // "connected" (ICE/DTLS came up via the OTHER peer's offer→answer
+      // exchange), but our m-line can end up missing/misdirected, so zero
+      // audio bytes actually leave while everything *looks* fine. This is
+      // consistent with the "I light up but nobody hears me" reports.
+      // Fix: bail out cleanly when we detect the race (synchronously, so no
+      // further state change can sneak in before setLocalDescription). The
+      // incoming offer is already being handled by handleDescription, whose
+      // createAnswer() reflects our CURRENT senders (including this track) —
+      // nothing is lost, and the browser will re-fire negotiationneeded once
+      // back to 'stable' if anything still needs (re)negotiating.
+      if (pc.signalingState !== 'stable') {
+        console.log(`[rtc] negotiate(${remoteId}): collision — state is ${pc.signalingState}, yielding to incoming offer (no audio dropped)`);
+        return;
+      }
+      offer.sdp = this.munge(offer.sdp);
+      try {
+        await pc.setLocalDescription(offer);
+      } catch (sldErr: any) {
+        // Micro-race: a remote offer arrived and was applied by handleDescription()
+        // in the gap between the signalingState guard above and this setLocalDescription
+        // call, flipping the state from 'stable' to 'have-remote-offer'.
+        // setLocalDescription throws InvalidStateError in that state.
+        // handleDescription is already processing the other side's offer and will
+        // call createAnswer() — nothing is lost on our end; just bail quietly.
+        if (sldErr?.name === 'InvalidStateError') {
+          console.log(`[rtc] negotiate(${remoteId}): setLocalDescription micro-race — yielding`);
+          return;
+        }
+        throw sldErr; // unexpected error — rethrow to outer catch
+      }
+      this.tune(pc);
+      console.log(`[rtc] negotiation → offer to ${remoteId}`);
+      this.cfg.emitOffer(remoteId, pc.localDescription!.toJSON());
+    } catch (err) {
+      console.error('[rtc] negotiate error:', err);
+    } finally {
+      peer.makingOffer = false;
+    }
+  }
+
   /** Create (or return existing) peer connection and wire Perfect Negotiation. */
   connect(remoteId: string): RTCPeerConnection | undefined {
     const existing = this.peers.get(remoteId);
@@ -183,60 +255,7 @@ export class VoiceEngine {
       this.cfg.onRemoteTrack(remoteId, track, stream);
     };
 
-    pc.onnegotiationneeded = async () => {
-      try {
-        peer.makingOffer = true;
-        const offer = await pc.createOffer();
-        // ── Glare guard ───────────────────────────────────────────────────
-        // createOffer() above is async — a remote offer can arrive and be
-        // applied (via handleDescription's setRemoteDescription, with implicit
-        // rollback when we're polite) WHILE we're waiting for it. If that
-        // happened, signalingState is no longer 'stable' and the `offer` we
-        // just captured is stale: calling setLocalDescription(offer) throws
-        // "InvalidStateError: Called in wrong state: have-remote-offer" —
-        // exactly the error that was flooding the console here.
-        // Worse than the noisy log: a thrown setLocalDescription means OUR
-        // side's audio sender/transceiver direction is never (re)applied to
-        // the local description for this round — the connection still reaches
-        // "connected" (ICE/DTLS came up via the OTHER peer's offer→answer
-        // exchange), but our m-line can end up missing/misdirected, so zero
-        // audio bytes actually leave while everything *looks* fine. This is
-        // consistent with the "I light up but nobody hears me" reports.
-        // Fix: bail out cleanly when we detect the race (synchronously, so no
-        // further state change can sneak in before setLocalDescription). The
-        // incoming offer is already being handled by handleDescription, whose
-        // createAnswer() reflects our CURRENT senders (including this track) —
-        // nothing is lost, and the browser will re-fire negotiationneeded once
-        // back to 'stable' if anything still needs (re)negotiating.
-        if (pc.signalingState !== 'stable') {
-          console.log(`[rtc] onnegotiationneeded(${remoteId}): collision — state is ${pc.signalingState}, yielding to incoming offer (no audio dropped)`);
-          return;
-        }
-        offer.sdp = this.munge(offer.sdp);
-        try {
-          await pc.setLocalDescription(offer);
-        } catch (sldErr: any) {
-          // Micro-race: a remote offer arrived and was applied by handleDescription()
-          // in the gap between the signalingState guard above and this setLocalDescription
-          // call, flipping the state from 'stable' to 'have-remote-offer'.
-          // setLocalDescription throws InvalidStateError in that state.
-          // handleDescription is already processing the other side's offer and will
-          // call createAnswer() — nothing is lost on our end; just bail quietly.
-          if (sldErr?.name === 'InvalidStateError') {
-            console.log(`[rtc] onnegotiationneeded(${remoteId}): setLocalDescription micro-race — yielding`);
-            return;
-          }
-          throw sldErr; // unexpected error — rethrow to outer catch
-        }
-        this.tune(pc);
-        console.log(`[rtc] negotiation → offer to ${remoteId}`);
-        this.cfg.emitOffer(remoteId, pc.localDescription!.toJSON());
-      } catch (err) {
-        console.error('[rtc] onnegotiationneeded error:', err);
-      } finally {
-        peer.makingOffer = false;
-      }
-    };
+    pc.onnegotiationneeded = () => { this.negotiate(remoteId); };
 
     pc.oniceconnectionstatechange = () => {
       const s = pc.iceConnectionState;
@@ -409,8 +428,10 @@ export class VoiceEngine {
   /** Add a local track to all peers and remember it for future peers. */
   addLocalTrack(track: MediaStreamTrack, stream: MediaStream): void {
     this.localTracks.push({ track, stream });
-    this.peers.forEach(({ pc }) => {
+    this.peers.forEach(({ pc }, remoteId) => {
       try { pc.addTrack(track, stream); } catch {}
+      // Fallback renegotiation trigger — see negotiate() doc comment.
+      setTimeout(() => this.negotiate(remoteId), 0);
     });
   }
 
@@ -422,10 +443,14 @@ export class VoiceEngine {
     // Update remembered local tracks (drop old audio, keep video/screen).
     this.localTracks = this.localTracks.filter(e => e.track.kind !== 'audio');
     this.localTracks.push({ track, stream });
-    this.peers.forEach(({ pc }) => {
+    this.peers.forEach(({ pc }, remoteId) => {
       const sender = pc.getSenders().find(s => s.track?.kind === 'audio');
       if (sender) sender.replaceTrack(track).catch(() => {});
-      else { try { pc.addTrack(track, stream); } catch {} }
+      else {
+        try { pc.addTrack(track, stream); } catch {}
+        // Fallback renegotiation trigger — see negotiate() doc comment.
+        setTimeout(() => this.negotiate(remoteId), 0);
+      }
     });
   }
 
@@ -449,11 +474,14 @@ export class VoiceEngine {
   removeLocalTracks(match: (e: LocalEntry) => boolean): void {
     const removed = this.localTracks.filter(match);
     this.localTracks = this.localTracks.filter(e => !match(e));
-    this.peers.forEach(({ pc }) => {
+    this.peers.forEach(({ pc }, remoteId) => {
+      let changed = false;
       removed.forEach(({ track }) => {
         const sender = pc.getSenders().find(s => s.track === track);
-        if (sender) { try { pc.removeTrack(sender); } catch {} }
+        if (sender) { try { pc.removeTrack(sender); changed = true; } catch {} }
       });
+      // Fallback renegotiation trigger — see negotiate() doc comment.
+      if (changed) setTimeout(() => this.negotiate(remoteId), 0);
     });
   }
 
