@@ -100,27 +100,6 @@ export class VoiceEngine {
     return preferOpusStereo(preferH264(sdp ?? ''));
   }
 
-  /**
-   * True when this peer connection has a sender with a live track that hasn't
-   * been assigned to any m-line yet (transceiver.mid === null). This happens
-   * after a glare rollback: e.g. we (polite) seeded mic+camera+screen via
-   * addTrack() in connect(), started building a 3-m-line offer, but the remote
-   * peer's offer (audio-only) won the race — setRemoteDescription's implicit
-   * rollback reverts our local description to "none", un-assigning mid for the
-   * camera/screen transceivers while leaving their senders' tracks attached.
-   * The connection settles at "stable" with those tracks never sent — and
-   * WebViews don't reliably re-fire onnegotiationneeded to recover (see
-   * negotiate() doc comment). hasDanglingSenders() lets callers detect this and
-   * trigger an explicit follow-up negotiate().
-   */
-  private hasDanglingSenders(pc: RTCPeerConnection): boolean {
-    try {
-      return pc.getTransceivers().some(t => t.sender?.track && t.mid === null);
-    } catch {
-      return false;
-    }
-  }
-
   private tune(pc: RTCPeerConnection): void {
     try {
       const count   = this.cfg.getParticipantCount();
@@ -353,11 +332,6 @@ export class VoiceEngine {
     for (const { track, stream } of this.localTracks) {
       try { pc.addTrack(track, stream); } catch {}
     }
-    // Fallback renegotiation trigger — see negotiate() doc comment. Covers the
-    // case where onnegotiationneeded never fires for a brand-new connection.
-    if (this.hasDanglingSenders(pc)) {
-      setTimeout(() => this.negotiate(remoteId), 0);
-    }
 
     return pc;
   }
@@ -415,18 +389,6 @@ export class VoiceEngine {
         this.tune(pc);
         console.log(`[rtc] negotiation → answer to ${from}`);
         this.cfg.emitAnswer(from, pc.localDescription!.toJSON());
-        // ── Post-rollback recovery ─────────────────────────────────────────
-        // If we (polite) just answered an incoming offer that won a glare
-        // collision, our own pending offer was implicitly rolled back —
-        // un-assigning mid for any tracks (e.g. camera/screen) we'd seeded via
-        // addTrack but hadn't negotiated yet. Those senders are now "stable but
-        // dangling": follow up with our own offer to add their m-lines. Bounded
-        // to one extra round-trip — once negotiated, hasDanglingSenders() is
-        // false and this is a no-op.
-        if (this.hasDanglingSenders(pc)) {
-          console.log(`[rtc] ${from}: dangling senders after answer — following up with offer`);
-          setTimeout(() => this.negotiate(from), 0);
-        }
       } catch (err) {
         console.error('[rtc] createAnswer failed:', err);
       }
