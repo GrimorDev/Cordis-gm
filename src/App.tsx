@@ -7055,7 +7055,7 @@ function ProfilePage({
             ) : (
               <div className={`w-full h-full bg-gradient-to-r ${bannerGrad}`}/>
             )}
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#0e0e1c]/80 pointer-events-none"/>
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent via-65% to-[#0e0e1c]/55 pointer-events-none"/>
             {isOwn && !(twitchToShow?.is_live) && (
               <label className="absolute top-3 right-3 w-9 h-9 bg-black/50 hover:bg-black/75 rounded-xl flex items-center justify-center cursor-pointer transition-all border border-white/10">
                 <Upload size={14} className="text-white"/>
@@ -8911,6 +8911,13 @@ export default function App() {
     onDone: (f: File) => void;
   } | null>(null);
   const openCrop = (file: File, aspect: number, cropShape: CropShape, title: string, onDone: (f: File) => void) => {
+    // GIFy pomijają kadrowanie — canvas.toBlob() nie obsługuje 'image/gif' i ciche
+    // przerabia animację na pojedynczą statyczną klatkę (PNG pod fałszywym
+    // rozszerzeniem .gif). Wgrywamy oryginalny plik bez zmian, żeby animacja działała.
+    if (file.type === 'image/gif' || /\.gif$/i.test(file.name)) {
+      onDone(file);
+      return;
+    }
     setCropPending({ file, aspect, cropShape, title, onDone });
   };
 
@@ -21523,7 +21530,7 @@ export default function App() {
                     <div className={`w-full h-full bg-gradient-to-r ${(currentUser?.id===selUser.id ? editProf?.banner_color : selUser?.banner_color)||getBannerGradient(selUser.id||'')}`}/>
                   )}
                   {/* Subtle bottom fade */}
-                  <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#222238]/50 pointer-events-none"/>
+                  <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent via-65% to-[#222238]/45 pointer-events-none"/>
                   {currentUser?.id===selUser.id&&(
                     <label className="absolute top-2 right-2 w-8 h-8 bg-black/50 hover:bg-black/75 rounded-xl flex items-center justify-center cursor-pointer transition-all">
                       <Upload size={13} className="text-white"/>
