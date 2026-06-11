@@ -18725,7 +18725,11 @@ export default function App() {
                           )}
 
                           {/* Content column */}
-                          <div className={`flex flex-col min-w-0 ${activeView==='dms'?`max-w-[85%] md:max-w-[72%] ${isOwn?'items-end':'items-start'}`:'flex-1 min-w-0 overflow-hidden'}`}>
+                          <div className={`flex flex-col min-w-0 ${activeView==='dms'?`max-w-[85%] md:max-w-[72%] ${isOwn?'items-end':'items-start'}`:'flex-1 min-w-0 overflow-hidden'}`}
+                            onDoubleClick={activeView==='servers' && editingMsgId!==msg.id && !((msg as any).deleted || msg.content==='__deleted__') ? (e: React.MouseEvent) => {
+                              e.preventDefault();
+                              toggleReaction(msg.id, '❤️', e);
+                            } : undefined}>
 
                             {/* Meta (name + time) */}
                             {!isGrouped && (
@@ -18994,7 +18998,7 @@ export default function App() {
                               const rxns = (msg as MessageFull).reactions;
                               if (!rxns?.length) return null;
                               return (
-                                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                                   {rxns.map(r => (
                                     <button key={r.emoji}
                                       onMouseDown={e=>{e.preventDefault();toggleReaction(msg.id,r.emoji,e);}}
@@ -19007,6 +19011,21 @@ export default function App() {
                                       <span>{r.count}</span>
                                     </button>
                                   ))}
+                                  {/* Add another reaction — only visible while hovering the message */}
+                                  <button
+                                    onMouseDown={e=>e.preventDefault()}
+                                    onClick={e=>{
+                                      e.stopPropagation();
+                                      const rect = e.currentTarget.getBoundingClientRect();
+                                      const menuW=260, menuH=420;
+                                      const x=Math.min(rect.left, window.innerWidth-menuW-8);
+                                      const y=Math.min(rect.bottom+6, window.innerHeight-menuH-8);
+                                      setReactionPicker({x:Math.max(x,8), y:Math.max(y,8), msg});
+                                    }}
+                                    className="inline-flex items-center justify-center h-6 w-6 rounded-lg border border-white/[0.1] bg-white/[0.04] text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-[#FFB454] hover:border-[rgba(255,180,84,0.35)] hover:bg-[rgba(255,180,84,0.12)] transition-all hover:scale-110 active:scale-95 select-none"
+                                    title="Dodaj reakcję">
+                                    <SmilePlus size={12}/>
+                                  </button>
                                 </div>
                               );
                             })()}
