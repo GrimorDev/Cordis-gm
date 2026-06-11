@@ -23662,6 +23662,33 @@ export default function App() {
                         </div>
                       )}
 
+                      {/* ── Linux: WebRTC backend status (camera/screen share availability) ── */}
+                      {isTauri && userOs==='linux' && (
+                        (window as any).__nativeRtcPolyfill ? (
+                          <div className="rounded-2xl p-4 border border-amber-500/20 bg-amber-500/[0.05] flex items-start gap-3">
+                            <AlertCircle size={16} className="text-amber-400 shrink-0 mt-0.5"/>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-amber-300 font-semibold">Tryb audio-only — WebKitGTK bez WebRTC</p>
+                              <p className="text-xs text-amber-400/70 mt-1 leading-relaxed">
+                                Ta wersja WebKitGTK nie udostępnia natywnego RTCPeerConnection, więc kamera
+                                i udostępnianie ekranu są wyłączone (działa tylko głos). Zaktualizuj pakiet
+                                webkit2gtk w systemie do wersji 2.38+ i uruchom aplikację ponownie.
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="rounded-2xl p-4 border border-emerald-500/20 bg-emerald-500/[0.05] flex items-start gap-3">
+                            <CheckCircle2 size={16} className="text-emerald-400 shrink-0 mt-0.5"/>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-emerald-300 font-semibold">WebRTC aktywne (WebKitGTK)</p>
+                              <p className="text-xs text-emerald-400/70 mt-1 leading-relaxed">
+                                Kamera i udostępnianie ekranu są dostępne na tym urządzeniu.
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      )}
+
                       {/* ── SEKCJA: Wejście ───────────────────────────────── */}
                       <div id="s-input" className="scroll-mt-4 flex flex-col gap-4">
                         <div className="flex items-center justify-between">
