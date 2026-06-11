@@ -156,6 +156,7 @@ export default function VoiceDiagnostics({ engineRef }: Props) {
   const localKinds = engineRef.current?.localTrackKinds() ?? [];
   const st = engineRef.current?.diagnosticsStats?.();
   const rtcOk = typeof RTCPeerConnection === 'function';
+  const nativePolyfill = (window as any).__nativeRtcPolyfill === true;
 
   const row = (k: string, v: React.ReactNode) => (
     <div style={{ display: 'flex', gap: 8, fontSize: 11, lineHeight: '16px' }}>
@@ -195,6 +196,9 @@ export default function VoiceDiagnostics({ engineRef }: Props) {
             WebRTC ({peers.length} peer{peers.length !== 1 ? 'ów' : ''})
           </div>
           {row('RTCPeerConn', <b style={{ color: rtcOk ? '#4ade80' : '#f87171' }}>{rtcOk ? 'available' : 'MISSING — WebRTC OFF!'}</b>)}
+          {row('backend', nativePolyfill
+            ? <b style={{ color: '#fbbf24' }}>Rust/cpal polyfill — TYLKO AUDIO (brak kamery/ekranu)</b>
+            : <b style={{ color: '#4ade80' }}>WebKitGTK natywny — kamera + ekran OK</b>)}
           {row('local→send', localKinds.length ? localKinds.join(', ') : '— (brak mikrofonu w engine)')}
           {(() => {
             const mic = engineRef.current?.localAudioTrackInfo?.();

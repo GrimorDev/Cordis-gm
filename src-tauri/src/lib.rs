@@ -447,43 +447,71 @@ pub fn run() {
             {
                 use webkit2gtk::{WebViewExt, PermissionRequestExt};
                 use webkit2gtk::glib::ObjectExt;
-                if let Some(win) = app.get_webview_window("main") {
-                    let _ = win.with_webview(|wv| {
-                        let webview = wv.inner();
-                        if let Some(settings) = WebViewExt::settings(&webview) {
-                            // glib 0.18 has no try_set_property — set_property panics
-                            // when a property doesn't exist (e.g. "enable-webrtc" on
-                            // WebKit < 2.38).  Wrap each call in catch_unwind so one
-                            // missing property doesn't abort the entire closure.
-                            // Safety: glib's set_property checks property existence in
-                            // pure Rust and panics before any C code runs, so
-                            // catch_unwind does not cross an FFI boundary here.
-                            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                                settings.set_property("enable-webrtc", true);
-                            }));
-                            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                                settings.set_property("enable-media-stream", true);
-                            }));
-                            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                                settings.set_property("media-playback-requires-user-gesture", false);
-                            }));
-                            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                                settings.set_property("enable-encrypted-media", true);
-                            }));
-                        }
-                        // Auto-allow ALL permission requests: mic, camera, screen share.
-                        // Registered unconditionally so it fires even if settings failed.
-                        webview.connect_permission_request(|_, req| {
-                            req.allow();
-                            true
+                // Diagnostic eprintln!s below — visible when running the AppImage/binary
+                // from a terminal. They let us tell apart, for users stuck on the
+                // Rust/cpal audio-only polyfill, whether: the "main" window wasn't found,
+                // with_webview failed to schedule, settings() returned None, or specific
+                // WebKitSettings properties (esp. "enable-webrtc") don't exist on their
+                // WebKitGTK build (< 2.38) — vs. everything here reporting "ok" yet
+                // RTCPeerConnection still missing afterwards (points to a different
+                // cause, e.g. missing GStreamer WebRTC plugins).
+                match app.get_webview_window("main") {
+                    Some(win) => {
+                        let result = win.with_webview(|wv| {
+                            let webview = wv.inner();
+                            if let Some(settings) = WebViewExt::settings(&webview) {
+                                // glib 0.18 has no try_set_property — set_property panics
+                                // when a property doesn't exist (e.g. "enable-webrtc" on
+                                // WebKit < 2.38).  Wrap each call in catch_unwind so one
+                                // missing property doesn't abort the entire closure.
+                                // Safety: glib's set_property checks property existence in
+                                // pure Rust and panics before any C code runs, so
+                                // catch_unwind does not cross an FFI boundary here.
+                                let r1 = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                    settings.set_property("enable-webrtc", true);
+                                }));
+                                eprintln!("[Cordyn][linux-webrtc] enable-webrtc: {}",
+                                    if r1.is_ok() { "ok" } else { "FAILED — property missing (WebKitGTK < 2.38?)" });
+                                let r2 = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                    settings.set_property("enable-media-stream", true);
+                                }));
+                                eprintln!("[Cordyn][linux-webrtc] enable-media-stream: {}",
+                                    if r2.is_ok() { "ok" } else { "FAILED — property missing" });
+                                let r3 = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                    settings.set_property("media-playback-requires-user-gesture", false);
+                                }));
+                                eprintln!("[Cordyn][linux-webrtc] media-playback-requires-user-gesture: {}",
+                                    if r3.is_ok() { "ok" } else { "FAILED — property missing" });
+                                let r4 = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                    settings.set_property("enable-encrypted-media", true);
+                                }));
+                                eprintln!("[Cordyn][linux-webrtc] enable-encrypted-media: {}",
+                                    if r4.is_ok() { "ok" } else { "FAILED — property missing" });
+                            } else {
+                                eprintln!("[Cordyn][linux-webrtc] WebViewExt::settings() returned None — cannot configure WebKitSettings!");
+                            }
+                            // Auto-allow ALL permission requests: mic, camera, screen share.
+                            // Registered unconditionally so it fires even if settings failed.
+                            webview.connect_permission_request(|_, req| {
+                                req.allow();
+                                true
+                            });
+                            // Reload so the new settings take effect in a fresh JS context.
+                            // with_webview on Linux runs as a GLib idle callback (priority
+                            // 200) AFTER the page loads (WebKit events at priority 100).
+                            // Without this reload RTCPeerConnection stays undefined for the
+                            // entire session.
+                            eprintln!("[Cordyn][linux-webrtc] reloading webview to apply settings...");
+                            webview.reload();
                         });
-                        // Reload so the new settings take effect in a fresh JS context.
-                        // with_webview on Linux runs as a GLib idle callback (priority
-                        // 200) AFTER the page loads (WebKit events at priority 100).
-                        // Without this reload RTCPeerConnection stays undefined for the
-                        // entire session.
-                        webview.reload();
-                    });
+                        match result {
+                            Ok(_) => eprintln!("[Cordyn][linux-webrtc] with_webview scheduled OK"),
+                            Err(e) => eprintln!("[Cordyn][linux-webrtc] with_webview FAILED: {e}"),
+                        }
+                    }
+                    None => {
+                        eprintln!("[Cordyn][linux-webrtc] get_webview_window(\"main\") returned None — WebRTC setup skipped!");
+                    }
                 }
             }
 
