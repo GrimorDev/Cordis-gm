@@ -18685,16 +18685,22 @@ export default function App() {
                         const totalReactions = ((msg as any).reactions||[]).reduce((s:number,r:any)=>s+(r.count||0),0);
                         const isPopular = totalReactions >= 5;
                         const isWarm    = totalReactions >= 2 && totalReactions < 5;
+                        const rowSpacingCls = compactMessages
+                          ? 'mb-0.5 py-0.5 min-h-10'
+                          : isGrouped
+                            ? 'mb-1 py-1 min-h-11'
+                            : 'mb-3 py-1 min-h-11';
+                        const rowTopMarginCls = isGrouped ? 'mt-0' : activeView!=='dms' ? 'mt-2' : '';
                         return (
                         <motion.div
                           data-msg-id={msg.id}
                           initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: Math.min(idx * 0.008, 0.05), type: 'spring', stiffness: 420, damping: 30 }}
-                          style={{ contentVisibility: 'auto', containIntrinsicHeight: 'auto 72px',
+                          style={{ contentVisibility: 'auto', containIntrinsicHeight: 'auto 92px',
                             ...(isPopular ? {borderLeft:'2px solid rgba(255,180,64,0.55)',borderRadius:8,background:'linear-gradient(90deg,rgba(255,143,64,0.07) 0%,transparent 70%)',boxShadow:'inset 0 0 20px rgba(255,143,64,0.04)'} :
                                isWarm    ? {borderLeft:'2px solid rgba(255,180,64,0.25)',paddingLeft:4,background:'rgba(255,143,64,0.025)'} : {})
                           }}
-                          className={`relative flex ${showChatAvatars?'gap-3':'gap-0'} group hover:z-10 ${compactMessages||isGrouped?'mb-0.5':'mb-2'} ${isGrouped?'mt-0':activeView!=='dms'?'mt-0.5':''} ${activeView==='dms'&&isOwn?'flex-row-reverse':'flex-row'} ${activeView!=='dms'?'msg-flat-row px-2':'px-2'} ${mentionsMe?'bg-amber-400/5 border-l-2 border-amber-400/60 pl-2':''} ${isCurrentMatch?'outline outline-2 outline-indigo-500/60 bg-indigo-500/[0.07]':''}  ${isSearchMatch&&!isCurrentMatch?'bg-indigo-500/[0.04]':''}`}
+                          className={`relative flex ${showChatAvatars?'gap-3':'gap-0'} group hover:z-10 ${rowSpacingCls} ${rowTopMarginCls} ${activeView==='dms'&&isOwn?'flex-row-reverse':'flex-row'} ${activeView!=='dms'?'msg-flat-row px-2':'px-2'} ${mentionsMe?'bg-amber-400/5 border-l-2 border-amber-400/60 pl-2':''} ${isCurrentMatch?'outline outline-2 outline-indigo-500/60 bg-indigo-500/[0.07]':''}  ${isSearchMatch&&!isCurrentMatch?'bg-indigo-500/[0.04]':''}`}
                           onContextMenu={e=>{
                             if(editingMsgId===msg.id) return;
                             if((msg as any).deleted||msg.content==='__deleted__') return;
