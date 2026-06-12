@@ -354,6 +354,50 @@ const APP_ORIGIN = STATIC_BASE || window.location.origin;
 const ava = (u: { avatar_url?: string | null; username: string }) =>
   (u.avatar_url ? staticUrl(u.avatar_url) : null) || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(u.username)}&size=40`;
 
+// Avatar that freezes animated GIFs on their first frame and only plays the
+// animation on hover. Avatars render in bulk (member lists, friend lists, DM
+// lists, chat messages) — without this, every GIF avatar in view would
+// decode/animate continuously all the time, which doesn't scale once many
+// users have animated avatars.
+function GifAvatar({ src, className, alt = '', style, title, onError, onClick }: {
+  src: string; className?: string; alt?: string; style?: React.CSSProperties;
+  title?: string; onError?: React.ReactEventHandler<HTMLImageElement>;
+  onClick?: React.MouseEventHandler<HTMLImageElement>;
+}) {
+  const isGif = /\.gif(\?|$)/i.test(src || '');
+  const [frozen, setFrozen] = useState<string | null>(null);
+  const [hover, setHover] = useState(false);
+
+  useEffect(() => {
+    if (!isGif) { setFrozen(null); return; }
+    let cancelled = false;
+    setFrozen(null);
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      if (cancelled) return;
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || 1;
+        canvas.height = img.naturalHeight || 1;
+        canvas.getContext('2d')?.drawImage(img, 0, 0);
+        setFrozen(canvas.toDataURL());
+      } catch { /* cross-origin canvas read blocked — fall back to animated gif */ }
+    };
+    img.src = src;
+    return () => { cancelled = true; };
+  }, [src, isGif]);
+
+  return (
+    <img
+      src={isGif && !hover && frozen ? frozen : src}
+      className={className} alt={alt} style={style} title={title} onError={onError} onClick={onClick}
+      onMouseEnter={isGif ? () => setHover(true) : undefined}
+      onMouseLeave={isGif ? () => setHover(false) : undefined}
+    />
+  );
+}
+
 const sc = (s: string) => {
   if (s === 'online') return 'bg-emerald-500';
   if (s === 'idle') return 'bg-amber-500';
@@ -4284,7 +4328,7 @@ function ServerSettingsPage({
                     {/* Użytkownik */}
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="relative shrink-0">
-                        <img src={ava(m)}
+                        <GifAvatar src={ava(m)}
                           className="w-9 h-9 rounded-full object-cover" alt=""/>
                         <StatusBadge status={m.status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
                       </div>
@@ -15516,7 +15560,7 @@ export default function App() {
                     onClick={()=>{setActiveDmUserId(f.id);setActiveGroupDm(null);setDmSideTab('messages');setActiveView('dms');setIsMobileOpen(false);openGlobalTab({key:`dm:${f.id}`,kind:'dm',name:f.username,userId:f.id,userAvatar:f.avatar_url??undefined,userStatus:f.status});}}
                     className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-2xl transition-all text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]">
                     <div className="relative shrink-0">
-                      <img src={ava(f)} className="w-8 h-8 rounded-2xl object-cover" alt=""/>
+                      <GifAvatar src={ava(f)} className="w-8 h-8 rounded-2xl object-cover" alt=""/>
                       <StatusBadge status={f.status} size={9} className="absolute -bottom-0.5 -right-0.5"/>
                     </div>
                     <div className="flex-1 min-w-0 text-left">
@@ -15576,7 +15620,7 @@ export default function App() {
                     style={isActive?{background:'linear-gradient(90deg,rgba(255,143,64,0.14) 0%,rgba(255,143,64,0.05) 100%)',borderColor:'rgba(255,143,64,0.32)',boxShadow:'inset 3px 0 0 var(--ayu-orange),0 1px 16px rgba(255,143,64,0.08)'}:{}}>
                     <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava({avatar_url:dm.other_avatar,username:dm.other_username})}")`} as React.CSSProperties}
                       onClick={e=>{ e.stopPropagation(); showHoverCard(dm.other_user_id, e); }}>
-                      <img src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className={`w-10 h-10 rounded-2xl object-cover av-eff-${(dm as any).other_avatar_effect||'none'} cursor-pointer hover:opacity-80 transition-opacity`} alt=""/>
+                      <GifAvatar src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className={`w-10 h-10 rounded-2xl object-cover av-eff-${(dm as any).other_avatar_effect||'none'} cursor-pointer hover:opacity-80 transition-opacity`} alt=""/>
                       <StatusBadge status={dm.other_status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
                     </div>
                     <div className="flex-1 truncate text-left min-w-0">
@@ -17035,7 +17079,7 @@ export default function App() {
                               onMouseLeave={e=>{const el=e.currentTarget as HTMLDivElement;el.style.background='#14151A';el.style.borderColor='transparent';}}
                               onClick={()=>openDm(f.id)}>
                               <div style={{position:'relative',flexShrink:0}}>
-                                <img src={ava(f)} style={{width:36,height:36,borderRadius:12,objectFit:'cover',display:'block'}} alt=""/>
+                                <GifAvatar src={ava(f)} style={{width:36,height:36,borderRadius:12,objectFit:'cover',display:'block'}} alt=""/>
                                 <StatusBadge status={f.status as any} size={6} className="absolute -bottom-0.5 -right-0.5"/>
                               </div>
                               <div style={{minWidth:0,flex:1}}>
@@ -17093,7 +17137,7 @@ export default function App() {
                                 onMouseLeave={e=>{(e.currentTarget as HTMLDivElement).style.background='';}}
                                 onClick={()=>setProfileViewId(f.id)}>
                                 <div style={{position:'relative',flexShrink:0}}>
-                                  <img src={ava(f)} style={{width:36,height:36,borderRadius:12,objectFit:'cover',display:'block'}} alt=""/>
+                                  <GifAvatar src={ava(f)} style={{width:36,height:36,borderRadius:12,objectFit:'cover',display:'block'}} alt=""/>
                                   <StatusBadge status={f.status as any} size={6} className="absolute -bottom-0.5 -right-0.5"/>
                                 </div>
                                 <div style={{flex:1,minWidth:0,fontSize:13.5}}>
@@ -17185,7 +17229,7 @@ export default function App() {
                         return (
                         <div key={f.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.06] transition-all group">
                           <div className="relative shrink-0 cursor-pointer" onClick={e=>{e.stopPropagation();showHoverCard(f.id,e)}}>
-                            <img src={ava(f)} className="w-9 h-9 rounded-xl object-cover av-sc-xs" alt=""/>
+                            <GifAvatar src={ava(f)} className="w-9 h-9 rounded-xl object-cover av-sc-xs" alt=""/>
                             <StatusBadge status={f.status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
                           </div>
                           <button onClick={()=>openDm(f.id)} className="flex-1 min-w-0 text-left">
@@ -17355,7 +17399,7 @@ export default function App() {
                     {!friendSearchLoading && friendSearchResult && addFriendVal.trim().length >= 2 && (
                       <div className="mt-2 px-4 py-3 bg-white/[0.04] border border-indigo-500/25 rounded-xl flex items-center gap-3">
                         <div className="relative shrink-0">
-                          <img src={ava(friendSearchResult)} className="w-10 h-10 rounded-full object-cover av-sc-xs" alt=""/>
+                          <GifAvatar src={ava(friendSearchResult)} className="w-10 h-10 rounded-full object-cover av-sc-xs" alt=""/>
                           <StatusBadge status={friendSearchResult.status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
                         </div>
                         <div className="flex-1 min-w-0">
@@ -17380,7 +17424,7 @@ export default function App() {
                       {incoming.map(r => (
                         <div key={r.id} className="flex items-center justify-between bg-rose-500/5 border border-rose-500/15 p-3.5 rounded-2xl">
                           <div className="flex items-center gap-3">
-                            <img src={ava({avatar_url: r.from_avatar, username: r.from_username})} className="w-10 h-10 rounded-2xl object-cover" alt=""/>
+                            <GifAvatar src={ava({avatar_url: r.from_avatar, username: r.from_username})} className="w-10 h-10 rounded-2xl object-cover" alt=""/>
                             <div>
                               <p className="font-semibold text-white text-sm">{r.from_username}</p>
                               <p className="text-xs text-zinc-600">Chce dodać Cię do znajomych</p>
@@ -17404,7 +17448,7 @@ export default function App() {
                       {outgoing.map(r => (
                         <div key={r.id} className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] p-3.5 rounded-2xl">
                           <div className="flex items-center gap-3">
-                            <img src={ava({avatar_url: r.from_avatar, username: r.from_username})} className="w-10 h-10 rounded-2xl object-cover opacity-70" alt=""/>
+                            <GifAvatar src={ava({avatar_url: r.from_avatar, username: r.from_username})} className="w-10 h-10 rounded-2xl object-cover opacity-70" alt=""/>
                             <div>
                               <p className="font-semibold text-zinc-300 text-sm">{r.from_username}</p>
                               <p className="text-xs text-zinc-600">Oczekuje na odpowiedź</p>
@@ -17436,7 +17480,7 @@ export default function App() {
                         <div key={f.id}
                           className="flex items-center justify-between bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] hover:border-white/[0.07] p-3.5 rounded-2xl transition-all duration-150 group">
                           <div className="flex items-center gap-3 cursor-pointer" onClick={e=>showHoverCard(f.id, e)}>
-                            <div className="relative"><img src={ava(f)} className="w-10 h-10 rounded-2xl object-cover av-sc-xs" alt=""/><StatusBadge status={f.status} size={10} className="absolute -bottom-0.5 -right-0.5"/></div>
+                            <div className="relative"><GifAvatar src={ava(f)} className="w-10 h-10 rounded-2xl object-cover av-sc-xs" alt=""/><StatusBadge status={f.status} size={10} className="absolute -bottom-0.5 -right-0.5"/></div>
                             <div>
                               <p className="font-semibold text-white text-sm">{maskName(f.username)}</p>
                               {fActivity ? (
@@ -17770,7 +17814,7 @@ export default function App() {
                   {activeView==='servers'&&members.length>0&&(
                   <div className="hidden md:flex -space-x-2 mr-1">
                     {members.slice(0,4).map(m=>(
-                      <img key={m.id} src={ava(m)} className="w-6 h-6 rounded-full border-2 border-[#181828] object-cover hover:scale-110 transition-transform cursor-pointer" alt="" title={m.username}/>
+                      <GifAvatar key={m.id} src={ava(m)} className="w-6 h-6 rounded-full border-2 border-[#181828] object-cover hover:scale-110 transition-transform cursor-pointer" alt="" title={m.username}/>
                     ))}
                     {members.length>4&&<div className="w-6 h-6 rounded-full border-2 border-[#181828] bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-white">+{members.length-4}</div>}
                   </div>
@@ -18520,7 +18564,7 @@ export default function App() {
                           return (
                             <div key={msg.id || i} className={`flex gap-2.5 ${isMe ? 'flex-row-reverse' : ''} ${sameAuthor ? 'mt-0.5' : 'mt-3'}`}>
                               {!sameAuthor
-                                ? <img src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} className="w-8 h-8 rounded-xl object-cover shrink-0 self-start mt-0.5" alt=""/>
+                                ? <GifAvatar src={ava({avatar_url:msg.sender_avatar,username:msg.sender_username})} className="w-8 h-8 rounded-xl object-cover shrink-0 self-start mt-0.5" alt=""/>
                                 : <div className="w-8 shrink-0"/>}
                               <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[70%]`}>
                                 {!sameAuthor && !isMe && <p className="msg-meta-name text-[11px] font-semibold text-zinc-400 mb-1 px-1">{msg.sender_username}</p>}
@@ -18731,7 +18775,7 @@ export default function App() {
                             isGrouped
                               ? <div className="w-10 shrink-0"/>
                               : <div className="av-frozen shrink-0 self-start mt-0.5" style={{'--av-url':`url("${avatarSrc}")`} as React.CSSProperties}>
-                                  <img src={avatarSrc} alt=""
+                                  <GifAvatar src={avatarSrc} alt=""
                                     onClick={isAuto?undefined:(e)=>showHoverCard(msg.sender_id, e as unknown as React.MouseEvent)}
                                     className={`w-10 h-10 rounded-xl object-cover ${isAuto?'cursor-default':'cursor-pointer hover:opacity-85 hover:scale-105'} transition-all av-eff-${(msg as any).sender_avatar_effect||'none'}`}/>
                                 </div>
@@ -19335,7 +19379,7 @@ export default function App() {
                             <button key={m.id} type="button"
                               onMouseDown={e=>{e.preventDefault(); insertMention(m.username);}}
                               className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors ${i === mentionSel ? 'bg-indigo-500/15' : 'hover:bg-white/[0.04]'}`}>
-                              <img src={ava(m)} alt="" className="w-7 h-7 rounded-xl object-cover shrink-0"/>
+                              <GifAvatar src={ava(m)} alt="" className="w-7 h-7 rounded-xl object-cover shrink-0"/>
                               <span className="text-sm font-semibold text-white">{m.username}</span>
                               <span className={`w-2 h-2 rounded-full shrink-0 ml-auto ${m.status==='online'?'bg-emerald-400':m.status==='idle'?'bg-amber-400':m.status==='dnd'?'bg-rose-500':'bg-zinc-600'}`}/>
                             </button>
@@ -19738,7 +19782,7 @@ export default function App() {
                       <div key={uid} className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl hover:bg-white/[0.04] transition-all group cursor-pointer"
                         onClick={e => showHoverCard(uid, e)}>
                         <div className="relative shrink-0">
-                          <img src={ava({avatar_url: p.avatar_url, username: p.username})} className="w-8 h-8 rounded-xl object-cover" alt=""/>
+                          <GifAvatar src={ava({avatar_url: p.avatar_url, username: p.username})} className="w-8 h-8 rounded-xl object-cover" alt=""/>
                           <StatusBadge status={status} size={9} className="absolute -bottom-0.5 -right-0.5"/>
                         </div>
                         <div className="flex-1 min-w-0 flex items-center gap-1.5">
@@ -19783,7 +19827,7 @@ export default function App() {
                       const isSpeaking=speakingUsers.has(u.id);
                       return (
                         <div key={u.id} className={`relative bg-zinc-900 rounded-xl overflow-hidden aspect-video flex items-center justify-center border ${isSpeaking?'border-emerald-500/60':'border-white/[0.07]'}`}>
-                          <img src={ava(u)} className="w-10 h-10 rounded-full object-cover" alt=""/>
+                          <GifAvatar src={ava(u)} className="w-10 h-10 rounded-full object-cover" alt=""/>
                           <div className="absolute bottom-0 left-0 right-0 px-1.5 pb-1 flex items-center gap-1">
                             <div className={`w-1.5 h-1.5 rounded-full ${sc(u.status)} shrink-0`}/>
                             <span className="text-[10px] font-semibold text-white truncate">{maskName(u.username)}</span>
@@ -19953,7 +19997,7 @@ export default function App() {
                   )}
                   <div className="relative z-[1] shrink-0 av-frozen" style={{'--av-url':`url("${ava(m)}")`} as React.CSSProperties}>
                     {isNew&&<div className="absolute inset-0 rounded-xl ring-2 ring-emerald-400/60 ring-offset-1 ring-offset-[#1e1e30] pointer-events-none animate-pulse z-10"/>}
-                    <img src={ava(m)} className={`w-10 h-10 rounded-xl object-cover ${opacity?'opacity-35':''} av-eff-${m.avatar_effect||'none'} av-sc`} alt=""/>
+                    <GifAvatar src={ava(m)} className={`w-10 h-10 rounded-xl object-cover ${opacity?'opacity-35':''} av-eff-${m.avatar_effect||'none'} av-sc`} alt=""/>
                     <StatusBadge status={opacity?'offline':m.status} size={10} className={`absolute -bottom-0.5 -right-0.5 ${opacity?'opacity-50':''}`}/>
                   </div>
                   <div className="relative z-[1] min-w-0 flex-1">
@@ -20063,7 +20107,7 @@ export default function App() {
                         <div key={m.id} className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-indigo-500/5 transition-all cursor-pointer" onClick={e=>showHoverCard(m.id,e)}>
                           <div className="relative shrink-0">
                             {m.avatar_url ? (
-                              <img src={ava(m)} alt="" className="w-10 h-10 rounded-xl object-cover"/>
+                              <GifAvatar src={ava(m)} alt="" className="w-10 h-10 rounded-xl object-cover"/>
                             ) : (
                               <div className="w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/20 flex items-center justify-center text-indigo-300 font-bold text-base">{m.username?.[0]?.toUpperCase()||'B'}</div>
                             )}
@@ -21951,7 +21995,7 @@ export default function App() {
                     {members.map(m=>(
                       <div key={m.id} className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] px-4 py-3 rounded-xl">
                         <div className="flex items-center gap-3">
-                          <div className="relative"><img src={ava(m)} className="w-9 h-9 rounded-full object-cover av-sc-xs" alt=""/><StatusBadge status={m.status} size={10} className="absolute -bottom-0.5 -right-0.5"/></div>
+                          <div className="relative"><GifAvatar src={ava(m)} className="w-9 h-9 rounded-full object-cover av-sc-xs" alt=""/><StatusBadge status={m.status} size={10} className="absolute -bottom-0.5 -right-0.5"/></div>
                           <div><p className="text-sm font-semibold text-white">{m.username}</p><p className="text-xs text-zinc-600">{m.role_name}</p></div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -22734,7 +22778,7 @@ export default function App() {
                 }).map(f=>(
                   <div key={f.id} className="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-white/[0.04] transition-colors">
                     <div className="relative shrink-0">
-                      <img src={ava(f)} className={`w-9 h-9 rounded-xl object-cover av-sc-xs ${f.status==='offline'?'opacity-40':''}`} alt=""/>
+                      <GifAvatar src={ava(f)} className={`w-9 h-9 rounded-xl object-cover av-sc-xs ${f.status==='offline'?'opacity-40':''}`} alt=""/>
                       <StatusBadge status={f.status} size={10} className="absolute -bottom-0.5 -right-0.5"/>
                     </div>
                     <div className="flex-1 min-w-0">
@@ -26229,7 +26273,7 @@ export default function App() {
                       {friendMatches.slice(0,5).map(f => {
                         const idx = globalIdx++;
                         return <Row key={f.id} idx={idx} onClick={()=>openDm(f.id)}>
-                          <img src={ava(f)} alt={f.username} className="w-6 h-6 rounded-full object-cover shrink-0"/>
+                          <GifAvatar src={ava(f)} alt={f.username} className="w-6 h-6 rounded-full object-cover shrink-0"/>
                           <span className="text-sm flex-1 truncate">{f.display_name||f.username}</span>
                           <span className="text-[10px] text-zinc-600 shrink-0">wiadomość</span>
                         </Row>;
@@ -26623,7 +26667,7 @@ export default function App() {
                         <div className="mt-2 flex flex-col gap-1 max-h-32 overflow-y-auto">
                           {filtered.slice(0,8).map(f => (
                             <div key={f.id} className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-white/[0.05] transition-colors">
-                              <img src={ava(f)} className="w-7 h-7 rounded-lg object-cover shrink-0" alt=""/>
+                              <GifAvatar src={ava(f)} className="w-7 h-7 rounded-lg object-cover shrink-0" alt=""/>
                               <span className="text-sm text-zinc-300 flex-1 truncate">{f.display_name||f.username}</span>
                               <button
                                 disabled={groupInviting === f.id}
@@ -26725,7 +26769,7 @@ export default function App() {
                     <button key={f.id} disabled={disabled}
                       onClick={()=>setGroupDmMemberIds(p=>sel?p.filter(id=>id!==f.id):[...p,f.id])}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${disabled?'opacity-40 cursor-not-allowed':''} ${sel?'bg-indigo-500/15':'hover:bg-white/[0.05]'}`}>
-                      <img src={ava(f)} alt={f.username} className="w-9 h-9 rounded-full object-cover shrink-0"/>
+                      <GifAvatar src={ava(f)} alt={f.username} className="w-9 h-9 rounded-full object-cover shrink-0"/>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-zinc-200 truncate">{f.display_name||f.username}</p>
                         <p className="text-[11px] text-zinc-600 truncate">{f.username}</p>
