@@ -379,10 +379,17 @@ function GifAvatar({ src, className, alt = '', style, title, onError, onClick }:
     img.onload = () => {
       if (cancelled) return;
       try {
+        // Cap the canvas at a small size — avatars render at a few dozen px,
+        // and toDataURL() on a full-resolution frame (uploads can be large
+        // since GIFs aren't downscaled) was blocking the main thread for
+        // every avatar instance on screen.
+        const w = img.naturalWidth || 1;
+        const h = img.naturalHeight || 1;
+        const scale = Math.min(1, 128 / Math.max(w, h));
         const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth || 1;
-        canvas.height = img.naturalHeight || 1;
-        canvas.getContext('2d')?.drawImage(img, 0, 0);
+        canvas.width = Math.max(1, Math.round(w * scale));
+        canvas.height = Math.max(1, Math.round(h * scale));
+        canvas.getContext('2d')?.drawImage(img, 0, 0, canvas.width, canvas.height);
         setFrozen(canvas.toDataURL());
       } catch { /* cross-origin canvas read blocked — fall back to animated gif */ }
     };
@@ -8957,13 +8964,6 @@ export default function App() {
     onDone: (f: File) => void;
   } | null>(null);
   const openCrop = (file: File, aspect: number, cropShape: CropShape, title: string, onDone: (f: File) => void) => {
-    // GIFy pomijają kadrowanie — canvas.toBlob() nie obsługuje 'image/gif' i ciche
-    // przerabia animację na pojedynczą statyczną klatkę (PNG pod fałszywym
-    // rozszerzeniem .gif). Wgrywamy oryginalny plik bez zmian, żeby animacja działała.
-    if (file.type === 'image/gif' || /\.gif$/i.test(file.name)) {
-      onDone(file);
-      return;
-    }
     setCropPending({ file, aspect, cropShape, title, onDone });
   };
 

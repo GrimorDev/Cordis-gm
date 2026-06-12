@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import Cropper from 'react-easy-crop';
 import type { Area, Point } from 'react-easy-crop';
 import { X, ZoomIn, ZoomOut, RotateCw, Check } from 'lucide-react';
+import { cropAnimatedGif } from './gifCrop';
 
 // ── Canvas helper — zwraca wykadrowany Blob ───────────────────────────────
 // Używa HTMLImageElement zamiast fetch(blob:...) — fetch blob-URL jest blokowany
@@ -83,12 +84,14 @@ export default function ImageCropModal({
   onDone,
 }: Props) {
   const src = URL.createObjectURL(file);
+  const isGif = file.type === 'image/gif' || /\.gif$/i.test(file.name);
 
   const [crop, setCrop]         = useState<Point>({ x: 0, y: 0 });
   const [zoom, setZoom]         = useState(1);
   const [rotation, setRotation] = useState(0);
   const [croppedArea, setCroppedArea] = useState<Area | null>(null);
   const [saving, setSaving]     = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
   const onCropComplete = useCallback((_: Area, pixelCrop: Area) => {
     setCroppedArea(pixelCrop);
@@ -98,15 +101,24 @@ export default function ImageCropModal({
     if (!croppedArea) return;
     setSaving(true);
     try {
-      const mime = file.type === 'image/png' ? 'image/png' : file.type === 'image/gif' ? 'image/gif' : 'image/jpeg';
-      const blob = await getCroppedBlob(src, croppedArea, rotation, mime);
-      const ext  = mime === 'image/png' ? '.png' : mime === 'image/gif' ? '.gif' : '.jpg';
-      const name = file.name.replace(/\.[^.]+$/, '') + '_crop' + ext;
-      onDone(new File([blob], name, { type: mime }));
+      if (isGif) {
+        // Re-encode the animated GIF cropped/scaled to the selected area —
+        // keeps the animation instead of flattening to a single frame.
+        const blob = await cropAnimatedGif(file, croppedArea, 640, (done, total) => setProgress({ done, total }));
+        const name = file.name.replace(/\.[^.]+$/, '') + '_crop.gif';
+        onDone(new File([blob], name, { type: 'image/gif' }));
+      } else {
+        const mime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+        const blob = await getCroppedBlob(src, croppedArea, rotation, mime);
+        const ext  = mime === 'image/png' ? '.png' : '.jpg';
+        const name = file.name.replace(/\.[^.]+$/, '') + '_crop' + ext;
+        onDone(new File([blob], name, { type: mime }));
+      }
     } catch (e) {
       console.error('Crop error', e);
     } finally {
       setSaving(false);
+      setProgress(null);
     }
   };
 
@@ -128,7 +140,7 @@ export default function ImageCropModal({
             image={src}
             crop={crop}
             zoom={zoom}
-            rotation={rotation}
+            rotation={isGif ? 0 : rotation}
             aspect={aspect}
             cropShape={cropShape}
             showGrid={false}
@@ -159,18 +171,20 @@ export default function ImageCropModal({
             </button>
           </div>
 
-          {/* Rotation */}
-          <div className="flex items-center gap-3">
-            <RotateCw size={16} className="text-zinc-400 shrink-0"/>
-            <input type="range" min={-180} max={180} step={1} value={rotation}
-              onChange={e => setRotation(Number(e.target.value))}
-              className="flex-1 accent-indigo-500 h-1"/>
-            <span className="text-zinc-500 text-xs w-10 text-right">{rotation}°</span>
-            {rotation !== 0 && (
-              <button onClick={() => setRotation(0)}
-                className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Reset</button>
-            )}
-          </div>
+          {/* Rotation — not supported for animated GIFs (would require rotating every frame) */}
+          {!isGif && (
+            <div className="flex items-center gap-3">
+              <RotateCw size={16} className="text-zinc-400 shrink-0"/>
+              <input type="range" min={-180} max={180} step={1} value={rotation}
+                onChange={e => setRotation(Number(e.target.value))}
+                className="flex-1 accent-indigo-500 h-1"/>
+              <span className="text-zinc-500 text-xs w-10 text-right">{rotation}°</span>
+              {rotation !== 0 && (
+                <button onClick={() => setRotation(0)}
+                  className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Reset</button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -182,7 +196,10 @@ export default function ImageCropModal({
           <button onClick={handleSave} disabled={saving}
             className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-bold transition-colors flex items-center justify-center gap-1.5">
             {saving ? (
-              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>
+              <>
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>
+                {progress && <span className="text-xs font-normal text-white/70">{progress.done}/{progress.total}</span>}
+              </>
             ) : (
               <><Check size={15}/> Zapisz</>
             )}

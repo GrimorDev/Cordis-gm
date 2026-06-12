@@ -34,6 +34,8 @@
     "dompurify": "^3.3.2",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
+    "gifenc": "^1.0.3",
+    "gifuct-js": "^2.1.2",
     "livekit-client": "^2.9.0",
     "lottie-react": "^2.4.1",
     "lucide-react": "^0.546.0",
