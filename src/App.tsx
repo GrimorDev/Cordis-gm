@@ -372,7 +372,9 @@ function GifAvatar({ src, className, alt = '', style, title, onError, onClick }:
     if (!isGif) { setFrozen(null); return; }
     let cancelled = false;
     setFrozen(null);
-    const img = new Image();
+    // Use window.Image — the bare `Image` identifier here resolves to the
+    // lucide-react icon imported at the top of this file, not the DOM constructor.
+    const img = new window.Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
       if (cancelled) return;
