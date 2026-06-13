@@ -52,6 +52,7 @@ import {
   type DiscoverServer, type ServerOnboarding, type UserSession,
   type VoiceActivityChannel, type EventRsvpUser,
   type ServerSound, soundsApi,
+  feedbackApi,
 } from './api';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -9386,6 +9387,18 @@ export default function App() {
   // ── Feature: Keyboard Shortcuts Modal ───────────────────────────
   const [showShortcuts, setShowShortcuts]     = useState(false);
 
+  // ── Feature: QA Bug Report (Ctrl+Shift+Z) ────────────────────────
+  const canQAReport = !!currentUser && (
+    !!currentUser.is_admin ||
+    !!currentUser.badges?.some(b => ['qa','developer','admin'].includes(b.name))
+  );
+  const [showQAReportModal, setShowQAReportModal] = useState(false);
+  const [qaTitle, setQaTitle]                 = useState('');
+  const [qaDesc, setQaDesc]                   = useState('');
+  const [qaScreenshot, setQaScreenshot]       = useState<File|null>(null);
+  const [qaScreenshotPreview, setQaScreenshotPreview] = useState<string|null>(null);
+  const [qaSending, setQaSending]             = useState(false);
+
   // ── Feature: Quick Switcher (Ctrl+K) ────────────────────────────
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
   const [quickQ, setQuickQ]                   = useState('');
@@ -9838,11 +9851,21 @@ export default function App() {
         setQuickSwitcherOpen(v => !v);
         return;
       }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'Z' || e.key === 'z')) {
+        const u = currentUserRef.current;
+        const canQA = !!u && (!!u.is_admin || !!u.badges?.some(b => ['qa','developer','admin'].includes(b.name)));
+        if (canQA) {
+          e.preventDefault();
+          setShowQAReportModal(v => !v);
+        }
+        return;
+      }
       if (e.key === 'Escape') {
         setShowShortcuts(false);
         setQuickSwitcherOpen(false);
         setShowDiscovery(false);
         setShowGroupDmModal(false);
+        setShowQAReportModal(false);
       }
     };
     window.addEventListener('keydown', handler);
@@ -26138,12 +26161,120 @@ export default function App() {
                   ['Escape', 'Zamknij modal / panel'],
                   ['Alt + ↑ / ↓', 'Nawigacja między kanałami'],
                   ['Ctrl + /', 'Szybka pomoc'],
+                  ...(canQAReport ? [['Ctrl + Shift + Z', '🐞 Zgłoś błąd (QA)']] : []),
                 ].map(([key, desc]) => (
                   <div key={key} className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                     <span className="text-zinc-400">{desc}</span>
                     <kbd className="px-2 py-1 bg-white/[0.08] border border-white/[0.12] rounded-lg text-xs font-mono text-zinc-300">{key}</kbd>
                   </div>
                 ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── QA Bug Report Modal (Ctrl+Shift+Z) ─────────────────── */}
+      <AnimatePresence>
+        {showQAReportModal && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+            className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={()=>{ if (!qaSending) setShowQAReportModal(false); }}>
+            <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
+              className={`${gm} p-6 w-full max-w-lg`}
+              onClick={e=>e.stopPropagation()}
+              onPaste={e=>{
+                const items = Array.from(e.clipboardData?.items ?? []) as DataTransferItem[];
+                const result = extractPasteFile(items);
+                if (result?.isImage) {
+                  e.preventDefault();
+                  setQaScreenshot(result.file);
+                  setQaScreenshotPreview(URL.createObjectURL(result.file));
+                }
+              }}>
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-base font-bold text-white flex items-center gap-2"><FlaskConical size={16} className="text-violet-400"/>Zgłoszenie QA</h2>
+                <button onClick={()=>setShowQAReportModal(false)} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all"><X size={14}/></button>
+              </div>
+
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Tytuł błędu *</label>
+                  <input value={qaTitle} onChange={e=>setQaTitle(e.target.value.slice(0,150))} maxLength={150}
+                    placeholder="np. Awatar nie wczytuje się po odświeżeniu"
+                    className={`${gi} w-full rounded-xl px-3 py-2.5 border-white/[0.08] text-white text-sm`}/>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Opis *</label>
+                  <textarea value={qaDesc} onChange={e=>setQaDesc(e.target.value.slice(0,3000))} maxLength={3000} rows={5}
+                    placeholder="Co się stało, jak to odtworzyć, czego się oczekiwało..."
+                    className={`${gi} w-full rounded-xl px-3 py-2.5 border-white/[0.08] text-white text-sm resize-none`}/>
+                </div>
+
+                <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+                  <CalendarDays size={13}/>
+                  <span>{new Date().toLocaleString('pl-PL', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}</span>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Screenshot (opcjonalnie)</label>
+                  {!qaScreenshotPreview ? (
+                    <label className="flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 border-dashed border-white/[0.1] hover:border-indigo-500/50 cursor-pointer transition-colors"
+                      onDragOver={e=>e.preventDefault()}
+                      onDrop={e=>{
+                        e.preventDefault();
+                        const f = e.dataTransfer.files?.[0];
+                        if (f && f.type.startsWith('image/')) { setQaScreenshot(f); setQaScreenshotPreview(URL.createObjectURL(f)); }
+                      }}>
+                      <ImageIcon size={22} className="text-zinc-500"/>
+                      <p className="text-xs text-zinc-400 font-medium">Kliknij, upuść lub wklej (Ctrl+V) obrazek</p>
+                      <p className="text-[10px] text-zinc-600">PNG, JPG, GIF · maks. 8MB</p>
+                      <input type="file" accept="image/*" className="hidden" onChange={e=>{
+                        const f = e.target.files?.[0];
+                        if (f) { setQaScreenshot(f); setQaScreenshotPreview(URL.createObjectURL(f)); }
+                      }}/>
+                    </label>
+                  ) : (
+                    <div className="relative inline-block">
+                      <img src={qaScreenshotPreview} alt="Screenshot" className="max-h-48 rounded-xl border border-white/[0.08]"/>
+                      <button onClick={()=>{ setQaScreenshot(null); setQaScreenshotPreview(null); }}
+                        className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-black/70 border border-white/[0.15] flex items-center justify-center text-zinc-300 hover:text-white hover:bg-rose-500/80 transition-colors">
+                        <X size={12}/>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-5">
+                <button onClick={()=>{
+                    if (qaSending) return;
+                    setShowQAReportModal(false);
+                    setQaTitle(''); setQaDesc(''); setQaScreenshot(null); setQaScreenshotPreview(null);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-400 bg-white/[0.05] hover:bg-white/[0.08] transition-colors">
+                  Anuluj
+                </button>
+                <button onClick={async ()=>{
+                    if (!qaTitle.trim() || !qaDesc.trim() || qaSending) return;
+                    setQaSending(true);
+                    try {
+                      await feedbackApi.sendQAReport(qaTitle.trim(), qaDesc.trim(), qaScreenshot);
+                      addToast('Zgłoszenie wysłane ✅', 'success');
+                      setShowQAReportModal(false);
+                      setQaTitle(''); setQaDesc(''); setQaScreenshot(null); setQaScreenshotPreview(null);
+                    } catch (err: any) {
+                      addToast(err?.message || 'Nie udało się wysłać zgłoszenia', 'error');
+                    } finally {
+                      setQaSending(false);
+                    }
+                  }}
+                  disabled={!qaTitle.trim() || !qaDesc.trim() || qaSending}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors flex items-center justify-center gap-2 ${qaTitle.trim() && qaDesc.trim() && !qaSending ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-zinc-700 opacity-50 cursor-not-allowed'}`}>
+                  {qaSending ? <Loader2 size={14} className="animate-spin"/> : <Send size={14}/>}
+                  {qaSending ? 'Wysyłanie...' : 'Wyślij log'}
+                </button>
               </div>
             </motion.div>
           </motion.div>

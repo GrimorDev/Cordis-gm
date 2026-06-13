@@ -1286,3 +1286,14 @@ export const bookmarksApi = {
     delete: (id: string)                                          => req<{ ok: boolean }>('DELETE', `/bookmarks/folders/${id}`),
   },
 };
+
+// ── Wewnętrzne zgłoszenia QA (Ctrl+Shift+Z → #log-qa na Cordyn Develop) ──────
+export const feedbackApi = {
+  sendQAReport: (title: string, description: string, screenshot?: File | null) => {
+    const fd = new FormData();
+    fd.append('title', title);
+    fd.append('description', description);
+    if (screenshot) fd.append('screenshot', screenshot);
+    return req<{ ok: boolean }>('POST', '/feedback/qa-report', fd, true);
+  },
+};

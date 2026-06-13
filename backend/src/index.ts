@@ -48,6 +48,7 @@ import automationsRoutes from './routes/automations';
 import eventsRoutes from './routes/events';
 import botsRoutes from './routes/bots';
 import filesRoutes from './routes/files';
+import feedbackRoutes from './routes/feedback';
 import bookmarksRoutes from './routes/bookmarks';
 import { musicStates } from './routes/bots';
 import developerRoutes from './routes/developer/index';
@@ -200,6 +201,7 @@ app.use('/api/dms', dmsRoutes);
 app.use('/api/friends', friendsRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/files',  filesRoutes);   // R2 pre-signed URL proxy
+app.use('/api/feedback', feedbackRoutes);
 
 app.use('/api/og', ogRoutes);
 app.use('/api/admin', perfRouter);   // SSE stream — no auth middleware (uses one-time token)
