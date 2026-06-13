@@ -246,6 +246,17 @@ export interface ServerBan {
   reason?: string | null; created_at: string; banned_by_username?: string | null;
 }
 export interface MsgReaction { emoji: string; count: number; mine: boolean; }
+export interface MsgEmbed {
+  title?: string;
+  description?: string;
+  color?: number;
+  url?: string;
+  thumbnail?: string;
+  image?: string;
+  footer?: string;
+  fields?: Array<{ name: string; value: string; inline?: boolean }>;
+  timestamp?: string;
+}
 export interface MessageFull {
   id: string; channel_id: string; content: string; edited: boolean;
   created_at: string; updated_at: string;
@@ -262,6 +273,7 @@ export interface MessageFull {
   sender_tag_server_id?: string | null;
   pinned?: boolean;
   reactions?: MsgReaction[];
+  embed?: MsgEmbed | null;
 }
 export interface DmConversation {
   id: string; created_at: string;

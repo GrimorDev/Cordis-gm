@@ -81,12 +81,13 @@ router.post('/qa-report', authMiddleware, (req: AuthRequest, res: Response) => {
     const now = new Date();
     const dateStr = `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-    const content = `🐞 **Nowe zgłoszenie QA**\n👤 Zgłaszający: **${req.user!.username}**\n🕒 Data: ${dateStr}\n\n📌 **${title}**\n\n${description}`;
+    const content = `🐞 **Nowe zgłoszenie QA**\n👤 Zgłaszający: **${req.user!.username}**\n🕒 Data: ${dateStr}`;
+    const embed = { title, description, color: 0xef4444 };
 
     const { rows: [msgRow] } = await query(
-      `INSERT INTO messages (channel_id, sender_id, content, attachment_url, is_automated, system_name)
-       VALUES ($1,$2,$3,$4,true,'🐞 QA Log') RETURNING *`,
-      [target.channel_id, userId, content, attachmentUrl]
+      `INSERT INTO messages (channel_id, sender_id, content, attachment_url, embed, is_automated, system_name)
+       VALUES ($1,$2,$3,$4,$5,true,'🐞 QA Log') RETURNING *`,
+      [target.channel_id, userId, content, attachmentUrl, JSON.stringify(embed)]
     );
 
     const io = req.app.get('io');

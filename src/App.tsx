@@ -48,7 +48,7 @@ import {
   type BotDefinition, type InstalledBot, type MusicBotState,
   channelPrefsApi, mutualServersApi, mutualFriendsApi, groupDmApi, eventsApi, discoverApi, onboardingApi,
   sessionsApi, activityApi,
-  type ChannelPref, type MutualServer, type MutualFriend, type GroupDmConversation, type GroupDmParticipant, type ServerEvent,
+  type ChannelPref, type MutualServer, type MutualFriend, type GroupDmConversation, type GroupDmParticipant, type ServerEvent, type MsgEmbed,
   type DiscoverServer, type ServerOnboarding, type UserSession,
   type VoiceActivityChannel, type EventRsvpUser,
   type ServerSound, soundsApi,
@@ -19021,6 +19021,29 @@ export default function App() {
                                   : 'glass-bubble text-zinc-100 bubble-tail-left'
                                 }`}>
                                   <p className={`${msgFontCls} leading-relaxed break-words msg-md`} dangerouslySetInnerHTML={{__html: renderMsgHTML(msg.content)}}/>
+                                </div>
+                              );
+                            })()}
+
+                            {/* Embed (Discord-style card) */}
+                            {(msg as any).embed && !(msg as any).deleted && msg.content !== '__deleted__' && (() => {
+                              const embed = (msg as any).embed as MsgEmbed;
+                              const accent = typeof embed.color === 'number' ? `#${embed.color.toString(16).padStart(6,'0')}` : '#6366f1';
+                              return (
+                                <div className="mt-1.5 max-w-md rounded-xl border-l-4 bg-white/[0.03] pl-3 pr-3.5 py-2.5" style={{borderLeftColor: accent}}>
+                                  {embed.title && <p className="text-sm font-bold text-white mb-1 break-words">{embed.title}</p>}
+                                  {embed.description && (
+                                    <p className="text-[13px] text-zinc-400 leading-relaxed break-words whitespace-pre-wrap">{embed.description}</p>
+                                  )}
+                                  {embed.image && (
+                                    <img src={staticUrl(embed.image)} alt="" className="mt-2 rounded-lg max-h-64 object-contain cursor-zoom-in hover:opacity-90 transition-opacity"
+                                      onClick={()=>setLightboxSrc(staticUrl(embed.image!))} loading="lazy" decoding="async"/>
+                                  )}
+                                  {(embed.footer || embed.timestamp) && (
+                                    <p className="text-[10px] text-zinc-600 mt-1.5">
+                                      {embed.footer}{embed.footer && embed.timestamp ? ' · ' : ''}{embed.timestamp ? fmtTime(embed.timestamp) : ''}
+                                    </p>
+                                  )}
                                 </div>
                               );
                             })()}
