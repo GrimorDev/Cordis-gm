@@ -6,7 +6,6 @@ import { msgLimiter } from '../middleware/messageLimiter';
 import { AuthRequest } from '../types';
 import { sendPushToUser } from '../services/push';
 import { sendDmPush } from '../services/expoPush';
-import { deleteFromR2 } from '../services/r2';
 import { getDmListCache, setDmListCache, invalidateDmListCache } from '../redis/client';
 
 const router = Router();
@@ -327,8 +326,9 @@ router.delete('/messages/:id', authMiddleware, async (req: AuthRequest, res: Res
           'SELECT id, r2_key, file_size, user_id FROM attachments WHERE url=$1 LIMIT 1',
           [msg.attachment_url]
         );
-        if (att?.r2_key) {
-          await deleteFromR2(att.r2_key);
+        if (att) {
+          // R2 obiektów nie usuwamy — są deduplikowane po SHA-256 (zob. storage.ts),
+          // inna wiadomość może wskazywać na ten sam klucz.
           await query(
             'UPDATE users SET storage_used_bytes = GREATEST(0, storage_used_bytes - $1) WHERE id=$2',
             [att.file_size, att.user_id]

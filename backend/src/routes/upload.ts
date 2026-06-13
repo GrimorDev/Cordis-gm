@@ -111,7 +111,7 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
 
     const { url, r2Key } = await saveUploadedFile(req.file.buffer, req.file.mimetype, req.file.originalname, folder);
 
-    // ── Track quota ────────────────────────────────────────────────────────────
+    // ── Track quota + R2 inventory (for admin "Przestrzeń dyskowa") ──────────────
     if (folder === 'attachments') {
       try {
         await query(
@@ -120,6 +120,17 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
         );
       } catch (e) {
         console.error('[attachment quota error]', e);
+      }
+      if (r2Key) {
+        try {
+          await query(
+            `INSERT INTO attachments (user_id, r2_key, url, file_size, mime_type, original_name)
+             VALUES ($1,$2,$3,$4,$5,$6)`,
+            [userId, r2Key, url, fileSize, req.file.mimetype, req.file.originalname.slice(0, 255)]
+          );
+        } catch (e) {
+          console.error('[attachments insert error]', e);
+        }
       }
     }
 
