@@ -5,10 +5,9 @@ import { query } from '../db/pool';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
 import { config } from '../config';
 import { redis } from '../redis/client';
+import { saveUploadedFile, deleteOldDiskFile } from '../services/storage';
 import { generateCode, sendDeletionEmail } from '../services/email';
 import {
   generateTotpSecret, generateQrCode, verifyTotpCode,
@@ -32,28 +31,15 @@ async function broadcastUserUpdate(req: AuthRequest, data: any) {
   io.to(`user:${req.user!.id}`).emit('user_updated', data);
 }
 
-function makeUpload(folder: string) {
-  const storage = multer.diskStorage({
-    destination: (_req, _file, cb) => {
-      const dir = path.join(config.uploads.dir, folder);
-      fs.mkdirSync(dir, { recursive: true });
-      cb(null, dir);
-    },
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase();
-      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-    },
-  });
-  return multer({ storage, limits: { fileSize: config.uploads.maxSize },
-    fileFilter: (_req, file, cb) => {
-      if (!file.mimetype.startsWith('image/')) cb(new Error('Only images allowed'));
-      else cb(null, true);
-    },
-  });
-}
-
-const avatarUpload = makeUpload('avatars');
-const bannerUpload = makeUpload('banners');
+// Memory storage — handlers save via saveUploadedFile (R2 primary, disk fallback)
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: config.uploads.maxSize },
+  fileFilter: (_req, file, cb) => {
+    if (!file.mimetype.startsWith('image/')) cb(new Error('Only images allowed'));
+    else cb(null, true);
+  },
+});
 
 // GET /api/users/me/unread-counts
 router.get('/me/unread-counts', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -366,26 +352,30 @@ router.put('/me/status', authMiddleware, async (req: AuthRequest, res: Response)
 });
 
 // POST /api/users/me/avatar
-router.post('/me/avatar', authMiddleware, avatarUpload.single('avatar'), async (req: AuthRequest, res: Response) => {
+router.post('/me/avatar', authMiddleware, imageUpload.single('avatar'), async (req: AuthRequest, res: Response) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const avatarUrl = `/uploads/avatars/${req.file.filename}`;
   try {
+    const { rows: [old] } = await query('SELECT avatar_url FROM users WHERE id=$1', [req.user!.id]);
+    const { url: avatarUrl } = await saveUploadedFile(req.file.buffer, req.file.mimetype, req.file.originalname, 'avatars');
     const { rows: [u] } = await query('UPDATE users SET avatar_url=$1 WHERE id=$2 RETURNING id,username,avatar_url,custom_status', [avatarUrl, req.user!.id]);
     await broadcastUserUpdate(req, u);
+    if (old?.avatar_url && old.avatar_url !== avatarUrl) await deleteOldDiskFile(old.avatar_url);
     return res.json({ avatar_url: avatarUrl });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
 
 // POST /api/users/me/banner
-router.post('/me/banner', authMiddleware, bannerUpload.single('banner'), async (req: AuthRequest, res: Response) => {
+router.post('/me/banner', authMiddleware, imageUpload.single('banner'), async (req: AuthRequest, res: Response) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const bannerUrl = `/uploads/banners/${req.file.filename}`;
   try {
+    const { rows: [old] } = await query('SELECT banner_url FROM users WHERE id=$1', [req.user!.id]);
+    const { url: bannerUrl } = await saveUploadedFile(req.file.buffer, req.file.mimetype, req.file.originalname, 'banners');
     const { rows: [u] } = await query(
       'UPDATE users SET banner_url=$1 WHERE id=$2 RETURNING id,username,avatar_url,banner_url,banner_color,bio,custom_status',
       [bannerUrl, req.user!.id]
     );
     await broadcastUserUpdate(req, { id: u.id, username: u.username, avatar_url: u.avatar_url, banner_url: u.banner_url, banner_color: u.banner_color, bio: u.bio, custom_status: u.custom_status });
+    if (old?.banner_url && old.banner_url !== bannerUrl) await deleteOldDiskFile(old.banner_url);
     return res.json({ banner_url: bannerUrl });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });

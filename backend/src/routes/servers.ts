@@ -7,6 +7,7 @@ import { AuthRequest } from '../types';
 import crypto from 'crypto';
 import { runAutomations } from '../services/automations';
 import { getServerMembersCache, setServerMembersCache, invalidateServerMembersCache } from '../redis/client';
+import { saveUploadedFile, deleteOldDiskFile } from '../services/storage';
 
 const router = Router();
 
@@ -286,6 +287,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
     const { name, description, icon_url, banner_url, accent_color, banner_color } = req.body;
+    const { rows: [old] } = await query('SELECT icon_url, banner_url FROM servers WHERE id=$1', [req.params.id]);
     const { rows: [server] } = await query(
       `UPDATE servers SET
          name         = COALESCE($1, name),
@@ -300,6 +302,8 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
        accent_color || null, banner_color || null,
        req.params.id]
     );
+    if (icon_url && old?.icon_url && old.icon_url !== icon_url) await deleteOldDiskFile(old.icon_url);
+    if (banner_url && old?.banner_url && old.banner_url !== banner_url) await deleteOldDiskFile(old.banner_url);
     const io = req.app.get('io');
     if (io) io.to(`server:${req.params.id}`).emit('server_updated', server);
     return res.json(server);
@@ -1205,26 +1209,12 @@ router.post('/:id/join-public', authMiddleware, joinLimiter, async (req: AuthReq
 
 // ── Soundboard ───────────────────────────────────────────────────────────────
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
-import { config } from '../config';
 
 const audioFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
   const ok = ['audio/mpeg','audio/ogg','audio/wav','audio/flac','audio/mp4','audio/aac','audio/opus','audio/x-wav','audio/webm'].includes(file.mimetype);
   ok ? cb(null, true) : cb(new Error('Dozwolone tylko pliki audio (mp3, ogg, wav, flac)'));
 };
-const diskAudio = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    const dir = path.join(config.uploads.dir, 'sounds');
-    fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase() || '.mp3';
-    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-  },
-});
-const uploadAudio = multer({ storage: diskAudio, limits: { fileSize: 10 * 1024 * 1024 }, fileFilter: audioFilter });
+const uploadAudio = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 }, fileFilter: audioFilter });
 
 // GET /api/servers/:id/sounds
 router.get('/:id/sounds', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -1263,9 +1253,9 @@ router.post('/:id/sounds', authMiddleware, async (req: AuthRequest, res: Respons
     const volume     = Math.min(200, Math.max(1, parseInt(req.body.volume) || 100));
     const startTrim  = parseFloat(req.body.start_trim) || 0;
     const endTrim    = req.body.end_trim ? parseFloat(req.body.end_trim) : null;
-    const fileUrl    = `/uploads/sounds/${req.file.filename}`;
 
     try {
+      const { url: fileUrl } = await saveUploadedFile(req.file.buffer, req.file.mimetype, req.file.originalname, 'sounds');
       const { rows: [sound] } = await query(
         `INSERT INTO server_sounds (server_id, name, emoji, file_url, volume, start_trim, end_trim, added_by)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
@@ -1286,11 +1276,7 @@ router.delete('/:id/sounds/:soundId', authMiddleware, async (req: AuthRequest, r
     const { rows: [sound] } = await query(`SELECT file_url FROM server_sounds WHERE id=$1 AND server_id=$2`, [soundId, serverId]);
     if (!sound) return res.status(404).json({ error: 'Sound not found' });
     await query(`DELETE FROM server_sounds WHERE id=$1`, [soundId]);
-    // Delete file from disk
-    try {
-      const filePath = path.join(config.uploads.dir, sound.file_url.replace('/uploads/', ''));
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    } catch { /* ignore file deletion errors */ }
+    await deleteOldDiskFile(sound.file_url);
     return res.json({ ok: true });
   } catch (err) { console.error('[sounds/delete]', err); return res.status(500).json({ error: 'Internal server error' }); }
 });

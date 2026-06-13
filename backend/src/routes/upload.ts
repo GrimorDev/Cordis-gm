@@ -1,12 +1,9 @@
 import { Router, Response } from 'express';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
-import { config } from '../config';
 import { authMiddleware } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { query } from '../db/pool';
-import { uploadToR2, r2Enabled } from '../services/r2';
+import { saveUploadedFile } from '../services/storage';
 
 const router = Router();
 
@@ -51,28 +48,13 @@ const attachmentFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
   else cb(new Error(`Typ pliku nieobsługiwany: ${file.mimetype} (.${ext})`));
 };
 
-// ── Disk storage (images + fallback) ─────────────────────────────────────────
-const diskStorage = multer.diskStorage({
-  destination: (req, _file, cb) => {
-    const folder = (req.query.folder as string) || 'misc';
-    const dir = path.join(config.uploads.dir, folder);
-    fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-  },
-});
-
+// ── Memory storage — handlers save via saveUploadedFile (R2 primary, disk fallback) ──
 const uploadImages = multer({
-  storage: diskStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: imageOnlyFilter,
 });
 
-// Attachments: memory storage — pliki trafiają w pamięć, handler zapisuje na dysk
-// (i opcjonalnie do R2 w tle jako CDN backup)
 const uploadAttachments = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 600 * 1024 * 1024 }, // 600MB max (Cordyn Power)
@@ -80,20 +62,20 @@ const uploadAttachments = multer({
 });
 
 // ── POST /api/upload/image?folder=avatars|banners|servers|emojis ──────────────
-router.post('/image', authMiddleware, (req: AuthRequest, res: Response, next) => {
-  uploadImages.single('file')(req, res, (err) => {
+router.post('/image', authMiddleware, (req: AuthRequest, res: Response) => {
+  uploadImages.single('file')(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const folder = (req.query.folder as string) || 'misc';
-    return res.json({ url: `/uploads/${folder}/${req.file.filename}` });
+    const { url } = await saveUploadedFile(req.file.buffer, req.file.mimetype, req.file.originalname, folder);
+    return res.json({ url });
   });
 });
 
-// ── POST /api/upload?folder=attachments ──────────────────────────────────────
-// STRATEGIA: dysk jako primary storage, R2 jako background backup (opcjonalne).
-// URL zawsze jest disk-based (/uploads/...) — niezależny od dostępności R2.
-// Eliminuje 404 z R2 presigned URL lub streaming proxy.
-router.post('/', authMiddleware, (req: AuthRequest, res: Response, next) => {
+// ── POST /api/upload?folder=attachments|avatars|emojis|servers ───────────────
+// R2 primary (when configured) — VPS dysk ma tylko 75GB i służy jako fallback
+// (lokalny dev bez credentiali R2, albo gdy konkretny upload do R2 się nie powiedzie).
+router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
   const folder = (req.query.folder as string) || 'misc';
   const middleware = folder === 'attachments'
     ? uploadAttachments.single('file')
@@ -127,63 +109,11 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response, next) => {
       } catch { /* błąd sprawdzenia → przepuść */ }
     }
 
-    // ── Zapisz na dysk (primary storage) ──────────────────────────────────────
-    let diskUrl: string;
-
-    if (req.file.buffer) {
-      // memory storage (attachments)
-      try {
-        const ext      = path.extname(req.file.originalname).toLowerCase() || '';
-        const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
-        const dir      = path.resolve(path.join(config.uploads.dir, folder));
-        fs.mkdirSync(dir, { recursive: true });
-        await fs.promises.writeFile(path.join(dir, filename), req.file.buffer);
-        diskUrl = `/uploads/${folder}/${filename}`;
-        console.log(`[upload] disk ok: ${diskUrl}`);
-      } catch (diskErr: any) {
-        console.error('[upload] disk write failed:', diskErr);
-        return res.status(500).json({ error: 'Nie można zapisać pliku na dysk' });
-      }
-    } else {
-      // disk storage (images uploaded via uploadImages middleware)
-      diskUrl = `/uploads/${folder}/${req.file.filename}`;
-    }
-
-    // ── R2 backup w tle (fire-and-forget, nie blokuje odpowiedzi) ─────────────
-    // Cel: CDN/deduplication backup. Błędy R2 nie wpływają na odpowiedź.
-    // Retry z exponential backoff: 3 próby co 2s, 4s, 8s
-    let r2Key: string | null = null;
-    let deduplicated = false;
-
-    if (r2Enabled && req.file.buffer) {
-      const buf = Buffer.from(req.file.buffer); // capture reference before multer clears it
-      const mime = req.file.mimetype;
-      const orig = req.file.originalname;
-      (async () => {
-        const delays = [0, 2000, 4000, 8000];
-        for (let attempt = 0; attempt < delays.length; attempt++) {
-          if (delays[attempt] > 0) await new Promise(r => setTimeout(r, delays[attempt]));
-          try {
-            const result = await uploadToR2(buf, mime, orig);
-            r2Key        = result.key;
-            deduplicated = result.deduplicated;
-            console.log(`[upload] R2 backup ok (attempt ${attempt + 1}): ${result.key}${result.deduplicated ? ' (dedup)' : ''}`);
-            return;
-          } catch (err: any) {
-            if (attempt < delays.length - 1) {
-              console.warn(`[upload] R2 attempt ${attempt + 1} failed, retrying: ${err?.message}`);
-            } else {
-              console.warn(`[upload] R2 backup permanently failed after ${delays.length} attempts: ${err?.message}`);
-            }
-          }
-        }
-      })();
-    }
+    const { url, r2Key } = await saveUploadedFile(req.file.buffer, req.file.mimetype, req.file.originalname, folder);
 
     // ── Track quota ────────────────────────────────────────────────────────────
     if (folder === 'attachments') {
       try {
-        // Quota update: nie czekamy na R2 wynik (deduplicated może być nieznane)
         await query(
           'UPDATE users SET storage_used_bytes = storage_used_bytes + $1 WHERE id=$2',
           [fileSize, userId]
@@ -193,8 +123,7 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response, next) => {
       }
     }
 
-    // ── Odpowiedź: zawsze URL z dysku ─────────────────────────────────────────
-    return res.json({ url: diskUrl, r2_key: r2Key, size: fileSize, mime: req.file.mimetype });
+    return res.json({ url, r2_key: r2Key, size: fileSize, mime: req.file.mimetype });
   });
 });
 
