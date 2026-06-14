@@ -422,7 +422,7 @@ export default function SupportPage() {
         style={{ position: 'sticky', top: 0, zIndex: 50, borderBottom: `1px solid ${cardBorder}`,
           background: hc ? 'rgba(0,0,0,0.95)' : 'rgba(9,9,15,0.85)', backdropFilter: 'blur(20px)' }}
       >
-        <div style={{ maxWidth: 1000, margin: '0 auto', padding: '0 28px', height: 58,
+        <div className="site-header-row" style={{ maxWidth: 1000, margin: '0 auto', padding: '0 28px', height: 58,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
             <img src="/cordyn_logo.png" alt="Cordyn" style={{ width: 28, height: 28, borderRadius: 8 }}
@@ -431,7 +431,7 @@ export default function SupportPage() {
             <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 15, margin: '0 2px' }}>/</span>
             <span style={{ color: accent, fontWeight: 600, fontSize: 14 }}>Centrum pomocy</span>
           </a>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="site-header-nav" style={{ display: 'flex', gap: 8 }}>
             <a href="/blog" style={{ padding: '7px 16px', borderRadius: 10, background: cardBg,
               border: `1px solid ${cardBorder}`, color: textMuted, fontSize: 13,
               fontWeight: 500, textDecoration: 'none' }}>Blog</a>

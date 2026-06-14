@@ -295,14 +295,14 @@ export default function BlogPage() {
       {/* ── Header ── */}
       <motion.header initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}
         style={{ position: 'relative', zIndex: 10, borderBottom: `1px solid ${border}`, background: hc ? 'rgba(0,0,0,0.9)' : 'rgba(9,9,15,0.7)', backdropFilter: 'blur(16px)' }}>
-        <div style={{ maxWidth: 820, margin: '0 auto', padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div className="site-header-row" style={{ maxWidth: 820, margin: '0 auto', padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
             <img src="/cordyn_logo.png" alt="" style={{ width: 28, height: 28, borderRadius: 8 }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}/>
             <span style={{ color: text, fontWeight: 700, fontSize: 15 }}>Cordyn</span>
             <span style={{ color: dim, margin: '0 2px' }}>/</span>
             <span style={{ color: '#818cf8', fontWeight: 600, fontSize: 14 }}>Blog</span>
           </a>
-          <nav style={{ display: 'flex', gap: 8 }}>
+          <nav className="site-header-nav" style={{ display: 'flex', gap: 8 }}>
             <a href="/support" style={{ padding: '7px 16px', borderRadius: 10, background: card, border: `1px solid ${border}`, color: muted, fontSize: 13, fontWeight: 500, textDecoration: 'none', transition: 'color 0.15s' }}>
               Centrum pomocy
             </a>
