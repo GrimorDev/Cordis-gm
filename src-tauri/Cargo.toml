@@ -26,13 +26,18 @@ log = "0.4"
 # blanket `impl<T: Into<Number>> From<T> for Value`. Pin to the last good
 # release until a tauri-utils version that resolves this is available.
 time = "=0.3.47"
-# brotli-decompressor 5.0.2 widened its alloc-no-stdlib requirement to
-# ">=2.0.4,<4", letting Cargo pull in the freshly-published alloc-no-stdlib
-# 3.0.0 for that edge while brotli 8.0.3 itself still requires "^2.0"
-# directly — two incompatible alloc-no-stdlib versions in one build break
-# StandardAlloc's BrotliAlloc impl (E0277). Pin to the last good 5.0.1
-# (alloc-no-stdlib ^2.0) until brotli/brotli-decompressor re-align.
+# 2026-06-14: danielrh published a coordinated bump of alloc-no-stdlib (->3.0.0),
+# alloc-stdlib (->0.2.3) and brotli-decompressor (->5.0.2). Both alloc-stdlib
+# 0.2.3 and brotli-decompressor 5.0.2 widened their alloc-no-stdlib requirement
+# to ">=2.0.4,<4", so Cargo resolves that edge to the new 3.0.0 — while brotli
+# 8.0.3 itself still requires alloc-no-stdlib "^2.0" (locked to 2.0.4). Two
+# incompatible alloc_no_stdlib versions then coexist, so StandardAlloc (impl'd
+# against 3.0.0 via alloc-stdlib) doesn't satisfy the Allocator bounds
+# brotli-decompressor needs (E0277). Pin both brotli-decompressor and
+# alloc-stdlib to their last versions with a strict "^2.0" alloc-no-stdlib
+# requirement until the ecosystem re-aligns.
 brotli-decompressor = { version = "=5.0.1", default-features = false }
+alloc-stdlib = "=0.2.2"
 tauri = { version = "2.10.3", features = ["tray-icon", "image-ico", "image-png", "devtools"] }
 tauri-plugin-log = "2"
 tauri-plugin-updater = "2"
