@@ -26,6 +26,13 @@ log = "0.4"
 # blanket `impl<T: Into<Number>> From<T> for Value`. Pin to the last good
 # release until a tauri-utils version that resolves this is available.
 time = "=0.3.47"
+# brotli-decompressor 5.0.2 widened its alloc-no-stdlib requirement to
+# ">=2.0.4,<4", letting Cargo pull in the freshly-published alloc-no-stdlib
+# 3.0.0 for that edge while brotli 8.0.3 itself still requires "^2.0"
+# directly — two incompatible alloc-no-stdlib versions in one build break
+# StandardAlloc's BrotliAlloc impl (E0277). Pin to the last good 5.0.1
+# (alloc-no-stdlib ^2.0) until brotli/brotli-decompressor re-align.
+brotli-decompressor = { version = "=5.0.1", default-features = false }
 tauri = { version = "2.10.3", features = ["tray-icon", "image-ico", "image-png", "devtools"] }
 tauri-plugin-log = "2"
 tauri-plugin-updater = "2"
