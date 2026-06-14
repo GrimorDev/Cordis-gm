@@ -56,6 +56,7 @@ if (path === '/stats') {
   Component = SupportPage as any;
 } else {
   Component = App;
+  document.body.classList.add('app-shell');
 }
 
 createRoot(document.getElementById('root')!).render(

@@ -34,6 +34,13 @@ body {
   font-size: 15px;
   line-height: 1.5;
   margin: 0;
+}
+
+/* Main app shell is a fixed full-viewport layout with its own internal
+   scroll containers — the page body itself must never scroll/bounce.
+   Static pages (blog, support, etc.) rely on normal body scrolling and
+   set this class neither — see main.tsx. */
+body.app-shell {
   overflow: hidden;
 }
 
