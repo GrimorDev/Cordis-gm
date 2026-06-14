@@ -15921,29 +15921,41 @@ export default function App() {
               <div className="call-orb call-orb-4"/>
               <div className="call-vignette"/>
               {/* Call header */}
-              <header className="shrink-0 flex items-center justify-between px-5 py-3 relative z-10"
-                style={{
-                  background:'linear-gradient(180deg,rgba(8,9,18,0.85) 0%,rgba(8,9,18,0.40) 100%)',
-                  borderBottom:'1px solid rgba(255,255,255,0.08)',
-                  backdropFilter:'blur(12px)',
-                }}>
-                {/* Shimmer accent top line */}
-                <div style={{position:'absolute',top:0,left:0,right:0,height:1,background:'linear-gradient(90deg,transparent 0%,rgba(255,143,64,0.40) 40%,rgba(89,194,255,0.30) 70%,transparent 100%)',pointerEvents:'none'}}/>
-                <div className="flex items-center gap-2.5">
-                  <div className="relative flex items-center justify-center w-5 h-5">
-                    <div className="w-2 h-2 bg-emerald-400 rounded-full z-10 relative"/>
-                    <div className="absolute w-4 h-4 bg-emerald-400/30 rounded-full animate-ping"/>
-                  </div>
-                  {activeCall.type==='voice_channel'
-                    ? <><Volume2 size={14} className="text-emerald-400"/><span className="font-bold text-white text-sm tracking-tight">{activeCall.channelName}</span></>
-                    : activeCall.type==='dm_video'
-                      ? <><Video size={14} className="text-[#59C2FF]"/><span className="font-bold text-white text-sm tracking-tight">{activeCall.username}</span></>
-                      : <><Phone size={14} className="text-[#59C2FF]"/><span className="font-bold text-white text-sm tracking-tight">{activeCall.username}</span></>
-                  }
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-emerald-400 font-mono px-2.5 py-0.5 rounded-lg font-semibold"
-                    style={{background:'rgba(127,217,98,0.10)',border:'1px solid rgba(127,217,98,0.20)'}}>{fmtDur(callDuration)}</span>
+              {(() => {
+                const channelBitrate = activeCall.type==='voice_channel'
+                  ? (serverFull?.categories.flatMap(c=>c.channels).find(c=>c.id===activeCall.channelId)?.bitrate ?? 64)
+                  : null;
+                const participantCount = activeCall.type==='voice_channel'
+                  ? (voiceUsers[activeCall.channelId]||[]).length
+                  : (activeCall.userId ? 2 : 1);
+                const pingMs = Math.round(voiceStats.lastRtt);
+                return (
+                  <header className="shrink-0 flex flex-col gap-1.5 px-5 py-3 relative z-10"
+                    style={{
+                      background:'linear-gradient(180deg,rgba(8,9,18,0.85) 0%,rgba(8,9,18,0.40) 100%)',
+                      borderBottom:'1px solid rgba(255,255,255,0.08)',
+                      backdropFilter:'blur(12px)',
+                    }}>
+                    {/* Shimmer accent top line */}
+                    <div style={{position:'absolute',top:0,left:0,right:0,height:1,background:'linear-gradient(90deg,transparent 0%,rgba(255,143,64,0.40) 40%,rgba(89,194,255,0.30) 70%,transparent 100%)',pointerEvents:'none'}}/>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {activeCall.type==='voice_channel'
+                          ? <Volume2 size={16} className="text-emerald-400 shrink-0"/>
+                          : activeCall.type==='dm_video'
+                            ? <Video size={16} className="text-[#59C2FF] shrink-0"/>
+                            : <Phone size={16} className="text-[#59C2FF] shrink-0"/>
+                        }
+                        <div className="flex flex-col leading-tight min-w-0">
+                          <span className="font-bold text-white text-sm tracking-tight truncate">
+                            {activeCall.type==='voice_channel' ? activeCall.channelName : activeCall.username}
+                          </span>
+                          <span className="text-[11px] text-zinc-500 font-medium">
+                            {activeCall.type==='voice_channel' ? 'kanał głosowy' : activeCall.type==='dm_video' ? 'Wideorozmowa' : 'Połączenie głosowe'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
 
                   {activeCall.type==='voice_channel' && ownSpotify?.connected && (
                     voiceDj[activeCall.channelId] ? (
@@ -15993,12 +16005,37 @@ export default function App() {
                       </button>
                     )
                   )}
-                  <button onClick={()=>setShowCallPanel(false)} title="Minimalizuj"
-                    className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all border border-transparent hover:border-white/[0.10]">
-                    <Minimize2 size={13}/>
-                  </button>
-                </div>
-              </header>
+                        <button onClick={()=>setShowCallPanel(false)} title="Minimalizuj"
+                          className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all border border-transparent hover:border-white/[0.10]">
+                          <Minimize2 size={13}/>
+                        </button>
+                      </div>
+                    </div>
+                    {/* Status row */}
+                    <div className="flex items-center gap-2 text-[11px] text-zinc-500 font-medium flex-wrap">
+                      <span className="flex items-center gap-1.5 text-emerald-400 font-semibold">
+                        <span className="relative flex w-2 h-2">
+                          <span className="w-2 h-2 bg-emerald-400 rounded-full"/>
+                          <span className="absolute inset-0 bg-emerald-400/40 rounded-full animate-ping"/>
+                        </span>
+                        połączony
+                      </span>
+                      <span className="opacity-30">·</span>
+                      <span className="font-mono text-zinc-400">{fmtDur(callDuration)}</span>
+                      <span className="opacity-30">·</span>
+                      <span className={`font-mono ${rttColor(pingMs)}`}>{pingMs} ms</span>
+                      {channelBitrate != null && (
+                        <>
+                          <span className="opacity-30">·</span>
+                          <span className="font-mono text-zinc-400">OPUS {channelBitrate}k</span>
+                        </>
+                      )}
+                      <span className="opacity-30">·</span>
+                      <span className="text-zinc-400">{participantCount} {participantCount===1?'osoba':'osób'}</span>
+                    </div>
+                  </header>
+                );
+              })()}
               {/* Spotify DJ info bar */}
               {activeCall?.type==='voice_channel' && voiceDj[activeCall.channelId] && (
                 <div className="flex items-center justify-between px-4 py-2 bg-[#1DB954]/8 border-b border-[#1DB954]/20 shrink-0 relative z-10">
@@ -16102,8 +16139,12 @@ export default function App() {
                             <ScreenShare size={9}/> Live
                           </div>
                         )}
+                        {/* Mute badge */}
+                        {!isSelf2&&uMuted&&(
+                          <div className="cpc-mute-badge"><MicOff size={11}/></div>
+                        )}
                         {/* Deafened badge */}
-                        {!isSelf2&&uDeafened&&(
+                        {!isSelf2&&!uMuted&&uDeafened&&(
                           <div className="absolute top-2 right-2 z-10 w-5 h-5 rounded-full bg-rose-500 flex items-center justify-center">
                             <VolumeX size={9} className="text-white"/>
                           </div>
@@ -16116,18 +16157,12 @@ export default function App() {
                           </div>
                         )}
                       </div>
-                      {/* Name bar */}
-                      <div className="cpc-name-bar">
-                        <span className={`cpc-name ${isSpeaking?'text-[#7FD962]':uMuted?'text-rose-400':''}`}>
-                          {u.username}
-                        </span>
-                        <div className={`cpc-mic ${uMuted?'bg-rose-500/20':isSpeaking?'bg-[#7FD962]/20':'bg-white/[0.06]'}`}>
-                          {uMuted
-                            ? <MicOff size={10} className="text-rose-400"/>
-                            : isSpeaking
-                              ? <Mic size={10} className="text-[#7FD962]"/>
-                              : <Mic size={10} className="text-zinc-600"/>
-                          }
+                      {/* Name + status footer */}
+                      <div className="cpc-name-block">
+                        <span className="cpc-name">{u.username}</span>
+                        <div className={`cpc-status-line ${uMuted?'status-muted':isSpeaking?'status-speaking':''}`}>
+                          {isSpeaking && <span className="voice-eq-bars"><span/><span/><span/></span>}
+                          {uMuted ? 'WYCISZONY' : isSpeaking ? 'MÓWI' : 'SŁUCHA'}
                         </div>
                       </div>
                     </motion.div>
@@ -16186,11 +16221,12 @@ export default function App() {
                     setWatchingStreamId(null);
                     if (activeCall.channelId) getSocket().emit('stream_watch_stop' as any, { channel_id: activeCall.channelId, streamer_id: watchingStreamId });
                   };
+                  const vidSettings = screenStream?.getVideoTracks()[0]?.getSettings();
                   return (
-                    <div className="flex-1 flex flex-col gap-3 p-4 overflow-hidden min-h-0 relative z-10">
-                      {/* Active stream video */}
-                      <div className="relative flex-1 bg-zinc-950 rounded-xl overflow-hidden min-h-0 group">
-                        {screenStream && (
+                    <div className="flex-1 flex gap-3 p-4 overflow-hidden min-h-0 relative z-10">
+                      {/* Screen share card */}
+                      <div className="relative flex-1 screen-share-card min-h-0 group">
+                        {screenStream ? (
                           <>
                             {/* Blurred background fill — removes black bars when aspect ratios differ */}
                             <video
@@ -16207,7 +16243,17 @@ export default function App() {
                               autoPlay playsInline muted
                             />
                           </>
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-[13px] font-extrabold uppercase tracking-[0.2em] text-white/15">EKRAN UDOSTĘPNIONY</span>
+                          </div>
                         )}
+                        {/* Live badge */}
+                        <div className="absolute top-3 left-3 z-10">
+                          <span className="inline-flex items-center gap-1.5 bg-[#C8FF6B] text-[#0a0e05] text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-lg shadow-[0_4px_14px_rgba(200,255,107,0.30)]">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#0a0e05]"/> NA ŻYWO
+                          </span>
+                        </div>
                         {/* PiP: own stream while watching someone else */}
                         {activeCall.isScreenSharing && screenStreamRef.current && (
                           <div className="absolute bottom-16 right-3 w-36 aspect-video bg-black rounded-lg overflow-hidden border border-white/20 shadow-lg">
@@ -16220,47 +16266,49 @@ export default function App() {
                             </div>
                           </div>
                         )}
-                        {/* Bottom bar */}
-                        <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between gap-2">
-                          <div className="flex flex-col gap-1.5">
-                            <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-sm rounded-lg px-2.5 py-1">
-                              <ScreenShare size={12} className="text-indigo-400"/>
-                              <span className="text-xs text-white font-medium">{screenOwner} udostępnia ekran</span>
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-600/80 text-white tracking-wide" title="Stream przez serwer pośredni">SFU</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {watcherBadge(watchingStreamId, true)}
-                              {watchers.length === 0 && (
-                                <span className="text-[10px] text-zinc-600 px-2">0 oglądających</span>
-                              )}
-                            </div>
+                        {/* Bottom-left caption */}
+                        <div className="absolute bottom-3 left-3 flex flex-col gap-1.5 max-w-[75%]">
+                          <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-sm rounded-lg px-2.5 py-1 w-fit">
+                            <ScreenShare size={12} className="text-[#C8FF6B]"/>
+                            <span className="text-xs text-white font-medium truncate">{screenOwner} · udostępnia ekran</span>
                           </div>
-                          {/* Audio controls */}
-                          <div className="flex items-center gap-2 bg-black/60 backdrop-blur-sm rounded-lg px-2.5 py-1.5">
-                            <button onClick={()=>{
-                              const m = !isMutedStream;
-                              setStreamMutedByMe(p=>({...p,[watchingStreamId]:m}));
-                              muteRemoteScreenStream(watchingStreamId, m);
-                              if (!m) setRemoteScreenVolume(watchingStreamId, svol);
-                            }} title={isMutedStream ? 'Włącz dźwięk' : 'Wycisz'}
-                              className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${isMutedStream?'text-rose-400':'text-zinc-300 hover:text-white'}`}>
-                              {isMutedStream ? <VolumeX size={13}/> : <Volume2 size={13}/>}
-                            </button>
-                            <input type="range" min={0} max={100} step={5} value={isMutedStream ? 0 : svol}
-                              onChange={e=>{
-                                const v=+e.target.value;
-                                setStreamVols(p=>({...p,[watchingStreamId]:v}));
-                                setRemoteScreenVolume(watchingStreamId, v);
-                                if (v>0&&isMutedStream){setStreamMutedByMe(p=>({...p,[watchingStreamId]:false}));muteRemoteScreenStream(watchingStreamId,false);}
-                                if (v===0){setStreamMutedByMe(p=>({...p,[watchingStreamId]:true}));muteRemoteScreenStream(watchingStreamId,true);}
-                                try{localStorage.setItem(`cordyn_streamvol_${watchingStreamId}`,String(v));}catch{}
-                              }}
-                              className="w-20 accent-indigo-400 cursor-pointer" style={{height:4}}/>
-                            <span className="text-[10px] text-zinc-400 font-mono w-7 text-right">{isMutedStream?0:svol}%</span>
+                          <div className="flex items-center gap-2">
+                            {vidSettings?.height && (
+                              <span className="text-[10px] text-zinc-400 font-mono bg-black/60 backdrop-blur-sm rounded-lg px-2.5 py-1">
+                                {vidSettings.height}P · {Math.round(vidSettings.frameRate||0)}FPS
+                              </span>
+                            )}
+                            {watcherBadge(watchingStreamId, true)}
+                            {watchers.length === 0 && (
+                              <span className="text-[10px] text-zinc-600 px-2">0 oglądających</span>
+                            )}
                           </div>
                         </div>
-                        {/* Top overlay: stop watching + fullscreen + switch to other streams */}
-                        <div className="absolute top-3 left-3 right-3 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
+                        {/* Audio controls */}
+                        <div className="absolute bottom-3 right-3 flex items-center gap-2 bg-black/60 backdrop-blur-sm rounded-lg px-2.5 py-1.5">
+                          <button onClick={()=>{
+                            const m = !isMutedStream;
+                            setStreamMutedByMe(p=>({...p,[watchingStreamId]:m}));
+                            muteRemoteScreenStream(watchingStreamId, m);
+                            if (!m) setRemoteScreenVolume(watchingStreamId, svol);
+                          }} title={isMutedStream ? 'Włącz dźwięk' : 'Wycisz'}
+                            className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${isMutedStream?'text-rose-400':'text-zinc-300 hover:text-white'}`}>
+                            {isMutedStream ? <VolumeX size={13}/> : <Volume2 size={13}/>}
+                          </button>
+                          <input type="range" min={0} max={100} step={5} value={isMutedStream ? 0 : svol}
+                            onChange={e=>{
+                              const v=+e.target.value;
+                              setStreamVols(p=>({...p,[watchingStreamId]:v}));
+                              setRemoteScreenVolume(watchingStreamId, v);
+                              if (v>0&&isMutedStream){setStreamMutedByMe(p=>({...p,[watchingStreamId]:false}));muteRemoteScreenStream(watchingStreamId,false);}
+                              if (v===0){setStreamMutedByMe(p=>({...p,[watchingStreamId]:true}));muteRemoteScreenStream(watchingStreamId,true);}
+                              try{localStorage.setItem(`cordyn_streamvol_${watchingStreamId}`,String(v));}catch{}
+                            }}
+                            className="w-20 accent-indigo-400 cursor-pointer" style={{height:4}}/>
+                          <span className="text-[10px] text-zinc-400 font-mono w-7 text-right">{isMutedStream?0:svol}%</span>
+                        </div>
+                        {/* Top overlay: stop watching + switch to other streams + fullscreen */}
+                        <div className="absolute top-12 left-3 right-3 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
                           <div className="flex items-center gap-2">
                             <button onClick={stopWatching}
                               className="h-7 bg-zinc-800/80 backdrop-blur-sm border border-white/10 rounded-lg flex items-center px-2.5 gap-1.5 text-xs text-zinc-300 hover:text-white transition-colors">
@@ -16289,8 +16337,8 @@ export default function App() {
                           </button>
                         </div>
                       </div>
-                      {/* Participants strip */}
-                      <div className="shrink-0 flex flex-wrap items-center justify-center gap-3 py-1 relative z-10">
+                      {/* Participants sidebar */}
+                      <div className="shrink-0 flex flex-wrap content-start gap-2.5 overflow-y-auto custom-scrollbar pr-1" style={{width:380}}>
                         {allParticipants}
                       </div>
                     </div>
@@ -16308,24 +16356,24 @@ export default function App() {
                             const isSelf = streamId === 'self';
                             const stream = isSelf ? screenStreamRef.current : remoteScreenStreamsRef.current.get(streamId);
                             const ownerName = isSelf ? (currentUser?.username||'Ty') : getUsername(streamId);
-                            const selfWatchers = streamWatchers['self'] ?? [];
-                            const wList = isSelf ? selfWatchers : (streamWatchers[streamId] ?? []);
                             return (
-                              <div key={streamId} className={`relative bg-black rounded-2xl overflow-hidden aspect-video group border ${isSelf?'border-indigo-500/30':'border-white/[0.06]'} hover:border-white/20 transition-all`}>
+                              <div key={streamId} className={`relative screen-share-card aspect-video group ${isSelf?'ring-2 ring-[#C8FF6B]/40':''}`}>
                                 {/* Video preview — blurred for others, clear for own stream */}
-                                {stream ? (
+                                {stream && (
                                   <video
                                     ref={el=>{if(el&&el.srcObject!==stream){el.muted=true;el.srcObject=stream;el.play().catch(()=>{});}}}
                                     className="w-full h-full object-contain"
                                     style={isSelf?{}:{filter:'blur(14px)',transform:'scale(1.06)'}}
                                     autoPlay playsInline muted/>
-                                ) : (
-                                  <div className="w-full h-full bg-zinc-950 flex items-center justify-center">
-                                    <ScreenShare size={32} className="text-zinc-800"/>
-                                  </div>
                                 )}
                                 {/* Dim overlay for remote streams */}
-                                {!isSelf && <div className="absolute inset-0 bg-black/45"/>}
+                                {!isSelf && stream && <div className="absolute inset-0 bg-black/45"/>}
+                                {/* Live badge */}
+                                <div className="absolute top-2.5 left-2.5 z-10">
+                                  <span className="inline-flex items-center gap-1.5 bg-[#C8FF6B] text-[#0a0e05] text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-md">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[#0a0e05]"/> NA ŻYWO
+                                  </span>
+                                </div>
                                 {/* Center CTA */}
                                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
                                   {!isSelf && (
@@ -16685,82 +16733,106 @@ export default function App() {
                     </div>
                   );
                 })()}
-                {/* Floating control pill */}
-                <div className="flex items-center justify-center">
-                  <div className="call-controls-bar">
-                    <div className="relative">
-                      <button onClick={toggleMute} title={activeCall.isMuted?'Włącz mikrofon':'Wycisz mikrofon'}
-                        className={`call-ctrl-btn ${activeCall.isMuted?'active-red':''}`}>
-                        {activeCall.isMuted?<MicOff size={18}/>:<Mic size={18}/>}
-                      </button>
-                      {voiceActivationMode==='push_to_talk' && !activeCall.isMuted && (
-                        <span title={`Push-to-Talk — przytrzymaj „${formatKeyCode(pttKey)}”, by mówić`}
-                          className={`absolute -bottom-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center border transition-colors ${
-                            pttActive
-                              ? 'bg-[#7FD962] border-[#7FD962] text-zinc-900 shadow-[0_0_6px_rgba(127,217,98,0.7)]'
-                              : 'bg-zinc-800 border-white/20 text-zinc-300'
-                          }`}>
-                          {formatKeyCode(pttKey)}
+                {/* Bottom info + controls bar */}
+                {(() => {
+                  const channelBitrate = activeCall.type==='voice_channel'
+                    ? (serverFull?.categories.flatMap(c=>c.channels).find(c=>c.id===activeCall.channelId)?.bitrate ?? 64)
+                    : null;
+                  const participantCount = activeCall.type==='voice_channel'
+                    ? (voiceUsers[activeCall.channelId]||[]).length
+                    : (activeCall.userId ? 2 : 1);
+                  const pingMs = Math.round(voiceStats.lastRtt);
+                  return (
+                    <div className="call-bottombar">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="relative flex w-2.5 h-2.5 shrink-0">
+                          <span className="w-2.5 h-2.5 bg-[#C8FF6B] rounded-full"/>
+                          <span className="absolute inset-0 bg-[#C8FF6B]/40 rounded-full animate-ping"/>
                         </span>
-                      )}
+                        <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#C8FF6B] shrink-0">LIVE</span>
+                        <span className="font-bold text-white text-sm truncate">
+                          {activeCall.type==='voice_channel' ? activeCall.channelName : activeCall.username}
+                        </span>
+                        <span className="hidden sm:inline text-zinc-500 text-xs font-mono truncate">
+                          · {participantCount} {participantCount===1?'osoba':'osób'} · {pingMs} ms{channelBitrate!=null?` · ${channelBitrate} kb/s`:''}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap justify-end">
+                        <div className="relative">
+                          <button onClick={toggleMute} title={activeCall.isMuted?'Włącz mikrofon':'Wycisz mikrofon'}
+                            className={`call-ctrl-btn ${activeCall.isMuted?'active-red':''}`}>
+                            {activeCall.isMuted?<MicOff size={18}/>:<Mic size={18}/>}
+                          </button>
+                          {voiceActivationMode==='push_to_talk' && !activeCall.isMuted && (
+                            <span title={`Push-to-Talk — przytrzymaj „${formatKeyCode(pttKey)}”, by mówić`}
+                              className={`absolute -bottom-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center border transition-colors ${
+                                pttActive
+                                  ? 'bg-[#7FD962] border-[#7FD962] text-zinc-900 shadow-[0_0_6px_rgba(127,217,98,0.7)]'
+                                  : 'bg-zinc-800 border-white/20 text-zinc-300'
+                              }`}>
+                              {formatKeyCode(pttKey)}
+                            </span>
+                          )}
+                        </div>
+                        <button onClick={toggleDeafen} title={activeCall.isDeafened?'Włącz głośnik':'Wycisz głośnik'}
+                          className={`call-ctrl-btn ${activeCall.isDeafened?'active-red':''}`}>
+                          {activeCall.isDeafened?<VolumeX size={18}/>:<Volume2 size={18}/>}
+                        </button>
+                        <div className="call-ctrl-divider"/>
+                        {/* Camera — disabled only when the Rust/cpal polyfill is active
+                            (audio-only fallback path, fires only on the very first load
+                            before WebKitGTK WebRTC is enabled by lib.rs + reload).
+                            After the settings reload, WebKitGTK RTCPeerConnection is
+                            available and video works natively — button is fully enabled. */}
+                        <button
+                          onClick={(window as any).__nativeRtcPolyfill ? undefined : toggleCamera}
+                          disabled={(window as any).__nativeRtcPolyfill === true}
+                          title={(window as any).__nativeRtcPolyfill
+                            ? 'Kamera niedostępna — WebKitGTK WebRTC nie jest jeszcze aktywne (uruchom aplikację ponownie)'
+                            : activeCall.isCameraOn ? 'Wyłącz kamerę' : 'Włącz kamerę'}
+                          className={`call-ctrl-btn ${activeCall.isCameraOn?'active-orange':''} ${(window as any).__nativeRtcPolyfill?'opacity-30 cursor-not-allowed':''}`}>
+                          <Video size={18}/>
+                        </button>
+                        {/* Screen share — same condition as camera above */}
+                        <button
+                          onClick={(window as any).__nativeRtcPolyfill ? undefined : toggleScreen}
+                          disabled={(window as any).__nativeRtcPolyfill === true}
+                          title={(window as any).__nativeRtcPolyfill
+                            ? 'Udostępnianie ekranu niedostępne — WebKitGTK WebRTC nie jest jeszcze aktywne (uruchom aplikację ponownie)'
+                            : activeCall.isScreenSharing ? 'Zatrzymaj udostępnianie' : 'Udostępnij ekran'}
+                          className={`call-ctrl-btn ${activeCall.isScreenSharing?'active-lime':''} ${(window as any).__nativeRtcPolyfill?'opacity-30 cursor-not-allowed':''}`}>
+                          <ScreenShare size={18}/>
+                        </button>
+                        <button onClick={async()=>{
+                          if (!devicesOpen) {
+                            await getMediaDevices().then(setDevices).catch(()=>{});
+                          }
+                          setDevicesOpen(v=>!v);
+                        }} title="Ustawienia urządzeń"
+                          className={`call-ctrl-btn ${devicesOpen?'active-orange':''}`}>
+                          <Settings size={18}/>
+                        </button>
+                        {/* Soundboard button */}
+                        <button onClick={()=>{
+                          const opening = !soundboardOpen;
+                          setSoundboardOpen(opening);
+                          // Pre-load current server's sounds when opening
+                          if (opening && activeCall?.serverId) {
+                            setSbSelectedServerId(null); // reset to Cordyn tab
+                            setSbSoundsByServer({}); // clear cache so re-opens are fresh
+                          }
+                        }} title="Soundboard"
+                          className={`call-ctrl-btn ${soundboardOpen?'active-orange':''}`}>
+                          <Music2 size={18}/>
+                        </button>
+                        <div className="call-ctrl-divider"/>
+                        <button onClick={hangupCall} title="Rozłącz" className="call-ctrl-btn danger">
+                          <PhoneOff size={18}/>
+                        </button>
+                      </div>
                     </div>
-                    <button onClick={toggleDeafen} title={activeCall.isDeafened?'Włącz głośnik':'Wycisz głośnik'}
-                      className={`call-ctrl-btn ${activeCall.isDeafened?'active-red':''}`}>
-                      {activeCall.isDeafened?<VolumeX size={18}/>:<Volume2 size={18}/>}
-                    </button>
-                    <div className="call-ctrl-divider"/>
-                    {/* Camera — disabled only when the Rust/cpal polyfill is active
-                        (audio-only fallback path, fires only on the very first load
-                        before WebKitGTK WebRTC is enabled by lib.rs + reload).
-                        After the settings reload, WebKitGTK RTCPeerConnection is
-                        available and video works natively — button is fully enabled. */}
-                    <button
-                      onClick={(window as any).__nativeRtcPolyfill ? undefined : toggleCamera}
-                      disabled={(window as any).__nativeRtcPolyfill === true}
-                      title={(window as any).__nativeRtcPolyfill
-                        ? 'Kamera niedostępna — WebKitGTK WebRTC nie jest jeszcze aktywne (uruchom aplikację ponownie)'
-                        : activeCall.isCameraOn ? 'Wyłącz kamerę' : 'Włącz kamerę'}
-                      className={`call-ctrl-btn ${activeCall.isCameraOn?'active-orange':''} ${(window as any).__nativeRtcPolyfill?'opacity-30 cursor-not-allowed':''}`}>
-                      <Video size={18}/>
-                    </button>
-                    {/* Screen share — same condition as camera above */}
-                    <button
-                      onClick={(window as any).__nativeRtcPolyfill ? undefined : toggleScreen}
-                      disabled={(window as any).__nativeRtcPolyfill === true}
-                      title={(window as any).__nativeRtcPolyfill
-                        ? 'Udostępnianie ekranu niedostępne — WebKitGTK WebRTC nie jest jeszcze aktywne (uruchom aplikację ponownie)'
-                        : activeCall.isScreenSharing ? 'Zatrzymaj udostępnianie' : 'Udostępnij ekran'}
-                      className={`call-ctrl-btn ${activeCall.isScreenSharing?'active-orange':''} ${(window as any).__nativeRtcPolyfill?'opacity-30 cursor-not-allowed':''}`}>
-                      <ScreenShare size={18}/>
-                    </button>
-                    <button onClick={async()=>{
-                      if (!devicesOpen) {
-                        await getMediaDevices().then(setDevices).catch(()=>{});
-                      }
-                      setDevicesOpen(v=>!v);
-                    }} title="Ustawienia urządzeń"
-                      className={`call-ctrl-btn ${devicesOpen?'active-orange':''}`}>
-                      <Settings size={18}/>
-                    </button>
-                    {/* Soundboard button */}
-                    <button onClick={()=>{
-                      const opening = !soundboardOpen;
-                      setSoundboardOpen(opening);
-                      // Pre-load current server's sounds when opening
-                      if (opening && activeCall?.serverId) {
-                        setSbSelectedServerId(null); // reset to Cordyn tab
-                        setSbSoundsByServer({}); // clear cache so re-opens are fresh
-                      }
-                    }} title="Soundboard"
-                      className={`call-ctrl-btn ${soundboardOpen?'active-orange':''}`}>
-                      <Music2 size={18}/>
-                    </button>
-                    <div className="call-ctrl-divider"/>
-                    <button onClick={hangupCall} title="Rozłącz" className="call-ctrl-btn danger">
-                      <PhoneOff size={18}/>
-                    </button>
-                  </div>
-                </div>
+                  );
+                })()}
               </div>
             </div>
           ) : activeView==='servers' && fsOpen && serverFull ? (
