@@ -15922,13 +15922,6 @@ export default function App() {
               <div className="call-vignette"/>
               {/* Call header */}
               {(() => {
-                const channelBitrate = activeCall.type==='voice_channel'
-                  ? (serverFull?.categories.flatMap(c=>c.channels).find(c=>c.id===activeCall.channelId)?.bitrate ?? 64)
-                  : null;
-                const participantCount = activeCall.type==='voice_channel'
-                  ? (voiceUsers[activeCall.channelId]||[]).length
-                  : (activeCall.userId ? 2 : 1);
-                const pingMs = Math.round(voiceStats.lastRtt);
                 return (
                   <header className="shrink-0 flex flex-col gap-1.5 px-5 py-3 relative z-10"
                     style={{
@@ -16010,28 +16003,6 @@ export default function App() {
                           <Minimize2 size={13}/>
                         </button>
                       </div>
-                    </div>
-                    {/* Status row */}
-                    <div className="flex items-center gap-2 text-[11px] text-zinc-500 font-medium flex-wrap">
-                      <span className="flex items-center gap-1.5 text-emerald-400 font-semibold font-mono">
-                        <span className="relative flex w-2 h-2">
-                          <span className="w-2 h-2 bg-emerald-400 rounded-full"/>
-                          <span className="absolute inset-0 bg-emerald-400/40 rounded-full animate-ping"/>
-                        </span>
-                        połączony
-                      </span>
-                      <span className="opacity-30">·</span>
-                      <span className="font-mono text-zinc-400">{fmtDur(callDuration)}</span>
-                      <span className="opacity-30">·</span>
-                      <span className={`font-mono ${rttColor(pingMs)}`}>{pingMs} ms</span>
-                      {channelBitrate != null && (
-                        <>
-                          <span className="opacity-30">·</span>
-                          <span className="font-mono text-zinc-400">OPUS {channelBitrate}k</span>
-                        </>
-                      )}
-                      <span className="opacity-30">·</span>
-                      <span className="font-mono text-zinc-400">{participantCount} {participantCount===1?'osoba':'osób'}</span>
                     </div>
                   </header>
                 );
@@ -16735,10 +16706,17 @@ export default function App() {
                 })()}
                 {/* Bottom info + controls bar */}
                 {(() => {
+                  const channelBitrate = activeCall.type==='voice_channel'
+                    ? (serverFull?.categories.flatMap(c=>c.channels).find(c=>c.id===activeCall.channelId)?.bitrate ?? 64)
+                    : null;
+                  const participantCount = activeCall.type==='voice_channel'
+                    ? (voiceUsers[activeCall.channelId]||[]).length
+                    : (activeCall.userId ? 2 : 1);
+                  const pingMs = Math.round(voiceStats.lastRtt);
                   const isLive = activeCall.isScreenSharing || sharingUserIds.size > 0;
                   return (
                     <div className="call-bottombar">
-                      <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
                         {isLive && (
                           <>
                             <span className="relative flex w-2.5 h-2.5 shrink-0">
@@ -16750,6 +16728,28 @@ export default function App() {
                         )}
                         <span className="font-bold text-white text-sm truncate">
                           {activeCall.type==='voice_channel' ? activeCall.channelName : activeCall.username}
+                        </span>
+                        <span className="flex items-center gap-2 text-[11px] text-zinc-500 font-medium font-mono">
+                          <span className="opacity-30">·</span>
+                          <span className="flex items-center gap-1.5 text-emerald-400 font-semibold">
+                            <span className="relative flex w-2 h-2">
+                              <span className="w-2 h-2 bg-emerald-400 rounded-full"/>
+                              <span className="absolute inset-0 bg-emerald-400/40 rounded-full animate-ping"/>
+                            </span>
+                            połączony
+                          </span>
+                          <span className="opacity-30">·</span>
+                          <span className="text-zinc-400">{fmtDur(callDuration)}</span>
+                          <span className="opacity-30">·</span>
+                          <span className={rttColor(pingMs)}>{pingMs} ms</span>
+                          {channelBitrate != null && (
+                            <>
+                              <span className="opacity-30">·</span>
+                              <span className="text-zinc-400">OPUS {channelBitrate}k</span>
+                            </>
+                          )}
+                          <span className="opacity-30">·</span>
+                          <span className="text-zinc-400">{participantCount} {participantCount===1?'osoba':'osób'}</span>
                         </span>
                       </div>
                       <div className="flex items-center gap-2.5 flex-wrap justify-end">

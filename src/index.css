@@ -2567,7 +2567,7 @@ img.av-eff-arcade-coin { transition: filter 0.3s; }
 /* Bottom info + controls bar (full width) */
 .call-bottombar {
   width: 100%;
-  background: linear-gradient(135deg, rgba(14,15,30,0.95) 0%, rgba(9,10,20,0.98) 100%);
+  background: #14151a;
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 20px;
   box-shadow: 0 16px 48px rgba(0,0,0,0.70),
@@ -2591,13 +2591,13 @@ img.av-eff-arcade-coin { transition: filter 0.3s; }
   align-items: center;
   justify-content: center;
   transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.08);
-  color: #a1a1aa;
+  background: #1c1e25;
+  border: 1px solid rgba(255,255,255,0.06);
+  color: #ffffff;
 }
 .call-ctrl-btn:hover {
-  background: rgba(255,255,255,0.12);
-  border-color: rgba(255,255,255,0.14);
+  background: #262934;
+  border-color: rgba(255,255,255,0.12);
   color: #ffffff;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0,0,0,0.40);
@@ -2644,10 +2644,6 @@ img.av-eff-arcade-coin { transition: filter 0.3s; }
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px;
-  border-radius: 18px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.06);
 }
 
 /* ── Server icon activity rings ─────────────────────────────────── */
