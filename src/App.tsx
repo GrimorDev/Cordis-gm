@@ -16735,29 +16735,25 @@ export default function App() {
                 })()}
                 {/* Bottom info + controls bar */}
                 {(() => {
-                  const channelBitrate = activeCall.type==='voice_channel'
-                    ? (serverFull?.categories.flatMap(c=>c.channels).find(c=>c.id===activeCall.channelId)?.bitrate ?? 64)
-                    : null;
-                  const participantCount = activeCall.type==='voice_channel'
-                    ? (voiceUsers[activeCall.channelId]||[]).length
-                    : (activeCall.userId ? 2 : 1);
-                  const pingMs = Math.round(voiceStats.lastRtt);
+                  const isLive = activeCall.isScreenSharing || sharingUserIds.size > 0;
                   return (
                     <div className="call-bottombar">
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="relative flex w-2.5 h-2.5 shrink-0">
-                          <span className="w-2.5 h-2.5 bg-[#C8FF6B] rounded-full"/>
-                          <span className="absolute inset-0 bg-[#C8FF6B]/40 rounded-full animate-ping"/>
-                        </span>
-                        <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#C8FF6B] shrink-0">LIVE</span>
+                        {isLive && (
+                          <>
+                            <span className="relative flex w-2.5 h-2.5 shrink-0">
+                              <span className="w-2.5 h-2.5 bg-[#C8FF6B] rounded-full"/>
+                              <span className="absolute inset-0 bg-[#C8FF6B]/40 rounded-full animate-ping"/>
+                            </span>
+                            <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#C8FF6B] shrink-0">LIVE</span>
+                          </>
+                        )}
                         <span className="font-bold text-white text-sm truncate">
                           {activeCall.type==='voice_channel' ? activeCall.channelName : activeCall.username}
                         </span>
-                        <span className="hidden sm:inline text-zinc-500 text-xs font-mono truncate">
-                          · {participantCount} {participantCount===1?'osoba':'osób'} · {pingMs} ms{channelBitrate!=null?` · ${channelBitrate} kb/s`:''}
-                        </span>
                       </div>
-                      <div className="flex items-center gap-2 flex-wrap justify-end">
+                      <div className="flex items-center gap-2.5 flex-wrap justify-end">
+                        <div className="call-ctrl-group">
                         <div className="relative">
                           <button onClick={toggleMute} title={activeCall.isMuted?'Włącz mikrofon':'Wycisz mikrofon'}
                             className={`call-ctrl-btn ${activeCall.isMuted?'active-red':''}`}>
@@ -16778,7 +16774,8 @@ export default function App() {
                           className={`call-ctrl-btn ${activeCall.isDeafened?'active-red':''}`}>
                           {activeCall.isDeafened?<VolumeX size={18}/>:<Volume2 size={18}/>}
                         </button>
-                        <div className="call-ctrl-divider"/>
+                        </div>
+                        <div className="call-ctrl-group">
                         {/* Camera — disabled only when the Rust/cpal polyfill is active
                             (audio-only fallback path, fires only on the very first load
                             before WebKitGTK WebRTC is enabled by lib.rs + reload).
@@ -16825,7 +16822,7 @@ export default function App() {
                           className={`call-ctrl-btn ${soundboardOpen?'active-orange':''}`}>
                           <Music2 size={18}/>
                         </button>
-                        <div className="call-ctrl-divider"/>
+                        </div>
                         <button onClick={hangupCall} title="Rozłącz" className="call-ctrl-btn danger">
                           <PhoneOff size={18}/>
                         </button>

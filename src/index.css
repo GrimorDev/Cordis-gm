@@ -2639,13 +2639,15 @@ img.av-eff-arcade-coin { transition: filter 0.3s; }
   transform: translateY(-1px) scale(1.04);
 }
 
-/* Divider in control bar */
-.call-ctrl-divider {
-  width: 1px;
-  height: 32px;
-  background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.10), transparent);
-  flex-shrink: 0;
-  margin: 0 4px;
+/* Grouped control buttons (mic+speaker / camera+screen+devices+soundboard) */
+.call-ctrl-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
 }
 
 /* ── Server icon activity rings ─────────────────────────────────── */
