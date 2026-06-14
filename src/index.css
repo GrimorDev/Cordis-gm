@@ -2502,6 +2502,7 @@ img.av-eff-arcade-coin { transition: filter 0.3s; }
   display: flex;
   align-items: center;
   gap: 5px;
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.10em;

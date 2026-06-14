@@ -16013,7 +16013,7 @@ export default function App() {
                     </div>
                     {/* Status row */}
                     <div className="flex items-center gap-2 text-[11px] text-zinc-500 font-medium flex-wrap">
-                      <span className="flex items-center gap-1.5 text-emerald-400 font-semibold">
+                      <span className="flex items-center gap-1.5 text-emerald-400 font-semibold font-mono">
                         <span className="relative flex w-2 h-2">
                           <span className="w-2 h-2 bg-emerald-400 rounded-full"/>
                           <span className="absolute inset-0 bg-emerald-400/40 rounded-full animate-ping"/>
@@ -16031,7 +16031,7 @@ export default function App() {
                         </>
                       )}
                       <span className="opacity-30">·</span>
-                      <span className="text-zinc-400">{participantCount} {participantCount===1?'osoba':'osób'}</span>
+                      <span className="font-mono text-zinc-400">{participantCount} {participantCount===1?'osoba':'osób'}</span>
                     </div>
                   </header>
                 );
