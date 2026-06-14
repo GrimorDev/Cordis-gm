@@ -8,6 +8,45 @@ interface Entry { version: string; date: string; title: string; summary: string;
 /* ─── Data ───────────────────────────────────────────────────────────────── */
 const ENTRIES: Entry[] = [
   {
+    version: '1.8.0', date: '13 czerwca 2026',
+    title: 'Rozmowy głosowe i wideo w nowej odsłonie',
+    summary: 'Połączenia głosowe przeszły dużą przebudowę silnika — działają stabilniej na Windows, macOS i Linuksie, a kamera i udostępnianie ekranu zostały znacznie ulepszone.',
+    items: [
+      { type: 'new',      text: 'Przebudowany silnik połączeń głosowych — stabilniejsze audio na Windows, macOS i Linuksie.' },
+      { type: 'new',      text: 'Kamera i udostępnianie ekranu na komputerze — szybsze i bardziej responsywne.' },
+      { type: 'new',      text: 'Tryb aktywacji głosem — wybierz między ciągłym nadawaniem a push-to-talk.' },
+      { type: 'new',      text: 'Serwer TURN znacznie zwiększa szansę na połączenie, nawet za trudnymi sieciami i firewallami.' },
+      { type: 'improved', text: 'Mikrofon, kamerę i głośniki można zmienić w trakcie rozmowy, bez wychodzenia z kanału.' },
+      { type: 'improved', text: 'Miniatury kamer uczestników widoczne na żywo, oddzielnie od udostępniania ekranu.' },
+      { type: 'fixed',    text: 'Naprawiono wyciszony dźwięk, dźwięk tylko w jednym uchu i ciszę po dołączeniu do kanału.' },
+      { type: 'fixed',    text: 'Aplikacja desktopowa aktualizuje się teraz sama w tle — bez okien instalatora i przerywania pracy.' },
+    ],
+  },
+  {
+    version: '1.7.0', date: '7 czerwca 2026',
+    title: 'Nowy wygląd profilu i osiągnięcia',
+    summary: 'Profil dostał pasek osiągnięć, a motywy kolorystyczne zostały odświeżone i działają od razu po wybraniu.',
+    items: [
+      { type: 'new',      text: 'Pasek osiągnięć na profilu — odznaki za czas spędzony na Cordyn, widoczne też dla innych.' },
+      { type: 'improved', text: 'Przeprojektowane motywy kolorystyczne — zmiana widoczna natychmiast, bez przeładowania.' },
+      { type: 'improved', text: 'Animowane awatary i banery (GIF) — zamrożone na pierwszej klatce, ożywają po najechaniu kursorem.' },
+      { type: 'fixed',    text: 'Poprawki układu nawigacji, przycinanych podpowiedzi i menu trzech kropek.' },
+    ],
+  },
+  {
+    version: '1.6.0', date: '6 czerwca 2026',
+    title: 'Automatyzacje, zaproszenia i reakcje',
+    summary: 'Automatyzacje serwera dostały graficzny edytor schematów, zaproszenia zostały przeprojektowane od podstaw, a dodawanie reakcji do wiadomości jest teraz szybsze.',
+    items: [
+      { type: 'new',      text: 'Nowy edytor automatyzacji — graficzny schemat połączeń (node-graph) oraz tryb prosty dla mniej technicznych osób.' },
+      { type: 'new',      text: 'Szybkie reakcje — kliknij ikonę przy wiadomości albo kliknij dwukrotnie, żeby dodać ❤️.' },
+      { type: 'new',      text: 'Nowe uprawnienie roli: zarządzanie pseudonimami innych osób na serwerze.' },
+      { type: 'improved', text: 'Zakładka zaproszeń w ustawieniach serwera przeprojektowana od zera — kod i link widoczne osobno.' },
+      { type: 'improved', text: 'Nowe, bardziej czytelne powiadomienia (toasty) w całej aplikacji.' },
+      { type: 'improved', text: 'Pliki — zdjęcia profilowe, banery i załączniki — przechowywane bardziej niezawodnie w chmurze.' },
+    ],
+  },
+  {
     version: '1.5.0', date: '24 maja 2026',
     title: 'Statystyki, blog i porządki',
     summary: 'Chcieliśmy żebyś widział ile czasu i energii wkładasz w Cordyn — teraz masz to w jednym miejscu. Dodaliśmy też tę stronę, żebyś zawsze wiedział co się dzieje na platformie.',
