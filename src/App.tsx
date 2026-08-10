@@ -76,6 +76,7 @@ import {
   playCallAccepted, playCallEnded,
   playStreamJoin,
   playScreenShareStart, playScreenShareStop,
+  playMicMute, playMicUnmute,
 } from './sounds';
 import {
   watchSpeaking, getMediaDevices, type NoisePipeline, primePlaybackContext, applyNoiseGate,
@@ -12619,6 +12620,7 @@ export default function App() {
       const next = !isMicMuted;
       setIsMicMuted(next);
       localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !next; });
+      next ? playMicMute() : playMicUnmute();
     }
   };
 
@@ -13761,6 +13763,7 @@ export default function App() {
     const muted = !activeCall?.isMuted;
     updateMicGate(muted);
     setActiveCall(p => p ? {...p, isMuted: muted} : p);
+    muted ? playMicMute() : playMicUnmute();
     const call = activeCallRef.current;
     if (call?.channelId) getSocket().emit('voice_state' as any, { muted, deafened: call.isDeafened, channel_id: call.channelId });
     if (call?.userId)    getSocket().emit('voice_state' as any, { muted, deafened: call.isDeafened, to_user_id: call.userId });
@@ -13769,6 +13772,7 @@ export default function App() {
     const muted = !(activeGroupCallRef.current?.isMuted ?? false);
     updateMicGate(muted);
     setActiveGroupCall(p => p ? { ...p, isMuted: muted } : p);
+    muted ? playMicMute() : playMicUnmute();
     const gc = activeGroupCallRef.current;
     if (gc) getSocket().emit('voice_state' as any, { muted, deafened: false, channel_id: undefined, to_user_id: undefined });
   };

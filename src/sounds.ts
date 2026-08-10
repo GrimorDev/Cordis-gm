@@ -127,6 +127,20 @@ export function playVoiceLeave() {
   tone(330, 0.22, 0.16, 'sine', 0.10, 294);
 }
 
+// ── Microphone mute/unmute ───────────────────────────────────────────────────
+// Deliberately tiny and quiet — this fires on every toggle, often mid-conversation,
+// so it must read as a subtle click rather than a notification.
+
+/** Microphone muted — short downward tick */
+export function playMicMute() {
+  tone(420, 0.08, 0.16, 'sine', 0, 300);
+}
+
+/** Microphone unmuted — short upward tick */
+export function playMicUnmute() {
+  tone(300, 0.08, 0.16, 'sine', 0, 420);
+}
+
 // ── Outgoing call ring ────────────────────────────────────────────────────────
 // Classic telephone ring: two tones mixed (400 + 480 Hz) → characteristic "warble".
 // Pattern: RING-RING … (two bursts of 0.4s, 0.15s apart, then 1.4s silence).
