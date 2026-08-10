@@ -27,8 +27,6 @@ function loadBuf(path: string): void {
 loadBuf('/sounds/push.mp3');           // DM notification
 loadBuf('/sounds/message-sound.mp3'); // channel / mention
 loadBuf('/sounds/call-in-sound.mp3'); // incoming call ring loop
-loadBuf('/sounds/mute.mp3');          // microphone muted
-loadBuf('/sounds/unmute.mp3');        // microphone unmuted
 
 function playBuf(path: string, volume = 0.55, loop = false): AudioBufferSourceNode | null {
   const entry = buffers[path];
@@ -133,16 +131,16 @@ export function playVoiceLeave() {
 // Deliberately tiny and quiet — this fires on every toggle, often mid-conversation,
 // so it must read as a subtle click rather than a notification.
 
-/** Microphone muted — mute.mp3 or fallback downward tick */
+/** Microphone muted — soft downward glide + tiny closing tick */
 export function playMicMute() {
-  if (playBuf('/sounds/mute.mp3', 0.5)) return;
-  tone(420, 0.08, 0.16, 'sine', 0, 300);
+  tone(500, 0.09, 0.20, 'sine', 0,     320);
+  tone(320, 0.05, 0.08, 'sine', 0.085, 300);
 }
 
-/** Microphone unmuted — unmute.mp3 or fallback upward tick */
+/** Microphone unmuted — soft upward glide + tiny opening tick */
 export function playMicUnmute() {
-  if (playBuf('/sounds/unmute.mp3', 0.5)) return;
-  tone(300, 0.08, 0.16, 'sine', 0, 420);
+  tone(320, 0.09, 0.20, 'sine', 0,     500);
+  tone(500, 0.05, 0.08, 'sine', 0.085, 520);
 }
 
 // ── Outgoing call ring ────────────────────────────────────────────────────────
