@@ -8,6 +8,26 @@ interface Entry { version: string; date: string; title: string; summary: string;
 /* ─── Data ───────────────────────────────────────────────────────────────── */
 const ENTRIES: Entry[] = [
   {
+    version: '1.10.0', date: '10 sierpnia 2026',
+    title: 'Dźwięk przy wyciszaniu mikrofonu',
+    summary: 'Krótki, delikatny dźwięk podpowiada teraz, czy mikrofon jest wyciszony, czy nie — zarówno w przeglądarce, jak i w aplikacji desktopowej.',
+    items: [
+      { type: 'new',      text: 'Dźwiękowe potwierdzenie wyciszenia i odciszenia mikrofonu — działa w rozmowach 1:1, grupowych i na kanałach głosowych.' },
+      { type: 'improved', text: 'Dotyczy wersji webowej oraz aplikacji desktopowej na Windows, macOS i Linuksie.' },
+    ],
+  },
+  {
+    version: '1.9.0', date: '14 czerwca 2026',
+    title: 'Odświeżony panel rozmowy',
+    summary: 'Panel rozmowy głosowej i wideo dostał nowy układ — statystyki połączenia przeniesione na dolny pasek, a przyciski sterowania pogrupowane i bardziej czytelne.',
+    items: [
+      { type: 'new',      text: 'Nowy wygląd panelu rozmowy, dopracowany wizualnie od podstaw.' },
+      { type: 'improved', text: 'Statystyki połączenia (ping, jakość) przeniesione na dolny pasek, wyświetlane czcionką monospace dla lepszej czytelności.' },
+      { type: 'improved', text: 'Odznaka LIVE pokazuje się tylko wtedy, gdy faktycznie streamujesz — mniej bałaganu na ekranie.' },
+      { type: 'improved', text: 'Ikony sterowania (mikrofon, kamera, ekran) pogrupowane logicznie, zduplikowane statystyki usunięte.' },
+    ],
+  },
+  {
     version: '1.8.0', date: '13 czerwca 2026',
     title: 'Rozmowy głosowe i wideo w nowej odsłonie',
     summary: 'Połączenia głosowe przeszły dużą przebudowę silnika — działają stabilniej na Windows, macOS i Linuksie, a kamera i udostępnianie ekranu zostały znacznie ulepszone.',
