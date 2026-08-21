@@ -14276,7 +14276,15 @@ export default function App() {
   };
 
   return (
-    <div className={`flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-transparent p-1 gap-1${focusCard?' focus-card-active':''}`}>
+    <div
+      className={`flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-transparent p-1 gap-1${focusCard?' focus-card-active':''}`}
+      style={{
+        paddingTop: 'max(0.25rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(0.25rem, env(safe-area-inset-bottom))',
+        paddingLeft: 'max(0.25rem, env(safe-area-inset-left))',
+        paddingRight: 'max(0.25rem, env(safe-area-inset-right))',
+      }}
+    >
 
 
       {/* Tauri frameless window titlebar — only rendered in the desktop app */}
