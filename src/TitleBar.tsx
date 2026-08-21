@@ -23,6 +23,11 @@ const isMacOS =
   typeof navigator !== 'undefined' &&
   (/Mac/i.test(navigator.platform) || navigator.userAgent.includes('Mac OS'));
 
+// Android has no window chrome to draw — no drag region, no minimize/maximize/
+// close buttons, the OS status bar/back-gesture own that space instead.
+export const isAndroid =
+  typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+
 // Shared hover state hook for traffic-light dots
 function useDotHover() {
   const [hover, setHover] = React.useState(false);
@@ -31,6 +36,13 @@ function useDotHover() {
 
 export function TitleBar() {
   const [groupHover, setGroupHover] = React.useState(false);
+
+  // ── Android ──────────────────────────────────────────────────────────────
+  // No frameless-window chrome to draw on a phone — the status bar / gesture
+  // nav bar own that space. Safe-area clearance is handled globally in CSS.
+  if (isAndroid) {
+    return null;
+  }
 
   // ── macOS ────────────────────────────────────────────────────────────────
   // `decorations: false` in tauri.conf.json removes native traffic lights on macOS.

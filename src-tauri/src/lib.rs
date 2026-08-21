@@ -340,7 +340,7 @@ async fn request_media_permissions(window: tauri::WebviewWindow) -> Result<(), S
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .manage(LoopbackState(std::sync::Mutex::new(None)))
         // Native WebRTC state (Linux only — shared Arc<Mutex<RtcState>>)
         .manage({
@@ -348,23 +348,35 @@ pub fn run() {
             { std::sync::Arc::new(tokio::sync::Mutex::new(RtcState::new())) as SharedRtcState }
             #[cfg(not(target_os = "linux"))]
             { () }
-        })
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            // Second launch attempt — bring existing window to front
-            if let Some(win) = app.get_webview_window("main") {
-                let _ = win.show();
-                let _ = win.unminimize();
-                let _ = win.set_focus();
-            }
-        }))
-        .plugin(tauri_plugin_window_state::Builder::default().build())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        });
+
+    // ── Desktop-only plugins ────────────────────────────────────────────────
+    // single-instance (no such concept on Android), window-state (no window
+    // geometry to persist), updater (mobile ships via GitHub Release APK
+    // downloads, not the desktop self-updater), autostart (no desktop-autostart
+    // concept on Android).
+    #[cfg(not(target_os = "android"))]
+    {
+        builder = builder
+            .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+                // Second launch attempt — bring existing window to front
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.show();
+                    let _ = win.unminimize();
+                    let _ = win.set_focus();
+                }
+            }))
+            .plugin(tauri_plugin_window_state::Builder::default().build())
+            .plugin(tauri_plugin_updater::Builder::new().build())
+            .plugin(tauri_plugin_autostart::init(
+                tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+                Some(vec![]),
+            ));
+    }
+
+    builder
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            Some(vec![]),
-        ))
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
@@ -376,47 +388,50 @@ pub fn run() {
                 )?;
             }
 
-            // ── System tray ─────────────────────────────────────────────────
-            let show_i = MenuItem::with_id(app, "show", "Pokaż Cordyn", true, None::<&str>)?;
-            let quit_i = MenuItem::with_id(app, "quit", "Zamknij", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
+            // ── System tray (no tray concept on Android) ────────────────────
+            #[cfg(not(target_os = "android"))]
+            {
+                let show_i = MenuItem::with_id(app, "show", "Pokaż Cordyn", true, None::<&str>)?;
+                let quit_i = MenuItem::with_id(app, "quit", "Zamknij", true, None::<&str>)?;
+                let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
 
-            TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
-                .menu(&menu)
-                .tooltip("Cordyn")
-                .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => {
-                        if let Some(win) = app.get_webview_window("main") {
-                            let _ = win.show();
-                            let _ = win.unminimize();
-                            let _ = win.set_focus();
-                        }
-                    }
-                    "quit" => app.exit(0),
-                    _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        let app = tray.app_handle();
-                        if let Some(win) = app.get_webview_window("main") {
-                            if win.is_visible().unwrap_or(false) {
-                                let _ = win.set_focus();
-                            } else {
+                TrayIconBuilder::new()
+                    .icon(app.default_window_icon().unwrap().clone())
+                    .menu(&menu)
+                    .tooltip("Cordyn")
+                    .show_menu_on_left_click(false)
+                    .on_menu_event(|app, event| match event.id.as_ref() {
+                        "show" => {
+                            if let Some(win) = app.get_webview_window("main") {
                                 let _ = win.show();
                                 let _ = win.unminimize();
                                 let _ = win.set_focus();
                             }
                         }
-                    }
-                })
-                .build(app)?;
+                        "quit" => app.exit(0),
+                        _ => {}
+                    })
+                    .on_tray_icon_event(|tray, event| {
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
+                            let app = tray.app_handle();
+                            if let Some(win) = app.get_webview_window("main") {
+                                if win.is_visible().unwrap_or(false) {
+                                    let _ = win.set_focus();
+                                } else {
+                                    let _ = win.show();
+                                    let _ = win.unminimize();
+                                    let _ = win.set_focus();
+                                }
+                            }
+                        }
+                    })
+                    .build(app)?;
+            }
 
             // ── Linux: enable WebRTC + auto-allow mic/camera/screen permissions ─
             //
@@ -554,21 +569,25 @@ pub fn run() {
             }
 
             // ── Close → hide to tray (nie zamykaj, tylko chowaj) ───────────
-            let app_handle = app.handle().clone();
-            let main_window = app.get_webview_window("main").unwrap();
-            main_window.on_window_event(move |event| {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    // Persist window position/size/monitor before hiding to tray
-                    use tauri_plugin_window_state::AppHandleExt;
-                    let _ = app_handle.save_window_state(
-                        tauri_plugin_window_state::StateFlags::all(),
-                    );
-                    if let Some(win) = app_handle.get_webview_window("main") {
-                        let _ = win.hide();
+            // No tray on Android — the OS activity/back-button lifecycle owns this.
+            #[cfg(not(target_os = "android"))]
+            {
+                let app_handle = app.handle().clone();
+                let main_window = app.get_webview_window("main").unwrap();
+                main_window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        // Persist window position/size/monitor before hiding to tray
+                        use tauri_plugin_window_state::AppHandleExt;
+                        let _ = app_handle.save_window_state(
+                            tauri_plugin_window_state::StateFlags::all(),
+                        );
+                        if let Some(win) = app_handle.get_webview_window("main") {
+                            let _ = win.hide();
+                        }
                     }
-                }
-            });
+                });
+            }
 
             Ok(())
         })

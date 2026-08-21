@@ -347,11 +347,158 @@ jobs:
             ${{ matrix.os == 'windows-latest' && 'windows-dist/*' || '' }}
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# JOB 2b — Build Android APK (Tauri mobile, reuses the same frontend/backend
+# connection as the desktop builds above — same app, same real data, just
+# packaged for a phone instead of a window).
+# ═══════════════════════════════════════════════════════════════════════════════
+  build-android:
+    name: Build — Android APK
+    needs: prepare
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # Sets ANDROID_HOME / ANDROID_SDK_ROOT for subsequent steps.
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: |
+          sdkmanager --install "ndk;27.0.12077973"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      # All 4 default Tauri Android targets — needed for a "universal" APK
+      # (single predictable output path/filename) rather than juggling
+      # per-ABI --target flags on this first pass.
+      - name: Add Rust Android targets
+        run: rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: android-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: android-cargo-
+
+      - name: Cache Cargo build artifacts
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/gen/android/app/.cxx
+          key: android-tauri-target-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: android-tauri-target-
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install JS dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Verify VITE_API_BASE
+        run: |
+          if [ -z "${{ secrets.VITE_API_BASE }}" ]; then
+            echo "::error::VITE_API_BASE secret is not set!"
+            exit 1
+          fi
+          echo "VITE_API_BASE OK: ${{ secrets.VITE_API_BASE }}"
+
+      # Generates src-tauri/gen/android fresh — not committed to git (see
+      # src-tauri/.gitignore), so this is the only place that project exists.
+      - name: Init Tauri Android project
+        run: pnpm exec tauri android init
+
+      # The default template only has INTERNET — add what voice/video calls
+      # and notifications actually need.
+      - name: Add required Android permissions
+        run: |
+          MANIFEST="src-tauri/gen/android/app/src/main/AndroidManifest.xml"
+          python3 - "$MANIFEST" <<'PY'
+          import sys
+          path = sys.argv[1]
+          with open(path) as f:
+              xml = f.read()
+          perms = [
+              'android.permission.RECORD_AUDIO',
+              'android.permission.CAMERA',
+              'android.permission.MODIFY_AUDIO_SETTINGS',
+              'android.permission.POST_NOTIFICATIONS',
+          ]
+          for p in perms:
+              tag = f'<uses-permission android:name="{p}" />'
+              if p not in xml:
+                  xml = xml.replace('</manifest>', f'    {tag}\n</manifest>')
+          with open(path, 'w') as f:
+              f.write(xml)
+          print('Permissions ensured:', perms)
+          PY
+          echo "=== AndroidManifest.xml ==="
+          cat "$MANIFEST"
+
+      # Debug-signed for this first pass — no new GitHub secrets required,
+      # ships something installable immediately. NOTE: Gradle's debug keystore
+      # is regenerated fresh on every CI run, so each new APK has a different
+      # signature — updating means uninstalling the previous APK first, not an
+      # in-place install. A persistent release keystore (mirroring how
+      # TAURI_SIGNING_PRIVATE_KEY works for desktop, stored as a GitHub secret)
+      # is the documented follow-up once this base build is proven.
+      - name: Build Android APK (debug-signed, universal)
+        env:
+          VITE_API_BASE:       ${{ secrets.VITE_API_BASE }}
+          VITE_TURN_URL:       ${{ secrets.VITE_TURN_URL }}
+          VITE_TURN_USERNAME:  ${{ secrets.VITE_TURN_USERNAME }}
+          VITE_TURN_CREDENTIAL: ${{ secrets.VITE_TURN_CREDENTIAL }}
+        run: pnpm exec tauri android build --apk --debug
+
+      - name: Collect Android artifact
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          mkdir -p android-dist
+          APK=$(find src-tauri/gen/android -name "*.apk" -path "*debug*" | head -1)
+          if [ -z "$APK" ]; then
+            echo "ERROR: no debug APK found under src-tauri/gen/android"
+            find src-tauri/gen/android -name "*.apk" 2>/dev/null || true
+            exit 1
+          fi
+          cp "$APK" "android-dist/Cordyn_${VERSION}_android.apk"
+          cp "$APK" "android-dist/Cordyn_android.apk"
+          ls -lh android-dist/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android
+          retention-days: 7
+          path: android-dist/*
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # JOB 3 — Publish GitHub Release + latest.json for auto-updater
 # ═══════════════════════════════════════════════════════════════════════════════
   release:
     name: Publish GitHub Release
-    needs: [prepare, build]
+    needs: [prepare, build, build-android]
     runs-on: ubuntu-latest
 
     steps:
@@ -372,6 +519,12 @@ jobs:
         with:
           name: linux
           path: dist/linux
+
+      - name: Download Android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: android
+          path: dist/android
 
       - name: List all artifacts
         run: find dist/ -type f | sort
@@ -397,6 +550,7 @@ jobs:
             dist/linux/*.AppImage.sig
             dist/linux/*.deb
             dist/linux/*.deb.sig
+            dist/android/*.apk
           body: |
             ## Cordyn Desktop ${{ needs.prepare.outputs.tag }}
 
@@ -412,13 +566,18 @@ jobs:
             - **Debian/Ubuntu** — `Cordyn_*.deb` → `sudo dpkg -i Cordyn_*.deb`
             > Wymagania: GTK 3, WebKit2GTK 4.1 (`libwebkit2gtk-4.1-0`)
 
+            ### 🤖 Android
+            Pobierz **`Cordyn_android.apk`** na telefon i zainstaluj (włącz "Instaluj z nieznanych źródeł" dla przeglądarki/menedżera plików przy pierwszej instalacji — appka nie jest w Google Play).
+            > ⚠️ To build testowy (debug-signed). Każda nowa wersja może wymagać odinstalowania poprzedniej przed instalacją nowej — stały klucz podpisujący (bez tego kroku) planowany jest w kolejnej iteracji.
+
             ### 🔄 Automatyczna aktualizacja
-            Zainstalowane wersje aktualizują się automatycznie.
+            Zainstalowane wersje desktopowe (Windows/macOS/Linux) aktualizują się automatycznie. Android na razie aktualizujesz ręcznie z tej strony.
 
             ### Wymagania systemowe
             - **Windows** 10 / 11 (64-bit)
             - **macOS** 11.0 Big Sur lub nowszy (Intel & Apple Silicon)
             - **Linux** Ubuntu 22.04+ / Fedora 38+ lub kompatybilna dystrybucja
+            - **Android** 8.0+ (arm64/armv7/x86/x86_64)
 
       - name: Generate latest.json
         run: |
