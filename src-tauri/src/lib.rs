@@ -1,8 +1,13 @@
 #[allow(unused_imports)]
+use tauri::{Emitter, Manager};
+
+// tauri::menu / tauri::tray are #[cfg(desktop)] inside the tauri crate itself —
+// they don't exist as modules at all when compiling for Android.
+#[cfg(not(target_os = "android"))]
+#[allow(unused_imports)]
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Emitter, Manager,
 };
 
 // ── Native WebRTC for Linux (webrtc-rs + cpal) ───────────────────────────────
@@ -66,12 +71,20 @@ async fn rtc_list_audio_devices() -> Vec<serde_json::Value> { vec![] }
 struct LoopbackState(std::sync::Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>>);
 
 /// Minimize the calling window.
+/// No-op on Android — Window::minimize() is #[cfg(desktop)] in Tauri itself,
+/// and TitleBar.tsx never invokes this command there anyway (no window chrome).
+#[cfg(not(target_os = "android"))]
 #[tauri::command]
 fn window_minimize(window: tauri::Window) {
     let _ = window.minimize();
 }
+#[cfg(target_os = "android")]
+#[tauri::command]
+fn window_minimize(_window: tauri::Window) {}
 
 /// Toggle maximise / restore on the calling window.
+/// No-op on Android — same #[cfg(desktop)] restriction as above.
+#[cfg(not(target_os = "android"))]
 #[tauri::command]
 fn window_maximize(window: tauri::Window) {
     if window.is_maximized().unwrap_or(false) {
@@ -80,6 +93,9 @@ fn window_maximize(window: tauri::Window) {
         let _ = window.maximize();
     }
 }
+#[cfg(target_os = "android")]
+#[tauri::command]
+fn window_maximize(_window: tauri::Window) {}
 
 /// Hide window to tray (called by title-bar X button).
 #[tauri::command]
@@ -340,6 +356,7 @@ async fn request_media_permissions(window: tauri::WebviewWindow) -> Result<(), S
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
         .manage(LoopbackState(std::sync::Mutex::new(None)))
         // Native WebRTC state (Linux only — shared Arc<Mutex<RtcState>>)
