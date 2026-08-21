@@ -379,11 +379,12 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      # All 4 default Tauri Android targets — needed for a "universal" APK
-      # (single predictable output path/filename) rather than juggling
-      # per-ABI --target flags on this first pass.
-      - name: Add Rust Android targets
-        run: rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+      # arm64 only — covers the overwhelming majority of real Android phones
+      # (anything from ~2017 on). A "universal" 4-ABI build was tried first and
+      # produced a 650MB debug APK (unstripped native lib x4 archs) — nobody's
+      # phone wants to download that. Single-arch keeps it to tens of MB.
+      - name: Add Rust Android target (arm64)
+        run: rustup target add aarch64-linux-android
 
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --locked
@@ -464,13 +465,13 @@ jobs:
       # in-place install. A persistent release keystore (mirroring how
       # TAURI_SIGNING_PRIVATE_KEY works for desktop, stored as a GitHub secret)
       # is the documented follow-up once this base build is proven.
-      - name: Build Android APK (debug-signed, universal)
+      - name: Build Android APK (debug-signed, arm64)
         env:
           VITE_API_BASE:       ${{ secrets.VITE_API_BASE }}
           VITE_TURN_URL:       ${{ secrets.VITE_TURN_URL }}
           VITE_TURN_USERNAME:  ${{ secrets.VITE_TURN_USERNAME }}
           VITE_TURN_CREDENTIAL: ${{ secrets.VITE_TURN_CREDENTIAL }}
-        run: pnpm exec tauri android build --apk --debug
+        run: pnpm exec tauri android build --apk --debug --target aarch64
 
       - name: Collect Android artifact
         run: |
@@ -577,7 +578,7 @@ jobs:
             - **Windows** 10 / 11 (64-bit)
             - **macOS** 11.0 Big Sur lub nowszy (Intel & Apple Silicon)
             - **Linux** Ubuntu 22.04+ / Fedora 38+ lub kompatybilna dystrybucja
-            - **Android** 8.0+ (arm64/armv7/x86/x86_64)
+            - **Android** 8.0+ (arm64 — covers virtually all real phones from ~2017 on)
 
       - name: Generate latest.json
         run: |
