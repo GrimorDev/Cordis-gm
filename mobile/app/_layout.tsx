@@ -20,8 +20,14 @@ export default function RootLayout() {
 
   // Expo Go auto-registers @expo/vector-icons fonts — a standalone build
   // (like this one) does not, so every Ionicons glyph renders as a blank
-  // box until the font is explicitly loaded here.
-  const [fontsLoaded] = useFonts({ ...Ionicons.font });
+  // box until the font is explicitly loaded here. Deliberately NOT gating
+  // the whole app's render on this — if font loading errors or hangs on a
+  // given device, worst case is blank icons for a moment, not a black
+  // screen forever (which is what blocking on it caused in testing).
+  const [, fontsError] = useFonts({ ...Ionicons.font });
+  useEffect(() => {
+    if (fontsError) console.warn('[Cordyn] Ionicons font failed to load:', fontsError);
+  }, [fontsError]);
 
   useEffect(() => {
     (async () => {
@@ -46,7 +52,7 @@ export default function RootLayout() {
     })();
   }, []);
 
-  if (!ready || !fontsLoaded) return null;
+  if (!ready) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
