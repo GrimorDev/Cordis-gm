@@ -50,7 +50,6 @@
       "expo-secure-store",
       "expo-font",
       "@config-plugins/react-native-webrtc",
-      "@notifee/react-native",
       [
         "expo-notifications",
         {
