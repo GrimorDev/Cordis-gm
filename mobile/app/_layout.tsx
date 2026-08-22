@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Alert } from 'react-native';
 import { useFonts } from 'expo-font';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { storage } from '../src/storage';
@@ -24,10 +25,32 @@ export default function RootLayout() {
   // the whole app's render on this — if font loading errors or hangs on a
   // given device, worst case is blank icons for a moment, not a black
   // screen forever (which is what blocking on it caused in testing).
-  const [, fontsError] = useFonts({ ...Ionicons.font });
+  const [fontsLoaded, fontsError] = useFonts({ ...Ionicons.font });
   useEffect(() => {
-    if (fontsError) console.warn('[Cordyn] Ionicons font failed to load:', fontsError);
-  }, [fontsError]);
+    if (fontsError) {
+      console.warn('[Cordyn] Ionicons font failed to load:', fontsError);
+      // TEMP diagnostic — console isn't visible on a real device, and this
+      // bug has resisted every other diagnosis attempt. Remove once the
+      // real cause is confirmed from what this dialog reports.
+      Alert.alert(
+        'Debug: font load failed',
+        String((fontsError as any)?.message ?? fontsError),
+      );
+    } else if (fontsLoaded) {
+      console.log('[Cordyn] Ionicons font loaded OK');
+    }
+  }, [fontsError, fontsLoaded]);
+
+  // TEMP diagnostic — distinguishes "load hangs forever" from "load fails
+  // fast" from "load actually succeeds" when neither branch above fires.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!fontsLoaded && !fontsError) {
+        Alert.alert('Debug: font load status', 'Still pending after 5s (neither loaded nor errored).');
+      }
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [fontsLoaded, fontsError]);
 
   useEffect(() => {
     (async () => {
