@@ -3,6 +3,8 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useFonts } from 'expo-font';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { storage } from '../src/storage';
 import { useStore } from '../src/store';
 import { authApi } from '../src/api';
@@ -15,6 +17,11 @@ import '../src/callNotification';
 export default function RootLayout() {
   const { setAuth, setLanguage } = useStore();
   const [ready, setReady] = useState(false);
+
+  // Expo Go auto-registers @expo/vector-icons fonts — a standalone build
+  // (like this one) does not, so every Ionicons glyph renders as a blank
+  // box until the font is explicitly loaded here.
+  const [fontsLoaded] = useFonts({ ...Ionicons.font });
 
   useEffect(() => {
     (async () => {
@@ -39,7 +46,7 @@ export default function RootLayout() {
     })();
   }, []);
 
-  if (!ready) return null;
+  if (!ready || !fontsLoaded) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
