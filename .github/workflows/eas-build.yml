@@ -58,13 +58,20 @@ jobs:
           import json, os
           with open('eas.json') as f:
               c = json.load(f)
+          # eas.json's schema rejects empty-string env values outright, so only
+          # set keys that actually have a value — omitted means voice falls
+          # back to STUN-only, same graceful degradation as the desktop app.
           turn = {
               'EXPO_PUBLIC_TURN_URL':        os.environ.get('TURN_URL', ''),
               'EXPO_PUBLIC_TURN_USERNAME':   os.environ.get('TURN_USERNAME', ''),
               'EXPO_PUBLIC_TURN_CREDENTIAL': os.environ.get('TURN_CREDENTIAL', ''),
           }
+          turn = {k: v for k, v in turn.items() if v}
           for profile in ('preview', 'production'):
-              c['build'][profile]['env'].update(turn)
+              env = c['build'][profile]['env']
+              for k in ('EXPO_PUBLIC_TURN_URL', 'EXPO_PUBLIC_TURN_USERNAME', 'EXPO_PUBLIC_TURN_CREDENTIAL'):
+                  env.pop(k, None)
+              env.update(turn)
           with open('eas.json', 'w') as f:
               json.dump(c, f, indent=2)
               f.write('\n')
