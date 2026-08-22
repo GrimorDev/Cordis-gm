@@ -44,6 +44,8 @@ jobs:
 
       - name: Build Android APK (preview)
         working-directory: mobile
-        # --no-wait: triggers the build on Expo's servers and exits immediately.
-        # Build takes ~10-20 min. Check https://expo.dev for status + QR code.
-        run: eas build --platform android --profile preview --non-interactive --no-wait
+        # Blocking (no --no-wait): the actual native build's log streams into
+        # this GH Actions job instead of only living on expo.dev, so a real
+        # compile failure shows up here instead of silently vanishing behind
+        # a "successfully queued" result. Takes ~10-20 min.
+        run: eas build --platform android --profile preview --non-interactive
