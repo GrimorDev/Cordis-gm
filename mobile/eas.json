@@ -10,7 +10,10 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://cordyn.pl/api",
-        "EXPO_PUBLIC_SOCKET_URL": "https://cordyn.pl"
+        "EXPO_PUBLIC_SOCKET_URL": "https://cordyn.pl",
+        "EXPO_PUBLIC_TURN_URL": "",
+        "EXPO_PUBLIC_TURN_USERNAME": "",
+        "EXPO_PUBLIC_TURN_CREDENTIAL": ""
       }
     },
     "production": {
@@ -19,7 +22,10 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://cordyn.pl/api",
-        "EXPO_PUBLIC_SOCKET_URL": "https://cordyn.pl"
+        "EXPO_PUBLIC_SOCKET_URL": "https://cordyn.pl",
+        "EXPO_PUBLIC_TURN_URL": "",
+        "EXPO_PUBLIC_TURN_USERNAME": "",
+        "EXPO_PUBLIC_TURN_CREDENTIAL": ""
       }
     }
   }

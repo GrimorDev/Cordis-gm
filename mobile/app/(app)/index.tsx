@@ -13,6 +13,8 @@ import { C } from '../../src/theme';
 import { serversApi, channelsApi } from '../../src/api';
 import { useStore } from '../../src/store';
 import { getSocket } from '../../src/socket';
+import { voiceMesh } from '../../src/webrtc';
+import { showOngoingCallNotification, hideOngoingCallNotification } from '../../src/callNotification';
 import { useT, getT } from '../../src/i18n';
 import type { Server, Channel } from '../../src/api';
 
@@ -50,6 +52,8 @@ export default function ServersScreen() {
   const [showChannels, setShowChannels] = useState(false);
   const [collapsedCats, setCollapsedCats] = useState<Set<string | null>>(new Set());
   const [activeVoice, setActiveVoice] = useState<{ channelId: string; channelName: string } | null>(null);
+  const [voiceMuted, setVoiceMuted] = useState(false);
+  const [voiceConnecting, setVoiceConnecting] = useState(false);
 
   // Modals
   const [modal, setModal] = useState<'none' | 'create' | 'join' | 'editChannel'>('none');
@@ -164,18 +168,45 @@ export default function ServersScreen() {
 
   const handleJoinVoice = (ch: Channel) => {
     if (activeVoice?.channelId === ch.id) return;
-    if (activeVoice) {
-      getSocket()?.emit('voice_leave', { channel_id: activeVoice.channelId });
-    }
-    getSocket()?.emit('voice_join', { channel_id: ch.id });
-    setActiveVoice({ channelId: ch.id, channelName: ch.name });
+    (async () => {
+      if (activeVoice) {
+        getSocket()?.emit('voice_leave', activeVoice.channelId);
+        await voiceMesh.leave();
+        await hideOngoingCallNotification();
+      }
+      setVoiceConnecting(true);
+      try {
+        // Mic permission + local stream must be ready before we announce
+        // ourselves — voice_existing_users can arrive within milliseconds
+        // of voice_join and we need local tracks ready to answer/offer.
+        await voiceMesh.join(ch.id);
+        getSocket()?.emit('voice_join', ch.id);
+        setActiveVoice({ channelId: ch.id, channelName: ch.name });
+        setVoiceMuted(false);
+        await showOngoingCallNotification(ch.name, () => handleLeaveVoice());
+      } catch (e: any) {
+        const gt = getT();
+        Alert.alert(gt.error, e?.message ?? 'Nie udało się uzyskać dostępu do mikrofonu');
+      } finally {
+        setVoiceConnecting(false);
+      }
+    })();
   };
 
   const handleLeaveVoice = () => {
     if (activeVoice) {
-      getSocket()?.emit('voice_leave', { channel_id: activeVoice.channelId });
+      getSocket()?.emit('voice_leave', activeVoice.channelId);
+      voiceMesh.leave();
+      hideOngoingCallNotification();
       setActiveVoice(null);
+      setVoiceMuted(false);
     }
+  };
+
+  const handleToggleMute = () => {
+    const next = !voiceMuted;
+    setVoiceMuted(next);
+    voiceMesh.setMuted(next);
   };
 
   const toggleCategory = (catId: string | null) => {
@@ -409,16 +440,23 @@ export default function ServersScreen() {
           <View style={styles.voiceBar}>
             <View style={styles.voiceBarLeft}>
               <View style={styles.voicePulse}>
-                <Ionicons name="mic" size={14} color="#22c55e" />
+                <Ionicons name={voiceConnecting ? 'sync' : 'mic'} size={14} color="#22c55e" />
               </View>
               <View>
-                <Text style={styles.voiceBarTitle}>{t.voiceConnectedTitle}</Text>
+                <Text style={styles.voiceBarTitle}>
+                  {voiceConnecting ? 'Łączenie…' : t.voiceConnectedTitle}
+                </Text>
                 <Text style={styles.voiceBarChannel}>#{activeVoice.channelName}</Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.voiceLeaveBtn} onPress={handleLeaveVoice}>
-              <Ionicons name="call" size={16} color="#fff" />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity style={styles.voiceMuteBtn} onPress={handleToggleMute}>
+                <Ionicons name={voiceMuted ? 'mic-off' : 'mic'} size={16} color={voiceMuted ? '#ef4444' : '#22c55e'} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.voiceLeaveBtn} onPress={handleLeaveVoice}>
+                <Ionicons name="call" size={16} color="#fff" />
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -882,6 +920,11 @@ const styles = StyleSheet.create({
   },
   voiceBarTitle: { color: '#22c55e', fontSize: 12, fontWeight: '700' },
   voiceBarChannel: { color: C.textMuted, fontSize: 11 },
+  voiceMuteBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: C.border,
+  },
   voiceLeaveBtn: {
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: C.danger, alignItems: 'center', justifyContent: 'center',
