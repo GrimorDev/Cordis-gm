@@ -10,7 +10,7 @@
 // mobile/app/_layout.tsx (module-level import triggers this file's own
 // top-level registerForegroundService call below).
 
-import notifee, { AndroidImportance, AndroidCategory, EventType } from '@notifee/react-native';
+import notifee, { AndroidImportance, AndroidCategory, AndroidForegroundServiceType, EventType } from '@notifee/react-native';
 
 const CHANNEL_ID = 'voice-call';
 
@@ -55,6 +55,11 @@ export async function showOngoingCallNotification(channelName: string, onHangup:
       channelId: CHANNEL_ID,
       ongoing: true,
       asForegroundService: true,
+      // Android 14+ (this app targets SDK 35) requires foreground services
+      // that use the microphone to declare that type explicitly — omitting
+      // it throws MissingForegroundServiceTypeException and kills the app
+      // right as the service starts, i.e. right when a call connects.
+      foregroundServiceTypes: [AndroidForegroundServiceType.FOREGROUND_SERVICE_TYPE_MICROPHONE],
       category: AndroidCategory.CALL,
       // expo-notifications' config plugin (already configured in app.json)
       // generates this drawable resource from assets/icon.png — reuse it
