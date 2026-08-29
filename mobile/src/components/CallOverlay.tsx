@@ -4,7 +4,7 @@
 // signaling/media lives in src/webrtc.ts (voiceMesh) and the socket
 // listeners wired in _layout.tsx.
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { UserAvatar } from './UserAvatar';
@@ -15,6 +15,12 @@ import { STATIC_BASE } from '../config';
 function resolveAvatar(url: string | null): string | null {
   if (!url) return null;
   return url.startsWith('http') ? url : `${STATIC_BASE}${url}`;
+}
+
+function fmtDuration(sec: number): string {
+  const m = Math.floor(sec / 60).toString().padStart(2, '0');
+  const s = Math.floor(sec % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
 }
 
 export function CallOverlay({
@@ -31,6 +37,26 @@ export function CallOverlay({
   muted: boolean;
 }) {
   const { activeCall } = useStore();
+  const [minimized, setMinimized] = useState(false);
+  const [durationSec, setDurationSec] = useState(0);
+  const connectedAtRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (activeCall?.status === 'connected') {
+      if (connectedAtRef.current === null) connectedAtRef.current = Date.now();
+      const interval = setInterval(() => {
+        setDurationSec(Math.floor((Date.now() - (connectedAtRef.current ?? Date.now())) / 1000));
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+    connectedAtRef.current = null;
+    setDurationSec(0);
+  }, [activeCall?.status]);
+
+  useEffect(() => {
+    if (!activeCall) setMinimized(false);
+  }, [activeCall]);
+
   if (!activeCall) return null;
 
   // Ringing (incoming or outgoing) — full-screen takeover, like a real phone call.
@@ -67,18 +93,54 @@ export function CallOverlay({
     );
   }
 
-  // Connected — compact floating bar so the user can keep browsing the app.
+  // Connected + minimized — compact floating bar, tap to expand back to full screen.
+  if (minimized) {
+    return (
+      <TouchableOpacity
+        style={styles.connectedBar}
+        activeOpacity={0.85}
+        onPress={() => setMinimized(false)}
+      >
+        <UserAvatar url={resolveAvatar(activeCall.peerAvatar)} username={activeCall.peerUsername} size={28} />
+        <Text style={styles.connectedName} numberOfLines={1}>{activeCall.peerUsername}</Text>
+        <Text style={styles.connectedDuration}>{fmtDuration(durationSec)}</Text>
+        <TouchableOpacity style={styles.miniBtn} onPress={onToggleMute}>
+          <Ionicons name={muted ? 'mic-off' : 'mic'} size={16} color={muted ? '#ef4444' : '#22c55e'} />
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.miniBtn, styles.hangupBtn]} onPress={onHangup}>
+          <Ionicons name="call" size={16} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
+        </TouchableOpacity>
+      </TouchableOpacity>
+    );
+  }
+
+  // Connected — full-screen call UI (default), like a real phone call screen.
   return (
-    <View style={styles.connectedBar}>
-      <UserAvatar url={resolveAvatar(activeCall.peerAvatar)} username={activeCall.peerUsername} size={28} />
-      <Text style={styles.connectedName} numberOfLines={1}>{activeCall.peerUsername}</Text>
-      <TouchableOpacity style={styles.miniBtn} onPress={onToggleMute}>
-        <Ionicons name={muted ? 'mic-off' : 'mic'} size={16} color={muted ? '#ef4444' : '#22c55e'} />
-      </TouchableOpacity>
-      <TouchableOpacity style={[styles.miniBtn, styles.hangupBtn]} onPress={onHangup}>
-        <Ionicons name="call" size={16} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
-      </TouchableOpacity>
-    </View>
+    <Modal visible transparent animationType="slide">
+      <View style={styles.ringingOverlay}>
+        <TouchableOpacity style={styles.minimizeBtn} onPress={() => setMinimized(true)}>
+          <Ionicons name="chevron-down" size={26} color="rgba(255,255,255,0.7)" />
+        </TouchableOpacity>
+
+        <View style={styles.ringingCard}>
+          <UserAvatar url={resolveAvatar(activeCall.peerAvatar)} username={activeCall.peerUsername} size={112} />
+          <Text style={styles.peerName}>{activeCall.peerUsername}</Text>
+          <View style={styles.connectedStatusRow}>
+            <View style={styles.liveDot} />
+            <Text style={styles.callStatus}>{fmtDuration(durationSec)}</Text>
+          </View>
+
+          <View style={styles.ringingActions}>
+            <TouchableOpacity style={[styles.ringingBtn, styles.muteBtn, muted && styles.muteBtnActive]} onPress={onToggleMute}>
+              <Ionicons name={muted ? 'mic-off' : 'mic'} size={24} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.ringingBtn, styles.declineBtn]} onPress={onHangup}>
+              <Ionicons name="call" size={26} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -87,9 +149,17 @@ const styles = StyleSheet.create({
     flex: 1, backgroundColor: 'rgba(5,5,10,0.97)',
     alignItems: 'center', justifyContent: 'center',
   },
+  minimizeBtn: {
+    position: 'absolute', top: 50, left: 16,
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
   ringingCard: { alignItems: 'center', gap: 8 },
   peerName: { color: '#fff', fontSize: 24, fontWeight: '800', marginTop: 18 },
   callStatus: { color: 'rgba(255,255,255,0.5)', fontSize: 14 },
+  connectedStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#22c55e' },
   ringingActions: { flexDirection: 'row', gap: 28, marginTop: 48 },
   ringingBtn: {
     width: 64, height: 64, borderRadius: 32,
@@ -97,6 +167,8 @@ const styles = StyleSheet.create({
   },
   acceptBtn: { backgroundColor: '#22c55e' },
   declineBtn: { backgroundColor: '#ef4444' },
+  muteBtn: { backgroundColor: 'rgba(255,255,255,0.1)' },
+  muteBtnActive: { backgroundColor: '#ef4444' },
 
   connectedBar: {
     position: 'absolute', top: 50, left: 12, right: 12,
@@ -107,6 +179,7 @@ const styles = StyleSheet.create({
     elevation: 10, zIndex: 999,
   },
   connectedName: { flex: 1, color: C.text, fontSize: 13, fontWeight: '700' },
+  connectedDuration: { color: '#22c55e', fontSize: 12, fontWeight: '600' },
   miniBtn: {
     width: 30, height: 30, borderRadius: 15,
     backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center',

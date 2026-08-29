@@ -22,13 +22,26 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+export interface Badge {
+  id: string;
+  name: string;
+  label: string;
+  color: string | null;
+  icon: string | null;
+  icon_url: string | null;
+}
+
 export interface User {
   id: string;
   username: string;
   avatar_url: string | null;
+  banner_url?: string | null;
+  banner_color?: string | null;
   status: string;
   is_admin: boolean;
-  about_me?: string | null;
+  bio?: string | null;
+  badges?: Badge[];
+  mutual_friends_count?: number;
   preferred_status?: string | null;
   created_at: string;
 }
@@ -153,7 +166,7 @@ export interface ServerBan {
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 export const usersApi = {
-  updateMe:      (data: Partial<{ username: string; about_me: string; preferred_status: string; bio: string }>) =>
+  updateMe:      (data: Partial<{ username: string; preferred_status: string; bio: string }>) =>
     req<User>('PUT', '/users/me', data),
   updateStatus:  (status: string) =>
     req<{ ok: boolean }>('PUT', '/users/me/status', { status }),

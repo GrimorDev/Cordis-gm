@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, Image,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,7 +10,13 @@ import { usersApi, friendsApi, type User } from '../../../src/api';
 import { useStore } from '../../../src/store';
 import { UserAvatar } from '../../../src/components/UserAvatar';
 import { C, STATUS_COLOR } from '../../../src/theme';
+import { STATIC_BASE } from '../../../src/config';
 import { useT, getT } from '../../../src/i18n';
+
+function resolveAsset(url: string | null | undefined): string | null {
+  if (!url) return null;
+  return url.startsWith('http') ? url : `${STATIC_BASE}${url}`;
+}
 
 export default function UserProfileScreen() {
   const t = useT();
@@ -155,9 +161,16 @@ export default function UserProfileScreen() {
         {/* Profile card */}
         <View style={styles.profileCard}>
           {/* Banner */}
-          <View style={[styles.banner, { backgroundColor: isBlocked ? C.danger + '18' : statusColor + '28' }]}>
-            <View style={[styles.bannerStripe, { backgroundColor: isBlocked ? C.danger + '44' : statusColor + '44' }]} />
-          </View>
+          {user.banner_url ? (
+            <Image source={{ uri: resolveAsset(user.banner_url)! }} style={styles.banner} resizeMode="cover" />
+          ) : (
+            <View style={[
+              styles.banner,
+              { backgroundColor: isBlocked ? C.danger + '18' : (user.banner_color || statusColor + '28') },
+            ]}>
+              <View style={[styles.bannerStripe, { backgroundColor: isBlocked ? C.danger + '44' : statusColor + '44' }]} />
+            </View>
+          )}
 
           {/* Avatar overlapping banner */}
           <View style={styles.avatarArea}>
@@ -197,12 +210,31 @@ export default function UserProfileScreen() {
           </View>
 
           {/* About me */}
-          {user.about_me && !isBlocked ? (
+          {user.bio && !isBlocked ? (
             <View style={styles.aboutSection}>
               <Text style={styles.aboutLabel}>{t.aboutMe}</Text>
-              <Text style={styles.aboutText}>{user.about_me}</Text>
+              <Text style={styles.aboutText}>{user.bio}</Text>
             </View>
           ) : null}
+
+          {/* Badges / achievements */}
+          {!isBlocked && user.badges && user.badges.length > 0 && (
+            <View style={styles.badgesSection}>
+              <Text style={styles.aboutLabel}>OSIĄGNIĘCIA</Text>
+              <View style={styles.badgesRow}>
+                {user.badges.map((b) => (
+                  <View key={b.id} style={[styles.badgeChip, { borderColor: (b.color ?? C.accent) + '55' }]}>
+                    {b.icon_url ? (
+                      <Image source={{ uri: resolveAsset(b.icon_url)! }} style={styles.badgeIconImg} />
+                    ) : (
+                      <Text style={styles.badgeIconText}>{b.icon ?? '🏆'}</Text>
+                    )}
+                    <Text style={[styles.badgeLabel, { color: b.color ?? C.text }]} numberOfLines={1}>{b.label}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
 
           {/* Member since */}
           <View style={styles.infoSection}>
@@ -211,6 +243,13 @@ export default function UserProfileScreen() {
               <Text style={styles.infoLabel}>{t.joinedAt}</Text>
               <Text style={styles.infoValue}>{joinDateStr}</Text>
             </View>
+            {!isSelf && !isBlocked && typeof user.mutual_friends_count === 'number' && (
+              <View style={[styles.infoRow, styles.infoRowBorder]}>
+                <Ionicons name="people-outline" size={14} color={C.textMuted} />
+                <Text style={styles.infoLabel}>Wspólni znajomi</Text>
+                <Text style={styles.infoValue}>{user.mutual_friends_count}</Text>
+              </View>
+            )}
             <View style={[styles.infoRow, styles.infoRowBorder]}>
               <Ionicons name="id-card-outline" size={14} color={C.textMuted} />
               <Text style={styles.infoLabel}>{t.idLabel}</Text>
@@ -353,6 +392,24 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   aboutText: { color: C.text, fontSize: 14, lineHeight: 22 },
+
+  badgesSection: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 16,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+  },
+  badgesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  badgeChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: C.bgElevated, borderWidth: 1,
+    borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6,
+    maxWidth: '100%',
+  },
+  badgeIconText: { fontSize: 14 },
+  badgeIconImg: { width: 16, height: 16, borderRadius: 4 },
+  badgeLabel: { fontSize: 12, fontWeight: '700' },
 
   infoSection: {
     borderTopWidth: 1,

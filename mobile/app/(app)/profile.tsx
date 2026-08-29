@@ -47,7 +47,7 @@ export default function ProfileScreen() {
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
   const [blockedLoading, setBlockedLoading] = useState(false);
 
-  const [aboutMe, setAboutMe] = useState(currentUser?.about_me ?? '');
+  const [aboutMe, setAboutMe] = useState(currentUser?.bio ?? '');
   const [newUsername, setNewUsername] = useState('');
   const [currentPass, setCurrentPass] = useState('');
   const [newPass, setNewPass] = useState('');
@@ -128,7 +128,7 @@ export default function ProfileScreen() {
   const handleSaveBio = async () => {
     setSaving(true);
     try {
-      const updated = await usersApi.updateMe({ about_me: aboutMe });
+      const updated = await usersApi.updateMe({ bio: aboutMe });
       setCurrentUser(updated);
       setSheet('none');
     } catch (e: any) { Alert.alert(t.error, e.message); }
@@ -233,8 +233,8 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          {currentUser.about_me ? (
-            <Text style={styles.heroAbout} numberOfLines={3}>{currentUser.about_me}</Text>
+          {currentUser.bio ? (
+            <Text style={styles.heroAbout} numberOfLines={3}>{currentUser.bio}</Text>
           ) : null}
         </View>
 
@@ -258,8 +258,8 @@ export default function ProfileScreen() {
             <SettingRow
               icon="document-text-outline"
               label={t.bioLabel}
-              value={currentUser.about_me || t.bioEmpty}
-              onPress={() => { setAboutMe(currentUser.about_me ?? ''); setSheet('editBio'); }}
+              value={currentUser.bio || t.bioEmpty}
+              onPress={() => { setAboutMe(currentUser.bio ?? ''); setSheet('editBio'); }}
               border
             />
           </View>
