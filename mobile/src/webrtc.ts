@@ -55,6 +55,10 @@ class VoiceMeshManager {
   private peers = new Map<string, RTCPeerConnection>();
   private localStream: MediaStream | null = null;
   private channelId: string | null = null;
+  // 'channel' = voice-channel mesh (join/leave, N peers). 'direct' = 1:1 DM
+  // call (call_invite/accept, exactly one peer). Both speak the same
+  // underlying webrtc_offer/answer/ice wire format, so they share this class.
+  private mode: 'channel' | 'direct' | null = null;
   private muted = false;
   private events: VoiceMeshEvents = {};
   private attached = false;
@@ -63,9 +67,9 @@ class VoiceMeshManager {
     this.events = events;
   }
 
-  /** True while a voice-channel mesh session is active. */
+  /** True while ANY session (voice-channel or direct call) is active. */
   get active(): boolean {
-    return this.channelId !== null;
+    return this.mode !== null;
   }
 
   private attachSocketListeners() {
@@ -90,7 +94,8 @@ class VoiceMeshManager {
 
   /** Call right after emitting `voice_join` on the socket. */
   async join(channelId: string): Promise<void> {
-    if (this.channelId) await this.leave();
+    if (this.mode) await this.leave();
+    this.mode = 'channel';
     this.channelId = channelId;
     this.attachSocketListeners();
     try {
@@ -98,14 +103,64 @@ class VoiceMeshManager {
       this.events.onLocalStreamReady?.(this.localStream);
     } catch (e: any) {
       this.events.onError?.(e?.message ?? 'Nie udało się uzyskać dostępu do mikrofonu');
+      this.mode = null;
       this.channelId = null;
       this.detachSocketListeners();
       throw e;
     }
   }
 
-  /** Call right before/after emitting `voice_leave` on the socket. */
+  /**
+   * Caller side of a 1:1 DM call — call after the callee has accepted
+   * (`call_accepted`), so the offer isn't racing their mic setup.
+   */
+  async startDirectCall(peerId: string): Promise<void> {
+    if (this.mode) await this.leave();
+    this.mode = 'direct';
+    this.attachSocketListeners();
+    try {
+      this.localStream = await mediaDevices.getUserMedia({ audio: true, video: false }) as unknown as MediaStream;
+      this.events.onLocalStreamReady?.(this.localStream);
+    } catch (e: any) {
+      this.events.onError?.(e?.message ?? 'Nie udało się uzyskać dostępu do mikrofonu');
+      this.mode = null;
+      this.detachSocketListeners();
+      throw e;
+    }
+    const pc = this.makePeerConnection(peerId);
+    try {
+      const offer = await pc.createOffer({} as any);
+      await pc.setLocalDescription(offer);
+      getSocket()?.emit('webrtc_offer', { to: peerId, sdp: descToPlain(pc.localDescription) });
+    } catch (e: any) {
+      this.events.onError?.(e?.message ?? 'Błąd nawiązywania połączenia');
+      throw e;
+    }
+  }
+
+  /**
+   * Callee side of a 1:1 DM call — call after accepting (`call_accept`
+   * emitted), before the caller's offer necessarily arrives. Just gets the
+   * mic ready; the incoming offer is handled by the normal onOffer listener.
+   */
+  async acceptDirectCall(): Promise<void> {
+    if (this.mode) await this.leave();
+    this.mode = 'direct';
+    this.attachSocketListeners();
+    try {
+      this.localStream = await mediaDevices.getUserMedia({ audio: true, video: false }) as unknown as MediaStream;
+      this.events.onLocalStreamReady?.(this.localStream);
+    } catch (e: any) {
+      this.events.onError?.(e?.message ?? 'Nie udało się uzyskać dostępu do mikrofonu');
+      this.mode = null;
+      this.detachSocketListeners();
+      throw e;
+    }
+  }
+
+  /** Call right before/after emitting `voice_leave`/`call_end` on the socket. */
   async leave(): Promise<void> {
+    this.mode = null;
     this.channelId = null;
     this.detachSocketListeners();
     for (const pc of this.peers.values()) {
@@ -153,7 +208,7 @@ class VoiceMeshManager {
   }
 
   private onExistingUsers = async ({ channel_id, user_ids }: { channel_id: string; user_ids: string[] }) => {
-    if (channel_id !== this.channelId) return;
+    if (this.mode !== 'channel' || channel_id !== this.channelId) return;
     for (const peerId of user_ids) {
       if (this.peers.has(peerId)) continue;
       const pc = this.makePeerConnection(peerId);
@@ -168,7 +223,7 @@ class VoiceMeshManager {
   };
 
   private onOffer = async ({ from, sdp }: { from: string; sdp: any }) => {
-    if (!this.channelId) return; // not in a voice-channel mesh session
+    if (!this.mode) return; // no active channel-mesh or direct-call session
     let pc = this.peers.get(from);
     if (!pc) pc = this.makePeerConnection(from);
     try {

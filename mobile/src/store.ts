@@ -5,6 +5,18 @@ import type { Lang } from './i18n';
 
 type VoiceUser = { id: string; username: string; avatar_url: string | null };
 
+export type DirectCallStatus = 'outgoing' | 'incoming' | 'connected';
+export interface DirectCall {
+  peerId: string;
+  peerUsername: string;
+  peerAvatar: string | null;
+  status: DirectCallStatus;
+  type: 'voice' | 'video';
+  /** Only set on the callee side (received from the call_invite payload) —
+   * needed for the call_accept emit. The caller never needs it. */
+  conversationId?: string;
+}
+
 interface AppStore {
   token: string | null;
   currentUser: User | null;
@@ -61,6 +73,11 @@ interface AppStore {
   addVoiceUser: (channelId: string, user: VoiceUser) => void;
   removeVoiceUser: (channelId: string, userId: string) => void;
   setVoiceUsers: (channelId: string, users: VoiceUser[]) => void;
+
+  /** 1:1 DM call — null when no call is ringing/active. */
+  activeCall: DirectCall | null;
+  setActiveCall: (call: DirectCall | null) => void;
+  updateActiveCallStatus: (status: DirectCallStatus) => void;
 }
 
 export const useStore = create<AppStore>((set) => ({
@@ -78,7 +95,7 @@ export const useStore = create<AppStore>((set) => ({
       token: null, currentUser: null, isAuthenticated: false,
       servers: [], channels: [], messages: {},
       dmConversations: [], friends: [], friendRequests: [],
-      voiceUsers: {},
+      voiceUsers: {}, activeCall: null,
     });
   },
   setCurrentUser: (user) => set({ currentUser: user }),
@@ -176,4 +193,9 @@ export const useStore = create<AppStore>((set) => ({
     })),
   setVoiceUsers: (channelId, users) =>
     set((st) => ({ voiceUsers: { ...st.voiceUsers, [channelId]: users } })),
+
+  activeCall: null,
+  setActiveCall: (call) => set({ activeCall: call }),
+  updateActiveCallStatus: (status) =>
+    set((st) => (st.activeCall ? { activeCall: { ...st.activeCall, status } } : {})),
 }));

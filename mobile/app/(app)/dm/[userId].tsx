@@ -12,7 +12,7 @@ import { MessageInput } from '../../../src/components/MessageInput';
 import { C, STATUS_COLOR } from '../../../src/theme';
 import { dmsApi, friendsApi, API_URL } from '../../../src/api';
 import { useStore } from '../../../src/store';
-import { getSocket } from '../../../src/socket';
+import { getSocket, sendCallInvite } from '../../../src/socket';
 import { storage } from '../../../src/storage';
 import { STATIC_BASE } from '../../../src/config';
 import { format, isToday, isYesterday } from 'date-fns';
@@ -87,7 +87,7 @@ export default function DmChatScreen() {
   const insets = useSafeAreaInsets();
   const {
     dmMessages, setDmMessages, addDmMessage, updateDmMessage, removeDmMessage,
-    currentUser, userStatuses, language,
+    currentUser, userStatuses, language, setActiveCall,
   } = useStore();
   const msgs = dmMessages[userId] ?? [];
 
@@ -217,20 +217,27 @@ export default function DmChatScreen() {
     }
   };
 
+  const startCall = (type: 'voice' | 'video') => {
+    sendCallInvite(userId, type);
+    setActiveCall({
+      peerId: userId,
+      peerUsername: username ?? '?',
+      peerAvatar: avatar ?? null,
+      status: 'outgoing',
+      type,
+    });
+  };
+
   const handleCallPress = () => {
     const gt = getT();
     Alert.alert(
       gt.callTitle,
       gt.callSelectType,
       [
-        {
-          text: gt.voiceCallLabel,
-          onPress: () => Alert.alert(gt.comingSoon, gt.voiceCallComingSoon),
-        },
-        {
-          text: gt.videoCallLabel,
-          onPress: () => Alert.alert(gt.comingSoon, gt.videoCallComingSoon),
-        },
+        { text: gt.voiceCallLabel, onPress: () => startCall('voice') },
+        // Video calling needs an actual video UI (camera preview, RTCView) —
+        // audio-only voiceMesh doesn't cover that yet, so this stays a stub.
+        { text: gt.videoCallLabel, onPress: () => Alert.alert(gt.comingSoon, gt.videoCallComingSoon) },
         { text: gt.cancel, style: 'cancel' },
       ],
     );
