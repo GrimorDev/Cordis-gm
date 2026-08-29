@@ -40,10 +40,35 @@ export interface User {
   status: string;
   is_admin: boolean;
   bio?: string | null;
+  custom_status?: string | null;
   badges?: Badge[];
   mutual_friends_count?: number;
   preferred_status?: string | null;
   created_at: string;
+  privacy_status_visible?: boolean;
+  privacy_typing_visible?: boolean;
+  privacy_read_receipts?: boolean;
+  privacy_friend_requests?: boolean;
+  privacy_dm_from_strangers?: boolean;
+}
+
+export interface UserStats {
+  messages_sent: number;
+  messages_this_month: number;
+  dms_sent: number;
+  servers_joined: number;
+  friends_count: number;
+  reactions_given: number;
+  reactions_received: number;
+  account_created: string;
+}
+
+export interface Session {
+  id: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
+  last_seen_at: string;
 }
 
 export interface Server {
@@ -145,6 +170,9 @@ export const authApi = {
     req<{ token: string; user: User }>('POST', '/auth/register', { username, password }),
   me:       () => req<User>('GET', '/auth/me'),
   logout:   () => req<{ ok: boolean }>('POST', '/auth/logout'),
+  sessions: () => req<Session[]>('GET', '/auth/sessions'),
+  revokeSession: (id: string) => req<{ ok: boolean }>('DELETE', `/auth/sessions/${id}`),
+  revokeAllSessions: () => req<{ ok: boolean }>('DELETE', '/auth/sessions'),
 };
 
 export interface ServerMember {
@@ -166,8 +194,12 @@ export interface ServerBan {
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 export const usersApi = {
-  updateMe:      (data: Partial<{ username: string; preferred_status: string; bio: string }>) =>
-    req<User>('PUT', '/users/me', data),
+  updateMe:      (data: Partial<{
+    username: string; preferred_status: string; bio: string; custom_status: string;
+    privacy_status_visible: boolean; privacy_typing_visible: boolean;
+    privacy_read_receipts: boolean; privacy_friend_requests: boolean;
+    privacy_dm_from_strangers: boolean;
+  }>) => req<User>('PUT', '/users/me', data),
   updateStatus:  (status: string) =>
     req<{ ok: boolean }>('PUT', '/users/me/status', { status }),
   changePassword:(current: string, newPass: string) =>
@@ -175,8 +207,12 @@ export const usersApi = {
   get:           (id: string) => req<User>('GET', `/users/${id}`),
   updateAvatar:  async (formData: FormData): Promise<User> => {
     const token = await getToken();
+    // Backend route is POST (router.post('/me/avatar', ...) in
+    // backend/src/routes/users.ts) — this was calling PUT, a method that
+    // route was never registered for, so every mobile avatar upload was
+    // silently 404ing.
     const res = await fetch(`${API_URL}/users/me/avatar`, {
-      method: 'PUT',
+      method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: formData,
     });
@@ -184,6 +220,18 @@ export const usersApi = {
     if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
     return data as User;
   },
+  updateBanner:  async (formData: FormData): Promise<{ banner_url: string }> => {
+    const token = await getToken();
+    const res = await fetch(`${API_URL}/users/me/banner`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+    return data as { banner_url: string };
+  },
+  getStats: (id?: string) => req<UserStats>('GET', id ? `/users/${id}/stats` : '/users/me/stats'),
 };
 
 // ── Servers ───────────────────────────────────────────────────────────────────
