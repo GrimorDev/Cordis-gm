@@ -15,6 +15,7 @@ import { useStore } from '../../src/store';
 import { getSocket } from '../../src/socket';
 import { voiceMesh } from '../../src/webrtc';
 import { showOngoingCallNotification, hideOngoingCallNotification } from '../../src/callNotification';
+import { VoiceChannelCallView } from '../../src/components/VoiceChannelCallView';
 import { useT, getT } from '../../src/i18n';
 import type { Server, Channel } from '../../src/api';
 
@@ -55,6 +56,7 @@ export default function ServersScreen() {
   const [activeVoice, setActiveVoice] = useState<{ channelId: string; channelName: string } | null>(null);
   const [voiceMuted, setVoiceMuted] = useState(false);
   const [voiceConnecting, setVoiceConnecting] = useState(false);
+  const [voiceExpanded, setVoiceExpanded] = useState(true);
 
   // Modals
   const [modal, setModal] = useState<'none' | 'create' | 'join' | 'editChannel'>('none');
@@ -184,6 +186,7 @@ export default function ServersScreen() {
         getSocket()?.emit('voice_join', ch.id);
         setActiveVoice({ channelId: ch.id, channelName: ch.name });
         setVoiceChannelActive(true);
+        setVoiceExpanded(true);
         setVoiceMuted(false);
         await showOngoingCallNotification(ch.name, () => handleLeaveVoice());
       } catch (e: any) {
@@ -210,6 +213,9 @@ export default function ServersScreen() {
     const next = !voiceMuted;
     setVoiceMuted(next);
     voiceMesh.setMuted(next);
+    if (activeVoice) {
+      getSocket()?.emit('voice_state', { muted: next, deafened: false, channel_id: activeVoice.channelId });
+    }
   };
 
   const toggleCategory = (catId: string | null) => {
@@ -438,9 +444,9 @@ export default function ServersScreen() {
           </ScrollView>
         )}
 
-        {/* Active voice channel bar */}
-        {activeVoice && (
-          <View style={styles.voiceBar}>
+        {/* Active voice channel bar — minimized view; tap to expand full-screen */}
+        {activeVoice && !voiceExpanded && (
+          <TouchableOpacity style={styles.voiceBar} activeOpacity={0.85} onPress={() => setVoiceExpanded(true)}>
             <View style={styles.voiceBarLeft}>
               <View style={styles.voicePulse}>
                 <Ionicons name={voiceConnecting ? 'sync' : 'mic'} size={14} color="#22c55e" />
@@ -474,7 +480,19 @@ export default function ServersScreen() {
                 <Ionicons name="call" size={16} color="#fff" />
               </TouchableOpacity>
             </View>
-          </View>
+          </TouchableOpacity>
+        )}
+
+        {activeVoice && (
+          <VoiceChannelCallView
+            visible={voiceExpanded}
+            channelId={activeVoice.channelId}
+            channelName={activeVoice.channelName}
+            onMinimize={() => setVoiceExpanded(false)}
+            onLeave={handleLeaveVoice}
+            onToggleMute={handleToggleMute}
+            muted={voiceMuted}
+          />
         )}
 
         <ServerActionSheet

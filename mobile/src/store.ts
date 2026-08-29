@@ -74,6 +74,10 @@ interface AppStore {
   removeVoiceUser: (channelId: string, userId: string) => void;
   setVoiceUsers: (channelId: string, users: VoiceUser[]) => void;
 
+  /** Per-user mic-mute state in a voice channel, from `voice_state` events. */
+  voiceUserMuted: Record<string, boolean>;
+  setVoiceUserMuted: (userId: string, muted: boolean) => void;
+
   /** 1:1 DM call — null when no call is ringing/active. */
   activeCall: DirectCall | null;
   setActiveCall: (call: DirectCall | null) => void;
@@ -199,6 +203,10 @@ export const useStore = create<AppStore>((set) => ({
     })),
   setVoiceUsers: (channelId, users) =>
     set((st) => ({ voiceUsers: { ...st.voiceUsers, [channelId]: users } })),
+
+  voiceUserMuted: {},
+  setVoiceUserMuted: (userId, muted) =>
+    set((st) => ({ voiceUserMuted: { ...st.voiceUserMuted, [userId]: muted } })),
 
   activeCall: null,
   setActiveCall: (call) => set({ activeCall: call }),

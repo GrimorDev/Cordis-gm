@@ -136,13 +136,16 @@ export default function AppLayout() {
   const {
     isAuthenticated, addMessage, addDmMessage, setUserStatus, currentUser,
     updateMessage, removeMessage, updateDmMessage, removeDmMessage,
-    addVoiceUser, removeVoiceUser,
+    addVoiceUser, removeVoiceUser, setVoiceUserMuted,
     activeCall, setActiveCall, updateActiveCallStatus,
   } = useStore();
   const [callMuted, setCallMuted] = useState(false);
 
   useEffect(() => {
     if (!currentUser) return;
+    // Perfect Negotiation (screen-share renegotiation) needs to know our own
+    // id to deterministically assign polite/impolite roles per peer.
+    voiceMesh.setSelfId(currentUser.id);
 
     const onNewMessage = (msg: any) => { addMessage(msg.channel_id, msg); };
     const onNewDm = (msg: any) => {
@@ -164,6 +167,9 @@ export default function AppLayout() {
     };
     const onVoiceUserJoined = ({ channel_id, user }: any) => { addVoiceUser(channel_id, user); };
     const onVoiceUserLeft = ({ channel_id, user_id }: any) => { removeVoiceUser(channel_id, user_id); };
+    const onVoiceState = ({ user_id, muted }: any) => {
+      if (typeof muted === 'boolean') setVoiceUserMuted(user_id, muted);
+    };
     const onCallInvite = ({ from, type, conversation_id }: any) => {
       if (!from?.id) return;
       setActiveCall({
@@ -217,6 +223,7 @@ export default function AppLayout() {
       sock.on('call_ended', onCallEnded);
       sock.on('voice_user_joined', onVoiceUserJoined);
       sock.on('voice_user_left', onVoiceUserLeft);
+      sock.on('voice_state', onVoiceState);
     };
 
     const detach = () => {
@@ -234,6 +241,7 @@ export default function AppLayout() {
       sock?.off('call_ended', onCallEnded);
       sock?.off('voice_user_joined', onVoiceUserJoined);
       sock?.off('voice_user_left', onVoiceUserLeft);
+      sock?.off('voice_state', onVoiceState);
     };
 
     const existing = getSocket();
