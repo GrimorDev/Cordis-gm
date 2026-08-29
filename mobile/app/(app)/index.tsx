@@ -442,12 +442,26 @@ export default function ServersScreen() {
               <View style={styles.voicePulse}>
                 <Ionicons name={voiceConnecting ? 'sync' : 'mic'} size={14} color="#22c55e" />
               </View>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.voiceBarTitle}>
                   {voiceConnecting ? 'Łączenie…' : t.voiceConnectedTitle}
                 </Text>
                 <Text style={styles.voiceBarChannel}>#{activeVoice.channelName}</Text>
               </View>
+              {/* Who else is here — the whole point of joining a voice channel
+                  is knowing who you're actually talking to. */}
+              {(voiceUsers[activeVoice.channelId] ?? []).length > 0 && (
+                <View style={styles.voiceBarAvatars}>
+                  {(voiceUsers[activeVoice.channelId] ?? []).slice(0, 4).map((u, i) => (
+                    <View key={u.id} style={[styles.voiceBarAvatarWrap, { marginLeft: i === 0 ? 0 : -8, zIndex: 10 - i }]}>
+                      <UserAvatar url={u.avatar_url} username={u.username} size={24} />
+                    </View>
+                  ))}
+                  {(voiceUsers[activeVoice.channelId] ?? []).length > 4 && (
+                    <Text style={styles.voiceBarOverflow}>+{(voiceUsers[activeVoice.channelId] ?? []).length - 4}</Text>
+                  )}
+                </View>
+              )}
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <TouchableOpacity style={styles.voiceMuteBtn} onPress={handleToggleMute}>
@@ -920,6 +934,9 @@ const styles = StyleSheet.create({
   },
   voiceBarTitle: { color: '#22c55e', fontSize: 12, fontWeight: '700' },
   voiceBarChannel: { color: C.textMuted, fontSize: 11 },
+  voiceBarAvatars: { flexDirection: 'row', alignItems: 'center', marginRight: 4 },
+  voiceBarAvatarWrap: { borderRadius: 14, borderWidth: 2, borderColor: '#0f1a12' },
+  voiceBarOverflow: { color: C.textMuted, fontSize: 10, fontWeight: '700', marginLeft: 4 },
   voiceMuteBtn: {
     width: 32, height: 32, borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center',

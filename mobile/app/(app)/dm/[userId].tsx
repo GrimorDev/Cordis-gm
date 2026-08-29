@@ -33,6 +33,28 @@ function resolveAttachment(url: string | undefined | null): string | null {
   return `${STATIC_BASE}${url}`;
 }
 
+/** Renders `text` with every case-insensitive occurrence of `query` highlighted. */
+function HighlightedText({ text, query }: { text: string; query: string }) {
+  if (!query) return <>{text}</>;
+  const lower = text.toLowerCase();
+  const q = query.toLowerCase();
+  const parts: React.ReactNode[] = [];
+  let i = 0;
+  let idx = lower.indexOf(q);
+  while (idx !== -1) {
+    if (idx > i) parts.push(text.slice(i, idx));
+    parts.push(
+      <Text key={idx} style={{ backgroundColor: C.accent + '55', color: C.text, fontWeight: '800' }}>
+        {text.slice(idx, idx + q.length)}
+      </Text>,
+    );
+    i = idx + q.length;
+    idx = lower.indexOf(q, i);
+  }
+  if (i < text.length) parts.push(text.slice(i));
+  return <>{parts}</>;
+}
+
 function fmtTime(dateStr: string, lang: 'pl' | 'en' = 'en', yesterday = 'Yesterday') {
   const d = new Date(dateStr);
   const locale = lang === 'pl' ? pl : enGB;
@@ -302,9 +324,38 @@ export default function DmChatScreen() {
 
       {loading ? (
         <View style={styles.center}><ActivityIndicator color={C.accent} size="large" /></View>
+      ) : query ? (
+        // Search results — a separate, non-inverted list. Filtering the live
+        // inverted chat FlatList directly made it jump wildly on every
+        // keystroke (RN inverted lists don't handle rapidly changing data
+        // gracefully), so search gets its own simple result list instead.
+        <FlatList
+          data={visibleMsgs}
+          keyExtractor={(m) => m.id}
+          contentContainerStyle={{ padding: 12, gap: 8 }}
+          ListEmptyComponent={
+            <View style={styles.center}>
+              <Ionicons name="search-outline" size={32} color={C.textMuted} />
+              <Text style={styles.searchEmptyText}>Brak wyników</Text>
+            </View>
+          }
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.searchResultRow}
+              onPress={() => { setSearchOpen(false); setSearchQuery(''); }}
+            >
+              <Text style={styles.searchResultSender}>
+                {item.sender_id === currentUser?.id ? 'Ty' : username} <Text style={styles.searchResultTime}>{fmtTime(item.created_at, language)}</Text>
+              </Text>
+              <Text style={styles.searchResultText} numberOfLines={2}>
+                <HighlightedText text={item.content} query={query} />
+              </Text>
+            </TouchableOpacity>
+          )}
+        />
       ) : (
         <FlatList
-          data={[...visibleMsgs].reverse()}
+          data={[...msgs].reverse()}
           keyExtractor={(m) => m.id}
           inverted
           contentContainerStyle={{ paddingVertical: 8 }}
@@ -329,7 +380,7 @@ export default function DmChatScreen() {
               );
             }
 
-            const reversed = [...visibleMsgs].reverse();
+            const reversed = [...msgs].reverse();
             const prev = reversed[index + 1];
             const showHeader = !prev || prev.sender_id !== item.sender_id ||
               (new Date(item.created_at).getTime() - new Date(prev.created_at).getTime()) > 5 * 60_000;
@@ -465,6 +516,14 @@ const styles = StyleSheet.create({
     backgroundColor: C.bgCard, borderBottomWidth: 1, borderBottomColor: C.border,
   },
   searchInput: { flex: 1, color: C.text, fontSize: 14, padding: 0 },
+  searchEmptyText: { color: C.textMuted, fontSize: 14, marginTop: 8 },
+  searchResultRow: {
+    backgroundColor: C.bgCard, borderRadius: 12, borderWidth: 1, borderColor: C.border,
+    padding: 12, gap: 4,
+  },
+  searchResultSender: { color: C.textSub, fontSize: 12, fontWeight: '700' },
+  searchResultTime: { color: C.textMuted, fontWeight: '400' },
+  searchResultText: { color: C.text, fontSize: 14, lineHeight: 19 },
   title: { color: C.text, fontSize: 16, fontWeight: '700' },
   headerStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   headerStatusDot: { width: 6, height: 6, borderRadius: 3 },
