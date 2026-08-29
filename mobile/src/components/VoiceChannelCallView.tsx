@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, FlatList } from 'react-native';
-import { RTCView } from 'react-native-webrtc';
+import { RTCView, MediaStream } from 'react-native-webrtc';
 import { Ionicons } from '@expo/vector-icons';
 import { UserAvatar } from './UserAvatar';
 import { C } from '../theme';
@@ -38,6 +38,8 @@ export function VoiceChannelCallView({
   const { voiceUsers, voiceUserMuted, currentUser } = useStore();
   const participants = voiceUsers[channelId] ?? [];
   const [remoteStreams, setRemoteStreams] = useState<Record<string, RemoteStreams>>({});
+  const [localVideo, setLocalVideo] = useState<{ stream: MediaStream; kind: 'camera' | 'screen' } | null>(null);
+  const [videoBusy, setVideoBusy] = useState(false);
 
   useEffect(() => {
     voiceMesh.configure({
@@ -51,9 +53,38 @@ export function VoiceChannelCallView({
           return next;
         });
       },
+      onLocalVideoChanged: (stream, kind) => {
+        setLocalVideo(stream && kind ? { stream, kind } : null);
+      },
       onError: (message) => console.warn('[Cordyn] voice mesh error:', message),
     });
   }, []);
+
+  const toggleCamera = async () => {
+    if (videoBusy) return;
+    setVideoBusy(true);
+    try {
+      if (voiceMesh.getLocalVideoKind() === 'camera') await voiceMesh.stopCamera();
+      else await voiceMesh.startCamera();
+    } catch (e: any) {
+      console.warn('[Cordyn] camera toggle failed:', e?.message);
+    } finally {
+      setVideoBusy(false);
+    }
+  };
+
+  const toggleScreenShare = async () => {
+    if (videoBusy) return;
+    setVideoBusy(true);
+    try {
+      if (voiceMesh.getLocalVideoKind() === 'screen') await voiceMesh.stopScreenShare();
+      else await voiceMesh.startScreenShare();
+    } catch (e: any) {
+      console.warn('[Cordyn] screen share toggle failed:', e?.message);
+    } finally {
+      setVideoBusy(false);
+    }
+  };
 
   // "Me" first, then everyone else — matches how the compact bar/voice
   // channel list already orders things.
@@ -86,11 +117,17 @@ export function VoiceChannelCallView({
           renderItem={({ item }) => {
             const isMe = item.id === currentUser?.id;
             const isMuted = isMe ? muted : (voiceUserMuted[item.id] ?? false);
-            const screen = remoteStreams[item.id]?.video;
+            const video = isMe ? localVideo?.stream : remoteStreams[item.id]?.video;
+            const videoKind = isMe ? localVideo?.kind : (remoteStreams[item.id]?.video ? 'screen' : undefined);
             return (
               <View style={styles.tile}>
-                {screen ? (
-                  <RTCView streamURL={screen.toURL()} style={StyleSheet.absoluteFillObject} objectFit="cover" />
+                {video ? (
+                  <RTCView
+                    streamURL={video.toURL()}
+                    style={StyleSheet.absoluteFillObject}
+                    objectFit="cover"
+                    mirror={isMe && videoKind === 'camera'}
+                  />
                 ) : (
                   <View style={styles.tileAvatarWrap}>
                     <UserAvatar url={item.avatar_url} username={item.username} size={72} />
@@ -104,10 +141,10 @@ export function VoiceChannelCallView({
                     color={isMuted ? '#ef4444' : '#22c55e'}
                   />
                 </View>
-                {screen && (
+                {video && (
                   <View style={styles.sharingBadge}>
-                    <Ionicons name="tv-outline" size={11} color="#fff" />
-                    <Text style={styles.sharingBadgeText}>Udostępnia</Text>
+                    <Ionicons name={videoKind === 'camera' ? 'videocam' : 'tv-outline'} size={11} color="#fff" />
+                    <Text style={styles.sharingBadgeText}>{videoKind === 'camera' ? 'Kamera' : 'Udostępnia'}</Text>
                   </View>
                 )}
               </View>
@@ -121,6 +158,20 @@ export function VoiceChannelCallView({
           </TouchableOpacity>
           <TouchableOpacity style={[styles.controlBtn, deafened && styles.controlBtnActive]} onPress={onToggleDeafen}>
             <Ionicons name={deafened ? 'headset-outline' : 'headset'} size={22} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.controlBtn, localVideo?.kind === 'camera' && styles.controlBtnVideoActive]}
+            onPress={toggleCamera}
+            disabled={videoBusy}
+          >
+            <Ionicons name={localVideo?.kind === 'camera' ? 'videocam' : 'videocam-outline'} size={22} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.controlBtn, localVideo?.kind === 'screen' && styles.controlBtnVideoActive]}
+            onPress={toggleScreenShare}
+            disabled={videoBusy}
+          >
+            <Ionicons name={localVideo?.kind === 'screen' ? 'tv' : 'tv-outline'} size={22} color="#fff" />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.controlBtn, styles.hangupBtn]} onPress={onLeave}>
             <Ionicons name="call" size={24} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
@@ -166,13 +217,14 @@ const styles = StyleSheet.create({
   },
   sharingBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
   controls: {
-    flexDirection: 'row', justifyContent: 'center', gap: 20,
-    paddingVertical: 24, paddingBottom: 40,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12,
+    paddingVertical: 24, paddingBottom: 40, paddingHorizontal: 8,
   },
   controlBtn: {
-    width: 56, height: 56, borderRadius: 28,
+    width: 50, height: 50, borderRadius: 25,
     backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center',
   },
   controlBtnActive: { backgroundColor: '#ef4444' },
-  hangupBtn: { backgroundColor: C.danger },
+  controlBtnVideoActive: { backgroundColor: '#6366f1' },
+  hangupBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: C.danger },
 });

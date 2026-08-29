@@ -10,8 +10,16 @@
 // react-native-webrtc auto-routes a received remote audio track to the
 // device speaker/earpiece once it's attached to the peer connection — unlike
 // web, no <audio> element is needed for mic audio. A remote VIDEO track
-// (screen share — mobile never sends camera in this app) needs an RTCView
-// to actually display, wired up by whoever consumes onRemoteStreamsChanged.
+// (camera or screen share — indistinguishable on the wire, both are just a
+// "video" kind track) needs an RTCView to actually display, wired up by
+// whoever consumes onRemoteStreamsChanged.
+//
+// Outgoing camera/screen share: react-native-webrtc bundles a full native
+// Android MediaProjection capture pipeline for getDisplayMedia() — no custom
+// native module needed, just permissions in app.json. Camera and screen
+// share are mutually exclusive locally (starting one stops the other), and
+// both go out as a single "video" track added via pc.addTrack(), same as
+// desktop.
 //
 // Screen-share support requires WebRTC renegotiation: a peer adds a video
 // track to an already-connected RTCPeerConnection via pc.addTrack(), which
@@ -22,7 +30,7 @@
 // "polite" peer (lower user id) backs off on collision, the "impolite" one
 // ignores the incoming colliding offer.
 
-import { mediaDevices, RTCPeerConnection, RTCIceCandidate, MediaStream } from 'react-native-webrtc';
+import { mediaDevices, RTCPeerConnection, RTCIceCandidate, MediaStream, MediaStreamTrack } from 'react-native-webrtc';
 import { getSocket } from './socket';
 
 // Desktop (src/rtc/engine.ts) sends pc.localDescription.toJSON() — a plain
@@ -63,9 +71,11 @@ type VoiceMeshEvents = {
   onLocalStreamReady?: (stream: MediaStream) => void;
   onError?: (message: string) => void;
   /** Fires whenever a peer's remote audio/video stream set changes — video
-   * present means that peer is sharing their screen. */
+   * present means that peer is sharing their screen or camera. */
   onRemoteStreamsChanged?: (peerId: string, streams: RemoteStreams) => void;
   onPeerRemoved?: (peerId: string) => void;
+  /** Our own outgoing camera/screen-share stream, for a local preview tile. */
+  onLocalVideoChanged?: (stream: MediaStream | null, kind: 'camera' | 'screen' | null) => void;
 };
 
 class VoiceMeshManager {
@@ -76,6 +86,12 @@ class VoiceMeshManager {
   private makingOffer = new Map<string, boolean>();
   private ignoreOffer = new Map<string, boolean>();
   private localStream: MediaStream | null = null;
+  // Camera and screen share are mutually exclusive in this pass (both are a
+  // single extra "video" track on the wire — the receiving side has no way
+  // to tell two simultaneous video sources apart, see ontrack below).
+  private localVideoStream: MediaStream | null = null;
+  private localVideoTrack: MediaStreamTrack | null = null;
+  private localVideoKind: 'camera' | 'screen' | null = null;
   private channelId: string | null = null;
   // 'channel' = voice-channel mesh (join/leave, N peers). 'direct' = 1:1 DM
   // call (call_invite/accept, exactly one peer). Both speak the same
@@ -212,6 +228,13 @@ class VoiceMeshManager {
       this.localStream.getTracks().forEach(t => t.stop());
       this.localStream = null;
     }
+    if (this.localVideoStream) {
+      this.localVideoStream.getTracks().forEach(t => t.stop());
+      this.localVideoStream = null;
+      this.localVideoTrack = null;
+      this.localVideoKind = null;
+      this.events.onLocalVideoChanged?.(null, null);
+    }
     this.muted = false;
     this.deafened = false;
   }
@@ -238,6 +261,73 @@ class VoiceMeshManager {
     return this.deafened;
   }
 
+  getLocalVideoKind(): 'camera' | 'screen' | null {
+    return this.localVideoKind;
+  }
+
+  /** Turn the camera on, adding it as a track to every connected peer.
+   * Renegotiation (pc.onnegotiationneeded) happens automatically per peer. */
+  async startCamera(): Promise<void> {
+    if (!this.mode) return;
+    if (this.localVideoKind === 'screen') await this.stopScreenShare();
+    if (this.localVideoKind === 'camera') return;
+    const stream = await mediaDevices.getUserMedia({ audio: false, video: { facingMode: 'user' } }) as unknown as MediaStream;
+    this.localVideoStream = stream;
+    this.localVideoTrack = stream.getVideoTracks()[0] ?? null;
+    this.localVideoKind = 'camera';
+    for (const pc of this.peers.values()) {
+      if (this.localVideoTrack) pc.addTrack(this.localVideoTrack, stream);
+    }
+    this.events.onLocalVideoChanged?.(stream, 'camera');
+  }
+
+  async stopCamera(): Promise<void> {
+    if (this.localVideoKind !== 'camera') return;
+    await this.stopLocalVideo();
+  }
+
+  /** Start sharing the screen — react-native-webrtc bundles a complete
+   * Android MediaProjection implementation (foreground service + capture)
+   * behind getDisplayMedia(), no custom native module needed. */
+  async startScreenShare(): Promise<void> {
+    if (!this.mode) return;
+    if (this.localVideoKind === 'camera') await this.stopCamera();
+    if (this.localVideoKind === 'screen') return;
+    const stream = await (mediaDevices as any).getDisplayMedia() as MediaStream;
+    this.localVideoStream = stream;
+    this.localVideoTrack = stream.getVideoTracks()[0] ?? null;
+    this.localVideoKind = 'screen';
+    for (const pc of this.peers.values()) {
+      if (this.localVideoTrack) pc.addTrack(this.localVideoTrack, stream);
+    }
+    this.events.onLocalVideoChanged?.(stream, 'screen');
+    // The OS screen-recording indicator / stop button ends the track
+    // directly (not through our own stop button) — react to that too.
+    this.localVideoTrack?.addEventListener?.('ended', () => {
+      if (this.localVideoKind === 'screen') this.stopLocalVideo().catch(() => {});
+    });
+  }
+
+  async stopScreenShare(): Promise<void> {
+    if (this.localVideoKind !== 'screen') return;
+    await this.stopLocalVideo();
+  }
+
+  private async stopLocalVideo(): Promise<void> {
+    const track = this.localVideoTrack;
+    for (const pc of this.peers.values()) {
+      const sender = pc.getSenders().find((s: any) => s.track === track);
+      if (sender) {
+        try { pc.removeTrack(sender); } catch {}
+      }
+    }
+    this.localVideoStream?.getTracks().forEach(t => t.stop());
+    this.localVideoStream = null;
+    this.localVideoTrack = null;
+    this.localVideoKind = null;
+    this.events.onLocalVideoChanged?.(null, null);
+  }
+
   private makePeerConnection(peerId: string): RTCPeerConnection {
     const pc = new RTCPeerConnection({
       iceServers: ICE_SERVERS,
@@ -257,6 +347,11 @@ class VoiceMeshManager {
       this.localStream.getTracks().forEach(track => {
         pc.addTrack(track, this.localStream as MediaStream);
       });
+    }
+    // A peer joining mid-share should still see it — add whatever local
+    // video (camera/screen) is already active to this brand-new connection.
+    if (this.localVideoTrack && this.localVideoStream) {
+      pc.addTrack(this.localVideoTrack, this.localVideoStream);
     }
 
     (pc as any).onicecandidate = (e: any) => {
