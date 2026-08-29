@@ -44,6 +44,7 @@ export default function ServersScreen() {
   const {
     servers, setServers, activeServer, setActiveServer,
     channels, setChannels, addServer, currentUser, voiceUsers,
+    setVoiceChannelActive,
   } = useStore();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -182,6 +183,7 @@ export default function ServersScreen() {
         await voiceMesh.join(ch.id);
         getSocket()?.emit('voice_join', ch.id);
         setActiveVoice({ channelId: ch.id, channelName: ch.name });
+        setVoiceChannelActive(true);
         setVoiceMuted(false);
         await showOngoingCallNotification(ch.name, () => handleLeaveVoice());
       } catch (e: any) {
@@ -199,6 +201,7 @@ export default function ServersScreen() {
       voiceMesh.leave();
       hideOngoingCallNotification();
       setActiveVoice(null);
+      setVoiceChannelActive(false);
       setVoiceMuted(false);
     }
   };

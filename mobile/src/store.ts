@@ -78,6 +78,12 @@ interface AppStore {
   activeCall: DirectCall | null;
   setActiveCall: (call: DirectCall | null) => void;
   updateActiveCallStatus: (status: DirectCallStatus) => void;
+
+  /** True while connected to a server voice channel — lets the tab bar
+   * (rendered in a different file than the voice-channel screen) hide
+   * itself so the voice bar's hangup button is never clipped underneath it. */
+  voiceChannelActive: boolean;
+  setVoiceChannelActive: (active: boolean) => void;
 }
 
 export const useStore = create<AppStore>((set) => ({
@@ -95,7 +101,7 @@ export const useStore = create<AppStore>((set) => ({
       token: null, currentUser: null, isAuthenticated: false,
       servers: [], channels: [], messages: {},
       dmConversations: [], friends: [], friendRequests: [],
-      voiceUsers: {}, activeCall: null,
+      voiceUsers: {}, activeCall: null, voiceChannelActive: false,
     });
   },
   setCurrentUser: (user) => set({ currentUser: user }),
@@ -198,4 +204,7 @@ export const useStore = create<AppStore>((set) => ({
   setActiveCall: (call) => set({ activeCall: call }),
   updateActiveCallStatus: (status) =>
     set((st) => (st.activeCall ? { activeCall: { ...st.activeCall, status } } : {})),
+
+  voiceChannelActive: false,
+  setVoiceChannelActive: (active) => set({ voiceChannelActive: active }),
 }));

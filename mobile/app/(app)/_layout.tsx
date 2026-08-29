@@ -84,11 +84,14 @@ const HIDE_TAB_BAR_ON = new Set(['channel/[id]', 'dm/[userId]']);
 function TabBar({ state, navigation }: any) {
   const t = useT();
   const insets = useSafeAreaInsets();
-  const { dmConversations } = useStore();
+  const { dmConversations, voiceChannelActive } = useStore();
   const totalUnread = dmConversations.reduce((s, c) => s + (c.unread_count ?? 0), 0);
 
   const activeRouteName = state.routes[state.index]?.name;
-  if (HIDE_TAB_BAR_ON.has(activeRouteName)) return null;
+  // Also hide while connected to a voice channel — that screen renders its
+  // own bottom voice bar (mute/hangup), and the two stacking on top of each
+  // other clipped the hangup button off-screen.
+  if (HIDE_TAB_BAR_ON.has(activeRouteName) || voiceChannelActive) return null;
 
   const TAB_DEFS = [
     { name: 'index',   icon: 'server',        label: t.servers      },
