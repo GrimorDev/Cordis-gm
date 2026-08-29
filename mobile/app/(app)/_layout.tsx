@@ -84,14 +84,16 @@ const HIDE_TAB_BAR_ON = new Set(['channel/[id]', 'dm/[userId]']);
 function TabBar({ state, navigation }: any) {
   const t = useT();
   const insets = useSafeAreaInsets();
-  const { dmConversations, voiceChannelActive } = useStore();
+  const { dmConversations } = useStore();
   const totalUnread = dmConversations.reduce((s, c) => s + (c.unread_count ?? 0), 0);
 
   const activeRouteName = state.routes[state.index]?.name;
-  // Also hide while connected to a voice channel — that screen renders its
-  // own bottom voice bar (mute/hangup), and the two stacking on top of each
-  // other clipped the hangup button off-screen.
-  if (HIDE_TAB_BAR_ON.has(activeRouteName) || voiceChannelActive) return null;
+  // NOTE: does NOT hide for an active voice channel — you should still be
+  // able to switch tabs while connected, same as Discord. The voice bar on
+  // the server screen accounts for this bar's height itself instead (see
+  // index.tsx's voiceBar margin) rather than the two fighting for the same
+  // space by hiding one of them.
+  if (HIDE_TAB_BAR_ON.has(activeRouteName)) return null;
 
   const TAB_DEFS = [
     { name: 'index',   icon: 'server',        label: t.servers      },

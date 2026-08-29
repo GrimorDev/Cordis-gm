@@ -1,8 +1,8 @@
 // ─── Full-screen voice-channel call view ─────────────────────────────────
-// Shows a tile per connected participant (avatar, mute state) and, when a
-// peer is sharing their screen, renders their video track via RTCView
-// instead of the avatar. Minimizes to the existing compact voice bar in
-// (app)/index.tsx — this component owns only the expanded state.
+// Shows a row per connected participant (avatar, mute state) and, when a
+// peer is sharing their screen, an inline video preview via RTCView.
+// Minimizes to the existing compact voice bar in (app)/index.tsx — this
+// component owns only the expanded state.
 
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, FlatList } from 'react-native';
@@ -51,7 +51,7 @@ export function VoiceChannelCallView({
   }, []);
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
+    <Modal visible={visible} animationType="slide" statusBarTranslucent>
       <View style={styles.root}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.minimizeBtn} onPress={onMinimize}>
@@ -64,9 +64,7 @@ export function VoiceChannelCallView({
         <FlatList
           data={participants}
           keyExtractor={(p) => p.id}
-          numColumns={2}
-          columnWrapperStyle={{ gap: 10 }}
-          contentContainerStyle={styles.grid}
+          contentContainerStyle={styles.list}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Ionicons name="people-outline" size={32} color="rgba(255,255,255,0.3)" />
@@ -78,26 +76,23 @@ export function VoiceChannelCallView({
             const isMuted = isMe ? muted : (voiceUserMuted[item.id] ?? false);
             const screen = remoteStreams[item.id]?.video;
             return (
-              <View style={styles.tile}>
-                {screen ? (
-                  <RTCView streamURL={screen.toURL()} style={styles.tileVideo} objectFit="cover" />
-                ) : (
-                  <View style={styles.tileAvatarWrap}>
-                    <UserAvatar url={item.avatar_url} username={item.username} size={56} />
-                  </View>
-                )}
-                <View style={styles.tileFooter}>
-                  <Text style={styles.tileName} numberOfLines={1}>{isMe ? 'Ty' : item.username}</Text>
+              <View style={styles.row}>
+                <View style={styles.rowHeader}>
+                  <UserAvatar url={item.avatar_url} username={item.username} size={40} />
+                  <Text style={styles.rowName} numberOfLines={1}>{isMe ? 'Ty' : item.username}</Text>
                   <Ionicons
                     name={isMuted ? 'mic-off' : 'mic'}
-                    size={13}
+                    size={16}
                     color={isMuted ? '#ef4444' : '#22c55e'}
                   />
                 </View>
                 {screen && (
-                  <View style={styles.sharingBadge}>
-                    <Ionicons name="tv-outline" size={11} color="#fff" />
-                    <Text style={styles.sharingBadgeText}>Udostępnia</Text>
+                  <View style={styles.screenPreview}>
+                    <RTCView streamURL={screen.toURL()} style={StyleSheet.absoluteFillObject} objectFit="contain" />
+                    <View style={styles.sharingBadge}>
+                      <Ionicons name="tv-outline" size={11} color="#fff" />
+                      <Text style={styles.sharingBadgeText}>Udostępnia ekran</Text>
+                    </View>
                   </View>
                 )}
               </View>
@@ -130,22 +125,21 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
   channelName: { flex: 1, textAlign: 'center', color: '#fff', fontSize: 16, fontWeight: '700' },
-  grid: { padding: 12, gap: 10, flexGrow: 1 },
+  list: { padding: 12, gap: 8, flexGrow: 1 },
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingTop: 80 },
   emptyText: { color: 'rgba(255,255,255,0.4)', fontSize: 14 },
-  tile: {
-    flex: 1, aspectRatio: 1, backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 16, alignItems: 'center', justifyContent: 'center',
+  row: {
+    backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', overflow: 'hidden',
   },
-  tileVideo: { ...StyleSheet.absoluteFillObject },
-  tileAvatarWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  tileFooter: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.5)', paddingVertical: 6,
+  rowHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 12, paddingVertical: 10,
   },
-  tileName: { color: '#fff', fontSize: 12, fontWeight: '600', maxWidth: '75%' },
+  rowName: { flex: 1, color: '#fff', fontSize: 15, fontWeight: '600' },
+  screenPreview: {
+    width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000',
+  },
   sharingBadge: {
     position: 'absolute', top: 8, left: 8,
     flexDirection: 'row', alignItems: 'center', gap: 4,
