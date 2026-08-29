@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, FlatList, StyleSheet, Text, TouchableOpacity,
-  ActivityIndicator, Alert, Modal, Image,
+  ActivityIndicator, Alert, Modal, Image, TextInput,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -98,6 +98,8 @@ export default function DmChatScreen() {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [isBlocked, setIsBlocked] = useState(false);   // I blocked them
   const [blockedByThem, setBlockedByThem] = useState(false); // they blocked me (403 on send)
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const remoteTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -228,24 +230,21 @@ export default function DmChatScreen() {
     });
   };
 
-  const handleCallPress = () => {
+  // Video calling needs an actual video UI (camera preview, RTCView) —
+  // audio-only voiceMesh doesn't cover that yet, so this stays a stub.
+  const handleVideoCallPress = () => {
     const gt = getT();
-    Alert.alert(
-      gt.callTitle,
-      gt.callSelectType,
-      [
-        { text: gt.voiceCallLabel, onPress: () => startCall('voice') },
-        // Video calling needs an actual video UI (camera preview, RTCView) —
-        // audio-only voiceMesh doesn't cover that yet, so this stays a stub.
-        { text: gt.videoCallLabel, onPress: () => Alert.alert(gt.comingSoon, gt.videoCallComingSoon) },
-        { text: gt.cancel, style: 'cancel' },
-      ],
-    );
+    Alert.alert(gt.comingSoon, gt.videoCallComingSoon);
   };
 
   const status = userStatuses[userId] ?? 'offline';
 
   const replyToAsMessage: Message | null = replyTo ? dmToMsg(replyTo) : null;
+
+  const query = searchQuery.trim().toLowerCase();
+  const visibleMsgs = query
+    ? msgs.filter(m => m.content?.toLowerCase().includes(query))
+    : msgs;
 
   return (
     <View style={[styles.flex, { paddingTop: insets.top }]}>
@@ -269,16 +268,43 @@ export default function DmChatScreen() {
             </Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.headerBtn} onPress={handleCallPress}>
-          <Ionicons name="call-outline" size={20} color={C.textSub} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => setSearchOpen(o => !o)}>
+            <Ionicons name="search-outline" size={19} color={searchOpen ? C.accent : C.textSub} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => startCall('voice')}>
+            <Ionicons name="call-outline" size={19} color={C.textSub} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerBtn} onPress={handleVideoCallPress}>
+            <Ionicons name="videocam-outline" size={19} color={C.textSub} />
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {searchOpen && (
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={16} color={C.textMuted} />
+          <TextInput
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Szukaj w rozmowie…"
+            placeholderTextColor={C.textMuted}
+            autoFocus
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={16} color={C.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       {loading ? (
         <View style={styles.center}><ActivityIndicator color={C.accent} size="large" /></View>
       ) : (
         <FlatList
-          data={[...msgs].reverse()}
+          data={[...visibleMsgs].reverse()}
           keyExtractor={(m) => m.id}
           inverted
           contentContainerStyle={{ paddingVertical: 8 }}
@@ -303,7 +329,7 @@ export default function DmChatScreen() {
               );
             }
 
-            const reversed = [...msgs].reverse();
+            const reversed = [...visibleMsgs].reverse();
             const prev = reversed[index + 1];
             const showHeader = !prev || prev.sender_id !== item.sender_id ||
               (new Date(item.created_at).getTime() - new Date(prev.created_at).getTime()) > 5 * 60_000;
@@ -428,10 +454,17 @@ const styles = StyleSheet.create({
   },
   back: { padding: 4 },
   headerInfo: { flex: 1 },
+  headerActions: { flexDirection: 'row', gap: 6 },
   headerBtn: {
     padding: 8, borderRadius: 11,
     backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border,
   },
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 14, paddingVertical: 9,
+    backgroundColor: C.bgCard, borderBottomWidth: 1, borderBottomColor: C.border,
+  },
+  searchInput: { flex: 1, color: C.text, fontSize: 14, padding: 0 },
   title: { color: C.text, fontSize: 16, fontWeight: '700' },
   headerStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   headerStatusDot: { width: 6, height: 6, borderRadius: 3 },

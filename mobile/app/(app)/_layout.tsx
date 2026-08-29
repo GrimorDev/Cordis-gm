@@ -77,11 +77,18 @@ function TabItem({ tab, focused, badge, onPress }: {
   );
 }
 
+// Full-screen chat surfaces — the tab bar just eats vertical space here and
+// the back arrow in each header already gets you home.
+const HIDE_TAB_BAR_ON = new Set(['channel/[id]', 'dm/[userId]']);
+
 function TabBar({ state, navigation }: any) {
   const t = useT();
   const insets = useSafeAreaInsets();
   const { dmConversations } = useStore();
   const totalUnread = dmConversations.reduce((s, c) => s + (c.unread_count ?? 0), 0);
+
+  const activeRouteName = state.routes[state.index]?.name;
+  if (HIDE_TAB_BAR_ON.has(activeRouteName)) return null;
 
   const TAB_DEFS = [
     { name: 'index',   icon: 'server',        label: t.servers      },

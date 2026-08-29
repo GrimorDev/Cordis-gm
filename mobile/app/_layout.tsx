@@ -10,8 +10,6 @@ import { useStore } from '../src/store';
 import { authApi } from '../src/api';
 import { connectSocket } from '../src/socket';
 import type { Lang } from '../src/i18n';
-// Registers the notifee foreground-service handler as a side effect of this
-// import — must happen once at app startup, before any voice-channel join.
 import '../src/callNotification';
 
 export default function RootLayout() {

@@ -1,16 +1,18 @@
-// ─── Ongoing-call Android notification (foreground service) ─────────────────
+// ─── Ongoing-call Android notification ───────────────────────────────────
 //
-// expo-notifications (already used for remote push) can't do a persistent/
-// ongoing Android notification tied to a foreground service — that's what
-// notifee is for. This is what makes the OS (and the user) actually aware
-// a call is active, instead of the app silently holding a mic stream with
-// no visible trace.
-//
-// notifee.registerForegroundService(...) must run once at app startup — see
-// mobile/app/_layout.tsx (module-level import triggers this file's own
-// top-level registerForegroundService call below).
+// Was implemented as a full Android foreground service (notifee
+// asForegroundService + FOREGROUND_SERVICE_TYPE_MICROPHONE). That crashed
+// the app on accepting a call, with no device logs available to confirm
+// exactly why — most likely notifee's precompiled service module and the
+// Android 14+ manifest-side foreground-service-type requirement not lining
+// up (can't inspect notifee's compiled .aar to be sure). Since a crash is a
+// strictly worse outcome than "no persistent notification", this drops the
+// foreground-service mechanism entirely: a plain `ongoing: true` local
+// notification still shows in the shade and can't be swiped away, it's
+// just not a formal foreground service. In-app awareness ("in this call")
+// still comes from CallOverlay's connected-state bar regardless.
 
-import notifee, { AndroidImportance, AndroidCategory, AndroidForegroundServiceType, EventType } from '@notifee/react-native';
+import notifee, { AndroidImportance, AndroidCategory, EventType } from '@notifee/react-native';
 
 const CHANNEL_ID = 'voice-call';
 
@@ -25,15 +27,6 @@ function ensureChannel(): Promise<void> {
   }
   return channelReady;
 }
-
-// Keeps the foreground service alive until stopForegroundService() is called
-// from hideOngoingCallNotification(). Registered once at module load.
-notifee.registerForegroundService(() => {
-  return new Promise(() => {
-    // Intentionally never resolves — the service stays alive until
-    // notifee.stopForegroundService() is called explicitly on hangup/leave.
-  });
-});
 
 let activeNotificationId: string | null = null;
 let unsubscribeAction: (() => void) | null = null;
@@ -54,12 +47,6 @@ export async function showOngoingCallNotification(channelName: string, onHangup:
     android: {
       channelId: CHANNEL_ID,
       ongoing: true,
-      asForegroundService: true,
-      // Android 14+ (this app targets SDK 35) requires foreground services
-      // that use the microphone to declare that type explicitly — omitting
-      // it throws MissingForegroundServiceTypeException and kills the app
-      // right as the service starts, i.e. right when a call connects.
-      foregroundServiceTypes: [AndroidForegroundServiceType.FOREGROUND_SERVICE_TYPE_MICROPHONE],
       category: AndroidCategory.CALL,
       // expo-notifications' config plugin (already configured in app.json)
       // generates this drawable resource from assets/icon.png — reuse it
@@ -76,7 +63,6 @@ export async function hideOngoingCallNotification(): Promise<void> {
   unsubscribeAction?.();
   unsubscribeAction = null;
   if (activeNotificationId) {
-    try { await notifee.stopForegroundService(); } catch {}
     try { await notifee.cancelNotification(activeNotificationId); } catch {}
     activeNotificationId = null;
   }
