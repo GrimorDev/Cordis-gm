@@ -55,6 +55,7 @@ export default function ServersScreen() {
   const [collapsedCats, setCollapsedCats] = useState<Set<string | null>>(new Set());
   const [activeVoice, setActiveVoice] = useState<{ channelId: string; channelName: string } | null>(null);
   const [voiceMuted, setVoiceMuted] = useState(false);
+  const [voiceDeafened, setVoiceDeafened] = useState(false);
   const [voiceConnecting, setVoiceConnecting] = useState(false);
   const [voiceExpanded, setVoiceExpanded] = useState(true);
 
@@ -188,6 +189,7 @@ export default function ServersScreen() {
         setVoiceChannelActive(true);
         setVoiceExpanded(true);
         setVoiceMuted(false);
+        setVoiceDeafened(false);
         await showOngoingCallNotification(ch.name, () => handleLeaveVoice());
       } catch (e: any) {
         const gt = getT();
@@ -206,6 +208,7 @@ export default function ServersScreen() {
       setActiveVoice(null);
       setVoiceChannelActive(false);
       setVoiceMuted(false);
+      setVoiceDeafened(false);
     }
   };
 
@@ -214,7 +217,16 @@ export default function ServersScreen() {
     setVoiceMuted(next);
     voiceMesh.setMuted(next);
     if (activeVoice) {
-      getSocket()?.emit('voice_state', { muted: next, deafened: false, channel_id: activeVoice.channelId });
+      getSocket()?.emit('voice_state', { muted: next, deafened: voiceDeafened, channel_id: activeVoice.channelId });
+    }
+  };
+
+  const handleToggleDeafen = () => {
+    const next = !voiceDeafened;
+    setVoiceDeafened(next);
+    voiceMesh.setDeafened(next);
+    if (activeVoice) {
+      getSocket()?.emit('voice_state', { muted: voiceMuted, deafened: next, channel_id: activeVoice.channelId });
     }
   };
 
@@ -504,6 +516,8 @@ export default function ServersScreen() {
             onLeave={handleLeaveVoice}
             onToggleMute={handleToggleMute}
             muted={voiceMuted}
+            onToggleDeafen={handleToggleDeafen}
+            deafened={voiceDeafened}
           />
         )}
 
@@ -950,16 +964,17 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#22c55e55',
   },
   voiceConnectedText: { color: '#22c55e', fontSize: 11, fontWeight: '700' },
-  voicePresenceRow: { flexDirection: 'row', flexWrap: 'wrap', paddingLeft: 52, paddingBottom: 4, gap: 8 },
-  voicePresenceUser: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  voicePresenceUsername: { color: C.textMuted, fontSize: 11, maxWidth: 72 },
+  voicePresenceRow: { flexDirection: 'column', paddingLeft: 52, paddingBottom: 4, gap: 6 },
+  voicePresenceUser: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  voicePresenceUsername: { color: C.textMuted, fontSize: 12, maxWidth: 200 },
   // Voice bar at bottom of channel list
   voiceBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: '#0f1a12', borderTopWidth: 1, borderTopColor: '#22c55e44',
     paddingHorizontal: 16, paddingVertical: 10,
+    width: '100%', alignSelf: 'stretch',
   },
-  voiceBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  voiceBarLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0 },
   voicePulse: {
     width: 32, height: 32, borderRadius: 16,
     backgroundColor: '#22c55e22', alignItems: 'center', justifyContent: 'center',

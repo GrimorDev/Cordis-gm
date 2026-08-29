@@ -1,6 +1,7 @@
 // ─── Full-screen voice-channel call view ─────────────────────────────────
-// Shows a row per connected participant (avatar, mute state) and, when a
-// peer is sharing their screen, an inline video preview via RTCView.
+// A tile grid per connected participant (avatar, mute state), matching
+// Discord's own call screen layout. When a peer is sharing their screen,
+// their tile renders the video track via RTCView instead of the avatar.
 // Minimizes to the existing compact voice bar in (app)/index.tsx — this
 // component owns only the expanded state.
 
@@ -21,6 +22,8 @@ export function VoiceChannelCallView({
   onLeave,
   onToggleMute,
   muted,
+  onToggleDeafen,
+  deafened,
 }: {
   visible: boolean;
   channelId: string;
@@ -29,6 +32,8 @@ export function VoiceChannelCallView({
   onLeave: () => void;
   onToggleMute: () => void;
   muted: boolean;
+  onToggleDeafen: () => void;
+  deafened: boolean;
 }) {
   const { voiceUsers, voiceUserMuted, currentUser } = useStore();
   const participants = voiceUsers[channelId] ?? [];
@@ -50,6 +55,11 @@ export function VoiceChannelCallView({
     });
   }, []);
 
+  // "Me" first, then everyone else — matches how the compact bar/voice
+  // channel list already orders things.
+  const meEntry = currentUser ? { id: currentUser.id, username: currentUser.username, avatar_url: currentUser.avatar_url } : null;
+  const tiles = meEntry ? [meEntry, ...participants.filter(p => p.id !== currentUser?.id)] : participants;
+
   return (
     <Modal visible={visible} animationType="slide" statusBarTranslucent>
       <View style={styles.root}>
@@ -62,9 +72,11 @@ export function VoiceChannelCallView({
         </View>
 
         <FlatList
-          data={participants}
+          data={tiles}
           keyExtractor={(p) => p.id}
-          contentContainerStyle={styles.list}
+          numColumns={2}
+          columnWrapperStyle={{ gap: 10 }}
+          contentContainerStyle={styles.grid}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Ionicons name="people-outline" size={32} color="rgba(255,255,255,0.3)" />
@@ -76,23 +88,26 @@ export function VoiceChannelCallView({
             const isMuted = isMe ? muted : (voiceUserMuted[item.id] ?? false);
             const screen = remoteStreams[item.id]?.video;
             return (
-              <View style={styles.row}>
-                <View style={styles.rowHeader}>
-                  <UserAvatar url={item.avatar_url} username={item.username} size={40} />
-                  <Text style={styles.rowName} numberOfLines={1}>{isMe ? 'Ty' : item.username}</Text>
+              <View style={styles.tile}>
+                {screen ? (
+                  <RTCView streamURL={screen.toURL()} style={StyleSheet.absoluteFillObject} objectFit="cover" />
+                ) : (
+                  <View style={styles.tileAvatarWrap}>
+                    <UserAvatar url={item.avatar_url} username={item.username} size={72} />
+                  </View>
+                )}
+                <View style={styles.tileFooter}>
+                  <Text style={styles.tileName} numberOfLines={1}>{isMe ? 'Ty' : item.username}</Text>
                   <Ionicons
                     name={isMuted ? 'mic-off' : 'mic'}
-                    size={16}
+                    size={13}
                     color={isMuted ? '#ef4444' : '#22c55e'}
                   />
                 </View>
                 {screen && (
-                  <View style={styles.screenPreview}>
-                    <RTCView streamURL={screen.toURL()} style={StyleSheet.absoluteFillObject} objectFit="contain" />
-                    <View style={styles.sharingBadge}>
-                      <Ionicons name="tv-outline" size={11} color="#fff" />
-                      <Text style={styles.sharingBadgeText}>Udostępnia ekran</Text>
-                    </View>
+                  <View style={styles.sharingBadge}>
+                    <Ionicons name="tv-outline" size={11} color="#fff" />
+                    <Text style={styles.sharingBadgeText}>Udostępnia</Text>
                   </View>
                 )}
               </View>
@@ -102,10 +117,13 @@ export function VoiceChannelCallView({
 
         <View style={styles.controls}>
           <TouchableOpacity style={[styles.controlBtn, muted && styles.controlBtnActive]} onPress={onToggleMute}>
-            <Ionicons name={muted ? 'mic-off' : 'mic'} size={24} color="#fff" />
+            <Ionicons name={muted ? 'mic-off' : 'mic'} size={22} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.controlBtn, deafened && styles.controlBtnActive]} onPress={onToggleDeafen}>
+            <Ionicons name={deafened ? 'headset-outline' : 'headset'} size={22} color="#fff" />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.controlBtn, styles.hangupBtn]} onPress={onLeave}>
-            <Ionicons name="call" size={26} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
+            <Ionicons name="call" size={24} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
           </TouchableOpacity>
         </View>
       </View>
@@ -125,21 +143,22 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
   channelName: { flex: 1, textAlign: 'center', color: '#fff', fontSize: 16, fontWeight: '700' },
-  list: { padding: 12, gap: 8, flexGrow: 1 },
+  grid: { padding: 12, gap: 10, flexGrow: 1 },
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingTop: 80 },
   emptyText: { color: 'rgba(255,255,255,0.4)', fontSize: 14 },
-  row: {
-    backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', overflow: 'hidden',
+  tile: {
+    flex: 1, aspectRatio: 1,
+    backgroundColor: 'rgba(99,102,241,0.12)',
+    borderRadius: 20, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(99,102,241,0.25)', overflow: 'hidden',
   },
-  rowHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 12, paddingVertical: 10,
+  tileAvatarWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  tileFooter: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.55)', paddingVertical: 8,
   },
-  rowName: { flex: 1, color: '#fff', fontSize: 15, fontWeight: '600' },
-  screenPreview: {
-    width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000',
-  },
+  tileName: { color: '#fff', fontSize: 13, fontWeight: '700', maxWidth: '75%' },
   sharingBadge: {
     position: 'absolute', top: 8, left: 8,
     flexDirection: 'row', alignItems: 'center', gap: 4,
@@ -147,7 +166,7 @@ const styles = StyleSheet.create({
   },
   sharingBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
   controls: {
-    flexDirection: 'row', justifyContent: 'center', gap: 24,
+    flexDirection: 'row', justifyContent: 'center', gap: 20,
     paddingVertical: 24, paddingBottom: 40,
   },
   controlBtn: {

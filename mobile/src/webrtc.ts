@@ -82,6 +82,7 @@ class VoiceMeshManager {
   // underlying webrtc_offer/answer/ice wire format, so they share this class.
   private mode: 'channel' | 'direct' | null = null;
   private muted = false;
+  private deafened = false;
   private events: VoiceMeshEvents = {};
   private attached = false;
   private selfId = '';
@@ -212,6 +213,7 @@ class VoiceMeshManager {
       this.localStream = null;
     }
     this.muted = false;
+    this.deafened = false;
   }
 
   setMuted(muted: boolean) {
@@ -221,6 +223,19 @@ class VoiceMeshManager {
 
   isMuted(): boolean {
     return this.muted;
+  }
+
+  /** Deafen — mutes INCOMING audio from every peer, unlike setMuted which
+   * only affects what you send. Does not touch the local mic. */
+  setDeafened(deafened: boolean) {
+    this.deafened = deafened;
+    for (const streams of this.remoteStreams.values()) {
+      streams.audio?.getAudioTracks().forEach(t => { t.enabled = !deafened; });
+    }
+  }
+
+  isDeafened(): boolean {
+    return this.deafened;
   }
 
   private makePeerConnection(peerId: string): RTCPeerConnection {
@@ -258,6 +273,9 @@ class VoiceMeshManager {
         entry.video = stream ?? new MediaStream([track]);
       } else {
         entry.audio = stream ?? new MediaStream([track]);
+        // A newly-arrived peer's audio should immediately respect an
+        // already-active deafen, not play for one frame then get silenced.
+        if (this.deafened) track.enabled = false;
       }
       this.remoteStreams.set(peerId, entry);
       this.events.onRemoteStreamsChanged?.(peerId, entry);
