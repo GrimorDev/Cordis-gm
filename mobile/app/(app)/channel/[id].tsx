@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, FlatList, StyleSheet, Text, TouchableOpacity,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, Modal, Pressable,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,6 +29,9 @@ export default function ChannelScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [pinnedVisible, setPinnedVisible] = useState(false);
+  const [pinnedMsgs, setPinnedMsgs] = useState<Message[]>([]);
+  const [pinnedLoading, setPinnedLoading] = useState(false);
 
   // Guard against double-sends
   const sendingRef = useRef(false);
@@ -67,9 +70,21 @@ export default function ChannelScreen() {
     };
     sock?.on('user_typing', onTyping);
 
+    const onMessagePinned = ({ message_id, channel_id, pinned }: any) => {
+      if (channel_id !== id) return;
+      const current = useStore.getState().messages[id] ?? [];
+      const msg = current.find(m => m.id === message_id);
+      if (msg) updateMessage(id, { ...msg, pinned });
+      setPinnedMsgs(prev => pinned
+        ? (msg && !prev.some(p => p.id === message_id) ? [{ ...msg, pinned }, ...prev] : prev)
+        : prev.filter(p => p.id !== message_id));
+    };
+    sock?.on('message_pinned', onMessagePinned);
+
     return () => {
       getSocket()?.emit('leave_channel', id);
       sock?.off('user_typing', onTyping);
+      sock?.off('message_pinned', onMessagePinned);
     };
   }, [id]);
 
@@ -129,6 +144,28 @@ export default function ChannelScreen() {
     catch { /* ignore */ }
   };
 
+  const handlePin = async (msgId: string, pinned: boolean) => {
+    // Optimistic — the message_pinned socket event (handled below) reconciles
+    // this across everyone in the channel, including us.
+    const msg = msgs.find(m => m.id === msgId);
+    if (msg) updateMessage(id, { ...msg, pinned });
+    try {
+      await messagesApi.togglePin(msgId, pinned);
+    } catch (e: any) {
+      if (msg) updateMessage(id, { ...msg, pinned: !pinned });
+      const gt = getT();
+      Alert.alert(gt.error, e.message ?? gt.pinFailed);
+    }
+  };
+
+  const loadPinned = useCallback(async () => {
+    if (!id) return;
+    setPinnedLoading(true);
+    try { setPinnedMsgs(await messagesApi.getPinned(id)); }
+    catch { /* ignore */ }
+    finally { setPinnedLoading(false); }
+  }, [id]);
+
   const isOwner = currentUser?.id === activeServer?.owner_id;
   const typing = typingUsers[id] ?? [];
 
@@ -144,6 +181,12 @@ export default function ChannelScreen() {
         </View>
         <Text style={styles.title} numberOfLines={1}>{name}</Text>
         <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.headerBtn}
+            onPress={() => { setPinnedVisible(true); loadPinned(); }}
+          >
+            <Ionicons name="pin-outline" size={19} color={C.textSub} />
+          </TouchableOpacity>
           {isOwner && activeServer && (
             <TouchableOpacity
               style={styles.headerBtn}
@@ -212,6 +255,7 @@ export default function ChannelScreen() {
                 onDelete={isSysMsg ? undefined : handleDelete}
                 onEdit={isSysMsg ? undefined : handleEdit}
                 onReact={isSysMsg ? undefined : handleReact}
+                onPin={isSysMsg ? undefined : handlePin}
                 isSystem={isSysMsg}
                 canModerate={isOwner}
                 onAvatarPress={(uid) => {
@@ -245,6 +289,43 @@ export default function ChannelScreen() {
           onTyping={handleTyping}
         />
       </View>
+
+      {/* Pinned messages sheet */}
+      <Modal visible={pinnedVisible} transparent animationType="slide" onRequestClose={() => setPinnedVisible(false)} statusBarTranslucent>
+        <Pressable style={styles.pinnedOverlay} onPress={() => setPinnedVisible(false)}>
+          <Pressable style={[styles.pinnedSheet, { paddingBottom: insets.bottom + 20 }]} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.pinnedHeader}>
+              <Ionicons name="pin" size={16} color={C.accentLight} />
+              <Text style={styles.pinnedTitle}>{t.pinnedMessages}</Text>
+              <TouchableOpacity onPress={() => setPinnedVisible(false)}>
+                <Ionicons name="close" size={22} color={C.textMuted} />
+              </TouchableOpacity>
+            </View>
+            {pinnedLoading ? (
+              <ActivityIndicator color={C.accent} style={{ padding: 24 }} />
+            ) : pinnedMsgs.length === 0 ? (
+              <Text style={styles.pinnedEmpty}>{t.noPinnedMessages}</Text>
+            ) : (
+              <FlatList
+                data={pinnedMsgs}
+                keyExtractor={(m) => m.id}
+                style={{ maxHeight: 420 }}
+                renderItem={({ item }) => (
+                  <View style={styles.pinnedRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.pinnedSender}>{item.sender_username}</Text>
+                      <Text style={styles.pinnedContent} numberOfLines={3}>{item.content}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => handlePin(item.id, false)} style={styles.pinnedUnpinBtn}>
+                      <Ionicons name="close-circle-outline" size={20} color={C.textMuted} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              />
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -308,4 +389,21 @@ const styles = StyleSheet.create({
   typingDots: { flexDirection: 'row', gap: 4 },
   dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: C.accent + 'aa' },
   typingText: { color: C.textMuted, fontSize: 12 },
+
+  // Pinned messages sheet
+  pinnedOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
+  pinnedSheet: {
+    backgroundColor: C.bgSurface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    borderWidth: 1, borderColor: C.border, paddingTop: 16, paddingHorizontal: 16,
+  },
+  pinnedHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 12 },
+  pinnedTitle: { flex: 1, color: C.text, fontSize: 16, fontWeight: '700' },
+  pinnedEmpty: { color: C.textMuted, fontSize: 14, textAlign: 'center', paddingVertical: 24 },
+  pinnedRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border,
+  },
+  pinnedSender: { color: C.accentLight, fontSize: 12.5, fontWeight: '700', marginBottom: 2 },
+  pinnedContent: { color: C.textSub, fontSize: 13.5, lineHeight: 18 },
+  pinnedUnpinBtn: { padding: 4 },
 });

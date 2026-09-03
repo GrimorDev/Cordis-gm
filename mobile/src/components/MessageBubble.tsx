@@ -29,6 +29,9 @@ interface Props {
   isSystem?: boolean;
   /** If true, moderator-level delete is allowed regardless of ownership */
   canModerate?: boolean;
+  /** Backend enforces the pin_messages permission — show the option to everyone
+   *  and surface a 403 as an alert rather than hiding it behind a client-side check. */
+  onPin?: (id: string, pinned: boolean) => void;
 }
 
 function fmtTime(dateStr: string, lang: 'pl' | 'en' = 'en', yesterday = 'Yesterday') {
@@ -63,7 +66,7 @@ function callColor(content: string): string {
 }
 
 export function MessageBubble({
-  msg, isOwn, showHeader, onReply, onDelete, onReact, onEdit, onAvatarPress, isSystem, canModerate,
+  msg, isOwn, showHeader, onReply, onDelete, onReact, onEdit, onAvatarPress, isSystem, canModerate, onPin,
 }: Props) {
   const t = useT();
   const { language } = useStore();
@@ -137,6 +140,7 @@ export function MessageBubble({
           <View style={styles.headerText}>
             <Text style={styles.username}>{msg.sender_username}</Text>
             <Text style={styles.time}>{fmtTime(msg.created_at, language, t.yesterday)}</Text>
+            {msg.pinned && <Ionicons name="pin" size={11} color={C.accentLight} style={{ transform: [{ rotate: '30deg' }] }} />}
           </View>
         </View>
       )}
@@ -261,6 +265,16 @@ export function MessageBubble({
               <Ionicons name="copy-outline" size={18} color={C.text} />
               <Text style={styles.menuLabel}>{t.copyText}</Text>
             </TouchableOpacity>
+
+            {onPin && (
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => { onPin(msg.id, !msg.pinned); setMenuVisible(false); }}
+              >
+                <Ionicons name="pin-outline" size={18} color={C.text} />
+                <Text style={styles.menuLabel}>{msg.pinned ? t.unpinMessage : t.pinMessage}</Text>
+              </TouchableOpacity>
+            )}
 
             {(isOwn || canModerate) && onDelete && (
               <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>

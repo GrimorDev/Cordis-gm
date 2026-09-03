@@ -105,6 +105,7 @@ export interface Message {
   reply_to_username?: string | null;
   reactions?: { emoji: string; count: number; reacted: boolean }[];
   attachment_url?: string | null;
+  pinned?: boolean;
 }
 
 export interface DmConversation {
@@ -175,6 +176,15 @@ export const authApi = {
   revokeAllSessions: () => req<{ ok: boolean }>('DELETE', '/auth/sessions'),
 };
 
+export interface ServerRole {
+  id: string;
+  name: string;
+  color: string;
+  permissions: string[];
+  is_default?: boolean;
+  position?: number;
+}
+
 export interface ServerMember {
   id: string;
   username: string;
@@ -182,6 +192,7 @@ export interface ServerMember {
   status: string;
   role_name: string;
   role_color?: string | null;
+  roles?: { role_id: string; name: string; color: string }[];
 }
 
 export interface ServerBan {
@@ -253,8 +264,15 @@ export const serversApi = {
   getBans:     (serverId: string) => req<ServerBan[]>('GET', `/servers/${serverId}/bans`),
   unban:       (serverId: string, userId: string) =>
     req<{ ok: boolean }>('DELETE', `/servers/${serverId}/bans/${userId}`),
-  getRoles:    (serverId: string) =>
-    req<{ id: string; name: string; color: string; permissions: number }[]>('GET', `/servers/${serverId}/roles`),
+  getRoles:    (serverId: string) => req<ServerRole[]>('GET', `/servers/${serverId}/roles`),
+  createRole:  (serverId: string, data: { name: string; color?: string; permissions?: string[] }) =>
+    req<ServerRole>('POST', `/servers/${serverId}/roles`, data),
+  updateRole:  (serverId: string, roleId: string, data: { name?: string; color?: string; permissions?: string[] }) =>
+    req<ServerRole>('PUT', `/servers/${serverId}/roles/${roleId}`, data),
+  deleteRole:  (serverId: string, roleId: string) =>
+    req<{ ok: boolean }>('DELETE', `/servers/${serverId}/roles/${roleId}`),
+  assignMemberRoles: (serverId: string, userId: string, roleIds: string[]) =>
+    req<{ message: string }>('PUT', `/servers/${serverId}/members/${userId}/roles`, { role_ids: roleIds }),
   uploadImage: async (formData: FormData, folder: 'servers' | 'banners'): Promise<{ url: string }> => {
     const token = await getToken();
     const res = await fetch(`${API_URL}/upload/image?folder=${folder}`, {
@@ -337,6 +355,10 @@ export const messagesApi = {
   delete: (id: string) => req<{ ok: boolean }>('DELETE', `/messages/${id}`),
   react:  (id: string, emoji: string) =>
     req<{ ok: boolean }>('POST', `/messages/${id}/react`, { emoji }),
+  togglePin: (id: string, pinned: boolean) =>
+    req<{ message: string }>('PUT', `/messages/${id}/pin`, { pinned }),
+  getPinned: (channelId: string) =>
+    req<Message[]>('GET', `/messages/channel/${channelId}/pinned`),
 };
 
 // ── DMs ───────────────────────────────────────────────────────────────────────
