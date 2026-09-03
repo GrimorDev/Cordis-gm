@@ -484,11 +484,24 @@ router.post('/group/create', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
+// Confirms the requester is actually a member of this group — every /group/:id/*
+// route below must call this before returning or accepting anything, otherwise
+// any authenticated user can read or post into a group they were never added to
+// just by knowing (or guessing) its id.
+async function isGroupParticipant(groupId: string, userId: string): Promise<boolean> {
+  const { rows } = await query(
+    `SELECT 1 FROM dm_participants WHERE conversation_id=$1 AND user_id=$2`,
+    [groupId, userId]
+  );
+  return rows.length > 0;
+}
+
 // GET /api/dms/group/:id — group info
 router.get('/group/:id', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const conv = await query(`SELECT * FROM dm_conversations WHERE id = $1 AND is_group = true`, [req.params.id]);
     if (!conv.rows.length) return res.status(404).json({ error: 'Not found' });
+    if (!(await isGroupParticipant(req.params.id, req.user!.id))) return res.status(403).json({ error: 'Not a member of this group' });
     return res.json({ ...conv.rows[0], participants: [] });
   } catch { return res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -497,6 +510,7 @@ router.get('/group/:id', authMiddleware, async (req: AuthRequest, res) => {
 router.get('/group/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
   const { before } = req.query;
   try {
+    if (!(await isGroupParticipant(req.params.id, req.user!.id))) return res.status(403).json({ error: 'Not a member of this group' });
     const { rows } = await query(
       `SELECT m.*, u.username AS sender_username, u.avatar_url AS sender_avatar
        FROM dm_messages m JOIN users u ON u.id = m.sender_id
@@ -509,7 +523,7 @@ router.get('/group/:id/messages', authMiddleware, async (req: AuthRequest, res) 
 });
 
 // POST /api/dms/group/:id/messages
-router.post('/group/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
+router.post('/group/:id/messages', authMiddleware, msgLimiter, async (req: AuthRequest, res) => {
   const myId = req.user!.id;
   const { content } = req.body;
   if (!content?.trim()) return res.status(400).json({ error: 'Content required' });
@@ -517,6 +531,7 @@ router.post('/group/:id/messages', authMiddleware, async (req: AuthRequest, res)
   try {
     const conv = await query(`SELECT * FROM dm_conversations WHERE id = $1 AND is_group = true`, [req.params.id]);
     if (!conv.rows.length) return res.status(404).json({ error: 'Not found' });
+    if (!(await isGroupParticipant(req.params.id, myId))) return res.status(403).json({ error: 'Not a member of this group' });
 
     // Insert message and immediately join with sender info
     const { rows: [fullMsg] } = await query(
@@ -550,6 +565,55 @@ router.post('/group/:id/messages', authMiddleware, async (req: AuthRequest, res)
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// PATCH /api/dms/group/:id — rename / change icon (creator only)
+router.patch('/group/:id', authMiddleware,
+  [
+    body('name').optional({ nullable: true }).trim().isLength({ max: 100 }),
+    body('icon_url').optional({ nullable: true }).trim().isLength({ max: 2048 }),
+  ],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const myId = req.user!.id;
+    const groupId = req.params.id;
+    const { name, icon_url } = req.body as { name?: string | null; icon_url?: string | null };
+    if (name === undefined && icon_url === undefined) return res.status(400).json({ error: 'Nothing to update' });
+
+    try {
+      const { rows: [conv] } = await query(
+        `SELECT creator_id FROM dm_conversations WHERE id=$1 AND is_group=true`, [groupId]
+      );
+      if (!conv) return res.status(404).json({ error: 'Not found' });
+      if (conv.creator_id !== myId) return res.status(403).json({ error: 'Only the creator can edit this group' });
+
+      const sets: string[] = [];
+      const params: any[] = [];
+      if (name !== undefined) { params.push(name); sets.push(`name=$${params.length}`); }
+      if (icon_url !== undefined) { params.push(icon_url); sets.push(`icon_url=$${params.length}`); }
+      params.push(groupId);
+      const { rows: [updated] } = await query(
+        `UPDATE dm_conversations SET ${sets.join(', ')} WHERE id=$${params.length} RETURNING *`,
+        params
+      );
+
+      const io = req.app.get('io');
+      if (io) {
+        const { rows: participants } = await query(
+          `SELECT user_id FROM dm_participants WHERE conversation_id=$1`, [groupId]
+        );
+        for (const p of participants) {
+          io.to(`user:${p.user_id}`).emit('group_dm_updated', { id: groupId, name: updated.name, icon_url: updated.icon_url });
+        }
+      }
+      return res.json({ ok: true, name: updated.name, icon_url: updated.icon_url });
+    } catch (err) {
+      console.error('[group-dm] update error:', err);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
 
 // DELETE /api/dms/group/:id — leave (member) or delete (creator)
 router.delete('/group/:id', authMiddleware, async (req: AuthRequest, res) => {

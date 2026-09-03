@@ -8953,7 +8953,6 @@ export default function App() {
   const [slowmodeLeft, setSlowmodeLeft]       = useState(0); // seconds remaining
   const [pinnedMsgs, setPinnedMsgs]           = useState<import('./api').MessageFull[]>([]);
   const [showPinned, setShowPinned]           = useState(false);
-  const [showPulse,  setShowPulse]            = useState(false);
   const [inviteDur, setInviteDur]             = useState('86400');
   const [inviteMaxUses, setInviteMaxUses]     = useState('unlimited');
   const [inviteCode, setInviteCode]           = useState<string|null>(null);
@@ -11878,17 +11877,22 @@ export default function App() {
   // ── Set status on login — respect preferred_status ──────────────
   useEffect(() => {
     if (isAuthenticated && currentUser) {
-      // Local pref takes priority (survives auto-idle from previous session)
+      // localStorage is only ever written on a manual status change (changeStatus
+      // with auto=false), so a stored 'idle' there is a genuine explicit choice.
+      // The DB's preferred_status is NOT as reliable for this: the backend writes
+      // it on every status update, including auto-idle, so an 'idle' coming from
+      // there could just be a stale auto-idle from whenever the user went inactive
+      // last session, not something they chose.
       const localPref = localStorage.getItem('cordis_preferred_status') as 'online'|'idle'|'dnd'|'offline'|null;
       const dbPref = (currentUser as any).preferred_status as string | null | undefined;
-      const target = localPref || dbPref || 'online';
 
-      if (target === 'dnd') {
-        changeStatus('dnd');
-      } else if (target === 'offline') {
-        changeStatus('offline');
+      if (localPref === 'dnd' || localPref === 'offline' || localPref === 'idle' || localPref === 'online') {
+        changeStatus(localPref);
+      } else if (dbPref === 'dnd' || dbPref === 'offline') {
+        changeStatus(dbPref);
       } else {
-        // 'online', 'idle' (auto-set last session), or unset → restore to online
+        // No trustworthy local pref, and DB pref is 'online'/'idle' (possibly stale
+        // auto-idle)/unset → safe default is online.
         changeStatus('online');
       }
     }
@@ -14517,16 +14521,7 @@ export default function App() {
                (serverFull?.name ?? '')}
             </span>
           </div>
-          {/* Desktop: logo mark */}
-          <button onClick={()=>{setActiveView('home');setActiveServer('');setActiveChannel('');setActiveDmUserId('');setActiveGroupDm(null);}}
-            className="hidden md:flex items-center gap-2 px-2 py-1 rounded-xl hover:bg-white/[0.06] transition-all group shrink-0"
-            title="Strona główna">
-            <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-[13px] shadow-sm shadow-indigo-500/30 group-hover:scale-105 transition-transform select-none">C</div>
-            <span className="text-[14px] font-bold text-white tracking-tight select-none">cordyn</span>
-          </button>
-          {/* Divider */}
-          <div className="hidden md:block w-px h-4 bg-white/[0.10] mx-1 shrink-0"/>
-          {/* Home pill */}
+          {/* Home pill — sole entry point to the home view (the old separate logo button did the exact same thing) */}
           <button onClick={()=>{setActiveView('home');setActiveServer('');setActiveChannel('');setActiveDmUserId('');setActiveGroupDm(null);}}
             className={`hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[12px] font-semibold transition-all shrink-0 ${activeView==='home'?'bg-[rgba(255,143,64,0.15)] text-[#FFB454]':'text-zinc-400 hover:text-white hover:bg-white/[0.06]'}`}>
             <LayoutDashboard size={13}/><span>Home</span>
@@ -15637,7 +15632,7 @@ export default function App() {
                       }
                     }}
                     onContextMenu={e=>{ e.preventDefault(); setGroupCtxMenu({ x: e.clientX, y: Math.min(e.clientY, window.innerHeight - 160), gc }); }}
-                    className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-200 ${isActive?'text-white border':unreadGc>0?'text-zinc-200 hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]'}`}
+                    className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-200 group/gdm ${isActive?'text-white border':unreadGc>0?'text-zinc-200 hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]'}`}
                     style={isActive?{background:'linear-gradient(90deg,rgba(255,143,64,0.14) 0%,rgba(255,143,64,0.05) 100%)',borderColor:'rgba(255,143,64,0.32)',boxShadow:'inset 3px 0 0 var(--ayu-orange),0 1px 16px rgba(255,143,64,0.08)'}:{}}>
                     <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 flex items-center justify-center shrink-0 overflow-hidden">
                       {gc.icon_url
@@ -15653,6 +15648,14 @@ export default function App() {
                         {unreadGc > 99 ? '99+' : unreadGc}
                       </span>
                     )}
+                    {/* Group options — same actions as right-click, exposed visibly since right-click alone isn't discoverable */}
+                    <span role="button" tabIndex={0}
+                      onClick={e=>{ e.stopPropagation(); const r=(e.currentTarget as HTMLElement).getBoundingClientRect(); setGroupCtxMenu({ x: r.right, y: Math.min(r.top, window.innerHeight - 160), gc }); }}
+                      onKeyDown={e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); e.stopPropagation(); const r=(e.currentTarget as HTMLElement).getBoundingClientRect(); setGroupCtxMenu({ x: r.right, y: Math.min(r.top, window.innerHeight - 160), gc }); } }}
+                      title="Opcje grupy"
+                      className="shrink-0 w-6 h-6 flex items-center justify-center rounded-lg opacity-0 group-hover/gdm:opacity-100 hover:bg-white/[0.10] hover:text-white transition-all">
+                      <MoreHorizontal size={14}/>
+                    </span>
                   </button>
                 );
               })}
@@ -17934,103 +17937,6 @@ export default function App() {
                     {members.length>4&&<div className="w-6 h-6 rounded-full border-2 border-[#181828] bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-white">+{members.length-4}</div>}
                   </div>
                   )}
-                  {/* ── Channel Pulse ── real-time activity stats (not on Discord!) */}
-                  {activeView==='servers'&&activeCh?.type==='text'&&(()=>{
-                    const now=Date.now();
-                    const msgsLast5=messages.filter(m=>now-new Date(m.created_at).getTime()<5*60*1000);
-                    const msgsToday=messages.filter(m=>new Date(m.created_at).toDateString()===new Date().toDateString());
-                    const msgsPerMin=msgsLast5.length/5;
-                    const lvl=msgsPerMin>2?'hot':msgsPerMin>0.5?'active':msgsPerMin>0.1?'chatting':'quiet';
-                    const senderMap:Record<string,number>={};
-                    messages.slice(-50).forEach(m=>{senderMap[m.sender_id]=(senderMap[m.sender_id]||0)+1;});
-                    const topEntry=Object.entries(senderMap).sort((a,b)=>b[1]-a[1])[0];
-                    const topSnd=topEntry?members.find(m=>m.id===topEntry[0]):null;
-                    const last12=messages.slice(-12);
-                    return (
-                      <div className="relative">
-                        <button onClick={()=>setShowPulse(v=>!v)}
-                          title={t('pulse.title')}
-                          className={`flex items-center gap-1 px-2.5 h-8 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 ${showPulse?'bg-[rgba(255,143,64,0.18)] text-[#FFB454]':lvl==='hot'?'bg-rose-500/10 text-rose-400':lvl==='active'?'bg-amber-500/10 text-amber-400':lvl==='chatting'?'bg-white/[0.05] text-zinc-400':'text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.04]'}`}>
-                          <span style={{fontSize:13,lineHeight:1}}>{lvl==='hot'?'🔥':lvl==='active'?'⚡':lvl==='chatting'?'💬':'💤'}</span>
-                          <span className="tabular-nums">{msgsToday.length}</span>
-                        </button>
-                        <AnimatePresence>
-                          {showPulse&&(<>
-                            <div className="fixed inset-0 z-40" onClick={()=>setShowPulse(false)}/>
-                            <motion.div
-                              initial={{opacity:0,y:-8,scale:0.96}}
-                              animate={{opacity:1,y:0,scale:1}}
-                              exit={{opacity:0,y:-8,scale:0.96}}
-                              transition={{duration:0.15,ease:[0.16,1,0.3,1]}}
-                              style={{position:'absolute',right:0,top:44,zIndex:50,width:258,background:'#0f1824',border:'1px solid rgba(255,255,255,0.11)',borderRadius:18,padding:16,display:'flex',flexDirection:'column',gap:12,boxShadow:'0 16px 48px rgba(0,0,0,0.75),0 0 0 1px rgba(255,143,64,0.07)'}}>
-                              {/* Title */}
-                              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                                <span style={{fontSize:12,fontWeight:700,color:'#e8e6df'}}>{t('pulse.title')}</span>
-                                <button onClick={()=>setShowPulse(false)} style={{color:'#5a6270',cursor:'pointer',lineHeight:0,display:'flex'}}><X size={12}/></button>
-                              </div>
-                              {/* Mini freshness bar chart */}
-                              <div>
-                                <p style={{fontSize:10,color:'#4a5260',marginBottom:7,letterSpacing:'0.06em',textTransform:'uppercase',fontWeight:600}}>{t('pulse.activity')}</p>
-                                <div style={{display:'flex',alignItems:'flex-end',gap:2,height:36}}>
-                                  {([...last12].reverse() as any[]).map((msg:any,i:number)=>{
-                                    const age=now-new Date(msg.created_at).getTime();
-                                    const h=Math.max(4,Math.round((1-Math.min(1,age/3_600_000))*100));
-                                    return <div key={msg.id} style={{flex:1,height:`${h}%`,background:`rgba(255,143,64,${0.12+0.7*(h/100)})`,borderRadius:3,transition:'height 0.5s ease'}}/>;
-                                  })}
-                                  {last12.length<12&&(Array.from({length:12-last12.length}) as any[]).map((_:any,i:number)=>(
-                                    <div key={'gap'+i} style={{flex:1,height:4,background:'rgba(255,255,255,0.05)',borderRadius:3}}/>
-                                  ))}
-                                </div>
-                              </div>
-                              {/* Stats cards */}
-                              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-                                <div style={{background:'rgba(255,255,255,0.04)',borderRadius:12,padding:'10px 12px'}}>
-                                  <p style={{fontSize:10,color:'#4a5260',marginBottom:3,fontWeight:600,letterSpacing:'0.05em',textTransform:'uppercase'}}>{t('pulse.today')}</p>
-                                  <p style={{fontSize:24,fontWeight:800,color:'#e8e6df',lineHeight:1,fontVariantNumeric:'tabular-nums'}}>{msgsToday.length}</p>
-                                  <p style={{fontSize:9,color:'#2e3740',marginTop:3}}>{t('pulse.msgs')}</p>
-                                </div>
-                                <div style={{background:'rgba(255,255,255,0.04)',borderRadius:12,padding:'10px 12px'}}>
-                                  <p style={{fontSize:10,color:'#4a5260',marginBottom:3,fontWeight:600,letterSpacing:'0.05em',textTransform:'uppercase'}}>{t('pulse.tempo')}</p>
-                                  <p style={{fontSize:24,fontWeight:800,color:'#FFB454',lineHeight:1,fontVariantNumeric:'tabular-nums'}}>{msgsPerMin<0.05?'0.0':msgsPerMin.toFixed(1)}</p>
-                                  <p style={{fontSize:9,color:'#2e3740',marginTop:3}}>{t('pulse.perMin')}</p>
-                                </div>
-                              </div>
-                              {/* Top sender */}
-                              {topSnd&&(
-                                <div style={{display:'flex',alignItems:'center',gap:10,background:'rgba(255,255,255,0.04)',borderRadius:12,padding:'9px 12px'}}>
-                                  <img src={topSnd.avatar_url ? staticUrl(topSnd.avatar_url) : `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(topSnd.username)}&size=28`} style={{width:28,height:28,borderRadius:8,objectFit:'cover',flexShrink:0}} alt=""/>
-                                  <div style={{flex:1,minWidth:0}}>
-                                    <p style={{fontSize:12,fontWeight:600,color:'#e8e6df',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{topSnd.username}</p>
-                                    <p style={{fontSize:10,color:'#4a5260'}}>{topEntry![1]} {t('pulse.inChannel')}</p>
-                                  </div>
-                                  <span style={{fontSize:16}}>🏆</span>
-                                </div>
-                              )}
-                              {/* Activity bar */}
-                              <div>
-                                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
-                                  <span style={{fontSize:10,color:'#4a5260',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.05em'}}>{t('pulse.activity2')}</span>
-                                  <span style={{fontSize:10,fontWeight:700,color:lvl==='hot'?'#f87171':lvl==='active'?'#fb923c':lvl==='chatting'?'#a78bfa':'#4a5260'}}>
-                                    {lvl==='hot'?`🔥 ${t('pulse.hot')}`:lvl==='active'?`⚡ ${t('pulse.active')}`:lvl==='chatting'?`💬 ${t('pulse.chatting')}`:`💤 ${t('pulse.quiet')}`}
-                                  </span>
-                                </div>
-                                <div style={{height:6,background:'rgba(255,255,255,0.06)',borderRadius:99,overflow:'hidden'}}>
-                                  <div style={{height:'100%',width:`${Math.min(100,msgsPerMin*33)}%`,background:'linear-gradient(90deg,#FF8F40,#FFB454)',borderRadius:99,transition:'width 0.9s cubic-bezier(0.16,1,0.3,1)'}}/>
-                                </div>
-                              </div>
-                            </motion.div>
-                          </>)}
-                        </AnimatePresence>
-                      </div>
-                    );
-                  })()}
-                  {activeView==='servers'&&activeCh?.type==='text'&&(
-                    <button onClick={async()=>{setShowPinned(v=>{const next=!v;if(next){messagesApi.listPinned(activeChannel!).then(setPinnedMsgs).catch(()=>{});}return next;})} }
-                      title="Przypięte wiadomości"
-                      className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-150 active:scale-95 ${showPinned?'text-amber-400 bg-amber-500/15':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07]'}`}>
-                      <Pin size={14}/>
-                    </button>
-                  )}
                   {/* Focus toggle — podświetl środkowy panel czatu */}
                   <button
                     onClick={()=>setFocusCard(v=>!v)}
@@ -18067,6 +17973,7 @@ export default function App() {
                                 {row(isMuted?<Volume2 size={13} className="text-emerald-400"/>:<VolumeX size={13} className="text-zinc-400"/>,isMuted?'Wyłącz wyciszenie':'Wycisz kanał',()=>setChMuted(p=>({...p,[activeCh.id]:!p[activeCh.id]})))}
                                 {row(<AtSign size={13} className="text-amber-400"/>,'Zaznacz jako przeczytany',()=>{setUnreadChs(p=>({...p,[activeCh.id]:0}));setPingChs(p=>({...p,[activeCh.id]:0}));})}
                                 {row(<Link2 size={13} className="text-purple-400"/>,'Kopiuj link kanału',()=>{try{navigator.clipboard.writeText(`${window.location.origin}/channels/${activeServer}/${activeCh.id}`);}catch{}addToast('Skopiowano link','success');})}
+                                {row(<Pin size={13} className={showPinned?'text-amber-400':'text-zinc-400'}/>,showPinned?'Ukryj przypięte':'Przypięte wiadomości',()=>setShowPinned(v=>{const next=!v;if(next){messagesApi.listPinned(activeChannel!).then(setPinnedMsgs).catch(()=>{});}return next;}))}
                                 {canManageChannels&&(<>
                                   <div className="h-px mx-3 my-1" style={{background:'rgba(255,255,255,0.07)'}}/>
                                   {row(<Settings2 size={13} className="text-zinc-400"/>,'Ustawienia kanału',()=>{openChEdit(activeCh);})}
@@ -18853,9 +18760,9 @@ export default function App() {
                         const isPopular = totalReactions >= 5;
                         const isWarm    = totalReactions >= 2 && totalReactions < 5;
                         const rowSpacingCls = compactMessages
-                          ? 'mb-0.5 py-0.5 min-h-10'
+                          ? (isGrouped ? 'mb-0 py-0 min-h-0' : 'mb-0.5 py-0.5 min-h-10')
                           : isGrouped
-                            ? 'mb-1 py-1 min-h-11'
+                            ? 'mb-0.5 py-0 min-h-0'
                             : 'mb-3 py-1 min-h-11';
                         const rowTopMarginCls = isGrouped ? 'mt-0' : activeView!=='dms' ? 'mt-2' : '';
                         return (
@@ -19110,7 +19017,7 @@ export default function App() {
                                 <p className={`${msgFontCls} leading-relaxed break-words overflow-hidden w-full msg-md text-[#d8d8ec]`} dangerouslySetInnerHTML={{__html: renderMsgHTML(msg.content)}}/>
                               ) : (
                                 <div className={`relative px-4 py-2.5 rounded-2xl max-w-full ${isOwn
-                                  ? 'bg-indigo-500/[0.14] border border-indigo-500/20 text-zinc-100 bubble-tail-right'
+                                  ? 'bg-orange-500/[0.14] border border-orange-500/20 text-zinc-100 bubble-tail-right'
                                   : 'glass-bubble text-zinc-100 bubble-tail-left'
                                 }`}>
                                   <p className={`${msgFontCls} leading-relaxed break-words msg-md`} dangerouslySetInnerHTML={{__html: renderMsgHTML(msg.content)}}/>
