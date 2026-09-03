@@ -50,6 +50,7 @@
       "expo-secure-store",
       "expo-font",
       "@config-plugins/react-native-webrtc",
+      "./plugins/withWebrtcMediaProjection",
       [
         "expo-notifications",
         {

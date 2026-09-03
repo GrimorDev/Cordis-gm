@@ -459,15 +459,7 @@ export default function ServersScreen() {
         {/* Active voice channel bar — minimized view; tap to expand full-screen */}
         {activeVoice && !voiceExpanded && (
           <TouchableOpacity
-            style={[
-              styles.voiceBar,
-              // The custom tab bar (rendered one level up, in (app)/_layout.tsx)
-              // doesn't report its own height back to this screen, so React
-              // Navigation doesn't reserve space for it — it overlays on top
-              // of whatever this screen renders. Clear it explicitly instead
-              // of hiding the tab bar (which broke switching tabs mid-call).
-              { marginBottom: 68 + (insets.bottom > 0 ? insets.bottom + 2 : 10) },
-            ]}
+            style={[styles.voiceBar, { marginBottom: 10 }]}
             activeOpacity={0.85}
             onPress={() => setVoiceExpanded(true)}
           >
