@@ -14557,6 +14557,7 @@ export default function App() {
             inCall={!!activeCall}
             callSummary={activeCall ? { channelName: activeCall.channelName, username: activeCall.username } : null}
             onOpenCallView={() => setShowCallPanel(true)}
+            onStartCall={(userId, username, avatarUrl, type) => startDmCall(userId, username, type, avatarUrl)}
             callView={showCallPanel && activeCall ? {
               activeCall,
               currentUser: currentUser!,
