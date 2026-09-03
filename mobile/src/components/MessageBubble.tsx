@@ -1,18 +1,26 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert,
-  TextInput, Modal, Image, Pressable, Dimensions,
+  TextInput, Modal, Image, Pressable, Dimensions, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { format, isToday, isYesterday } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { enGB } from 'date-fns/locale';
+import { router } from 'expo-router';
 import { UserAvatar } from './UserAvatar';
 import { C } from '../theme';
 import { useT, getT } from '../i18n';
 import { useStore } from '../store';
+import { serversApi } from '../api';
+import { STATIC_BASE } from '../config';
 import type { Message } from '../api';
+
+function resolveStatic(url: string | null | undefined): string | null {
+  if (!url) return null;
+  return url.startsWith('http') ? url : `${STATIC_BASE}${url}`;
+}
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -63,6 +71,75 @@ function callIcon(content: string): string {
 function callColor(content: string): string {
   if (content === 'Połączenie nieodebrane') return C.danger;
   return '#22c55e';
+}
+
+/** Server-invite-via-DM payload: `CINV|serverId|code|serverName|iconUrl|bannerUrl`
+ *  (mirrors desktop's src/App.tsx). Mobile never rendered this specially before —
+ *  it just dumped the raw pipe-delimited string as message text. */
+function ServerInviteCard({ content }: { content: string }) {
+  const t = useT();
+  const { servers, addServer, setActiveServer } = useStore();
+  const [joining, setJoining] = useState(false);
+  const parts = content.split('|');
+  const [, srvId, code, srvName, iconUrl, bannerUrl] = parts;
+  const iconSrc = resolveStatic(iconUrl);
+  const bannerSrc = resolveStatic(bannerUrl);
+  const alreadyMember = servers.some(s => s.id === srvId);
+
+  const handleJoin = async () => {
+    setJoining(true);
+    try {
+      const joined = await serversApi.join(code);
+      addServer(joined);
+      setActiveServer(joined);
+      router.push('/(app)');
+    } catch (e: any) {
+      const gt = getT();
+      Alert.alert(gt.error, e.message ?? gt.error);
+    } finally {
+      setJoining(false);
+    }
+  };
+
+  return (
+    <View style={inviteStyles.card}>
+      <View style={inviteStyles.banner}>
+        {bannerSrc ? (
+          <Image source={{ uri: bannerSrc }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+        ) : (
+          <View style={[StyleSheet.absoluteFillObject, inviteStyles.bannerFallback]} />
+        )}
+        <View style={inviteStyles.bannerShade} />
+      </View>
+      <View style={inviteStyles.head}>
+        {iconSrc ? (
+          <Image source={{ uri: iconSrc }} style={inviteStyles.icon} />
+        ) : (
+          <View style={[inviteStyles.icon, inviteStyles.iconFallback]}>
+            <Text style={inviteStyles.iconFallbackText}>{(srvName?.[0] ?? 'S').toUpperCase()}</Text>
+          </View>
+        )}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={inviteStyles.label}>{t.serverInviteLabel}</Text>
+          <Text style={inviteStyles.name} numberOfLines={1}>{srvName || '?'}</Text>
+        </View>
+      </View>
+      <View style={inviteStyles.footer}>
+        {alreadyMember ? (
+          <View style={inviteStyles.memberPill}>
+            <Text style={inviteStyles.memberPillText}>{t.alreadyMember}</Text>
+          </View>
+        ) : (
+          <TouchableOpacity style={inviteStyles.joinBtn} onPress={handleJoin} disabled={joining} activeOpacity={0.85}>
+            {joining
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Text style={inviteStyles.joinBtnText}>{t.joinServerBtn}</Text>
+            }
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
 }
 
 export function MessageBubble({
@@ -187,10 +264,12 @@ export function MessageBubble({
           onLongPress={handleLongPress}
           style={[styles.bubble, showHeader ? styles.bubbleWithHeader : styles.bubbleNoHeader]}
         >
-          {msg.content ? (
+          {msg.content?.startsWith('CINV|') ? (
+            <ServerInviteCard content={msg.content} />
+          ) : msg.content ? (
             <Text style={styles.content}>{msg.content}</Text>
           ) : null}
-          {msg.is_edited && <Text style={styles.edited}>{t.editedMark}</Text>}
+          {msg.is_edited && !msg.content?.startsWith('CINV|') && <Text style={styles.edited}>{t.editedMark}</Text>}
 
           {/* Image attachment */}
           {msg.attachment_url && (
@@ -416,4 +495,36 @@ const styles = StyleSheet.create({
     position: 'absolute', top: 48, right: 20,
     backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, padding: 6,
   },
+});
+
+// ── Server invite card ──────────────────────────────────────────────────────
+const inviteStyles = StyleSheet.create({
+  card: {
+    width: 260, borderRadius: 16, overflow: 'hidden',
+    backgroundColor: C.bgSurface, borderWidth: 1, borderColor: C.border,
+    marginTop: 2,
+  },
+  banner: { height: 60, backgroundColor: C.accentDark },
+  bannerFallback: { backgroundColor: C.accentDark },
+  bannerShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.25)' },
+  head: {
+    flexDirection: 'row', alignItems: 'flex-end', gap: 10,
+    paddingHorizontal: 12, paddingTop: 0, marginTop: -22, paddingBottom: 6,
+  },
+  icon: { width: 46, height: 46, borderRadius: 14, borderWidth: 3, borderColor: C.bgSurface },
+  iconFallback: { backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
+  iconFallbackText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  label: { color: C.textMuted, fontSize: 9.5, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' },
+  name: { color: C.text, fontSize: 14, fontWeight: '700', marginTop: 1 },
+  footer: { paddingHorizontal: 12, paddingBottom: 12 },
+  joinBtn: {
+    backgroundColor: C.accent, borderRadius: 11, paddingVertical: 10,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  joinBtnText: { color: '#fff', fontSize: 13.5, fontWeight: '700' },
+  memberPill: {
+    backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border,
+    borderRadius: 11, paddingVertical: 10, alignItems: 'center',
+  },
+  memberPillText: { color: C.textMuted, fontSize: 12.5, fontWeight: '600' },
 });
