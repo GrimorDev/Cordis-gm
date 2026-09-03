@@ -52,6 +52,11 @@ export interface NewLookShellProps {
   sending: boolean;
 
   onToggleReaction: (msgId: string, emoji: string, evt?: React.MouseEvent) => void;
+  onDeleteMessage: (msg: MessageFull | DmMessageFull) => void;
+  onEditMessage: (msg: MessageFull | DmMessageFull, content: string) => void;
+  onPinMessage: (msgId: string, pinned: boolean) => void;
+  replyTo: MessageFull | DmMessageFull | null;
+  setReplyTo: (msg: MessageFull | DmMessageFull | null) => void;
 
   inCall: boolean;
   callSummary: CallSummary | null;

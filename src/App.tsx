@@ -14537,6 +14537,23 @@ export default function App() {
             onSend={handleSend}
             sending={sending}
             onToggleReaction={toggleReaction}
+            onDeleteMessage={(msg) => {
+              if ('conversation_id' in msg) {
+                dmsApi.deleteMessage(msg.id).then(() => setDmMsgs(p => p.filter(m => m.id !== msg.id))).catch(console.error);
+              } else {
+                messagesApi.delete(msg.id).then(() => setChannelMsgs(p => p.filter(m => m.id !== msg.id))).catch(console.error);
+              }
+            }}
+            onEditMessage={(msg, content) => {
+              if ('conversation_id' in msg) {
+                dmsApi.editMessage(msg.id, content).then(updated => setDmMsgs(p => p.map(m => m.id === msg.id ? updated : m))).catch(console.error);
+              } else {
+                messagesApi.edit(msg.id, content).then(updated => setChannelMsgs(p => p.map(m => m.id === msg.id ? updated : m))).catch(console.error);
+              }
+            }}
+            onPinMessage={handlePinMessage}
+            replyTo={replyTo}
+            setReplyTo={setReplyTo}
             inCall={!!activeCall}
             callSummary={activeCall ? { channelName: activeCall.channelName, username: activeCall.username } : null}
             onOpenClassicForCall={() => setNewLookEnabled(false)}

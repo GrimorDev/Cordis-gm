@@ -19,6 +19,8 @@ export function ChannelList({
   dmConvs, activeDmUserId, unreadDms, onSelectDm,
 }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState('');
+  const q = query.trim().toLowerCase();
   const toggleCat = (id: string) => setCollapsed(prev => {
     const next = new Set(prev);
     next.has(id) ? next.delete(id) : next.add(id);
@@ -31,6 +33,8 @@ export function ChannelList({
         <div style={{ position: 'relative' }}>
           <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#6b6b82' }} />
           <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
             placeholder="Szukaj…"
             style={{
               width: '100%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)',
@@ -43,7 +47,7 @@ export function ChannelList({
       <div className="nl-scroll" style={{ flex: 1, overflowY: 'auto', padding: '0 10px 12px' }}>
         {activeView === 'dms' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {dmConvs.map(dm => {
+            {dmConvs.filter(dm => !q || dm.other_username.toLowerCase().includes(q)).map(dm => {
               const active = activeDmUserId === dm.other_user_id;
               const unread = unreadDms[dm.other_user_id] ?? 0;
               const avatar = staticUrl(dm.other_avatar);
@@ -77,7 +81,9 @@ export function ChannelList({
           </div>
         ) : serverFull ? (
           serverFull.categories.map(cat => {
-            const isCollapsed = collapsed.has(cat.id);
+            const filteredChannels = q ? cat.channels.filter(ch => ch.name.toLowerCase().includes(q)) : cat.channels;
+            if (q && filteredChannels.length === 0) return null;
+            const isCollapsed = !q && collapsed.has(cat.id);
             return (
               <div key={cat.id} style={{ marginTop: 14 }}>
                 <button
@@ -93,7 +99,7 @@ export function ChannelList({
                 </button>
                 {!isCollapsed && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginTop: 4 }}>
-                    {cat.channels.map(ch => {
+                    {filteredChannels.map(ch => {
                       const active = activeChannel === ch.id;
                       const unread = ch.unread_count ?? 0;
                       return (
