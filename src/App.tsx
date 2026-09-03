@@ -2,6 +2,7 @@
 import ReactDOM from 'react-dom';
 import { TitleBar, isTauri, openExternalLink } from './TitleBar';
 import ImageCropModal, { type CropShape } from './ImageCropModal';
+import { NewLookShell } from './newlook/NewLookShell';
 import { translate, resolveLocale, bcp47 as localeBcp47, loadLocale, detectLocale, LOCALES, type Locale, type TimeFormat } from './i18n';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -9229,7 +9230,21 @@ export default function App() {
 
   // App Settings
   const [appSettOpen, setAppSettOpen]         = useState(false);
-  const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'notifications'|'devices'|'privacy'|'locale'|'connections'|'theme'|'desktop'|'updates'|'about'|'stats'>('account');
+  // "Nowy wygląd" — opt-in alternate shell (src/newlook/), a local device
+  // preference (not synced to the account) so it's cheap to try/revert.
+  const [newLookEnabled, setNewLookEnabledRaw] = useState(() => {
+    try { return localStorage.getItem('cordyn_new_look') === '1'; } catch { return false; }
+  });
+  const [newLookTransitioning, setNewLookTransitioning] = useState(false);
+  const setNewLookEnabled = (next: boolean) => {
+    setNewLookTransitioning(true);
+    try { localStorage.setItem('cordyn_new_look', next ? '1' : '0'); } catch {}
+    // Swap after the overlay has faded to full opacity so the tree change
+    // itself is hidden behind it, then fade the overlay back out.
+    setTimeout(() => setNewLookEnabledRaw(next), 180);
+    setTimeout(() => setNewLookTransitioning(false), 420);
+  };
+  const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'notifications'|'devices'|'privacy'|'locale'|'connections'|'theme'|'newlook'|'desktop'|'updates'|'about'|'stats'>('account');
 
   const [userStats, setUserStats]             = useState<{messages_sent:number;messages_this_month:number;dms_sent:number;servers_joined:number;friends_count:number;reactions_given:number;reactions_received:number;account_created:string}|null>(null);
   const [statsLoading, setStatsLoading]       = useState(false);
@@ -14285,6 +14300,10 @@ export default function App() {
         paddingRight: 'max(0.25rem, env(safe-area-inset-right))',
       }}
     >
+      {/* "Nowy wygląd" toggle transition — a brief full-screen fade that
+          hides the moment the tree swaps underneath it, so switching feels
+          like one smooth animated transition rather than an instant cut. */}
+      <div className={`nl-transition-overlay${newLookTransitioning ? ' on' : ''}`} />
 
 
       {/* Tauri frameless window titlebar — only rendered in the desktop app */}
@@ -14490,6 +14509,42 @@ export default function App() {
            grid-cols: 1fr auto 1fr guarantees center is always truly centered.
            No items-center on nav so children use h-full correctly (stretch). */}
       {/* Nav + tabs bar share ONE glass card — no gap, seamless grid */}
+      {newLookEnabled ? (
+        <div className="flex-1 min-h-0 overflow-hidden rounded-2xl">
+          <NewLookShell
+            currentUser={currentUser!}
+            staticUrl={staticUrl}
+            renderMsgHTML={renderMsgHTML}
+            serverList={serverList}
+            activeServer={activeServer}
+            serverFull={serverFull}
+            onSelectServer={(id) => { setActiveServer(id); setActiveView('servers'); }}
+            activeView={activeView}
+            onShowDms={() => setActiveView('dms')}
+            allChs={allChs}
+            activeChannel={activeChannel}
+            activeCh={activeCh}
+            onSelectChannel={setActiveChannel}
+            dmConvs={dmConvs}
+            activeDmUserId={activeDmUserId}
+            unreadDms={unreadDms}
+            onSelectDm={(uid) => { setActiveDmUserId(uid); setActiveView('dms'); }}
+            channelMsgs={channelMsgs}
+            dmMsgs={dmMsgs}
+            members={members}
+            msgInput={msgInput}
+            setMsgInput={setMsgInput}
+            onSend={handleSend}
+            sending={sending}
+            onToggleReaction={toggleReaction}
+            inCall={!!activeCall}
+            callSummary={activeCall ? { channelName: activeCall.channelName, username: activeCall.username } : null}
+            onOpenClassicForCall={() => setNewLookEnabled(false)}
+            onOpenSettings={() => { setAppSettTab('newlook'); setAppSettOpen(true); }}
+          />
+        </div>
+      ) : (
+      <>
       <div className="shrink-0 z-30 glass-panel rounded-2xl flex flex-col">
       <nav className="h-12 px-2 grid" style={{gridTemplateColumns:'auto minmax(0,1fr) auto'}}>
         {/* Left col — Logo/brand + Home (desktop) | hamburger+context (mobile) */}
@@ -20659,6 +20714,8 @@ export default function App() {
           })()}
         </aside>
       </main>
+      </>
+      )}
 
       {/* ── MODALS ─────────────────────────────────────────────────────── */}
 
@@ -23040,6 +23097,7 @@ export default function App() {
                       {id:'notifications', label:'Powiadomienia', icon:<Bell size={14}/>,
                         sections:[{id:'s-quiet',label:'Godziny ciszy'}]},
                       {id:'theme',       label:tl('settings.theme'),     icon:<Palette size={14}/>, sections:[]},
+                      {id:'newlook',     label:'Nowy wygląd',             icon:<Sparkles size={14}/>, sections:[]},
                       {id:'connections', label:tl('settings.connections'),icon:<Link2 size={14}/>, sections:[]},
                       {id:'stats',       label:'Statystyki',              icon:<BarChart2 size={14}/>, sections:[]},
                     ]},
@@ -24432,6 +24490,42 @@ export default function App() {
                             </button>
                           );
                         })}
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* ─── NOWY WYGLĄD ─── */}
+                  {appSettTab==='newlook'&&(
+                    <motion.div key="newlook" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
+                      className="flex flex-col gap-5">
+                      <div>
+                        <h3 className="text-sm font-bold text-white mb-1 flex items-center gap-2">
+                          <Sparkles size={14} className="text-indigo-400"/> Nowy wygląd
+                          <span className="text-[9px] text-indigo-300 bg-indigo-500/15 border border-indigo-500/25 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">Eksperymentalne</span>
+                        </h3>
+                        <p className="text-xs text-zinc-500 leading-relaxed">Odświeżony układ interfejsu — wąska szyna serwerów, wyraźniejszy podział na kolumny i gradientowe tło czatu. Przełącznik jest zapisywany tylko na tym urządzeniu, więc możesz go swobodnie wypróbować i wrócić do klasycznego widoku w każdej chwili. Podczas aktywnej rozmowy głosowej nowy widok automatycznie pokazuje klasyczny panel połączenia.</p>
+                      </div>
+
+                      <div className="w-full h-28 rounded-2xl overflow-hidden flex gap-1 p-1.5 border border-white/[0.06]"
+                        style={{ background: 'linear-gradient(0deg, #0b1a3a 0%, #150816 60%, #0a0710 100%)' }}>
+                        <div className="w-6 h-full rounded-lg flex-shrink-0 bg-white/[0.06] backdrop-blur-sm"/>
+                        <div className="w-14 h-full rounded-lg flex-shrink-0 bg-white/[0.04]"/>
+                        <div className="flex-1 h-full rounded-lg bg-white/[0.02] flex items-end p-2 gap-1">
+                          <div className="w-2/3 h-3 rounded-full bg-indigo-500/40"/>
+                        </div>
+                        <div className="w-10 h-full rounded-lg flex-shrink-0 bg-white/[0.04]"/>
+                      </div>
+
+                      <div className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-3.5 hover:border-white/[0.09] transition-colors">
+                        <div className="flex-1 min-w-0 mr-3">
+                          <p className="text-sm font-medium text-white">Włącz nowy wygląd</p>
+                          <p className="text-[11px] text-zinc-600 mt-0.5 leading-tight">Przełącza się płynnie, bez odświeżania strony.</p>
+                        </div>
+                        <button onClick={()=>setNewLookEnabled(!newLookEnabled)}
+                          className={`w-9 h-5 rounded-full transition-all shrink-0 relative ${newLookEnabled?'bg-indigo-500':'bg-zinc-700'}`}>
+                          <span className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-200"
+                            style={{left: newLookEnabled ? 'calc(100% - 1.125rem)' : '0.125rem'}}/>
+                        </button>
                       </div>
                     </motion.div>
                   )}
