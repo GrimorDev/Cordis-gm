@@ -18853,9 +18853,9 @@ export default function App() {
                         const isPopular = totalReactions >= 5;
                         const isWarm    = totalReactions >= 2 && totalReactions < 5;
                         const rowSpacingCls = compactMessages
-                          ? 'mb-0.5 py-0.5 min-h-10'
+                          ? (isGrouped ? 'mb-0 py-0 min-h-0' : 'mb-0.5 py-0.5 min-h-10')
                           : isGrouped
-                            ? 'mb-1 py-1 min-h-11'
+                            ? 'mb-0.5 py-0 min-h-0'
                             : 'mb-3 py-1 min-h-11';
                         const rowTopMarginCls = isGrouped ? 'mt-0' : activeView!=='dms' ? 'mt-2' : '';
                         return (
@@ -19110,7 +19110,7 @@ export default function App() {
                                 <p className={`${msgFontCls} leading-relaxed break-words overflow-hidden w-full msg-md text-[#d8d8ec]`} dangerouslySetInnerHTML={{__html: renderMsgHTML(msg.content)}}/>
                               ) : (
                                 <div className={`relative px-4 py-2.5 rounded-2xl max-w-full ${isOwn
-                                  ? 'bg-indigo-500/[0.14] border border-indigo-500/20 text-zinc-100 bubble-tail-right'
+                                  ? 'bg-orange-500/[0.14] border border-orange-500/20 text-zinc-100 bubble-tail-right'
                                   : 'glass-bubble text-zinc-100 bubble-tail-left'
                                 }`}>
                                   <p className={`${msgFontCls} leading-relaxed break-words msg-md`} dangerouslySetInnerHTML={{__html: renderMsgHTML(msg.content)}}/>
