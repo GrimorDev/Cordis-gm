@@ -29,7 +29,8 @@ import {
 } from 'lucide-react';
 import {
   auth, users, serversApi, channelsApi, messagesApi, dmsApi, friendsApi, forumApi, adminApi,
-  gamesApi, spotifyApi, twitchApi, steamApi, youtubeApi, kickApi, epicApi, twoFactorApi,
+  gamesApi, spotifyApi, twitchApi, steamApi, youtubeApi, kickApi, epicApi, twoFactorApi, gifsApi,
+  type GifResult,
   emojisApi, notesApi, pollsApi, automationsApi, dmPinApi, pushApi, bookmarksApi,
   uploadFile, uploadFileWithProgress, setToken, clearToken, getToken,
   setRefreshToken, clearRefreshToken, getRefreshToken, restoreAuthFromFile, tryRefreshToken,
@@ -617,16 +618,18 @@ function EmojiPicker({ onSelect, onClose, serverEmojis }: { onSelect: (e: string
   );
 }
 
-// ─── Tenor GIF Picker ─────────────────────────────────────────────────────────
-// Tenor API v1 — publiczny demo-klucz działa bez rejestracji
-const TENOR_KEY = (import.meta.env.VITE_TENOR_API_KEY as string | undefined) || 'LIVDSRZULELA';
+// ─── GIF Picker ───────────────────────────────────────────────────────────────
+// Backed by GIPHY via our own backend (/api/gifs/*) — Google fully shut down
+// the Tenor API (all versions, all keys) on 2026-06-30, so every request to
+// the old client-side Tenor endpoints just errored out forever, which is why
+// this used to spin indefinitely. Proxying through the backend also keeps the
+// real GIPHY key out of the frontend bundle.
+type GifItem = GifResult;
 
-interface TenorGif { id: string; url: string; preview: string; }
-
-function TenorGifPicker({ onSelect, onClose }: { onSelect: (url: string) => void; onClose: () => void }) {
+function GifPicker({ onSelect, onClose }: { onSelect: (url: string) => void; onClose: () => void }) {
   const [query, setQuery]     = useState('');
   const [pending, setPending] = useState('');
-  const [results, setResults] = useState<TenorGif[]>([]);
+  const [results, setResults] = useState<GifItem[]>([]);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const wrapRef  = useRef<HTMLDivElement>(null);
@@ -639,21 +642,15 @@ function TenorGifPicker({ onSelect, onClose }: { onSelect: (url: string) => void
     return () => clearTimeout(t);
   }, [query]);
 
-  // fetch Tenor API v1
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
-    const ep = pending
-      ? `https://api.tenor.com/v1/search?q=${encodeURIComponent(pending)}&key=${TENOR_KEY}&limit=24&media_filter=minimal&contentfilter=medium`
-      : `https://api.tenor.com/v1/trending?key=${TENOR_KEY}&limit=24&media_filter=minimal&contentfilter=medium`;
-    fetch(ep)
-      .then(r => r.json())
-      .then(data => setResults((data.results ?? []).map((r: any) => ({
-        id:      r.id,
-        url:     r.media?.[0]?.gif?.url     || '',
-        preview: r.media?.[0]?.tinygif?.url || r.media?.[0]?.gif?.url || '',
-      })).filter((g: TenorGif) => g.url)))
-      .catch(() => setResults([]))
-      .finally(() => setLoading(false));
+    const fetchResults = pending ? gifsApi.search(pending) : gifsApi.trending();
+    fetchResults
+      .then(data => { if (!cancelled) setResults(data.results ?? []); })
+      .catch(() => { if (!cancelled) setResults([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [pending]);
 
   // click-outside closes
@@ -695,7 +692,7 @@ function TenorGifPicker({ onSelect, onClose }: { onSelect: (url: string) => void
         )}
       </div>
       <div className="shrink-0 px-3 py-1.5 border-t border-white/[0.05] flex justify-end">
-        <span className="text-[9px] text-zinc-700 font-medium tracking-wide">Powered by Tenor</span>
+        <span className="text-[9px] text-zinc-700 font-medium tracking-wide">Powered by GIPHY</span>
       </div>
     </div>
   );
@@ -12712,7 +12709,7 @@ export default function App() {
     setTimeout(() => { input?.focus(); input?.setSelectionRange(pos + emoji.length, pos + emoji.length); }, 0);
   };
 
-  // ── Send a Tenor GIF directly (bypasses text input) ─────────────
+  // ── Send a GIF directly (bypasses text input) ─────────────
   const sendGif = async (gifUrl: string) => {
     if (sending) return;
     setSending(true);
@@ -18689,7 +18686,7 @@ export default function App() {
                                 })()}
                                 {msg.content && (() => {
                                   const c = msg.content;
-                                  if (/^https:\/\/media\.tenor\.com\/[^\s]+$/i.test(c)) {
+                                  if (/^https:\/\/(media\d*\.giphy\.com|i\.giphy\.com|media\.tenor\.com)\/[^\s]+$/i.test(c)) {
                                     return (
                                       <div className="max-w-[260px] rounded-2xl overflow-hidden shadow-lg cursor-zoom-in hover:opacity-90 transition-opacity mb-1"
                                         onClick={()=>setLightboxSrc(c)}>
@@ -19085,8 +19082,8 @@ export default function App() {
                               }
                             })() : (()=>{
                               const c = msg.content?.trim() ?? '';
-                              // ── Tenor GIF: content is exactly a tenor media URL ──
-                              if (/^https:\/\/media\.tenor\.com\/[^\s]+$/i.test(c)) {
+                              // ── GIF: content is exactly a GIF media URL ──
+                              if (/^https:\/\/(media\d*\.giphy\.com|i\.giphy\.com|media\.tenor\.com)\/[^\s]+$/i.test(c)) {
                                 return (
                                   <div className="max-w-[280px] rounded-2xl overflow-hidden shadow-lg cursor-zoom-in hover:opacity-90 transition-opacity"
                                     onClick={()=>setLightboxSrc(c)}>
@@ -19136,10 +19133,10 @@ export default function App() {
                               );
                             })()}
 
-                            {/* Link preview — skip for tenor GIFs */}
+                            {/* Link preview — skip for GIF messages */}
                             {(()=>{
                               const c = msg.content?.trim() ?? '';
-                              if (/^https:\/\/media\.tenor\.com\/[^\s]+$/i.test(c)) return null;
+                              if (/^https:\/\/(media\d*\.giphy\.com|i\.giphy\.com|media\.tenor\.com)\/[^\s]+$/i.test(c)) return null;
                               const urls = c.match(URL_RE);
                               const firstUrl = urls?.[0];
                               if (!firstUrl || !c) return null;
@@ -19763,7 +19760,7 @@ export default function App() {
                             className={`transition-all active:scale-90 px-1.5 py-0.5 rounded-md text-[11px] font-black leading-none tracking-wide ${showGifPicker ? 'text-indigo-400 bg-indigo-500/15' : 'text-zinc-600 hover:text-zinc-400'}`}>
                             GIF
                           </button>
-                          {showGifPicker && <TenorGifPicker onSelect={sendGif} onClose={() => setShowGifPicker(false)}/>}
+                          {showGifPicker && <GifPicker onSelect={sendGif} onClose={() => setShowGifPicker(false)}/>}
                         </div>
                         {/* Emoji picker */}
                         <div className="relative shrink-0">
