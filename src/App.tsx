@@ -14290,6 +14290,121 @@ export default function App() {
     return safe;
   };
 
+  // Full profile view, reused as-is by "Nowy wygląd" (rendered as a
+  // full-screen overlay there) — the classic layout's own ternary further
+  // below still renders this exact same block inline; this duplication
+  // (rather than extracting/relocating the classic ternary) keeps the
+  // classic render path completely untouched.
+  const profileOverlayNode = profileViewId ? (
+    <ProfilePage
+      viewUserId={profileViewId}
+      profileData={profilePageData}
+      games={profileGames}
+      spotify={profileSpotify}
+      ownSpotify={ownSpotify}
+      twitch={profileTwitch}
+      ownTwitch={ownTwitch}
+      steam={profileSteam}
+      ownSteam={ownSteam}
+      youtube={profileYoutube}
+      ownYoutube={ownYoutube}
+      kick={profileKick}
+      ownKick={ownKick}
+      epic={profileEpic}
+      ownEpic={ownEpic}
+      steamGameStartedAt={profileViewId ? (steamGameStartRef.current.get(profileViewId) ?? null) : null}
+      liveSpotifyTrack={profileViewId ? (userActivities.get(profileViewId) ?? null) : null}
+      achievementStats={(() => {
+        const e = profileViewId ? achievementStats[profileViewId] : undefined;
+        return (e && e !== 'loading' && e !== 'error') ? e : null;
+      })()}
+      achievementStatsLoading={(() => {
+        const e = profileViewId ? achievementStats[profileViewId] : undefined;
+        return e === undefined || e === 'loading';
+      })()}
+      loading={profileLoading}
+      currentUser={currentUser}
+      editProf={editProf}
+      setEditProf={setEditProf}
+      profBannerFile={profBannerFile}
+      profBannerPrev={profBannerPrev}
+      onBack={closeProfilePage}
+      onOpenDm={(id)=>{ openDm(id); closeProfilePage(); }}
+      onCall={(id,un,av,t)=>{ startDmCall(id,un,t,av); closeProfilePage(); }}
+      handleAvatarUpload={handleAvatarUpload}
+      handleBannerSelect={handleBannerSelect}
+      handleSaveProfile={handleSaveProfile}
+      onGameAdded={(g)=>setProfileGames(p=>[...p,g])}
+      onGameRemoved={(id)=>setProfileGames(p=>p.filter(g=>g.id!==id))}
+      showGameModal={showGameModal}
+      setShowGameModal={setShowGameModal}
+      gameSearch={gameSearch}
+      setGameSearch={setGameSearch}
+      gameResults={gameResults}
+      setGameResults={setGameResults}
+      gameSearching={gameSearching}
+      setGameSearching={setGameSearching}
+      gameSearchRef={gameSearchRef}
+      onSpotifyConnect={async()=>{ try { const r = await spotifyApi.connect(); await openOAuth(r.url, 'spotify'); } catch(e:any){ addToast(e.message||'Błąd Spotify','error'); } }}
+      onSpotifyDisconnect={async()=>{ try { await spotifyApi.disconnect(); setOwnSpotify(null); addToast('Spotify odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Spotify','error'); } }}
+      onSpotifyToggle={async(v)=>{ await spotifyApi.setSettings({show_on_profile:v}); setOwnSpotify(p=>p?{...p,show_on_profile:v}:p); lastEmittedTrack.current=undefined; if(!v&&currentUser?.id){const sock=getSocket();if(sock)(sock as any).emit('spotify_update',{track:null});setUserActivities(p=>{const n=new Map(p);n.set(currentUser.id,null);return n;});} }}
+      onTwitchConnect={async()=>{ try { const r = await twitchApi.connect(); await openOAuth(r.url, 'twitch'); } catch(e:any){ addToast(e.message||'Błąd Twitch','error'); } }}
+      onTwitchDisconnect={async()=>{ try { await twitchApi.disconnect(); setOwnTwitch(null); addToast('Twitch odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Twitch','error'); } }}
+      onTwitchToggle={async(v)=>{ await twitchApi.setSettings({show_on_profile:v}); setOwnTwitch(p=>p?{...p,show_on_profile:v}:p); lastEmittedStream.current=undefined; if(!v&&currentUser?.id){const sock=getSocket();if(sock)(sock as any).emit('twitch_update',{stream:null});setUserTwitchActivities(p=>{const n=new Map(p);n.set(currentUser.id,null);return n;});} }}
+      onSteamConnect={async()=>{ try { const r = await steamApi.connect(); await openOAuth(r.url, 'steam'); } catch(e:any){ addToast(e.message||'Błąd Steam','error'); } }}
+      onSteamDisconnect={async()=>{ try { await steamApi.disconnect(); setOwnSteam(null); addToast('Steam odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Steam','error'); } }}
+      onSteamToggle={async(v)=>{ await steamApi.setSettings({show_on_profile:v}); setOwnSteam(p=>p?{...p,show_on_profile:v}:p); lastEmittedGame.current=undefined; if(!v&&currentUser?.id){const sock=getSocket();if(sock)(sock as any).emit('steam_update',{game:null});setUserSteamActivities(p=>{const n=new Map(p);n.set(currentUser.id,null);return n;});} }}
+      friends={friends}
+      blockedUsers={blockedUsers}
+      addToast={addToast}
+      myJam={myJam}
+      jamLoading={jamLoading}
+      viewedUserJam={profileViewedJam}
+      onJamStart={async()=>{
+        setJamLoading(true);
+        try {
+          await spotifyApi.jamStart();
+          const j = await spotifyApi.jamActive();
+          setMyJam(j);
+          addToast('JAM uruchomiony! Znajomi mogą dołączyć z Twojego profilu', 'success');
+        } catch(e:any){ addToast(e.message||'Błąd JAM','error'); }
+        finally { setJamLoading(false); }
+      }}
+      onJamStop={async()=>{
+        setJamLoading(true);
+        try {
+          await spotifyApi.jamLeave();
+          getSocket()?.emit('spotify_jam_ended' as any, { host_id: currentUser?.id });
+          setMyJam({ role: null, members: [] });
+          addToast('JAM zakończony','info');
+        } catch(e:any){ addToast(e.message||'Błąd','error'); }
+        finally { setJamLoading(false); }
+      }}
+      onJamJoin={async(hostId)=>{
+        setJamLoading(true);
+        try {
+          await spotifyApi.jamJoin(hostId);
+          getSocket()?.emit('spotify_jam_joined' as any, { host_id: hostId });
+          const j = await spotifyApi.jamActive();
+          setMyJam(j);
+          addToast('Dołączono do JAM! Synchronizacja Spotify...','success');
+        } catch(e:any){ addToast(e.message||'Błąd','error'); }
+        finally { setJamLoading(false); }
+      }}
+      onJamLeave={async()=>{
+        setJamLoading(true);
+        try {
+          const r = await spotifyApi.jamLeave();
+          if (!r.was_host) getSocket()?.emit('spotify_jam_left' as any, { host_id: r.host_id });
+          setMyJam({ role: null, members: [] });
+          addToast('Opuszczono JAM','info');
+        } catch(e:any){ addToast(e.message||'Błąd','error'); }
+        finally { setJamLoading(false); }
+      }}
+      mutualServers={mutualServers}
+    />
+  ) : null;
+
   return (
     <div
       className={`flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-transparent p-1 gap-1${focusCard?' focus-card-active':''}`}
@@ -14579,7 +14694,21 @@ export default function App() {
               onMinimize: () => setShowCallPanel(false),
             } : null}
             onOpenSettings={() => { setAppSettTab('newlook'); setAppSettOpen(true); }}
+            onOpenProfile={openProfilePage}
+            onJoinServer={async (code) => {
+              try {
+                const s = await serversApi.join(code);
+                setServerList(p => [...p, s]); setActiveServer(s.id); setActiveView('servers');
+                getSocket()?.emit('join_server_room' as any, s.id);
+                addToast(`Dołączono do serwera ${s.name}!`, 'success');
+              } catch (err: any) { addToast(err?.message || 'Nie udało się dołączyć', 'error'); }
+            }}
           />
+          {profileOverlayNode && (
+            <div className="fixed inset-0 z-[200] overflow-y-auto" style={{ background: '#0a0a10' }}>
+              {profileOverlayNode}
+            </div>
+          )}
         </div>
       ) : (
       <>
