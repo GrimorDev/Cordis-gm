@@ -291,10 +291,22 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
 
     // ── Voice channels ───────────────────────────────────────────────
     socket.on('voice_join', async (channelId) => {
-      // ── User-limit check ──────────────────────────────────────────────
       const { rows: [chInfo] } = await query(
         `SELECT server_id, name, user_limit FROM channels WHERE id = $1`, [channelId]
       );
+      if (!chInfo) return;
+      // Verify server membership before letting anyone actually join the voice
+      // room. This used to only get checked incidentally, inside the user_limit
+      // branch below (to see if the joiner is an admin who bypasses the limit) —
+      // so any channel without an explicit limit set (the common case) let ANY
+      // authenticated user join ANY voice channel on ANY server just by knowing
+      // its id, with no membership check at all.
+      const { rows: [membership] } = await query(
+        `SELECT 1 FROM server_members WHERE server_id=$1 AND user_id=$2`,
+        [chInfo.server_id, user.id]
+      );
+      if (!membership) return;
+      // ── User-limit check ──────────────────────────────────────────────
       if (chInfo?.user_limit > 0) {
         // Check if admin/owner (bypasses limit)
         const { rows: [memberRow] } = await query(
