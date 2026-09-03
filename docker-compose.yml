@@ -154,6 +154,7 @@ services:
       KICK_CLIENT_ID: ${KICK_CLIENT_ID:-}
       KICK_CLIENT_SECRET: ${KICK_CLIENT_SECRET:-}
       KICK_REDIRECT_URI: ${KICK_REDIRECT_URI:-}
+      GIPHY_API_KEY: ${GIPHY_API_KEY:-}
     volumes:
       - backend-uploads:/app/uploads
     depends_on:

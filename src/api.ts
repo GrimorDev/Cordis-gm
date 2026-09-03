@@ -880,6 +880,12 @@ export const spotifyApi = {
   voiceDjGet:    (channelId: string) => req<SpotifyVoiceDj>('GET', `/spotify/voice-dj/${channelId}`),
 };
 
+export interface GifResult { id: string; url: string; preview: string; }
+export const gifsApi = {
+  search:   (q: string) => req<{ results: GifResult[] }>('GET', `/gifs/search?q=${encodeURIComponent(q)}`),
+  trending: ()          => req<{ results: GifResult[] }>('GET', '/gifs/trending'),
+};
+
 export const twitchApi = {
   connect:     () => req<{ url: string }>('GET', '/twitch/connect'),
   status:      () => req<TwitchData>('GET', '/twitch/status'),
