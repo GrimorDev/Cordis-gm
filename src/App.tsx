@@ -21837,15 +21837,21 @@ export default function App() {
             className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4"
             onClick={()=>{ setCreateSrvOpen(false); setCreateSrvIconFile(null); setCreateSrvIconPreview(null); setCreateSrvName(''); setJoinCode(''); }}>
             <motion.div initial={{scale:0.93,opacity:0,y:16}} animate={{scale:1,opacity:1,y:0}} exit={{scale:0.93,opacity:0,y:16}} transition={{type:'spring',stiffness:380,damping:32}}
-              onClick={e=>e.stopPropagation()} className={`${gm} rounded-3xl w-full max-w-sm overflow-hidden`}>
+              onClick={e=>e.stopPropagation()} className="rounded-3xl w-full max-w-sm overflow-hidden relative"
+              style={{
+                background:'linear-gradient(160deg, rgba(24,20,16,0.62) 0%, rgba(10,9,8,0.78) 100%)',
+                backdropFilter:'blur(28px) saturate(1.5)', WebkitBackdropFilter:'blur(28px) saturate(1.5)',
+                border:'1px solid rgba(255,255,255,0.12)',
+                boxShadow:'0 32px 64px -12px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,143,64,0.08), inset 0 1px 0 rgba(255,255,255,0.08)',
+              }}>
 
               {/* Mode tabs */}
-              <div className="flex border-b border-white/[0.06]">
+              <div className="flex border-b border-white/[0.06] relative z-10">
                 {(['create','join'] as const).map(m=>(
                   <button key={m} onClick={()=>setCreateSrvMode(m)}
                     className={`flex-1 py-4 text-sm font-bold transition-all relative ${createSrvMode===m?'text-white':'text-zinc-500 hover:text-zinc-300'}`}>
                     {m==='create'?'Utwórz serwer':'Dołącz do serwera'}
-                    {createSrvMode===m&&<motion.div layoutId="srv-tab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500" transition={{type:'spring',stiffness:400,damping:30}}/>}
+                    {createSrvMode===m&&<motion.div layoutId="srv-tab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FF8F40]" transition={{type:'spring',stiffness:400,damping:30}}/>}
                   </button>
                 ))}
               </div>
@@ -21853,9 +21859,9 @@ export default function App() {
               <AnimatePresence mode="wait">
                 {createSrvMode==='create' ? (
                   <motion.div key="create" initial={{opacity:0,x:-16}} animate={{opacity:1,x:0}} exit={{opacity:0,x:16}} transition={{duration:0.18}}
-                    className="flex flex-col">
+                    className="flex flex-col relative z-10">
                     {/* Gradient preview banner with avatar */}
-                    <div className="relative h-28 bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 overflow-hidden">
+                    <div className="relative h-28 overflow-hidden" style={{background:'linear-gradient(135deg, #ff8f40 0%, #e8622f 45%, #b8341f 100%)'}}>
                       <motion.div animate={{scale:[1,1.15,1]}} transition={{duration:6,repeat:Infinity,ease:'easeInOut'}}
                         className="absolute -top-6 -right-6 w-32 h-32 rounded-full bg-white/10"/>
                       <motion.div animate={{scale:[1,1.2,1]}} transition={{duration:8,repeat:Infinity,ease:'easeInOut',delay:2}}
@@ -21900,7 +21906,7 @@ export default function App() {
                         <button onClick={()=>{ setCreateSrvOpen(false); setCreateSrvIconFile(null); setCreateSrvIconPreview(null); setCreateSrvName(''); }}
                           className={`flex-1 ${gb} py-2.5 rounded-2xl text-sm font-semibold transition-all`}>Anuluj</button>
                         <button onClick={handleCreateServer} disabled={!createSrvName.trim()}
-                          className="flex-1 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-2xl transition-all shadow-lg shadow-indigo-500/25">
+                          className="flex-1 bg-gradient-to-r from-[#FF8F40] to-[#e8622f] hover:from-[#ffa15c] hover:to-[#f0703d] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-2xl transition-all shadow-lg shadow-orange-500/25">
                           Utwórz →
                         </button>
                       </div>
@@ -21908,11 +21914,11 @@ export default function App() {
                   </motion.div>
                 ) : (
                   <motion.div key="join" initial={{opacity:0,x:16}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-16}} transition={{duration:0.18}}
-                    className="p-6 flex flex-col gap-5">
+                    className="p-6 flex flex-col gap-5 relative z-10">
                     {/* Illustration */}
                     <div className="flex flex-col items-center gap-3 py-2">
-                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500/20 to-indigo-500/20 border border-indigo-500/25 flex items-center justify-center shadow-lg shadow-indigo-500/10">
-                        <Users size={28} className="text-indigo-400"/>
+                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500/20 to-amber-600/20 border border-orange-500/25 flex items-center justify-center shadow-lg shadow-orange-500/10">
+                        <Users size={28} className="text-[#FF8F40]"/>
                       </div>
                       <div className="text-center">
                         <p className="text-sm font-bold text-white">Masz zaproszenie?</p>
@@ -21936,7 +21942,7 @@ export default function App() {
                       <button onClick={()=>{ setCreateSrvOpen(false); setJoinCode(''); }}
                         className={`flex-1 ${gb} py-2.5 rounded-2xl text-sm font-semibold transition-all`}>Anuluj</button>
                       <button onClick={handleJoinServer} disabled={!joinCode.trim()}
-                        className="flex-1 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-2xl transition-all shadow-lg shadow-indigo-500/25">
+                        className="flex-1 bg-gradient-to-r from-[#FF8F40] to-[#e8622f] hover:from-[#ffa15c] hover:to-[#f0703d] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-2xl transition-all shadow-lg shadow-orange-500/25">
                         Dołącz →
                       </button>
                     </div>
