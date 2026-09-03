@@ -112,6 +112,13 @@ export interface NewLookShellProps {
   callView: CallViewProps | null;
 
   onOpenSettings: () => void;
+  /** Opens the real full profile (ProfilePage) as a full-screen overlay —
+   *  same component/tabs (Profil/Media/Linki/Połączenia/Przypięte) the
+   *  classic view uses, rendered by App.tsx outside this shell. */
+  onOpenProfile: (userId: string) => void;
+  /** Joins a server via invite code — used by the CINV|... server-invite
+   *  card rendered in place of that raw pipe-delimited payload. */
+  onJoinServer: (code: string) => void;
 }
 
 export type { MsgReaction };

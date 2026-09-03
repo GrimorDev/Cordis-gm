@@ -5,17 +5,17 @@ import type { ServerMember, MutualServer, MutualFriend, DmConversation } from '.
 import { mutualServersApi, mutualFriendsApi, notesApi } from '../api';
 
 type Props = Pick<NewLookShellProps,
-  'staticUrl' | 'activeView' | 'serverFull' | 'members' | 'dmConvs' | 'activeDmUserId'
+  'staticUrl' | 'activeView' | 'serverFull' | 'members' | 'dmConvs' | 'activeDmUserId' | 'onOpenProfile'
 >;
 
 const STATUS_COLOR: Record<string, string> = {
   online: '#4ade80', idle: '#fbbf24', dnd: '#f87171', offline: '#5a5a70',
 };
 
-function MemberRow({ m, staticUrl }: { m: ServerMember; staticUrl: (u: string | null | undefined) => string | null }) {
+function MemberRow({ m, staticUrl, onOpenProfile }: { m: ServerMember; staticUrl: (u: string | null | undefined) => string | null; onOpenProfile: (id: string) => void }) {
   const avatar = staticUrl(m.avatar_url);
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 4px' }}>
+    <div onClick={() => onOpenProfile(m.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 4px', cursor: 'pointer' }}>
       <span style={{ position: 'relative', width: 30, height: 30, flexShrink: 0 }}>
         <span style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#2a2a3a', fontSize: 11, fontWeight: 700 }}>
           {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : m.username.slice(0, 2).toUpperCase()}
@@ -35,7 +35,7 @@ function MemberRow({ m, staticUrl }: { m: ServerMember; staticUrl: (u: string | 
   );
 }
 
-function DmProfilePanel({ dm, staticUrl }: { dm: DmConversation; staticUrl: (u: string | null | undefined) => string | null }) {
+function DmProfilePanel({ dm, staticUrl, onOpenProfile }: { dm: DmConversation; staticUrl: (u: string | null | undefined) => string | null; onOpenProfile: (id: string) => void }) {
   const [mutualServers, setMutualServers] = useState<MutualServer[]>([]);
   const [mutualFriends, setMutualFriends] = useState<MutualFriend[]>([]);
   const [note, setNote] = useState('');
@@ -55,7 +55,7 @@ function DmProfilePanel({ dm, staticUrl }: { dm: DmConversation; staticUrl: (u: 
 
   return (
     <div className="nl-info nl-glass nl-scroll" style={{ borderRadius: 0, overflowY: 'auto', padding: 20 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, textAlign: 'center', marginBottom: 20 }}>
+      <div onClick={() => onOpenProfile(dm.other_user_id)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, textAlign: 'center', marginBottom: 20, cursor: 'pointer' }}>
         <span style={{ width: 72, height: 72, borderRadius: '50%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#2a2a3a', fontSize: 24, fontWeight: 700 }}>
           {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : dm.other_username.slice(0, 2).toUpperCase()}
         </span>
@@ -89,7 +89,7 @@ function DmProfilePanel({ dm, staticUrl }: { dm: DmConversation; staticUrl: (u: 
             {mutualFriends.map(f => {
               const fAvatar = staticUrl(f.avatar_url);
               return (
-                <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div key={f.id} onClick={() => onOpenProfile(f.id)} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                   <span style={{ width: 24, height: 24, borderRadius: '50%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#2a2a3a', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
                     {fAvatar ? <img src={fAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : f.username.slice(0, 2).toUpperCase()}
                   </span>
@@ -125,11 +125,11 @@ const sectionLabelStyle: React.CSSProperties = {
   fontSize: 11, fontWeight: 700, color: '#7a7a92', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8,
 };
 
-export function InfoPanel({ staticUrl, activeView, serverFull, members, dmConvs, activeDmUserId }: Props) {
+export function InfoPanel({ staticUrl, activeView, serverFull, members, dmConvs, activeDmUserId, onOpenProfile }: Props) {
   if (activeView === 'dms') {
     const dm = dmConvs.find(d => d.other_user_id === activeDmUserId);
     if (!dm) return <div className="nl-info nl-glass" style={{ borderRadius: 0 }} />;
-    return <DmProfilePanel dm={dm} staticUrl={staticUrl} />;
+    return <DmProfilePanel dm={dm} staticUrl={staticUrl} onOpenProfile={onOpenProfile} />;
   }
 
   if (!serverFull) return <div className="nl-info nl-glass" style={{ borderRadius: 0 }} />;
@@ -164,14 +164,14 @@ export function InfoPanel({ staticUrl, activeView, serverFull, members, dmConvs,
         <p style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: '#7a7a92', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4 }}>
           <Users size={11} /> Online — {online.length}
         </p>
-        {online.map(m => <MemberRow key={m.id} m={m} staticUrl={staticUrl} />)}
+        {online.map(m => <MemberRow key={m.id} m={m} staticUrl={staticUrl} onOpenProfile={onOpenProfile} />)}
 
         {offline.length > 0 && (
           <>
             <p style={{ fontSize: 11, fontWeight: 700, color: '#7a7a92', letterSpacing: 0.5, textTransform: 'uppercase', margin: '16px 0 4px' }}>
               Offline — {offline.length}
             </p>
-            {offline.map(m => <MemberRow key={m.id} m={m} staticUrl={staticUrl} />)}
+            {offline.map(m => <MemberRow key={m.id} m={m} staticUrl={staticUrl} onOpenProfile={onOpenProfile} />)}
           </>
         )}
       </div>

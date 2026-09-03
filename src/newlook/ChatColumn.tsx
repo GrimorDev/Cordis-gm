@@ -9,7 +9,8 @@ type Props = Pick<NewLookShellProps,
   'currentUser' | 'staticUrl' | 'renderMsgHTML' | 'activeView' | 'activeCh' |
   'dmConvs' | 'activeDmUserId' | 'channelMsgs' | 'dmMsgs' | 'msgInput' | 'setMsgInput' |
   'onSend' | 'sending' | 'onToggleReaction' | 'onDeleteMessage' | 'onEditMessage' | 'onPinMessage' |
-  'replyTo' | 'setReplyTo' | 'inCall' | 'callSummary' | 'onOpenCallView' | 'onStartCall' | 'serverFull'
+  'replyTo' | 'setReplyTo' | 'inCall' | 'callSummary' | 'onOpenCallView' | 'onStartCall' | 'serverFull' | 'onOpenProfile' |
+  'serverList' | 'onJoinServer'
 > & { onToggleInfo: () => void };
 
 const QUICK_EMOJI = ['👍', '❤️', '😂', '🔥', '😮', '😢'];
@@ -21,7 +22,7 @@ function isSameGroup(a: MessageFull | DmMessageFull, b: MessageFull | DmMessageF
 
 function MessageRow({
   msg, isOwn, showHeader, staticUrl, renderMsgHTML, onToggleReaction, onDeleteMessage,
-  onEditMessage, onPinMessage, onReply, canPin,
+  onEditMessage, onPinMessage, onReply, canPin, onOpenProfile, serverList, onJoinServer,
 }: {
   msg: MessageFull | DmMessageFull; isOwn: boolean; showHeader: boolean;
   staticUrl: (u: string | null | undefined) => string | null;
@@ -32,6 +33,9 @@ function MessageRow({
   onPinMessage: (id: string, pinned: boolean) => void;
   onReply: (msg: MessageFull | DmMessageFull) => void;
   canPin: boolean;
+  onOpenProfile: (userId: string) => void;
+  serverList: NewLookShellProps['serverList'];
+  onJoinServer: (code: string) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -55,7 +59,10 @@ function MessageRow({
     >
       <div style={{ width: 34, flexShrink: 0 }}>
         {showHeader && (
-          <span style={{ width: 34, height: 34, borderRadius: '50%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#2a2a3a', fontSize: 12, fontWeight: 700 }}>
+          <span
+            onClick={() => onOpenProfile(msg.sender_id)}
+            style={{ width: 34, height: 34, borderRadius: '50%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#2a2a3a', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+          >
             {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : msg.sender_username.slice(0, 2).toUpperCase()}
           </span>
         )}
@@ -64,7 +71,7 @@ function MessageRow({
       <div style={{ maxWidth: '62%', display: 'flex', flexDirection: 'column', alignItems: isOwn ? 'flex-end' : 'flex-start' }}>
         {showHeader && (
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, marginBottom: 3, flexDirection: isOwn ? 'row-reverse' : 'row' }}>
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: isOwn ? '#c7c7ff' : '#fff' }}>{isOwn ? 'Ty' : msg.sender_username}</span>
+            <span onClick={() => onOpenProfile(msg.sender_id)} style={{ fontSize: 12.5, fontWeight: 700, color: isOwn ? '#c7c7ff' : '#fff', cursor: 'pointer' }}>{isOwn ? 'Ty' : msg.sender_username}</span>
             <span style={{ fontSize: 10, color: '#6b6b82' }}>{new Date(msg.created_at).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</span>
             {pinned && <Pin size={10} color="#818cf8" />}
           </div>
@@ -94,6 +101,8 @@ function MessageRow({
               <button onClick={commitEdit} style={{ fontSize: 11, color: '#818cf8', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Zapisz</button>
             </div>
           </div>
+        ) : msg.content?.startsWith('CINV|') ? (
+          <ServerInviteCard content={msg.content} staticUrl={staticUrl} serverList={serverList} onJoinServer={onJoinServer} />
         ) : (
           <>
             {msg.content && (
@@ -164,6 +173,56 @@ function MessageRow({
   );
 }
 
+/** Server-invite-via-DM payload: `CINV|serverId|code|serverName|iconUrl|bannerUrl`
+ *  (mirrors desktop classic's own inline card at src/App.tsx, and mobile's
+ *  ServerInviteCard) — without this it's a raw pipe-delimited string. */
+function ServerInviteCard({
+  content, staticUrl, serverList, onJoinServer,
+}: {
+  content: string;
+  staticUrl: (u: string | null | undefined) => string | null;
+  serverList: NewLookShellProps['serverList'];
+  onJoinServer: (code: string) => void;
+}) {
+  const parts = content.split('|');
+  const [, srvId, code, srvName, iconUrl, bannerUrl] = parts;
+  const iconSrc = staticUrl(iconUrl);
+  const bannerSrc = staticUrl(bannerUrl);
+  const alreadyMember = serverList.some(s => s.id === srvId);
+
+  return (
+    <div style={{ width: 260, borderRadius: 16, overflow: 'hidden', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+      <div style={{ height: 60, position: 'relative', background: 'linear-gradient(135deg, #6366f1, #7c3aed, #ec4899)' }}>
+        {bannerSrc && <img src={bannerSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }} />}
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.25)' }} />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, padding: '0 12px', marginTop: -22 }}>
+        <span style={{ width: 46, height: 46, borderRadius: 14, border: '3px solid #14141e', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#2a2a3a', fontSize: 16, fontWeight: 800, flexShrink: 0 }}>
+          {iconSrc ? <img src={iconSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (srvName?.[0] ?? 'S').toUpperCase()}
+        </span>
+        <div style={{ minWidth: 0, paddingBottom: 6 }}>
+          <p style={{ fontSize: 9.5, fontWeight: 700, color: '#9797b0', letterSpacing: 0.6, textTransform: 'uppercase' }}>Zaproszenie na serwer</p>
+          <p style={{ fontSize: 14, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{srvName || '?'}</p>
+        </div>
+      </div>
+      <div style={{ padding: 12 }}>
+        {alreadyMember ? (
+          <div style={{ width: '100%', padding: '9px 0', borderRadius: 11, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', textAlign: 'center', fontSize: 12.5, fontWeight: 700, color: '#9797b0' }}>
+            Jesteś już członkiem
+          </div>
+        ) : (
+          <button
+            onClick={() => onJoinServer(code)}
+            style={{ width: '100%', padding: '9px 0', borderRadius: 11, background: '#6366f1', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+          >
+            Dołącz do serwera →
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const actionBtnStyle: React.CSSProperties = {
   width: 26, height: 26, borderRadius: 7, background: 'none', border: 'none', color: '#c4c4d4',
   display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
@@ -173,7 +232,8 @@ export function ChatColumn({
   currentUser, staticUrl, renderMsgHTML, activeView, activeCh,
   dmConvs, activeDmUserId, channelMsgs, dmMsgs, msgInput, setMsgInput,
   onSend, sending, onToggleReaction, onDeleteMessage, onEditMessage, onPinMessage,
-  replyTo, setReplyTo, inCall, callSummary, onOpenCallView, onStartCall, serverFull, onToggleInfo,
+  replyTo, setReplyTo, inCall, callSummary, onOpenCallView, onStartCall, serverFull, onToggleInfo, onOpenProfile,
+  serverList, onJoinServer,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -268,6 +328,9 @@ export function ChatColumn({
               onPinMessage={onPinMessage}
               onReply={setReplyTo}
               canPin={!isDm}
+              onOpenProfile={onOpenProfile}
+              serverList={serverList}
+              onJoinServer={onJoinServer}
             />
           );
         })}
