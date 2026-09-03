@@ -14524,7 +14524,7 @@ export default function App() {
             allChs={allChs}
             activeChannel={activeChannel}
             activeCh={activeCh}
-            onSelectChannel={setActiveChannel}
+            onSelectChannel={(ch) => { if (ch.type === 'voice') joinVoiceCh(ch); else setActiveChannel(ch.id); }}
             dmConvs={dmConvs}
             activeDmUserId={activeDmUserId}
             unreadDms={unreadDms}
@@ -14556,7 +14556,27 @@ export default function App() {
             setReplyTo={setReplyTo}
             inCall={!!activeCall}
             callSummary={activeCall ? { channelName: activeCall.channelName, username: activeCall.username } : null}
-            onOpenClassicForCall={() => setNewLookEnabled(false)}
+            onOpenCallView={() => setShowCallPanel(true)}
+            callView={showCallPanel && activeCall ? {
+              activeCall,
+              currentUser: currentUser!,
+              staticUrl,
+              voiceUsers: activeCall.channelId ? (voiceUsers[activeCall.channelId] ?? []) : [],
+              voiceUserStates,
+              cameraOnUserIds,
+              sharingUserIds,
+              cameraStreamRef,
+              screenStreamRef,
+              remoteCameraStreamsRef,
+              remoteScreenStreamsRef,
+              screenShareTick,
+              onToggleMute: toggleMute,
+              onToggleDeafen: toggleDeafen,
+              onToggleCamera: toggleCamera,
+              onToggleScreen: toggleScreen,
+              onHangup: hangupCall,
+              onMinimize: () => setShowCallPanel(false),
+            } : null}
             onOpenSettings={() => { setAppSettTab('newlook'); setAppSettOpen(true); }}
           />
         </div>

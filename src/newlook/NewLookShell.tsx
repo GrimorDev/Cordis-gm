@@ -5,6 +5,7 @@ import { ServerRail } from './ServerRail';
 import { ChannelList } from './ChannelList';
 import { ChatColumn } from './ChatColumn';
 import { InfoPanel } from './InfoPanel';
+import { CallView } from './CallView';
 
 /** Opt-in alternate desktop shell ("Nowy wygląd" in Settings). Composes the
  *  4 reference-image zones — server rail, channel/DM list, chat, info panel
@@ -16,8 +17,12 @@ export function NewLookShell(props: NewLookShellProps) {
     <div className="nl-root">
       <ServerRail {...props} />
       <ChannelList {...props} />
-      <ChatColumn {...props} onToggleInfo={() => setShowInfo(v => !v)} />
-      {showInfo && <InfoPanel {...props} />}
+      {props.callView ? (
+        <CallView {...props.callView} />
+      ) : (
+        <ChatColumn {...props} onToggleInfo={() => setShowInfo(v => !v)} />
+      )}
+      {showInfo && !props.callView && <InfoPanel {...props} />}
     </div>
   );
 }

@@ -105,7 +105,7 @@ export function ChannelList({
                       return (
                         <button
                           key={ch.id}
-                          onClick={() => onSelectChannel(ch.id)}
+                          onClick={() => onSelectChannel(ch)}
                           style={{
                             display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8,
                             background: active ? 'rgba(255,255,255,0.09)' : 'transparent',

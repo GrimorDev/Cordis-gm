@@ -9,7 +9,7 @@ type Props = Pick<NewLookShellProps,
   'currentUser' | 'staticUrl' | 'renderMsgHTML' | 'activeView' | 'activeCh' |
   'dmConvs' | 'activeDmUserId' | 'channelMsgs' | 'dmMsgs' | 'msgInput' | 'setMsgInput' |
   'onSend' | 'sending' | 'onToggleReaction' | 'onDeleteMessage' | 'onEditMessage' | 'onPinMessage' |
-  'replyTo' | 'setReplyTo' | 'inCall' | 'callSummary' | 'onOpenClassicForCall' | 'serverFull'
+  'replyTo' | 'setReplyTo' | 'inCall' | 'callSummary' | 'onOpenCallView' | 'serverFull'
 > & { onToggleInfo: () => void };
 
 const QUICK_EMOJI = ['👍', '❤️', '😂', '🔥', '😮', '😢'];
@@ -173,7 +173,7 @@ export function ChatColumn({
   currentUser, staticUrl, renderMsgHTML, activeView, activeCh,
   dmConvs, activeDmUserId, channelMsgs, dmMsgs, msgInput, setMsgInput,
   onSend, sending, onToggleReaction, onDeleteMessage, onEditMessage, onPinMessage,
-  replyTo, setReplyTo, inCall, callSummary, onOpenClassicForCall, serverFull, onToggleInfo,
+  replyTo, setReplyTo, inCall, callSummary, onOpenCallView, serverFull, onToggleInfo,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const isDm = activeView === 'dms';
@@ -209,7 +209,7 @@ export function ChatColumn({
           {subtitle && <p style={{ fontSize: 11.5, color: '#8a8aa0' }}>{subtitle}</p>}
         </div>
         <div style={{ flex: 1 }} />
-        <button onClick={onOpenClassicForCall} title="Rozpocznij rozmowę" style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
+        <button onClick={onOpenCallView} title="Rozpocznij rozmowę" style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
           <Phone size={16} style={{ color: '#8a8aa0' }} />
         </button>
         <button onClick={onToggleInfo} title="Informacje" style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
@@ -227,7 +227,7 @@ export function ChatColumn({
             W trakcie rozmowy{callSummary?.channelName ? ` — #${callSummary.channelName}` : callSummary?.username ? ` z ${callSummary.username}` : ''}
           </p>
           <button
-            onClick={onOpenClassicForCall}
+            onClick={onOpenCallView}
             style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#6366f1', color: '#fff', border: 'none', borderRadius: 8, padding: '5px 10px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}
           >
             <PhoneOff size={12} /> Otwórz panel rozmowy
