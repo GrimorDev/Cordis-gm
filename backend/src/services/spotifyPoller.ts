@@ -1,6 +1,7 @@
 import { query } from '../db/pool';
 import { Server as SocketServer } from 'socket.io';
 import { spotifyCache } from '../socket';
+import { getUserStatus } from '../redis/client';
 
 const CLIENT_ID     = (process.env.SPOTIFY_CLIENT_ID     || '').trim();
 const CLIENT_SECRET = (process.env.SPOTIFY_CLIENT_SECRET || '').trim();
@@ -53,6 +54,30 @@ async function getValidAccessToken(userId: string): Promise<string | null> {
 // Last known track per user — avoids redundant broadcasts when track hasn't changed
 const lastTrackKey = new Map<string, string>();
 
+async function broadcastTrack(io: SocketServer, userId: string, track: any, progress_captured_at: number): Promise<void> {
+  // Broadcast to all server rooms this user belongs to
+  const { rows: serverRows } = await query(
+    `SELECT server_id FROM server_members WHERE user_id = $1`, [userId]
+  );
+  for (const { server_id } of serverRows) {
+    io.to(`server:${server_id}`).emit('friend_spotify_update', {
+      user_id: userId, track, progress_captured_at,
+    });
+  }
+
+  // Also broadcast to friends in DM context
+  const { rows: friendRows } = await query(
+    `SELECT CASE WHEN requester_id=$1 THEN addressee_id ELSE requester_id END AS friend_id
+     FROM friends WHERE (requester_id=$1 OR addressee_id=$1) AND status='accepted'`,
+    [userId]
+  );
+  for (const { friend_id } of friendRows) {
+    io.to(`user:${friend_id}`).emit('friend_spotify_update', {
+      user_id: userId, track, progress_captured_at,
+    });
+  }
+}
+
 async function pollOnce(io: SocketServer): Promise<void> {
   // Fetch all users with Spotify connected and visible
   const { rows: users } = await query(
@@ -62,6 +87,25 @@ async function pollOnce(io: SocketServer): Promise<void> {
 
   for (const { id: userId } of users) {
     try {
+      // Mirrors the same guard the live `spotify_update` socket handler
+      // uses — a stored refresh token keeps working after the user closes
+      // the app entirely, so without this the poller kept hitting Spotify's
+      // API and broadcasting "now playing" for accounts that were fully
+      // offline/logged out, not just idle/DND.
+      const status = await getUserStatus(userId);
+      if (status === 'offline') {
+        const progress_captured_at = Date.now();
+        spotifyCache.set(userId, { data: null, ts: progress_captured_at });
+        const fingerprint = 'null';
+        if (lastTrackKey.get(userId) !== fingerprint) {
+          lastTrackKey.set(userId, fingerprint);
+          // Clear any stale "listening to X" still shown to friends/servers
+          // from before the user went offline.
+          await broadcastTrack(io, userId, null, progress_captured_at);
+        }
+        continue; // skip the actual Spotify API call — nothing to poll for
+      }
+
       const token = await getValidAccessToken(userId);
       if (!token) continue;
 
@@ -98,27 +142,7 @@ async function pollOnce(io: SocketServer): Promise<void> {
       if (lastTrackKey.get(userId) === fingerprint) continue;
       lastTrackKey.set(userId, fingerprint);
 
-      // Broadcast to all server rooms this user belongs to
-      const { rows: serverRows } = await query(
-        `SELECT server_id FROM server_members WHERE user_id = $1`, [userId]
-      );
-      for (const { server_id } of serverRows) {
-        io.to(`server:${server_id}`).emit('friend_spotify_update', {
-          user_id: userId, track, progress_captured_at,
-        });
-      }
-
-      // Also broadcast to friends in DM context
-      const { rows: friendRows } = await query(
-        `SELECT CASE WHEN requester_id=$1 THEN addressee_id ELSE requester_id END AS friend_id
-         FROM friends WHERE (requester_id=$1 OR addressee_id=$1) AND status='accepted'`,
-        [userId]
-      );
-      for (const { friend_id } of friendRows) {
-        io.to(`user:${friend_id}`).emit('friend_spotify_update', {
-          user_id: userId, track, progress_captured_at,
-        });
-      }
+      await broadcastTrack(io, userId, track, progress_captured_at);
     } catch {
       // Ignore individual user errors — don't block the rest of the poll
     }
