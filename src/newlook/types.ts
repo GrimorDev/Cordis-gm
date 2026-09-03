@@ -3,6 +3,7 @@
 // gaps like missing reply_to fields). Components here consume the real API
 // types from src/api.ts directly and receive already-computed state/handlers
 // from App.tsx as props, the same data the classic layout already renders.
+import type { RefObject } from 'react';
 import type {
   UserProfile, ServerData, ServerFull, ChannelData, ServerMember,
   MessageFull, DmMessageFull, DmConversation, MsgReaction,
@@ -16,6 +17,40 @@ export type ActiveView = 'servers' | 'dms' | 'friends' | 'admin' | 'home';
 export interface CallSummary {
   channelName?: string;
   username?: string;
+}
+
+/** Mirrors App.tsx's local `CallState` type (not exported) — used by CallView. */
+export interface CallStateLike {
+  type: 'voice_channel' | 'dm_voice' | 'dm_video';
+  channelId?: string; channelName?: string; serverId?: string;
+  userId?: string; username?: string; avatarUrl?: string | null;
+  isMuted: boolean; isDeafened: boolean; isCameraOn: boolean; isScreenSharing: boolean;
+}
+
+/** Mirrors App.tsx's local `VoiceUser` type (not exported). */
+export interface VoiceUserLike {
+  id: string; username: string; avatar_url: string | null; status: string;
+}
+
+export interface CallViewProps {
+  activeCall: CallStateLike;
+  currentUser: UserProfile;
+  staticUrl: (url: string | null | undefined) => string | null;
+  voiceUsers: VoiceUserLike[];
+  voiceUserStates: Record<string, { muted: boolean; deafened: boolean }>;
+  cameraOnUserIds: Set<string>;
+  sharingUserIds: Set<string>;
+  cameraStreamRef: RefObject<MediaStream | null>;
+  screenStreamRef: RefObject<MediaStream | null>;
+  remoteCameraStreamsRef: RefObject<Map<string, MediaStream>>;
+  remoteScreenStreamsRef: RefObject<Map<string, MediaStream>>;
+  screenShareTick: number;
+  onToggleMute: () => void;
+  onToggleDeafen: () => void;
+  onToggleCamera: () => void;
+  onToggleScreen: () => void;
+  onHangup: () => void;
+  onMinimize: () => void;
 }
 
 export interface NewLookShellProps {
@@ -34,7 +69,11 @@ export interface NewLookShellProps {
   allChs: ChannelData[];
   activeChannel: string;
   activeCh: ChannelData | undefined;
-  onSelectChannel: (id: string) => void;
+  /** Text/announcement/forum channels just switch the active channel; voice
+   *  channels actually join the call (mirrors classic's joinVoiceCh) — the
+   *  full ChannelData is needed to tell them apart and to read user_limit
+   *  etc., not just the id. */
+  onSelectChannel: (ch: ChannelData) => void;
 
   dmConvs: DmConversation[];
   activeDmUserId: string;
@@ -60,7 +99,13 @@ export interface NewLookShellProps {
 
   inCall: boolean;
   callSummary: CallSummary | null;
-  onOpenClassicForCall: () => void;
+  /** Opens the native new-look call view (sets showCallPanel true) — replaces
+   *  the earlier "bail out to classic" escape hatch now that calls have a
+   *  real visual of their own. */
+  onOpenCallView: () => void;
+  /** Present whenever inCall is true — full data/handlers for the native
+   *  new-look call view (see CallView.tsx). */
+  callView: CallViewProps | null;
 
   onOpenSettings: () => void;
 }
