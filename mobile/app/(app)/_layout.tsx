@@ -1,17 +1,22 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { Tabs, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../../src/store';
-import { getSocket, connectSocket } from '../../src/socket';
+import { getSocket, connectSocket, acceptCall, rejectCall, endCall } from '../../src/socket';
 import { registerForPushNotifications } from '../../src/notifications';
+import { voiceMesh } from '../../src/webrtc';
+import { showOngoingCallNotification, hideOngoingCallNotification } from '../../src/callNotification';
+import { CallOverlay } from '../../src/components/CallOverlay';
 import { C } from '../../src/theme';
 import { useT, getT } from '../../src/i18n';
 import * as Notifications from 'expo-notifications';
 
+type TabDef = { name: string; icon: string; label: string };
+
 function TabItem({ tab, focused, badge, onPress }: {
-  tab: typeof TAB_DEFS[0];
+  tab: TabDef;
   focused: boolean;
   badge?: number;
   onPress: () => void;
@@ -72,11 +77,23 @@ function TabItem({ tab, focused, badge, onPress }: {
   );
 }
 
+// Full-screen chat surfaces — the tab bar just eats vertical space here and
+// the back arrow in each header already gets you home.
+const HIDE_TAB_BAR_ON = new Set(['channel/[id]', 'dm/[userId]']);
+
 function TabBar({ state, navigation }: any) {
   const t = useT();
   const insets = useSafeAreaInsets();
   const { dmConversations } = useStore();
   const totalUnread = dmConversations.reduce((s, c) => s + (c.unread_count ?? 0), 0);
+
+  const activeRouteName = state.routes[state.index]?.name;
+  // NOTE: does NOT hide for an active voice channel — you should still be
+  // able to switch tabs while connected, same as Discord. The voice bar on
+  // the server screen accounts for this bar's height itself instead (see
+  // index.tsx's voiceBar margin) rather than the two fighting for the same
+  // space by hiding one of them.
+  if (HIDE_TAB_BAR_ON.has(activeRouteName)) return null;
 
   const TAB_DEFS = [
     { name: 'index',   icon: 'server',        label: t.servers      },
@@ -121,11 +138,16 @@ export default function AppLayout() {
   const {
     isAuthenticated, addMessage, addDmMessage, setUserStatus, currentUser,
     updateMessage, removeMessage, updateDmMessage, removeDmMessage,
-    addVoiceUser, removeVoiceUser,
+    addVoiceUser, removeVoiceUser, setVoiceUserMuted,
+    activeCall, setActiveCall, updateActiveCallStatus,
   } = useStore();
+  const [callMuted, setCallMuted] = useState(false);
 
   useEffect(() => {
     if (!currentUser) return;
+    // Perfect Negotiation (screen-share renegotiation) needs to know our own
+    // id to deterministically assign polite/impolite roles per peer.
+    voiceMesh.setSelfId(currentUser.id);
 
     const onNewMessage = (msg: any) => { addMessage(msg.channel_id, msg); };
     const onNewDm = (msg: any) => {
@@ -147,7 +169,17 @@ export default function AppLayout() {
     };
     const onVoiceUserJoined = ({ channel_id, user }: any) => { addVoiceUser(channel_id, user); };
     const onVoiceUserLeft = ({ channel_id, user_id }: any) => { removeVoiceUser(channel_id, user_id); };
-    const onCallInvite = ({ from, type }: any) => {
+    const onVoiceState = ({ user_id, muted }: any) => {
+      if (typeof muted === 'boolean') setVoiceUserMuted(user_id, muted);
+    };
+    const onCallInvite = ({ from, type, conversation_id }: any) => {
+      if (!from?.id) return;
+      setActiveCall({
+        peerId: from.id, peerUsername: from.username ?? '?', peerAvatar: from.avatar_url ?? null,
+        status: 'incoming', type: type === 'video' ? 'video' : 'voice', conversationId: conversation_id,
+      });
+      // Local notification too — the ringing overlay only shows while the
+      // app is foregrounded, this covers backgrounded/locked-screen case.
       const gt = getT();
       Notifications.scheduleNotificationAsync({
         content: {
@@ -157,6 +189,25 @@ export default function AppLayout() {
         },
         trigger: null,
       });
+    };
+    const onCallAccepted = async ({ from_user_id }: any) => {
+      updateActiveCallStatus('connected');
+      try {
+        await voiceMesh.startDirectCall(from_user_id);
+        const call = useStore.getState().activeCall;
+        if (call) await showOngoingCallNotification(call.peerUsername, () => handleHangupCall());
+      } catch {
+        handleHangupCall();
+      }
+    };
+    const onCallRejected = () => {
+      setActiveCall(null);
+      voiceMesh.leave();
+    };
+    const onCallEnded = () => {
+      setActiveCall(null);
+      voiceMesh.leave();
+      hideOngoingCallNotification();
     };
 
     const attach = (sock: ReturnType<typeof getSocket>) => {
@@ -169,8 +220,12 @@ export default function AppLayout() {
       sock.on('dm_message_updated', onDmMessageUpdated);
       sock.on('dm_message_deleted', onDmMessageDeleted);
       sock.on('call_invite', onCallInvite);
+      sock.on('call_accepted', onCallAccepted);
+      sock.on('call_rejected', onCallRejected);
+      sock.on('call_ended', onCallEnded);
       sock.on('voice_user_joined', onVoiceUserJoined);
       sock.on('voice_user_left', onVoiceUserLeft);
+      sock.on('voice_state', onVoiceState);
     };
 
     const detach = () => {
@@ -183,8 +238,12 @@ export default function AppLayout() {
       sock?.off('dm_message_updated', onDmMessageUpdated);
       sock?.off('dm_message_deleted', onDmMessageDeleted);
       sock?.off('call_invite', onCallInvite);
+      sock?.off('call_accepted', onCallAccepted);
+      sock?.off('call_rejected', onCallRejected);
+      sock?.off('call_ended', onCallEnded);
       sock?.off('voice_user_joined', onVoiceUserJoined);
       sock?.off('voice_user_left', onVoiceUserLeft);
+      sock?.off('voice_state', onVoiceState);
     };
 
     const existing = getSocket();
@@ -209,23 +268,66 @@ export default function AppLayout() {
     registerForPushNotifications().catch(() => {});
   }, [currentUser?.id]);
 
+  const handleAcceptCall = async () => {
+    if (!activeCall) return;
+    const { peerId, conversationId } = activeCall;
+    acceptCall(conversationId ?? '', peerId);
+    updateActiveCallStatus('connected');
+    try {
+      await voiceMesh.acceptDirectCall();
+      await showOngoingCallNotification(activeCall.peerUsername, () => handleHangupCall());
+    } catch {
+      handleHangupCall();
+    }
+  };
+
+  const handleDeclineCall = () => {
+    if (!activeCall) return;
+    rejectCall(activeCall.peerId);
+    setActiveCall(null);
+  };
+
+  const handleHangupCall = () => {
+    const call = useStore.getState().activeCall;
+    if (call) endCall(call.peerId);
+    setActiveCall(null);
+    voiceMesh.leave();
+    hideOngoingCallNotification();
+    setCallMuted(false);
+  };
+
+  const handleToggleCallMute = () => {
+    const next = !callMuted;
+    setCallMuted(next);
+    voiceMesh.setMuted(next);
+  };
+
   if (!isAuthenticated) return <Redirect href="/(auth)/login" />;
 
   return (
-    <Tabs
-      tabBar={(props) => <TabBar {...props} />}
-      screenOptions={{ headerShown: false }}
-    >
-      <Tabs.Screen name="index"                   options={{ title: t.servers       }} />
-      <Tabs.Screen name="channel/[id]"            options={{ href: null             }} />
-      <Tabs.Screen name="dms"                     options={{ title: t.dmsTitle      }} />
-      <Tabs.Screen name="dm/[userId]"             options={{ href: null             }} />
-      <Tabs.Screen name="friends"                 options={{ title: t.friendsTitle  }} />
-      <Tabs.Screen name="profile"                 options={{ title: t.tabProfile    }} />
-      <Tabs.Screen name="user-profile/[userId]"   options={{ href: null           }} />
-      <Tabs.Screen name="server-settings/[serverId]" options={{ href: null        }} />
-      <Tabs.Screen name="member-list/[serverId]"  options={{ href: null           }} />
-    </Tabs>
+    <>
+      <Tabs
+        tabBar={(props) => <TabBar {...props} />}
+        screenOptions={{ headerShown: false }}
+      >
+        <Tabs.Screen name="index"                   options={{ title: t.servers       }} />
+        <Tabs.Screen name="channel/[id]"            options={{ href: null             }} />
+        <Tabs.Screen name="dms"                     options={{ title: t.dmsTitle      }} />
+        <Tabs.Screen name="dm/[userId]"             options={{ href: null             }} />
+        <Tabs.Screen name="friends"                 options={{ title: t.friendsTitle  }} />
+        <Tabs.Screen name="profile"                 options={{ title: t.tabProfile    }} />
+        <Tabs.Screen name="user-profile/[userId]"   options={{ href: null           }} />
+        <Tabs.Screen name="server-settings/[serverId]" options={{ href: null        }} />
+        <Tabs.Screen name="member-list/[serverId]"  options={{ href: null           }} />
+      </Tabs>
+      <CallOverlay
+        onAccept={handleAcceptCall}
+        onDecline={handleDeclineCall}
+        onHangup={handleHangupCall}
+        onToggleMute={handleToggleCallMute}
+        muted={callMuted}
+      />
+    </>
   );
 }
 

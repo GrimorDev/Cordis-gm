@@ -15,6 +15,17 @@ import { pl } from 'date-fns/locale';
 import { enGB } from 'date-fns/locale';
 import { useT } from '../../src/i18n';
 
+/** Mirrors desktop's DM-list preview formatting (src/App.tsx) — a CINV|... server
+ *  invite is an internal pipe-delimited payload, never meant to be shown raw. */
+function fmtPreview(content: string | null | undefined, inviteLabel: string): string {
+  if (!content) return '';
+  if (content.startsWith('CINV|')) {
+    const parts = content.split('|');
+    return `📨 ${inviteLabel}: ${parts[3] || ''}`;
+  }
+  return content;
+}
+
 function fmtTime(dateStr?: string | null, lang: 'pl' | 'en' = 'en', yesterday = 'Yesterday') {
   if (!dateStr) return '';
   try {
@@ -68,7 +79,7 @@ function DmRow({ item, status, onPress }: { item: any; status: string; onPress: 
               style={[styles.rowPreview, hasUnread && styles.rowPreviewBold]}
               numberOfLines={1}
             >
-              {item.last_message || t.startConvo}
+              {fmtPreview(item.last_message, t.serverInviteLabel) || t.startConvo}
             </Text>
             {hasUnread && (
               <View style={styles.badge}>

@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, TextInput,
-  Alert, ScrollView, Modal, Platform, ActivityIndicator,
-  RefreshControl,
+  Alert, ScrollView, Platform, ActivityIndicator,
+  RefreshControl, Switch, Image,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { UserAvatar } from '../../src/components/UserAvatar';
+import { Sheet } from '../../src/components/Sheet';
 import { C, STATUS_COLOR } from '../../src/theme';
-import { authApi, usersApi, friendsApi, type BlockedUser } from '../../src/api';
+import { authApi, usersApi, friendsApi, type BlockedUser, type Session, type UserStats } from '../../src/api';
 import { useStore } from '../../src/store';
 import { disconnectSocket } from '../../src/socket';
 import { unregisterPushNotifications } from '../../src/notifications';
@@ -33,7 +34,17 @@ function getStatusOptions(t: ReturnType<typeof useT>) {
   ];
 }
 
-type Sheet = 'none' | 'editBio' | 'changeUsername' | 'changePassword' | 'status' | 'blocked';
+type Sheet = 'none' | 'editBio' | 'changeUsername' | 'changePassword' | 'status' | 'blocked' | 'customStatus' | 'sessions' | 'stats';
+
+const PRIVACY_TOGGLES: { key: keyof Pick<import('../../src/api').User,
+  'privacy_status_visible' | 'privacy_typing_visible' | 'privacy_read_receipts' |
+  'privacy_friend_requests' | 'privacy_dm_from_strangers'>; label: string; hint: string }[] = [
+  { key: 'privacy_status_visible',    label: 'Pokazuj status online',        hint: 'Inni widzą, kiedy jesteś online' },
+  { key: 'privacy_typing_visible',    label: 'Pokazuj "pisze…"',             hint: 'Inni widzą, gdy piszesz wiadomość' },
+  { key: 'privacy_read_receipts',     label: 'Potwierdzenia odczytu',        hint: 'Inni widzą, że przeczytałeś/aś wiadomość' },
+  { key: 'privacy_friend_requests',   label: 'Zaproszenia do znajomych',     hint: 'Pozwól obcym wysyłać Ci zaproszenia' },
+  { key: 'privacy_dm_from_strangers', label: 'Wiadomości od obcych',         hint: 'Pozwól pisać do Ciebie osobom spoza znajomych' },
+];
 
 export default function ProfileScreen() {
   const t = useT();
@@ -44,15 +55,22 @@ export default function ProfileScreen() {
   const [sheet, setSheet] = useState<Sheet>('none');
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
   const [blockedLoading, setBlockedLoading] = useState(false);
 
-  const [aboutMe, setAboutMe] = useState(currentUser?.about_me ?? '');
+  const [aboutMe, setAboutMe] = useState(currentUser?.bio ?? '');
   const [newUsername, setNewUsername] = useState('');
   const [currentPass, setCurrentPass] = useState('');
   const [newPass, setNewPass] = useState('');
   const [confirmPass, setConfirmPass] = useState('');
   const [showPass, setShowPass] = useState(false);
+  const [customStatusText, setCustomStatusText] = useState(currentUser?.custom_status ?? '');
+
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [stats, setStats] = useState<UserStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
 
   const loadBlocked = useCallback(async () => {
     setBlockedLoading(true);
@@ -86,6 +104,51 @@ export default function ProfileScreen() {
     );
   };
 
+  const loadSessions = useCallback(async () => {
+    setSessionsLoading(true);
+    try { setSessions(await authApi.sessions()); }
+    catch { }
+    finally { setSessionsLoading(false); }
+  }, []);
+
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true);
+    try { setStats(await usersApi.getStats()); }
+    catch { }
+    finally { setStatsLoading(false); }
+  }, []);
+
+  const handleRevokeSession = (id: string) => {
+    Alert.alert('Wyloguj urządzenie', 'To urządzenie zostanie wylogowane.', [
+      { text: t.cancel, style: 'cancel' },
+      {
+        text: 'Wyloguj', style: 'destructive', onPress: async () => {
+          try {
+            await authApi.revokeSession(id);
+            setSessions(prev => prev.filter(s => s.id !== id));
+          } catch (e: any) { Alert.alert(t.error, e.message); }
+        },
+      },
+    ]);
+  };
+
+  const handleRevokeAllSessions = () => {
+    Alert.alert('Wyloguj wszystkie urządzenia', 'Zostaniesz wylogowany/a wszędzie, łącznie z tym urządzeniem.', [
+      { text: t.cancel, style: 'cancel' },
+      {
+        text: 'Wyloguj wszystkie', style: 'destructive', onPress: async () => {
+          try {
+            await authApi.revokeAllSessions();
+            await unregisterPushNotifications().catch(() => {});
+            disconnectSocket();
+            await clearAuth();
+            router.replace('/(auth)/login');
+          } catch (e: any) { Alert.alert(t.error, e.message); }
+        },
+      },
+    ]);
+  };
+
   if (!currentUser) return null;
 
   const currentStatus = currentUser.preferred_status ?? currentUser.status ?? 'online';
@@ -117,6 +180,53 @@ export default function ProfileScreen() {
     } finally { setUploadingAvatar(false); }
   };
 
+  const handleBannerUpload = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(t.noPermission, t.galleryPermission);
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.85,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    const formData = new FormData();
+    formData.append('banner', { uri: asset.uri, type: asset.mimeType ?? 'image/jpeg', name: asset.fileName ?? 'banner.jpg' } as any);
+    setUploadingBanner(true);
+    try {
+      const { banner_url } = await usersApi.updateBanner(formData);
+      setCurrentUser({ ...currentUser, banner_url });
+    } catch (e: any) {
+      Alert.alert(t.error, e.message ?? t.error);
+    } finally { setUploadingBanner(false); }
+  };
+
+  const handleSaveCustomStatus = async () => {
+    setSaving(true);
+    try {
+      const updated = await usersApi.updateMe({ custom_status: customStatusText.trim() || undefined });
+      setCurrentUser(updated);
+      setSheet('none');
+    } catch (e: any) { Alert.alert(t.error, e.message); }
+    finally { setSaving(false); }
+  };
+
+  const togglePrivacy = async (key: typeof PRIVACY_TOGGLES[number]['key'], value: boolean) => {
+    // Optimistic — flip immediately, roll back on failure so the switch
+    // doesn't lag behind a finger's worth of latency.
+    setCurrentUser({ ...currentUser, [key]: value });
+    try {
+      await usersApi.updateMe({ [key]: value } as any);
+    } catch (e: any) {
+      setCurrentUser({ ...currentUser, [key]: !value });
+      Alert.alert(t.error, e.message);
+    }
+  };
+
   const handleStatusChange = async (status: string) => {
     try {
       await usersApi.updateStatus(status);
@@ -128,7 +238,7 @@ export default function ProfileScreen() {
   const handleSaveBio = async () => {
     setSaving(true);
     try {
-      const updated = await usersApi.updateMe({ about_me: aboutMe });
+      const updated = await usersApi.updateMe({ bio: aboutMe });
       setCurrentUser(updated);
       setSheet('none');
     } catch (e: any) { Alert.alert(t.error, e.message); }
@@ -186,7 +296,18 @@ export default function ProfileScreen() {
       >
         {/* Hero banner */}
         <View style={styles.hero}>
-          <View style={styles.heroBanner} />
+          <TouchableOpacity style={styles.heroBanner} onPress={handleBannerUpload} activeOpacity={0.85}>
+            {currentUser.banner_url ? (
+              <Image
+                source={{ uri: currentUser.banner_url.startsWith('http') ? currentUser.banner_url : `${STATIC_BASE}${currentUser.banner_url}` }}
+                style={StyleSheet.absoluteFillObject}
+                resizeMode="cover"
+              />
+            ) : null}
+            <View style={styles.bannerEditBadge}>
+              {uploadingBanner ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="camera" size={13} color="#fff" />}
+            </View>
+          </TouchableOpacity>
           <View style={styles.heroContent}>
             <TouchableOpacity onPress={handleAvatarUpload} activeOpacity={0.85} style={styles.avatarWrap}>
               <View style={[styles.avatarRing, { borderColor: statusColor + '55' }]}>
@@ -233,8 +354,8 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          {currentUser.about_me ? (
-            <Text style={styles.heroAbout} numberOfLines={3}>{currentUser.about_me}</Text>
+          {currentUser.bio ? (
+            <Text style={styles.heroAbout} numberOfLines={3}>{currentUser.bio}</Text>
           ) : null}
         </View>
 
@@ -258,9 +379,57 @@ export default function ProfileScreen() {
             <SettingRow
               icon="document-text-outline"
               label={t.bioLabel}
-              value={currentUser.about_me || t.bioEmpty}
-              onPress={() => { setAboutMe(currentUser.about_me ?? ''); setSheet('editBio'); }}
+              value={currentUser.bio || t.bioEmpty}
+              onPress={() => { setAboutMe(currentUser.bio ?? ''); setSheet('editBio'); }}
               border
+            />
+            <SettingRow
+              icon="chatbubble-ellipses-outline"
+              label="Status niestandardowy"
+              value={currentUser.custom_status || 'Brak'}
+              onPress={() => { setCustomStatusText(currentUser.custom_status ?? ''); setSheet('customStatus'); }}
+              border
+            />
+            <SettingRow
+              icon="laptop-outline"
+              label="Aktywne sesje"
+              value="Zarządzaj urządzeniami"
+              onPress={() => { setSheet('sessions'); loadSessions(); }}
+              border
+            />
+          </View>
+        </View>
+
+        {/* Privacy toggles */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Prywatność i bezpieczeństwo</Text>
+          <View style={styles.card}>
+            {PRIVACY_TOGGLES.map((opt, idx) => (
+              <View key={opt.key} style={[styles.toggleRow, idx > 0 && styles.rowBorder]}>
+                <View style={styles.toggleContent}>
+                  <Text style={styles.settingLabel}>{opt.label}</Text>
+                  <Text style={styles.toggleHint}>{opt.hint}</Text>
+                </View>
+                <Switch
+                  value={currentUser[opt.key] ?? true}
+                  onValueChange={(v) => togglePrivacy(opt.key, v)}
+                  trackColor={{ false: C.bgElevated, true: C.accent }}
+                  thumbColor="#fff"
+                />
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Stats */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Statystyki</Text>
+          <View style={styles.card}>
+            <SettingRow
+              icon="stats-chart-outline"
+              label="Twoja aktywność"
+              value="Wiadomości, serwery, znajomi"
+              onPress={() => { setSheet('stats'); loadStats(); }}
             />
           </View>
         </View>
@@ -397,13 +566,7 @@ export default function ProfileScreen() {
       </BottomSheet>
 
       {/* Blocked users sheet */}
-      <Modal
-        visible={sheet === 'blocked'}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setSheet('none')}
-      >
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setSheet('none')}>
+      <Sheet visible={sheet === 'blocked'} onClose={() => setSheet('none')}>
           <View style={[styles.sheet, { maxHeight: '75%' }]} onStartShouldSetResponder={() => true}>
             <View style={styles.dragBar} />
             <View style={styles.blockedHeader}>
@@ -442,8 +605,7 @@ export default function ProfileScreen() {
               </ScrollView>
             )}
           </View>
-        </TouchableOpacity>
-      </Modal>
+      </Sheet>
 
       {/* Password sheet */}
       <BottomSheet visible={sheet === 'changePassword'} onClose={() => setSheet('none')} title={t.changePassword}>
@@ -484,6 +646,90 @@ export default function ProfileScreen() {
           <Text style={styles.sheetBtnText}>{saving ? t.saving : t.changePassword}</Text>
         </TouchableOpacity>
       </BottomSheet>
+
+      {/* Custom status sheet */}
+      <BottomSheet visible={sheet === 'customStatus'} onClose={() => setSheet('none')} title="Status niestandardowy">
+        <TextInput
+          style={styles.sheetInput}
+          value={customStatusText}
+          onChangeText={setCustomStatusText}
+          placeholder="Np. Gram w coś fajnego…"
+          placeholderTextColor={C.textMuted}
+          maxLength={128}
+          autoFocus
+        />
+        <TouchableOpacity
+          style={[styles.sheetBtn, saving && styles.sheetBtnDisabled]}
+          onPress={handleSaveCustomStatus}
+          disabled={saving}
+        >
+          <Text style={styles.sheetBtnText}>{saving ? t.saving : t.save}</Text>
+        </TouchableOpacity>
+      </BottomSheet>
+
+      {/* Sessions sheet */}
+      <Sheet visible={sheet === 'sessions'} onClose={() => setSheet('none')}>
+          <View style={[styles.sheet, { maxHeight: '75%' }]} onStartShouldSetResponder={() => true}>
+            <View style={styles.dragBar} />
+            <View style={styles.blockedHeader}>
+              <Text style={styles.sheetTitle}>Aktywne sesje</Text>
+              <TouchableOpacity onPress={loadSessions}>
+                <Ionicons name="refresh-outline" size={20} color={C.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            {sessionsLoading ? (
+              <ActivityIndicator color={C.accent} style={{ marginVertical: 24 }} />
+            ) : sessions.length === 0 ? (
+              <View style={styles.blockedEmpty}>
+                <Ionicons name="laptop-outline" size={36} color={C.textMuted} />
+                <Text style={styles.blockedEmptyText}>Brak aktywnych sesji</Text>
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
+                {sessions.map(s => (
+                  <View key={s.id} style={styles.blockedRow}>
+                    <View style={styles.sessionIcon}>
+                      <Ionicons name="phone-portrait-outline" size={18} color={C.accent} />
+                    </View>
+                    <View style={styles.blockedInfo}>
+                      <Text style={styles.blockedName} numberOfLines={1}>{s.user_agent || 'Nieznane urządzenie'}</Text>
+                      <Text style={styles.blockedDate}>
+                        {s.ip_address ?? '?'} · ostatnio {new Date(s.last_seen_at).toLocaleDateString(language === 'pl' ? 'pl-PL' : 'en-GB', { day: 'numeric', month: 'short' })}
+                      </Text>
+                    </View>
+                    <TouchableOpacity style={styles.revokeBtn} onPress={() => handleRevokeSession(s.id)}>
+                      <Text style={styles.revokeBtnText}>Wyloguj</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+
+            {sessions.length > 0 && (
+              <TouchableOpacity style={[styles.sheetBtn, styles.dangerBtn]} onPress={handleRevokeAllSessions}>
+                <Text style={styles.sheetBtnText}>Wyloguj wszystkie urządzenia</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+      </Sheet>
+
+      {/* Stats sheet */}
+      <BottomSheet visible={sheet === 'stats'} onClose={() => setSheet('none')} title="Twoja aktywność">
+        {statsLoading || !stats ? (
+          <ActivityIndicator color={C.accent} style={{ marginVertical: 24 }} />
+        ) : (
+          <View style={styles.statsGrid}>
+            <StatTile label="Wiadomości" value={stats.messages_sent} />
+            <StatTile label="W tym miesiącu" value={stats.messages_this_month} />
+            <StatTile label="DM-y" value={stats.dms_sent} />
+            <StatTile label="Serwery" value={stats.servers_joined} />
+            <StatTile label="Znajomi" value={stats.friends_count} />
+            <StatTile label="Reakcje dodane" value={stats.reactions_given} />
+            <StatTile label="Reakcje otrzymane" value={stats.reactions_received} />
+          </View>
+        )}
+      </BottomSheet>
     </>
   );
 }
@@ -494,7 +740,7 @@ function SettingRow({ icon, label, value, onPress, border }: {
   return (
     <TouchableOpacity style={[styles.settingRow, border && styles.rowBorder]} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.settingIconWrap}>
-        <Ionicons name={icon as any} size={16} color={C.accent} />
+        <Ionicons name={icon as any} size={19} color={C.textSub} />
       </View>
       <View style={styles.settingContent}>
         <Text style={styles.settingLabel}>{label}</Text>
@@ -502,6 +748,15 @@ function SettingRow({ icon, label, value, onPress, border }: {
       </View>
       <Ionicons name="chevron-forward" size={16} color={C.textMuted} />
     </TouchableOpacity>
+  );
+}
+
+function StatTile({ label, value }: { label: string; value: number }) {
+  return (
+    <View style={styles.statTile}>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
   );
 }
 
@@ -520,15 +775,13 @@ function BottomSheet({ visible, onClose, title, children }: {
   visible: boolean; onClose: () => void; title: string; children: React.ReactNode;
 }) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
-        <View style={styles.sheet} onStartShouldSetResponder={() => true}>
-          <View style={styles.dragBar} />
-          <Text style={styles.sheetTitle}>{title}</Text>
-          {children}
-        </View>
-      </TouchableOpacity>
-    </Modal>
+    <Sheet visible={visible} onClose={onClose}>
+      <View style={styles.sheet} onStartShouldSetResponder={() => true}>
+        <View style={styles.dragBar} />
+        <Text style={styles.sheetTitle}>{title}</Text>
+        {children}
+      </View>
+    </Sheet>
   );
 }
 
@@ -547,6 +800,13 @@ const styles = StyleSheet.create({
     backgroundColor: C.accentMuted,
     borderBottomWidth: 1,
     borderBottomColor: C.borderAccent,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  bannerEditBadge: {
+    position: 'absolute', bottom: 8, right: 8,
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center',
   },
   heroContent: {
     flexDirection: 'row',
@@ -636,21 +896,16 @@ const styles = StyleSheet.create({
   },
 
   // Setting rows
-  settingRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  settingRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13, paddingHorizontal: 14 },
   rowBorder: { borderTopWidth: 1, borderTopColor: C.border },
   settingIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: C.accentMuted,
+    width: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: C.borderAccent,
   },
   settingContent: { flex: 1 },
-  settingLabel: { color: C.text, fontSize: 15 },
-  settingValue: { color: C.textMuted, fontSize: 12, marginTop: 1 },
+  settingLabel: { color: C.text, fontSize: 15, fontWeight: '500' },
+  settingValue: { color: C.textMuted, fontSize: 12.5, marginTop: 2 },
 
   // Info rows
   infoRow: {
@@ -780,4 +1035,32 @@ const styles = StyleSheet.create({
     borderColor: C.success + '44',
   },
   unblockBtnText: { color: C.success, fontSize: 13, fontWeight: '700' },
+
+  // Privacy toggles
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  toggleContent: { flex: 1, gap: 2 },
+  toggleHint: { color: C.textMuted, fontSize: 12 },
+
+  // Sessions
+  sessionIcon: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: C.accentMuted, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: C.borderAccent,
+  },
+  revokeBtn: {
+    backgroundColor: C.dangerMuted, borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderWidth: 1, borderColor: C.danger + '44',
+  },
+  revokeBtnText: { color: C.danger, fontSize: 13, fontWeight: '700' },
+  dangerBtn: { backgroundColor: C.danger, marginTop: 12 },
+
+  // Stats
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  statTile: {
+    width: '31%', backgroundColor: C.bgElevated, borderRadius: 14,
+    borderWidth: 1, borderColor: C.border, padding: 12, alignItems: 'center', gap: 4,
+  },
+  statValue: { color: C.accent, fontSize: 20, fontWeight: '800' },
+  statLabel: { color: C.textMuted, fontSize: 11, textAlign: 'center' },
 });

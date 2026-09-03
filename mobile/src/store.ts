@@ -5,6 +5,18 @@ import type { Lang } from './i18n';
 
 type VoiceUser = { id: string; username: string; avatar_url: string | null };
 
+export type DirectCallStatus = 'outgoing' | 'incoming' | 'connected';
+export interface DirectCall {
+  peerId: string;
+  peerUsername: string;
+  peerAvatar: string | null;
+  status: DirectCallStatus;
+  type: 'voice' | 'video';
+  /** Only set on the callee side (received from the call_invite payload) —
+   * needed for the call_accept emit. The caller never needs it. */
+  conversationId?: string;
+}
+
 interface AppStore {
   token: string | null;
   currentUser: User | null;
@@ -61,6 +73,21 @@ interface AppStore {
   addVoiceUser: (channelId: string, user: VoiceUser) => void;
   removeVoiceUser: (channelId: string, userId: string) => void;
   setVoiceUsers: (channelId: string, users: VoiceUser[]) => void;
+
+  /** Per-user mic-mute state in a voice channel, from `voice_state` events. */
+  voiceUserMuted: Record<string, boolean>;
+  setVoiceUserMuted: (userId: string, muted: boolean) => void;
+
+  /** 1:1 DM call — null when no call is ringing/active. */
+  activeCall: DirectCall | null;
+  setActiveCall: (call: DirectCall | null) => void;
+  updateActiveCallStatus: (status: DirectCallStatus) => void;
+
+  /** True while connected to a server voice channel — lets the tab bar
+   * (rendered in a different file than the voice-channel screen) hide
+   * itself so the voice bar's hangup button is never clipped underneath it. */
+  voiceChannelActive: boolean;
+  setVoiceChannelActive: (active: boolean) => void;
 }
 
 export const useStore = create<AppStore>((set) => ({
@@ -78,7 +105,7 @@ export const useStore = create<AppStore>((set) => ({
       token: null, currentUser: null, isAuthenticated: false,
       servers: [], channels: [], messages: {},
       dmConversations: [], friends: [], friendRequests: [],
-      voiceUsers: {},
+      voiceUsers: {}, activeCall: null, voiceChannelActive: false,
     });
   },
   setCurrentUser: (user) => set({ currentUser: user }),
@@ -176,4 +203,16 @@ export const useStore = create<AppStore>((set) => ({
     })),
   setVoiceUsers: (channelId, users) =>
     set((st) => ({ voiceUsers: { ...st.voiceUsers, [channelId]: users } })),
+
+  voiceUserMuted: {},
+  setVoiceUserMuted: (userId, muted) =>
+    set((st) => ({ voiceUserMuted: { ...st.voiceUserMuted, [userId]: muted } })),
+
+  activeCall: null,
+  setActiveCall: (call) => set({ activeCall: call }),
+  updateActiveCallStatus: (status) =>
+    set((st) => (st.activeCall ? { activeCall: { ...st.activeCall, status } } : {})),
+
+  voiceChannelActive: false,
+  setVoiceChannelActive: (active) => set({ voiceChannelActive: active }),
 }));

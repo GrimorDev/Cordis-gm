@@ -28,7 +28,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: mobile/package-lock.json
 
@@ -42,8 +42,45 @@ jobs:
         working-directory: mobile
         run: npm install --legacy-peer-deps
 
+      # Voice-channel WebRTC needs the same TURN relay the desktop app uses
+      # (coturn, see docker-compose.yml) — same secrets desktop already reads
+      # as VITE_TURN_*, just injected into eas.json's env block instead of a
+      # Vite build-time env var. Not committed to eas.json since these are
+      # real credentials, unlike the already-public API URL in that file.
+      - name: Inject TURN credentials into eas.json
+        working-directory: mobile
+        env:
+          TURN_URL:        ${{ secrets.VITE_TURN_URL }}
+          TURN_USERNAME:   ${{ secrets.VITE_TURN_USERNAME }}
+          TURN_CREDENTIAL: ${{ secrets.VITE_TURN_CREDENTIAL }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          with open('eas.json') as f:
+              c = json.load(f)
+          # eas.json's schema rejects empty-string env values outright, so only
+          # set keys that actually have a value — omitted means voice falls
+          # back to STUN-only, same graceful degradation as the desktop app.
+          turn = {
+              'EXPO_PUBLIC_TURN_URL':        os.environ.get('TURN_URL', ''),
+              'EXPO_PUBLIC_TURN_USERNAME':   os.environ.get('TURN_USERNAME', ''),
+              'EXPO_PUBLIC_TURN_CREDENTIAL': os.environ.get('TURN_CREDENTIAL', ''),
+          }
+          turn = {k: v for k, v in turn.items() if v}
+          for profile in ('preview', 'production'):
+              env = c['build'][profile]['env']
+              for k in ('EXPO_PUBLIC_TURN_URL', 'EXPO_PUBLIC_TURN_USERNAME', 'EXPO_PUBLIC_TURN_CREDENTIAL'):
+                  env.pop(k, None)
+              env.update(turn)
+          with open('eas.json', 'w') as f:
+              json.dump(c, f, indent=2)
+              f.write('\n')
+          PY
+
       - name: Build Android APK (preview)
         working-directory: mobile
-        # --no-wait: triggers the build on Expo's servers and exits immediately.
-        # Build takes ~10-20 min. Check https://expo.dev for status + QR code.
-        run: eas build --platform android --profile preview --non-interactive --no-wait
+        # Blocking (no --no-wait): the actual native build's log streams into
+        # this GH Actions job instead of only living on expo.dev, so a real
+        # compile failure shows up here instead of silently vanishing behind
+        # a "successfully queued" result. Takes ~10-20 min.
+        run: eas build --platform android --profile preview --non-interactive

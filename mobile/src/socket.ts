@@ -29,3 +29,20 @@ export function disconnectSocket() {
   socket?.disconnect();
   socket = null;
 }
+
+// ─── 1:1 DM call signaling (mirrors src/socket.ts on desktop exactly) ──────
+export function sendCallInvite(toUserId: string, type: 'voice' | 'video') {
+  getSocket()?.emit('call_invite', { to_user_id: toUserId, type });
+}
+
+export function acceptCall(conversationId: string, toUserId: string) {
+  getSocket()?.emit('call_accept', { conversation_id: conversationId, to_user_id: toUserId });
+}
+
+export function rejectCall(toUserId: string) {
+  getSocket()?.emit('call_reject', { to_user_id: toUserId });
+}
+
+export function endCall(toUserId: string) {
+  getSocket()?.emit('call_end', { to_user_id: toUserId });
+}

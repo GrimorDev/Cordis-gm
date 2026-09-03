@@ -10,10 +10,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import {
   serversApi, channelsApi,
-  type Server, type ServerMember, type ServerBan, type ChannelFull,
+  type Server, type ServerMember, type ServerBan, type ChannelFull, type ServerRole,
 } from '../../../src/api';
 import { useStore } from '../../../src/store';
 import { UserAvatar } from '../../../src/components/UserAvatar';
+import { Sheet } from '../../../src/components/Sheet';
 import { C } from '../../../src/theme';
 import { STATIC_BASE } from '../../../src/config';
 import { useT, getT } from '../../../src/i18n';
@@ -23,12 +24,34 @@ function resolveUrl(url: string | null | undefined): string | null {
   return url.startsWith('http') ? url : `${STATIC_BASE}${url}`;
 }
 
-type Tab = 'basic' | 'channels' | 'members' | 'bans';
+type Tab = 'basic' | 'channels' | 'roles' | 'members' | 'bans';
 
 const ACCENT_COLORS = [
   '#f59e0b','#8b5cf6','#ec4899','#3b82f6','#10b981',
   '#14b8a6','#06b6d4','#f97316','#ef4444','#6366f1',
 ];
+
+const ROLE_COLORS = ['#5865f2','#eb459e','#ed4245','#faa61a','#57f287','#1abc9c','#3498db','#9b59b6'];
+
+function getPermissions(t: ReturnType<typeof useT>) {
+  return [
+    { id: 'administrator',       label: t.permAdministrator,       desc: t.permAdministratorDesc },
+    { id: 'manage_server',       label: t.permManageServer,        desc: t.permManageServerDesc },
+    { id: 'manage_channels',     label: t.permManageChannels,      desc: t.permManageChannelsDesc },
+    { id: 'manage_roles',        label: t.permManageRoles,         desc: t.permManageRolesDesc },
+    { id: 'kick_members',        label: t.permKickMembers,         desc: t.permKickMembersDesc },
+    { id: 'ban_members',         label: t.permBanMembers,          desc: t.permBanMembersDesc },
+    { id: 'create_invites',      label: t.permCreateInvites,       desc: t.permCreateInvitesDesc },
+    { id: 'send_messages',       label: t.permSendMessages,        desc: t.permSendMessagesDesc },
+    { id: 'attach_files',        label: t.permAttachFiles,         desc: t.permAttachFilesDesc },
+    { id: 'manage_messages',     label: t.permManageMessages,      desc: t.permManageMessagesDesc },
+    { id: 'mention_everyone',    label: t.permMentionEveryone,     desc: t.permMentionEveryoneDesc },
+    { id: 'pin_messages',        label: t.permPinMessages,         desc: t.permPinMessagesDesc },
+    { id: 'read_messages',       label: t.permReadMessages,        desc: t.permReadMessagesDesc },
+    { id: 'manage_nicknames',    label: t.permManageNicknames,     desc: t.permManageNicknamesDesc },
+    { id: 'view_server_activity', label: t.permViewServerActivity, desc: t.permViewServerActivityDesc },
+  ];
+}
 
 function getSlowmodeOptions(t: ReturnType<typeof useT>) {
   return [
@@ -280,12 +303,217 @@ function ChannelEditorModal({
   );
 }
 
+// ── Role editor modal ─────────────────────────────────────────────────────────
+function RoleEditorModal({
+  role,
+  visible,
+  onClose,
+  onSave,
+}: {
+  role: ServerRole | null;
+  visible: boolean;
+  onClose: () => void;
+  onSave: (data: { name: string; color: string; permissions: string[] }) => Promise<void>;
+}) {
+  const t = useT();
+  const PERMISSIONS = getPermissions(t);
+  const [name, setName] = useState(role?.name ?? '');
+  const [color, setColor] = useState(role?.color ?? ROLE_COLORS[0]);
+  const [perms, setPerms] = useState<Set<string>>(new Set(role?.permissions ?? []));
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setName(role?.name ?? '');
+    setColor(role?.color ?? ROLE_COLORS[0]);
+    setPerms(new Set(role?.permissions ?? []));
+  }, [role?.id, visible]);
+
+  const togglePerm = (id: string) => {
+    setPerms(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSave = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      await onSave({ name: name.trim(), color, permissions: Array.from(perms) });
+      onClose();
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={ed.overlay}>
+        <View style={ed.container}>
+          <View style={ed.header}>
+            <TouchableOpacity onPress={onClose} style={ed.closeBtn}>
+              <Ionicons name="close" size={22} color={C.textMuted} />
+            </TouchableOpacity>
+            <Text style={ed.title}>{role ? t.editRole : t.newRole}</Text>
+            <TouchableOpacity
+              style={[ed.saveBtn, (!name.trim() || saving) && { opacity: 0.5 }]}
+              onPress={handleSave}
+              disabled={!name.trim() || saving}
+            >
+              {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={ed.saveBtnText}>{t.save}</Text>}
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={ed.scroll} contentContainerStyle={{ padding: 20, gap: 20, paddingBottom: 48 }}>
+            <View>
+              <Text style={ed.label}>{t.roleName}</Text>
+              <TextInput
+                style={ed.input}
+                value={name}
+                onChangeText={setName}
+                placeholder={t.roleNamePh}
+                placeholderTextColor={C.textMuted}
+                maxLength={50}
+              />
+            </View>
+
+            <View>
+              <Text style={ed.label}>{t.roleColor}</Text>
+              <View style={styles.colorGrid}>
+                {ROLE_COLORS.map(col => (
+                  <TouchableOpacity
+                    key={col}
+                    style={[styles.colorSwatch, { backgroundColor: col }, color === col && styles.colorSwatchActive]}
+                    onPress={() => setColor(col)}
+                    activeOpacity={0.8}
+                  >
+                    {color === col && <Ionicons name="checkmark" size={18} color="#fff" />}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View>
+              <Text style={ed.label}>{t.rolePermissions}</Text>
+              <View style={{ gap: 6 }}>
+                {PERMISSIONS.map(perm => {
+                  const active = perms.has(perm.id);
+                  return (
+                    <TouchableOpacity
+                      key={perm.id}
+                      style={[rs.permRow, active && rs.permRowActive]}
+                      onPress={() => togglePerm(perm.id)}
+                      activeOpacity={0.75}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={rs.permLabel}>{perm.label}</Text>
+                        <Text style={rs.permDesc}>{perm.desc}</Text>
+                      </View>
+                      <Switch
+                        value={active}
+                        onValueChange={() => togglePerm(perm.id)}
+                        trackColor={{ false: C.border, true: color + '99' }}
+                        thumbColor={active ? color : C.textMuted}
+                      />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ── Assign roles modal (per member) ────────────────────────────────────────────
+function AssignRolesModal({
+  member,
+  roles,
+  visible,
+  onClose,
+  onSave,
+}: {
+  member: ServerMember | null;
+  roles: ServerRole[];
+  visible: boolean;
+  onClose: () => void;
+  onSave: (roleIds: string[]) => Promise<void>;
+}) {
+  const t = useT();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setSelected(new Set((member?.roles ?? []).map(r => r.role_id)));
+  }, [member?.id, visible]);
+
+  const toggle = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try { await onSave(Array.from(selected)); onClose(); }
+    finally { setSaving(false); }
+  };
+
+  if (!member) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={ed.overlay}>
+        <View style={ed.container}>
+          <View style={ed.header}>
+            <TouchableOpacity onPress={onClose} style={ed.closeBtn}>
+              <Ionicons name="close" size={22} color={C.textMuted} />
+            </TouchableOpacity>
+            <Text style={ed.title} numberOfLines={1}>{member.username}</Text>
+            <TouchableOpacity style={[ed.saveBtn, saving && { opacity: 0.5 }]} onPress={handleSave} disabled={saving}>
+              {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={ed.saveBtnText}>{t.save}</Text>}
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={ed.scroll} contentContainerStyle={{ padding: 20, gap: 8, paddingBottom: 48 }}>
+            {roles.length === 0 ? (
+              <Text style={styles.emptyText}>{t.noRoles}</Text>
+            ) : roles.map(role => {
+              const active = selected.has(role.id);
+              return (
+                <TouchableOpacity
+                  key={role.id}
+                  style={[rs.permRow, active && rs.permRowActive]}
+                  onPress={() => toggle(role.id)}
+                  activeOpacity={0.75}
+                >
+                  <View style={[rs.roleDot, { backgroundColor: role.color }]} />
+                  <Text style={[rs.permLabel, { flex: 1 }]}>{role.name}</Text>
+                  <Switch
+                    value={active}
+                    onValueChange={() => toggle(role.id)}
+                    trackColor={{ false: C.border, true: role.color + '99' }}
+                    thumbColor={active ? role.color : C.textMuted}
+                  />
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function ServerSettingsScreen() {
   const t = useT();
   const TABS: { key: Tab; label: string; icon: string }[] = [
     { key: 'basic',    label: t.tabGeneral,  icon: 'settings-outline' },
     { key: 'channels', label: t.tabChannels, icon: 'chatbox-outline'  },
+    { key: 'roles',    label: t.tabRoles,    icon: 'shield-outline'   },
     { key: 'members',  label: t.tabMembers,  icon: 'people-outline'   },
     { key: 'bans',     label: t.tabBans,     icon: 'ban-outline'      },
   ];
@@ -314,9 +542,16 @@ export default function ServerSettingsScreen() {
   const [addingChan, setAddingChan] = useState(false);
   const [editingChannel, setEditingChannel] = useState<ChannelFull | null>(null);
 
+  // Roles tab
+  const [roles, setRoles] = useState<ServerRole[]>([]);
+  const [rolesLoading, setRolesLoading] = useState(false);
+  const [editingRole, setEditingRole] = useState<ServerRole | null | 'new'>(null);
+
   // Members tab
   const [members, setMembers] = useState<ServerMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
+  const [assigningRolesFor, setAssigningRolesFor] = useState<ServerMember | null>(null);
+  const [memberOptionsFor, setMemberOptionsFor] = useState<ServerMember | null>(null);
 
   // Bans tab
   const [bans, setBans] = useState<ServerBan[]>([]);
@@ -350,10 +585,72 @@ export default function ServerSettingsScreen() {
     serversApi.getBans(serverId).then(setBans).catch(() => {}).finally(() => setBansLoading(false));
   }, [serverId]);
 
+  const loadRoles = useCallback(() => {
+    if (!serverId || rolesLoading) return;
+    setRolesLoading(true);
+    serversApi.getRoles(serverId).then(setRoles)
+      .catch(() => { const gt = getT(); Alert.alert(gt.error, gt.errLoadRoles); })
+      .finally(() => setRolesLoading(false));
+  }, [serverId]);
+
   useEffect(() => {
     if (activeTab === 'members') loadMembers();
     if (activeTab === 'bans') loadBans();
+    if (activeTab === 'roles') loadRoles();
   }, [activeTab]);
+
+  // The "assign roles" sheet (opened from the Members tab) needs the role
+  // list too — load it eagerly so it's not empty if the user never visited
+  // the Roles tab first.
+  useEffect(() => {
+    if (assigningRolesFor && roles.length === 0) loadRoles();
+  }, [assigningRolesFor]);
+
+  // ── Role actions ─────────────────────────────────────────────────────────
+  const handleSaveRole = async (data: { name: string; color: string; permissions: string[] }) => {
+    if (!serverId) return;
+    try {
+      if (editingRole && editingRole !== 'new') {
+        const updated = await serversApi.updateRole(serverId, editingRole.id, data);
+        setRoles(prev => prev.map(r => r.id === updated.id ? updated : r));
+      } else {
+        const created = await serversApi.createRole(serverId, data);
+        setRoles(prev => [...prev, created]);
+      }
+    } catch (e: any) {
+      const gt = getT(); Alert.alert(gt.error, e.message ?? gt.errSaveRole);
+      throw e;
+    }
+  };
+
+  const handleDeleteRole = (role: ServerRole) => {
+    const gt = getT();
+    if (role.is_default) { Alert.alert(gt.error, gt.cannotDeleteDefaultRole); return; }
+    Alert.alert(gt.deleteRoleTitle(role.name), gt.deleteRoleMsg, [
+      { text: gt.cancel, style: 'cancel' },
+      {
+        text: gt.delete, style: 'destructive', onPress: async () => {
+          try {
+            await serversApi.deleteRole(serverId!, role.id);
+            setRoles(prev => prev.filter(r => r.id !== role.id));
+          } catch (e: any) { const gt2 = getT(); Alert.alert(gt2.error, e.message ?? gt2.errDeleteRole); }
+        },
+      },
+    ]);
+  };
+
+  const handleAssignRoles = async (roleIds: string[]) => {
+    if (!serverId || !assigningRolesFor) return;
+    try {
+      await serversApi.assignMemberRoles(serverId, assigningRolesFor.id, roleIds);
+      setMembers(prev => prev.map(m => m.id === assigningRolesFor.id
+        ? { ...m, roles: roles.filter(r => roleIds.includes(r.id)).map(r => ({ role_id: r.id, name: r.name, color: r.color })) }
+        : m));
+    } catch (e: any) {
+      const gt = getT(); Alert.alert(gt.error, e.message);
+      throw e;
+    }
+  };
 
   // ── Icon upload ──────────────────────────────────────────────────────────
   const handleIconUpload = async () => {
@@ -443,29 +740,26 @@ export default function ServerSettingsScreen() {
   };
 
   // ── Member actions ───────────────────────────────────────────────────────
-  const handleMemberOptions = (member: ServerMember) => {
+  const handleKick = (member: ServerMember) => {
     const gt = getT();
-    Alert.alert(member.username, gt.memberOptions, [
+    Alert.alert(gt.kick, gt.kickTitle(member.username), [
       { text: gt.cancel, style: 'cancel' },
-      {
-        text: gt.kick, onPress: () => Alert.alert(gt.kick, gt.kickTitle(member.username), [
-          { text: gt.cancel, style: 'cancel' },
-          { text: gt.kickBtn, style: 'destructive', onPress: async () => {
-            try { await serversApi.kick(serverId!, member.id); setMembers(prev => prev.filter(m => m.id !== member.id)); }
-            catch (e: any) { const gt2 = getT(); Alert.alert(gt2.error, e.message); }
-          }},
-        ]),
-      },
-      {
-        text: gt.ban, style: 'destructive', onPress: () => Alert.prompt(
-          gt.banTitle, gt.banReasonPh(member.username),
-          async (reason) => {
-            try { await serversApi.ban(serverId!, member.id, reason || undefined); setMembers(prev => prev.filter(m => m.id !== member.id)); }
-            catch (e: any) { const gt2 = getT(); Alert.alert(gt2.error, e.message); }
-          }, 'plain-text',
-        ),
-      },
+      { text: gt.kickBtn, style: 'destructive', onPress: async () => {
+        try { await serversApi.kick(serverId!, member.id); setMembers(prev => prev.filter(m => m.id !== member.id)); }
+        catch (e: any) { const gt2 = getT(); Alert.alert(gt2.error, e.message); }
+      }},
     ]);
+  };
+
+  const handleBan = (member: ServerMember) => {
+    const gt = getT();
+    Alert.prompt(
+      gt.banTitle, gt.banReasonPh(member.username),
+      async (reason) => {
+        try { await serversApi.ban(serverId!, member.id, reason || undefined); setMembers(prev => prev.filter(m => m.id !== member.id)); }
+        catch (e: any) { const gt2 = getT(); Alert.alert(gt2.error, e.message); }
+      }, 'plain-text',
+    );
   };
 
   if (loading) {
@@ -692,6 +986,47 @@ export default function ServerSettingsScreen() {
           </>
         )}
 
+        {/* ─── ROLES ─── */}
+        {activeTab === 'roles' && (
+          <>
+            <TouchableOpacity style={styles.btnPrimary} onPress={() => setEditingRole('new')}>
+              <Ionicons name="add" size={18} color="#fff" />
+              <Text style={styles.btnText}>{t.createRole}</Text>
+            </TouchableOpacity>
+
+            <View style={styles.card}>
+              <Text style={styles.sectionLabel}>{t.rolesCount(roles.length)}</Text>
+              {rolesLoading ? (
+                <ActivityIndicator color={C.accent} style={{ padding: 20 }} />
+              ) : roles.length === 0 ? (
+                <Text style={styles.emptyText}>{t.noRoles}</Text>
+              ) : (
+                roles.map(role => (
+                  <View key={role.id} style={styles.roleRow}>
+                    <View style={[rs.roleDot, { backgroundColor: role.color }]} />
+                    <View style={styles.memberInfo}>
+                      <Text style={styles.memberName}>{role.name}</Text>
+                      {role.is_default && (
+                        <View style={[styles.roleBadge, { backgroundColor: C.bgElevated, alignSelf: 'flex-start' }]}>
+                          <Text style={[styles.roleText, { color: C.textMuted }]}>{t.defaultRoleBadge}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <TouchableOpacity style={styles.chEditBtn} onPress={() => setEditingRole(role)}>
+                      <Ionicons name="pencil-outline" size={16} color={C.accent} />
+                    </TouchableOpacity>
+                    {!role.is_default && (
+                      <TouchableOpacity style={styles.chDeleteBtn} onPress={() => handleDeleteRole(role)}>
+                        <Ionicons name="trash-outline" size={16} color={C.danger} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))
+              )}
+            </View>
+          </>
+        )}
+
         {/* ─── MEMBERS ─── */}
         {activeTab === 'members' && (
           <View style={styles.card}>
@@ -702,15 +1037,22 @@ export default function ServerSettingsScreen() {
               <Text style={styles.emptyText}>{t.noMembers}</Text>
             ) : (
               members.map(m => (
-                <TouchableOpacity key={m.id} style={styles.memberRow} onPress={() => handleMemberOptions(m)} activeOpacity={0.7}>
+                <TouchableOpacity key={m.id} style={styles.memberRow} onPress={() => setMemberOptionsFor(m)} activeOpacity={0.7}>
                   <UserAvatar url={m.avatar_url} username={m.username} size={40} status={m.status} showStatus />
                   <View style={styles.memberInfo}>
                     <Text style={styles.memberName}>{m.username}</Text>
-                    {m.role_name && (
-                      <View style={[styles.roleBadge, { backgroundColor: (m.role_color ?? C.accent) + '22' }]}>
-                        <Text style={[styles.roleText, { color: m.role_color ?? C.accent }]}>{m.role_name}</Text>
-                      </View>
-                    )}
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+                      {m.role_name && (
+                        <View style={[styles.roleBadge, { backgroundColor: (m.role_color ?? C.accent) + '22' }]}>
+                          <Text style={[styles.roleText, { color: m.role_color ?? C.accent }]}>{m.role_name}</Text>
+                        </View>
+                      )}
+                      {(m.roles ?? []).map(r => (
+                        <View key={r.role_id} style={[styles.roleBadge, { backgroundColor: r.color + '22' }]}>
+                          <Text style={[styles.roleText, { color: r.color }]}>{r.name}</Text>
+                        </View>
+                      ))}
+                    </View>
                   </View>
                   <Ionicons name="ellipsis-vertical" size={18} color={C.textMuted} />
                 </TouchableOpacity>
@@ -765,6 +1107,56 @@ export default function ServerSettingsScreen() {
           setLocalChannels(prev => prev.map(c => c.id === updated.id ? updated : c));
         }}
       />
+
+      {/* Role editor */}
+      <RoleEditorModal
+        role={editingRole === 'new' || editingRole === null ? null : editingRole}
+        visible={editingRole !== null}
+        onClose={() => setEditingRole(null)}
+        onSave={handleSaveRole}
+      />
+
+      {/* Assign roles to a member */}
+      <AssignRolesModal
+        member={assigningRolesFor}
+        roles={roles}
+        visible={assigningRolesFor !== null}
+        onClose={() => setAssigningRolesFor(null)}
+        onSave={handleAssignRoles}
+      />
+
+      {/* Member options sheet */}
+      <Sheet visible={memberOptionsFor !== null} onClose={() => setMemberOptionsFor(null)}>
+        <View style={mo.sheet}>
+          <View style={mo.dragBar} />
+          {memberOptionsFor && (
+            <>
+              <Text style={mo.title}>{memberOptionsFor.username}</Text>
+              <TouchableOpacity
+                style={mo.row}
+                onPress={() => { const m = memberOptionsFor; setMemberOptionsFor(null); if (m) setAssigningRolesFor(m); }}
+              >
+                <Ionicons name="shield-outline" size={18} color={C.text} />
+                <Text style={mo.rowLabel}>{t.assignRoles}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={mo.row}
+                onPress={() => { const m = memberOptionsFor; setMemberOptionsFor(null); if (m) handleKick(m); }}
+              >
+                <Ionicons name="exit-outline" size={18} color={C.text} />
+                <Text style={mo.rowLabel}>{t.kick}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={mo.row}
+                onPress={() => { const m = memberOptionsFor; setMemberOptionsFor(null); if (m) handleBan(m); }}
+              >
+                <Ionicons name="ban-outline" size={18} color={C.danger} />
+                <Text style={[mo.rowLabel, { color: C.danger }]}>{t.ban}</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </Sheet>
     </View>
   );
 }
@@ -970,6 +1362,12 @@ const styles = StyleSheet.create({
   },
   roleText: { fontSize: 11, fontWeight: '700' },
 
+  // Roles tab
+  roleRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border,
+  },
+
   // Bans
   banRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
@@ -986,4 +1384,32 @@ const styles = StyleSheet.create({
 
   emptyText: { color: C.textMuted, fontSize: 14, textAlign: 'center', paddingVertical: 16 },
   emptyState: { alignItems: 'center', paddingVertical: 28, gap: 10 },
+});
+
+// ── Member options sheet styles ──────────────────────────────────────────────
+const mo = StyleSheet.create({
+  sheet: {
+    backgroundColor: C.bgSurface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    borderWidth: 1, borderColor: C.border, padding: 20, paddingBottom: 36, gap: 2,
+  },
+  dragBar: {
+    width: 36, height: 4, borderRadius: 2, backgroundColor: C.border,
+    alignSelf: 'center', marginBottom: 14,
+  },
+  title: { color: C.textMuted, fontSize: 13, fontWeight: '700', marginBottom: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13, paddingHorizontal: 4, borderRadius: 12 },
+  rowLabel: { color: C.text, fontSize: 15.5, fontWeight: '500' },
+});
+
+// ── Roles/permissions row styles ────────────────────────────────────────────────
+const rs = StyleSheet.create({
+  permRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: C.bgCard, borderRadius: 12, padding: 12,
+    borderWidth: 1, borderColor: C.border,
+  },
+  permRowActive: { borderColor: C.borderAccent, backgroundColor: C.accentMuted },
+  permLabel: { color: C.text, fontSize: 14, fontWeight: '600' },
+  permDesc: { color: C.textMuted, fontSize: 11.5, marginTop: 2, lineHeight: 15 },
+  roleDot: { width: 14, height: 14, borderRadius: 7 },
 });

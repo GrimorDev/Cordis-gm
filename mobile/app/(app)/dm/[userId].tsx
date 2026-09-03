@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, FlatList, StyleSheet, Text, TouchableOpacity,
-  ActivityIndicator, Alert, Modal, Image,
+  ActivityIndicator, Alert, Modal, Image, TextInput,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,7 +12,7 @@ import { MessageInput } from '../../../src/components/MessageInput';
 import { C, STATUS_COLOR } from '../../../src/theme';
 import { dmsApi, friendsApi, API_URL } from '../../../src/api';
 import { useStore } from '../../../src/store';
-import { getSocket } from '../../../src/socket';
+import { getSocket, sendCallInvite } from '../../../src/socket';
 import { storage } from '../../../src/storage';
 import { STATIC_BASE } from '../../../src/config';
 import { format, isToday, isYesterday } from 'date-fns';
@@ -31,6 +31,28 @@ function resolveAttachment(url: string | undefined | null): string | null {
   if (!url) return null;
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
   return `${STATIC_BASE}${url}`;
+}
+
+/** Renders `text` with every case-insensitive occurrence of `query` highlighted. */
+function HighlightedText({ text, query }: { text: string; query: string }) {
+  if (!query) return <>{text}</>;
+  const lower = text.toLowerCase();
+  const q = query.toLowerCase();
+  const parts: React.ReactNode[] = [];
+  let i = 0;
+  let idx = lower.indexOf(q);
+  while (idx !== -1) {
+    if (idx > i) parts.push(text.slice(i, idx));
+    parts.push(
+      <Text key={idx} style={{ backgroundColor: C.accent + '55', color: C.text, fontWeight: '800' }}>
+        {text.slice(idx, idx + q.length)}
+      </Text>,
+    );
+    i = idx + q.length;
+    idx = lower.indexOf(q, i);
+  }
+  if (i < text.length) parts.push(text.slice(i));
+  return <>{parts}</>;
 }
 
 function fmtTime(dateStr: string, lang: 'pl' | 'en' = 'en', yesterday = 'Yesterday') {
@@ -87,7 +109,7 @@ export default function DmChatScreen() {
   const insets = useSafeAreaInsets();
   const {
     dmMessages, setDmMessages, addDmMessage, updateDmMessage, removeDmMessage,
-    currentUser, userStatuses, language,
+    currentUser, userStatuses, language, setActiveCall,
   } = useStore();
   const msgs = dmMessages[userId] ?? [];
 
@@ -98,6 +120,8 @@ export default function DmChatScreen() {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [isBlocked, setIsBlocked] = useState(false);   // I blocked them
   const [blockedByThem, setBlockedByThem] = useState(false); // they blocked me (403 on send)
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const remoteTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -217,28 +241,32 @@ export default function DmChatScreen() {
     }
   };
 
-  const handleCallPress = () => {
+  const startCall = (type: 'voice' | 'video') => {
+    sendCallInvite(userId, type);
+    setActiveCall({
+      peerId: userId,
+      peerUsername: username ?? '?',
+      peerAvatar: avatar ?? null,
+      status: 'outgoing',
+      type,
+    });
+  };
+
+  // Video calling needs an actual video UI (camera preview, RTCView) —
+  // audio-only voiceMesh doesn't cover that yet, so this stays a stub.
+  const handleVideoCallPress = () => {
     const gt = getT();
-    Alert.alert(
-      gt.callTitle,
-      gt.callSelectType,
-      [
-        {
-          text: gt.voiceCallLabel,
-          onPress: () => Alert.alert(gt.comingSoon, gt.voiceCallComingSoon),
-        },
-        {
-          text: gt.videoCallLabel,
-          onPress: () => Alert.alert(gt.comingSoon, gt.videoCallComingSoon),
-        },
-        { text: gt.cancel, style: 'cancel' },
-      ],
-    );
+    Alert.alert(gt.comingSoon, gt.videoCallComingSoon);
   };
 
   const status = userStatuses[userId] ?? 'offline';
 
   const replyToAsMessage: Message | null = replyTo ? dmToMsg(replyTo) : null;
+
+  const query = searchQuery.trim().toLowerCase();
+  const visibleMsgs = query
+    ? msgs.filter(m => m.content?.toLowerCase().includes(query))
+    : msgs;
 
   return (
     <View style={[styles.flex, { paddingTop: insets.top }]}>
@@ -262,13 +290,69 @@ export default function DmChatScreen() {
             </Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.headerBtn} onPress={handleCallPress}>
-          <Ionicons name="call-outline" size={20} color={C.textSub} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => setSearchOpen(o => !o)}>
+            <Ionicons name="search-outline" size={19} color={searchOpen ? C.accent : C.textSub} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => startCall('voice')}>
+            <Ionicons name="call-outline" size={19} color={C.textSub} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerBtn} onPress={handleVideoCallPress}>
+            <Ionicons name="videocam-outline" size={19} color={C.textSub} />
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {searchOpen && (
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={16} color={C.textMuted} />
+          <TextInput
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Szukaj w rozmowie…"
+            placeholderTextColor={C.textMuted}
+            autoFocus
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={16} color={C.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       {loading ? (
         <View style={styles.center}><ActivityIndicator color={C.accent} size="large" /></View>
+      ) : query ? (
+        // Search results — a separate, non-inverted list. Filtering the live
+        // inverted chat FlatList directly made it jump wildly on every
+        // keystroke (RN inverted lists don't handle rapidly changing data
+        // gracefully), so search gets its own simple result list instead.
+        <FlatList
+          data={visibleMsgs}
+          keyExtractor={(m) => m.id}
+          contentContainerStyle={{ padding: 12, gap: 8 }}
+          ListEmptyComponent={
+            <View style={styles.center}>
+              <Ionicons name="search-outline" size={32} color={C.textMuted} />
+              <Text style={styles.searchEmptyText}>Brak wyników</Text>
+            </View>
+          }
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.searchResultRow}
+              onPress={() => { setSearchOpen(false); setSearchQuery(''); }}
+            >
+              <Text style={styles.searchResultSender}>
+                {item.sender_id === currentUser?.id ? 'Ty' : username} <Text style={styles.searchResultTime}>{fmtTime(item.created_at, language)}</Text>
+              </Text>
+              <Text style={styles.searchResultText} numberOfLines={2}>
+                <HighlightedText text={item.content} query={query} />
+              </Text>
+            </TouchableOpacity>
+          )}
+        />
       ) : (
         <FlatList
           data={[...msgs].reverse()}
@@ -421,10 +505,25 @@ const styles = StyleSheet.create({
   },
   back: { padding: 4 },
   headerInfo: { flex: 1 },
+  headerActions: { flexDirection: 'row', gap: 6 },
   headerBtn: {
     padding: 8, borderRadius: 11,
     backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border,
   },
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 14, paddingVertical: 9,
+    backgroundColor: C.bgCard, borderBottomWidth: 1, borderBottomColor: C.border,
+  },
+  searchInput: { flex: 1, color: C.text, fontSize: 14, padding: 0 },
+  searchEmptyText: { color: C.textMuted, fontSize: 14, marginTop: 8 },
+  searchResultRow: {
+    backgroundColor: C.bgCard, borderRadius: 12, borderWidth: 1, borderColor: C.border,
+    padding: 12, gap: 4,
+  },
+  searchResultSender: { color: C.textSub, fontSize: 12, fontWeight: '700' },
+  searchResultTime: { color: C.textMuted, fontWeight: '400' },
+  searchResultText: { color: C.text, fontSize: 14, lineHeight: 19 },
   title: { color: C.text, fontSize: 16, fontWeight: '700' },
   headerStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   headerStatusDot: { width: 6, height: 6, borderRadius: 3 },

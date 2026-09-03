@@ -40,11 +40,11 @@ export const C = {
   warning:      '#f59e0b',
   warningMuted: 'rgba(245,158,11,0.15)',
 
-  // ── Status ───────────────────────────────────────────────────────────────────
-  online:       '#22c55e',
+  // ── Status (matches desktop's emerald/amber/rose/zinc palette) ─────────────────
+  online:       '#10b981',
   idle:         '#f59e0b',
-  dnd:          '#ef4444',
-  offline:      '#4b5563',
+  dnd:          '#f43f5e',
+  offline:      '#71717a',
 
   // ── Shadows ──────────────────────────────────────────────────────────────────
   shadowDark:   '#000000',

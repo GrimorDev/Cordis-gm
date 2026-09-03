@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  RefreshControl, TextInput, Modal, ActivityIndicator, Alert,
+  RefreshControl, TextInput, ActivityIndicator, Alert,
   ScrollView, Share, Animated, LayoutAnimation, Platform, UIManager,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -13,6 +13,10 @@ import { C } from '../../src/theme';
 import { serversApi, channelsApi } from '../../src/api';
 import { useStore } from '../../src/store';
 import { getSocket } from '../../src/socket';
+import { voiceMesh } from '../../src/webrtc';
+import { showOngoingCallNotification, hideOngoingCallNotification } from '../../src/callNotification';
+import { VoiceChannelCallView } from '../../src/components/VoiceChannelCallView';
+import { Sheet } from '../../src/components/Sheet';
 import { useT, getT } from '../../src/i18n';
 import type { Server, Channel } from '../../src/api';
 
@@ -42,6 +46,7 @@ export default function ServersScreen() {
   const {
     servers, setServers, activeServer, setActiveServer,
     channels, setChannels, addServer, currentUser, voiceUsers,
+    setVoiceChannelActive,
   } = useStore();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -50,6 +55,10 @@ export default function ServersScreen() {
   const [showChannels, setShowChannels] = useState(false);
   const [collapsedCats, setCollapsedCats] = useState<Set<string | null>>(new Set());
   const [activeVoice, setActiveVoice] = useState<{ channelId: string; channelName: string } | null>(null);
+  const [voiceMuted, setVoiceMuted] = useState(false);
+  const [voiceDeafened, setVoiceDeafened] = useState(false);
+  const [voiceConnecting, setVoiceConnecting] = useState(false);
+  const [voiceExpanded, setVoiceExpanded] = useState(true);
 
   // Modals
   const [modal, setModal] = useState<'none' | 'create' | 'join' | 'editChannel'>('none');
@@ -164,17 +173,61 @@ export default function ServersScreen() {
 
   const handleJoinVoice = (ch: Channel) => {
     if (activeVoice?.channelId === ch.id) return;
-    if (activeVoice) {
-      getSocket()?.emit('voice_leave', { channel_id: activeVoice.channelId });
-    }
-    getSocket()?.emit('voice_join', { channel_id: ch.id });
-    setActiveVoice({ channelId: ch.id, channelName: ch.name });
+    (async () => {
+      if (activeVoice) {
+        getSocket()?.emit('voice_leave', activeVoice.channelId);
+        await voiceMesh.leave();
+        await hideOngoingCallNotification();
+      }
+      setVoiceConnecting(true);
+      try {
+        // Mic permission + local stream must be ready before we announce
+        // ourselves — voice_existing_users can arrive within milliseconds
+        // of voice_join and we need local tracks ready to answer/offer.
+        await voiceMesh.join(ch.id);
+        getSocket()?.emit('voice_join', ch.id);
+        setActiveVoice({ channelId: ch.id, channelName: ch.name });
+        setVoiceChannelActive(true);
+        setVoiceExpanded(true);
+        setVoiceMuted(false);
+        setVoiceDeafened(false);
+        await showOngoingCallNotification(ch.name, () => handleLeaveVoice());
+      } catch (e: any) {
+        const gt = getT();
+        Alert.alert(gt.error, e?.message ?? 'Nie udało się uzyskać dostępu do mikrofonu');
+      } finally {
+        setVoiceConnecting(false);
+      }
+    })();
   };
 
   const handleLeaveVoice = () => {
     if (activeVoice) {
-      getSocket()?.emit('voice_leave', { channel_id: activeVoice.channelId });
+      getSocket()?.emit('voice_leave', activeVoice.channelId);
+      voiceMesh.leave();
+      hideOngoingCallNotification();
       setActiveVoice(null);
+      setVoiceChannelActive(false);
+      setVoiceMuted(false);
+      setVoiceDeafened(false);
+    }
+  };
+
+  const handleToggleMute = () => {
+    const next = !voiceMuted;
+    setVoiceMuted(next);
+    voiceMesh.setMuted(next);
+    if (activeVoice) {
+      getSocket()?.emit('voice_state', { muted: next, deafened: voiceDeafened, channel_id: activeVoice.channelId });
+    }
+  };
+
+  const handleToggleDeafen = () => {
+    const next = !voiceDeafened;
+    setVoiceDeafened(next);
+    voiceMesh.setDeafened(next);
+    if (activeVoice) {
+      getSocket()?.emit('voice_state', { muted: voiceMuted, deafened: next, channel_id: activeVoice.channelId });
     }
   };
 
@@ -404,22 +457,61 @@ export default function ServersScreen() {
           </ScrollView>
         )}
 
-        {/* Active voice channel bar */}
-        {activeVoice && (
-          <View style={styles.voiceBar}>
+        {/* Active voice channel bar — minimized view; tap to expand full-screen */}
+        {activeVoice && !voiceExpanded && (
+          <TouchableOpacity
+            style={[styles.voiceBar, { marginBottom: 10 }]}
+            activeOpacity={0.85}
+            onPress={() => setVoiceExpanded(true)}
+          >
             <View style={styles.voiceBarLeft}>
               <View style={styles.voicePulse}>
-                <Ionicons name="mic" size={14} color="#22c55e" />
+                <Ionicons name={voiceConnecting ? 'sync' : 'mic'} size={14} color="#22c55e" />
               </View>
-              <View>
-                <Text style={styles.voiceBarTitle}>{t.voiceConnectedTitle}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.voiceBarTitle}>
+                  {voiceConnecting ? 'Łączenie…' : t.voiceConnectedTitle}
+                </Text>
                 <Text style={styles.voiceBarChannel}>#{activeVoice.channelName}</Text>
               </View>
+              {/* Who else is here — the whole point of joining a voice channel
+                  is knowing who you're actually talking to. */}
+              {(voiceUsers[activeVoice.channelId] ?? []).length > 0 && (
+                <View style={styles.voiceBarAvatars}>
+                  {(voiceUsers[activeVoice.channelId] ?? []).slice(0, 4).map((u, i) => (
+                    <View key={u.id} style={[styles.voiceBarAvatarWrap, { marginLeft: i === 0 ? 0 : -8, zIndex: 10 - i }]}>
+                      <UserAvatar url={u.avatar_url} username={u.username} size={24} />
+                    </View>
+                  ))}
+                  {(voiceUsers[activeVoice.channelId] ?? []).length > 4 && (
+                    <Text style={styles.voiceBarOverflow}>+{(voiceUsers[activeVoice.channelId] ?? []).length - 4}</Text>
+                  )}
+                </View>
+              )}
             </View>
-            <TouchableOpacity style={styles.voiceLeaveBtn} onPress={handleLeaveVoice}>
-              <Ionicons name="call" size={16} color="#fff" />
-            </TouchableOpacity>
-          </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity style={styles.voiceMuteBtn} onPress={handleToggleMute}>
+                <Ionicons name={voiceMuted ? 'mic-off' : 'mic'} size={16} color={voiceMuted ? '#ef4444' : '#22c55e'} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.voiceLeaveBtn} onPress={handleLeaveVoice}>
+                <Ionicons name="call" size={16} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {activeVoice && (
+          <VoiceChannelCallView
+            visible={voiceExpanded}
+            channelId={activeVoice.channelId}
+            channelName={activeVoice.channelName}
+            onMinimize={() => setVoiceExpanded(false)}
+            onLeave={handleLeaveVoice}
+            onToggleMute={handleToggleMute}
+            muted={voiceMuted}
+            onToggleDeafen={handleToggleDeafen}
+            deafened={voiceDeafened}
+          />
         )}
 
         <ServerActionSheet
@@ -450,8 +542,7 @@ export default function ServersScreen() {
         />
 
         {/* Edit channel modal */}
-        <Modal visible={modal === 'editChannel'} transparent animationType="slide" onRequestClose={() => setModal('none')}>
-          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setModal('none')}>
+        <Sheet visible={modal === 'editChannel'} onClose={() => setModal('none')}>
             <View style={styles.modalCard} onStartShouldSetResponder={() => true}>
               <View style={styles.modalDragBar} />
               <Text style={styles.modalTitle}>{t.editChannelTitle}</Text>
@@ -477,8 +568,7 @@ export default function ServersScreen() {
                 }
               </TouchableOpacity>
             </View>
-          </TouchableOpacity>
-        </Modal>
+        </Sheet>
       </View>
     );
   }
@@ -516,10 +606,7 @@ export default function ServersScreen() {
             onLongPress={() => setActionServer(item)}
             activeOpacity={0.7}
           >
-            {/* Left accent bar */}
-            <View style={styles.serverCardAccent} />
-
-            <UserAvatar url={resolveUrl(item.icon_url)} username={item.name} size={54} />
+            <UserAvatar url={resolveUrl(item.icon_url)} username={item.name} size={52} />
 
             <View style={styles.serverInfo}>
               <Text style={styles.serverName} numberOfLines={1}>{item.name}</Text>
@@ -534,9 +621,7 @@ export default function ServersScreen() {
               )}
             </View>
 
-            <View style={styles.serverChevron}>
-              <Ionicons name="chevron-forward" size={15} color={C.accentLight} />
-            </View>
+            <Ionicons name="chevron-forward" size={18} color={C.textMuted} />
           </TouchableOpacity>
         )}
         ListEmptyComponent={
@@ -575,8 +660,7 @@ export default function ServersScreen() {
       />
 
       {/* Create server modal */}
-      <Modal visible={modal === 'create'} transparent animationType="slide" onRequestClose={() => setModal('none')}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setModal('none')}>
+      <Sheet visible={modal === 'create'} onClose={() => setModal('none')}>
           <View style={styles.modalCard}>
             <View style={styles.modalDragBar} />
             <Text style={styles.modalTitle}>{t.createServer}</Text>
@@ -611,12 +695,10 @@ export default function ServersScreen() {
               }
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      </Modal>
+      </Sheet>
 
       {/* Join server modal */}
-      <Modal visible={modal === 'join'} transparent animationType="slide" onRequestClose={() => setModal('none')}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setModal('none')}>
+      <Sheet visible={modal === 'join'} onClose={() => setModal('none')}>
           <View style={styles.modalCard}>
             <View style={styles.modalDragBar} />
             <Text style={styles.modalTitle}>{t.joinServer}</Text>
@@ -642,8 +724,7 @@ export default function ServersScreen() {
               }
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      </Modal>
+      </Sheet>
     </View>
   );
 }
@@ -658,8 +739,7 @@ function ServerActionSheet({ server, onClose, onLeave, onInvite }: {
   const t = useT();
   if (!server) return null;
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
+    <Sheet visible onClose={onClose}>
         <View style={styles.actionSheet}>
           <View style={styles.modalDragBar} />
           <Text style={styles.actionSheetServerTitle}>{server.name}</Text>
@@ -667,8 +747,7 @@ function ServerActionSheet({ server, onClose, onLeave, onInvite }: {
           <View style={styles.actionDivider} />
           <ActionRow icon="log-out-outline" label={t.leaveServer} color={C.danger} onPress={() => { onClose(); onLeave(server); }} />
         </View>
-      </TouchableOpacity>
-    </Modal>
+    </Sheet>
   );
 }
 
@@ -690,8 +769,7 @@ function ChannelActionSheet({ channel, isOwner, onClose, onOpen, onEdit, onDelet
     : t.channelTypeText;
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
+    <Sheet visible onClose={onClose}>
         <View style={styles.actionSheet} onStartShouldSetResponder={() => true}>
           <View style={styles.modalDragBar} />
           {/* Channel header in sheet */}
@@ -721,8 +799,7 @@ function ChannelActionSheet({ channel, isOwner, onClose, onOpen, onEdit, onDelet
             </>
           )}
         </View>
-      </TouchableOpacity>
-    </Modal>
+    </Sheet>
   );
 }
 
@@ -763,28 +840,17 @@ const styles = StyleSheet.create({
   // Server card
   serverCard: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
-    backgroundColor: C.bgCard, borderRadius: 20, padding: 14,
+    backgroundColor: C.bgCard, borderRadius: 16, padding: 14,
     borderWidth: 1, borderColor: C.border,
-    shadowColor: C.shadowAccent, shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 3 },
-    elevation: 6,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  serverCardAccent: {
-    position: 'absolute', left: 0, top: 0, bottom: 0, width: 3,
-    backgroundColor: C.accent, borderTopLeftRadius: 20, borderBottomLeftRadius: 20,
+    shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
   serverInfo: { flex: 1 },
-  serverName: { color: C.text, fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
+  serverName: { color: C.text, fontSize: 16, fontWeight: '700', letterSpacing: -0.1 },
   serverDesc: { color: C.textMuted, fontSize: 12, marginTop: 3, lineHeight: 16 },
   memberCountRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5 },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
   memberCount: { color: C.textSub, fontSize: 12, fontWeight: '500' },
-  serverChevron: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: C.accentMuted, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: C.borderAccent,
-  },
 
   // Empty state
   empty: { alignItems: 'center', paddingVertical: 60, gap: 12 },
@@ -865,16 +931,17 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#22c55e55',
   },
   voiceConnectedText: { color: '#22c55e', fontSize: 11, fontWeight: '700' },
-  voicePresenceRow: { flexDirection: 'row', flexWrap: 'wrap', paddingLeft: 52, paddingBottom: 4, gap: 8 },
-  voicePresenceUser: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  voicePresenceUsername: { color: C.textMuted, fontSize: 11, maxWidth: 72 },
+  voicePresenceRow: { flexDirection: 'column', paddingLeft: 52, paddingBottom: 4, gap: 6 },
+  voicePresenceUser: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  voicePresenceUsername: { color: C.textMuted, fontSize: 12, maxWidth: 200 },
   // Voice bar at bottom of channel list
   voiceBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: '#0f1a12', borderTopWidth: 1, borderTopColor: '#22c55e44',
     paddingHorizontal: 16, paddingVertical: 10,
+    width: '100%', alignSelf: 'stretch',
   },
-  voiceBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  voiceBarLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0 },
   voicePulse: {
     width: 32, height: 32, borderRadius: 16,
     backgroundColor: '#22c55e22', alignItems: 'center', justifyContent: 'center',
@@ -882,6 +949,14 @@ const styles = StyleSheet.create({
   },
   voiceBarTitle: { color: '#22c55e', fontSize: 12, fontWeight: '700' },
   voiceBarChannel: { color: C.textMuted, fontSize: 11 },
+  voiceBarAvatars: { flexDirection: 'row', alignItems: 'center', marginRight: 4 },
+  voiceBarAvatarWrap: { borderRadius: 14, borderWidth: 2, borderColor: '#0f1a12' },
+  voiceBarOverflow: { color: C.textMuted, fontSize: 10, fontWeight: '700', marginLeft: 4 },
+  voiceMuteBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: C.border,
+  },
   voiceLeaveBtn: {
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: C.danger, alignItems: 'center', justifyContent: 'center',

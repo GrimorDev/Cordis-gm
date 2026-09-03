@@ -22,15 +22,53 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+export interface Badge {
+  id: string;
+  name: string;
+  label: string;
+  color: string | null;
+  icon: string | null;
+  icon_url: string | null;
+}
+
 export interface User {
   id: string;
   username: string;
   avatar_url: string | null;
+  banner_url?: string | null;
+  banner_color?: string | null;
   status: string;
   is_admin: boolean;
-  about_me?: string | null;
+  bio?: string | null;
+  custom_status?: string | null;
+  badges?: Badge[];
+  mutual_friends_count?: number;
   preferred_status?: string | null;
   created_at: string;
+  privacy_status_visible?: boolean;
+  privacy_typing_visible?: boolean;
+  privacy_read_receipts?: boolean;
+  privacy_friend_requests?: boolean;
+  privacy_dm_from_strangers?: boolean;
+}
+
+export interface UserStats {
+  messages_sent: number;
+  messages_this_month: number;
+  dms_sent: number;
+  servers_joined: number;
+  friends_count: number;
+  reactions_given: number;
+  reactions_received: number;
+  account_created: string;
+}
+
+export interface Session {
+  id: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
+  last_seen_at: string;
 }
 
 export interface Server {
@@ -67,6 +105,7 @@ export interface Message {
   reply_to_username?: string | null;
   reactions?: { emoji: string; count: number; reacted: boolean }[];
   attachment_url?: string | null;
+  pinned?: boolean;
 }
 
 export interface DmConversation {
@@ -132,7 +171,19 @@ export const authApi = {
     req<{ token: string; user: User }>('POST', '/auth/register', { username, password }),
   me:       () => req<User>('GET', '/auth/me'),
   logout:   () => req<{ ok: boolean }>('POST', '/auth/logout'),
+  sessions: () => req<Session[]>('GET', '/auth/sessions'),
+  revokeSession: (id: string) => req<{ ok: boolean }>('DELETE', `/auth/sessions/${id}`),
+  revokeAllSessions: () => req<{ ok: boolean }>('DELETE', '/auth/sessions'),
 };
+
+export interface ServerRole {
+  id: string;
+  name: string;
+  color: string;
+  permissions: string[];
+  is_default?: boolean;
+  position?: number;
+}
 
 export interface ServerMember {
   id: string;
@@ -141,6 +192,7 @@ export interface ServerMember {
   status: string;
   role_name: string;
   role_color?: string | null;
+  roles?: { role_id: string; name: string; color: string }[];
 }
 
 export interface ServerBan {
@@ -153,8 +205,12 @@ export interface ServerBan {
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 export const usersApi = {
-  updateMe:      (data: Partial<{ username: string; about_me: string; preferred_status: string; bio: string }>) =>
-    req<User>('PUT', '/users/me', data),
+  updateMe:      (data: Partial<{
+    username: string; preferred_status: string; bio: string; custom_status: string;
+    privacy_status_visible: boolean; privacy_typing_visible: boolean;
+    privacy_read_receipts: boolean; privacy_friend_requests: boolean;
+    privacy_dm_from_strangers: boolean;
+  }>) => req<User>('PUT', '/users/me', data),
   updateStatus:  (status: string) =>
     req<{ ok: boolean }>('PUT', '/users/me/status', { status }),
   changePassword:(current: string, newPass: string) =>
@@ -162,8 +218,12 @@ export const usersApi = {
   get:           (id: string) => req<User>('GET', `/users/${id}`),
   updateAvatar:  async (formData: FormData): Promise<User> => {
     const token = await getToken();
+    // Backend route is POST (router.post('/me/avatar', ...) in
+    // backend/src/routes/users.ts) — this was calling PUT, a method that
+    // route was never registered for, so every mobile avatar upload was
+    // silently 404ing.
     const res = await fetch(`${API_URL}/users/me/avatar`, {
-      method: 'PUT',
+      method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: formData,
     });
@@ -171,6 +231,18 @@ export const usersApi = {
     if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
     return data as User;
   },
+  updateBanner:  async (formData: FormData): Promise<{ banner_url: string }> => {
+    const token = await getToken();
+    const res = await fetch(`${API_URL}/users/me/banner`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+    return data as { banner_url: string };
+  },
+  getStats: (id?: string) => req<UserStats>('GET', id ? `/users/${id}/stats` : '/users/me/stats'),
 };
 
 // ── Servers ───────────────────────────────────────────────────────────────────
@@ -192,8 +264,15 @@ export const serversApi = {
   getBans:     (serverId: string) => req<ServerBan[]>('GET', `/servers/${serverId}/bans`),
   unban:       (serverId: string, userId: string) =>
     req<{ ok: boolean }>('DELETE', `/servers/${serverId}/bans/${userId}`),
-  getRoles:    (serverId: string) =>
-    req<{ id: string; name: string; color: string; permissions: number }[]>('GET', `/servers/${serverId}/roles`),
+  getRoles:    (serverId: string) => req<ServerRole[]>('GET', `/servers/${serverId}/roles`),
+  createRole:  (serverId: string, data: { name: string; color?: string; permissions?: string[] }) =>
+    req<ServerRole>('POST', `/servers/${serverId}/roles`, data),
+  updateRole:  (serverId: string, roleId: string, data: { name?: string; color?: string; permissions?: string[] }) =>
+    req<ServerRole>('PUT', `/servers/${serverId}/roles/${roleId}`, data),
+  deleteRole:  (serverId: string, roleId: string) =>
+    req<{ ok: boolean }>('DELETE', `/servers/${serverId}/roles/${roleId}`),
+  assignMemberRoles: (serverId: string, userId: string, roleIds: string[]) =>
+    req<{ message: string }>('PUT', `/servers/${serverId}/members/${userId}/roles`, { role_ids: roleIds }),
   uploadImage: async (formData: FormData, folder: 'servers' | 'banners'): Promise<{ url: string }> => {
     const token = await getToken();
     const res = await fetch(`${API_URL}/upload/image?folder=${folder}`, {
@@ -276,6 +355,10 @@ export const messagesApi = {
   delete: (id: string) => req<{ ok: boolean }>('DELETE', `/messages/${id}`),
   react:  (id: string, emoji: string) =>
     req<{ ok: boolean }>('POST', `/messages/${id}/react`, { emoji }),
+  togglePin: (id: string, pinned: boolean) =>
+    req<{ message: string }>('PUT', `/messages/${id}/pin`, { pinned }),
+  getPinned: (channelId: string) =>
+    req<Message[]>('GET', `/messages/channel/${channelId}/pinned`),
 };
 
 // ── DMs ───────────────────────────────────────────────────────────────────────
