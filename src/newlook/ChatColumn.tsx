@@ -357,29 +357,6 @@ export function ChatColumn({
           borderRadius: replyTo ? '0 0 14px 14px' : 14,
         }}>
           <Paperclip size={16} style={{ color: '#7a7a92', cursor: 'default', flexShrink: 0 }} />
-          {[
-            { label: 'B', style: { fontWeight: 800 }, wrap: ['**', '**'] as [string, string] },
-            { label: 'i', style: { fontStyle: 'italic' as const }, wrap: ['*', '*'] as [string, string] },
-            { label: '</>', style: { fontSize: 10 }, wrap: ['`', '`'] as [string, string] },
-          ].map(f => (
-            <button
-              key={f.label}
-              type="button"
-              title="Formatuj zaznaczenie"
-              onClick={() => {
-                const el = inputRef.current;
-                const [prefix, suffix] = f.wrap;
-                const start = el?.selectionStart ?? msgInput.length;
-                const end = el?.selectionEnd ?? msgInput.length;
-                const selected = msgInput.slice(start, end) || 'tekst';
-                setMsgInput(msgInput.slice(0, start) + prefix + selected + suffix + msgInput.slice(end));
-                setTimeout(() => { el?.focus(); el?.setSelectionRange(start + prefix.length, start + prefix.length + selected.length); }, 0);
-              }}
-              style={{ width: 24, height: 24, borderRadius: 6, background: 'none', border: 'none', color: '#9797b0', cursor: 'pointer', flexShrink: 0, ...f.style }}
-            >
-              {f.label}
-            </button>
-          ))}
           <input
             ref={inputRef}
             value={msgInput}
@@ -387,6 +364,31 @@ export function ChatColumn({
             placeholder={isDm ? `Napisz do @${title}` : `Napisz na #${title}`}
             style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: '#e4e4ec', fontSize: 14 }}
           />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2, borderLeft: '1px solid rgba(255,255,255,0.08)', paddingLeft: 8, marginRight: 2 }}>
+            {[
+              { label: 'B', style: { fontWeight: 800, fontSize: 12 }, wrap: ['**', '**'] as [string, string] },
+              { label: 'i', style: { fontStyle: 'italic' as const, fontSize: 13 }, wrap: ['*', '*'] as [string, string] },
+              { label: '</>', style: { fontSize: 9, fontWeight: 700 }, wrap: ['`', '`'] as [string, string] },
+            ].map(f => (
+              <button
+                key={f.label}
+                type="button"
+                title="Formatuj zaznaczenie"
+                onClick={() => {
+                  const el = inputRef.current;
+                  const [prefix, suffix] = f.wrap;
+                  const start = el?.selectionStart ?? msgInput.length;
+                  const end = el?.selectionEnd ?? msgInput.length;
+                  const selected = msgInput.slice(start, end) || 'tekst';
+                  setMsgInput(msgInput.slice(0, start) + prefix + selected + suffix + msgInput.slice(end));
+                  setTimeout(() => { el?.focus(); el?.setSelectionRange(start + prefix.length, start + prefix.length + selected.length); }, 0);
+                }}
+                style={{ width: 22, height: 22, borderRadius: 6, background: 'none', border: 'none', color: '#6b6b82', cursor: 'pointer', flexShrink: 0, opacity: 0.8, ...f.style }}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
           <button
             type="submit"
             disabled={sending || !msgInput.trim()}

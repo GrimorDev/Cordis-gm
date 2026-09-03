@@ -5,7 +5,7 @@ import type { ServerMember, MutualServer, MutualFriend, DmConversation, DmMessag
 import { mutualServersApi, mutualFriendsApi, notesApi, users, dmPinApi } from '../api';
 
 type Props = Pick<NewLookShellProps,
-  'staticUrl' | 'activeView' | 'serverFull' | 'members' | 'dmConvs' | 'activeDmUserId' | 'onOpenProfile' | 'dmMsgs'
+  'staticUrl' | 'activeView' | 'serverFull' | 'members' | 'dmConvs' | 'activeDmUserId' | 'onOpenProfile' | 'dmMsgs' | 'channelMsgs'
 >;
 
 const IMG_EXT = /\.(jpe?g|png|gif|webp|avif|svg|bmp)(\?.*)?$/i;
@@ -276,7 +276,68 @@ const sectionLabelStyle: React.CSSProperties = {
   fontSize: 11, fontWeight: 700, color: '#7a7a92', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8,
 };
 
-export function InfoPanel({ staticUrl, activeView, serverFull, members, dmConvs, activeDmUserId, onOpenProfile, dmMsgs }: Props) {
+function SharedMedia({ channelMsgs, staticUrl }: { channelMsgs: Props['channelMsgs']; staticUrl: (u: string | null | undefined) => string | null }) {
+  const [tab, setTab] = useState<'photos' | 'videos' | 'other'>('photos');
+  const attachments = channelMsgs.filter(m => !!m.attachment_url);
+  const photos = attachments.filter(m => isImgUrl(m.attachment_url!));
+  const videos = attachments.filter(m => isVidUrl(m.attachment_url!));
+  const other = attachments.filter(m => !isImgUrl(m.attachment_url!) && !isVidUrl(m.attachment_url!));
+  const items = tab === 'photos' ? photos : tab === 'videos' ? videos : other;
+  const VISIBLE = 4;
+
+  if (attachments.length === 0) return null;
+
+  return (
+    <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+      <p style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: '#7a7a92', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>
+        <ImageIcon size={11} /> Udostępnione media
+      </p>
+      <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 3, marginBottom: 10 }}>
+        {([['photos', `Zdjęcia`], ['videos', 'Wideo'], ['other', 'Inne']] as const).map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            style={{
+              flex: 1, padding: '5px 0', borderRadius: 7, border: 'none', cursor: 'pointer',
+              fontSize: 11, fontWeight: 700, background: tab === id ? '#6366f1' : 'none',
+              color: tab === id ? '#fff' : '#8a8aa0',
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {items.length === 0 ? (
+        <p style={emptyTabStyle}>Brak.</p>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          {items.slice(0, VISIBLE).map((m, i) => {
+            const src = staticUrl(m.attachment_url);
+            const isLast = i === VISIBLE - 1 && items.length > VISIBLE;
+            return (
+              <div key={m.id} style={{ position: 'relative', aspectRatio: '1', borderRadius: 8, overflow: 'hidden', background: '#1a1a24' }}>
+                {tab === 'other' ? (
+                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <ImageIcon size={20} color="#7a7a92" />
+                  </div>
+                ) : (
+                  <img src={src ?? ''} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                )}
+                {isLast && (
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: '#fff' }}>
+                    +{items.length - VISIBLE}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function InfoPanel({ staticUrl, activeView, serverFull, members, dmConvs, activeDmUserId, onOpenProfile, dmMsgs, channelMsgs }: Props) {
   if (activeView === 'dms') {
     const dm = dmConvs.find(d => d.other_user_id === activeDmUserId);
     if (!dm) return <div className="nl-info nl-glass" style={{ borderRadius: 0 }} />;
@@ -310,6 +371,8 @@ export function InfoPanel({ staticUrl, activeView, serverFull, members, dmConvs,
           </p>
         )}
       </div>
+
+      <SharedMedia channelMsgs={channelMsgs} staticUrl={staticUrl} />
 
       <div style={{ padding: '14px 16px' }}>
         <p style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: '#7a7a92', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 4 }}>
