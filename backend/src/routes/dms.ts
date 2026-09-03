@@ -523,7 +523,7 @@ router.get('/group/:id/messages', authMiddleware, async (req: AuthRequest, res) 
 });
 
 // POST /api/dms/group/:id/messages
-router.post('/group/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
+router.post('/group/:id/messages', authMiddleware, msgLimiter, async (req: AuthRequest, res) => {
   const myId = req.user!.id;
   const { content } = req.body;
   if (!content?.trim()) return res.status(400).json({ error: 'Content required' });
