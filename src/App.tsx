@@ -2,7 +2,6 @@
 import ReactDOM from 'react-dom';
 import { TitleBar, isTauri, openExternalLink } from './TitleBar';
 import ImageCropModal, { type CropShape } from './ImageCropModal';
-import { NewLookShell } from './newlook/NewLookShell';
 import { translate, resolveLocale, bcp47 as localeBcp47, loadLocale, detectLocale, LOCALES, type Locale, type TimeFormat } from './i18n';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -9230,21 +9229,7 @@ export default function App() {
 
   // App Settings
   const [appSettOpen, setAppSettOpen]         = useState(false);
-  // "Nowy wygląd" — opt-in alternate shell (src/newlook/), a local device
-  // preference (not synced to the account) so it's cheap to try/revert.
-  const [newLookEnabled, setNewLookEnabledRaw] = useState(() => {
-    try { return localStorage.getItem('cordyn_new_look') === '1'; } catch { return false; }
-  });
-  const [newLookTransitioning, setNewLookTransitioning] = useState(false);
-  const setNewLookEnabled = (next: boolean) => {
-    setNewLookTransitioning(true);
-    try { localStorage.setItem('cordyn_new_look', next ? '1' : '0'); } catch {}
-    // Swap after the overlay has faded to full opacity so the tree change
-    // itself is hidden behind it, then fade the overlay back out.
-    setTimeout(() => setNewLookEnabledRaw(next), 180);
-    setTimeout(() => setNewLookTransitioning(false), 420);
-  };
-  const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'notifications'|'devices'|'privacy'|'locale'|'connections'|'theme'|'newlook'|'desktop'|'updates'|'about'|'stats'>('account');
+  const [appSettTab, setAppSettTab]           = useState<'account'|'appearance'|'notifications'|'devices'|'privacy'|'locale'|'connections'|'theme'|'desktop'|'updates'|'about'|'stats'>('account');
 
   const [userStats, setUserStats]             = useState<{messages_sent:number;messages_this_month:number;dms_sent:number;servers_joined:number;friends_count:number;reactions_given:number;reactions_received:number;account_created:string}|null>(null);
   const [statsLoading, setStatsLoading]       = useState(false);
@@ -14290,121 +14275,6 @@ export default function App() {
     return safe;
   };
 
-  // Full profile view, reused as-is by "Nowy wygląd" (rendered as a
-  // full-screen overlay there) — the classic layout's own ternary further
-  // below still renders this exact same block inline; this duplication
-  // (rather than extracting/relocating the classic ternary) keeps the
-  // classic render path completely untouched.
-  const profileOverlayNode = profileViewId ? (
-    <ProfilePage
-      viewUserId={profileViewId}
-      profileData={profilePageData}
-      games={profileGames}
-      spotify={profileSpotify}
-      ownSpotify={ownSpotify}
-      twitch={profileTwitch}
-      ownTwitch={ownTwitch}
-      steam={profileSteam}
-      ownSteam={ownSteam}
-      youtube={profileYoutube}
-      ownYoutube={ownYoutube}
-      kick={profileKick}
-      ownKick={ownKick}
-      epic={profileEpic}
-      ownEpic={ownEpic}
-      steamGameStartedAt={profileViewId ? (steamGameStartRef.current.get(profileViewId) ?? null) : null}
-      liveSpotifyTrack={profileViewId ? (userActivities.get(profileViewId) ?? null) : null}
-      achievementStats={(() => {
-        const e = profileViewId ? achievementStats[profileViewId] : undefined;
-        return (e && e !== 'loading' && e !== 'error') ? e : null;
-      })()}
-      achievementStatsLoading={(() => {
-        const e = profileViewId ? achievementStats[profileViewId] : undefined;
-        return e === undefined || e === 'loading';
-      })()}
-      loading={profileLoading}
-      currentUser={currentUser}
-      editProf={editProf}
-      setEditProf={setEditProf}
-      profBannerFile={profBannerFile}
-      profBannerPrev={profBannerPrev}
-      onBack={closeProfilePage}
-      onOpenDm={(id)=>{ openDm(id); closeProfilePage(); }}
-      onCall={(id,un,av,t)=>{ startDmCall(id,un,t,av); closeProfilePage(); }}
-      handleAvatarUpload={handleAvatarUpload}
-      handleBannerSelect={handleBannerSelect}
-      handleSaveProfile={handleSaveProfile}
-      onGameAdded={(g)=>setProfileGames(p=>[...p,g])}
-      onGameRemoved={(id)=>setProfileGames(p=>p.filter(g=>g.id!==id))}
-      showGameModal={showGameModal}
-      setShowGameModal={setShowGameModal}
-      gameSearch={gameSearch}
-      setGameSearch={setGameSearch}
-      gameResults={gameResults}
-      setGameResults={setGameResults}
-      gameSearching={gameSearching}
-      setGameSearching={setGameSearching}
-      gameSearchRef={gameSearchRef}
-      onSpotifyConnect={async()=>{ try { const r = await spotifyApi.connect(); await openOAuth(r.url, 'spotify'); } catch(e:any){ addToast(e.message||'Błąd Spotify','error'); } }}
-      onSpotifyDisconnect={async()=>{ try { await spotifyApi.disconnect(); setOwnSpotify(null); addToast('Spotify odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Spotify','error'); } }}
-      onSpotifyToggle={async(v)=>{ await spotifyApi.setSettings({show_on_profile:v}); setOwnSpotify(p=>p?{...p,show_on_profile:v}:p); lastEmittedTrack.current=undefined; if(!v&&currentUser?.id){const sock=getSocket();if(sock)(sock as any).emit('spotify_update',{track:null});setUserActivities(p=>{const n=new Map(p);n.set(currentUser.id,null);return n;});} }}
-      onTwitchConnect={async()=>{ try { const r = await twitchApi.connect(); await openOAuth(r.url, 'twitch'); } catch(e:any){ addToast(e.message||'Błąd Twitch','error'); } }}
-      onTwitchDisconnect={async()=>{ try { await twitchApi.disconnect(); setOwnTwitch(null); addToast('Twitch odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Twitch','error'); } }}
-      onTwitchToggle={async(v)=>{ await twitchApi.setSettings({show_on_profile:v}); setOwnTwitch(p=>p?{...p,show_on_profile:v}:p); lastEmittedStream.current=undefined; if(!v&&currentUser?.id){const sock=getSocket();if(sock)(sock as any).emit('twitch_update',{stream:null});setUserTwitchActivities(p=>{const n=new Map(p);n.set(currentUser.id,null);return n;});} }}
-      onSteamConnect={async()=>{ try { const r = await steamApi.connect(); await openOAuth(r.url, 'steam'); } catch(e:any){ addToast(e.message||'Błąd Steam','error'); } }}
-      onSteamDisconnect={async()=>{ try { await steamApi.disconnect(); setOwnSteam(null); addToast('Steam odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Steam','error'); } }}
-      onSteamToggle={async(v)=>{ await steamApi.setSettings({show_on_profile:v}); setOwnSteam(p=>p?{...p,show_on_profile:v}:p); lastEmittedGame.current=undefined; if(!v&&currentUser?.id){const sock=getSocket();if(sock)(sock as any).emit('steam_update',{game:null});setUserSteamActivities(p=>{const n=new Map(p);n.set(currentUser.id,null);return n;});} }}
-      friends={friends}
-      blockedUsers={blockedUsers}
-      addToast={addToast}
-      myJam={myJam}
-      jamLoading={jamLoading}
-      viewedUserJam={profileViewedJam}
-      onJamStart={async()=>{
-        setJamLoading(true);
-        try {
-          await spotifyApi.jamStart();
-          const j = await spotifyApi.jamActive();
-          setMyJam(j);
-          addToast('JAM uruchomiony! Znajomi mogą dołączyć z Twojego profilu', 'success');
-        } catch(e:any){ addToast(e.message||'Błąd JAM','error'); }
-        finally { setJamLoading(false); }
-      }}
-      onJamStop={async()=>{
-        setJamLoading(true);
-        try {
-          await spotifyApi.jamLeave();
-          getSocket()?.emit('spotify_jam_ended' as any, { host_id: currentUser?.id });
-          setMyJam({ role: null, members: [] });
-          addToast('JAM zakończony','info');
-        } catch(e:any){ addToast(e.message||'Błąd','error'); }
-        finally { setJamLoading(false); }
-      }}
-      onJamJoin={async(hostId)=>{
-        setJamLoading(true);
-        try {
-          await spotifyApi.jamJoin(hostId);
-          getSocket()?.emit('spotify_jam_joined' as any, { host_id: hostId });
-          const j = await spotifyApi.jamActive();
-          setMyJam(j);
-          addToast('Dołączono do JAM! Synchronizacja Spotify...','success');
-        } catch(e:any){ addToast(e.message||'Błąd','error'); }
-        finally { setJamLoading(false); }
-      }}
-      onJamLeave={async()=>{
-        setJamLoading(true);
-        try {
-          const r = await spotifyApi.jamLeave();
-          if (!r.was_host) getSocket()?.emit('spotify_jam_left' as any, { host_id: r.host_id });
-          setMyJam({ role: null, members: [] });
-          addToast('Opuszczono JAM','info');
-        } catch(e:any){ addToast(e.message||'Błąd','error'); }
-        finally { setJamLoading(false); }
-      }}
-      mutualServers={mutualServers}
-    />
-  ) : null;
-
   return (
     <div
       className={`flex flex-col h-[100dvh] w-full text-zinc-300 font-sans overflow-hidden relative bg-transparent p-1 gap-1${focusCard?' focus-card-active':''}`}
@@ -14415,10 +14285,6 @@ export default function App() {
         paddingRight: 'max(0.25rem, env(safe-area-inset-right))',
       }}
     >
-      {/* "Nowy wygląd" toggle transition — a brief full-screen fade that
-          hides the moment the tree swaps underneath it, so switching feels
-          like one smooth animated transition rather than an instant cut. */}
-      <div className={`nl-transition-overlay${newLookTransitioning ? ' on' : ''}`} />
 
 
       {/* Tauri frameless window titlebar — only rendered in the desktop app */}
@@ -14624,94 +14490,6 @@ export default function App() {
            grid-cols: 1fr auto 1fr guarantees center is always truly centered.
            No items-center on nav so children use h-full correctly (stretch). */}
       {/* Nav + tabs bar share ONE glass card — no gap, seamless grid */}
-      {newLookEnabled ? (
-        <div className="flex-1 min-h-0 overflow-hidden rounded-2xl">
-          <NewLookShell
-            currentUser={currentUser!}
-            staticUrl={staticUrl}
-            renderMsgHTML={renderMsgHTML}
-            serverList={serverList}
-            activeServer={activeServer}
-            serverFull={serverFull}
-            onSelectServer={(id) => { setActiveServer(id); setActiveView('servers'); }}
-            activeView={activeView}
-            onShowDms={() => setActiveView('dms')}
-            allChs={allChs}
-            activeChannel={activeChannel}
-            activeCh={activeCh}
-            onSelectChannel={(ch) => { if (ch.type === 'voice') joinVoiceCh(ch); else setActiveChannel(ch.id); }}
-            dmConvs={dmConvs}
-            activeDmUserId={activeDmUserId}
-            unreadDms={unreadDms}
-            onSelectDm={(uid) => { setActiveDmUserId(uid); setActiveView('dms'); }}
-            channelMsgs={channelMsgs}
-            dmMsgs={dmMsgs}
-            members={members}
-            msgInput={msgInput}
-            setMsgInput={setMsgInput}
-            onSend={handleSend}
-            sending={sending}
-            onToggleReaction={toggleReaction}
-            onDeleteMessage={(msg) => {
-              if ('conversation_id' in msg) {
-                dmsApi.deleteMessage(msg.id).then(() => setDmMsgs(p => p.filter(m => m.id !== msg.id))).catch(console.error);
-              } else {
-                messagesApi.delete(msg.id).then(() => setChannelMsgs(p => p.filter(m => m.id !== msg.id))).catch(console.error);
-              }
-            }}
-            onEditMessage={(msg, content) => {
-              if ('conversation_id' in msg) {
-                dmsApi.editMessage(msg.id, content).then(updated => setDmMsgs(p => p.map(m => m.id === msg.id ? updated : m))).catch(console.error);
-              } else {
-                messagesApi.edit(msg.id, content).then(updated => setChannelMsgs(p => p.map(m => m.id === msg.id ? updated : m))).catch(console.error);
-              }
-            }}
-            onPinMessage={handlePinMessage}
-            replyTo={replyTo}
-            setReplyTo={setReplyTo}
-            inCall={!!activeCall}
-            callSummary={activeCall ? { channelName: activeCall.channelName, username: activeCall.username } : null}
-            onOpenCallView={() => setShowCallPanel(true)}
-            onStartCall={(userId, username, avatarUrl, type) => startDmCall(userId, username, type, avatarUrl)}
-            callView={showCallPanel && activeCall ? {
-              activeCall,
-              currentUser: currentUser!,
-              staticUrl,
-              voiceUsers: activeCall.channelId ? (voiceUsers[activeCall.channelId] ?? []) : [],
-              voiceUserStates,
-              cameraOnUserIds,
-              sharingUserIds,
-              cameraStreamRef,
-              screenStreamRef,
-              remoteCameraStreamsRef,
-              remoteScreenStreamsRef,
-              screenShareTick,
-              onToggleMute: toggleMute,
-              onToggleDeafen: toggleDeafen,
-              onToggleCamera: toggleCamera,
-              onToggleScreen: toggleScreen,
-              onHangup: hangupCall,
-              onMinimize: () => setShowCallPanel(false),
-            } : null}
-            onOpenSettings={() => { setAppSettTab('newlook'); setAppSettOpen(true); }}
-            onOpenProfile={openProfilePage}
-            onJoinServer={async (code) => {
-              try {
-                const s = await serversApi.join(code);
-                setServerList(p => [...p, s]); setActiveServer(s.id); setActiveView('servers');
-                getSocket()?.emit('join_server_room' as any, s.id);
-                addToast(`Dołączono do serwera ${s.name}!`, 'success');
-              } catch (err: any) { addToast(err?.message || 'Nie udało się dołączyć', 'error'); }
-            }}
-          />
-          {profileOverlayNode && (
-            <div className="fixed inset-0 z-[200] overflow-y-auto" style={{ background: '#0a0a10' }}>
-              {profileOverlayNode}
-            </div>
-          )}
-        </div>
-      ) : (
-      <>
       <div className="shrink-0 z-30 glass-panel rounded-2xl flex flex-col">
       <nav className="h-12 px-2 grid" style={{gridTemplateColumns:'auto minmax(0,1fr) auto'}}>
         {/* Left col — Logo/brand + Home (desktop) | hamburger+context (mobile) */}
@@ -20881,8 +20659,6 @@ export default function App() {
           })()}
         </aside>
       </main>
-      </>
-      )}
 
       {/* ── MODALS ─────────────────────────────────────────────────────── */}
 
@@ -23264,7 +23040,6 @@ export default function App() {
                       {id:'notifications', label:'Powiadomienia', icon:<Bell size={14}/>,
                         sections:[{id:'s-quiet',label:'Godziny ciszy'}]},
                       {id:'theme',       label:tl('settings.theme'),     icon:<Palette size={14}/>, sections:[]},
-                      {id:'newlook',     label:'Nowy wygląd',             icon:<Sparkles size={14}/>, sections:[]},
                       {id:'connections', label:tl('settings.connections'),icon:<Link2 size={14}/>, sections:[]},
                       {id:'stats',       label:'Statystyki',              icon:<BarChart2 size={14}/>, sections:[]},
                     ]},
@@ -24657,42 +24432,6 @@ export default function App() {
                             </button>
                           );
                         })}
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* ─── NOWY WYGLĄD ─── */}
-                  {appSettTab==='newlook'&&(
-                    <motion.div key="newlook" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
-                      className="flex flex-col gap-5">
-                      <div>
-                        <h3 className="text-sm font-bold text-white mb-1 flex items-center gap-2">
-                          <Sparkles size={14} className="text-indigo-400"/> Nowy wygląd
-                          <span className="text-[9px] text-indigo-300 bg-indigo-500/15 border border-indigo-500/25 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">Eksperymentalne</span>
-                        </h3>
-                        <p className="text-xs text-zinc-500 leading-relaxed">Odświeżony układ interfejsu — wąska szyna serwerów, wyraźniejszy podział na kolumny i gradientowe tło czatu. Przełącznik jest zapisywany tylko na tym urządzeniu, więc możesz go swobodnie wypróbować i wrócić do klasycznego widoku w każdej chwili. Podczas aktywnej rozmowy głosowej nowy widok automatycznie pokazuje klasyczny panel połączenia.</p>
-                      </div>
-
-                      <div className="w-full h-28 rounded-2xl overflow-hidden flex gap-1 p-1.5 border border-white/[0.06]"
-                        style={{ background: 'linear-gradient(0deg, #0b1a3a 0%, #150816 60%, #0a0710 100%)' }}>
-                        <div className="w-6 h-full rounded-lg flex-shrink-0 bg-white/[0.06] backdrop-blur-sm"/>
-                        <div className="w-14 h-full rounded-lg flex-shrink-0 bg-white/[0.04]"/>
-                        <div className="flex-1 h-full rounded-lg bg-white/[0.02] flex items-end p-2 gap-1">
-                          <div className="w-2/3 h-3 rounded-full bg-indigo-500/40"/>
-                        </div>
-                        <div className="w-10 h-full rounded-lg flex-shrink-0 bg-white/[0.04]"/>
-                      </div>
-
-                      <div className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 py-3.5 hover:border-white/[0.09] transition-colors">
-                        <div className="flex-1 min-w-0 mr-3">
-                          <p className="text-sm font-medium text-white">Włącz nowy wygląd</p>
-                          <p className="text-[11px] text-zinc-600 mt-0.5 leading-tight">Przełącza się płynnie, bez odświeżania strony.</p>
-                        </div>
-                        <button onClick={()=>setNewLookEnabled(!newLookEnabled)}
-                          className={`w-9 h-5 rounded-full transition-all shrink-0 relative ${newLookEnabled?'bg-indigo-500':'bg-zinc-700'}`}>
-                          <span className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-200"
-                            style={{left: newLookEnabled ? 'calc(100% - 1.125rem)' : '0.125rem'}}/>
-                        </button>
                       </div>
                     </motion.div>
                   )}
