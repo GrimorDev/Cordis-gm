@@ -17937,13 +17937,6 @@ export default function App() {
                     {members.length>4&&<div className="w-6 h-6 rounded-full border-2 border-[#181828] bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-white">+{members.length-4}</div>}
                   </div>
                   )}
-                  {activeView==='servers'&&activeCh?.type==='text'&&(
-                    <button onClick={async()=>{setShowPinned(v=>{const next=!v;if(next){messagesApi.listPinned(activeChannel!).then(setPinnedMsgs).catch(()=>{});}return next;})} }
-                      title="Przypięte wiadomości"
-                      className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-150 active:scale-95 ${showPinned?'text-amber-400 bg-amber-500/15':'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.07]'}`}>
-                      <Pin size={14}/>
-                    </button>
-                  )}
                   {/* Focus toggle — podświetl środkowy panel czatu */}
                   <button
                     onClick={()=>setFocusCard(v=>!v)}
@@ -17980,6 +17973,7 @@ export default function App() {
                                 {row(isMuted?<Volume2 size={13} className="text-emerald-400"/>:<VolumeX size={13} className="text-zinc-400"/>,isMuted?'Wyłącz wyciszenie':'Wycisz kanał',()=>setChMuted(p=>({...p,[activeCh.id]:!p[activeCh.id]})))}
                                 {row(<AtSign size={13} className="text-amber-400"/>,'Zaznacz jako przeczytany',()=>{setUnreadChs(p=>({...p,[activeCh.id]:0}));setPingChs(p=>({...p,[activeCh.id]:0}));})}
                                 {row(<Link2 size={13} className="text-purple-400"/>,'Kopiuj link kanału',()=>{try{navigator.clipboard.writeText(`${window.location.origin}/channels/${activeServer}/${activeCh.id}`);}catch{}addToast('Skopiowano link','success');})}
+                                {row(<Pin size={13} className={showPinned?'text-amber-400':'text-zinc-400'}/>,showPinned?'Ukryj przypięte':'Przypięte wiadomości',()=>setShowPinned(v=>{const next=!v;if(next){messagesApi.listPinned(activeChannel!).then(setPinnedMsgs).catch(()=>{});}return next;}))}
                                 {canManageChannels&&(<>
                                   <div className="h-px mx-3 my-1" style={{background:'rgba(255,255,255,0.07)'}}/>
                                   {row(<Settings2 size={13} className="text-zinc-400"/>,'Ustawienia kanału',()=>{openChEdit(activeCh);})}
