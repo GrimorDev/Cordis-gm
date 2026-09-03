@@ -18820,7 +18820,7 @@ export default function App() {
                           )}
 
                           {/* Content column */}
-                          <div className={`flex flex-col min-w-0 ${activeView==='dms'?`max-w-[85%] md:max-w-[72%] ${isOwn?'items-end':'items-start'}`:'flex-1 min-w-0 overflow-hidden'}`}
+                          <div className={`flex flex-col min-w-0 ${activeView==='dms'?`max-w-[85%] md:max-w-[72%] ${isOwn?'items-end':'items-start'}`:'flex-1 min-w-0'}`}
                             onDoubleClick={activeView==='servers' && editingMsgId!==msg.id && !((msg as any).deleted || msg.content==='__deleted__') ? (e: React.MouseEvent) => {
                               e.preventDefault();
                               toggleReaction(msg.id, '❤️', e);
