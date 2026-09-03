@@ -524,8 +524,19 @@ router.post('/:id/reactions', authMiddleware, async (req: AuthRequest, res: Resp
   const { emoji } = req.body;
   if (!emoji || emoji.length > 12) return res.status(400).json({ error: 'Emoji required' });
   try {
+    // One reaction per user per message — picking a new emoji replaces whatever
+    // this user already had here instead of stacking alongside it.
+    const { rows: replaced } = await query(
+      `DELETE FROM message_reactions WHERE message_id=$1 AND user_id=$2 AND emoji!=$3 RETURNING emoji`,
+      [req.params.id, req.user!.id, emoji]
+    );
     await query('INSERT INTO message_reactions (message_id,user_id,emoji) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
       [req.params.id, req.user!.id, emoji]);
+    // Broadcast the emoji(s) this user was replaced off of too, so other
+    // clients see those counts drop instead of only seeing the new one rise.
+    for (const r of replaced) {
+      await broadcastReactionUpdate(req, req.params.id, r.emoji);
+    }
     await broadcastReactionUpdate(req, req.params.id, emoji);
     // ── reaction_added automation trigger ─────────────────────────────
     const { rows: [msgInfo] } = await query(

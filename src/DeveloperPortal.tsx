@@ -2200,27 +2200,29 @@ function DocsTab({ app }: DocsTabProps) {
       </div>
 
       {/* Content area */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '24px 32px', minWidth: 0 }}>
-        {/* Language tabs */}
-        <div style={{
-          display: 'flex', gap: 2, marginBottom: 24, flexWrap: 'wrap',
-          borderBottom: '1px solid #1c1c1f', paddingBottom: 16,
-        }}>
-          <span style={{ fontSize: 12, color: '#52525b', alignSelf: 'center', marginRight: 8 }}>Język:</span>
-          {LANGS.map(l => (
-            <button key={l.id} onClick={() => setLang(l.id)} style={{
-              padding: '5px 14px', borderRadius: 6, fontSize: 12, fontWeight: 500,
-              background: lang === l.id ? '#6366f1' : 'transparent',
-              border: `1px solid ${lang === l.id ? '#6366f1' : '#27272a'}`,
-              color: lang === l.id ? '#fff' : '#71717a',
-              cursor: 'pointer', transition: 'all 0.1s',
-            }}>
-              {l.label}
-            </button>
-          ))}
-        </div>
+      <div className="custom-scrollbar" style={{ flex: 1, overflow: 'auto', padding: '24px 32px', minWidth: 0 }}>
+        <div style={{ maxWidth: 880, marginLeft: 'auto', marginRight: 'auto' }}>
+          {/* Language tabs */}
+          <div style={{
+            display: 'flex', gap: 2, marginBottom: 24, flexWrap: 'wrap',
+            borderBottom: '1px solid #1c1c1f', paddingBottom: 16,
+          }}>
+            <span style={{ fontSize: 12, color: '#52525b', alignSelf: 'center', marginRight: 8 }}>Język:</span>
+            {LANGS.map(l => (
+              <button key={l.id} onClick={() => setLang(l.id)} style={{
+                padding: '5px 14px', borderRadius: 6, fontSize: 12, fontWeight: 500,
+                background: lang === l.id ? '#6366f1' : 'transparent',
+                border: `1px solid ${lang === l.id ? '#6366f1' : '#27272a'}`,
+                color: lang === l.id ? '#fff' : '#71717a',
+                cursor: 'pointer', transition: 'all 0.1s',
+              }}>
+                {l.label}
+              </button>
+            ))}
+          </div>
 
-        {sectionContent[section]}
+          {sectionContent[section]}
+        </div>
       </div>
     </div>
   );
@@ -2360,7 +2362,7 @@ export default function DeveloperPortal() {
   ];
 
   const sidebar = (
-    <aside style={{
+    <aside className="custom-scrollbar" style={{
       width: 220, minWidth: 220, borderRight: '1px solid #18181b',
       background: '#09090b', display: 'flex', flexDirection: 'column',
       overflowY: 'auto', position: 'sticky', top: 56,
@@ -2506,13 +2508,14 @@ export default function DeveloperPortal() {
               </p>
             </div>
             {/* Docs content — takes remaining height */}
-            <div style={{ flex: 1, overflow: 'auto', display: 'flex' }}>
+            <div className="custom-scrollbar" style={{ flex: 1, overflow: 'auto', display: 'flex' }}>
               <DocsTab app={selectedApp || { client_id: 'TWÓJ_CLIENT_ID', rate_limit_tier: 'free' } as any} />
             </div>
           </div>
         ) : (
           /* ── APP SETTINGS ── */
-          <main style={{ flex: 1, overflowY: 'auto', padding: '28px 36px', maxWidth: 820 }}>
+          <main className="custom-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '28px 36px' }}>
+            <div style={{ maxWidth: 820, marginLeft: 'auto', marginRight: 'auto' }}>
             {!selectedApp ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '55%', gap: 14, textAlign: 'center' }}>
                 <div style={{ color: '#27272a' }}>
@@ -2579,6 +2582,7 @@ export default function DeveloperPortal() {
                 </div>
               </>
             )}
+            </div>
           </main>
         )}
       </div>
