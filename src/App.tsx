@@ -8407,7 +8407,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
             <div className="relative av-frozen av-active" style={{'--av-url':`url("${staticUrl(u?.avatar_url)||`https://api.dicebear.com/9.x/identicon/svg?seed=${u?.username||userId}`}")`} as React.CSSProperties}>
               <img src={staticUrl(u?.avatar_url)||`https://api.dicebear.com/9.x/identicon/svg?seed=${u?.username||userId}`}
                 className={`w-14 h-14 rounded-2xl object-cover border-4 av-eff-${u?.avatar_effect||'none'} av-sc`}
-                style={{ borderColor: cardBg }} alt=""/>
+                style={{ borderColor: cardBg, boxShadow: effectiveStatus==='online' ? `0 0 0 2px ${cardBg}, 0 0 14px 1px rgba(74,222,128,0.35)` : undefined }} alt=""/>
               <span className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 ${sc(effectiveStatus)}`}
                 style={{ borderColor: cardBg }}/>
             </div>
@@ -8434,7 +8434,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
             {!isSelf && u && (
               <div className="flex gap-1.5">
                 <button onClick={()=>onOpenDm(userId)}
-                  className="w-7 h-7 bg-white/[0.06] hover:bg-indigo-500/20 border border-white/[0.08] rounded-lg flex items-center justify-center text-zinc-400 hover:text-indigo-400 transition-all" title={tl('profile.message')}>
+                  className="w-7 h-7 bg-white/[0.06] hover:bg-orange-500/20 border border-white/[0.08] rounded-lg flex items-center justify-center text-zinc-400 hover:text-orange-400 transition-all" title={tl('profile.message')}>
                   <MessageCircle size={13}/>
                 </button>
                 <button onClick={()=>onCall(userId, u.username, u.avatar_url||null, 'voice')}
@@ -8536,7 +8536,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
 
           {/* View profile button */}
           <button onClick={()=>onOpenProfile(userId)}
-            className="w-full mt-1 py-2 rounded-xl bg-white/[0.05] hover:bg-indigo-500/20 border border-white/[0.08] hover:border-indigo-500/30 text-[12px] font-semibold text-zinc-400 hover:text-indigo-300 transition-all flex items-center justify-center gap-1.5">
+            className="w-full mt-1 py-2 rounded-xl bg-white/[0.05] hover:bg-orange-500/20 border border-white/[0.08] hover:border-orange-500/30 text-[12px] font-semibold text-zinc-400 hover:text-orange-300 transition-all flex items-center justify-center gap-1.5">
             {tl('profile.goToProfile')}
           </button>
         </div>
@@ -18798,13 +18798,13 @@ export default function App() {
                         <React.Fragment key={msg.id}>
                           {showUnreadDivider && (
                             <div data-unread-divider className="flex items-center gap-3 my-3 mx-2 select-none">
-                              <div className="flex-1 h-px bg-indigo-500/40"/>
-                              <span className="text-[11px] text-indigo-400 font-semibold px-2 shrink-0 flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 inline-block"/>
+                              <div className="flex-1 h-px bg-orange-500/40"/>
+                              <span className="text-[11px] text-orange-400 font-semibold px-2 shrink-0 flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-orange-400 inline-block"/>
                                 Nowe wiadomości
-                                <button onClick={() => setUnreadJumpIdx(-1)} className="ml-1 text-indigo-500 hover:text-indigo-300 transition-colors leading-none" title="Zamknij">×</button>
+                                <button onClick={() => setUnreadJumpIdx(-1)} className="ml-1 text-orange-500 hover:text-orange-300 transition-colors leading-none" title="Zamknij">×</button>
                               </span>
-                              <div className="flex-1 h-px bg-indigo-500/40"/>
+                              <div className="flex-1 h-px bg-orange-500/40"/>
                             </div>
                           )}
                           {showSep&&(
@@ -18828,13 +18828,13 @@ export default function App() {
                       <React.Fragment key={msg.id}>
                         {showUnreadDivider && (
                           <div data-unread-divider className="flex items-center gap-3 my-3 mx-2 select-none">
-                            <div className="flex-1 h-px bg-indigo-500/40"/>
-                            <span className="text-[11px] text-indigo-400 font-semibold px-2 shrink-0 flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 inline-block"/>
+                            <div className="flex-1 h-px bg-orange-500/40"/>
+                            <span className="text-[11px] text-orange-400 font-semibold px-2 shrink-0 flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-orange-400 inline-block"/>
                               Nowe wiadomości
-                              <button onClick={() => setUnreadJumpIdx(-1)} className="ml-1 text-indigo-500 hover:text-indigo-300 transition-colors leading-none" title="Zamknij">×</button>
+                              <button onClick={() => setUnreadJumpIdx(-1)} className="ml-1 text-orange-500 hover:text-orange-300 transition-colors leading-none" title="Zamknij">×</button>
                             </span>
-                            <div className="flex-1 h-px bg-indigo-500/40"/>
+                            <div className="flex-1 h-px bg-orange-500/40"/>
                           </div>
                         )}
                         {showSep&&(
@@ -18889,7 +18889,9 @@ export default function App() {
                             return (<>
                           {showChatAvatars && (
                             isGrouped
-                              ? <div className="w-10 shrink-0"/>
+                              ? <div className="w-10 shrink-0 flex items-start justify-center pt-1">
+                                  <span className={`msg-ts text-[10px] text-zinc-600 leading-none transition-opacity ${alwaysShowTimestamps?'':'opacity-0 group-hover:opacity-100'}`}>{fmtTime(msg.created_at)}</span>
+                                </div>
                               : <div className="av-frozen shrink-0 self-start mt-0.5" style={{'--av-url':`url("${avatarSrc}")`} as React.CSSProperties}>
                                   <GifAvatar src={avatarSrc} alt=""
                                     onClick={isAuto?undefined:(e)=>showHoverCard(msg.sender_id, e as unknown as React.MouseEvent)}
@@ -18908,7 +18910,7 @@ export default function App() {
                             {!isGrouped && (
                             <div className={`flex items-center gap-2 mb-1 ${activeView==='dms'&&isOwn?'flex-row-reverse':''}`}>
                               <span className={`msg-meta-name text-[13.5px] font-semibold leading-none transition-opacity ${isAuto?'cursor-default':'cursor-pointer hover:underline hover:opacity-80'}`}
-                                style={{ color: isAuto?'#818cf8':((msg as MessageFull).sender_role_color || (isOwn ? '#818cf8' : '#c4c4d8')) }}
+                                style={{ color: isAuto?'#818cf8':((msg as MessageFull).sender_role_color || (isOwn ? '#ff8f40' : '#c4c4d8')) }}
                                 onClick={isAuto?undefined:(e)=>showHoverCard(msg.sender_id, e as unknown as React.MouseEvent)}>
                                 {displayName}
                               </span>
@@ -18948,7 +18950,7 @@ export default function App() {
 
                             {/* Reply preview */}
                             {msg.reply_to_id&&msg.reply_content&&(
-                              <div className={`flex items-center gap-1.5 mb-1 text-[11px] text-zinc-500 border-l-2 border-indigo-500/40 pl-2 py-0.5 ${activeView==='dms'&&isOwn?'self-end':''}`}>
+                              <div className={`flex items-center gap-1.5 mb-1 text-[11px] text-zinc-500 border-l-2 border-orange-500/40 pl-2 py-0.5 ${activeView==='dms'&&isOwn?'self-end':''}`}>
                                 <Reply size={9} className="shrink-0"/>
                                 <span className="font-semibold">{msg.reply_username}</span>
                                 <span className="truncate max-w-[160px] text-zinc-600">{msg.reply_content}</span>
