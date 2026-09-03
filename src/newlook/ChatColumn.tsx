@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Hash, Users, Phone, Send, PhoneOff, Reply, SmilePlus, Pin, Pencil, Trash2, X, Paperclip,
+  Hash, Users, Phone, Video, Send, PhoneOff, Reply, SmilePlus, Pin, Pencil, Trash2, X, Paperclip,
 } from 'lucide-react';
 import type { NewLookShellProps } from './types';
 import type { MessageFull, DmMessageFull } from '../api';
@@ -9,7 +9,7 @@ type Props = Pick<NewLookShellProps,
   'currentUser' | 'staticUrl' | 'renderMsgHTML' | 'activeView' | 'activeCh' |
   'dmConvs' | 'activeDmUserId' | 'channelMsgs' | 'dmMsgs' | 'msgInput' | 'setMsgInput' |
   'onSend' | 'sending' | 'onToggleReaction' | 'onDeleteMessage' | 'onEditMessage' | 'onPinMessage' |
-  'replyTo' | 'setReplyTo' | 'inCall' | 'callSummary' | 'onOpenCallView' | 'serverFull'
+  'replyTo' | 'setReplyTo' | 'inCall' | 'callSummary' | 'onOpenCallView' | 'onStartCall' | 'serverFull'
 > & { onToggleInfo: () => void };
 
 const QUICK_EMOJI = ['👍', '❤️', '😂', '🔥', '😮', '😢'];
@@ -173,9 +173,10 @@ export function ChatColumn({
   currentUser, staticUrl, renderMsgHTML, activeView, activeCh,
   dmConvs, activeDmUserId, channelMsgs, dmMsgs, msgInput, setMsgInput,
   onSend, sending, onToggleReaction, onDeleteMessage, onEditMessage, onPinMessage,
-  replyTo, setReplyTo, inCall, callSummary, onOpenCallView, serverFull, onToggleInfo,
+  replyTo, setReplyTo, inCall, callSummary, onOpenCallView, onStartCall, serverFull, onToggleInfo,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const isDm = activeView === 'dms';
   const dm = isDm ? dmConvs.find(d => d.other_user_id === activeDmUserId) : null;
   const msgs: (MessageFull | DmMessageFull)[] = isDm ? dmMsgs : channelMsgs;
@@ -209,9 +210,21 @@ export function ChatColumn({
           {subtitle && <p style={{ fontSize: 11.5, color: '#8a8aa0' }}>{subtitle}</p>}
         </div>
         <div style={{ flex: 1 }} />
-        <button onClick={onOpenCallView} title="Rozpocznij rozmowę" style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
-          <Phone size={16} style={{ color: '#8a8aa0' }} />
-        </button>
+        {isDm && inCall && (
+          <button onClick={onOpenCallView} title="Wróć do rozmowy" style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
+            <Phone size={16} style={{ color: '#4ade80' }} />
+          </button>
+        )}
+        {isDm && !inCall && dm && (
+          <>
+            <button onClick={() => onStartCall(dm.other_user_id, dm.other_username, staticUrl(dm.other_avatar), 'voice')} title="Zadzwoń" style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
+              <Phone size={16} style={{ color: '#8a8aa0' }} />
+            </button>
+            <button onClick={() => onStartCall(dm.other_user_id, dm.other_username, staticUrl(dm.other_avatar), 'video')} title="Rozmowa wideo" style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
+              <Video size={16} style={{ color: '#8a8aa0' }} />
+            </button>
+          </>
+        )}
         <button onClick={onToggleInfo} title="Informacje" style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}>
           <Users size={16} style={{ color: '#8a8aa0' }} />
         </button>
@@ -277,11 +290,35 @@ export function ChatColumn({
           </div>
         )}
         <div className="nl-glass" style={{
-          display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+          display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px',
           borderRadius: replyTo ? '0 0 14px 14px' : 14,
         }}>
           <Paperclip size={16} style={{ color: '#7a7a92', cursor: 'default', flexShrink: 0 }} />
+          {[
+            { label: 'B', style: { fontWeight: 800 }, wrap: ['**', '**'] as [string, string] },
+            { label: 'i', style: { fontStyle: 'italic' as const }, wrap: ['*', '*'] as [string, string] },
+            { label: '</>', style: { fontSize: 10 }, wrap: ['`', '`'] as [string, string] },
+          ].map(f => (
+            <button
+              key={f.label}
+              type="button"
+              title="Formatuj zaznaczenie"
+              onClick={() => {
+                const el = inputRef.current;
+                const [prefix, suffix] = f.wrap;
+                const start = el?.selectionStart ?? msgInput.length;
+                const end = el?.selectionEnd ?? msgInput.length;
+                const selected = msgInput.slice(start, end) || 'tekst';
+                setMsgInput(msgInput.slice(0, start) + prefix + selected + suffix + msgInput.slice(end));
+                setTimeout(() => { el?.focus(); el?.setSelectionRange(start + prefix.length, start + prefix.length + selected.length); }, 0);
+              }}
+              style={{ width: 24, height: 24, borderRadius: 6, background: 'none', border: 'none', color: '#9797b0', cursor: 'pointer', flexShrink: 0, ...f.style }}
+            >
+              {f.label}
+            </button>
+          ))}
           <input
+            ref={inputRef}
             value={msgInput}
             onChange={e => setMsgInput(e.target.value)}
             placeholder={isDm ? `Napisz do @${title}` : `Napisz na #${title}`}

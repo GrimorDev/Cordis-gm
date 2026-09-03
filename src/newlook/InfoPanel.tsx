@@ -1,7 +1,8 @@
-import React from 'react';
-import { Info, Users } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Info, Users, StickyNote } from 'lucide-react';
 import type { NewLookShellProps } from './types';
-import type { ServerMember } from '../api';
+import type { ServerMember, MutualServer, MutualFriend, DmConversation } from '../api';
+import { mutualServersApi, mutualFriendsApi, notesApi } from '../api';
 
 type Props = Pick<NewLookShellProps,
   'staticUrl' | 'activeView' | 'serverFull' | 'members' | 'dmConvs' | 'activeDmUserId'
@@ -34,22 +35,101 @@ function MemberRow({ m, staticUrl }: { m: ServerMember; staticUrl: (u: string | 
   );
 }
 
+function DmProfilePanel({ dm, staticUrl }: { dm: DmConversation; staticUrl: (u: string | null | undefined) => string | null }) {
+  const [mutualServers, setMutualServers] = useState<MutualServer[]>([]);
+  const [mutualFriends, setMutualFriends] = useState<MutualFriend[]>([]);
+  const [note, setNote] = useState('');
+  const [noteLoaded, setNoteLoaded] = useState(false);
+  const avatar = staticUrl(dm.other_avatar);
+
+  useEffect(() => {
+    setNoteLoaded(false);
+    mutualServersApi.get(dm.other_user_id).then(setMutualServers).catch(() => setMutualServers([]));
+    mutualFriendsApi.get(dm.other_user_id).then(setMutualFriends).catch(() => setMutualFriends([]));
+    notesApi.get(dm.other_user_id).then(r => { setNote(r.content || ''); setNoteLoaded(true); }).catch(() => setNoteLoaded(true));
+  }, [dm.other_user_id]);
+
+  const commitNote = () => {
+    notesApi.save(dm.other_user_id, note).catch(() => {});
+  };
+
+  return (
+    <div className="nl-info nl-glass nl-scroll" style={{ borderRadius: 0, overflowY: 'auto', padding: 20 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, textAlign: 'center', marginBottom: 20 }}>
+        <span style={{ width: 72, height: 72, borderRadius: '50%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#2a2a3a', fontSize: 24, fontWeight: 700 }}>
+          {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : dm.other_username.slice(0, 2).toUpperCase()}
+        </span>
+        <p style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>{dm.other_username}</p>
+        {dm.other_custom_status && <p style={{ fontSize: 12.5, color: '#8a8aa0' }}>{dm.other_custom_status}</p>}
+      </div>
+
+      {mutualServers.length > 0 && (
+        <div style={{ marginBottom: 18 }}>
+          <p style={sectionLabelStyle}>Wspólne serwery — {mutualServers.length}</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {mutualServers.map(s => {
+              const sIcon = staticUrl(s.icon_url);
+              return (
+                <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 24, height: 24, borderRadius: 8, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#2a2a3a', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
+                    {sIcon ? <img src={sIcon} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : s.name.slice(0, 2).toUpperCase()}
+                  </span>
+                  <span style={{ fontSize: 12.5, color: '#d0d0dc' }}>{s.name}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {mutualFriends.length > 0 && (
+        <div style={{ marginBottom: 18 }}>
+          <p style={sectionLabelStyle}>Wspólni znajomi — {mutualFriends.length}</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {mutualFriends.map(f => {
+              const fAvatar = staticUrl(f.avatar_url);
+              return (
+                <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 24, height: 24, borderRadius: '50%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#2a2a3a', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
+                    {fAvatar ? <img src={fAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : f.username.slice(0, 2).toUpperCase()}
+                  </span>
+                  <span style={{ fontSize: 12.5, color: '#d0d0dc' }}>{f.username}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {noteLoaded && (
+        <div>
+          <p style={{ ...sectionLabelStyle, display: 'flex', alignItems: 'center', gap: 5 }}><StickyNote size={11} /> Prywatna notatka</p>
+          <textarea
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            onBlur={commitNote}
+            placeholder="Dodaj notatkę o tej osobie…"
+            rows={3}
+            style={{
+              width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 10, color: '#e4e4ec', fontSize: 12.5, padding: 10, resize: 'none', outline: 'none',
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+const sectionLabelStyle: React.CSSProperties = {
+  fontSize: 11, fontWeight: 700, color: '#7a7a92', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8,
+};
+
 export function InfoPanel({ staticUrl, activeView, serverFull, members, dmConvs, activeDmUserId }: Props) {
   if (activeView === 'dms') {
     const dm = dmConvs.find(d => d.other_user_id === activeDmUserId);
     if (!dm) return <div className="nl-info nl-glass" style={{ borderRadius: 0 }} />;
-    const avatar = staticUrl(dm.other_avatar);
-    return (
-      <div className="nl-info nl-glass nl-scroll" style={{ borderRadius: 0, overflowY: 'auto', padding: 20 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, textAlign: 'center' }}>
-          <span style={{ width: 72, height: 72, borderRadius: '50%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#2a2a3a', fontSize: 24, fontWeight: 700 }}>
-            {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : dm.other_username.slice(0, 2).toUpperCase()}
-          </span>
-          <p style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>{dm.other_username}</p>
-          {dm.other_custom_status && <p style={{ fontSize: 12.5, color: '#8a8aa0' }}>{dm.other_custom_status}</p>}
-        </div>
-      </div>
-    );
+    return <DmProfilePanel dm={dm} staticUrl={staticUrl} />;
   }
 
   if (!serverFull) return <div className="nl-info nl-glass" style={{ borderRadius: 0 }} />;

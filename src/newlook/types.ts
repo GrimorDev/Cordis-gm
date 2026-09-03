@@ -103,6 +103,10 @@ export interface NewLookShellProps {
    *  the earlier "bail out to classic" escape hatch now that calls have a
    *  real visual of their own. */
   onOpenCallView: () => void;
+  /** Starts a DM voice/video call (mirrors App.tsx's startDmCall) — the
+   *  chat header's phone/video buttons had nothing wired to actually place
+   *  a call, only to reopen an already-active one. */
+  onStartCall: (userId: string, username: string, avatarUrl: string | null, type: 'voice' | 'video') => void;
   /** Present whenever inCall is true — full data/handlers for the native
    *  new-look call view (see CallView.tsx). */
   callView: CallViewProps | null;
