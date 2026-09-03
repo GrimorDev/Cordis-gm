@@ -18692,6 +18692,19 @@ export default function App() {
                       && !(msg as any).reply_to_id
                       && !(prevMsg as any).deleted
                       && (new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime()) < 5 * 60 * 1000;
+                    // Forward-looking: will the NEXT message group under this one? If so this
+                    // row needs the tight "same cluster" bottom margin, not the wide one meant
+                    // to separate it from a genuinely different sender/time — otherwise the
+                    // first message of a group sits noticeably further from its own
+                    // continuation than the continuation lines sit from each other.
+                    const nextMsg = idx < messages.length - 1 ? messages[idx + 1] : null;
+                    const nextIsGrouped = !!nextMsg
+                      && nextMsg.sender_id === msg.sender_id
+                      && msg.sender_id !== '__system__'
+                      && nextMsg.sender_id !== '__system__'
+                      && !(nextMsg as any).reply_to_id
+                      && !(msg as any).deleted
+                      && (new Date(nextMsg.created_at).getTime() - new Date(msg.created_at).getTime()) < 5 * 60 * 1000;
                     const sepLabel = dateSepLabel(msg.created_at);
                     // System message (call ended, missed call, etc.)
                     if (msg.sender_id === '__system__') {
@@ -18763,7 +18776,7 @@ export default function App() {
                           ? (isGrouped ? 'mb-0 py-0 min-h-0' : 'mb-0.5 py-0.5 min-h-10')
                           : isGrouped
                             ? 'mb-0.5 py-0 min-h-0'
-                            : 'mb-3 py-1 min-h-11';
+                            : (nextIsGrouped ? 'mb-0.5 py-1 min-h-11' : 'mb-3 py-1 min-h-11');
                         const rowTopMarginCls = isGrouped ? 'mt-0' : activeView!=='dms' ? 'mt-2' : '';
                         return (
                         <motion.div
