@@ -606,10 +606,7 @@ export default function ServersScreen() {
             onLongPress={() => setActionServer(item)}
             activeOpacity={0.7}
           >
-            {/* Left accent bar */}
-            <View style={styles.serverCardAccent} />
-
-            <UserAvatar url={resolveUrl(item.icon_url)} username={item.name} size={54} />
+            <UserAvatar url={resolveUrl(item.icon_url)} username={item.name} size={52} />
 
             <View style={styles.serverInfo}>
               <Text style={styles.serverName} numberOfLines={1}>{item.name}</Text>
@@ -624,9 +621,7 @@ export default function ServersScreen() {
               )}
             </View>
 
-            <View style={styles.serverChevron}>
-              <Ionicons name="chevron-forward" size={15} color={C.accentLight} />
-            </View>
+            <Ionicons name="chevron-forward" size={18} color={C.textMuted} />
           </TouchableOpacity>
         )}
         ListEmptyComponent={
@@ -845,28 +840,17 @@ const styles = StyleSheet.create({
   // Server card
   serverCard: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
-    backgroundColor: C.bgCard, borderRadius: 20, padding: 14,
+    backgroundColor: C.bgCard, borderRadius: 16, padding: 14,
     borderWidth: 1, borderColor: C.border,
-    shadowColor: C.shadowAccent, shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 3 },
-    elevation: 6,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  serverCardAccent: {
-    position: 'absolute', left: 0, top: 0, bottom: 0, width: 3,
-    backgroundColor: C.accent, borderTopLeftRadius: 20, borderBottomLeftRadius: 20,
+    shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
   serverInfo: { flex: 1 },
-  serverName: { color: C.text, fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
+  serverName: { color: C.text, fontSize: 16, fontWeight: '700', letterSpacing: -0.1 },
   serverDesc: { color: C.textMuted, fontSize: 12, marginTop: 3, lineHeight: 16 },
   memberCountRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5 },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
   memberCount: { color: C.textSub, fontSize: 12, fontWeight: '500' },
-  serverChevron: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: C.accentMuted, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: C.borderAccent,
-  },
 
   // Empty state
   empty: { alignItems: 'center', paddingVertical: 60, gap: 12 },

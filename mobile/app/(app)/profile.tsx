@@ -740,7 +740,7 @@ function SettingRow({ icon, label, value, onPress, border }: {
   return (
     <TouchableOpacity style={[styles.settingRow, border && styles.rowBorder]} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.settingIconWrap}>
-        <Ionicons name={icon as any} size={16} color={C.accent} />
+        <Ionicons name={icon as any} size={19} color={C.textSub} />
       </View>
       <View style={styles.settingContent}>
         <Text style={styles.settingLabel}>{label}</Text>
@@ -896,21 +896,16 @@ const styles = StyleSheet.create({
   },
 
   // Setting rows
-  settingRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  settingRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13, paddingHorizontal: 14 },
   rowBorder: { borderTopWidth: 1, borderTopColor: C.border },
   settingIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: C.accentMuted,
+    width: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: C.borderAccent,
   },
   settingContent: { flex: 1 },
-  settingLabel: { color: C.text, fontSize: 15 },
-  settingValue: { color: C.textMuted, fontSize: 12, marginTop: 1 },
+  settingLabel: { color: C.text, fontSize: 15, fontWeight: '500' },
+  settingValue: { color: C.textMuted, fontSize: 12.5, marginTop: 2 },
 
   // Info rows
   infoRow: {
