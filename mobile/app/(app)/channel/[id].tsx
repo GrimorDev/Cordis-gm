@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, FlatList, StyleSheet, Text, TouchableOpacity,
-  ActivityIndicator, Alert, Modal, Pressable,
+  ActivityIndicator, Alert,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MessageBubble } from '../../../src/components/MessageBubble';
 import { MessageInput } from '../../../src/components/MessageInput';
+import { Sheet } from '../../../src/components/Sheet';
 import { C } from '../../../src/theme';
 import { messagesApi } from '../../../src/api';
 import { useStore } from '../../../src/store';
@@ -291,9 +292,8 @@ export default function ChannelScreen() {
       </View>
 
       {/* Pinned messages sheet */}
-      <Modal visible={pinnedVisible} transparent animationType="slide" onRequestClose={() => setPinnedVisible(false)} statusBarTranslucent>
-        <Pressable style={styles.pinnedOverlay} onPress={() => setPinnedVisible(false)}>
-          <Pressable style={[styles.pinnedSheet, { paddingBottom: insets.bottom + 20 }]} onPress={(e) => e.stopPropagation()}>
+      <Sheet visible={pinnedVisible} onClose={() => setPinnedVisible(false)}>
+          <View style={[styles.pinnedSheet, { paddingBottom: insets.bottom + 20 }]}>
             <View style={styles.pinnedHeader}>
               <Ionicons name="pin" size={16} color={C.accentLight} />
               <Text style={styles.pinnedTitle}>{t.pinnedMessages}</Text>
@@ -323,9 +323,8 @@ export default function ChannelScreen() {
                 )}
               />
             )}
-          </Pressable>
-        </Pressable>
-      </Modal>
+          </View>
+      </Sheet>
     </View>
   );
 }
@@ -391,7 +390,6 @@ const styles = StyleSheet.create({
   typingText: { color: C.textMuted, fontSize: 12 },
 
   // Pinned messages sheet
-  pinnedOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
   pinnedSheet: {
     backgroundColor: C.bgSurface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
     borderWidth: 1, borderColor: C.border, paddingTop: 16, paddingHorizontal: 16,

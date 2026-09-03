@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  RefreshControl, TextInput, Modal, ActivityIndicator, Alert,
+  RefreshControl, TextInput, ActivityIndicator, Alert,
   ScrollView, Share, Animated, LayoutAnimation, Platform, UIManager,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -16,6 +16,7 @@ import { getSocket } from '../../src/socket';
 import { voiceMesh } from '../../src/webrtc';
 import { showOngoingCallNotification, hideOngoingCallNotification } from '../../src/callNotification';
 import { VoiceChannelCallView } from '../../src/components/VoiceChannelCallView';
+import { Sheet } from '../../src/components/Sheet';
 import { useT, getT } from '../../src/i18n';
 import type { Server, Channel } from '../../src/api';
 
@@ -541,8 +542,7 @@ export default function ServersScreen() {
         />
 
         {/* Edit channel modal */}
-        <Modal visible={modal === 'editChannel'} transparent animationType="slide" onRequestClose={() => setModal('none')}>
-          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setModal('none')}>
+        <Sheet visible={modal === 'editChannel'} onClose={() => setModal('none')}>
             <View style={styles.modalCard} onStartShouldSetResponder={() => true}>
               <View style={styles.modalDragBar} />
               <Text style={styles.modalTitle}>{t.editChannelTitle}</Text>
@@ -568,8 +568,7 @@ export default function ServersScreen() {
                 }
               </TouchableOpacity>
             </View>
-          </TouchableOpacity>
-        </Modal>
+        </Sheet>
       </View>
     );
   }
@@ -666,8 +665,7 @@ export default function ServersScreen() {
       />
 
       {/* Create server modal */}
-      <Modal visible={modal === 'create'} transparent animationType="slide" onRequestClose={() => setModal('none')}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setModal('none')}>
+      <Sheet visible={modal === 'create'} onClose={() => setModal('none')}>
           <View style={styles.modalCard}>
             <View style={styles.modalDragBar} />
             <Text style={styles.modalTitle}>{t.createServer}</Text>
@@ -702,12 +700,10 @@ export default function ServersScreen() {
               }
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      </Modal>
+      </Sheet>
 
       {/* Join server modal */}
-      <Modal visible={modal === 'join'} transparent animationType="slide" onRequestClose={() => setModal('none')}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setModal('none')}>
+      <Sheet visible={modal === 'join'} onClose={() => setModal('none')}>
           <View style={styles.modalCard}>
             <View style={styles.modalDragBar} />
             <Text style={styles.modalTitle}>{t.joinServer}</Text>
@@ -733,8 +729,7 @@ export default function ServersScreen() {
               }
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      </Modal>
+      </Sheet>
     </View>
   );
 }
@@ -749,8 +744,7 @@ function ServerActionSheet({ server, onClose, onLeave, onInvite }: {
   const t = useT();
   if (!server) return null;
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
+    <Sheet visible onClose={onClose}>
         <View style={styles.actionSheet}>
           <View style={styles.modalDragBar} />
           <Text style={styles.actionSheetServerTitle}>{server.name}</Text>
@@ -758,8 +752,7 @@ function ServerActionSheet({ server, onClose, onLeave, onInvite }: {
           <View style={styles.actionDivider} />
           <ActionRow icon="log-out-outline" label={t.leaveServer} color={C.danger} onPress={() => { onClose(); onLeave(server); }} />
         </View>
-      </TouchableOpacity>
-    </Modal>
+    </Sheet>
   );
 }
 
@@ -781,8 +774,7 @@ function ChannelActionSheet({ channel, isOwner, onClose, onOpen, onEdit, onDelet
     : t.channelTypeText;
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
+    <Sheet visible onClose={onClose}>
         <View style={styles.actionSheet} onStartShouldSetResponder={() => true}>
           <View style={styles.modalDragBar} />
           {/* Channel header in sheet */}
@@ -812,8 +804,7 @@ function ChannelActionSheet({ channel, isOwner, onClose, onOpen, onEdit, onDelet
             </>
           )}
         </View>
-      </TouchableOpacity>
-    </Modal>
+    </Sheet>
   );
 }
 

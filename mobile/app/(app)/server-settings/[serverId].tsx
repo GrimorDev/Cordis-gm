@@ -14,6 +14,7 @@ import {
 } from '../../../src/api';
 import { useStore } from '../../../src/store';
 import { UserAvatar } from '../../../src/components/UserAvatar';
+import { Sheet } from '../../../src/components/Sheet';
 import { C } from '../../../src/theme';
 import { STATIC_BASE } from '../../../src/config';
 import { useT, getT } from '../../../src/i18n';
@@ -550,6 +551,7 @@ export default function ServerSettingsScreen() {
   const [members, setMembers] = useState<ServerMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
   const [assigningRolesFor, setAssigningRolesFor] = useState<ServerMember | null>(null);
+  const [memberOptionsFor, setMemberOptionsFor] = useState<ServerMember | null>(null);
 
   // Bans tab
   const [bans, setBans] = useState<ServerBan[]>([]);
@@ -738,30 +740,26 @@ export default function ServerSettingsScreen() {
   };
 
   // ── Member actions ───────────────────────────────────────────────────────
-  const handleMemberOptions = (member: ServerMember) => {
+  const handleKick = (member: ServerMember) => {
     const gt = getT();
-    Alert.alert(member.username, gt.memberOptions, [
+    Alert.alert(gt.kick, gt.kickTitle(member.username), [
       { text: gt.cancel, style: 'cancel' },
-      { text: gt.assignRoles, onPress: () => setAssigningRolesFor(member) },
-      {
-        text: gt.kick, onPress: () => Alert.alert(gt.kick, gt.kickTitle(member.username), [
-          { text: gt.cancel, style: 'cancel' },
-          { text: gt.kickBtn, style: 'destructive', onPress: async () => {
-            try { await serversApi.kick(serverId!, member.id); setMembers(prev => prev.filter(m => m.id !== member.id)); }
-            catch (e: any) { const gt2 = getT(); Alert.alert(gt2.error, e.message); }
-          }},
-        ]),
-      },
-      {
-        text: gt.ban, style: 'destructive', onPress: () => Alert.prompt(
-          gt.banTitle, gt.banReasonPh(member.username),
-          async (reason) => {
-            try { await serversApi.ban(serverId!, member.id, reason || undefined); setMembers(prev => prev.filter(m => m.id !== member.id)); }
-            catch (e: any) { const gt2 = getT(); Alert.alert(gt2.error, e.message); }
-          }, 'plain-text',
-        ),
-      },
+      { text: gt.kickBtn, style: 'destructive', onPress: async () => {
+        try { await serversApi.kick(serverId!, member.id); setMembers(prev => prev.filter(m => m.id !== member.id)); }
+        catch (e: any) { const gt2 = getT(); Alert.alert(gt2.error, e.message); }
+      }},
     ]);
+  };
+
+  const handleBan = (member: ServerMember) => {
+    const gt = getT();
+    Alert.prompt(
+      gt.banTitle, gt.banReasonPh(member.username),
+      async (reason) => {
+        try { await serversApi.ban(serverId!, member.id, reason || undefined); setMembers(prev => prev.filter(m => m.id !== member.id)); }
+        catch (e: any) { const gt2 = getT(); Alert.alert(gt2.error, e.message); }
+      }, 'plain-text',
+    );
   };
 
   if (loading) {
@@ -1039,7 +1037,7 @@ export default function ServerSettingsScreen() {
               <Text style={styles.emptyText}>{t.noMembers}</Text>
             ) : (
               members.map(m => (
-                <TouchableOpacity key={m.id} style={styles.memberRow} onPress={() => handleMemberOptions(m)} activeOpacity={0.7}>
+                <TouchableOpacity key={m.id} style={styles.memberRow} onPress={() => setMemberOptionsFor(m)} activeOpacity={0.7}>
                   <UserAvatar url={m.avatar_url} username={m.username} size={40} status={m.status} showStatus />
                   <View style={styles.memberInfo}>
                     <Text style={styles.memberName}>{m.username}</Text>
@@ -1126,6 +1124,39 @@ export default function ServerSettingsScreen() {
         onClose={() => setAssigningRolesFor(null)}
         onSave={handleAssignRoles}
       />
+
+      {/* Member options sheet */}
+      <Sheet visible={memberOptionsFor !== null} onClose={() => setMemberOptionsFor(null)}>
+        <View style={mo.sheet}>
+          <View style={mo.dragBar} />
+          {memberOptionsFor && (
+            <>
+              <Text style={mo.title}>{memberOptionsFor.username}</Text>
+              <TouchableOpacity
+                style={mo.row}
+                onPress={() => { const m = memberOptionsFor; setMemberOptionsFor(null); if (m) setAssigningRolesFor(m); }}
+              >
+                <Ionicons name="shield-outline" size={18} color={C.text} />
+                <Text style={mo.rowLabel}>{t.assignRoles}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={mo.row}
+                onPress={() => { const m = memberOptionsFor; setMemberOptionsFor(null); if (m) handleKick(m); }}
+              >
+                <Ionicons name="exit-outline" size={18} color={C.text} />
+                <Text style={mo.rowLabel}>{t.kick}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={mo.row}
+                onPress={() => { const m = memberOptionsFor; setMemberOptionsFor(null); if (m) handleBan(m); }}
+              >
+                <Ionicons name="ban-outline" size={18} color={C.danger} />
+                <Text style={[mo.rowLabel, { color: C.danger }]}>{t.ban}</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </Sheet>
     </View>
   );
 }
@@ -1353,6 +1384,21 @@ const styles = StyleSheet.create({
 
   emptyText: { color: C.textMuted, fontSize: 14, textAlign: 'center', paddingVertical: 16 },
   emptyState: { alignItems: 'center', paddingVertical: 28, gap: 10 },
+});
+
+// ── Member options sheet styles ──────────────────────────────────────────────
+const mo = StyleSheet.create({
+  sheet: {
+    backgroundColor: C.bgSurface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    borderWidth: 1, borderColor: C.border, padding: 20, paddingBottom: 36, gap: 2,
+  },
+  dragBar: {
+    width: 36, height: 4, borderRadius: 2, backgroundColor: C.border,
+    alignSelf: 'center', marginBottom: 14,
+  },
+  title: { color: C.textMuted, fontSize: 13, fontWeight: '700', marginBottom: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13, paddingHorizontal: 4, borderRadius: 12 },
+  rowLabel: { color: C.text, fontSize: 15.5, fontWeight: '500' },
 });
 
 // ── Roles/permissions row styles ────────────────────────────────────────────────

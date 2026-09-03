@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, TextInput,
-  Alert, ScrollView, Modal, Platform, ActivityIndicator,
+  Alert, ScrollView, Platform, ActivityIndicator,
   RefreshControl, Switch, Image,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { UserAvatar } from '../../src/components/UserAvatar';
+import { Sheet } from '../../src/components/Sheet';
 import { C, STATUS_COLOR } from '../../src/theme';
 import { authApi, usersApi, friendsApi, type BlockedUser, type Session, type UserStats } from '../../src/api';
 import { useStore } from '../../src/store';
@@ -565,13 +566,7 @@ export default function ProfileScreen() {
       </BottomSheet>
 
       {/* Blocked users sheet */}
-      <Modal
-        visible={sheet === 'blocked'}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setSheet('none')}
-      >
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setSheet('none')}>
+      <Sheet visible={sheet === 'blocked'} onClose={() => setSheet('none')}>
           <View style={[styles.sheet, { maxHeight: '75%' }]} onStartShouldSetResponder={() => true}>
             <View style={styles.dragBar} />
             <View style={styles.blockedHeader}>
@@ -610,8 +605,7 @@ export default function ProfileScreen() {
               </ScrollView>
             )}
           </View>
-        </TouchableOpacity>
-      </Modal>
+      </Sheet>
 
       {/* Password sheet */}
       <BottomSheet visible={sheet === 'changePassword'} onClose={() => setSheet('none')} title={t.changePassword}>
@@ -674,8 +668,7 @@ export default function ProfileScreen() {
       </BottomSheet>
 
       {/* Sessions sheet */}
-      <Modal visible={sheet === 'sessions'} transparent animationType="slide" onRequestClose={() => setSheet('none')}>
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setSheet('none')}>
+      <Sheet visible={sheet === 'sessions'} onClose={() => setSheet('none')}>
           <View style={[styles.sheet, { maxHeight: '75%' }]} onStartShouldSetResponder={() => true}>
             <View style={styles.dragBar} />
             <View style={styles.blockedHeader}>
@@ -719,8 +712,7 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             )}
           </View>
-        </TouchableOpacity>
-      </Modal>
+      </Sheet>
 
       {/* Stats sheet */}
       <BottomSheet visible={sheet === 'stats'} onClose={() => setSheet('none')} title="Twoja aktywność">
@@ -783,15 +775,13 @@ function BottomSheet({ visible, onClose, title, children }: {
   visible: boolean; onClose: () => void; title: string; children: React.ReactNode;
 }) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
-        <View style={styles.sheet} onStartShouldSetResponder={() => true}>
-          <View style={styles.dragBar} />
-          <Text style={styles.sheetTitle}>{title}</Text>
-          {children}
-        </View>
-      </TouchableOpacity>
-    </Modal>
+    <Sheet visible={visible} onClose={onClose}>
+      <View style={styles.sheet} onStartShouldSetResponder={() => true}>
+        <View style={styles.dragBar} />
+        <Text style={styles.sheetTitle}>{title}</Text>
+        {children}
+      </View>
+    </Sheet>
   );
 }
 
