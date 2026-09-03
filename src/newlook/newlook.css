@@ -108,6 +108,16 @@
   background: linear-gradient(135deg, #6366f1, #7c3aed);
 }
 
+/* The soft blue "poświata" haze pooling at the bottom of the chat column,
+   layered on top of the base gradient — distinct from it, not a substitute. */
+.nl-glow {
+  position: absolute;
+  left: 0; right: 0; bottom: 0; height: 45%;
+  pointer-events: none;
+  background: radial-gradient(60% 100% at 50% 100%, rgba(56, 97, 220, 0.28) 0%, rgba(56, 97, 220, 0) 70%);
+  z-index: 0;
+}
+
 .nl-transition-overlay {
   position: fixed;
   inset: 0;

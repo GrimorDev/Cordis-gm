@@ -26,6 +26,14 @@ export function ServerRail({
         <MessageSquare size={18} />
       </button>
 
+      <button className="nl-rail-icon" title={currentUser.username} onClick={onOpenSettings} style={{ padding: 0, overflow: 'hidden' }}>
+        {currentUser.avatar_url ? (
+          <img src={staticUrl(currentUser.avatar_url) ?? ''} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        ) : (
+          <span style={{ fontSize: 14, fontWeight: 700 }}>{currentUser.username.slice(0, 2).toUpperCase()}</span>
+        )}
+      </button>
+
       <div style={{ width: 32, height: 1, background: 'rgba(255,255,255,0.1)', margin: '2px 0' }} />
 
       <div className="nl-scroll" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center', width: '100%' }}>
@@ -54,11 +62,7 @@ export function ServerRail({
       </div>
 
       <button className="nl-rail-icon" title="Ustawienia" onClick={onOpenSettings}>
-        {currentUser.avatar_url ? (
-          <img src={staticUrl(currentUser.avatar_url) ?? ''} alt="" style={{ borderRadius: 14 }} />
-        ) : (
-          <Settings size={18} />
-        )}
+        <Settings size={18} />
       </button>
     </div>
   );

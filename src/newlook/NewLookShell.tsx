@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import './newlook.css';
 import type { NewLookShellProps } from './types';
 import { ServerRail } from './ServerRail';
@@ -11,12 +11,13 @@ import { InfoPanel } from './InfoPanel';
  *  — from real app state passed down as props; no local data-fetching or
  *  socket wiring of its own (App.tsx already owns all of that). */
 export function NewLookShell(props: NewLookShellProps) {
+  const [showInfo, setShowInfo] = useState(true);
   return (
     <div className="nl-root">
       <ServerRail {...props} />
       <ChannelList {...props} />
-      <ChatColumn {...props} />
-      <InfoPanel {...props} />
+      <ChatColumn {...props} onToggleInfo={() => setShowInfo(v => !v)} />
+      {showInfo && <InfoPanel {...props} />}
     </div>
   );
 }
