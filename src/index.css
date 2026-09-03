@@ -579,14 +579,22 @@ button, [role="button"], a, input, textarea, select {
 }
 
 /* ── Focus visible — keyboard navigation accessibility ─────────────────── */
-/* :where() lowers specificity so class-level "outline-none" still wins.   */
-:where(:focus-visible) {
-  outline: 2px solid rgba(99, 102, 241, 0.65);
-  outline-offset: 2px;
-  border-radius: 6px;
-}
-:where(:focus:not(:focus-visible)) {
-  outline: none;
+/* :where() lowers specificity so class-level "outline-none" still wins —
+   but that only works if this rule is actually IN the utilities layer:
+   unlayered CSS beats every @layer rule regardless of specificity, which
+   silently broke that intent (e.g. the message composer's textarea has
+   outline-none and still showed this ring on click, doubled up with the
+   composer's own focus-within border — "frame in frame"). Also switched
+   the color from a leftover indigo to the real brand accent. */
+@layer utilities {
+  :where(:focus-visible) {
+    outline: 2px solid rgba(255, 143, 64, 0.65);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  :where(:focus:not(:focus-visible)) {
+    outline: none;
+  }
 }
 
 @keyframes shimmer {
