@@ -96,6 +96,13 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 // Configure marked once — GFM mode, line-break aware
 marked.use({ gfm: true });
+// Hides every Spotify-facing UI element (settings, profile, voice call DJ,
+// activity status) while leaving the backend fully intact — Spotify's own
+// Development Mode caps external OAuth users at 5, so broader rollout isn't
+// possible yet. Flip back to true once the app qualifies for Extended Quota
+// Mode; no backend changes are needed either way.
+const SPOTIFY_ENABLED = false;
+
 // ─── Brand SVG icons ──────────────────────────────────────────────────────────
 const SpotifyIcon = ({ size = 14, className = '' }: { size?: number; className?: string }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-label="Spotify">
@@ -1759,7 +1766,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   </svg>
                 </div>
                 <h3 className="text-lg font-bold text-white mb-2 relative z-10">Twoje ulubione serwisy</h3>
-                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">Spotify, Steam, Twitch — wszystko widoczne na profilu w czasie rzeczywistym.</p>
+                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">Steam, Twitch — wszystko widoczne na profilu w czasie rzeczywistym.</p>
               </motion.div>
 
             </div>
@@ -7433,8 +7440,8 @@ function ProfilePage({
                 </div>
               )}
 
-              {/* Spotify section */}
-              {((isOwn && ownSpotify?.connected) || (spotifyToShow?.connected && spotifyToShow?.show_on_profile)) && (
+              {/* Spotify section — hidden while SPOTIFY_ENABLED is off */}
+              {SPOTIFY_ENABLED && ((isOwn && ownSpotify?.connected) || (spotifyToShow?.connected && spotifyToShow?.show_on_profile)) && (
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
@@ -8343,7 +8350,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
   const effectiveStatus = realtimeStatus ?? u?.status ?? 'offline';
   // Respect show_on_profile from fetched data; activity from socket is only shown if show_on_profile is true
   // Also hide Spotify activity if the user is offline (status should suppress all activity)
-  const showSpotify = data?.spotify?.show_on_profile !== false && effectiveStatus !== 'offline';
+  const showSpotify = SPOTIFY_ENABLED && data?.spotify?.show_on_profile !== false && effectiveStatus !== 'offline';
   const nowPlaying: (SpotifyTrack & {is_playing?:boolean}) | null | undefined =
     showSpotify
       ? (activity !== undefined
@@ -15962,7 +15969,7 @@ export default function App() {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
 
-                  {activeCall.type==='voice_channel' && ownSpotify?.connected && (
+                  {SPOTIFY_ENABLED && activeCall.type==='voice_channel' && ownSpotify?.connected && (
                     voiceDj[activeCall.channelId] ? (
                       voiceDj[activeCall.channelId]?.id === currentUser?.id ? (
                         // I am the DJ
@@ -16020,7 +16027,7 @@ export default function App() {
                 );
               })()}
               {/* Spotify DJ info bar */}
-              {activeCall?.type==='voice_channel' && voiceDj[activeCall.channelId] && (
+              {SPOTIFY_ENABLED && activeCall?.type==='voice_channel' && voiceDj[activeCall.channelId] && (
                 <div className="flex items-center justify-between px-4 py-2 bg-[#1DB954]/8 border-b border-[#1DB954]/20 shrink-0 relative z-10">
                   <div className="flex items-center gap-2">
                     <SpotifyIcon size={14} className="text-[#1DB954]"/>
@@ -17340,7 +17347,7 @@ export default function App() {
                           </div>
                           <button onClick={()=>openDm(f.id)} className="flex-1 min-w-0 text-left">
                             <p className="text-sm font-semibold text-zinc-300 group-hover:text-white transition-colors truncate">{maskName(f.username)}</p>
-                            {fAct ? <p className="text-[11px] text-[#1DB954] leading-tight flex items-center gap-1 min-w-0"><SpotifyIcon size={9} className="shrink-0"/> <MarqueeText text={fAct.artists} className="flex-1"/></p>
+                            {(SPOTIFY_ENABLED && fAct) ? <p className="text-[11px] text-[#1DB954] leading-tight flex items-center gap-1 min-w-0"><SpotifyIcon size={9} className="shrink-0"/> <MarqueeText text={fAct.artists} className="flex-1"/></p>
                             : fTw ? <p className="text-[11px] text-purple-400 leading-tight flex items-center gap-1 min-w-0"><TwitchIcon size={9} className="shrink-0"/> <MarqueeText text={fTw.game_name} className="flex-1"/></p>
                             : fSt ? <p className="text-[11px] text-emerald-400 leading-tight flex items-center gap-1 min-w-0"><Gamepad2 size={9} className="shrink-0"/> <MarqueeText text={fSt.name} className="flex-1"/></p>
                             : f.custom_status ? <p className="text-xs text-zinc-600 truncate">{f.custom_status}</p> : null}
@@ -17589,7 +17596,7 @@ export default function App() {
                             <div className="relative"><GifAvatar src={ava(f)} className="w-10 h-10 rounded-2xl object-cover av-sc-xs" alt=""/><StatusBadge status={f.status} size={10} className="absolute -bottom-0.5 -right-0.5"/></div>
                             <div>
                               <p className="font-semibold text-white text-sm">{maskName(f.username)}</p>
-                              {fActivity ? (
+                              {(SPOTIFY_ENABLED && fActivity) ? (
                                 <p className="text-xs text-[#1DB954] flex items-center gap-1 min-w-0 max-w-[160px]"><SpotifyIcon size={11} className="shrink-0"/> <MarqueeText text={`${fActivity.artists} — ${fActivity.name}`} className="flex-1"/></p>
                               ) : fTwitch ? (
                                 <p className="text-xs text-purple-400 flex items-center gap-1 min-w-0 max-w-[160px]"><TwitchIcon size={11} className="shrink-0"/> <MarqueeText text={`Streamuje: ${fTwitch.game_name}`} className="flex-1"/></p>
@@ -20140,7 +20147,7 @@ export default function App() {
                       {(m as any).active_tag&&<span className={opacity?'opacity-50':''}><TagBadge tag={(m as any).active_tag} color={(m as any).active_tag_server_id?(serverTagColorMap[(m as any).active_tag_server_id]??null):null} icon={(m as any).active_tag_server_id?(serverTagIconMap[(m as any).active_tag_server_id]??null):null} serverInfo={(m as any).active_tag_server_id?(serverList.find(s=>s.id===(m as any).active_tag_server_id)??null):null}/></span>}
                       {m.badges?.map((b:any)=><span key={b.id} className={opacity?'opacity-40':''}><BadgePip b={b} size={14}/></span>)}
                     </div>
-                    {!opacity ? (mActivity?(
+                    {!opacity ? ((SPOTIFY_ENABLED && mActivity)?(
                       <p className="text-[11px] text-[#1DB954] leading-tight flex items-center gap-1 min-w-0"><SpotifyIcon size={10} className="shrink-0"/> <MarqueeText text={mActivity.artists} className="flex-1"/></p>
                     ):mTwitch?(
                       <p className="text-[11px] text-purple-400 leading-tight flex items-center gap-1 min-w-0"><TwitchIcon size={10} className="shrink-0"/> <MarqueeText text={`Streamuje: ${mTwitch.game_name}`} className="flex-1"/></p>
@@ -24442,7 +24449,8 @@ export default function App() {
                       className="flex flex-col gap-6">
                       <h3 className="text-sm font-bold text-white">{tl('connections.title')}</h3>
 
-                      {/* Spotify */}
+                      {/* Spotify — hidden while SPOTIFY_ENABLED is off */}
+                      {SPOTIFY_ENABLED && (
                       <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
                         <div className="flex items-center gap-3 mb-3">
                           <div className="w-8 h-8 bg-[#1DB954]/15 rounded-xl flex items-center justify-center">
@@ -24471,6 +24479,7 @@ export default function App() {
                           </div>
                         )}
                       </div>
+                      )}
 
                       {/* Twitch */}
                       <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
