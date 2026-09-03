@@ -11421,7 +11421,12 @@ export default function App() {
 
   // ── DM change ───────────────────────────────────────────────────
   useEffect(() => {
-    if (!activeDmUserId) return;
+    if (!activeDmUserId) {
+      // Leaving a 1-on-1 DM (e.g. switching to a group DM) — clear the stale
+      // partner profile so it can't outlive the conversation it belongs to.
+      setDmPartnerProfile(null);
+      return;
+    }
     setDmMsgs([]); setMsgsLoading(true); setSearchQuery(''); setDmHasMore(true);
     setTypingUsers({});
     dmsApi.messages(activeDmUserId).then(msgs => { setDmMsgs(msgs); if (msgs.length < 50) setDmHasMore(false); }).catch(console.error).finally(()=>setMsgsLoading(false));
@@ -18523,7 +18528,8 @@ export default function App() {
                   </div>
                 )}
               {/* Messages */}
-              <div ref={msgScrollRef} data-chat-font={fontSize} className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-5 custom-scrollbar flex flex-col"
+              <motion.div ref={msgScrollRef} data-chat-font={fontSize} className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-5 custom-scrollbar flex flex-col"
+                animate={{opacity: msgsLoading ? 0.35 : 1}} transition={{duration: 0.2, ease: 'easeOut'}}
                 style={activeCh?.background_url ? {
                   backgroundImage: activeCh.background_gradient
                     ? `${activeCh.background_gradient}, url(${activeCh.background_url})`
@@ -19347,7 +19353,7 @@ export default function App() {
                   <div ref={bottomRef}/>
                 </motion.div>
                 </AnimatePresence>
-              </div>
+              </motion.div>
 
               {/* Input */}
               <div className="shrink-0 px-4 md:px-6 pb-5 pt-3 relative" style={{borderTop:'1px solid rgba(255,255,255,0.05)',background:'linear-gradient(to bottom,rgba(0,0,0,0.08) 0%,transparent 100%)'}}>
@@ -20263,7 +20269,7 @@ export default function App() {
           })()}
 
           {/* ─ DM PARTNER BIO PANEL ─ */}
-          {activeView==='dms'&&(activeDm||dmPartnerProfile)&&dmPartnerProfile&&(()=>{
+          {activeView==='dms'&&!activeGroupDm&&dmPartnerProfile&&(()=>{
             // ── helpers for tabs ─────────────────────────────────
             const IMG_EXT = /\.(jpe?g|png|gif|webp|avif|svg|bmp)(\?.*)?$/i;
             const VID_EXT = /\.(mp4|webm|ogg|mov|avi)(\?.*)?$/i;
@@ -20319,10 +20325,10 @@ export default function App() {
                 <div className="px-4 pb-3 border-b border-white/[0.07]">
                   <div className="relative inline-block -mt-7 mb-2 av-frozen" style={{'--av-url':`url("${ava(dmPartnerProfile)}")`} as React.CSSProperties}>
                     <img src={ava(dmPartnerProfile)} className={`w-14 h-14 rounded-2xl border-4 border-[#1e1e30] object-cover av-eff-${dmPartnerProfile.avatar_effect||'none'}`} alt=""/>
-                    <StatusBadge status={activeDm.other_status} size={12} className="absolute -bottom-0.5 -right-0.5"/>
+                    <StatusBadge status={activeDm?.other_status ?? dmPartnerProfile.status} size={12} className="absolute -bottom-0.5 -right-0.5"/>
                   </div>
                   <h3 className="text-sm font-bold text-white leading-tight">{maskName(dmPartnerProfile.username)}</h3>
-                  {activeDm.other_custom_status&&(
+                  {activeDm?.other_custom_status&&(
                     <p className="text-xs text-zinc-500 mt-0.5 truncate">{activeDm.other_custom_status}</p>
                   )}
                   {/* Badges row */}
