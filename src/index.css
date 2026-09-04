@@ -241,10 +241,10 @@ button, [role="button"], a, input, textarea, select {
 }
 .srv-icon-btn.active {
   border-radius: 14px;
-  border-color: rgba(255,143,64,0.50);
-  box-shadow: 0 4px 24px rgba(255,143,64,0.35),
-              0 0 0 1px rgba(255,143,64,0.20),
-              inset 0 1px 0 rgba(255,143,64,0.18);
+  border-color: rgb(var(--accent-rgb) / 0.50);
+  box-shadow: 0 4px 24px rgb(var(--accent-rgb) / 0.35),
+              0 0 0 1px rgb(var(--accent-rgb) / 0.20),
+              inset 0 1px 0 rgb(var(--accent-rgb) / 0.18);
 }
 .srv-icon-btn .srv-active-pip {
   position: absolute;
@@ -254,7 +254,7 @@ button, [role="button"], a, input, textarea, select {
   width: 3px;
   height: 0;
   border-radius: 0 2px 2px 0;
-  background: var(--ayu-orange);
+  background: var(--app-accent, var(--ayu-orange));
   transition: height 0.20s cubic-bezier(0.16,1,0.3,1);
 }
 .srv-icon-btn.active .srv-active-pip { height: 24px; }
@@ -323,18 +323,18 @@ button, [role="button"], a, input, textarea, select {
 
 /* Send button — Ayu Orange */
 .send-btn {
-  background: linear-gradient(135deg, #e8832a 0%, #FF8F40 100%);
-  box-shadow: 0 2px 10px rgba(255,143,64, 0.30);
+  background: linear-gradient(135deg, color-mix(in srgb, rgb(var(--accent-rgb)) 80%, black) 0%, rgb(var(--accent-rgb)) 100%);
+  box-shadow: 0 2px 10px rgb(var(--accent-rgb) / 0.30);
   transition: all 0.15s ease;
 }
 .send-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #d4771f 0%, #f08035 100%);
-  box-shadow: 0 3px 16px rgba(255,143,64, 0.45);
+  background: linear-gradient(135deg, color-mix(in srgb, rgb(var(--accent-rgb)) 70%, black) 0%, color-mix(in srgb, rgb(var(--accent-rgb)) 90%, white) 100%);
+  box-shadow: 0 3px 16px rgb(var(--accent-rgb) / 0.45);
   transform: scale(1.05);
 }
 .send-btn:active:not(:disabled) {
   transform: scale(0.92);
-  box-shadow: 0 1px 6px rgba(255,143,64, 0.25);
+  box-shadow: 0 1px 6px rgb(var(--accent-rgb) / 0.25);
 }
 
 /* Active channel pill — glowing left indicator */
@@ -383,12 +383,12 @@ button, [role="button"], a, input, textarea, select {
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
 }
 .ch-btn.active {
-  background: linear-gradient(90deg, rgba(255,143,64,0.18) 0%, rgba(255,143,64,0.07) 100%);
-  color: var(--ayu-yellow);
-  border-color: rgba(255,143,64,0.38);
-  box-shadow: inset 3px 0 0 var(--ayu-orange),
-              0 1px 20px rgba(255,143,64,0.14),
-              inset 0 1px 0 rgba(255,143,64,0.12);
+  background: linear-gradient(90deg, rgb(var(--accent-rgb) / 0.18) 0%, rgb(var(--accent-rgb) / 0.07) 100%);
+  color: var(--app-accent-soft, var(--ayu-yellow));
+  border-color: rgb(var(--accent-rgb) / 0.38);
+  box-shadow: inset 3px 0 0 var(--app-accent, var(--ayu-orange)),
+              0 1px 20px rgb(var(--accent-rgb) / 0.14),
+              inset 0 1px 0 rgb(var(--accent-rgb) / 0.12);
 }
 .ch-btn.unread:not(.active) {
   color: var(--ayu-text);
@@ -424,9 +424,9 @@ button, [role="button"], a, input, textarea, select {
   border-color: rgba(255,255,255,0.07);
 }
 .ch-btn.active .ch-icon {
-  background: rgba(255,143,64,0.28);
-  border-color: rgba(255,143,64,0.38);
-  box-shadow: 0 0 14px rgba(255,143,64,0.22);
+  background: rgb(var(--accent-rgb) / 0.28);
+  border-color: rgb(var(--accent-rgb) / 0.38);
+  box-shadow: 0 0 14px rgb(var(--accent-rgb) / 0.22);
 }
 .ch-btn:hover:not(.active) .ch-icon {
   background: rgba(99,102,241,0.18);
@@ -449,9 +449,9 @@ button, [role="button"], a, input, textarea, select {
   width: 3px;
   height: 12px;
   border-radius: 2px;
-  background: linear-gradient(to bottom, var(--ayu-orange), var(--ayu-yellow));
+  background: linear-gradient(to bottom, var(--app-accent, var(--ayu-orange)), var(--app-accent-soft, var(--ayu-yellow)));
   opacity: 0.75;
-  box-shadow: 0 0 8px rgba(255,143,64,0.45);
+  box-shadow: 0 0 8px rgb(var(--accent-rgb) / 0.45);
 }
 .cat-header-bar .cat-label {
   font-size: 11px;
@@ -476,7 +476,7 @@ button, [role="button"], a, input, textarea, select {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0; height: 1px;
-  background: linear-gradient(to right, transparent, rgba(255,143,64,0.45), transparent);
+  background: linear-gradient(to right, transparent, rgb(var(--accent-rgb) / 0.45), transparent);
   pointer-events: none;
 }
 
@@ -519,15 +519,15 @@ button, [role="button"], a, input, textarea, select {
   box-shadow: 0 4px 16px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.06);
 }
 .msg-input-wrap:hover {
-  border-color: rgba(255,143,64,0.32);
+  border-color: rgb(var(--accent-rgb) / 0.32);
   box-shadow: 0 4px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.07);
 }
 .msg-input-wrap:focus-within {
-  border-color: rgba(255,143,64,0.68);
-  box-shadow: 0 0 0 3px rgba(255,143,64,0.14),
-              0 0 36px rgba(255,143,64,0.18),
+  border-color: rgb(var(--accent-rgb) / 0.68);
+  box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 0.14),
+              0 0 36px rgb(var(--accent-rgb) / 0.18),
               0 4px 20px rgba(0,0,0,0.40),
-              inset 0 1px 0 rgba(255,143,64,0.12);
+              inset 0 1px 0 rgb(var(--accent-rgb) / 0.12);
   background: linear-gradient(135deg, rgba(16,17,30,0.99) 0%, rgba(12,13,24,1) 100%);
 }
 
@@ -1797,12 +1797,12 @@ img.av-eff-arcade-coin { transition: filter 0.3s; }
   pointer-events: none;
 }
 .focus-card-active .focus-card-center {
-  outline: 2px solid rgba(255,143,64,0.55) !important;
+  outline: 2px solid rgb(var(--accent-rgb) / 0.55) !important;
   outline-offset: 0px;
   box-shadow:
-    0 0 0 4px rgba(255,143,64,0.08),
-    0 0 50px rgba(255,143,64,0.12),
-    inset 0 0 80px rgba(255,143,64,0.03) !important;
+    0 0 0 4px rgb(var(--accent-rgb) / 0.08),
+    0 0 50px rgb(var(--accent-rgb) / 0.12),
+    inset 0 0 80px rgb(var(--accent-rgb) / 0.03) !important;
 }
 
 /* ── Flying emoji reaction animation ── */

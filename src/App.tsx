@@ -146,7 +146,7 @@ function fmtSubsConn(n: number): string { if (n >= 1_000_000) return (n/1_000_00
 // ─── Glass constants ──────────────────────────────────────────────────────────
 const gp = 'glass-panel';
 const gm = 'glass-modal rounded-3xl'; // modals: high opacity, no bleed-through
-const gi = 'bg-white/[0.06] border border-white/[0.08] text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] transition-all rounded-xl';
+const gi = 'bg-white/[0.06] border border-white/[0.08] text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 focus:shadow-[0_0_0_3px_var(--tw-shadow-color)] focus:shadow-indigo-500/10 transition-all rounded-xl';
 const gb = 'glass-panel glass-panel-hover text-zinc-400 hover:text-white transition-all active:scale-95';
 
 const PERMISSIONS = [
@@ -315,6 +315,24 @@ const hexToRgb = (hex: string): string => {
   const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
   const n = parseInt(full, 16) || 0;
   return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+};
+
+// User-selectable accent palette (Settings → Wygląd → Kolor akcentu). Single
+// source of truth for both the CSS-variable override below and applyThemeVars'
+// injected stylesheet — previously each derived a color independently and the
+// theme override (using !important) always won, so picking an accent color
+// other than the active theme's own default silently did nothing app-wide.
+const ACCENT_PALETTES: Record<string, Record<string,string>> = {
+  indigo:  { '300':'#a5b4fc','400':'#818cf8','500':'#6366f1','600':'#4f46e5','700':'#4338ca' },
+  violet:  { '300':'#c4b5fd','400':'#a78bfa','500':'#8b5cf6','600':'#7c3aed','700':'#6d28d9' },
+  pink:    { '300':'#f9a8d4','400':'#f472b6','500':'#ec4899','600':'#db2777','700':'#be185d' },
+  blue:    { '300':'#93c5fd','400':'#60a5fa','500':'#3b82f6','600':'#2563eb','700':'#1d4ed8' },
+  emerald: { '300':'#6ee7b7','400':'#34d399','500':'#10b981','600':'#059669','700':'#047857' },
+  amber:   { '300':'#fcd34d','400':'#fbbf24','500':'#f59e0b','600':'#d97706','700':'#b45309' },
+  orange:  { '300':'#fdba74','400':'#fb923c','500':'#f97316','600':'#ea580c','700':'#c2410c' },
+  rose:    { '300':'#fda4af','400':'#fb7185','500':'#f43f5e','600':'#e11d48','700':'#be123c' },
+  teal:    { '300':'#5eead4','400':'#2dd4bf','500':'#14b8a6','600':'#0d9488','700':'#0f766e' },
+  cyan:    { '300':'#67e8f9','400':'#22d3ee','500':'#06b6d4','600':'#0891b2','700':'#0e7490' },
 };
 
 const THEMES = [
@@ -8419,7 +8437,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
             {!isSelf && u && (
               <div className="flex gap-1.5">
                 <button onClick={()=>onOpenDm(userId)}
-                  className="w-7 h-7 bg-white/[0.06] hover:bg-orange-500/20 border border-white/[0.08] rounded-lg flex items-center justify-center text-zinc-400 hover:text-orange-400 transition-all" title={tl('profile.message')}>
+                  className="w-7 h-7 bg-white/[0.06] hover:bg-indigo-500/20 border border-white/[0.08] rounded-lg flex items-center justify-center text-zinc-400 hover:text-indigo-400 transition-all" title={tl('profile.message')}>
                   <MessageCircle size={13}/>
                 </button>
                 <button onClick={()=>onCall(userId, u.username, u.avatar_url||null, 'voice')}
@@ -8521,7 +8539,7 @@ function HoverCard({ userId, x, y, currentUserId, onOpenDm, onCall, onOpenProfil
 
           {/* View profile button */}
           <button onClick={()=>onOpenProfile(userId)}
-            className="w-full mt-1 py-2 rounded-xl bg-white/[0.05] hover:bg-orange-500/20 border border-white/[0.08] hover:border-orange-500/30 text-[12px] font-semibold text-zinc-400 hover:text-orange-300 transition-all flex items-center justify-center gap-1.5">
+            className="w-full mt-1 py-2 rounded-xl bg-white/[0.05] hover:bg-indigo-500/20 border border-white/[0.08] hover:border-indigo-500/30 text-[12px] font-semibold text-zinc-400 hover:text-indigo-300 transition-all flex items-center justify-center gap-1.5">
             {tl('profile.goToProfile')}
           </button>
         </div>
@@ -11683,19 +11701,7 @@ export default function App() {
 
   // Apply accent color — override Tailwind v4 color CSS variables so every bg-indigo-*, text-indigo-* etc. uses the chosen color
   useEffect(() => {
-    const palettes: Record<string, Record<string,string>> = {
-      indigo:  { '300':'#a5b4fc','400':'#818cf8','500':'#6366f1','600':'#4f46e5','700':'#4338ca' },
-      violet:  { '300':'#c4b5fd','400':'#a78bfa','500':'#8b5cf6','600':'#7c3aed','700':'#6d28d9' },
-      pink:    { '300':'#f9a8d4','400':'#f472b6','500':'#ec4899','600':'#db2777','700':'#be185d' },
-      blue:    { '300':'#93c5fd','400':'#60a5fa','500':'#3b82f6','600':'#2563eb','700':'#1d4ed8' },
-      emerald: { '300':'#6ee7b7','400':'#34d399','500':'#10b981','600':'#059669','700':'#047857' },
-      amber:   { '300':'#fcd34d','400':'#fbbf24','500':'#f59e0b','600':'#d97706','700':'#b45309' },
-      orange:  { '300':'#fdba74','400':'#fb923c','500':'#f97316','600':'#ea580c','700':'#c2410c' },
-      rose:    { '300':'#fda4af','400':'#fb7185','500':'#f43f5e','600':'#e11d48','700':'#be123c' },
-      teal:    { '300':'#5eead4','400':'#2dd4bf','500':'#14b8a6','600':'#0d9488','700':'#0f766e' },
-      cyan:    { '300':'#67e8f9','400':'#22d3ee','500':'#06b6d4','600':'#0891b2','700':'#0e7490' },
-    };
-    const p = palettes[accentColor] || palettes.indigo;
+    const p = ACCENT_PALETTES[accentColor] || ACCENT_PALETTES.indigo;
     const r = document.documentElement;
     ['300','400','500','600','700'].forEach(shade => r.style.setProperty(`--color-indigo-${shade}`, p[shade]));
     // Fallback: legacy CSS variable used by some inline styles
@@ -11727,8 +11733,12 @@ export default function App() {
       const sidebar   = palette.sidebar   || '#0d0d15';
       const card      = palette.card      || '#15151f';
       const surface   = palette.surface   || '#1c1c2a';
-      const accent    = palette.accent     || '#6366f1';
-      const soft      = palette.accentSoft || '#a5b4fc';
+      // Accent comes from the user's own "Kolor akcentu" pick, not the theme's
+      // own default — themes only own backgrounds/surfaces now (see comment on
+      // ACCENT_PALETTES above for why these two used to fight each other).
+      const accentPalette = ACCENT_PALETTES[accentColor] || ACCENT_PALETTES.indigo;
+      const accent    = accentPalette['500'];
+      const soft      = accentPalette['400'];
       const gradient  = palette.gradient as string | undefined;
       const rgb       = hexToRgb(accent);
       const softRgb   = hexToRgb(soft);
@@ -11801,7 +11811,7 @@ export default function App() {
     };
 
     applyThemeVars(selectedTheme);
-  }, [selectedTheme]);
+  }, [selectedTheme, accentColor]);
 
   // ── Game session timer tick (refresh elapsed time display every minute) ──
   useEffect(() => {
@@ -14508,7 +14518,7 @@ export default function App() {
           </div>
           {/* Home pill — sole entry point to the home view (the old separate logo button did the exact same thing) */}
           <button onClick={()=>{setActiveView('home');setActiveServer('');setActiveChannel('');setActiveDmUserId('');setActiveGroupDm(null);}}
-            className={`hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[12px] font-semibold transition-all shrink-0 ${activeView==='home'?'bg-[rgba(255,143,64,0.15)] text-[#FFB454]':'text-zinc-400 hover:text-white hover:bg-white/[0.06]'}`}>
+            className={`hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[12px] font-semibold transition-all shrink-0 ${activeView==='home'?'bg-indigo-500/15 text-indigo-400':'text-zinc-400 hover:text-white hover:bg-white/[0.06]'}`}>
             <LayoutDashboard size={13}/><span>Home</span>
           </button>
         </div>
@@ -14535,15 +14545,15 @@ export default function App() {
                   onClick={()=>{if(activeServer===srv.id&&activeView==='servers')return;const same=activeServer===srv.id;setActiveServer(srv.id);setActiveView('servers');setActiveChannel('');setServerFull(null);setProfileViewId(null);setBannerExpanded(false);setFsOpen(false);if(same)setServerReloadKey(k=>k+1);setSrvRingActivity(prev=>{const n={...prev};delete n[srv.id];return n;});}}
                   onContextMenu={e=>{e.preventDefault();setSrvContextMenu({x:e.clientX,y:e.clientY,srv});}}
                   title={srv.name}
-                  className={`flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-xl transition-all shrink-0 relative border ${isAct?'bg-[rgba(255,143,64,0.12)] border-[rgba(255,143,64,0.22)]':mention?'border-amber-400/30 bg-amber-400/[0.06]':unrd?'border-sky-400/30 bg-sky-400/[0.06]':'border-transparent hover:bg-white/[0.08]'}`}>
-                  <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 p-px ${isAct?'ring-1 ring-[rgba(255,143,64,0.5)]':mention?'ring-1 ring-amber-400/50':unrd?'ring-1 ring-sky-400/40':''}`}>
+                  className={`flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-xl transition-all shrink-0 relative border ${isAct?'bg-indigo-500/10 border-indigo-500/20':mention?'border-amber-400/30 bg-amber-400/[0.06]':unrd?'border-sky-400/30 bg-sky-400/[0.06]':'border-transparent hover:bg-white/[0.08]'}`}>
+                  <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 p-px ${isAct?'ring-1 ring-indigo-500/50':mention?'ring-1 ring-amber-400/50':unrd?'ring-1 ring-sky-400/40':''}`}>
                   <span className="w-full h-full rounded-[7px] overflow-hidden flex items-center justify-center">
                     {srv.icon_url
                       ? <img src={staticUrl(srv.icon_url)} className="w-full h-full object-cover" alt=""/>
-                      : <span className={`w-full h-full flex items-center justify-center text-[10px] font-bold text-white rounded-[7px] ${isAct?'bg-gradient-to-br from-[#FF8F40] to-[#FFB454]':'bg-[#1a2030]'}`}>{srv.name.charAt(0).toUpperCase()}</span>}
+                      : <span className={`w-full h-full flex items-center justify-center text-[10px] font-bold text-white rounded-[7px] ${isAct?'bg-gradient-to-br from-indigo-500 to-indigo-400':'bg-[#1a2030]'}`}>{srv.name.charAt(0).toUpperCase()}</span>}
                   </span>{/* /overflow-hidden inner */}
                   </span>{/* /ring outer */}
-                  <span className={`text-[11px] font-semibold truncate max-w-[80px] ${isAct?'text-[#FFB454]':mention?'text-amber-400':unrd?'text-sky-400':'text-zinc-300'}`}>{srv.name}</span>
+                  <span className={`text-[11px] font-semibold truncate max-w-[80px] ${isAct?'text-indigo-400':mention?'text-amber-400':unrd?'text-sky-400':'text-zinc-300'}`}>{srv.name}</span>
                   {/* Activity dot */}
                   {mention&&<span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-400 border-2 border-[#0A0E14]"/>}
                   {unrd&&!mention&&<span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-sky-400 border-2 border-[#0A0E14]"/>}
@@ -14574,7 +14584,7 @@ export default function App() {
             <Search size={15}/>
           </button>
           <div className="relative group hidden sm:flex items-center">
-            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-[#FF8F40] transition-colors pointer-events-none"/>
+            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-indigo-400 transition-colors pointer-events-none"/>
             <input ref={searchInputRef} placeholder="Szukaj wszędzie — kanały, ludzie, wiadomości" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
               onKeyDown={e => {
                 if (e.key === 'Escape') { setSearchQuery(''); (e.target as HTMLInputElement).blur(); }
@@ -14585,7 +14595,7 @@ export default function App() {
                   else setSearchResultIdx(i => (i + 1) % searchMatches.length);
                 }
               }}
-              className="bg-white/[0.05] border border-white/[0.07] text-white placeholder-zinc-600 outline-none focus:border-[rgba(255,143,64,0.45)] focus:shadow-[0_0_0_3px_rgba(255,143,64,0.09)] rounded-xl pl-8 pr-14 py-1.5 text-xs w-44 focus:w-72 transition-all duration-300"/>
+              className="bg-white/[0.05] border border-white/[0.07] text-white placeholder-zinc-600 outline-none focus:border-indigo-500/40 focus:shadow-[0_0_0_3px_var(--tw-shadow-color)] focus:shadow-indigo-500/10 rounded-xl pl-8 pr-14 py-1.5 text-xs w-44 focus:w-72 transition-all duration-300"/>
             <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] text-zinc-600 bg-white/[0.06] border border-white/[0.09] rounded px-1.5 py-0.5 pointer-events-none">⌘ K</kbd>
           </div>
 
@@ -14593,7 +14603,7 @@ export default function App() {
           <div className="relative" ref={notifBellRef}>
             <button onClick={() => {
               setNotifOpen(p => !p);
-            }} className={`relative w-8 h-8 flex items-center justify-center rounded-xl transition-all ${notifOpen ? 'bg-[rgba(255,143,64,0.15)] text-[#FFB454]' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]'}`}>
+            }} className={`relative w-8 h-8 flex items-center justify-center rounded-xl transition-all ${notifOpen ? 'bg-indigo-500/15 text-indigo-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]'}`}>
               <Bell size={15}/>
               {(()=>{ const u = notifications.filter(n=>!n.read).length; return u>0 ? (
                 <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-rose-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5 leading-none shadow-[0_0_6px_rgba(239,68,68,0.5)]">
@@ -14726,7 +14736,7 @@ export default function App() {
           {/* Compass / server discovery — next to bell */}
           <button onClick={()=>{setDiscoveryCategory('all');setDiscoveryQ('');setDiscoveryLoading(true);discoverApi.list('').then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false));setShowDiscovery(true);}}
             title="Odkrywaj serwery"
-            className="hidden sm:flex w-8 h-8 items-center justify-center rounded-xl text-zinc-500 hover:text-[#FFB454] hover:bg-[rgba(255,143,64,0.10)] transition-all shrink-0">
+            className="hidden sm:flex w-8 h-8 items-center justify-center rounded-xl text-zinc-500 hover:text-indigo-400 hover:bg-indigo-500/10 transition-all shrink-0">
             <Compass size={15}/>
           </button>
 
@@ -15063,9 +15073,9 @@ export default function App() {
               const isAct=activeView===v;
               return (
                 <button key={v} title={label} onClick={()=>{setActiveView(v);setActiveServer('');setActiveChannel('');}}
-                  className={`srv-icon-btn ${isAct?'active':''} ${isAct?'bg-[rgba(255,143,64,0.15)]':'bg-white/[0.04] hover:bg-white/[0.08]'}`}>
+                  className={`srv-icon-btn ${isAct?'active':''} ${isAct?'bg-indigo-500/15':'bg-white/[0.04] hover:bg-white/[0.08]'}`}>
                   <span className="srv-active-pip"/>
-                  <span className={`${isAct?'text-[#FFB454]':'text-[#626A73] group-hover:text-white'}`}>{icon}</span>
+                  <span className={`${isAct?'text-indigo-400':'text-[#626A73] group-hover:text-white'}`}>{icon}</span>
                   {unread>0&&!isAct&&<span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 bg-red-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5 leading-none">{unread>99?'99+':unread}</span>}
                 </button>
               );
@@ -15110,7 +15120,7 @@ export default function App() {
                   <span className="srv-active-pip"/>
                   {srv.icon_url
                     ? <img src={staticUrl(srv.icon_url)} className="w-full h-full object-cover rounded-[inherit]" alt=""/>
-                    : <span className={`w-full h-full flex items-center justify-center text-[13px] font-bold text-white rounded-[inherit] ${isAct?'bg-gradient-to-br from-[#FF8F40] to-[#FFB454]':'bg-[#1a2030] group-hover:bg-[#242d3d]'}`}>{srv.name.charAt(0).toUpperCase()}</span>}
+                    : <span className={`w-full h-full flex items-center justify-center text-[13px] font-bold text-white rounded-[inherit] ${isAct?'bg-gradient-to-br from-indigo-500 to-indigo-400':'bg-[#1a2030] group-hover:bg-[#242d3d]'}`}>{srv.name.charAt(0).toUpperCase()}</span>}
                   {srv.is_official&&<span className="absolute bottom-0.5 right-0.5"><BadgeCheck size={9} className="text-amber-400"/></span>}
                   {/* Mute indicator — shown when server is muted */}
                   {srvMuted[srv.id] && (
@@ -15317,7 +15327,7 @@ export default function App() {
                             className={`ch-btn group/ch ${isAct?'active':ping>0?'pinged':unread>0?'unread':''}`}>
                             <div className="flex items-center gap-2 truncate flex-1 min-w-0">
                               <div className="ch-icon">
-                                <ChIcon size={13} className={isAct?'text-[#FFB454]':ping>0?'text-amber-400':unread>0?'text-[#59C2FF]':ch.type==='forum'?'text-purple-400':ch.type==='announcement'?'text-[#FF8F40]':'text-zinc-500'}/>
+                                <ChIcon size={13} className={isAct?'text-indigo-400':ping>0?'text-amber-400':unread>0?'text-[#59C2FF]':ch.type==='forum'?'text-purple-400':ch.type==='announcement'?'text-[#FF8F40]':'text-zinc-500'}/>
                               </div>
                               <span className={`text-[13px] truncate ${(unread>0||ping>0)&&!isAct?'font-semibold text-white':'font-medium'}`}>{ch.name}</span>
                             </div>
@@ -15420,7 +15430,7 @@ export default function App() {
                               className={`ch-btn group/ch ${compactChannels ? 'ch-btn-compact' : ''} ${isAct?'active':ping>0?'pinged':unread>0?'unread':''}`}>
                               <div className="flex items-center gap-2 truncate flex-1 min-w-0">
                                 <div className="ch-icon">
-                                  <ChIcon size={13} className={isAct?'text-[#FFB454]':ping>0?'text-amber-400':ch.type==='announcement'?'text-[#FF8F40]':ch.type==='forum'?'text-purple-400':unread>0?'text-[#59C2FF]':'text-zinc-500'}/>
+                                  <ChIcon size={13} className={isAct?'text-indigo-400':ping>0?'text-amber-400':ch.type==='announcement'?'text-[#FF8F40]':ch.type==='forum'?'text-purple-400':unread>0?'text-[#59C2FF]':'text-zinc-500'}/>
                                 </div>
                                 <span className={`text-[14px] truncate ${(unread>0||ping>0)&&!isAct?'font-semibold text-white':'font-medium'}`}>{ch.name}</span>
                                 {ch.is_private&&<Lock size={9} className="text-zinc-700 shrink-0"/>}
@@ -15618,7 +15628,7 @@ export default function App() {
                     }}
                     onContextMenu={e=>{ e.preventDefault(); setGroupCtxMenu({ x: e.clientX, y: Math.min(e.clientY, window.innerHeight - 160), gc }); }}
                     className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-200 group/gdm ${isActive?'text-white border':unreadGc>0?'text-zinc-200 hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]'}`}
-                    style={isActive?{background:'linear-gradient(90deg,rgba(255,143,64,0.14) 0%,rgba(255,143,64,0.05) 100%)',borderColor:'rgba(255,143,64,0.32)',boxShadow:'inset 3px 0 0 var(--ayu-orange),0 1px 16px rgba(255,143,64,0.08)'}:{}}>
+                    style={isActive?{background:'linear-gradient(90deg,rgb(var(--accent-rgb) / 0.14) 0%,rgb(var(--accent-rgb) / 0.05) 100%)',borderColor:'rgb(var(--accent-rgb) / 0.32)',boxShadow:'inset 3px 0 0 rgb(var(--accent-rgb)),0 1px 16px rgb(var(--accent-rgb) / 0.08)'}:{}}>
                     <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 flex items-center justify-center shrink-0 overflow-hidden">
                       {gc.icon_url
                         ? <img src={staticUrl(gc.icon_url)} className="w-full h-full object-cover" alt=""/>
@@ -15651,7 +15661,7 @@ export default function App() {
                   <button key={dm.id} onClick={() => { setActiveDmUserId(dm.other_user_id); setActiveGroupDm(null); setActiveView('dms'); setIsMobileOpen(false); setUnreadDms(p => ({ ...p, [dm.other_user_id]: 0 })); setProfileViewId(null); openGlobalTab({key:`dm:${dm.other_user_id}`,kind:'dm',name:dm.other_username,userId:dm.other_user_id,userAvatar:dm.other_avatar??undefined,userStatus:dm.other_status}); }}
                     onContextMenu={e => { e.preventDefault(); const rect = (e.currentTarget as HTMLElement).getBoundingClientRect(); setDmCtxMenu({ x: e.clientX, y: Math.min(e.clientY, window.innerHeight - 300), dm }); }}
                     className={`w-full flex items-center gap-3 px-2 py-2 rounded-2xl transition-all duration-200 ${isActive?'text-white border':unread>0?'text-zinc-200 hover:bg-white/[0.06] border border-transparent':'text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200 border border-transparent hover:border-white/[0.05]'}`}
-                    style={isActive?{background:'linear-gradient(90deg,rgba(255,143,64,0.14) 0%,rgba(255,143,64,0.05) 100%)',borderColor:'rgba(255,143,64,0.32)',boxShadow:'inset 3px 0 0 var(--ayu-orange),0 1px 16px rgba(255,143,64,0.08)'}:{}}>
+                    style={isActive?{background:'linear-gradient(90deg,rgb(var(--accent-rgb) / 0.14) 0%,rgb(var(--accent-rgb) / 0.05) 100%)',borderColor:'rgb(var(--accent-rgb) / 0.32)',boxShadow:'inset 3px 0 0 rgb(var(--accent-rgb)),0 1px 16px rgb(var(--accent-rgb) / 0.08)'}:{}}>
                     <div className="relative shrink-0 av-frozen" style={{'--av-url':`url("${ava({avatar_url:dm.other_avatar,username:dm.other_username})}")`} as React.CSSProperties}
                       onClick={e=>{ e.stopPropagation(); showHoverCard(dm.other_user_id, e); }}>
                       <GifAvatar src={ava({avatar_url:dm.other_avatar,username:dm.other_username})} className={`w-10 h-10 rounded-2xl object-cover av-eff-${(dm as any).other_avatar_effect||'none'} cursor-pointer hover:opacity-80 transition-opacity`} alt=""/>
@@ -17926,7 +17936,7 @@ export default function App() {
                   <button
                     onClick={()=>setFocusCard(v=>!v)}
                     title={focusCard?'Wyłącz focus':'Focus — wycisz boczne panele'}
-                    className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-200 active:scale-95 ${focusCard?'bg-[rgba(255,143,64,0.18)] text-[#FFB454] shadow-[0_0_10px_rgba(255,143,64,0.3)]':'text-zinc-500 hover:text-[#FFB454] hover:bg-[rgba(255,143,64,0.10)]'}`}>
+                    className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-200 active:scale-95 ${focusCard?'bg-indigo-500/20 text-indigo-400 shadow-[0_0_10px_var(--tw-shadow-color)] shadow-indigo-500/30':'text-zinc-500 hover:text-indigo-400 hover:bg-indigo-500/10'}`}>
                     <ScanLine size={15}/>
                   </button>
                   <div className="relative">
@@ -18703,13 +18713,13 @@ export default function App() {
                         <React.Fragment key={msg.id}>
                           {showUnreadDivider && (
                             <div data-unread-divider className="flex items-center gap-3 my-3 mx-2 select-none">
-                              <div className="flex-1 h-px bg-orange-500/40"/>
-                              <span className="text-[11px] text-orange-400 font-semibold px-2 shrink-0 flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-orange-400 inline-block"/>
+                              <div className="flex-1 h-px bg-indigo-500/40"/>
+                              <span className="text-[11px] text-indigo-400 font-semibold px-2 shrink-0 flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 inline-block"/>
                                 Nowe wiadomości
-                                <button onClick={() => setUnreadJumpIdx(-1)} className="ml-1 text-orange-500 hover:text-orange-300 transition-colors leading-none" title="Zamknij">×</button>
+                                <button onClick={() => setUnreadJumpIdx(-1)} className="ml-1 text-indigo-500 hover:text-indigo-300 transition-colors leading-none" title="Zamknij">×</button>
                               </span>
-                              <div className="flex-1 h-px bg-orange-500/40"/>
+                              <div className="flex-1 h-px bg-indigo-500/40"/>
                             </div>
                           )}
                           {showSep&&(
@@ -18733,13 +18743,13 @@ export default function App() {
                       <React.Fragment key={msg.id}>
                         {showUnreadDivider && (
                           <div data-unread-divider className="flex items-center gap-3 my-3 mx-2 select-none">
-                            <div className="flex-1 h-px bg-orange-500/40"/>
-                            <span className="text-[11px] text-orange-400 font-semibold px-2 shrink-0 flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-orange-400 inline-block"/>
+                            <div className="flex-1 h-px bg-indigo-500/40"/>
+                            <span className="text-[11px] text-indigo-400 font-semibold px-2 shrink-0 flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 inline-block"/>
                               Nowe wiadomości
-                              <button onClick={() => setUnreadJumpIdx(-1)} className="ml-1 text-orange-500 hover:text-orange-300 transition-colors leading-none" title="Zamknij">×</button>
+                              <button onClick={() => setUnreadJumpIdx(-1)} className="ml-1 text-indigo-500 hover:text-indigo-300 transition-colors leading-none" title="Zamknij">×</button>
                             </span>
-                            <div className="flex-1 h-px bg-orange-500/40"/>
+                            <div className="flex-1 h-px bg-indigo-500/40"/>
                           </div>
                         )}
                         {showSep&&(
@@ -18855,7 +18865,7 @@ export default function App() {
 
                             {/* Reply preview */}
                             {msg.reply_to_id&&msg.reply_content&&(
-                              <div className={`flex items-center gap-1.5 mb-1 text-[11px] text-zinc-500 border-l-2 border-orange-500/40 pl-2 py-0.5 ${activeView==='dms'&&isOwn?'self-end':''}`}>
+                              <div className={`flex items-center gap-1.5 mb-1 text-[11px] text-zinc-500 border-l-2 border-indigo-500/40 pl-2 py-0.5 ${activeView==='dms'&&isOwn?'self-end':''}`}>
                                 <Reply size={9} className="shrink-0"/>
                                 <span className="font-semibold">{msg.reply_username}</span>
                                 <span className="truncate max-w-[160px] text-zinc-600">{msg.reply_content}</span>
@@ -19015,7 +19025,7 @@ export default function App() {
                                 <p className={`${msgFontCls} leading-relaxed break-words overflow-hidden w-full msg-md text-[#d8d8ec]`} dangerouslySetInnerHTML={{__html: renderMsgHTML(msg.content)}}/>
                               ) : (
                                 <div className={`relative px-4 py-2.5 rounded-2xl max-w-full ${isOwn
-                                  ? 'bg-orange-500/[0.14] border border-orange-500/20 text-zinc-100 bubble-tail-right'
+                                  ? 'bg-indigo-500/15 border border-indigo-500/20 text-zinc-100 bubble-tail-right'
                                   : 'glass-bubble text-zinc-100 bubble-tail-left'
                                 }`}>
                                   <p className={`${msgFontCls} leading-relaxed break-words msg-md`} dangerouslySetInnerHTML={{__html: renderMsgHTML(msg.content)}}/>
@@ -19125,7 +19135,7 @@ export default function App() {
                                       const y=Math.min(rect.bottom+6, window.innerHeight-menuH-8);
                                       setReactionPicker({x:Math.max(x,8), y:Math.max(y,8), msg});
                                     }}
-                                    className="inline-flex items-center justify-center h-6 w-6 rounded-lg border border-white/[0.1] bg-white/[0.04] text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-[#FFB454] hover:border-[rgba(255,180,84,0.35)] hover:bg-[rgba(255,180,84,0.12)] transition-all hover:scale-110 active:scale-95 select-none"
+                                    className="inline-flex items-center justify-center h-6 w-6 rounded-lg border border-white/[0.1] bg-white/[0.04] text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-indigo-400 hover:border-indigo-500/30 hover:bg-indigo-500/10 transition-all hover:scale-110 active:scale-95 select-none"
                                     title="Dodaj reakcję">
                                     <SmilePlus size={12}/>
                                   </button>
@@ -19189,7 +19199,7 @@ export default function App() {
                                   const y=Math.min(rect.bottom+4, window.innerHeight-menuH-8);
                                   setMsgCtxMenu({x:Math.max(x,8), y:Math.max(y,8), msg});
                                 }}
-                                className="w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-100 active:scale-90 text-zinc-500 hover:text-[#FFB454] hover:bg-[rgba(255,180,84,0.14)]"
+                                className="w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-100 active:scale-90 text-zinc-500 hover:text-indigo-400 hover:bg-indigo-500/15"
                                 title="Dodaj reakcję"><SmilePlus size={12}/></button>
                               {/* Reply */}
                               <button onClick={()=>setReplyTo(msg)}
@@ -21827,7 +21837,7 @@ export default function App() {
                 background:'linear-gradient(160deg, rgba(24,20,16,0.62) 0%, rgba(10,9,8,0.78) 100%)',
                 backdropFilter:'blur(28px) saturate(1.5)', WebkitBackdropFilter:'blur(28px) saturate(1.5)',
                 border:'1px solid rgba(255,255,255,0.12)',
-                boxShadow:'0 32px 64px -12px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,143,64,0.08), inset 0 1px 0 rgba(255,255,255,0.08)',
+                boxShadow:'0 32px 64px -12px rgba(0,0,0,0.7), 0 0 0 1px rgb(var(--accent-rgb) / 0.08), inset 0 1px 0 rgba(255,255,255,0.08)',
               }}>
 
               {/* Mode tabs */}
@@ -21836,7 +21846,7 @@ export default function App() {
                   <button key={m} onClick={()=>setCreateSrvMode(m)}
                     className={`flex-1 py-4 text-sm font-bold transition-all relative ${createSrvMode===m?'text-white':'text-zinc-500 hover:text-zinc-300'}`}>
                     {m==='create'?'Utwórz serwer':'Dołącz do serwera'}
-                    {createSrvMode===m&&<motion.div layoutId="srv-tab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FF8F40]" transition={{type:'spring',stiffness:400,damping:30}}/>}
+                    {createSrvMode===m&&<motion.div layoutId="srv-tab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500" transition={{type:'spring',stiffness:400,damping:30}}/>}
                   </button>
                 ))}
               </div>
@@ -21846,7 +21856,7 @@ export default function App() {
                   <motion.div key="create" initial={{opacity:0,x:-16}} animate={{opacity:1,x:0}} exit={{opacity:0,x:16}} transition={{duration:0.18}}
                     className="flex flex-col relative z-10">
                     {/* Gradient preview banner with avatar */}
-                    <div className="relative h-28 overflow-hidden" style={{background:'linear-gradient(135deg, #ff8f40 0%, #e8622f 45%, #b8341f 100%)'}}>
+                    <div className="relative h-28 overflow-hidden" style={{background:'linear-gradient(135deg, rgb(var(--accent-rgb)) 0%, color-mix(in srgb, rgb(var(--accent-rgb)) 75%, black) 45%, color-mix(in srgb, rgb(var(--accent-rgb)) 50%, black) 100%)'}}>
                       <motion.div animate={{scale:[1,1.15,1]}} transition={{duration:6,repeat:Infinity,ease:'easeInOut'}}
                         className="absolute -top-6 -right-6 w-32 h-32 rounded-full bg-white/10"/>
                       <motion.div animate={{scale:[1,1.2,1]}} transition={{duration:8,repeat:Infinity,ease:'easeInOut',delay:2}}
@@ -21891,7 +21901,7 @@ export default function App() {
                         <button onClick={()=>{ setCreateSrvOpen(false); setCreateSrvIconFile(null); setCreateSrvIconPreview(null); setCreateSrvName(''); }}
                           className={`flex-1 ${gb} py-2.5 rounded-2xl text-sm font-semibold transition-all`}>Anuluj</button>
                         <button onClick={handleCreateServer} disabled={!createSrvName.trim()}
-                          className="flex-1 bg-gradient-to-r from-[#FF8F40] to-[#e8622f] hover:from-[#ffa15c] hover:to-[#f0703d] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-2xl transition-all shadow-lg shadow-orange-500/25">
+                          className="flex-1 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-2xl transition-all shadow-lg shadow-indigo-500/25">
                           Utwórz →
                         </button>
                       </div>
@@ -21902,8 +21912,8 @@ export default function App() {
                     className="p-6 flex flex-col gap-5 relative z-10">
                     {/* Illustration */}
                     <div className="flex flex-col items-center gap-3 py-2">
-                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500/20 to-amber-600/20 border border-orange-500/25 flex items-center justify-center shadow-lg shadow-orange-500/10">
-                        <Users size={28} className="text-[#FF8F40]"/>
+                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-indigo-600/20 border border-indigo-500/25 flex items-center justify-center shadow-lg shadow-indigo-500/10">
+                        <Users size={28} className="text-indigo-400"/>
                       </div>
                       <div className="text-center">
                         <p className="text-sm font-bold text-white">Masz zaproszenie?</p>
@@ -21927,7 +21937,7 @@ export default function App() {
                       <button onClick={()=>{ setCreateSrvOpen(false); setJoinCode(''); }}
                         className={`flex-1 ${gb} py-2.5 rounded-2xl text-sm font-semibold transition-all`}>Anuluj</button>
                       <button onClick={handleJoinServer} disabled={!joinCode.trim()}
-                        className="flex-1 bg-gradient-to-r from-[#FF8F40] to-[#e8622f] hover:from-[#ffa15c] hover:to-[#f0703d] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-2xl transition-all shadow-lg shadow-orange-500/25">
+                        className="flex-1 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-2xl transition-all shadow-lg shadow-indigo-500/25">
                         Dołącz →
                       </button>
                     </div>
