@@ -1371,7 +1371,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   {tl('landing.loginBtn')}
                 </button>
                 <button onClick={() => openModal('register')}
-                  className="px-4 py-2 rounded-xl text-[13px] font-bold bg-indigo-500 hover:bg-indigo-400 text-white transition-all shadow-lg shadow-indigo-500/30">
+                  className="px-4 py-2 rounded-xl text-[13px] font-bold bg-[#FF8F40] hover:bg-[#FFB454] text-[#0A0E14] transition-all shadow-lg shadow-[#FF8F40]/30">
                   {tl('landing.registerBtn')} →
                 </button>
               </div>
@@ -1405,7 +1405,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     {tl('landing.loginBtn')}
                   </button>
                   <button onClick={() => openModal('register')}
-                    className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-indigo-500 hover:bg-indigo-400 text-white transition-all">
+                    className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-[#FF8F40] hover:bg-[#FFB454] text-[#0A0E14] transition-all">
                     {tl('landing.registerBtn')}
                   </button>
                 </div>
@@ -1424,15 +1424,15 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                 {/* Eyebrow label */}
                 <motion.div initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ duration:.5 }}
                   className="inline-flex items-center gap-2 mb-8">
-                  <span className="w-6 h-px bg-gradient-to-r from-indigo-400 to-transparent"/>
-                  <span className="text-[12px] text-indigo-300/90 font-semibold uppercase tracking-[0.14em]">{tl('landing.communication')}</span>
+                  <span className="w-6 h-px bg-gradient-to-r from-[#FF8F40] to-transparent"/>
+                  <span className="text-[12px] text-[#FFB454] font-semibold uppercase tracking-[0.14em]">{tl('landing.communication')}</span>
                 </motion.div>
 
                 {/* Headline */}
                 <motion.h1 initial={{ opacity:0, y:24 }} animate={{ opacity:1, y:0 }} transition={{ duration:.6, delay:.08 }}
                   className="text-5xl sm:text-6xl xl:text-[72px] font-black leading-[1.03] tracking-tight mb-6">
                   <span className="block text-white">{tl('landing.headline1')}</span>
-                  <span className="block bg-gradient-to-r from-indigo-400 via-violet-400 to-cyan-400 bg-clip-text text-transparent">
+                  <span className="block bg-gradient-to-r from-[#FF8F40] via-[#FFB454] to-[#95E6CB] bg-clip-text text-transparent">
                     {tl('landing.headline2')}
                   </span>
                 </motion.h1>
@@ -1447,11 +1447,11 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                 <motion.div initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }} transition={{ duration:.5, delay:.22 }}
                   className="flex flex-wrap gap-3 mb-12">
                   <button onClick={() => openModal('register')}
-                    className="group relative px-7 py-3.5 rounded-2xl text-[15px] font-bold text-white transition-all shadow-xl shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:-translate-y-0.5 active:translate-y-0 overflow-hidden"
-                    style={{ background:'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
+                    className="group relative px-7 py-3.5 rounded-2xl text-[15px] font-bold text-[#0A0E14] transition-all shadow-xl shadow-[#FF8F40]/30 hover:shadow-[#FF8F40]/50 hover:-translate-y-0.5 active:translate-y-0 overflow-hidden"
+                    style={{ background:'linear-gradient(135deg,#FF8F40,#FFB454)' }}>
                     <span className="relative z-10">{tl('landing.startFree')}</span>
                     <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                      style={{ background:'linear-gradient(135deg,#818cf8,#a78bfa)' }}/>
+                      style={{ background:'linear-gradient(135deg,#FFA866,#FFC97A)' }}/>
                   </button>
                   <button onClick={() => openModal('login')}
                     className="px-7 py-3.5 rounded-2xl text-[15px] font-semibold text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.1] transition-all hover:-translate-y-0.5">
@@ -1459,9 +1459,9 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   </button>
                   <a href={osDownload.url || '#'}
                     className={`flex items-center gap-2 px-6 py-3.5 rounded-2xl text-[15px] font-semibold transition-all hover:-translate-y-0.5 group border ${!osDownload.loading ? 'text-zinc-400 bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] cursor-pointer' : 'text-zinc-600 bg-white/[0.02] border-white/[0.04] cursor-wait pointer-events-none'}`}>
-                    {osDownload.loading ? <Loader2 size={16} className="animate-spin text-zinc-600"/> : <Monitor size={16} className="text-zinc-500 group-hover:text-indigo-400 transition-colors"/>}
+                    {osDownload.loading ? <Loader2 size={16} className="animate-spin text-zinc-600"/> : <Monitor size={16} className="text-zinc-500 group-hover:text-[#FF8F40] transition-colors"/>}
                     <span>{osDownload.label}</span>
-                    {!osDownload.loading && <Download size={13} className="text-zinc-600 group-hover:text-indigo-400 transition-colors"/>}
+                    {!osDownload.loading && <Download size={13} className="text-zinc-600 group-hover:text-[#FF8F40] transition-colors"/>}
                   </a>
                 </motion.div>
 
@@ -1469,7 +1469,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                 <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:.4 }}
                   className="flex flex-wrap gap-8 pt-8 border-t border-white/[0.06]">
                   {[
-                    { val:tl('landing.stats.voice'), label:tl('landing.stats.videoHd'), color:'text-indigo-400' },
+                    { val:tl('landing.stats.voice'), label:tl('landing.stats.videoHd'), color:'text-[#FF8F40]' },
                     { val:'2FA', label:tl('landing.stats.security'), color:'text-amber-400' },
                     { val:'∞', label:tl('landing.stats.messages'), color:'text-emerald-400' },
                     { val:tl('landing.stats.bots'), label:tl('landing.stats.automations'), color:'text-violet-400' },
@@ -1487,7 +1487,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                 className="relative hidden lg:block">
                 {/* Glow orb behind mockup */}
                 <div className="absolute -inset-10 rounded-full pointer-events-none"
-                  style={{ background:'radial-gradient(ellipse,rgba(99,102,241,0.14) 0%,transparent 70%)' }}/>
+                  style={{ background:'radial-gradient(ellipse,rgba(255,143,64,0.14) 0%,transparent 70%)' }}/>
 
                 {/* Floating notification — top right */}
                 <motion.div animate={{ y:[0,-7,0] }} transition={{ duration:3.8,repeat:Infinity,ease:'easeInOut' }}
@@ -1508,7 +1508,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   <div className="flex items-center gap-0.5">
                     {[0,1,2].map(i => (
                       <motion.span key={i} animate={{ y:[0,-3,0] }} transition={{ duration:.6,repeat:Infinity,delay:i*0.13 }}
-                        className="w-1.5 h-1.5 rounded-full bg-indigo-400 inline-block"/>
+                        className="w-1.5 h-1.5 rounded-full bg-[#FF8F40] inline-block"/>
                     ))}
                   </div>
                   <p className="text-xs text-zinc-500 font-medium">Alex pisze…</p>
@@ -1516,7 +1516,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
 
                 {/* App window */}
                 <div className="relative rounded-3xl border border-white/[0.08] overflow-hidden shadow-2xl shadow-black/70"
-                  style={{ background:'linear-gradient(145deg,rgba(99,102,241,0.07) 0%,rgba(3,3,8,0.97) 100%)' }}>
+                  style={{ background:'linear-gradient(145deg,rgba(255,143,64,0.07) 0%,rgba(3,3,8,0.97) 100%)' }}>
                   {/* Titlebar */}
                   <div className="flex items-center gap-2 px-5 py-3 border-b border-white/[0.05]"
                     style={{ background:'rgba(3,3,8,0.6)' }}>
@@ -1534,7 +1534,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                       style={{ background:'rgba(0,0,0,0.25)' }}>
                       {['C','G','P','M'].map((l,i) => (
                         <div key={i} className={`w-8 h-8 rounded-${i===0?'2xl':'xl'} flex items-center justify-center text-[11px] font-black transition-all
-                          ${i===0 ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/40' : 'bg-white/[0.06] text-zinc-600 hover:bg-white/[0.1]'}`}>{l}</div>
+                          ${i===0 ? 'bg-[#FF8F40] text-[#0A0E14] shadow-lg shadow-[#FF8F40]/40' : 'bg-white/[0.06] text-zinc-600 hover:bg-white/[0.1]'}`}>{l}</div>
                       ))}
                       <div className="w-8 h-8 rounded-xl bg-white/[0.04] border border-dashed border-white/[0.12] text-zinc-700 flex items-center justify-center text-base mt-1">+</div>
                     </div>
@@ -1562,10 +1562,10 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     {/* Messages area */}
                     <div className="flex-1 flex flex-col p-3 gap-2.5 overflow-hidden">
                       {[
-                        { u:'Alex', c:'bg-indigo-500', msg:'Hej, ktoś gra dziś wieczorem? 🎮', time:'21:30' },
+                        { u:'Alex', c:'bg-[#FF8F40]', msg:'Hej, ktoś gra dziś wieczorem? 🎮', time:'21:30' },
                         { u:'Kasia', c:'bg-pink-500', msg:'Jestem! Wskakuję na głosowy 🎙️', time:'21:31' },
                         { u:'Marek', c:'bg-emerald-500', msg:'Już lecę, chwila sekundy ⚡', time:'21:32' },
-                        { u:'Alex', c:'bg-indigo-500', msg:'Świetnie, zapraszam do #gaming 🕹️', time:'21:33' },
+                        { u:'Alex', c:'bg-[#FF8F40]', msg:'Świetnie, zapraszam do #gaming 🕹️', time:'21:33' },
                       ].map((m,i) => (
                         <div key={i} className="flex items-start gap-2">
                           <div className={`w-6 h-6 rounded-full ${m.c} flex items-center justify-center text-[9px] font-black text-white shrink-0 mt-0.5`}>{m.u[0]}</div>
@@ -1638,12 +1638,12 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
               {/* BIG CARD: Chat — spans 2 rows on lg */}
               <motion.div initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.45 }}
                 whileHover={{ y:-4 }}
-                className="sm:row-span-2 relative flex flex-col p-7 rounded-3xl border border-indigo-500/20 overflow-hidden group cursor-default"
-                style={{ background:'linear-gradient(145deg,rgba(99,102,241,0.09) 0%,rgba(3,3,8,0.95) 100%)' }}>
+                className="sm:row-span-2 relative flex flex-col p-7 rounded-3xl border border-[#FF8F40]/20 overflow-hidden group cursor-default"
+                style={{ background:'linear-gradient(145deg,rgba(255,143,64,0.09) 0%,rgba(3,3,8,0.95) 100%)' }}>
                 <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full opacity-30 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
-                  style={{ background:'radial-gradient(circle,rgba(99,102,241,0.7) 0%,transparent 70%)' }}/>
-                <div className="w-12 h-12 rounded-2xl bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center mb-6 relative z-10">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="w-6 h-6 text-indigo-400">
+                  style={{ background:'radial-gradient(circle,rgba(255,143,64,0.7) 0%,transparent 70%)' }}/>
+                <div className="w-12 h-12 rounded-2xl bg-[#FF8F40]/15 border border-[#FF8F40]/25 flex items-center justify-center mb-6 relative z-10">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="w-6 h-6 text-[#FF8F40]">
                     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                   </svg>
                 </div>
@@ -1652,14 +1652,14 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                 {/* Mini chat preview */}
                 <div className="mt-7 flex flex-col gap-2.5 relative z-10">
                   {[
-                    { u:'Alex', c:'bg-indigo-500', msg:'Siema! Co słychać? 👋', side:'left' },
-                    { u:'Ty', c:'bg-violet-500', msg:'Hej! Gramy dziś? 🎮', side:'right' },
-                    { u:'Alex', c:'bg-indigo-500', msg:'Tak! O 20tej na głosowym 🎙️', side:'left' },
+                    { u:'Alex', c:'bg-slate-500', msg:'Siema! Co słychać? 👋', side:'left' },
+                    { u:'Ty', c:'bg-[#FF8F40]', msg:'Hej! Gramy dziś? 🎮', side:'right' },
+                    { u:'Alex', c:'bg-slate-500', msg:'Tak! O 20tej na głosowym 🎙️', side:'left' },
                   ].map((m,i) => (
                     <div key={i} className={`flex items-end gap-2 ${m.side==='right'?'flex-row-reverse':''}`}>
                       <div className={`w-6 h-6 rounded-full ${m.c} flex items-center justify-center text-[9px] font-black text-white shrink-0`}>{m.u[0]}</div>
                       <div className={`px-3 py-2 rounded-2xl text-xs font-medium max-w-[78%] leading-relaxed
-                        ${m.side==='right' ? 'bg-indigo-500/25 text-indigo-200 rounded-br-sm' : 'bg-white/[0.08] text-zinc-300 rounded-bl-sm'}`}>
+                        ${m.side==='right' ? 'bg-[#FF8F40]/25 text-[#FFD9AD] rounded-br-sm' : 'bg-white/[0.08] text-zinc-300 rounded-bl-sm'}`}>
                         {m.msg}
                       </div>
                     </div>
@@ -1692,7 +1692,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                 <div className="flex gap-2 items-center relative z-10">
                   {['A','K','M'].map((l,i) => (
                     <div key={i} className="relative">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-black text-white ${['bg-indigo-500','bg-pink-500','bg-emerald-500'][i]} shadow-lg`}>{l}</div>
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-black text-white ${['bg-sky-500','bg-pink-500','bg-emerald-500'][i]} shadow-lg`}>{l}</div>
                       <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[#030308]"/>
                     </div>
                   ))}
@@ -1921,19 +1921,19 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
           <div className="max-w-4xl mx-auto">
             <motion.div initial={{ opacity:0, y:24 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.55 }}>
               <div className="relative rounded-3xl border border-white/[0.08] overflow-hidden p-10 sm:p-16 text-center"
-                style={{ background:'linear-gradient(135deg,rgba(99,102,241,0.1) 0%,rgba(3,3,8,0.98) 50%,rgba(139,92,246,0.07) 100%)' }}>
+                style={{ background:'linear-gradient(135deg,rgba(255,143,64,0.1) 0%,rgba(3,3,8,0.98) 50%,rgba(255,180,84,0.07) 100%)' }}>
 
                 {/* Radial glow */}
                 <motion.div animate={{ scale:[1,1.06,1],opacity:[.15,.3,.15] }} transition={{ duration:5,repeat:Infinity,ease:'easeInOut' }}
                   className="absolute inset-0 pointer-events-none"
-                  style={{ background:'radial-gradient(ellipse at 50% 50%,rgba(99,102,241,0.25) 0%,transparent 65%)' }}/>
+                  style={{ background:'radial-gradient(ellipse at 50% 50%,rgba(255,143,64,0.25) 0%,transparent 65%)' }}/>
 
                 {/* Noise overlay */}
                 <div className="absolute inset-0 opacity-[0.018] pointer-events-none"
                   style={{ backgroundImage:`url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}/>
 
                 <div className="relative z-10">
-                  <div className="w-16 h-16 rounded-2xl bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center mx-auto mb-7 overflow-hidden">
+                  <div className="w-16 h-16 rounded-2xl bg-[#FF8F40]/15 border border-[#FF8F40]/25 flex items-center justify-center mx-auto mb-7 overflow-hidden">
                     <img src="/cordyn.png" alt="Cordyn" className="w-11 h-11 object-contain"/>
                   </div>
                   <h2 className="text-4xl sm:text-5xl font-black mb-4">{tl('landing.cta.join')}</h2>
@@ -1942,8 +1942,8 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   </p>
                   <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                     <button onClick={() => openModal('register')}
-                      className="w-full sm:w-auto px-8 py-4 rounded-2xl text-[15px] font-bold text-white transition-all shadow-xl shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:-translate-y-0.5"
-                      style={{ background:'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
+                      className="w-full sm:w-auto px-8 py-4 rounded-2xl text-[15px] font-bold text-[#0A0E14] transition-all shadow-xl shadow-[#FF8F40]/30 hover:shadow-[#FF8F40]/50 hover:-translate-y-0.5"
+                      style={{ background:'linear-gradient(135deg,#FF8F40,#FFB454)' }}>
                       {tl('landing.startFree')}
                     </button>
                     <button onClick={() => openModal('login')}
@@ -1952,9 +1952,9 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     </button>
                     <a href={osDownload.url || '#'}
                       className={`w-full sm:w-auto flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl text-[15px] font-semibold transition-all hover:-translate-y-0.5 group border ${!osDownload.loading ? 'text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border-white/[0.1] cursor-pointer' : 'text-zinc-600 bg-white/[0.02] border-white/[0.05] cursor-wait pointer-events-none'}`}>
-                      {osDownload.loading ? <Loader2 size={16} className="animate-spin"/> : <Monitor size={16} className="text-zinc-500 group-hover:text-indigo-400 transition-colors"/>}
+                      {osDownload.loading ? <Loader2 size={16} className="animate-spin"/> : <Monitor size={16} className="text-zinc-500 group-hover:text-[#FF8F40] transition-colors"/>}
                       <span>{osDownload.label}</span>
-                      {!osDownload.loading && <Download size={13} className="text-zinc-600 group-hover:text-indigo-400 transition-colors"/>}
+                      {!osDownload.loading && <Download size={13} className="text-zinc-600 group-hover:text-[#FF8F40] transition-colors"/>}
                     </a>
                   </div>
                 </div>
