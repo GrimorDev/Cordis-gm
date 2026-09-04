@@ -542,6 +542,48 @@ const T: Record<string, Record<Locale, string>> = {
   'landing.stats.automations':{ pl: 'i automatyzacje',           en: 'and automations',         cs: 'a automatizace',             de: 'und Automatisierungen'     },
   'landing.loginEmail':      { pl: 'Login lub email',            en: 'Login or email',          cs: 'Přihlašovací jméno nebo e-mail', de: 'Login oder E-Mail'      },
 
+  // ── Landing page — feature bento cards ─────────────────────────────────────
+  'landing.card.chat.title':        { pl: 'Wiadomości i czat',          en: 'Messages & chat',            cs: 'Zprávy a chat',                  de: 'Nachrichten & Chat'            },
+  'landing.card.chat.desc':         { pl: 'Pisz do znajomych, wysyłaj zdjęcia, GIF-y i reaguj emotikonami. Wiadomości pojawiają się błyskawicznie.', en: 'Message friends, send photos, GIFs and react with emoji. Messages arrive instantly.', cs: 'Pište přátelům, posílejte fotky, GIFy a reagujte emotikony. Zprávy se objevují okamžitě.', de: 'Schreib Freunden, sende Fotos, GIFs und reagiere mit Emojis. Nachrichten erscheinen sofort.' },
+  'landing.card.voice.title':       { pl: 'Głos i wideo HD',            en: 'Voice & HD video',           cs: 'Hlas a HD video',                de: 'Sprache & HD-Video'            },
+  'landing.card.voice.desc':        { pl: 'Rozmawiaj i wideorozmawiaj jednym kliknięciem. Bez lagów, bez instalacji.', en: 'Talk and video call with one click. No lag, no install.', cs: 'Volejte a videovolejte jedním kliknutím. Bez zpoždění, bez instalace.', de: 'Sprich und telefoniere per Video mit einem Klick. Ohne Lag, ohne Installation.' },
+  'landing.card.servers.title':     { pl: 'Serwery i społeczności',     en: 'Servers & communities',      cs: 'Servery a komunity',             de: 'Server & Communitys'           },
+  'landing.card.servers.desc':      { pl: 'Stwórz własny serwer. Kanały, role, kategorie — w pełni konfigurowalny.', en: 'Create your own server. Channels, roles, categories — fully configurable.', cs: 'Vytvořte si vlastní server. Kanály, role, kategorie — plně konfigurovatelné.', de: 'Erstelle deinen eigenen Server. Kanäle, Rollen, Kategorien — vollständig anpassbar.' },
+  'landing.card.dm.title':          { pl: 'Znajomi i prywatne DM',      en: 'Friends & private DMs',      cs: 'Přátelé a soukromé zprávy',      de: 'Freunde & private DMs'         },
+  'landing.card.dm.desc':           { pl: 'Dodawaj znajomych, pisz prywatnie lub grupowo. Zapraszaj jednym linkiem.', en: 'Add friends, message privately or in groups. Invite with a single link.', cs: 'Přidávejte přátele, pište soukromě nebo ve skupině. Zvěte jedním odkazem.', de: 'Füge Freunde hinzu, schreib privat oder in Gruppen. Lade mit einem einzigen Link ein.' },
+  'landing.card.security.title':    { pl: 'Bezpieczne konto',           en: 'Secure account',             cs: 'Zabezpečený účet',               de: 'Sicheres Konto'                },
+  'landing.card.security.desc':     { pl: '2FA, weryfikacja e-mail, szyfrowane hasła. Twoje konto zawsze chronione.', en: '2FA, email verification, encrypted passwords. Your account always protected.', cs: '2FA, ověření e-mailem, šifrovaná hesla. Váš účet je vždy chráněn.', de: '2FA, E-Mail-Verifizierung, verschlüsselte Passwörter. Dein Konto ist immer geschützt.' },
+  'landing.card.integrations.title':{ pl: 'Twoje ulubione serwisy',     en: 'Your favorite services',     cs: 'Vaše oblíbené služby',           de: 'Deine Lieblingsdienste'        },
+  'landing.card.integrations.desc':{ pl: 'Steam, Twitch — wszystko widoczne na profilu w czasie rzeczywistym.', en: 'Steam, Twitch — all visible on your profile in real time.', cs: 'Steam, Twitch — vše viditelné na profilu v reálném čase.', de: 'Steam, Twitch — alles live auf deinem Profil sichtbar.' },
+
+  // ── Landing page — marquee strip ───────────────────────────────────────────
+  'landing.marquee.chat':          { pl: 'Czat w czasie rzeczywistym', en: 'Real-time chat',            cs: 'Chat v reálném čase',        de: 'Echtzeit-Chat'                },
+  'landing.marquee.voiceHd':       { pl: 'Głos i wideo HD',            en: 'HD voice & video',          cs: 'HD hlas a video',            de: 'HD-Sprache & Video'           },
+  'landing.marquee.screenShare':   { pl: 'Udostępnianie ekranu',       en: 'Screen sharing',            cs: 'Sdílení obrazovky',          de: 'Bildschirmfreigabe'           },
+  'landing.marquee.gameStatus':    { pl: 'Status gry',                 en: 'Game status',               cs: 'Herní status',               de: 'Spielstatus'                  },
+  'landing.marquee.spotifyJam':    { pl: 'Spotify JAM',                en: 'Spotify JAM',               cs: 'Spotify JAM',                de: 'Spotify JAM'                  },
+  'landing.marquee.twoFa':         { pl: '2FA i weryfikacja e-mail',   en: '2FA & email verification',  cs: '2FA a ověření e-mailem',     de: '2FA & E-Mail-Verifizierung'   },
+  'landing.marquee.mobileApp':     { pl: 'Aplikacja mobilna',          en: 'Mobile app',                cs: 'Mobilní aplikace',           de: 'Mobile App'                   },
+  'landing.marquee.bots':          { pl: 'Boty i automatyzacje',       en: 'Bots & automations',        cs: 'Boti a automatizace',        de: 'Bots & Automatisierungen'     },
+  'landing.marquee.publicServers': { pl: 'Serwery publiczne',          en: 'Public servers',            cs: 'Veřejné servery',            de: 'Öffentliche Server'           },
+  'landing.marquee.pushNotif':     { pl: 'Powiadomienia push',         en: 'Push notifications',        cs: 'Push oznámení',              de: 'Push-Benachrichtigungen'      },
+  'landing.marquee.bookmarks':     { pl: 'System zakładek',            en: 'Bookmark system',           cs: 'Systém záložek',             de: 'Lesezeichen-System'           },
+  'landing.marquee.editMsg':       { pl: 'Edycja wiadomości',          en: 'Message editing',           cs: 'Úprava zpráv',               de: 'Nachrichten bearbeiten'       },
+  'landing.marquee.focusMode':     { pl: 'Focus Mode',                 en: 'Focus Mode',                cs: 'Focus Mode',                 de: 'Focus-Modus'                  },
+  'landing.marquee.profileCustom': { pl: 'Personalizacja profilu',     en: 'Profile customization',     cs: 'Přizpůsobení profilu',       de: 'Profilanpassung'              },
+  'landing.marquee.serverInvites': { pl: 'Zaproszenia serwerowe',      en: 'Server invites',            cs: 'Pozvánky na server',         de: 'Server-Einladungen'           },
+
+  // ── Landing page — security bullet list ────────────────────────────────────
+  'landing.security.item1': { pl: 'Dwuetapowe logowanie — dodatkowa ochrona przy każdym logowaniu', en: 'Two-step login — extra protection on every sign-in', cs: 'Dvoufázové přihlášení — dodatečná ochrana při každém přihlášení', de: 'Zweistufige Anmeldung — zusätzlicher Schutz bei jeder Anmeldung' },
+  'landing.security.item2': { pl: 'Weryfikacja e-mail — tylko prawdziwe konta mają dostęp', en: 'Email verification — only real accounts get access', cs: 'Ověření e-mailem — přístup mají jen skutečné účty', de: 'E-Mail-Verifizierung — nur echte Konten erhalten Zugang' },
+  'landing.security.item3': { pl: 'Automatyczne wylogowanie przy podejrzanej aktywności', en: 'Automatic logout on suspicious activity', cs: 'Automatické odhlášení při podezřelé aktivitě', de: 'Automatische Abmeldung bei verdächtiger Aktivität' },
+  'landing.security.item4': { pl: 'Bezpieczne hasła wymagane przy zakładaniu konta', en: 'Strong passwords required at sign-up', cs: 'Při registraci jsou vyžadována silná hesla', de: 'Sichere Passwörter bei der Registrierung erforderlich' },
+  'landing.security.item5': { pl: 'Ochrona przed spamem i nieautoryzowanym dostępem', en: 'Protection against spam and unauthorized access', cs: 'Ochrana proti spamu a neoprávněnému přístupu', de: 'Schutz vor Spam und unbefugtem Zugriff' },
+  'landing.totp.compat':    { pl: 'Kompatybilna z każdą aplikacją TOTP (RFC 6238)', en: 'Compatible with any TOTP app (RFC 6238)', cs: 'Kompatibilní s jakoukoli TOTP aplikací (RFC 6238)', de: 'Kompatibel mit jeder TOTP-App (RFC 6238)' },
+  'landing.integration.spotify.desc': { pl: 'JAM sessions — słuchaj muzyki razem ze znajomymi w czasie rzeczywistym.', en: 'JAM sessions — listen to music together with friends in real time.', cs: 'JAM sessions — poslouchejte hudbu s přáteli v reálném čase.', de: 'JAM-Sessions — hör mit Freunden in Echtzeit gemeinsam Musik.' },
+  'landing.integration.twitch.desc':  { pl: 'Linkuj swój kanał Twitch i pokaż znajomym, kiedy streamujesz.', en: "Link your Twitch channel and show friends when you're streaming.", cs: 'Propojte svůj kanál Twitch a ukažte přátelům, když streamujete.', de: 'Verknüpfe deinen Twitch-Kanal und zeig Freunden, wenn du streamst.' },
+  'landing.integration.steam.desc':   { pl: 'Udostępnij swój profil Steam i pokaż, w co aktualnie grasz.', en: "Share your Steam profile and show what you're currently playing.", cs: 'Sdílejte svůj profil Steam a ukažte, co právě hrajete.', de: 'Teile dein Steam-Profil und zeig, was du gerade spielst.' },
+
   // ── Misc UI ──────────────────────────────────────────────────────────────
   'menu.notifSettings':      { pl: 'Ustawienia powiadomień',     en: 'Notification settings',   cs: 'Nastavení oznámení',         de: 'Benachrichtigungseinstellungen' },
   'group.settings':          { pl: 'Ustawienia grupy',           en: 'Group settings',          cs: 'Nastavení skupiny',          de: 'Gruppeneinstellungen'      },
@@ -657,7 +699,6 @@ const T: Record<string, Record<Locale, string>> = {
 
   // ── Server settings ───────────────────────────────────────────────────
   'server.public':           { pl: 'publiczny',                  en: 'public',                  cs: 'veřejný',                    de: 'öffentlich'                },
-  'server.private':          { pl: 'prywatny',                   en: 'private',                 cs: 'soukromý',                   de: 'privat'                    },
   'server.nowPublic':        { pl: 'Serwer jest teraz publiczny!', en: 'Server is now public!',  cs: 'Server je nyní veřejný!',    de: 'Server ist jetzt öffentlich!' },
   'server.nowPrivate':       { pl: 'Serwer jest teraz prywatny!', en: 'Server is now private!', cs: 'Server je nyní soukromý!',   de: 'Server ist jetzt privat!'  },
   'server.descSaved':        { pl: 'Opis zapisany!',             en: 'Description saved!',      cs: 'Popis uložen!',              de: 'Beschreibung gespeichert!' },

@@ -1028,7 +1028,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
   const INTEGRATIONS = [
     {
       name: 'Spotify',
-      desc: 'JAM sessions — słuchaj muzyki razem ze znajomymi w czasie rzeczywistym.',
+      desc: tl('landing.integration.spotify.desc'),
       color: 'from-green-500/20 to-emerald-500/10',
       gradFrom: 'rgba(29,185,84,0.09)',
       border: 'border-green-500/25',
@@ -1040,7 +1040,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
     },
     {
       name: 'Twitch',
-      desc: 'Linkuj swój kanał Twitch i pokaż znajomym, kiedy streamujesz.',
+      desc: tl('landing.integration.twitch.desc'),
       color: 'from-purple-500/20 to-violet-500/10',
       gradFrom: 'rgba(145,70,255,0.09)',
       border: 'border-purple-500/25',
@@ -1052,7 +1052,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
     },
     {
       name: 'Steam',
-      desc: 'Udostępnij swój profil Steam i pokaż, w co aktualnie grasz.',
+      desc: tl('landing.integration.steam.desc'),
       color: 'from-blue-500/20 to-sky-500/10',
       gradFrom: 'rgba(27,136,184,0.09)',
       border: 'border-blue-500/25',
@@ -1421,14 +1421,11 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
 
               {/* LEFT: Text content */}
               <div>
-                {/* Live badge */}
+                {/* Eyebrow label */}
                 <motion.div initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ duration:.5 }}
-                  className="inline-flex items-center gap-2.5 mb-8 bg-white/[0.04] border border-white/[0.09] rounded-full px-4 py-2">
-                  <span className="relative flex w-2 h-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"/>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"/>
-                  </span>
-                  <span className="text-[13px] text-zinc-300 font-medium">{tl('landing.communication')}</span>
+                  className="inline-flex items-center gap-2 mb-8">
+                  <span className="w-6 h-px bg-gradient-to-r from-indigo-400 to-transparent"/>
+                  <span className="text-[12px] text-indigo-300/90 font-semibold uppercase tracking-[0.14em]">{tl('landing.communication')}</span>
                 </motion.div>
 
                 {/* Headline */}
@@ -1596,11 +1593,11 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
         {/* ── Marquee strip ── */}
         {(()=>{
           const ITEMS = [
-            'Czat w czasie rzeczywistym','Głos i wideo HD','Udostępnianie ekranu',
-            'Status gry','Spotify JAM','2FA i weryfikacja e-mail',
-            'Aplikacja mobilna','Boty i automatyzacje','Serwery publiczne',
-            'Powiadomienia push','System zakładek','Edycja wiadomości',
-            'Focus Mode','Personalizacja profilu','Zaproszenia serwerowe',
+            tl('landing.marquee.chat'),tl('landing.marquee.voiceHd'),tl('landing.marquee.screenShare'),
+            tl('landing.marquee.gameStatus'),tl('landing.marquee.spotifyJam'),tl('landing.marquee.twoFa'),
+            tl('landing.marquee.mobileApp'),tl('landing.marquee.bots'),tl('landing.marquee.publicServers'),
+            tl('landing.marquee.pushNotif'),tl('landing.marquee.bookmarks'),tl('landing.marquee.editMsg'),
+            tl('landing.marquee.focusMode'),tl('landing.marquee.profileCustom'),tl('landing.marquee.serverInvites'),
           ];
           const DOT = <span className="w-1 h-1 rounded-full bg-zinc-700 shrink-0" aria-hidden/>;
           return (
@@ -1650,8 +1647,8 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                   </svg>
                 </div>
-                <h3 className="text-xl font-bold text-white mb-3 relative z-10">Wiadomości i czat</h3>
-                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">Pisz do znajomych, wysyłaj zdjęcia, GIF-y i reaguj emotikonami. Wiadomości pojawiają się błyskawicznie.</p>
+                <h3 className="text-xl font-bold text-white mb-3 relative z-10">{tl('landing.card.chat.title')}</h3>
+                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">{tl('landing.card.chat.desc')}</p>
                 {/* Mini chat preview */}
                 <div className="mt-7 flex flex-col gap-2.5 relative z-10">
                   {[
@@ -1689,8 +1686,8 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
                   </svg>
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2 relative z-10">Głos i wideo HD</h3>
-                <p className="text-sm text-zinc-500 leading-relaxed relative z-10 mb-5">Rozmawiaj i wideorozmawiaj jednym kliknięciem. Bez lagów, bez instalacji.</p>
+                <h3 className="text-lg font-bold text-white mb-2 relative z-10">{tl('landing.card.voice.title')}</h3>
+                <p className="text-sm text-zinc-500 leading-relaxed relative z-10 mb-5">{tl('landing.card.voice.desc')}</p>
                 {/* Voice users */}
                 <div className="flex gap-2 items-center relative z-10">
                   {['A','K','M'].map((l,i) => (
@@ -1716,8 +1713,8 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                   </svg>
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2 relative z-10">Serwery i społeczności</h3>
-                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">Stwórz własny serwer. Kanały, role, kategorie — w pełni konfigurowalny.</p>
+                <h3 className="text-lg font-bold text-white mb-2 relative z-10">{tl('landing.card.servers.title')}</h3>
+                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">{tl('landing.card.servers.desc')}</p>
               </motion.div>
 
               {/* Friends DM */}
@@ -1733,8 +1730,8 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
                   </svg>
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2 relative z-10">Znajomi i prywatne DM</h3>
-                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">Dodawaj znajomych, pisz prywatnie lub grupowo. Zapraszaj jednym linkiem.</p>
+                <h3 className="text-lg font-bold text-white mb-2 relative z-10">{tl('landing.card.dm.title')}</h3>
+                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">{tl('landing.card.dm.desc')}</p>
               </motion.div>
 
               {/* Security + Integrations row */}
@@ -1749,8 +1746,8 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                   </svg>
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2 relative z-10">Bezpieczne konto</h3>
-                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">2FA, weryfikacja e-mail, szyfrowane hasła. Twoje konto zawsze chronione.</p>
+                <h3 className="text-lg font-bold text-white mb-2 relative z-10">{tl('landing.card.security.title')}</h3>
+                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">{tl('landing.card.security.desc')}</p>
               </motion.div>
 
               {/* Integrations pill */}
@@ -1765,8 +1762,8 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
                   </svg>
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2 relative z-10">Twoje ulubione serwisy</h3>
-                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">Steam, Twitch — wszystko widoczne na profilu w czasie rzeczywistym.</p>
+                <h3 className="text-lg font-bold text-white mb-2 relative z-10">{tl('landing.card.integrations.title')}</h3>
+                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">{tl('landing.card.integrations.desc')}</p>
               </motion.div>
 
             </div>
@@ -1843,11 +1840,11 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                 <p className="text-zinc-500 leading-relaxed mb-8">{tl('landing.security.desc')}</p>
                 <div className="flex flex-col gap-3">
                   {[
-                    { icon:'🔐', text:'Dwuetapowe logowanie — dodatkowa ochrona przy każdym logowaniu' },
-                    { icon:'✉️', text:'Weryfikacja e-mail — tylko prawdziwe konta mają dostęp' },
-                    { icon:'🛡️', text:'Automatyczne wylogowanie przy podejrzanej aktywności' },
-                    { icon:'🔒', text:'Bezpieczne hasła wymagane przy zakładaniu konta' },
-                    { icon:'⚡', text:'Ochrona przed spamem i nieautoryzowanym dostępem' },
+                    { icon:'🔐', text:tl('landing.security.item1') },
+                    { icon:'✉️', text:tl('landing.security.item2') },
+                    { icon:'🛡️', text:tl('landing.security.item3') },
+                    { icon:'🔒', text:tl('landing.security.item4') },
+                    { icon:'⚡', text:tl('landing.security.item5') },
                   ].map((item,i) => (
                     <motion.div key={item.text}
                       initial={{ opacity:0, x:-14 }} whileInView={{ opacity:1, x:0 }} viewport={{ once:true }}
@@ -1870,8 +1867,8 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   <div className="flex items-center gap-3 mb-6">
                     <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/25 flex items-center justify-center text-xl">🔐</div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold text-white text-sm">Weryfikacja dwuetapowa</p>
-                      <p className="text-xs text-zinc-600">Kompatybilna z każdą aplikacją TOTP (RFC 6238)</p>
+                      <p className="font-bold text-white text-sm">{tl('landing.verify2fa')}</p>
+                      <p className="text-xs text-zinc-600">{tl('landing.totp.compat')}</p>
                     </div>
                     <div className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 text-[10px] font-bold uppercase shrink-0">
                       {tl('privacy.2fa.enabled')}
@@ -1939,19 +1936,19 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   <div className="w-16 h-16 rounded-2xl bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center mx-auto mb-7 overflow-hidden">
                     <img src="/cordyn.png" alt="Cordyn" className="w-11 h-11 object-contain"/>
                   </div>
-                  <h2 className="text-4xl sm:text-5xl font-black mb-4">Gotowy na start?</h2>
+                  <h2 className="text-4xl sm:text-5xl font-black mb-4">{tl('landing.cta.join')}</h2>
                   <p className="text-zinc-500 mb-10 max-w-md mx-auto leading-relaxed">
-                    Dołącz do Cordyn — bezpłatnie, bez reklam, bez limitów wiadomości.
+                    {tl('landing.cta.desc')}
                   </p>
                   <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                     <button onClick={() => openModal('register')}
                       className="w-full sm:w-auto px-8 py-4 rounded-2xl text-[15px] font-bold text-white transition-all shadow-xl shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:-translate-y-0.5"
                       style={{ background:'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
-                      Zarejestruj się za darmo
+                      {tl('landing.startFree')}
                     </button>
                     <button onClick={() => openModal('login')}
                       className="w-full sm:w-auto px-8 py-4 rounded-2xl text-[15px] font-semibold text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border border-white/[0.1] transition-all hover:-translate-y-0.5">
-                      Mam już konto
+                      {tl('landing.loginBtn')}
                     </button>
                     <a href={osDownload.url || '#'}
                       className={`w-full sm:w-auto flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl text-[15px] font-semibold transition-all hover:-translate-y-0.5 group border ${!osDownload.loading ? 'text-zinc-300 bg-white/[0.05] hover:bg-white/[0.09] border-white/[0.1] cursor-pointer' : 'text-zinc-600 bg-white/[0.02] border-white/[0.05] cursor-wait pointer-events-none'}`}>
