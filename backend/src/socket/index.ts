@@ -233,8 +233,8 @@ export function initSocket(httpServer: HttpServer): SocketServer<ClientToServerE
            JOIN server_members sm ON sm.server_id = c.server_id AND sm.user_id = $2
            WHERE c.id = $1
            UNION ALL
-           SELECT 1 FROM dm_conversations
-           WHERE id = $1 AND (user1_id = $2 OR user2_id = $2)
+           SELECT 1 FROM dm_participants
+           WHERE conversation_id = $1 AND user_id = $2
            LIMIT 1`,
           [channelId, user.id]
         );
