@@ -1088,7 +1088,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
             <div className="flex bg-white/[0.04] border border-white/[0.06] rounded-2xl p-1 mb-6">
               {(['login', 'register'] as const).map(t => (
                 <button key={t} onClick={() => switchTab(t)}
-                  className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${modalTab === t ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-zinc-400 hover:text-white'}`}>
+                  className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${modalTab === t ? 'bg-[#FF8F40] text-[#0A0E14] shadow-lg shadow-[#FF8F40]/20' : 'text-zinc-400 hover:text-white'}`}>
                   {t === 'login' ? tl('auth.login') : tl('auth.register')}
                 </button>
               ))}
@@ -1100,8 +1100,8 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                 <motion.form key="dt-2fa" onSubmit={handleVerify2fa}
                   initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}
                   transition={{ duration: .2 }} className="flex flex-col gap-3.5">
-                  <div className="flex items-center gap-3 p-3.5 bg-indigo-500/10 border border-indigo-500/20 rounded-xl mb-1">
-                    <Shield size={18} className="text-indigo-400 shrink-0" />
+                  <div className="flex items-center gap-3 p-3.5 bg-[#FF8F40]/10 border border-[#FF8F40]/20 rounded-xl mb-1">
+                    <Shield size={18} className="text-[#FF8F40] shrink-0" />
                     <div>
                       <p className="text-sm font-semibold text-white">{tl('landing.verify2fa')}</p>
                       <p className="text-xs text-zinc-400">{twoFaType === 'totp' ? tl('landing.totp.hint') : tl('landing.backup.hint')}</p>
@@ -1120,7 +1120,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     )}
                   </AnimatePresence>
                   <button type="submit" disabled={loading || !twoFaCode.trim()}
-                    className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
+                    className="bg-[#FF8F40] hover:bg-[#FFB454] disabled:opacity-50 text-[#0A0E14] font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#FF8F40]/20">
                     {loading ? <><Loader2 size={17} className="animate-spin" /> {tl('auth.verifying')}</> : <><Shield size={15} />{tl('auth.verify')}</>}
                   </button>
                   <div className="flex gap-2">
@@ -1165,17 +1165,17 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   </AnimatePresence>
                   <label className="flex items-center gap-2.5 cursor-pointer select-none group">
                     <div onClick={()=>setRememberMe(v=>!v)}
-                      className={`w-4 h-4 rounded flex items-center justify-center border transition-all shrink-0 ${rememberMe?'bg-indigo-500 border-indigo-500':'border-zinc-600 bg-transparent group-hover:border-zinc-400'}`}>
+                      className={`w-4 h-4 rounded flex items-center justify-center border transition-all shrink-0 ${rememberMe?'bg-[#FF8F40] border-[#FF8F40]':'border-zinc-600 bg-transparent group-hover:border-zinc-400'}`}>
                       {rememberMe && <Check size={10} className="text-white"/>}
                     </div>
                     <span className="text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors">{tl('auth.rememberMe')}</span>
                   </label>
                   <button type="submit" disabled={loading}
-                    className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
+                    className="bg-[#FF8F40] hover:bg-[#FFB454] disabled:opacity-50 text-[#0A0E14] font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#FF8F40]/20 mt-1">
                     {loading ? <><Loader2 size={17} className="animate-spin" /> {tl('auth.loggingIn')}</> : tl('auth.loginBtn')}
                   </button>
                   <button type="button" onClick={() => { setForgotView('form'); setError(''); }}
-                    className="text-xs text-zinc-500 hover:text-indigo-400 transition-colors text-center mt-0.5">
+                    className="text-xs text-zinc-500 hover:text-[#FF8F40] transition-colors text-center mt-0.5">
                     Zapomniałeś hasła?
                   </button>
                 </motion.form>
@@ -1198,7 +1198,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   </div>
                   {error && <p className="text-rose-400 text-xs flex items-center gap-1.5"><AlertCircle size={13}/>{error}</p>}
                   <button type="submit" disabled={loading}
-                    className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
+                    className="bg-[#FF8F40] hover:bg-[#FFB454] disabled:opacity-50 text-[#0A0E14] font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
                     {loading ? <Loader2 size={17} className="animate-spin"/> : 'Wyślij link'}
                   </button>
                   <button type="button" onClick={() => { setForgotView('none'); setError(''); }}
@@ -1262,7 +1262,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     )}
                   </AnimatePresence>
                   <button type="submit" disabled={loading}
-                    className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
+                    className="bg-[#FF8F40] hover:bg-[#FFB454] disabled:opacity-50 text-[#0A0E14] font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#FF8F40]/20 mt-1">
                     {loading ? <><Loader2 size={17} className="animate-spin" /> {tl('auth.sendingCode')}</> : tl('auth.sendCode')}
                   </button>
                 </motion.form>
@@ -1273,10 +1273,10 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                 <motion.form key="dt-verify" onSubmit={handleRegister}
                   initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }}
                   transition={{ duration: .2 }} className="flex flex-col gap-3.5">
-                  <div className="flex items-center gap-2.5 bg-indigo-500/10 border border-indigo-500/25 rounded-xl px-4 py-3">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center shrink-0"><span className="text-base">✉️</span></div>
+                  <div className="flex items-center gap-2.5 bg-[#FF8F40]/10 border border-[#FF8F40]/25 rounded-xl px-4 py-3">
+                    <div className="w-8 h-8 rounded-lg bg-[#FF8F40]/20 flex items-center justify-center shrink-0"><span className="text-base">✉️</span></div>
                     <div className="min-w-0">
-                      <p className="text-xs text-indigo-300 font-medium">{tl('auth.codeSentTo')}</p>
+                      <p className="text-xs text-[#FFB454] font-medium">{tl('auth.codeSentTo')}</p>
                       <p className="text-sm text-white font-semibold truncate">{form.email}</p>
                     </div>
                   </div>
@@ -1295,7 +1295,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     )}
                   </AnimatePresence>
                   <button type="submit" disabled={loading}
-                    className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
+                    className="bg-[#FF8F40] hover:bg-[#FFB454] disabled:opacity-50 text-[#0A0E14] font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#FF8F40]/20 mt-1">
                     {loading ? <><Loader2 size={17} className="animate-spin" /> {tl('auth.creatingAccount')}</> : tl('auth.registerBtn')}
                   </button>
                   <button type="button" onClick={() => { setRegStep('form'); setError(''); setInfo(''); setVerifyCode(''); }}
@@ -1309,7 +1309,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
             <p className="text-xs text-zinc-700 text-center mt-5">
               {modalTab === 'login' ? tl('landing.noAccount') : tl('landing.haveAccount')}
               <button onClick={() => switchTab(modalTab === 'login' ? 'register' : 'login')}
-                className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">
+                className="text-[#FF8F40] hover:text-[#FFB454] font-semibold transition-colors">
                 {modalTab === 'login' ? tl('auth.switchToRegister') : tl('auth.switchToLogin')}
               </button>
             </p>
@@ -1620,155 +1620,127 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
           );
         })()}
 
-        {/* ── Features Bento Section ── */}
-        <section id="funkcje" className="py-28 px-4 sm:px-6 z-10 relative">
-          <div className="max-w-7xl mx-auto">
-            <motion.div initial={{ opacity:0, y:24 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.5 }}
-              className="mb-16">
-              <div className="inline-flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 rounded-full px-4 py-1.5 mb-5">
-                <span className="text-[11px] font-bold text-violet-400 uppercase tracking-wider">{tl('landing.features')}</span>
-              </div>
-              <h2 className="text-4xl sm:text-5xl font-black mb-4 leading-tight max-w-xl">{tl('landing.features.title')}</h2>
-              <p className="text-zinc-500 max-w-lg">{tl('landing.features.desc')}</p>
-            </motion.div>
+        {/* ── Showcase sections (big alternating panels) ── */}
+        <div id="funkcje" className="flex flex-col gap-8 px-4 sm:px-6 py-20">
 
-            {/* BENTO GRID */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 auto-rows-auto gap-4">
-
-              {/* BIG CARD: Chat — spans 2 rows on lg */}
-              <motion.div initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.45 }}
-                whileHover={{ y:-4 }}
-                className="sm:row-span-2 relative flex flex-col p-7 rounded-3xl border border-[#FF8F40]/20 overflow-hidden group cursor-default"
-                style={{ background:'linear-gradient(145deg,rgba(255,143,64,0.09) 0%,rgba(3,3,8,0.95) 100%)' }}>
-                <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full opacity-30 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
-                  style={{ background:'radial-gradient(circle,rgba(255,143,64,0.7) 0%,transparent 70%)' }}/>
-                <div className="w-12 h-12 rounded-2xl bg-[#FF8F40]/15 border border-[#FF8F40]/25 flex items-center justify-center mb-6 relative z-10">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="w-6 h-6 text-[#FF8F40]">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                  </svg>
-                </div>
-                <h3 className="text-xl font-bold text-white mb-3 relative z-10">{tl('landing.card.chat.title')}</h3>
-                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">{tl('landing.card.chat.desc')}</p>
-                {/* Mini chat preview */}
-                <div className="mt-7 flex flex-col gap-2.5 relative z-10">
-                  {[
-                    { u:'Alex', c:'bg-slate-500', msg:'Siema! Co słychać? 👋', side:'left' },
-                    { u:'Ty', c:'bg-[#FF8F40]', msg:'Hej! Gramy dziś? 🎮', side:'right' },
-                    { u:'Alex', c:'bg-slate-500', msg:'Tak! O 20tej na głosowym 🎙️', side:'left' },
-                  ].map((m,i) => (
-                    <div key={i} className={`flex items-end gap-2 ${m.side==='right'?'flex-row-reverse':''}`}>
-                      <div className={`w-6 h-6 rounded-full ${m.c} flex items-center justify-center text-[9px] font-black text-white shrink-0`}>{m.u[0]}</div>
-                      <div className={`px-3 py-2 rounded-2xl text-xs font-medium max-w-[78%] leading-relaxed
-                        ${m.side==='right' ? 'bg-[#FF8F40]/25 text-[#FFD9AD] rounded-br-sm' : 'bg-white/[0.08] text-zinc-300 rounded-bl-sm'}`}>
-                        {m.msg}
+          {/* A — Chat & reactions (image right) */}
+          <section className="max-w-7xl mx-auto w-full">
+            <motion.div initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true, amount:.3 }} transition={{ duration:.55 }}
+              className="grid lg:grid-cols-2 gap-0 rounded-[2.5rem] overflow-hidden border border-white/[0.06]">
+              {/* Visual panel */}
+              <div className="relative order-2 lg:order-1 min-h-[340px] flex items-center justify-center p-10 overflow-hidden"
+                style={{ background:'radial-gradient(circle at 30% 20%,rgba(255,143,64,0.35) 0%,rgba(20,10,4,0.9) 60%,rgba(3,3,8,1) 100%)' }}>
+                <div className="relative w-full max-w-[300px] rounded-2xl overflow-hidden shadow-2xl shadow-black/50 border border-white/10"
+                  style={{ background:'#0d0d12' }}>
+                  <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.06]">
+                    <span className="text-zinc-500">#</span>
+                    <span className="text-sm font-semibold text-zinc-200">ogólny</span>
+                  </div>
+                  <div className="p-4 flex flex-col gap-3">
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-[#FF8F40] flex items-center justify-center text-xs font-black text-[#0A0E14] shrink-0">K</div>
+                      <div>
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-[13px] font-bold text-white">Kasia</span>
+                          <span className="text-[10px] text-zinc-600">dziś 21:14</span>
+                        </div>
+                        <p className="text-[13px] text-zinc-300 mt-0.5">spójrzcie na to 👀</p>
+                        <motion.div initial={{ opacity:0, scale:.8 }} whileInView={{ opacity:1, scale:1 }} viewport={{ once:true }} transition={{ delay:.3, duration:.3 }}
+                          className="flex gap-1.5 mt-2">
+                          {[['😂','12'],['🔥','5'],['❤️','3']].map(([e,c]) => (
+                            <span key={e} className="flex items-center gap-1 px-2 py-1 rounded-full bg-[#FF8F40]/15 border border-[#FF8F40]/30 text-xs">
+                              <span>{e}</span><span className="text-[#FFB454] font-semibold">{c}</span>
+                            </span>
+                          ))}
+                          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-white/[0.06] border border-white/[0.1] text-zinc-500 text-xs">+</span>
+                        </motion.div>
                       </div>
                     </div>
-                  ))}
-                  <div className="flex items-center gap-1.5 mt-1 ml-8">
-                    {[0,1,2].map(i => (
-                      <motion.span key={i} animate={{ y:[0,-2,0] }} transition={{ duration:.55,repeat:Infinity,delay:i*0.12 }}
-                        className="w-1.5 h-1.5 rounded-full bg-zinc-600 inline-block"/>
-                    ))}
-                    <span className="text-[10px] text-zinc-700 ml-1">Alex pisze…</span>
                   </div>
                 </div>
-              </motion.div>
+              </div>
+              {/* Text panel */}
+              <div className="order-1 lg:order-2 flex flex-col justify-center p-10 sm:p-14"
+                style={{ background:'linear-gradient(135deg,rgba(255,143,64,0.05) 0%,rgba(3,3,8,0.98) 100%)' }}>
+                <h2 className="text-3xl sm:text-4xl font-black leading-[1.05] mb-4 tracking-tight">{tl('landing.showcase.chat.title')}</h2>
+                <p className="text-zinc-400 leading-relaxed max-w-md">{tl('landing.showcase.chat.desc')}</p>
+              </div>
+            </motion.div>
+          </section>
 
-              {/* Voice & Video */}
-              <motion.div initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.45, delay:.07 }}
-                whileHover={{ y:-4 }}
-                className="relative flex flex-col p-7 rounded-3xl border border-violet-500/20 overflow-hidden group cursor-default"
-                style={{ background:'linear-gradient(145deg,rgba(139,92,246,0.09) 0%,rgba(3,3,8,0.95) 100%)' }}>
-                <div className="absolute -top-14 -right-14 w-36 h-36 rounded-full opacity-25 group-hover:opacity-55 transition-opacity duration-500 pointer-events-none"
-                  style={{ background:'radial-gradient(circle,rgba(139,92,246,0.7) 0%,transparent 70%)' }}/>
-                <div className="w-12 h-12 rounded-2xl bg-violet-500/15 border border-violet-500/25 flex items-center justify-center mb-5 relative z-10">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="w-6 h-6 text-violet-400">
-                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                  </svg>
-                </div>
-                <h3 className="text-lg font-bold text-white mb-2 relative z-10">{tl('landing.card.voice.title')}</h3>
-                <p className="text-sm text-zinc-500 leading-relaxed relative z-10 mb-5">{tl('landing.card.voice.desc')}</p>
-                {/* Voice users */}
-                <div className="flex gap-2 items-center relative z-10">
-                  {['A','K','M'].map((l,i) => (
-                    <div key={i} className="relative">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-black text-white ${['bg-sky-500','bg-pink-500','bg-emerald-500'][i]} shadow-lg`}>{l}</div>
-                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[#030308]"/>
+          {/* B — Voice & video (image left) */}
+          <section className="max-w-7xl mx-auto w-full">
+            <motion.div initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true, amount:.3 }} transition={{ duration:.55 }}
+              className="grid lg:grid-cols-2 gap-0 rounded-[2.5rem] overflow-hidden border border-white/[0.06]">
+              {/* Visual panel */}
+              <div className="relative min-h-[340px] flex items-center justify-center p-10 overflow-hidden"
+                style={{ background:'radial-gradient(circle at 70% 30%,rgba(149,230,203,0.28) 0%,rgba(6,20,17,0.92) 60%,rgba(3,3,8,1) 100%)' }}>
+                <div className="grid grid-cols-2 gap-2.5 w-full max-w-[300px]">
+                  {[
+                    { l:'A', c:'bg-[#FF8F40]', speaking:true },
+                    { l:'K', c:'bg-pink-500', speaking:false },
+                    { l:'M', c:'bg-sky-500', speaking:false },
+                    { l:'+', c:'bg-white/[0.06]', speaking:false, ghost:true },
+                  ].map((u,i) => (
+                    <div key={i} className={`aspect-square rounded-2xl flex items-center justify-center relative ${u.ghost ? 'border border-dashed border-white/15 text-zinc-600' : u.c}`}>
+                      {u.speaking && (
+                        <motion.span animate={{ scale:[1,1.12,1], opacity:[.6,.15,.6] }} transition={{ duration:1.4, repeat:Infinity }}
+                          className="absolute inset-0 rounded-2xl border-2 border-[#95E6CB]"/>
+                      )}
+                      <span className={`font-black ${u.ghost ? 'text-lg' : 'text-xl text-white'}`}>{u.l}</span>
                     </div>
                   ))}
-                  <div className="w-10 h-10 rounded-xl bg-white/[0.05] border border-dashed border-white/[0.15] flex items-center justify-center text-zinc-600 ml-1">+</div>
-                  <span className="text-xs text-zinc-600 ml-1">3 online</span>
                 </div>
-              </motion.div>
+              </div>
+              {/* Text panel */}
+              <div className="flex flex-col justify-center p-10 sm:p-14"
+                style={{ background:'linear-gradient(135deg,rgba(149,230,203,0.05) 0%,rgba(3,3,8,0.98) 100%)' }}>
+                <h2 className="text-3xl sm:text-4xl font-black leading-[1.05] mb-4 tracking-tight">{tl('landing.showcase.voice.title')}</h2>
+                <p className="text-zinc-400 leading-relaxed max-w-md">{tl('landing.showcase.voice.desc')}</p>
+              </div>
+            </motion.div>
+          </section>
 
-              {/* Servers */}
-              <motion.div initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.45, delay:.14 }}
-                whileHover={{ y:-4 }}
-                className="relative flex flex-col p-7 rounded-3xl border border-emerald-500/20 overflow-hidden group cursor-default"
-                style={{ background:'linear-gradient(145deg,rgba(34,197,94,0.07) 0%,rgba(3,3,8,0.95) 100%)' }}>
-                <div className="absolute -top-14 -right-14 w-36 h-36 rounded-full opacity-25 group-hover:opacity-55 transition-opacity duration-500 pointer-events-none"
-                  style={{ background:'radial-gradient(circle,rgba(34,197,94,0.6) 0%,transparent 70%)' }}/>
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center mb-5 relative z-10">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="w-6 h-6 text-emerald-400">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                  </svg>
+          {/* C — Servers & communities (image right) */}
+          <section className="max-w-7xl mx-auto w-full">
+            <motion.div initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true, amount:.3 }} transition={{ duration:.55 }}
+              className="grid lg:grid-cols-2 gap-0 rounded-[2.5rem] overflow-hidden border border-white/[0.06]">
+              {/* Visual panel */}
+              <div className="relative order-2 lg:order-1 min-h-[340px] flex items-center justify-center p-10 overflow-hidden"
+                style={{ background:'radial-gradient(circle at 30% 70%,rgba(255,180,84,0.3) 0%,rgba(20,15,4,0.92) 60%,rgba(3,3,8,1) 100%)' }}>
+                <div className="flex w-full max-w-[300px] rounded-2xl overflow-hidden shadow-2xl shadow-black/50 border border-white/10"
+                  style={{ background:'#0d0d12' }}>
+                  <div className="w-12 border-r border-white/[0.06] flex flex-col items-center gap-2 py-3">
+                    {['C','G','P'].map((l,i) => (
+                      <div key={i} className={`w-8 h-8 rounded-${i===0?'xl':'full'} flex items-center justify-center text-[10px] font-black ${i===0?'bg-[#FFB454] text-[#0A0E14]':'bg-white/[0.07] text-zinc-500'}`}>{l}</div>
+                    ))}
+                  </div>
+                  <div className="flex-1 p-3">
+                    <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Kanały tekstowe</p>
+                    {['ogólny','ekipa','memy'].map((c,i) => (
+                      <div key={c} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg mb-0.5 ${i===0?'bg-white/[0.07] text-white':'text-zinc-500'}`}>
+                        <span className="text-[10px] text-zinc-600">#</span><span className="text-xs font-medium">{c}</span>
+                      </div>
+                    ))}
+                    <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mt-3 mb-2">Role</p>
+                    <div className="flex flex-wrap gap-1">
+                      {[['Admin','#FF8F40'],['Mod','#95E6CB'],['Ekipa','#FFB454']].map(([r,c]) => (
+                        <span key={r} className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ color:c, background:`${c}22`, border:`1px solid ${c}44` }}>{r}</span>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2 relative z-10">{tl('landing.card.servers.title')}</h3>
-                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">{tl('landing.card.servers.desc')}</p>
-              </motion.div>
+              </div>
+              {/* Text panel */}
+              <div className="order-1 lg:order-2 flex flex-col justify-center p-10 sm:p-14"
+                style={{ background:'linear-gradient(135deg,rgba(255,180,84,0.05) 0%,rgba(3,3,8,0.98) 100%)' }}>
+                <h2 className="text-3xl sm:text-4xl font-black leading-[1.05] mb-4 tracking-tight">{tl('landing.showcase.servers.title')}</h2>
+                <p className="text-zinc-400 leading-relaxed max-w-md">{tl('landing.showcase.servers.desc')}</p>
+              </div>
+            </motion.div>
+          </section>
 
-              {/* Friends DM */}
-              <motion.div initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.45, delay:.21 }}
-                whileHover={{ y:-4 }}
-                className="relative flex flex-col p-7 rounded-3xl border border-pink-500/20 overflow-hidden group cursor-default"
-                style={{ background:'linear-gradient(145deg,rgba(236,72,153,0.07) 0%,rgba(3,3,8,0.95) 100%)' }}>
-                <div className="absolute -top-14 -right-14 w-36 h-36 rounded-full opacity-25 group-hover:opacity-55 transition-opacity duration-500 pointer-events-none"
-                  style={{ background:'radial-gradient(circle,rgba(236,72,153,0.6) 0%,transparent 70%)' }}/>
-                <div className="w-12 h-12 rounded-2xl bg-pink-500/15 border border-pink-500/25 flex items-center justify-center mb-5 relative z-10">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="w-6 h-6 text-pink-400">
-                    <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-                  </svg>
-                </div>
-                <h3 className="text-lg font-bold text-white mb-2 relative z-10">{tl('landing.card.dm.title')}</h3>
-                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">{tl('landing.card.dm.desc')}</p>
-              </motion.div>
-
-              {/* Security + Integrations row */}
-              <motion.div initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.45, delay:.28 }}
-                whileHover={{ y:-4 }}
-                className="relative flex flex-col p-7 rounded-3xl border border-amber-500/20 overflow-hidden group cursor-default"
-                style={{ background:'linear-gradient(145deg,rgba(245,158,11,0.07) 0%,rgba(3,3,8,0.95) 100%)' }}>
-                <div className="absolute -top-14 -right-14 w-36 h-36 rounded-full opacity-25 group-hover:opacity-55 transition-opacity duration-500 pointer-events-none"
-                  style={{ background:'radial-gradient(circle,rgba(245,158,11,0.6) 0%,transparent 70%)' }}/>
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center mb-5 relative z-10">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="w-6 h-6 text-amber-400">
-                    <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                  </svg>
-                </div>
-                <h3 className="text-lg font-bold text-white mb-2 relative z-10">{tl('landing.card.security.title')}</h3>
-                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">{tl('landing.card.security.desc')}</p>
-              </motion.div>
-
-              {/* Integrations pill */}
-              <motion.div initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:.45, delay:.35 }}
-                whileHover={{ y:-4 }}
-                className="relative flex flex-col p-7 rounded-3xl border border-cyan-500/20 overflow-hidden group cursor-default"
-                style={{ background:'linear-gradient(145deg,rgba(6,182,212,0.07) 0%,rgba(3,3,8,0.95) 100%)' }}>
-                <div className="absolute -top-14 -right-14 w-36 h-36 rounded-full opacity-25 group-hover:opacity-55 transition-opacity duration-500 pointer-events-none"
-                  style={{ background:'radial-gradient(circle,rgba(6,182,212,0.6) 0%,transparent 70%)' }}/>
-                <div className="w-12 h-12 rounded-2xl bg-cyan-500/15 border border-cyan-500/25 flex items-center justify-center mb-5 relative z-10">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="w-6 h-6 text-cyan-400">
-                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-                  </svg>
-                </div>
-                <h3 className="text-lg font-bold text-white mb-2 relative z-10">{tl('landing.card.integrations.title')}</h3>
-                <p className="text-sm text-zinc-500 leading-relaxed relative z-10">{tl('landing.card.integrations.desc')}</p>
-              </motion.div>
-
-            </div>
-          </div>
-        </section>
+        </div>
 
         {/* ── Integrations Section ── */}
         <section id="integracje" className="py-28 px-4 sm:px-6 z-10 relative">
@@ -2012,14 +1984,14 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
 
               {/* Invite banner */}
               {inviteInfo && (
-                <div className="mb-6 flex items-center gap-3 bg-indigo-500/10 border border-indigo-500/25 rounded-2xl px-4 py-3">
+                <div className="mb-6 flex items-center gap-3 bg-[#FF8F40]/10 border border-[#FF8F40]/25 rounded-2xl px-4 py-3">
                   {inviteInfo.icon_url
                     ? <img src={staticUrl(inviteInfo.icon_url)} className="w-10 h-10 rounded-xl object-cover shrink-0" alt=""/>
-                    : <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-lg font-bold text-white shrink-0">{inviteInfo.server_name[0]}</div>
+                    : <div className="w-10 h-10 rounded-xl bg-[#FF8F40] flex items-center justify-center text-lg font-bold text-[#0A0E14] shrink-0">{inviteInfo.server_name[0]}</div>
                   }
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-white truncate">Zaproszenie na serwer</p>
-                    <p className="text-xs text-indigo-300 font-semibold truncate">{inviteInfo.server_name}</p>
+                    <p className="text-xs text-[#FFB454] font-semibold truncate">{inviteInfo.server_name}</p>
                     <p className="text-xs text-zinc-500 truncate">od <span className="text-zinc-400">{inviteInfo.creator_username}</span></p>
                   </div>
                 </div>
@@ -2042,7 +2014,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                 {(['login','register'] as const).map(t => (
                   <button key={t} onClick={() => switchTab(t)}
                     className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                      modalTab===t ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-zinc-400 hover:text-white'}`}>
+                      modalTab===t ? 'bg-[#FF8F40] text-[#0A0E14] shadow-lg shadow-[#FF8F40]/20' : 'text-zinc-400 hover:text-white'}`}>
                     {t === 'login' ? tl('auth.login') : tl('auth.register')}
                   </button>
                 ))}
@@ -2054,8 +2026,8 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   <motion.form key="2fa-form" onSubmit={handleVerify2fa}
                     initial={{ opacity:0, x:12 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-12 }}
                     transition={{ duration:.2 }} className="flex flex-col gap-3.5">
-                    <div className="flex items-center gap-3 p-3.5 bg-indigo-500/10 border border-indigo-500/20 rounded-xl mb-1">
-                      <Shield size={18} className="text-indigo-400 shrink-0"/>
+                    <div className="flex items-center gap-3 p-3.5 bg-[#FF8F40]/10 border border-[#FF8F40]/20 rounded-xl mb-1">
+                      <Shield size={18} className="text-[#FF8F40] shrink-0"/>
                       <div>
                         <p className="text-sm font-semibold text-white">{tl('landing.verify2fa')}</p>
                         <p className="text-xs text-zinc-400">
@@ -2077,7 +2049,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                       )}
                     </AnimatePresence>
                     <button type="submit" disabled={loading || !twoFaCode.trim()}
-                      className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
+                      className="bg-[#FF8F40] hover:bg-[#FFB454] disabled:opacity-50 text-[#0A0E14] font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#FF8F40]/20">
                       {loading ? <><Loader2 size={17} className="animate-spin"/> {tl('auth.verifying')}</> : <><Shield size={15}/>{tl('auth.verify')}</>}
                     </button>
                     <div className="flex gap-2">
@@ -2122,17 +2094,17 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     </AnimatePresence>
                     <label className="flex items-center gap-2.5 cursor-pointer select-none group">
                       <div onClick={()=>setRememberMe(v=>!v)}
-                        className={`w-4 h-4 rounded flex items-center justify-center border transition-all shrink-0 ${rememberMe?'bg-indigo-500 border-indigo-500':'border-zinc-600 bg-transparent group-hover:border-zinc-400'}`}>
+                        className={`w-4 h-4 rounded flex items-center justify-center border transition-all shrink-0 ${rememberMe?'bg-[#FF8F40] border-[#FF8F40]':'border-zinc-600 bg-transparent group-hover:border-zinc-400'}`}>
                         {rememberMe && <Check size={10} className="text-white"/>}
                       </div>
                       <span className="text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors">{tl('auth.rememberMe')}</span>
                     </label>
                     <button type="submit" disabled={loading}
-                      className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
+                      className="bg-[#FF8F40] hover:bg-[#FFB454] disabled:opacity-50 text-[#0A0E14] font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#FF8F40]/20 mt-1">
                       {loading ? <><Loader2 size={17} className="animate-spin"/> {tl('auth.loggingIn')}</> : tl('auth.loginBtn')}
                     </button>
                     <button type="button" onClick={() => { setForgotView('form'); setError(''); setInfo(''); }}
-                      className="text-xs text-zinc-500 hover:text-indigo-400 transition-colors text-center mt-0.5">
+                      className="text-xs text-zinc-500 hover:text-[#FF8F40] transition-colors text-center mt-0.5">
                       Zapomniałeś hasła?
                     </button>
                   </motion.form>
@@ -2155,7 +2127,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     </div>
                     {error && <p className="text-rose-400 text-xs flex items-center gap-1.5"><AlertCircle size={13}/>{error}</p>}
                     <button type="submit" disabled={loading}
-                      className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
+                      className="bg-[#FF8F40] hover:bg-[#FFB454] disabled:opacity-50 text-[#0A0E14] font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
                       {loading ? <Loader2 size={17} className="animate-spin"/> : 'Wyślij link resetujący'}
                     </button>
                     <button type="button" onClick={() => { setForgotView('none'); setError(''); }}
@@ -2210,7 +2182,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                     </div>
                     {error && <p className="text-rose-400 text-xs flex items-center gap-1.5"><AlertCircle size={13}/>{error}</p>}
                     <button type="submit" disabled={loading}
-                      className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
+                      className="bg-[#FF8F40] hover:bg-[#FFB454] disabled:opacity-50 text-[#0A0E14] font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
                       {loading ? <Loader2 size={17} className="animate-spin"/> : 'Zmień hasło'}
                     </button>
                   </motion.form>
@@ -2257,7 +2229,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                       )}
                     </AnimatePresence>
                     <button type="submit" disabled={loading}
-                      className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
+                      className="bg-[#FF8F40] hover:bg-[#FFB454] disabled:opacity-50 text-[#0A0E14] font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#FF8F40]/20 mt-1">
                       {loading ? <><Loader2 size={17} className="animate-spin"/> {tl('auth.sendingCode')}</> : tl('auth.sendCode')}
                     </button>
                   </motion.form>
@@ -2268,10 +2240,10 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                   <motion.form key="verify-form" onSubmit={handleRegister}
                     initial={{ opacity:0, x:12 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-12 }}
                     transition={{ duration:.2 }} className="flex flex-col gap-3.5">
-                    <div className="flex items-center gap-2.5 bg-indigo-500/10 border border-indigo-500/25 rounded-xl px-4 py-3">
-                      <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center shrink-0"><span className="text-base">✉️</span></div>
+                    <div className="flex items-center gap-2.5 bg-[#FF8F40]/10 border border-[#FF8F40]/25 rounded-xl px-4 py-3">
+                      <div className="w-8 h-8 rounded-lg bg-[#FF8F40]/20 flex items-center justify-center shrink-0"><span className="text-base">✉️</span></div>
                       <div className="min-w-0">
-                        <p className="text-xs text-indigo-300 font-medium">{tl('auth.codeSentTo')}</p>
+                        <p className="text-xs text-[#FFB454] font-medium">{tl('auth.codeSentTo')}</p>
                         <p className="text-sm text-white font-semibold truncate">{form.email}</p>
                       </div>
                     </div>
@@ -2290,7 +2262,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                       )}
                     </AnimatePresence>
                     <button type="submit" disabled={loading}
-                      className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 mt-1">
+                      className="bg-[#FF8F40] hover:bg-[#FFB454] disabled:opacity-50 text-[#0A0E14] font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#FF8F40]/20 mt-1">
                       {loading ? <><Loader2 size={17} className="animate-spin"/> {tl('auth.creatingAccount')}</> : tl('auth.registerBtn')}
                     </button>
                     <button type="button" onClick={() => { setRegStep('form'); setError(''); setInfo(''); setVerifyCode(''); }}
@@ -2304,7 +2276,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
               <p className="text-xs text-zinc-700 text-center mt-5">
                 {modalTab === 'login' ? tl('landing.noAccount') : tl('landing.haveAccount')}
                 <button onClick={() => switchTab(modalTab === 'login' ? 'register' : 'login')}
-                  className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">
+                  className="text-[#FF8F40] hover:text-[#FFB454] font-semibold transition-colors">
                   {modalTab === 'login' ? tl('auth.switchToRegister') : tl('auth.switchToLogin')}
                 </button>
               </p>
@@ -2312,11 +2284,11 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
               {/* Desktop app download link */}
               <div className="mt-5 pt-4 border-t border-white/[0.06] flex flex-col gap-1.5">
                 <a href={osDownload.url || '#'}
-                  className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-xs font-medium border transition-all group ${!osDownload.loading ? 'text-zinc-400 hover:text-white bg-white/[0.03] hover:bg-white/[0.07] border-white/[0.06] hover:border-indigo-500/40 cursor-pointer' : 'text-zinc-700 bg-white/[0.02] border-white/[0.03] cursor-wait pointer-events-none'}`}>
-                  {osDownload.loading ? <Loader2 size={13} className="animate-spin"/> : <Monitor size={13} className="group-hover:text-indigo-400 transition-colors"/>}
+                  className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-xs font-medium border transition-all group ${!osDownload.loading ? 'text-zinc-400 hover:text-white bg-white/[0.03] hover:bg-white/[0.07] border-white/[0.06] hover:border-[#FF8F40]/40 cursor-pointer' : 'text-zinc-700 bg-white/[0.02] border-white/[0.03] cursor-wait pointer-events-none'}`}>
+                  {osDownload.loading ? <Loader2 size={13} className="animate-spin"/> : <Monitor size={13} className="group-hover:text-[#FF8F40] transition-colors"/>}
                   {osDownload.loading ? tl('landing.loading') : `${tl('landing.downloadApp')} — ${userOs === 'macos' ? 'macOS' : userOs === 'windows' ? 'Windows' : userOs === 'linux' ? 'Linux' : 'Desktop'}`}
                   {!osDownload.loading && osDownload.ext && <span className="text-[10px] text-zinc-600 font-mono">.{osDownload.ext}</span>}
-                  {!osDownload.loading && <Download size={12} className="group-hover:text-indigo-400 transition-colors"/>}
+                  {!osDownload.loading && <Download size={12} className="group-hover:text-[#FF8F40] transition-colors"/>}
                 </a>
                 {/* Linux: secondary portable AppImage link */}
                 {!osDownload.loading && osDownload.alt && (
