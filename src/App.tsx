@@ -27,7 +27,7 @@ import {
   Bookmark, BookmarkCheck, Timer, Square, ImageIcon, Moon,
   Keyboard, Radio, Compass, CalendarPlus, Mic2, HelpCircle,
   Home, BookOpen, TrendingUp, Layers, SmilePlus, Smartphone,
-  Clipboard, ScanLine, RefreshCw, ShieldBan, Ban, Pencil,
+  Clipboard, ScanLine, RefreshCw, ShieldBan, Ban, Pencil, Mail,
   type LucideIcon
 } from 'lucide-react';
 import {
@@ -1623,12 +1623,12 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
         {/* ── Showcase sections (big alternating panels) ── */}
         <div id="funkcje" className="flex flex-col gap-8 px-4 sm:px-6 py-20">
 
-          {/* A — Chat & reactions (image right) */}
+          {/* A — Chat & reactions (visual left) */}
           <section className="max-w-7xl mx-auto w-full">
             <motion.div initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true, amount:.3 }} transition={{ duration:.55 }}
               className="grid lg:grid-cols-2 gap-0 rounded-[2.5rem] overflow-hidden border border-white/[0.06]">
               {/* Visual panel */}
-              <div className="relative order-2 lg:order-1 min-h-[340px] flex items-center justify-center p-10 overflow-hidden"
+              <div className="relative min-h-[340px] flex items-center justify-center p-10 overflow-hidden"
                 style={{ background:'radial-gradient(circle at 30% 20%,rgba(255,143,64,0.35) 0%,rgba(20,10,4,0.9) 60%,rgba(3,3,8,1) 100%)' }}>
                 <div className="relative w-full max-w-[300px] rounded-2xl overflow-hidden shadow-2xl shadow-black/50 border border-white/10"
                   style={{ background:'#0d0d12' }}>
@@ -1660,7 +1660,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                 </div>
               </div>
               {/* Text panel */}
-              <div className="order-1 lg:order-2 flex flex-col justify-center p-10 sm:p-14"
+              <div className="flex flex-col justify-center p-10 sm:p-14"
                 style={{ background:'linear-gradient(135deg,rgba(255,143,64,0.05) 0%,rgba(3,3,8,0.98) 100%)' }}>
                 <h2 className="text-3xl sm:text-4xl font-black leading-[1.05] mb-4 tracking-tight">{tl('landing.showcase.chat.title')}</h2>
                 <p className="text-zinc-400 leading-relaxed max-w-md">{tl('landing.showcase.chat.desc')}</p>
@@ -1668,71 +1668,80 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
             </motion.div>
           </section>
 
-          {/* B — Voice & video (image left) */}
+          {/* B — Voice & video (visual right) */}
           <section className="max-w-7xl mx-auto w-full">
             <motion.div initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true, amount:.3 }} transition={{ duration:.55 }}
               className="grid lg:grid-cols-2 gap-0 rounded-[2.5rem] overflow-hidden border border-white/[0.06]">
-              {/* Visual panel */}
-              <div className="relative min-h-[340px] flex items-center justify-center p-10 overflow-hidden"
-                style={{ background:'radial-gradient(circle at 70% 30%,rgba(149,230,203,0.28) 0%,rgba(6,20,17,0.92) 60%,rgba(3,3,8,1) 100%)' }}>
-                <div className="grid grid-cols-2 gap-2.5 w-full max-w-[300px]">
-                  {[
-                    { l:'A', c:'bg-[#FF8F40]', speaking:true },
-                    { l:'K', c:'bg-pink-500', speaking:false },
-                    { l:'M', c:'bg-sky-500', speaking:false },
-                    { l:'+', c:'bg-white/[0.06]', speaking:false, ghost:true },
-                  ].map((u,i) => (
-                    <div key={i} className={`aspect-square rounded-2xl flex items-center justify-center relative ${u.ghost ? 'border border-dashed border-white/15 text-zinc-600' : u.c}`}>
-                      {u.speaking && (
-                        <motion.span animate={{ scale:[1,1.12,1], opacity:[.6,.15,.6] }} transition={{ duration:1.4, repeat:Infinity }}
-                          className="absolute inset-0 rounded-2xl border-2 border-[#95E6CB]"/>
-                      )}
-                      <span className={`font-black ${u.ghost ? 'text-lg' : 'text-xl text-white'}`}>{u.l}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
               {/* Text panel */}
-              <div className="flex flex-col justify-center p-10 sm:p-14"
+              <div className="order-2 lg:order-1 flex flex-col justify-center p-10 sm:p-14"
                 style={{ background:'linear-gradient(135deg,rgba(149,230,203,0.05) 0%,rgba(3,3,8,0.98) 100%)' }}>
                 <h2 className="text-3xl sm:text-4xl font-black leading-[1.05] mb-4 tracking-tight">{tl('landing.showcase.voice.title')}</h2>
                 <p className="text-zinc-400 leading-relaxed max-w-md">{tl('landing.showcase.voice.desc')}</p>
               </div>
+              {/* Visual panel — floating call cards + control bar, styled after the real in-app call view */}
+              <div className="order-1 lg:order-2 relative min-h-[340px] flex flex-col items-center justify-center gap-6 p-10 overflow-hidden"
+                style={{ background:'radial-gradient(circle at 30% 25%,rgba(255,143,64,0.16) 0%,transparent 45%),radial-gradient(circle at 75% 65%,rgba(149,230,203,0.22) 0%,transparent 45%),#070a09' }}>
+                <div className="flex gap-3">
+                  {[
+                    { l:'A', c:'#FF8F40', name:'Alex', speaking:true },
+                    { l:'K', c:'#ec4899', name:'Kasia', speaking:false },
+                  ].map((u,i) => (
+                    <motion.div key={i} animate={{ y:[0,-5,0] }} transition={{ duration:3.5+i, repeat:Infinity, ease:'easeInOut', delay:i*.4 }}
+                      className="relative w-28 rounded-2xl overflow-hidden shadow-xl shadow-black/40"
+                      style={{ background:'#0d0d12', border: u.speaking ? '1.5px solid #95E6CB' : '1px solid rgba(255,255,255,0.08)' }}>
+                      {u.speaking && (
+                        <motion.span animate={{ opacity:[.5,1,.5] }} transition={{ duration:1.2, repeat:Infinity }}
+                          className="absolute inset-0 rounded-2xl pointer-events-none" style={{ boxShadow:'0 0 16px rgba(149,230,203,0.5)' }}/>
+                      )}
+                      <div className="aspect-square flex items-center justify-center" style={{ background:`${u.c}33` }}>
+                        <span className="text-2xl font-black" style={{ color:u.c }}>{u.l}</span>
+                      </div>
+                      <div className="px-2.5 py-2 flex items-center gap-1.5">
+                        <span className="text-[11px] font-semibold text-white truncate">{u.name}</span>
+                        {u.speaking && <Mic size={10} className="text-[#95E6CB] shrink-0"/>}
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+                {/* Control bar */}
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-2xl border border-white/[0.08]" style={{ background:'rgba(10,10,15,0.9)' }}>
+                  {[Mic, Video, ScreenShare].map((Icon,i) => (
+                    <span key={i} className="w-8 h-8 rounded-xl bg-white/[0.06] flex items-center justify-center text-zinc-300">
+                      <Icon size={14}/>
+                    </span>
+                  ))}
+                  <span className="w-8 h-8 rounded-xl bg-rose-500 flex items-center justify-center text-white">
+                    <PhoneOff size={14}/>
+                  </span>
+                </div>
+              </div>
             </motion.div>
           </section>
 
-          {/* C — Servers & communities (image right) */}
+          {/* C — Servers & communities (visual left) */}
           <section className="max-w-7xl mx-auto w-full">
             <motion.div initial={{ opacity:0, y:30 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true, amount:.3 }} transition={{ duration:.55 }}
               className="grid lg:grid-cols-2 gap-0 rounded-[2.5rem] overflow-hidden border border-white/[0.06]">
-              {/* Visual panel */}
-              <div className="relative order-2 lg:order-1 min-h-[340px] flex items-center justify-center p-10 overflow-hidden"
+              {/* Visual panel — dashboard-style server grid, styled after the real "Twoje serwery" view */}
+              <div className="relative min-h-[340px] flex items-center justify-center p-10 overflow-hidden"
                 style={{ background:'radial-gradient(circle at 30% 70%,rgba(255,180,84,0.3) 0%,rgba(20,15,4,0.92) 60%,rgba(3,3,8,1) 100%)' }}>
-                <div className="flex w-full max-w-[300px] rounded-2xl overflow-hidden shadow-2xl shadow-black/50 border border-white/10"
+                <div className="w-full max-w-[300px] rounded-2xl overflow-hidden shadow-2xl shadow-black/50 border border-white/10 p-4"
                   style={{ background:'#0d0d12' }}>
-                  <div className="w-12 border-r border-white/[0.06] flex flex-col items-center gap-2 py-3">
-                    {['C','G','P'].map((l,i) => (
-                      <div key={i} className={`w-8 h-8 rounded-${i===0?'xl':'full'} flex items-center justify-center text-[10px] font-black ${i===0?'bg-[#FFB454] text-[#0A0E14]':'bg-white/[0.07] text-zinc-500'}`}>{l}</div>
+                  <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-2.5">Twoje serwery</p>
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    {[['E','#FF8F40'],['N','#95E6CB'],['G','#FFB454']].map(([l,c]) => (
+                      <div key={l} className="aspect-square rounded-xl flex items-center justify-center text-sm font-black" style={{ background:`${c}26`, color:c, border:`1px solid ${c}44` }}>{l}</div>
                     ))}
                   </div>
-                  <div className="flex-1 p-3">
-                    <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-2">Kanały tekstowe</p>
-                    {['ogólny','ekipa','memy'].map((c,i) => (
-                      <div key={c} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg mb-0.5 ${i===0?'bg-white/[0.07] text-white':'text-zinc-500'}`}>
-                        <span className="text-[10px] text-zinc-600">#</span><span className="text-xs font-medium">{c}</span>
-                      </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[['Admin','#FF8F40'],['Mod','#95E6CB'],['Ekipa','#FFB454']].map(([r,c]) => (
+                      <span key={r} className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ color:c, background:`${c}22`, border:`1px solid ${c}44` }}>{r}</span>
                     ))}
-                    <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mt-3 mb-2">Role</p>
-                    <div className="flex flex-wrap gap-1">
-                      {[['Admin','#FF8F40'],['Mod','#95E6CB'],['Ekipa','#FFB454']].map(([r,c]) => (
-                        <span key={r} className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ color:c, background:`${c}22`, border:`1px solid ${c}44` }}>{r}</span>
-                      ))}
-                    </div>
                   </div>
                 </div>
               </div>
               {/* Text panel */}
-              <div className="order-1 lg:order-2 flex flex-col justify-center p-10 sm:p-14"
+              <div className="flex flex-col justify-center p-10 sm:p-14"
                 style={{ background:'linear-gradient(135deg,rgba(255,180,84,0.05) 0%,rgba(3,3,8,0.98) 100%)' }}>
                 <h2 className="text-3xl sm:text-4xl font-black leading-[1.05] mb-4 tracking-tight">{tl('landing.showcase.servers.title')}</h2>
                 <p className="text-zinc-400 leading-relaxed max-w-md">{tl('landing.showcase.servers.desc')}</p>
@@ -1812,17 +1821,19 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                 <p className="text-zinc-500 leading-relaxed mb-8">{tl('landing.security.desc')}</p>
                 <div className="flex flex-col gap-3">
                   {[
-                    { icon:'🔐', text:tl('landing.security.item1') },
-                    { icon:'✉️', text:tl('landing.security.item2') },
-                    { icon:'🛡️', text:tl('landing.security.item3') },
-                    { icon:'🔒', text:tl('landing.security.item4') },
-                    { icon:'⚡', text:tl('landing.security.item5') },
+                    { Icon:Shield, text:tl('landing.security.item1') },
+                    { Icon:Mail, text:tl('landing.security.item2') },
+                    { Icon:ShieldBan, text:tl('landing.security.item3') },
+                    { Icon:Lock, text:tl('landing.security.item4') },
+                    { Icon:Zap, text:tl('landing.security.item5') },
                   ].map((item,i) => (
                     <motion.div key={item.text}
                       initial={{ opacity:0, x:-14 }} whileInView={{ opacity:1, x:0 }} viewport={{ once:true }}
                       transition={{ duration:.3, delay: i * .07 }}
                       className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-white/[0.02] border border-white/[0.05] hover:border-amber-500/25 hover:bg-amber-500/5 transition-all duration-200">
-                      <span className="text-xl shrink-0 w-8 text-center">{item.icon}</span>
+                      <span className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+                        <item.Icon size={15} className="text-amber-400"/>
+                      </span>
                       <span className="text-sm text-zinc-400">{item.text}</span>
                     </motion.div>
                   ))}
@@ -1837,7 +1848,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
                 <div className="relative rounded-3xl border border-amber-500/20 p-7 overflow-hidden"
                   style={{ background:'linear-gradient(145deg,rgba(245,158,11,0.06) 0%,rgba(3,3,8,0.97) 100%)' }}>
                   <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/25 flex items-center justify-center text-xl">🔐</div>
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/25 flex items-center justify-center"><Shield size={18} className="text-amber-400"/></div>
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-white text-sm">{tl('landing.verify2fa')}</p>
                       <p className="text-xs text-zinc-600">{tl('landing.totp.compat')}</p>
