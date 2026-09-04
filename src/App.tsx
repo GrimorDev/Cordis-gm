@@ -1,7 +1,10 @@
 ﻿import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { TitleBar, isTauri, openExternalLink } from './TitleBar';
-import ImageCropModal, { type CropShape } from './ImageCropModal';
+import { type CropShape } from './ImageCropModal';
+// Lazy-loaded: only needed when actually cropping an image (avatar/banner/icon),
+// or opening a server's Automations tab — keeps their code out of the initial bundle.
+const ImageCropModal = React.lazy(() => import('./ImageCropModal'));
 import { translate, resolveLocale, bcp47 as localeBcp47, loadLocale, detectLocale, LOCALES, type Locale, type TimeFormat } from './i18n';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -91,7 +94,7 @@ import {
 } from './rtc/playback';
 import { VoiceEngine } from './rtc/engine';
 import VoiceDiagnostics from './VoiceDiagnostics';
-import AutomationsTabNew from './AutomationEditor';
+const AutomationsTabNew = React.lazy(() => import('./AutomationEditor'));
 import { captureSourceStream } from './rtc/screen';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -4593,7 +4596,9 @@ function ServerSettingsPage({
 
           {/* ── Automatyzacje ── */}
           {tab === 'automations' && activeServer && (
-            <AutomationsTabNew serverId={activeServer} gi={gi} roles={roles} channels={channels||[]}/>
+            <React.Suspense fallback={<div className="flex justify-center py-12"><Loader2 size={20} className="animate-spin text-zinc-600"/></div>}>
+              <AutomationsTabNew serverId={activeServer} gi={gi} roles={roles} channels={channels||[]}/>
+            </React.Suspense>
           )}
 
           {/* ── Tag serwera ── */}
@@ -25904,14 +25909,16 @@ export default function App() {
 
       {/* Image crop modal — avatar, banner, server icon/banner */}
       {cropPending && (
-        <ImageCropModal
-          file={cropPending.file}
-          aspect={cropPending.aspect}
-          cropShape={cropPending.cropShape}
-          title={cropPending.title}
-          onCancel={() => setCropPending(null)}
-          onDone={cropPending.onDone}
-        />
+        <React.Suspense fallback={null}>
+          <ImageCropModal
+            file={cropPending.file}
+            aspect={cropPending.aspect}
+            cropShape={cropPending.cropShape}
+            title={cropPending.title}
+            onCancel={() => setCropPending(null)}
+            onDone={cropPending.onDone}
+          />
+        </React.Suspense>
       )}
 
       {/* ── Flying emoji reactions overlay ───────────────────────────────── */}
