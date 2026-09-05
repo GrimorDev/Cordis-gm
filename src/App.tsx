@@ -1034,7 +1034,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
         body: JSON.stringify({ token: resetToken, userId: resetUid, newPassword: resetPass }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Błąd');
+      if (!res.ok) throw new Error(data.error || tl('common.error'));
       setForgotView('none');
       setError('✓ Hasło zmienione! Możesz się teraz zalogować.');
       window.history.replaceState({}, '', window.location.pathname);
@@ -4150,8 +4150,8 @@ function ServerSettingsPage({
     try {
       await serversApi.deleteInvite(activeServer, code);
       setInviteListLocal(p => p.filter(i => i.code !== code));
-      addToast?.('Zaproszenie usunięte', 'info');
-    } catch { addToast?.('Błąd', 'error'); }
+      addToast?.(tl('invites.deleted'), 'info');
+    } catch { addToast?.(tl('common.error'), 'error'); }
   };
 
   const copyInviteLink = (code: string) => {
@@ -4400,8 +4400,8 @@ function ServerSettingsPage({
           {/* ── Bany ── */}
           {tab === 'bans' && (
             <div className="max-w-2xl mx-auto flex flex-col gap-4">
-              <h2 className="text-base font-bold text-white">Zbanowani ({banList.length})</h2>
-              {banList.length === 0 && <p className="text-sm text-zinc-600">Brak zbanowanych użytkowników.</p>}
+              <h2 className="text-base font-bold text-white">{tl('srv.banned')} ({banList.length})</h2>
+              {banList.length === 0 && <p className="text-sm text-zinc-600">{tl('srv.noBanned')}</p>}
               {banList.map(b => (
                 <div key={b.user_id} className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] px-4 py-3 rounded-xl">
                   <div className="flex items-center gap-3">
@@ -4409,8 +4409,8 @@ function ServerSettingsPage({
                       className="w-9 h-9 rounded-full object-cover" alt=""/>
                     <div>
                       <p className="text-sm font-semibold text-white">{b.username}</p>
-                      {b.reason && <p className="text-xs text-zinc-600">Powód: {b.reason}</p>}
-                      {b.banned_by_username && <p className="text-xs text-zinc-700">przez {b.banned_by_username}</p>}
+                      {b.reason && <p className="text-xs text-zinc-600">{tl('srv.reason')}: {b.reason}</p>}
+                      {b.banned_by_username && <p className="text-xs text-zinc-700">{tl('srv.by')} {b.banned_by_username}</p>}
                     </div>
                   </div>
                   <button onClick={() => handleUnban(b.user_id)} className="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors">{tl('action.unban')}</button>
@@ -4427,14 +4427,14 @@ function ServerSettingsPage({
               <div className="space-y-6">
                 {/* Header */}
                 <div>
-                  <h2 className="text-xl font-bold text-white">Zaproszenia</h2>
-                  <p className="text-sm text-zinc-500 mt-0.5">Linki, kody i metody dołączania do <span className="text-zinc-300 font-medium">{serverFull?.name}</span>.</p>
+                  <h2 className="text-xl font-bold text-white">{tl('invites.title')}</h2>
+                  <p className="text-sm text-zinc-500 mt-0.5">{tl('invites.desc')} <span className="text-zinc-300 font-medium">{serverFull?.name}</span>.</p>
                 </div>
 
                 {/* Permanent invite block */}
                 <div className="rounded-2xl border border-white/[0.07] overflow-hidden">
                   <div className="px-5 py-3 bg-white/[0.025] border-b border-white/[0.05]">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Stały link zaproszenia</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{tl('invites.permanentLink')}</p>
                   </div>
                   <div className="p-5">
                     {permanentInvite ? (
@@ -4445,38 +4445,38 @@ function ServerSettingsPage({
                           </div>
                           <button onClick={() => copyInviteLink(permanentInvite.code)}
                             className="flex items-center gap-1.5 px-3.5 py-2.5 bg-zinc-800 hover:bg-zinc-700 border border-white/[0.08] rounded-xl text-sm text-zinc-200 transition-colors shrink-0">
-                            <Copy size={13}/> Kopiuj link
+                            <Copy size={13}/> {tl('invites.copyLink')}
                           </button>
                           <button onClick={() => { const url=`${APP_ORIGIN}/join/${permanentInvite.code}`; if(navigator.share){navigator.share({url}).catch(()=>copyInviteLink(permanentInvite.code));}else copyInviteLink(permanentInvite.code); }}
                             className="flex items-center gap-1.5 px-3.5 py-2.5 bg-indigo-500 hover:bg-indigo-400 rounded-xl text-sm text-white font-semibold transition-colors shrink-0">
-                            <ExternalLink size={13}/> Udostępnij
+                            <ExternalLink size={13}/> {tl('invites.share')}
                           </button>
                         </div>
                         {/* Short code */}
                         <div className="flex items-center gap-2 mb-2">
-                          <span className="text-[11px] text-zinc-500">Kod zaproszenia:</span>
+                          <span className="text-[11px] text-zinc-500">{tl('invites.code')}</span>
                           <code className="text-sm font-mono font-bold text-indigo-300 tracking-wider">{streamerMode ? '••••••••••' : permanentInvite.code}</code>
-                          <button onClick={() => { navigator.clipboard.writeText(permanentInvite.code); addToast?.('Kod skopiowany!','success'); }}
+                          <button onClick={() => { navigator.clipboard.writeText(permanentInvite.code); addToast?.(tl('invites.codeCopied'),'success'); }}
                             className="flex items-center gap-1 text-xs text-zinc-500 hover:text-indigo-400 transition-colors">
-                            <Copy size={10}/> Kopiuj kod
+                            <Copy size={10}/> {tl('invites.copyCode')}
                           </button>
                         </div>
                         <p className="text-[11px] text-zinc-600">
-                          Wygasa: <span className="text-zinc-400">nigdy</span> · Limit: <span className="text-zinc-400">brak</span> · Użyto: <span className="text-zinc-400">{permanentInvite.uses} razy</span>
+                          {tl('invites.expires')} <span className="text-zinc-400">{tl('invites.never')}</span> · {tl('invites.limit')} <span className="text-zinc-400">{tl('invites.none')}</span> · {tl('invites.usedTimes')} <span className="text-zinc-400">{permanentInvite.uses} {tl('invites.times')}</span>
                           <button onClick={() => delInviteLocal(permanentInvite.code)} className="ml-3 text-zinc-700 hover:text-rose-400 transition-colors">{tl('action.delete')}</button>
                         </p>
                       </>
                     ) : (
                       <div className="flex items-center gap-3">
-                        <p className="text-sm text-zinc-500 flex-1">Brak stałego linku. Utwórz stały link bez daty wygaśnięcia.</p>
+                        <p className="text-sm text-zinc-500 flex-1">{tl('invites.noPermanent')}</p>
                         <button onClick={async () => {
                           if (!activeServer) return;
                           setInviteGeneratingLocal(true);
-                          try { const r = await serversApi.createInvite(activeServer,'never','unlimited'); setInviteListLocal(p=>[{...r,creator_username:currentUser?.username??''},...p]); addToast?.('Stały link utworzony!','success'); }
-                          catch { addToast?.('Błąd','error'); } finally { setInviteGeneratingLocal(false); }
+                          try { const r = await serversApi.createInvite(activeServer,'never','unlimited'); setInviteListLocal(p=>[{...r,creator_username:currentUser?.username??''},...p]); addToast?.(tl('invites.permanentCreated'),'success'); }
+                          catch { addToast?.(tl('common.error'),'error'); } finally { setInviteGeneratingLocal(false); }
                         }} disabled={inviteGeneratingLocal}
                           className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition-colors shrink-0">
-                          {inviteGeneratingLocal ? <Loader2 size={13} className="animate-spin"/> : <Plus size={13}/>} Utwórz stały link
+                          {inviteGeneratingLocal ? <Loader2 size={13} className="animate-spin"/> : <Plus size={13}/>} {tl('invites.createPermanent')}
                         </button>
                       </div>
                     )}
@@ -4486,38 +4486,38 @@ function ServerSettingsPage({
                 {/* Create new temporary invite */}
                 <div className="rounded-2xl border border-white/[0.07] overflow-hidden">
                   <div className="px-5 py-3 bg-white/[0.025] border-b border-white/[0.05]">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Nowy link tymczasowy</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{tl('invites.newTemp')}</p>
                   </div>
                   <div className="p-5 grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">Ważność</label>
+                      <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">{tl('invites.validity')}</label>
                       <select value={inviteDur} onChange={e => setInviteDur(e.target.value)} className={selCls + ' w-full'}>
-                        <option value="1800">30 minut</option>
-                        <option value="3600">1 godzina</option>
-                        <option value="21600">6 godzin</option>
-                        <option value="86400">1 dzień</option>
-                        <option value="259200">3 dni</option>
-                        <option value="604800">7 dni</option>
-                        <option value="never">Nigdy</option>
+                        <option value="1800">{tl('invites.dur.30m')}</option>
+                        <option value="3600">{tl('invites.dur.1h')}</option>
+                        <option value="21600">{tl('invites.dur.6h')}</option>
+                        <option value="86400">{tl('invites.dur.1d')}</option>
+                        <option value="259200">{tl('invites.dur.3d')}</option>
+                        <option value="604800">{tl('invites.dur.7d')}</option>
+                        <option value="never">{tl('invites.dur.never')}</option>
                       </select>
                     </div>
                     <div>
-                      <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">Limit użyć</label>
+                      <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">{tl('invites.usesLimit')}</label>
                       <select value={inviteMaxUsesLocal} onChange={e => setInviteMaxUsesLocal(e.target.value)} className={selCls + ' w-full'}>
-                        <option value="unlimited">Bez limitu</option>
-                        <option value="1">1 użycie</option>
-                        <option value="5">5 użyć</option>
-                        <option value="10">10 użyć</option>
-                        <option value="25">25 użyć</option>
-                        <option value="50">50 użyć</option>
-                        <option value="100">100 użyć</option>
+                        <option value="unlimited">{tl('invites.unlimited')}</option>
+                        <option value="1">1 {tl('invites.oneUse')}</option>
+                        <option value="5">5 {tl('invites.uses')}</option>
+                        <option value="10">10 {tl('invites.uses')}</option>
+                        <option value="25">25 {tl('invites.uses')}</option>
+                        <option value="50">50 {tl('invites.uses')}</option>
+                        <option value="100">100 {tl('invites.uses')}</option>
                       </select>
                     </div>
                     <div className="col-span-2">
                       <button onClick={handleInviteLocal} disabled={inviteGeneratingLocal}
                         className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors text-sm">
                         {inviteGeneratingLocal ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>}
-                        Generuj nowy link
+                        {tl('invites.generateNew')}
                       </button>
                     </div>
                   </div>
@@ -4525,7 +4525,7 @@ function ServerSettingsPage({
 
                 {/* Active invites list */}
                 <div>
-                  <h3 className="text-sm font-bold text-white mb-3">Aktywne linki</h3>
+                  <h3 className="text-sm font-bold text-white mb-3">{tl('invites.activeLinks')}</h3>
                   {inviteListLoadingLocal ? (
                     <div className="space-y-2">
                       {[1,2,3].map(i => <div key={i} className="h-14 rounded-xl bg-white/[0.02] animate-pulse"/>)}
@@ -4533,8 +4533,8 @@ function ServerSettingsPage({
                   ) : inviteListLocal.length === 0 ? (
                     <div className="flex flex-col items-center py-10 text-center">
                       <div className="w-12 h-12 rounded-2xl bg-zinc-800/60 flex items-center justify-center mb-3"><UserPlus size={20} className="text-zinc-600"/></div>
-                      <p className="text-sm text-zinc-500">Brak aktywnych linków zaproszeniowych.</p>
-                      <p className="text-xs text-zinc-700 mt-1">Utwórz nowy link powyżej.</p>
+                      <p className="text-sm text-zinc-500">{tl('invites.noActive')}</p>
+                      <p className="text-xs text-zinc-700 mt-1">{tl('invites.createAbove')}</p>
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-white/[0.07] overflow-hidden divide-y divide-white/[0.05]">
@@ -4548,21 +4548,21 @@ function ServerSettingsPage({
                               <span className="inline-flex items-center gap-1 bg-indigo-500/10 border border-indigo-500/20 rounded-md px-1.5 py-0.5">
                                 <span className="text-[10px] text-zinc-500">kod:</span>
                                 <code className="text-[11px] font-mono text-indigo-300">{streamerMode ? '••••••' : inv.code}</code>
-                                <button onClick={() => { navigator.clipboard.writeText(inv.code); addToast?.('Kod skopiowany!', 'success'); }}
-                                  className="text-zinc-600 hover:text-indigo-400 transition-colors ml-0.5" title="Kopiuj sam kod">
+                                <button onClick={() => { navigator.clipboard.writeText(inv.code); addToast?.(tl('invites.codeCopied'), 'success'); }}
+                                  className="text-zinc-600 hover:text-indigo-400 transition-colors ml-0.5" title={tl('invites.copyCodeOnly')}>
                                   <Copy size={9}/>
                                 </button>
                               </span>
                               <span className="text-[11px] text-zinc-600 flex items-center gap-2 flex-wrap">
-                                {!inv.expires_at ? (<span className="text-zinc-500">Stały</span>) : <span>{fmtInvExpiry(inv)}</span>}
-                                {inv.max_uses ? (<><span className="text-zinc-800">·</span><span>{inv.uses}/{inv.max_uses} użyć</span></>) : <span className="text-zinc-700">{inv.uses} użyć</span>}
+                                {!inv.expires_at ? (<span className="text-zinc-500">{tl('invites.permanent')}</span>) : <span>{fmtInvExpiry(inv)}</span>}
+                                {inv.max_uses ? (<><span className="text-zinc-800">·</span><span>{inv.uses}/{inv.max_uses} {tl('invites.uses')}</span></>) : <span className="text-zinc-700">{inv.uses} {tl('invites.uses')}</span>}
                                 {inv.creator_username && (<><span className="text-zinc-800">·</span><span>przez <span className="text-zinc-400">{inv.creator_username}</span></span></>)}
                               </span>
                             </div>
                           </div>
                           <button onClick={() => copyInviteLink(inv.code)}
                             className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.05] text-zinc-400 hover:text-white text-xs transition-all">
-                            <Copy size={11}/> Link
+                            <Copy size={11}/> {tl('invites.link')}
                           </button>
                           <button onClick={() => delInviteLocal(inv.code)}
                             className="opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all">
@@ -4857,7 +4857,7 @@ function ServerSettingsPage({
                       setServerEvents(evs);
                       setNewEvent({title:'',description:'',starts_at:'',channel_id:''});
                       addToast?.('Event utworzony!','success');
-                    } catch(e:any){ addToast?.(e.message||'Błąd','error'); }
+                    } catch(e:any){ addToast?.(e.message||tl('common.error'),'error'); }
                     finally { setEventsLoading(false); }
                   }}
                   className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-2">
@@ -4878,7 +4878,7 @@ function ServerSettingsPage({
                     </div>
                     <button onClick={async()=>{
                       try { await eventsApi.delete(serverFull.id,ev.id); setServerEvents?.(serverEvents.filter(e=>e.id!==ev.id)); addToast?.('Usunięto event','info'); }
-                      catch(e:any){ addToast?.(e.message||'Błąd','error'); }
+                      catch(e:any){ addToast?.(e.message||tl('common.error'),'error'); }
                     }} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all shrink-0">
                       <Trash2 size={12}/>
                     </button>
@@ -4942,7 +4942,7 @@ function ServerSettingsPage({
                       await onboardingApi.update(serverFull.id,{welcome_text:welcome,rules_text:rules,enabled:onboardingData.enabled,assign_role_id:roleId});
                       setOnboardingData?.({...onboardingData,welcome_text:welcome,rules_text:rules,assign_role_id:roleId});
                       addToast?.('Onboarding zapisany!','success');
-                    } catch(e:any){ addToast?.(e.message||'Błąd','error'); }
+                    } catch(e:any){ addToast?.(e.message||tl('common.error'),'error'); }
                   }} className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">
                     Zapisz onboarding
                   </button>
@@ -4970,7 +4970,7 @@ function ServerSettingsPage({
                     await discoverApi.setDiscovery(serverFull.id,{is_public:next});
                     setIsPublicLocal(next);
                     addToast?.(`Serwer jest teraz ${next?'publiczny':'prywatny'}!`,'success');
-                  } catch(e:any){ addToast?.(e.message||'Błąd','error'); }
+                  } catch(e:any){ addToast?.(e.message||tl('common.error'),'error'); }
                 }} className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${isPublicLocal?'bg-indigo-500':'bg-zinc-700'}`}>
                   <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${isPublicLocal?'translate-x-5':'translate-x-0'}`}/>
                 </button>
@@ -5004,7 +5004,7 @@ function ServerSettingsPage({
                     discovery_category: discCat || null,
                   });
                   addToast?.('Ustawienia odkrywalności zapisane!','success');
-                } catch(e:any){ addToast?.(e.message||'Błąd','error'); }
+                } catch(e:any){ addToast?.(e.message||tl('common.error'),'error'); }
               }} className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">
                 Zapisz ustawienia
               </button>
@@ -6437,7 +6437,7 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                         {a.id !== currentUser?.id && a.is_admin && (
                           <button onClick={async()=>{
                             try { await adminApi.users.setAdmin(a.id, false); setAdminsList(p=>p.filter(x=>x.id!==a.id||x.badges.some(b=>b.name==='developer'))); addToast({ type:'success', message:`Cofnięto uprawnienia admina dla ${a.username}` }); }
-                            catch { addToast({ type:'error', message:'Błąd' }); }
+                            catch { addToast({ type:'error', message:tl('common.error') }); }
                           }} className="p-1.5 rounded-lg text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all" title="Cofnij uprawnienia admina">
                             <ShieldOff size={13}/>
                           </button>
@@ -13220,7 +13220,7 @@ export default function App() {
     if (!activeServer) return;
     confirmAction('Wyrzucić użytkownika?', async () => {
       try { await serversApi.kickMember(activeServer, userId); setMembers(p => p.filter(m => m.id !== userId)); }
-      catch (err: any) { alert(err?.message || 'Błąd'); }
+      catch (err: any) { alert(err?.message || tl('common.error')); }
     });
   };
   const handleBan = (userId: string, username: string) => {
@@ -13229,7 +13229,7 @@ export default function App() {
       try {
         await serversApi.bans.ban(activeServer, userId);
         setMembers(p => p.filter(m => m.id !== userId));
-      } catch (err: any) { alert(err?.message || 'Błąd'); }
+      } catch (err: any) { alert(err?.message || tl('common.error')); }
     });
   };
   const handleUnban = (userId: string) => {
@@ -13238,7 +13238,7 @@ export default function App() {
       try {
         await serversApi.bans.unban(activeServer, userId);
         setBanList(p => p.filter(b => b.user_id !== userId));
-      } catch (err: any) { alert(err?.message || 'Błąd'); }
+      } catch (err: any) { alert(err?.message || tl('common.error')); }
     });
   };
   const handlePinMessage = async (msgId: string, pinned: boolean) => {
@@ -13253,7 +13253,7 @@ export default function App() {
     } catch (err: any) {
       // Revert on error
       setChannelMsgs(p => p.map(m => m.id === msgId ? { ...m, pinned: !pinned } : m));
-      alert(err?.message || 'Błąd');
+      alert(err?.message || tl('common.error'));
     }
   };
 
@@ -15979,7 +15979,7 @@ export default function App() {
                             getSocket()?.emit('voice_dj_stopped' as any, { channel_id: activeCall.channelId });
                             setVoiceDj(p=>{const n={...p};delete n[activeCall.channelId];return n;});
                             addToast('DJ zatrzymany','info');
-                          } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                          } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                         }} title="Zatrzymaj Spotify DJ"
                           className="w-7 h-7 rounded-lg flex items-center justify-center bg-[#1DB954]/20 text-[#1DB954] hover:bg-rose-500/20 hover:text-rose-400 transition-all">
                           <SpotifyIcon size={13}/>
@@ -16010,7 +16010,7 @@ export default function App() {
                           getSocket()?.emit('voice_dj_started' as any, { channel_id: activeCall.channelId });
                           setVoiceDj(p=>({...p,[activeCall.channelId]:{id:currentUser!.id,username:currentUser!.username,avatar_url:currentUser!.avatar_url??null}}));
                           addToast('Jesteś teraz DJ-em! Wszyscy mogą słuchać Twojego Spotify.','success');
-                        } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                        } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                       }} title="Uruchom Spotify DJ"
                         className={`w-7 h-7 rounded-lg flex items-center justify-center text-zinc-600 hover:text-[#1DB954] hover:bg-[#1DB954]/10 transition-all ${gb}`}>
                         <SpotifyIcon size={13}/>
@@ -17287,7 +17287,7 @@ export default function App() {
                           const diffMin=Math.floor(Math.abs(diffMs)/60_000);const diffH=Math.floor(diffMin/60);const diffD=Math.floor(diffH/24);
                           const countdown=isLive?'LIVE':diffD>0?`za ${diffD}d`:diffH>0?`za ${diffH}h`:`za ${diffMin}m`;
                           const dayN=new Date(ev.starts_at).getDate();
-                          const handleSave=async()=>{try{const r=await eventsApi.rsvp(ev.server_id,ev.id,'going');setHomeEvents(p=>p.map(e=>e.id===ev.id?{...e,...r,my_rsvp:'going'}:e));addToast(`Zapisano na "${ev.title}"`, 'success');}catch{addToast('Błąd','error');}};
+                          const handleSave=async()=>{try{const r=await eventsApi.rsvp(ev.server_id,ev.id,'going');setHomeEvents(p=>p.map(e=>e.id===ev.id?{...e,...r,my_rsvp:'going'}:e));addToast(`Zapisano na "${ev.title}"`, 'success');}catch{addToast(tl('common.error'),'error');}};
                           return (
                             <div key={ev.id} style={{display:'flex',gap:14,padding:14,borderRadius:10,alignItems:'flex-start' as const,transition:'background 120ms'}}
                               onMouseEnter={e=>{(e.currentTarget as HTMLDivElement).style.background='rgba(255,255,255,0.04)';}}
@@ -17449,7 +17449,7 @@ export default function App() {
                   getSocket()?.emit('spotify_jam_ended' as any, { host_id: currentUser?.id });
                   setMyJam({ role: null, members: [] });
                   addToast('JAM zakończony','info');
-                } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                 finally { setJamLoading(false); }
               }}
               onJamJoin={async(hostId)=>{
@@ -17460,7 +17460,7 @@ export default function App() {
                   const j = await spotifyApi.jamActive();
                   setMyJam(j);
                   addToast('Dołączono do JAM! Synchronizacja Spotify...','success');
-                } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                 finally { setJamLoading(false); }
               }}
               onJamLeave={async()=>{
@@ -17470,7 +17470,7 @@ export default function App() {
                   if (!r.was_host) getSocket()?.emit('spotify_jam_left' as any, { host_id: r.host_id });
                   setMyJam({ role: null, members: [] });
                   addToast('Opuszczono JAM','info');
-                } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                 finally { setJamLoading(false); }
               }}
               mutualServers={mutualServers}
@@ -20751,7 +20751,7 @@ export default function App() {
                     setGroupMessages(p=>{const n={...p};delete n[gc.id];return n;});
                     if (activeGroupDm===gc.id) setActiveGroupDm(null);
                     addToast('Grupa usunięta','success');
-                  } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                  } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                 }} className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2.5 transition-colors">
                   <Trash2 size={13}/>Usuń grupę
                 </button>
@@ -20765,7 +20765,7 @@ export default function App() {
                     setGroupMessages(p=>{const n={...p};delete n[gc.id];return n;});
                     if (activeGroupDm===gc.id) setActiveGroupDm(null);
                     addToast('Opuszczono grupę','success');
-                  } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                  } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                 }} className="w-full text-left px-3 py-2 text-sm text-orange-400 hover:bg-orange-500/10 flex items-center gap-2.5 transition-colors">
                   <LogOut size={13}/>Opuść grupę
                 </button>
@@ -20872,7 +20872,7 @@ export default function App() {
               {/* Friends */}
               {!isSelf&&!m.is_bot&&sep}
               {!isSelf&&!m.is_bot&&!isFriend&&!isPendingOut&&btn(<UserPlus size={13} className="text-zinc-500 shrink-0"/>,'Dodaj do znajomych', async()=>{
-                try{await friendsApi.sendRequest(m.username);addToast('Prośba o znajomość wysłana','success');}catch(e:any){addToast(e?.message||'Błąd','error');}
+                try{await friendsApi.sendRequest(m.username);addToast('Prośba o znajomość wysłana','success');}catch(e:any){addToast(e?.message||tl('common.error'),'error');}
               })}
               {!isSelf&&!m.is_bot&&!isFriend&&isPendingOut&&btn(<UserPlus size={13} className="text-zinc-500 shrink-0"/>,'Prośba wysłana…', ()=>{}, false, true)}
               {!isSelf&&!m.is_bot&&isFriend&&btn(<UserMinus size={13} className="text-zinc-500 shrink-0"/>,'Usuń ze znajomych', ()=>{if(friendEntry?.friendship_id)handleRemoveFriend(friendEntry.friendship_id,m.username);})}
@@ -22081,16 +22081,16 @@ export default function App() {
                 )}
                 {srvSettTab==='bans'&&(
                   <div className="flex flex-col gap-3">
-                    <h3 className="text-sm font-bold text-white">Zbanowani ({banList.length})</h3>
-                    {banList.length===0&&<p className="text-sm text-zinc-600">Brak zbanowanych użytkowników.</p>}
+                    <h3 className="text-sm font-bold text-white">{tl('srv.banned')} ({banList.length})</h3>
+                    {banList.length===0&&<p className="text-sm text-zinc-600">{tl('srv.noBanned')}</p>}
                     {banList.map(b=>(
                       <div key={b.user_id} className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] px-4 py-3 rounded-xl">
                         <div className="flex items-center gap-3">
                           <img src={b.avatar_url||`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(b.username)}&size=36`} className="w-9 h-9 rounded-full object-cover" alt=""/>
                           <div>
                             <p className="text-sm font-semibold text-white">{b.username}</p>
-                            {b.reason&&<p className="text-xs text-zinc-600">Powód: {b.reason}</p>}
-                            {b.banned_by_username&&<p className="text-xs text-zinc-700">przez {b.banned_by_username}</p>}
+                            {b.reason&&<p className="text-xs text-zinc-600">{tl('srv.reason')}: {b.reason}</p>}
+                            {b.banned_by_username&&<p className="text-xs text-zinc-700">{tl('srv.by')} {b.banned_by_username}</p>}
                           </div>
                         </div>
                         <button onClick={()=>handleUnban(b.user_id)} className="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors">{tl('action.unban')}</button>
@@ -22115,8 +22115,8 @@ export default function App() {
                   const copyLink=(code:string)=>{ navigator.clipboard.writeText(`${APP_ORIGIN}/join/${code}`); addToast('Link skopiowany!','success'); };
                   const delInv=async(code:string)=>{
                     if(!activeServer) return;
-                    try{ await serversApi.deleteInvite(activeServer,code); setInviteList(p=>p.filter(i=>i.code!==code)); addToast('Zaproszenie usunięte','info'); }
-                    catch{ addToast('Błąd','error'); }
+                    try{ await serversApi.deleteInvite(activeServer,code); setInviteList(p=>p.filter(i=>i.code!==code)); addToast(tl('invites.deleted'),'info'); }
+                    catch{ addToast(tl('common.error'),'error'); }
                   };
                   const permanentInvite=inviteList.find(i=>!i.expires_at);
                   const tempInvites=inviteList.filter(i=>i.expires_at);
@@ -22125,14 +22125,14 @@ export default function App() {
                   <div className="space-y-6">
                     {/* Header */}
                     <div>
-                      <h2 className="text-xl font-bold text-white">Zaproszenia</h2>
-                      <p className="text-sm text-zinc-500 mt-0.5">Linki, kody i metody dołączania do <span className="text-zinc-300 font-medium">{serverFull?.name}</span>.</p>
+                      <h2 className="text-xl font-bold text-white">{tl('invites.title')}</h2>
+                      <p className="text-sm text-zinc-500 mt-0.5">{tl('invites.desc')} <span className="text-zinc-300 font-medium">{serverFull?.name}</span>.</p>
                     </div>
 
                     {/* Permanent invite block */}
                     <div className="rounded-2xl border border-white/[0.07] overflow-hidden">
                       <div className="px-5 py-3 bg-white/[0.025] border-b border-white/[0.05]">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Stały link zaproszenia</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{tl('invites.permanentLink')}</p>
                       </div>
                       <div className="p-5">
                         {permanentInvite ? (
@@ -22143,38 +22143,38 @@ export default function App() {
                               </div>
                               <button onClick={()=>copyLink(permanentInvite.code)}
                                 className="flex items-center gap-1.5 px-3.5 py-2.5 bg-zinc-800 hover:bg-zinc-700 border border-white/[0.08] rounded-xl text-sm text-zinc-200 transition-colors shrink-0">
-                                <Copy size={13}/> Kopiuj link
+                                <Copy size={13}/> {tl('invites.copyLink')}
                               </button>
                               <button onClick={()=>{ const url=`${APP_ORIGIN}/join/${permanentInvite.code}`; if(navigator.share){navigator.share({url}).catch(()=>copyLink(permanentInvite.code));}else copyLink(permanentInvite.code); }}
                                 className="flex items-center gap-1.5 px-3.5 py-2.5 bg-indigo-500 hover:bg-indigo-400 rounded-xl text-sm text-white font-semibold transition-colors shrink-0">
-                                <ExternalLink size={13}/> Udostępnij
+                                <ExternalLink size={13}/> {tl('invites.share')}
                               </button>
                             </div>
                             {/* Short code */}
                             <div className="flex items-center gap-2 mb-2">
-                              <span className="text-[11px] text-zinc-500">Kod zaproszenia:</span>
+                              <span className="text-[11px] text-zinc-500">{tl('invites.code')}</span>
                               <code className="text-sm font-mono font-bold text-indigo-300 tracking-wider">{streamerMode?'••••••••••':permanentInvite.code}</code>
-                              <button onClick={()=>{ navigator.clipboard.writeText(permanentInvite.code); addToast('Kod skopiowany!','success'); }}
+                              <button onClick={()=>{ navigator.clipboard.writeText(permanentInvite.code); addToast(tl('invites.codeCopied'),'success'); }}
                                 className="flex items-center gap-1 text-xs text-zinc-500 hover:text-indigo-400 transition-colors">
-                                <Copy size={10}/> Kopiuj kod
+                                <Copy size={10}/> {tl('invites.copyCode')}
                               </button>
                             </div>
                             <p className="text-[11px] text-zinc-600">
-                              Wygasa: <span className="text-zinc-400">nigdy</span> · Limit: <span className="text-zinc-400">brak</span> · Użyto: <span className="text-zinc-400">{permanentInvite.uses} razy</span>
+                              {tl('invites.expires')} <span className="text-zinc-400">{tl('invites.never')}</span> · {tl('invites.limit')} <span className="text-zinc-400">{tl('invites.none')}</span> · {tl('invites.usedTimes')} <span className="text-zinc-400">{permanentInvite.uses} {tl('invites.times')}</span>
                               <button onClick={()=>delInv(permanentInvite.code)} className="ml-3 text-zinc-700 hover:text-rose-400 transition-colors">{tl('action.delete')}</button>
                             </p>
                           </>
                         ) : (
                           <div className="flex items-center gap-3">
-                            <p className="text-sm text-zinc-500 flex-1">Brak stałego linku. Utwórz stały link bez daty wygaśnięcia.</p>
+                            <p className="text-sm text-zinc-500 flex-1">{tl('invites.noPermanent')}</p>
                             <button onClick={async()=>{
                               if(!activeServer) return;
                               setInviteGenerating(true);
-                              try{ const r=await serversApi.createInvite(activeServer,'never','unlimited'); setInviteList(p=>[{...r,creator_username:currentUser?.username??''},  ...p]); addToast('Stały link utworzony!','success'); }
-                              catch{ addToast('Błąd','error'); } finally{ setInviteGenerating(false); }
+                              try{ const r=await serversApi.createInvite(activeServer,'never','unlimited'); setInviteList(p=>[{...r,creator_username:currentUser?.username??''},  ...p]); addToast(tl('invites.permanentCreated'),'success'); }
+                              catch{ addToast(tl('common.error'),'error'); } finally{ setInviteGenerating(false); }
                             }} disabled={inviteGenerating}
                               className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition-colors shrink-0">
-                              {inviteGenerating?<Loader2 size={13} className="animate-spin"/>:<Plus size={13}/>} Utwórz stały link
+                              {inviteGenerating?<Loader2 size={13} className="animate-spin"/>:<Plus size={13}/>} {tl('invites.createPermanent')}
                             </button>
                           </div>
                         )}
@@ -22193,38 +22193,38 @@ export default function App() {
                     {/* Create new invite */}
                     <div className="rounded-2xl border border-white/[0.07] overflow-hidden">
                       <div className="px-5 py-3 bg-white/[0.025] border-b border-white/[0.05]">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Nowy link tymczasowy</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{tl('invites.newTemp')}</p>
                       </div>
                       <div className="p-5 grid grid-cols-2 gap-3">
                         <div>
-                          <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">Ważność</label>
+                          <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">{tl('invites.validity')}</label>
                           <select value={inviteDur} onChange={e=>setInviteDur(e.target.value)} className={selCls+' w-full'}>
-                            <option value="1800">30 minut</option>
-                            <option value="3600">1 godzina</option>
-                            <option value="21600">6 godzin</option>
-                            <option value="86400">1 dzień</option>
-                            <option value="259200">3 dni</option>
-                            <option value="604800">7 dni</option>
-                            <option value="never">Nigdy</option>
+                            <option value="1800">{tl('invites.dur.30m')}</option>
+                            <option value="3600">{tl('invites.dur.1h')}</option>
+                            <option value="21600">{tl('invites.dur.6h')}</option>
+                            <option value="86400">{tl('invites.dur.1d')}</option>
+                            <option value="259200">{tl('invites.dur.3d')}</option>
+                            <option value="604800">{tl('invites.dur.7d')}</option>
+                            <option value="never">{tl('invites.dur.never')}</option>
                           </select>
                         </div>
                         <div>
-                          <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">Limit użyć</label>
+                          <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">{tl('invites.usesLimit')}</label>
                           <select value={inviteMaxUses} onChange={e=>setInviteMaxUses(e.target.value)} className={selCls+' w-full'}>
-                            <option value="unlimited">Bez limitu</option>
-                            <option value="1">1 użycie</option>
-                            <option value="5">5 użyć</option>
-                            <option value="10">10 użyć</option>
-                            <option value="25">25 użyć</option>
-                            <option value="50">50 użyć</option>
-                            <option value="100">100 użyć</option>
+                            <option value="unlimited">{tl('invites.unlimited')}</option>
+                            <option value="1">1 {tl('invites.oneUse')}</option>
+                            <option value="5">5 {tl('invites.uses')}</option>
+                            <option value="10">10 {tl('invites.uses')}</option>
+                            <option value="25">25 {tl('invites.uses')}</option>
+                            <option value="50">50 {tl('invites.uses')}</option>
+                            <option value="100">100 {tl('invites.uses')}</option>
                           </select>
                         </div>
                         <div className="col-span-2">
                           <button onClick={handleInvite} disabled={inviteGenerating}
                             className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors text-sm">
                             {inviteGenerating?<Loader2 size={14} className="animate-spin"/>:<Plus size={14}/>}
-                            Generuj nowy link
+                            {tl('invites.generateNew')}
                           </button>
                         </div>
                       </div>
@@ -22232,7 +22232,7 @@ export default function App() {
 
                     {/* Active links list */}
                     <div>
-                      <h3 className="text-sm font-bold text-white mb-3">Aktywne linki</h3>
+                      <h3 className="text-sm font-bold text-white mb-3">{tl('invites.activeLinks')}</h3>
                       {inviteListLoading?(
                         <div className="space-y-2">
                           {[1,2,3].map(i=><div key={i} className="h-14 rounded-xl bg-white/[0.02] animate-pulse"/>)}
@@ -22240,8 +22240,8 @@ export default function App() {
                       ):inviteList.length===0?(
                         <div className="flex flex-col items-center py-10 text-center">
                           <div className="w-12 h-12 rounded-2xl bg-zinc-800/60 flex items-center justify-center mb-3"><UserPlus size={20} className="text-zinc-600"/></div>
-                          <p className="text-sm text-zinc-500">Brak aktywnych linków zaproszeniowych.</p>
-                          <p className="text-xs text-zinc-700 mt-1">Utwórz nowy link powyżej.</p>
+                          <p className="text-sm text-zinc-500">{tl('invites.noActive')}</p>
+                          <p className="text-xs text-zinc-700 mt-1">{tl('invites.createAbove')}</p>
                         </div>
                       ):(
                         <div className="rounded-2xl border border-white/[0.07] overflow-hidden divide-y divide-white/[0.05]">
@@ -22253,21 +22253,21 @@ export default function App() {
                                   <span className="inline-flex items-center gap-1 bg-indigo-500/10 border border-indigo-500/20 rounded-md px-1.5 py-0.5">
                                     <span className="text-[10px] text-zinc-500">kod:</span>
                                     <code className="text-[11px] font-mono text-indigo-300">{streamerMode?'••••••':inv.code}</code>
-                                    <button onClick={()=>{ navigator.clipboard.writeText(inv.code); addToast('Kod skopiowany!','success'); }}
-                                      className="text-zinc-600 hover:text-indigo-400 transition-colors ml-0.5" title="Kopiuj sam kod">
+                                    <button onClick={()=>{ navigator.clipboard.writeText(inv.code); addToast(tl('invites.codeCopied'),'success'); }}
+                                      className="text-zinc-600 hover:text-indigo-400 transition-colors ml-0.5" title={tl('invites.copyCodeOnly')}>
                                       <Copy size={9}/>
                                     </button>
                                   </span>
                                   <span className="text-[11px] text-zinc-600 flex items-center gap-2 flex-wrap">
-                                    {!inv.expires_at?(<span className="text-zinc-500">Stały</span>):<span>{fmtExpiry(inv)}</span>}
-                                    {inv.max_uses?(<><span className="text-zinc-800">·</span><span>{inv.uses}/{inv.max_uses} użyć</span></>):<span className="text-zinc-700">{inv.uses} użyć</span>}
+                                    {!inv.expires_at?(<span className="text-zinc-500">{tl('invites.permanent')}</span>):<span>{fmtExpiry(inv)}</span>}
+                                    {inv.max_uses?(<><span className="text-zinc-800">·</span><span>{inv.uses}/{inv.max_uses} {tl('invites.uses')}</span></>):<span className="text-zinc-700">{inv.uses} {tl('invites.uses')}</span>}
                                     {inv.creator_username&&(<><span className="text-zinc-800">·</span><span>przez <span className="text-zinc-400">{inv.creator_username}</span></span></>)}
                                   </span>
                                 </div>
                               </div>
                               <button onClick={()=>copyLink(inv.code)}
                                 className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.05] text-zinc-400 hover:text-white text-xs transition-all">
-                                <Copy size={11}/> Link
+                                <Copy size={11}/> {tl('invites.link')}
                               </button>
                               <button onClick={()=>delInv(inv.code)}
                                 className="opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all">
@@ -22301,7 +22301,7 @@ export default function App() {
                             setServerEvents(evs);
                             setNewEvent({title:'',description:'',starts_at:'',channel_id:''});
                             addToast('Event utworzony!','success');
-                          } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                          } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                           finally { setEventsLoading(false); }
                         }}
                         className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 text-white font-semibold py-2 rounded-xl transition-colors text-sm">
@@ -22317,7 +22317,7 @@ export default function App() {
                           </div>
                           <button onClick={async()=>{
                             try { await eventsApi.delete(activeServer!,ev.id); setServerEvents(p=>p.filter(e=>e.id!==ev.id)); addToast('Usunięto event','info'); }
-                            catch(e:any){ addToast(e.message||'Błąd','error'); }
+                            catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                           }} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all">
                             <Trash2 size={12}/>
                           </button>
@@ -22359,7 +22359,7 @@ export default function App() {
                             await onboardingApi.update(activeServer!,{welcome_text:welcome, rules_text:rules, enabled:onboardingData.enabled});
                             setOnboardingData(p=>p?{...p,welcome_text:welcome,rules_text:rules}:p);
                             addToast('Onboarding zapisany!','success');
-                          } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                          } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                         }} className="bg-indigo-500 hover:bg-indigo-400 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm">{tl('action.save')}</button>
                       </div>
                     ) : (
@@ -22381,7 +22381,7 @@ export default function App() {
                           await discoverApi.setDiscovery(activeServer!,{is_public:next});
                           setServerFull((p:any)=>p?{...p,is_public:next}:p);
                           addToast(`Serwer jest teraz ${next?'publiczny':'prywatny'}!`,'success');
-                        } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                        } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                       }} className={`relative w-10 h-5 rounded-full transition-colors ${(serverFull as any)?.is_public?'bg-indigo-500':'bg-zinc-700'}`}>
                         <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${(serverFull as any)?.is_public?'translate-x-5':'translate-x-0.5'}`}/>
                       </button>
@@ -22396,7 +22396,7 @@ export default function App() {
                           await discoverApi.setDiscovery(activeServer!,{is_public:!!(serverFull as any)?.is_public, discovery_description:desc});
                           setServerFull((p:any)=>p?{...p,discovery_description:desc}:p);
                           addToast('Opis zapisany!','success');
-                        } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                        } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                       }} className="mt-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">{tl('action.save')}</button>
                     </div>
                   </div>
@@ -22536,8 +22536,8 @@ export default function App() {
                       <option value="60">1 minuta</option>
                       <option value="300">5 minut</option>
                       <option value="600">10 minut</option>
-                      <option value="3600">1 godzina</option>
-                      <option value="21600">6 godzin</option>
+                      <option value="3600">{tl('invites.dur.1h')}</option>
+                      <option value="21600">{tl('invites.dur.6h')}</option>
                     </select>
                     {chForm.slowmode_seconds>0&&<p className="text-[11px] text-zinc-600 mt-1">Użytkownicy mogą wysyłać wiadomość co {chForm.slowmode_seconds<60?`${chForm.slowmode_seconds}s`:chForm.slowmode_seconds<3600?`${chForm.slowmode_seconds/60} min`:`${chForm.slowmode_seconds/3600} godz`}</p>}
                   </div>
@@ -23450,7 +23450,7 @@ export default function App() {
                                         setActiveTagServerId(null);
                                         setCurrentUser(p => p ? {...p, active_tag_server_id: null, active_tag: null} : p);
                                         addToast('Tag zdjęty', 'success');
-                                      } catch { addToast('Błąd', 'error'); }
+                                      } catch { addToast(tl('common.error'), 'error'); }
                                     }}
                                     className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${!activeTagServerId ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
                                     <div className="w-7 h-7 bg-zinc-700/80 rounded-lg flex items-center justify-center shrink-0">
@@ -24039,7 +24039,7 @@ export default function App() {
                                   setTwoFaSetupData(data);
                                   setTwoFaInputCode('');
                                   setTwoFaModal('setup');
-                                } catch(e:any) { setTwoFaError(e?.message || 'Błąd'); }
+                                } catch(e:any) { setTwoFaError(e?.message || tl('common.error')); }
                                 finally { setTwoFaLoading(false); }
                               }}
                               disabled={twoFaLoading}
@@ -24070,7 +24070,7 @@ export default function App() {
                               setPushSubscribed(false);
                               addToast('Powiadomienia push wyłączone', 'info');
                             } catch (e: any) {
-                              addToast(e?.message || 'Błąd', 'error');
+                              addToast(e?.message || tl('common.error'), 'error');
                             }
                           }}
                             className="text-sm font-semibold text-zinc-300 hover:text-white bg-zinc-700/50 hover:bg-zinc-700 border border-zinc-600/30 px-4 py-2 rounded-xl transition-all flex items-center gap-2">
@@ -24479,7 +24479,7 @@ export default function App() {
                               : <p className="text-xs text-zinc-500">{tl('connections.notConnected')}</p>}
                           </div>
                           {ownYoutube?.connected
-                            ? <button onClick={async()=>{ try { await youtubeApi.disconnect(); setOwnYoutube(null); addToast(`YouTube ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||'Błąd','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> {tl('connections.disconnect')}</button>
+                            ? <button onClick={async()=>{ try { await youtubeApi.disconnect(); setOwnYoutube(null); addToast(`YouTube ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||tl('common.error'),'error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> {tl('connections.disconnect')}</button>
                             : <button onClick={async()=>{ try { const r = await youtubeApi.connect(); await openOAuth(r.url, 'youtube'); } catch(e:any){ addToast(e.message||`${tl('connections.error')} YouTube`,'error'); } }} className="text-xs text-[#FF0000] flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-red-500/30 hover:bg-red-500/10">{tl('connections.connect')}</button>}
                         </div>
                         {ownYoutube?.connected && (
@@ -24509,7 +24509,7 @@ export default function App() {
                               : <p className="text-xs text-zinc-500">{tl('connections.notConnected')}</p>}
                           </div>
                           {ownKick?.connected
-                            ? <button onClick={async()=>{ try { await kickApi.disconnect(); setOwnKick(null); addToast(`Kick ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||'Błąd','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> {tl('connections.disconnect')}</button>
+                            ? <button onClick={async()=>{ try { await kickApi.disconnect(); setOwnKick(null); addToast(`Kick ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||tl('common.error'),'error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> {tl('connections.disconnect')}</button>
                             : <button onClick={async()=>{ try { const r = await kickApi.connect(); await openOAuth(r.url, 'kick'); } catch(e:any){ addToast(e.message||`${tl('connections.error')} Kick`,'error'); } }} className="text-xs text-[#53fc18] flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-[#53fc18]/30 hover:bg-[#53fc18]/10">{tl('connections.connect')}</button>}
                         </div>
                         {ownKick?.connected && (
@@ -24539,7 +24539,7 @@ export default function App() {
                               : <p className="text-xs text-zinc-500">{tl('connections.notConnected')}</p>}
                           </div>
                           {ownEpic?.connected && (
-                            <button onClick={async()=>{ try { await epicApi.disconnect(); setOwnEpic(null); addToast(`Epic Games ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||'Błąd','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> {tl('connections.disconnect')}</button>
+                            <button onClick={async()=>{ try { await epicApi.disconnect(); setOwnEpic(null); addToast(`Epic Games ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||tl('common.error'),'error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> {tl('connections.disconnect')}</button>
                           )}
                         </div>
                         {!ownEpic?.connected && (
@@ -26727,7 +26727,7 @@ export default function App() {
                                 <motion.button whileTap={{scale:0.96}}
                                   onClick={async()=>{
                                     try { await serversApi.joinPublic(s.id); await loadServers(); setShowDiscovery(false); setActiveServer(s.id); setActiveView('servers'); addToast(`Dołączono do ${s.name}!`,'success'); }
-                                    catch(ex:any){ addToast(ex.message||'Błąd','error'); }
+                                    catch(ex:any){ addToast(ex.message||tl('common.error'),'error'); }
                                   }}
                                   className="w-full py-2 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white transition-all duration-200 shadow-[0_2px_12px_rgba(99,102,241,0.3)] hover:shadow-[0_4px_20px_rgba(99,102,241,0.5)]">
                                   Dołącz
@@ -26770,7 +26770,7 @@ export default function App() {
                   setShowOnboarding(false);
                   setOnboardingData(p=>p?{...p,completed:true}:p);
                   addToast('Reguły zaakceptowane!','success');
-                } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
               }} className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">
                 Akceptuję zasady i dołączam
               </button>
@@ -26850,7 +26850,7 @@ export default function App() {
                                     await groupDmApi.invite(activeGroupDm!, f.id);
                                     addToast(`${f.display_name||f.username} dodany/a do grupy`, 'success');
                                     setGroupInviteQ('');
-                                  } catch(e:any){ addToast(e?.message||'Błąd', 'error'); }
+                                  } catch(e:any){ addToast(e?.message||tl('common.error'), 'error'); }
                                   finally { setGroupInviting(null); }
                                 }}
                                 className="px-2.5 py-1 rounded-lg bg-indigo-600/70 hover:bg-indigo-600 disabled:opacity-50 text-white text-xs font-semibold transition-all shrink-0 flex items-center gap-1">
@@ -26983,7 +26983,7 @@ export default function App() {
                       setGroupDmName(''); setGroupDmMemberIds([]); setGroupDmSearchQ('');
                       setActiveView('dms');
                       addToast('Grupa utworzona!','success');
-                    } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                    } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                   }}
                   className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all">
                   Utwórz wiadomość grupową
@@ -27021,7 +27021,7 @@ export default function App() {
                           const evs = await eventsApi.list(activeServer!);
                           setServerEvents(evs);
                           addToast('Event utworzony!','success');
-                        } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                        } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                         finally { setEventsLoading(false); }
                       }} className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white transition-colors flex items-center gap-1.5">
                         <CalendarPlus size={11}/>Nowy event
@@ -27117,7 +27117,7 @@ export default function App() {
                         <button onClick={async()=>{
                           confirmAction('Usunąć event?', async()=>{
                             try{ await eventsApi.delete(activeServer!,ev.id); setServerEvents(p=>p.filter(e=>e.id!==ev.id)); addToast('Event usunięty','info'); }
-                            catch(e:any){ addToast(e.message||'Błąd','error'); }
+                            catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                           });
                         }} className="w-7 h-7 flex items-center justify-center rounded-xl text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0">
                           <Trash2 size={12}/>
