@@ -26062,8 +26062,8 @@ export default function App() {
                           <Bookmark size={24} className="text-zinc-700"/>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-zinc-400">Brak zapisanych wiadomości</p>
-                          <p className="text-xs text-zinc-600 mt-1">Kliknij prawym przyciskiem na wiadomość i wybierz „Zapisz wiadomość"</p>
+                          <p className="text-sm font-medium text-zinc-400">{tl('bookmarks.empty')}</p>
+                          <p className="text-xs text-zinc-600 mt-1">{tl('bookmarks.emptyHint')}</p>
                         </div>
                       </div>
                     );
@@ -26079,7 +26079,7 @@ export default function App() {
                               <span className="text-[10px] text-zinc-600">{bm.created_at ? fmtTime(bm.created_at) : ''}</span>
                             </div>
                             <p className="text-sm text-zinc-300 break-words line-clamp-3 leading-relaxed">
-                              {bm.message?.content || (bm.message?.attachment_url ? '📎 Załącznik' : '—')}
+                              {bm.message?.content || (bm.message?.attachment_url ? `📎 ${tl('bookmarks.attachment')}` : '—')}
                             </p>
                           </div>
                           <button onClick={async () => {
@@ -26124,8 +26124,8 @@ export default function App() {
             <div className="flex items-center justify-between px-4 py-3.5 border-b border-white/[0.07] shrink-0">
               <div className="flex items-center gap-2">
                 <MessageSquare size={15} className="text-indigo-400"/>
-                <h3 className="text-sm font-bold text-white">Wątek</h3>
-                <span className="text-xs text-zinc-600">{threadMessages.length} odpowiedzi</span>
+                <h3 className="text-sm font-bold text-white">{tl('thread.title')}</h3>
+                <span className="text-xs text-zinc-600">{threadMessages.length} {tl('thread.repliesCount')}</span>
               </div>
               <button onClick={()=>setThreadRootId(null)} className="text-zinc-600 hover:text-white"><X size={15}/></button>
             </div>
@@ -26133,7 +26133,7 @@ export default function App() {
               {threadMessages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center flex-1 gap-3 py-12">
                   <MessageSquare size={32} className="text-zinc-700"/>
-                  <p className="text-sm text-zinc-600 text-center">Brak odpowiedzi.<br/>Zacznij wątek poniżej.</p>
+                  <p className="text-sm text-zinc-600 text-center">{tl('thread.noReplies')}<br/>{tl('thread.startBelow')}</p>
                 </div>
               ) : threadMessages.map((m: any) => (
                 <div key={m.id} className="flex gap-2.5 py-1.5 hover:bg-white/[0.02] rounded-xl px-2 transition-colors">
@@ -26142,7 +26142,7 @@ export default function App() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2 mb-0.5">
                       <span className="text-xs font-semibold text-white">{m.sender_username}</span>
-                      <span className="text-[10px] text-zinc-600">{new Date(m.created_at).toLocaleTimeString('pl-PL', {hour:'2-digit',minute:'2-digit'})}</span>
+                      <span className="text-[10px] text-zinc-600">{fmtTime(m.created_at)}</span>
                     </div>
                     <p className="text-xs text-zinc-300 leading-relaxed break-words">{m.content}</p>
                   </div>
@@ -26169,7 +26169,7 @@ export default function App() {
                 } finally { setThreadSending(false); }
               }} className="flex gap-2">
                 <input value={threadInput} onChange={e=>setThreadInput(e.target.value)}
-                  placeholder="Odpowiedz w wątku…"
+                  placeholder={tl('thread.replyPh')}
                   className="flex-1 bg-white/[0.06] border border-white/[0.1] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500/50 min-w-0"/>
                 <button type="submit" disabled={!threadInput.trim()||threadSending}
                   className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 transition-colors text-white shrink-0">
@@ -26191,17 +26191,17 @@ export default function App() {
               className={`${gm} p-6 w-full max-w-md`}
               onClick={e=>e.stopPropagation()}>
               <div className="flex items-center justify-between mb-5">
-                <h2 className="text-base font-bold text-white flex items-center gap-2"><Keyboard size={16} className="text-indigo-400"/>Skróty klawiszowe</h2>
+                <h2 className="text-base font-bold text-white flex items-center gap-2"><Keyboard size={16} className="text-indigo-400"/>{tl('shortcuts.title')}</h2>
                 <button onClick={()=>setShowShortcuts(false)} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all"><X size={14}/></button>
               </div>
               <div className="flex flex-col gap-1.5 text-sm">
                 {[
-                  ['?', 'Otwórz/zamknij skróty'],
-                  ['Ctrl + K', 'Szybkie przełączanie (Quick Switcher)'],
-                  ['Escape', 'Zamknij modal / panel'],
-                  ['Alt + ↑ / ↓', 'Nawigacja między kanałami'],
-                  ['Ctrl + /', 'Szybka pomoc'],
-                  ...(canQAReport ? [['Ctrl + Shift + Z', '🐞 Zgłoś błąd (QA)']] : []),
+                  ['?', tl('shortcuts.toggle')],
+                  ['Ctrl + K', tl('shortcuts.quickSwitcher')],
+                  ['Escape', tl('shortcuts.closeModal')],
+                  ['Alt + ↑ / ↓', tl('shortcuts.navChannels')],
+                  ['Ctrl + /', tl('shortcuts.quickHelp')],
+                  ...(canQAReport ? [['Ctrl + Shift + Z', tl('shortcuts.reportBug')]] : []),
                 ].map(([key, desc]) => (
                   <div key={key} className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                     <span className="text-zinc-400">{desc}</span>
@@ -26233,32 +26233,32 @@ export default function App() {
                 }
               }}>
               <div className="flex items-center justify-between mb-5">
-                <h2 className="text-base font-bold text-white flex items-center gap-2"><FlaskConical size={16} className="text-violet-400"/>Zgłoszenie QA</h2>
+                <h2 className="text-base font-bold text-white flex items-center gap-2"><FlaskConical size={16} className="text-violet-400"/>{tl('qa.title')}</h2>
                 <button onClick={()=>setShowQAReportModal(false)} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all"><X size={14}/></button>
               </div>
 
               <div className="flex flex-col gap-4">
                 <div>
-                  <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Tytuł błędu *</label>
+                  <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">{tl('qa.bugTitle')}</label>
                   <input value={qaTitle} onChange={e=>setQaTitle(e.target.value.slice(0,150))} maxLength={150}
-                    placeholder="np. Awatar nie wczytuje się po odświeżeniu"
+                    placeholder={tl('qa.bugTitlePh')}
                     className={`${gi} w-full rounded-xl px-3 py-2.5 border-white/[0.08] text-white text-sm`}/>
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Opis *</label>
+                  <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">{tl('qa.desc')}</label>
                   <textarea value={qaDesc} onChange={e=>setQaDesc(e.target.value.slice(0,3000))} maxLength={3000} rows={5}
-                    placeholder="Co się stało, jak to odtworzyć, czego się oczekiwało..."
+                    placeholder={tl('qa.descPh')}
                     className={`${gi} w-full rounded-xl px-3 py-2.5 border-white/[0.08] text-white text-sm resize-none`}/>
                 </div>
 
                 <div className="flex items-center gap-2 text-[11px] text-zinc-500">
                   <CalendarDays size={13}/>
-                  <span>{new Date().toLocaleString('pl-PL', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}</span>
+                  <span>{fmtDate(new Date().toISOString(), { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}</span>
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Screenshot (opcjonalnie)</label>
+                  <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">{tl('qa.screenshot')}</label>
                   {!qaScreenshotPreview ? (
                     <label className="flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 border-dashed border-white/[0.1] hover:border-indigo-500/50 cursor-pointer transition-colors"
                       onDragOver={e=>e.preventDefault()}
@@ -26268,7 +26268,7 @@ export default function App() {
                         if (f && f.type.startsWith('image/')) { setQaScreenshot(f); setQaScreenshotPreview(URL.createObjectURL(f)); }
                       }}>
                       <ImageIcon size={22} className="text-zinc-500"/>
-                      <p className="text-xs text-zinc-400 font-medium">Kliknij, upuść lub wklej (Ctrl+V) obrazek</p>
+                      <p className="text-xs text-zinc-400 font-medium">{tl('qa.screenshotHint')}</p>
                       <p className="text-[10px] text-zinc-600">PNG, JPG, GIF · maks. 8MB</p>
                       <input type="file" accept="image/*" className="hidden" onChange={e=>{
                         const f = e.target.files?.[0];
@@ -26294,18 +26294,18 @@ export default function App() {
                     setQaTitle(''); setQaDesc(''); setQaScreenshot(null); setQaScreenshotPreview(null);
                   }}
                   className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-400 bg-white/[0.05] hover:bg-white/[0.08] transition-colors">
-                  Anuluj
+                  {tl('action.cancel')}
                 </button>
                 <button onClick={async ()=>{
                     if (!qaTitle.trim() || !qaDesc.trim() || qaSending) return;
                     setQaSending(true);
                     try {
                       await feedbackApi.sendQAReport(qaTitle.trim(), qaDesc.trim(), qaScreenshot);
-                      addToast('Zgłoszenie wysłane ✅', 'success');
+                      addToast(tl('qa.sent'), 'success');
                       setShowQAReportModal(false);
                       setQaTitle(''); setQaDesc(''); setQaScreenshot(null); setQaScreenshotPreview(null);
                     } catch (err: any) {
-                      addToast(err?.message || 'Nie udało się wysłać zgłoszenia', 'error');
+                      addToast(err?.message || tl('qa.sendError'), 'error');
                     } finally {
                       setQaSending(false);
                     }
@@ -26313,7 +26313,7 @@ export default function App() {
                   disabled={!qaTitle.trim() || !qaDesc.trim() || qaSending}
                   className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors flex items-center justify-center gap-2 ${qaTitle.trim() && qaDesc.trim() && !qaSending ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-zinc-700 opacity-50 cursor-not-allowed'}`}>
                   {qaSending ? <Loader2 size={14} className="animate-spin"/> : <Send size={14}/>}
-                  {qaSending ? 'Wysyłanie...' : 'Wyślij log'}
+                  {qaSending ? tl('qa.sending') : tl('qa.sendLog')}
                 </button>
               </div>
             </motion.div>
@@ -26343,8 +26343,8 @@ export default function App() {
                     const sM  = serverList.filter(s=>!q2||s.name.toLowerCase().includes(q2));
                     const fM  = friends.filter(f=>(f.username?.toLowerCase().includes(q2)||f.display_name?.toLowerCase().includes(q2))&&q2);
                     const sttM= [
-                      {label:'Ustawienia konta',k:'account'},{label:'Wygląd i motywy',k:'appearance'},
-                      {label:'Urządzenia',k:'devices'},{label:'Prywatność',k:'privacy'},
+                      {label:tl('quickswitch.accountSettings'),k:'account'},{label:tl('quickswitch.appearanceSettings'),k:'appearance'},
+                      {label:tl('settings.devices'),k:'devices'},{label:tl('settings.privacy'),k:'privacy'},
                     ].filter(s=>!q2||s.label.toLowerCase().includes(q2));
                     const total = Math.min(chM.length,5)+Math.min(sM.length,5)+Math.min(fM.length,5)+Math.min(sttM.length,4);
                     if (e.key === 'ArrowDown') { e.preventDefault(); setQuickIdx(i=>(i+1)%Math.max(total,1)); }
@@ -26363,7 +26363,7 @@ export default function App() {
                         || fire(sttM, s=>{ setAppSettTab(s.k as any); setAppSettOpen(true); });
                     }
                   }}
-                  placeholder="Szukaj kanałów, serwerów, znajomych, ustawień..."
+                  placeholder={tl('quickswitch.searchPh')}
                   className="flex-1 bg-transparent outline-none text-white placeholder-zinc-600 text-sm"/>
                 <kbd className="px-2 py-1 bg-white/[0.05] border border-white/[0.08] rounded-md text-[10px] font-mono text-zinc-600 shrink-0">ESC</kbd>
               </div>
@@ -26375,24 +26375,24 @@ export default function App() {
                 const serverMatches  = serverList.filter(s=>!q||s.name.toLowerCase().includes(q));
                 const friendMatches  = friends.filter(f=>(f.username?.toLowerCase().includes(q)||f.display_name?.toLowerCase().includes(q))&&q);
                 const settingsItems  = ([
-                  {label:'Ustawienia konta',  icon:<Users size={12}/>,  k:'account'   as const},
-                  {label:'Wygląd i motywy',   icon:<Palette size={12}/>,k:'appearance' as const},
-                  {label:'Urządzenia',         icon:<Mic size={12}/>,    k:'devices'    as const},
-                  {label:'Prywatność',         icon:<Shield size={12}/>, k:'privacy'    as const},
+                  {label:tl('quickswitch.accountSettings'),  icon:<Users size={12}/>,  k:'account'   as const},
+                  {label:tl('quickswitch.appearanceSettings'),   icon:<Palette size={12}/>,k:'appearance' as const},
+                  {label:tl('settings.devices'),         icon:<Mic size={12}/>,    k:'devices'    as const},
+                  {label:tl('settings.privacy'),         icon:<Shield size={12}/>, k:'privacy'    as const},
                 ] as const).filter(s=>!q||s.label.toLowerCase().includes(q));
 
                 const totalResults = channelMatches.length+serverMatches.length+friendMatches.length+settingsItems.length;
                 if (totalResults===0 && q) return (
                   <div className="px-4 py-8 text-center">
                     <Search size={22} className="text-zinc-700 mx-auto mb-2"/>
-                    <p className="text-sm text-zinc-600">Brak wyników dla „{quickQ}"</p>
+                    <p className="text-sm text-zinc-600">{tl('search.noResultsFor')} „{quickQ}"</p>
                   </div>
                 );
                 if (!q) return (
                   <div className="px-4 py-5 text-center">
-                    <p className="text-xs text-zinc-600">Wpisz aby wyszukać kanały, serwery, znajomych lub ustawienia</p>
+                    <p className="text-xs text-zinc-600">{tl('quickswitch.typeToSearch')}</p>
                     <div className="flex items-center justify-center gap-4 mt-3">
-                      {[['↑↓','nawigacja'],['↵','otwórz'],['ESC','zamknij']].map(([key,desc])=>(
+                      {[['↑↓',tl('quickswitch.navigate')],['↵',tl('quickswitch.open')],['ESC',tl('quickswitch.close')]].map(([key,desc])=>(
                         <span key={key} className="flex items-center gap-1.5 text-[10px] text-zinc-700">
                           <kbd className="px-1.5 py-0.5 bg-white/[0.05] border border-white/[0.08] rounded text-zinc-500 font-mono">{key}</kbd>
                           {desc}
@@ -26416,7 +26416,7 @@ export default function App() {
                 return (
                   <div className="max-h-[380px] overflow-y-auto custom-scrollbar py-1">
                     {channelMatches.length>0&&<>
-                      <SectionLabel label="Kanały"/>
+                      <SectionLabel label={tl('quickswitch.channels')}/>
                       {channelMatches.slice(0,5).map(c => {
                         const idx = globalIdx++;
                         return <Row key={c.id} idx={idx} onClick={()=>setActiveChannel(c.id)}>
@@ -26429,7 +26429,7 @@ export default function App() {
                       })}
                     </>}
                     {serverMatches.length>0&&<>
-                      <SectionLabel label="Serwery"/>
+                      <SectionLabel label={tl('quickswitch.servers')}/>
                       {serverMatches.slice(0,5).map(s => {
                         const idx = globalIdx++;
                         return <Row key={s.id} idx={idx} onClick={()=>{ const same=activeServer===s.id; setActiveServer(s.id); setActiveView('servers'); setServerFull(null); setActiveChannel(''); setSrvRingActivity(prev=>{const n={...prev};delete n[s.id];return n;}); if(same)setServerReloadKey(k=>k+1); }}>
@@ -26442,24 +26442,24 @@ export default function App() {
                       })}
                     </>}
                     {friendMatches.length>0&&<>
-                      <SectionLabel label="Znajomi"/>
+                      <SectionLabel label={tl('quickswitch.friends')}/>
                       {friendMatches.slice(0,5).map(f => {
                         const idx = globalIdx++;
                         return <Row key={f.id} idx={idx} onClick={()=>openDm(f.id)}>
                           <GifAvatar src={ava(f)} alt={f.username} className="w-6 h-6 rounded-full object-cover shrink-0"/>
                           <span className="text-sm flex-1 truncate">{f.display_name||f.username}</span>
-                          <span className="text-[10px] text-zinc-600 shrink-0">wiadomość</span>
+                          <span className="text-[10px] text-zinc-600 shrink-0">{tl('quickswitch.message')}</span>
                         </Row>;
                       })}
                     </>}
                     {settingsItems.length>0&&<>
-                      <SectionLabel label="Ustawienia"/>
+                      <SectionLabel label={tl('quickswitch.settings')}/>
                       {settingsItems.slice(0,4).map(s => {
                         const idx = globalIdx++;
                         return <Row key={s.k} idx={idx} onClick={()=>{ setAppSettTab(s.k); setAppSettOpen(true); }}>
                           <div className="w-6 h-6 rounded-lg bg-white/[0.05] flex items-center justify-center shrink-0 text-zinc-500">{s.icon}</div>
                           <span className="text-sm flex-1 truncate">{s.label}</span>
-                          <span className="text-[10px] text-zinc-600 shrink-0">ustawienia</span>
+                          <span className="text-[10px] text-zinc-600 shrink-0">{tl('quickswitch.settingsHint')}</span>
                         </Row>;
                       })}
                     </>}

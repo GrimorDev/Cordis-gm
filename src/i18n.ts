@@ -609,6 +609,56 @@ const T: Record<string, Record<Locale, string>> = {
   // ── Drag & drop file overlay ──────────────────────────────────────────────
   'dnd.dropHere':          { pl: 'Upuść plik tutaj',             en: 'Drop file here',          cs: 'Přetáhněte soubor sem',       de: 'Datei hier ablegen'        },
   'dnd.fileTypes':         { pl: 'Obrazy, audio, wideo, kod, archiwa i więcej', en: 'Images, audio, video, code, archives and more', cs: 'Obrázky, zvuk, video, kód, archivy a další', de: 'Bilder, Audio, Video, Code, Archive und mehr' },
+
+  // ── Saved messages (bookmarks) panel ─────────────────────────────────────
+  'bookmarks.empty':       { pl: 'Brak zapisanych wiadomości',   en: 'No saved messages',       cs: 'Žádné uložené zprávy',        de: 'Keine gespeicherten Nachrichten' },
+  'bookmarks.emptyHint':   { pl: 'Kliknij prawym przyciskiem na wiadomość i wybierz „Zapisz wiadomość"', en: 'Right-click a message and choose "Save message"', cs: 'Klikněte pravým tlačítkem na zprávu a vyberte „Uložit zprávu"', de: 'Rechtsklicke auf eine Nachricht und wähle „Nachricht speichern"' },
+  'bookmarks.attachment':  { pl: 'Załącznik',                    en: 'Attachment',              cs: 'Příloha',                     de: 'Anhang'                    },
+
+  // ── Thread panel ──────────────────────────────────────────────────────────
+  'thread.title':          { pl: 'Wątek',                        en: 'Thread',                  cs: 'Vlákno',                      de: 'Thread'                    },
+  'thread.repliesCount':   { pl: 'odpowiedzi',                   en: 'replies',                 cs: 'odpovědí',                    de: 'Antworten'                 },
+  'thread.noReplies':      { pl: 'Brak odpowiedzi.',             en: 'No replies.',             cs: 'Žádné odpovědi.',             de: 'Keine Antworten.'          },
+  'thread.startBelow':     { pl: 'Zacznij wątek poniżej.',       en: 'Start the thread below.', cs: 'Začněte vlákno níže.',        de: 'Starte den Thread unten.'  },
+  'thread.replyPh':        { pl: 'Odpowiedz w wątku…',           en: 'Reply in thread…',        cs: 'Odpovědět ve vlákně…',        de: 'Im Thread antworten…'      },
+
+  // ── Keyboard shortcuts modal ──────────────────────────────────────────────
+  'shortcuts.title':       { pl: 'Skróty klawiszowe',            en: 'Keyboard shortcuts',      cs: 'Klávesové zkratky',           de: 'Tastenkombinationen'       },
+  'shortcuts.toggle':      { pl: 'Otwórz/zamknij skróty',        en: 'Open/close shortcuts',    cs: 'Otevřít/zavřít zkratky',      de: 'Kürzel öffnen/schließen'   },
+  'shortcuts.quickSwitcher': { pl: 'Szybkie przełączanie (Quick Switcher)', en: 'Quick switching (Quick Switcher)', cs: 'Rychlé přepínání (Quick Switcher)', de: 'Schnellwechsel (Quick Switcher)' },
+  'shortcuts.closeModal':  { pl: 'Zamknij modal / panel',        en: 'Close modal / panel',     cs: 'Zavřít modal / panel',        de: 'Modal / Panel schließen'   },
+  'shortcuts.navChannels': { pl: 'Nawigacja między kanałami',    en: 'Navigate between channels', cs: 'Navigace mezi kanály',      de: 'Zwischen Kanälen navigieren' },
+  'shortcuts.quickHelp':   { pl: 'Szybka pomoc',                 en: 'Quick help',              cs: 'Rychlá nápověda',             de: 'Schnellhilfe'              },
+  'shortcuts.reportBug':   { pl: '🐞 Zgłoś błąd (QA)',           en: '🐞 Report a bug (QA)',    cs: '🐞 Nahlásit chybu (QA)',      de: '🐞 Fehler melden (QA)'     },
+
+  // ── QA bug report modal ───────────────────────────────────────────────────
+  'qa.title':              { pl: 'Zgłoszenie QA',                en: 'QA report',               cs: 'QA hlášení',                  de: 'QA-Meldung'                },
+  'qa.bugTitle':           { pl: 'Tytuł błędu *',                en: 'Bug title *',             cs: 'Název chyby *',               de: 'Fehlertitel *'             },
+  'qa.bugTitlePh':         { pl: 'np. Awatar nie wczytuje się po odświeżeniu', en: 'e.g. Avatar doesn\'t load after refresh', cs: 'např. Avatar se po obnovení nenačte', de: 'z. B. Avatar lädt nach dem Neuladen nicht' },
+  'qa.desc':               { pl: 'Opis *',                       en: 'Description *',           cs: 'Popis *',                     de: 'Beschreibung *'            },
+  'qa.descPh':             { pl: 'Co się stało, jak to odtworzyć, czego się oczekiwało...', en: 'What happened, how to reproduce it, what was expected...', cs: 'Co se stalo, jak to reprodukovat, co se očekávalo...', de: 'Was ist passiert, wie reproduziert man es, was wurde erwartet...' },
+  'qa.screenshot':         { pl: 'Screenshot (opcjonalnie)',     en: 'Screenshot (optional)',   cs: 'Snímek obrazovky (volitelné)', de: 'Screenshot (optional)'    },
+  'qa.screenshotHint':     { pl: 'Kliknij, upuść lub wklej (Ctrl+V) obrazek', en: 'Click, drop, or paste (Ctrl+V) an image', cs: 'Klikněte, přetáhněte nebo vložte (Ctrl+V) obrázek', de: 'Klicke, ziehe oder füge (Strg+V) ein Bild ein' },
+  'qa.sent':               { pl: 'Zgłoszenie wysłane ✅',        en: 'Report sent ✅',          cs: 'Hlášení odesláno ✅',          de: 'Meldung gesendet ✅'       },
+  'qa.sendError':          { pl: 'Nie udało się wysłać zgłoszenia', en: 'Failed to send the report', cs: 'Nepodařilo se odeslat hlášení', de: 'Meldung konnte nicht gesendet werden' },
+  'qa.sending':            { pl: 'Wysyłanie...',                en: 'Sending...',              cs: 'Odesílání...',                de: 'Wird gesendet...'          },
+  'qa.sendLog':            { pl: 'Wyślij log',                  en: 'Send log',                cs: 'Odeslat log',                 de: 'Log senden'                },
+
+  // ── Quick Switcher (Ctrl+K) ───────────────────────────────────────────────
+  'quickswitch.accountSettings': { pl: 'Ustawienia konta',       en: 'Account settings',        cs: 'Nastavení účtu',              de: 'Kontoeinstellungen'        },
+  'quickswitch.appearanceSettings': { pl: 'Wygląd i motywy',     en: 'Appearance & themes',     cs: 'Vzhled a motivy',             de: 'Darstellung & Designs'     },
+  'quickswitch.searchPh':  { pl: 'Szukaj kanałów, serwerów, znajomych, ustawień...', en: 'Search channels, servers, friends, settings...', cs: 'Hledat kanály, servery, přátele, nastavení...', de: 'Kanäle, Server, Freunde, Einstellungen durchsuchen...' },
+  'search.noResultsFor': { pl: 'Brak wyników dla',             en: 'No results for',          cs: 'Žádné výsledky pro',          de: 'Keine Ergebnisse für'      },
+  'quickswitch.typeToSearch': { pl: 'Wpisz aby wyszukać kanały, serwery, znajomych lub ustawienia', en: 'Type to search channels, servers, friends, or settings', cs: 'Psaním hledejte kanály, servery, přátele nebo nastavení', de: 'Tippe, um Kanäle, Server, Freunde oder Einstellungen zu durchsuchen' },
+  'quickswitch.navigate':  { pl: 'nawigacja',                    en: 'navigate',                cs: 'navigace',                    de: 'navigieren'                },
+  'quickswitch.open':      { pl: 'otwórz',                       en: 'open',                    cs: 'otevřít',                     de: 'öffnen'                    },
+  'quickswitch.close':     { pl: 'zamknij',                      en: 'close',                   cs: 'zavřít',                      de: 'schließen'                 },
+  'quickswitch.channels':  { pl: 'Kanały',                       en: 'Channels',                cs: 'Kanály',                      de: 'Kanäle'                    },
+  'quickswitch.servers':   { pl: 'Serwery',                      en: 'Servers',                 cs: 'Servery',                     de: 'Server'                    },
+  'quickswitch.friends':   { pl: 'Znajomi',                      en: 'Friends',                 cs: 'Přátelé',                     de: 'Freunde'                   },
+  'quickswitch.settings':  { pl: 'Ustawienia',                   en: 'Settings',                cs: 'Nastavení',                   de: 'Einstellungen'             },
+  'quickswitch.message':   { pl: 'wiadomość',                    en: 'message',                 cs: 'zpráva',                      de: 'Nachricht'                 },
+  'quickswitch.settingsHint': { pl: 'ustawienia',                en: 'settings',                cs: 'nastavení',                   de: 'Einstellungen'             },
   'settings.desktop':        { pl: 'Aplikacja',                en: 'Application',             cs: 'Aplikace',                  de: 'Anwendung'                 },
   'settings.updates':        { pl: 'Aktualizacje',             en: 'Updates',                 cs: 'Aktualizace',               de: 'Aktualisierungen'          },
   'settings.about':          { pl: 'O aplikacji',              en: 'About',                   cs: 'O aplikaci',                de: 'Über die App'              },
