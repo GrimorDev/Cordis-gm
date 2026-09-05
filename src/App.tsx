@@ -3287,30 +3287,30 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
   return (
     <div className="p-6 max-w-2xl mx-auto">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-xl font-bold text-white">Panel dźwięków</h2>
+        <h2 className="text-xl font-bold text-white">{tl('sounds.panelTitle')}</h2>
         {canManage && sounds.length < 10 && (
           <button onClick={()=>setUploadOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold rounded-xl transition-colors">
-            <Upload size={14}/> Prześlij dźwięk
+            <Upload size={14}/> {tl('sounds.upload')}
           </button>
         )}
       </div>
       <p className="text-sm text-zinc-500 mb-5">
-        Niestandardowe dźwięki dostępne dla wszystkich podczas rozmów głosowych. Limit: {sounds.length}/10.
+        {tl('sounds.limitDesc')} {sounds.length}/10.
       </p>
 
-      {loading && <p className="text-sm text-zinc-600 italic">Ładowanie...</p>}
+      {loading && <p className="text-sm text-zinc-600 italic">{tl('sounds.loading')}</p>}
       {!loading && sounds.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-zinc-600">
           <Music2 size={36} className="mb-3 opacity-30"/>
-          <p className="text-sm font-medium">Brak własnych dźwięków</p>
-          <p className="text-xs mt-1">Dodaj pierwszy dźwięk za pomocą przycisku powyżej</p>
+          <p className="text-sm font-medium">{tl('sounds.none')}</p>
+          <p className="text-xs mt-1">{tl('sounds.addFirst')}</p>
         </div>
       )}
       {sounds.length > 0 && (
         <div className="flex flex-col gap-2">
           <div className="grid grid-cols-[1fr_80px_100px_32px] gap-2 text-[10px] text-zinc-600 uppercase tracking-widest font-bold px-3 mb-1">
-            <span>Emoji / Nazwa</span><span className="text-center">Głośność</span><span>Dodane przez</span><span/>
+            <span>{tl('sounds.col.emojiName')}</span><span className="text-center">{tl('sounds.col.volume')}</span><span>{tl('sounds.col.addedBy')}</span><span/>
           </div>
           {sounds.map(s => (
             <div key={s.id} className="grid grid-cols-[1fr_80px_100px_32px] gap-2 items-center p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05] transition-colors">
@@ -3339,7 +3339,7 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={()=>{setUploadOpen(false);resetUpload();}}>
           <div className="bg-[#14141f] rounded-2xl border border-white/[0.1] shadow-2xl p-6 w-full max-w-lg" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-bold text-white">Prześlij dźwięk</h3>
+              <h3 className="text-lg font-bold text-white">{tl('sounds.upload')}</h3>
               <button onClick={()=>{setUploadOpen(false);resetUpload();}} className="text-zinc-600 hover:text-zinc-300 transition-colors"><X size={16}/></button>
             </div>
 
@@ -3347,7 +3347,7 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
             {!previewUrl ? (
               <label className="flex flex-col items-center justify-center gap-2 p-8 rounded-xl border-2 border-dashed border-white/[0.1] hover:border-indigo-500/50 cursor-pointer transition-colors mb-5">
                 <Music2 size={28} className="text-zinc-500"/>
-                <p className="text-sm text-zinc-400 font-medium">Kliknij aby wybrać plik audio</p>
+                <p className="text-sm text-zinc-400 font-medium">{tl('sounds.clickToPick')}</p>
                 <p className="text-[10px] text-zinc-600">MP3, OGG, WAV, FLAC · maks. 10MB</p>
                 <input type="file" accept="audio/*" className="hidden" onChange={e => { const f=e.target.files?.[0]; if(f) handleFile(f); }}/>
               </label>
@@ -3368,10 +3368,10 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
                 <div className="mb-3">
                   {/* Duration badge */}
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Zaznacz fragment</span>
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">{tl('sounds.selectClip')}</span>
                     <span className={`text-[11px] font-bold tabular-nums ${isValid ? 'text-emerald-400' : 'text-red-400'}`}>
                       {trimmedSec.toFixed(1)}s&nbsp;/&nbsp;{SB_MAX_SEC}s maks
-                      {!isValid && <span className="ml-1 text-[10px] font-normal">— za długi!</span>}
+                      {!isValid && <span className="ml-1 text-[10px] font-normal">{tl('sounds.tooLong')}</span>}
                     </span>
                   </div>
 
@@ -3444,7 +3444,7 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
                     </div>
                     <div className="flex gap-1 pt-2 border-t border-white/[0.06]">
                       <input value={emoji} onChange={e=>setEmoji(e.target.value.slice(0,4))} maxLength={4}
-                        placeholder="lub wpisz..."
+                        placeholder={tl('sounds.orType')}
                         className="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-2 py-1 text-sm text-white text-center placeholder-zinc-600 outline-none focus:border-indigo-500/40"/>
                       <button type="button" onClick={()=>setEmojiPickerOpen(false)}
                         className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold">OK</button>
@@ -3453,7 +3453,7 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
                 )}
               </div>
               <div className="flex-1">
-                <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Nazwa dźwięku *</label>
+                <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">{tl('sounds.nameLabel')}</label>
                 <input value={name} onChange={e=>setName(e.target.value)} placeholder="np. Klakson, Oklaski..." maxLength={100}
                   className={`${gi} w-full rounded-xl px-3 py-2.5 border-white/[0.08] text-white text-sm`}/>
               </div>
@@ -3462,7 +3462,7 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
             {/* Volume */}
             <div className="mb-5">
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Głośność</label>
+                <label className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">{tl('sounds.col.volume')}</label>
                 <span className="text-xs text-zinc-400 font-semibold tabular-nums">{volume}%</span>
               </div>
               <input type="range" min={10} max={200} step={5} value={volume} onChange={e=>setVolume(parseInt(e.target.value))}
@@ -3473,7 +3473,7 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
             {previewUrl && !isValid && (
               <div className="mb-4 flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30">
                 <AlertCircle size={14} className="text-red-400 shrink-0"/>
-                <p className="text-xs text-red-300">Zaznaczony fragment jest za długi ({trimmedSec.toFixed(1)}s). Przesuń uchwyty na fali dźwiękowej, aby zaznaczyć maks. {SB_MAX_SEC}s.</p>
+                <p className="text-xs text-red-300">{tl('sounds.clipTooLong')} ({trimmedSec.toFixed(1)}s). {tl('sounds.adjustHandles')} {SB_MAX_SEC}s.</p>
               </div>
             )}
 
@@ -3484,7 +3484,7 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
               </button>
               <button onClick={handleUpload} disabled={!file || !name.trim() || saving || !isValid}
                 className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors ${isValid && file && name.trim() ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-zinc-700 opacity-50 cursor-not-allowed'}`}>
-                {saving ? 'Przesyłanie...' : 'Prześlij'}
+                {saving ? tl('sounds.uploading') : tl('sounds.upload')}
               </button>
             </div>
           </div>
@@ -4413,7 +4413,7 @@ function ServerSettingsPage({
                       {b.banned_by_username && <p className="text-xs text-zinc-700">przez {b.banned_by_username}</p>}
                     </div>
                   </div>
-                  <button onClick={() => handleUnban(b.user_id)} className="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors">Odbanuj</button>
+                  <button onClick={() => handleUnban(b.user_id)} className="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors">{tl('action.unban')}</button>
                 </div>
               ))}
             </div>
@@ -4463,7 +4463,7 @@ function ServerSettingsPage({
                         </div>
                         <p className="text-[11px] text-zinc-600">
                           Wygasa: <span className="text-zinc-400">nigdy</span> · Limit: <span className="text-zinc-400">brak</span> · Użyto: <span className="text-zinc-400">{permanentInvite.uses} razy</span>
-                          <button onClick={() => delInviteLocal(permanentInvite.code)} className="ml-3 text-zinc-700 hover:text-rose-400 transition-colors">Usuń</button>
+                          <button onClick={() => delInviteLocal(permanentInvite.code)} className="ml-3 text-zinc-700 hover:text-rose-400 transition-colors">{tl('action.delete')}</button>
                         </p>
                       </>
                     ) : (
@@ -5344,7 +5344,7 @@ function StorageTab({ addToast }: { addToast: (m:string,t?:any)=>void }) {
       {storageView==='files' && stats && (
         <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl overflow-hidden">
           <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-4 py-2 border-b border-white/[0.06] text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-            <span>Plik</span><span>Rozmiar</span><span>Przez</span><span>Usuń</span>
+            <span>Plik</span><span>Rozmiar</span><span>Przez</span><span>{tl('action.delete')}</span>
           </div>
           <div className="divide-y divide-white/[0.04]">
             {stats.recent.map(f => (
@@ -5970,7 +5970,7 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                                 className="flex-1 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 text-white py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5">
                                 {editUserLoading&&<Loader2 size={11} className="animate-spin"/>} Zapisz
                               </button>
-                              <button onClick={()=>setEditUserForm(null)} className="flex-1 bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 py-2 rounded-xl text-xs transition-colors">Anuluj</button>
+                              <button onClick={()=>setEditUserForm(null)} className="flex-1 bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 py-2 rounded-xl text-xs transition-colors">{tl('action.cancel')}</button>
                             </div>
                           </div>
                         ) : (
@@ -6092,7 +6092,7 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                     </select>
                     <div className="flex gap-2">
                       <button onClick={handleAssignBadge} className="flex-1 bg-indigo-500 hover:bg-indigo-400 text-white py-2 rounded-xl text-sm font-semibold transition-colors">Przypisz</button>
-                      <button onClick={()=>setAssignUser(null)} className="flex-1 bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 py-2 rounded-xl text-sm transition-colors">Anuluj</button>
+                      <button onClick={()=>setAssignUser(null)} className="flex-1 bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 py-2 rounded-xl text-sm transition-colors">{tl('action.cancel')}</button>
                     </div>
                     {assignUser.badges?.length>0&&(
                       <div>
@@ -6162,8 +6162,8 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                     <p className="text-sm text-zinc-400">Czy na pewno chcesz usunąć serwer <span className="text-white font-semibold">{serversList.find(s=>s.id===deleteServerConfirmId)?.name}</span>? Tej operacji nie można cofnąć.</p>
                     <div className="flex gap-2">
                       <button onClick={()=>handleDeleteServer(deleteServerConfirmId)}
-                        className="flex-1 bg-rose-500 hover:bg-rose-400 text-white py-2 rounded-xl text-sm font-semibold transition-colors">Usuń</button>
-                      <button onClick={()=>setDeleteServerConfirmId(null)} className="flex-1 bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 py-2 rounded-xl text-sm transition-colors">Anuluj</button>
+                        className="flex-1 bg-rose-500 hover:bg-rose-400 text-white py-2 rounded-xl text-sm font-semibold transition-colors">{tl('action.delete')}</button>
+                      <button onClick={()=>setDeleteServerConfirmId(null)} className="flex-1 bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 py-2 rounded-xl text-sm transition-colors">{tl('action.cancel')}</button>
                     </div>
                   </div>
                 </div>
@@ -17420,11 +17420,11 @@ export default function App() {
               onSpotifyConnect={async()=>{ try { const r = await spotifyApi.connect(); await openOAuth(r.url, 'spotify'); } catch(e:any){ addToast(e.message||'Błąd Spotify','error'); } }}
               onSpotifyDisconnect={async()=>{ try { await spotifyApi.disconnect(); setOwnSpotify(null); addToast('Spotify odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Spotify','error'); } }}
               onSpotifyToggle={async(v)=>{ await spotifyApi.setSettings({show_on_profile:v}); setOwnSpotify(p=>p?{...p,show_on_profile:v}:p); lastEmittedTrack.current=undefined; if(!v&&currentUser?.id){const sock=getSocket();if(sock)(sock as any).emit('spotify_update',{track:null});setUserActivities(p=>{const n=new Map(p);n.set(currentUser.id,null);return n;});} }}
-              onTwitchConnect={async()=>{ try { const r = await twitchApi.connect(); await openOAuth(r.url, 'twitch'); } catch(e:any){ addToast(e.message||'Błąd Twitch','error'); } }}
-              onTwitchDisconnect={async()=>{ try { await twitchApi.disconnect(); setOwnTwitch(null); addToast('Twitch odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Twitch','error'); } }}
+              onTwitchConnect={async()=>{ try { const r = await twitchApi.connect(); await openOAuth(r.url, 'twitch'); } catch(e:any){ addToast(e.message||`${tl('connections.error')} Twitch`,'error'); } }}
+              onTwitchDisconnect={async()=>{ try { await twitchApi.disconnect(); setOwnTwitch(null); addToast(`Twitch ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||`${tl('connections.disconnectError')} Twitch`,'error'); } }}
               onTwitchToggle={async(v)=>{ await twitchApi.setSettings({show_on_profile:v}); setOwnTwitch(p=>p?{...p,show_on_profile:v}:p); lastEmittedStream.current=undefined; if(!v&&currentUser?.id){const sock=getSocket();if(sock)(sock as any).emit('twitch_update',{stream:null});setUserTwitchActivities(p=>{const n=new Map(p);n.set(currentUser.id,null);return n;});} }}
-              onSteamConnect={async()=>{ try { const r = await steamApi.connect(); await openOAuth(r.url, 'steam'); } catch(e:any){ addToast(e.message||'Błąd Steam','error'); } }}
-              onSteamDisconnect={async()=>{ try { await steamApi.disconnect(); setOwnSteam(null); addToast('Steam odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Steam','error'); } }}
+              onSteamConnect={async()=>{ try { const r = await steamApi.connect(); await openOAuth(r.url, 'steam'); } catch(e:any){ addToast(e.message||`${tl('connections.error')} Steam`,'error'); } }}
+              onSteamDisconnect={async()=>{ try { await steamApi.disconnect(); setOwnSteam(null); addToast(`Steam ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||`${tl('connections.disconnectError')} Steam`,'error'); } }}
               onSteamToggle={async(v)=>{ await steamApi.setSettings({show_on_profile:v}); setOwnSteam(p=>p?{...p,show_on_profile:v}:p); lastEmittedGame.current=undefined; if(!v&&currentUser?.id){const sock=getSocket();if(sock)(sock as any).emit('steam_update',{game:null});setUserSteamActivities(p=>{const n=new Map(p);n.set(currentUser.id,null);return n;});} }}
               friends={friends}
               blockedUsers={blockedUsers}
@@ -21899,7 +21899,7 @@ export default function App() {
                       {/* Buttons */}
                       <div className="flex gap-2.5">
                         <button onClick={()=>{ setCreateSrvOpen(false); setCreateSrvIconFile(null); setCreateSrvIconPreview(null); setCreateSrvName(''); }}
-                          className={`flex-1 ${gb} py-2.5 rounded-2xl text-sm font-semibold transition-all`}>Anuluj</button>
+                          className={`flex-1 ${gb} py-2.5 rounded-2xl text-sm font-semibold transition-all`}>{tl('action.cancel')}</button>
                         <button onClick={handleCreateServer} disabled={!createSrvName.trim()}
                           className="flex-1 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-2xl transition-all shadow-lg shadow-indigo-500/25">
                           Utwórz →
@@ -21935,7 +21935,7 @@ export default function App() {
 
                     <div className="flex gap-2.5">
                       <button onClick={()=>{ setCreateSrvOpen(false); setJoinCode(''); }}
-                        className={`flex-1 ${gb} py-2.5 rounded-2xl text-sm font-semibold transition-all`}>Anuluj</button>
+                        className={`flex-1 ${gb} py-2.5 rounded-2xl text-sm font-semibold transition-all`}>{tl('action.cancel')}</button>
                       <button onClick={handleJoinServer} disabled={!joinCode.trim()}
                         className="flex-1 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-2xl transition-all shadow-lg shadow-indigo-500/25">
                         Dołącz →
@@ -22093,7 +22093,7 @@ export default function App() {
                             {b.banned_by_username&&<p className="text-xs text-zinc-700">przez {b.banned_by_username}</p>}
                           </div>
                         </div>
-                        <button onClick={()=>handleUnban(b.user_id)} className="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors">Odbanuj</button>
+                        <button onClick={()=>handleUnban(b.user_id)} className="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors">{tl('action.unban')}</button>
                       </div>
                     ))}
                   </div>
@@ -22161,7 +22161,7 @@ export default function App() {
                             </div>
                             <p className="text-[11px] text-zinc-600">
                               Wygasa: <span className="text-zinc-400">nigdy</span> · Limit: <span className="text-zinc-400">brak</span> · Użyto: <span className="text-zinc-400">{permanentInvite.uses} razy</span>
-                              <button onClick={()=>delInv(permanentInvite.code)} className="ml-3 text-zinc-700 hover:text-rose-400 transition-colors">Usuń</button>
+                              <button onClick={()=>delInv(permanentInvite.code)} className="ml-3 text-zinc-700 hover:text-rose-400 transition-colors">{tl('action.delete')}</button>
                             </p>
                           </>
                         ) : (
@@ -22360,7 +22360,7 @@ export default function App() {
                             setOnboardingData(p=>p?{...p,welcome_text:welcome,rules_text:rules}:p);
                             addToast('Onboarding zapisany!','success');
                           } catch(e:any){ addToast(e.message||'Błąd','error'); }
-                        }} className="bg-indigo-500 hover:bg-indigo-400 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm">Zapisz</button>
+                        }} className="bg-indigo-500 hover:bg-indigo-400 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm">{tl('action.save')}</button>
                       </div>
                     ) : (
                       <div className="flex items-center justify-center py-8"><Loader2 size={20} className="animate-spin text-zinc-600"/></div>
@@ -22397,7 +22397,7 @@ export default function App() {
                           setServerFull((p:any)=>p?{...p,discovery_description:desc}:p);
                           addToast('Opis zapisany!','success');
                         } catch(e:any){ addToast(e.message||'Błąd','error'); }
-                      }} className="mt-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">Zapisz</button>
+                      }} className="mt-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">{tl('action.save')}</button>
                     </div>
                   </div>
                 )}
@@ -22614,7 +22614,7 @@ export default function App() {
                     {chForm.bitrate>64&&<p className="text-[11px] text-amber-500/80 mt-1">⚠ Powyżej 64 kbps może wpłynąć na słabe łącza.</p>}
                   </div>
                 </>)}
-                <button onClick={handleSaveCh} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">Zapisz</button>
+                <button onClick={handleSaveCh} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">{tl('action.save')}</button>
               </div>
             </motion.div>
           </motion.div>
@@ -22711,7 +22711,7 @@ export default function App() {
               )}
 
               <div className="flex gap-2">
-                <button onClick={()=>setChCreateOpen(false)} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold ${gb} transition-all`}>Anuluj</button>
+                <button onClick={()=>setChCreateOpen(false)} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold ${gb} transition-all`}>{tl('action.cancel')}</button>
                 <button onClick={handleCreateCh} disabled={!newChName.trim()}
                   className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all">
                   Utwórz kanał
@@ -22775,7 +22775,7 @@ export default function App() {
                   </div>
                 )}
                 <div className="flex gap-2">
-                  <button onClick={()=>setCatCreateOpen(false)} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold ${gb} transition-all`}>Anuluj</button>
+                  <button onClick={()=>setCatCreateOpen(false)} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold ${gb} transition-all`}>{tl('action.cancel')}</button>
                   <button onClick={handleCreateCat} disabled={!newCatName.trim()}
                     className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all">
                     Utwórz kategorię
@@ -24384,18 +24384,18 @@ export default function App() {
                           <div className="flex-1">
                             <p className="text-sm font-semibold text-white">Spotify</p>
                             {ownSpotify?.connected
-                              ? <p className="text-xs text-zinc-500">Połączono jako {ownSpotify.display_name}</p>
-                              : <p className="text-xs text-zinc-500">Nie połączono</p>}
+                              ? <p className="text-xs text-zinc-500">{tl('connections.connectedAs')} {ownSpotify.display_name}</p>
+                              : <p className="text-xs text-zinc-500">{tl('connections.notConnected')}</p>}
                           </div>
                           {ownSpotify?.connected
-                            ? <button onClick={async()=>{ try { await spotifyApi.disconnect(); setOwnSpotify(null); addToast('Spotify odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Spotify','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
-                            : <button onClick={async()=>{ try { const r = await spotifyApi.connect(); await openOAuth(r.url, 'spotify'); } catch(e:any){ addToast(e.message||'Błąd Spotify','error'); } }} className="text-xs text-[#1DB954] flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-[#1DB954]/30 hover:bg-[#1DB954]/10">Połącz</button>}
+                            ? <button onClick={async()=>{ try { await spotifyApi.disconnect(); setOwnSpotify(null); addToast(`Spotify ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||`${tl('connections.disconnectError')} Spotify`,'error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> {tl('connections.disconnect')}</button>
+                            : <button onClick={async()=>{ try { const r = await spotifyApi.connect(); await openOAuth(r.url, 'spotify'); } catch(e:any){ addToast(e.message||`${tl('connections.error')} Spotify`,'error'); } }} className="text-xs text-[#1DB954] flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-[#1DB954]/30 hover:bg-[#1DB954]/10">{tl('connections.connect')}</button>}
                         </div>
                         {ownSpotify?.connected && (
                           <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
                             <div>
-                              <p className="text-sm text-white">Wyświetlaj w profilu</p>
-                              <p className="text-xs text-zinc-500 mt-0.5">Inni widzą co teraz grasz</p>
+                              <p className="text-sm text-white">{tl('connections.showOnProfile')}</p>
+                              <p className="text-xs text-zinc-500 mt-0.5">{tl('connections.spotify.desc')}</p>
                             </div>
                             <button onClick={async()=>{ const v=!ownSpotify.show_on_profile; await spotifyApi.setSettings({show_on_profile:v}); setOwnSpotify(p=>p?{...p,show_on_profile:v}:p); }}
                               className={`relative w-11 h-6 rounded-full transition-all ${ownSpotify.show_on_profile?'bg-[#1DB954]':'bg-white/[0.1]'}`}>
@@ -24415,18 +24415,18 @@ export default function App() {
                           <div className="flex-1">
                             <p className="text-sm font-semibold text-white">Twitch</p>
                             {ownTwitch?.connected
-                              ? <p className="text-xs text-zinc-500">Połączono jako {ownTwitch.display_name || ownTwitch.login}</p>
-                              : <p className="text-xs text-zinc-500">Nie połączono</p>}
+                              ? <p className="text-xs text-zinc-500">{tl('connections.connectedAs')} {ownTwitch.display_name || ownTwitch.login}</p>
+                              : <p className="text-xs text-zinc-500">{tl('connections.notConnected')}</p>}
                           </div>
                           {ownTwitch?.connected
-                            ? <button onClick={async()=>{ try { await twitchApi.disconnect(); setOwnTwitch(null); addToast('Twitch odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Twitch','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
-                            : <button onClick={async()=>{ try { const r = await twitchApi.connect(); await openOAuth(r.url, 'twitch'); } catch(e:any){ addToast(e.message||'Błąd Twitch','error'); } }} className="text-xs text-purple-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-purple-500/30 hover:bg-purple-500/10">Połącz</button>}
+                            ? <button onClick={async()=>{ try { await twitchApi.disconnect(); setOwnTwitch(null); addToast(`Twitch ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||`${tl('connections.disconnectError')} Twitch`,'error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> {tl('connections.disconnect')}</button>
+                            : <button onClick={async()=>{ try { const r = await twitchApi.connect(); await openOAuth(r.url, 'twitch'); } catch(e:any){ addToast(e.message||`${tl('connections.error')} Twitch`,'error'); } }} className="text-xs text-purple-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-purple-500/30 hover:bg-purple-500/10">{tl('connections.connect')}</button>}
                         </div>
                         {ownTwitch?.connected && (
                           <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
                             <div>
-                              <p className="text-sm text-white">Wyświetlaj w profilu</p>
-                              <p className="text-xs text-zinc-500 mt-0.5">Inni widzą kiedy streamujesz</p>
+                              <p className="text-sm text-white">{tl('connections.showOnProfile')}</p>
+                              <p className="text-xs text-zinc-500 mt-0.5">{tl('connections.twitch.desc')}</p>
                             </div>
                             <button onClick={async()=>{ const v=!ownTwitch.show_on_profile; await twitchApi.setSettings({show_on_profile:v}); setOwnTwitch(p=>p?{...p,show_on_profile:v}:p); }}
                               className={`relative w-11 h-6 rounded-full transition-all ${ownTwitch.show_on_profile?'bg-purple-500':'bg-white/[0.1]'}`}>
@@ -24445,18 +24445,18 @@ export default function App() {
                           <div className="flex-1">
                             <p className="text-sm font-semibold text-white">Steam</p>
                             {ownSteam?.connected
-                              ? <p className="text-xs text-zinc-500">Połączono jako {ownSteam.display_name}</p>
-                              : <p className="text-xs text-zinc-500">Nie połączono</p>}
+                              ? <p className="text-xs text-zinc-500">{tl('connections.connectedAs')} {ownSteam.display_name}</p>
+                              : <p className="text-xs text-zinc-500">{tl('connections.notConnected')}</p>}
                           </div>
                           {ownSteam?.connected
-                            ? <button onClick={async()=>{ try { await steamApi.disconnect(); setOwnSteam(null); addToast('Steam odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Steam','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
-                            : <button onClick={async()=>{ try { const r = await steamApi.connect(); await openOAuth(r.url, 'steam'); } catch(e:any){ addToast(e.message||'Błąd Steam','error'); } }} className="text-xs text-blue-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-blue-500/30 hover:bg-blue-500/10">Połącz</button>}
+                            ? <button onClick={async()=>{ try { await steamApi.disconnect(); setOwnSteam(null); addToast(`Steam ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||`${tl('connections.disconnectError')} Steam`,'error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> {tl('connections.disconnect')}</button>
+                            : <button onClick={async()=>{ try { const r = await steamApi.connect(); await openOAuth(r.url, 'steam'); } catch(e:any){ addToast(e.message||`${tl('connections.error')} Steam`,'error'); } }} className="text-xs text-blue-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-blue-500/30 hover:bg-blue-500/10">{tl('connections.connect')}</button>}
                         </div>
                         {ownSteam?.connected && (
                           <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
                             <div>
-                              <p className="text-sm text-white">Wyświetlaj w profilu</p>
-                              <p className="text-xs text-zinc-500 mt-0.5">Inni widzą co grasz na Steam</p>
+                              <p className="text-sm text-white">{tl('connections.showOnProfile')}</p>
+                              <p className="text-xs text-zinc-500 mt-0.5">{tl('connections.steam.desc')}</p>
                             </div>
                             <button onClick={async()=>{ const v=!ownSteam.show_on_profile; await steamApi.setSettings({show_on_profile:v}); setOwnSteam(p=>p?{...p,show_on_profile:v}:p); }}
                               className={`relative w-11 h-6 rounded-full transition-all ${ownSteam.show_on_profile?'bg-blue-500':'bg-white/[0.1]'}`}>
@@ -24476,17 +24476,17 @@ export default function App() {
                             <p className="text-sm font-semibold text-white">YouTube</p>
                             {ownYoutube?.connected
                               ? <p className="text-xs text-zinc-500">{ownYoutube.display_name}{ownYoutube.subscriber_count != null ? ` · ${fmtSubsConn(ownYoutube.subscriber_count)} sub.` : ''}</p>
-                              : <p className="text-xs text-zinc-500">Nie połączono</p>}
+                              : <p className="text-xs text-zinc-500">{tl('connections.notConnected')}</p>}
                           </div>
                           {ownYoutube?.connected
-                            ? <button onClick={async()=>{ try { await youtubeApi.disconnect(); setOwnYoutube(null); addToast('YouTube odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
-                            : <button onClick={async()=>{ try { const r = await youtubeApi.connect(); await openOAuth(r.url, 'youtube'); } catch(e:any){ addToast(e.message||'Błąd YouTube','error'); } }} className="text-xs text-[#FF0000] flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-red-500/30 hover:bg-red-500/10">Połącz</button>}
+                            ? <button onClick={async()=>{ try { await youtubeApi.disconnect(); setOwnYoutube(null); addToast(`YouTube ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||'Błąd','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> {tl('connections.disconnect')}</button>
+                            : <button onClick={async()=>{ try { const r = await youtubeApi.connect(); await openOAuth(r.url, 'youtube'); } catch(e:any){ addToast(e.message||`${tl('connections.error')} YouTube`,'error'); } }} className="text-xs text-[#FF0000] flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-red-500/30 hover:bg-red-500/10">{tl('connections.connect')}</button>}
                         </div>
                         {ownYoutube?.connected && (
                           <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
                             <div>
-                              <p className="text-sm text-white">Wyświetlaj w profilu</p>
-                              <p className="text-xs text-zinc-500 mt-0.5">Inni widzą Twój kanał YouTube</p>
+                              <p className="text-sm text-white">{tl('connections.showOnProfile')}</p>
+                              <p className="text-xs text-zinc-500 mt-0.5">{tl('connections.youtube.desc')}</p>
                             </div>
                             <button onClick={async()=>{ const v=!ownYoutube.show_on_profile; await youtubeApi.setSettings({show_on_profile:v}); setOwnYoutube(p=>p?{...p,show_on_profile:v}:p); }}
                               className={`relative w-11 h-6 rounded-full transition-all ${ownYoutube.show_on_profile?'bg-[#FF0000]':'bg-white/[0.1]'}`}>
@@ -24505,18 +24505,18 @@ export default function App() {
                           <div className="flex-1">
                             <p className="text-sm font-semibold text-white">Kick</p>
                             {ownKick?.connected
-                              ? <p className="text-xs text-zinc-500">Połączono jako {ownKick.display_name || ownKick.username}{ownKick.is_live ? ' · 🔴 NA ŻYWO' : ''}</p>
-                              : <p className="text-xs text-zinc-500">Nie połączono</p>}
+                              ? <p className="text-xs text-zinc-500">{tl('connections.connectedAs')} {ownKick.display_name || ownKick.username}{ownKick.is_live ? ` · 🔴 ${tl('connections.live')}` : ''}</p>
+                              : <p className="text-xs text-zinc-500">{tl('connections.notConnected')}</p>}
                           </div>
                           {ownKick?.connected
-                            ? <button onClick={async()=>{ try { await kickApi.disconnect(); setOwnKick(null); addToast('Kick odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
-                            : <button onClick={async()=>{ try { const r = await kickApi.connect(); await openOAuth(r.url, 'kick'); } catch(e:any){ addToast(e.message||'Błąd Kick','error'); } }} className="text-xs text-[#53fc18] flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-[#53fc18]/30 hover:bg-[#53fc18]/10">Połącz</button>}
+                            ? <button onClick={async()=>{ try { await kickApi.disconnect(); setOwnKick(null); addToast(`Kick ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||'Błąd','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> {tl('connections.disconnect')}</button>
+                            : <button onClick={async()=>{ try { const r = await kickApi.connect(); await openOAuth(r.url, 'kick'); } catch(e:any){ addToast(e.message||`${tl('connections.error')} Kick`,'error'); } }} className="text-xs text-[#53fc18] flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-[#53fc18]/30 hover:bg-[#53fc18]/10">{tl('connections.connect')}</button>}
                         </div>
                         {ownKick?.connected && (
                           <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
                             <div>
-                              <p className="text-sm text-white">Wyświetlaj w profilu</p>
-                              <p className="text-xs text-zinc-500 mt-0.5">Inni widzą kiedy streamujesz na Kick</p>
+                              <p className="text-sm text-white">{tl('connections.showOnProfile')}</p>
+                              <p className="text-xs text-zinc-500 mt-0.5">{tl('connections.kick.desc')}</p>
                             </div>
                             <button onClick={async()=>{ const v=!ownKick.show_on_profile; await kickApi.setSettings({show_on_profile:v}); setOwnKick(p=>p?{...p,show_on_profile:v}:p); }}
                               className={`relative w-11 h-6 rounded-full transition-all ${ownKick.show_on_profile?'bg-[#53fc18]':'bg-white/[0.1]'}`}>
@@ -24535,11 +24535,11 @@ export default function App() {
                           <div className="flex-1">
                             <p className="text-sm font-semibold text-white">Epic Games</p>
                             {ownEpic?.connected
-                              ? <p className="text-xs text-zinc-500">Połączono jako {ownEpic.display_name}{(ownEpic.fortnite_matches ?? 0) > 0 ? ` · ${(ownEpic.fortnite_wins??0)} wygranych` : ''}</p>
-                              : <p className="text-xs text-zinc-500">Nie połączono</p>}
+                              ? <p className="text-xs text-zinc-500">{tl('connections.connectedAs')} {ownEpic.display_name}{(ownEpic.fortnite_matches ?? 0) > 0 ? ` · ${(ownEpic.fortnite_wins??0)} ${tl('connections.epic.wins')}` : ''}</p>
+                              : <p className="text-xs text-zinc-500">{tl('connections.notConnected')}</p>}
                           </div>
                           {ownEpic?.connected && (
-                            <button onClick={async()=>{ try { await epicApi.disconnect(); setOwnEpic(null); addToast('Epic Games odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
+                            <button onClick={async()=>{ try { await epicApi.disconnect(); setOwnEpic(null); addToast(`Epic Games ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||'Błąd','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> {tl('connections.disconnect')}</button>
                           )}
                         </div>
                         {!ownEpic?.connected && (
@@ -24549,16 +24549,16 @@ export default function App() {
                               onChange={e=>setEpicConnectName(e.target.value)}
                               placeholder="Epic display name"
                               className="flex-1 bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-white/20 transition-all"
-                              onKeyDown={async e=>{ if(e.key==='Enter' && epicConnectName.trim()){ try { const r=await epicApi.connect(epicConnectName.trim()); setOwnEpic(r); setEpicConnectName(''); addToast('Epic Games połączono','success'); } catch(err:any){ addToast(err.message||'Błąd Epic','error'); } } }}
+                              onKeyDown={async e=>{ if(e.key==='Enter' && epicConnectName.trim()){ try { const r=await epicApi.connect(epicConnectName.trim()); setOwnEpic(r); setEpicConnectName(''); addToast(`Epic Games ${tl('connections.connectedToast')}`,'success'); } catch(err:any){ addToast(err.message||`${tl('connections.error')} Epic`,'error'); } } }}
                             />
-                            <button onClick={async()=>{ if(!epicConnectName.trim())return; try { const r=await epicApi.connect(epicConnectName.trim()); setOwnEpic(r); setEpicConnectName(''); addToast('Epic Games połączono','success'); } catch(err:any){ addToast(err.message||'Błąd Epic','error'); } }} className="text-xs text-zinc-300 px-3 py-2 rounded-xl border border-white/[0.1] hover:bg-white/[0.06] transition-all">Połącz</button>
+                            <button onClick={async()=>{ if(!epicConnectName.trim())return; try { const r=await epicApi.connect(epicConnectName.trim()); setOwnEpic(r); setEpicConnectName(''); addToast(`Epic Games ${tl('connections.connectedToast')}`,'success'); } catch(err:any){ addToast(err.message||`${tl('connections.error')} Epic`,'error'); } }} className="text-xs text-zinc-300 px-3 py-2 rounded-xl border border-white/[0.1] hover:bg-white/[0.06] transition-all">{tl('connections.connect')}</button>
                           </div>
                         )}
                         {ownEpic?.connected && (
                           <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
                             <div>
-                              <p className="text-sm text-white">Wyświetlaj w profilu</p>
-                              <p className="text-xs text-zinc-500 mt-0.5">Inni widzą Twoje konto Epic / statystyki Fortnite</p>
+                              <p className="text-sm text-white">{tl('connections.showOnProfile')}</p>
+                              <p className="text-xs text-zinc-500 mt-0.5">{tl('connections.epic.desc')}</p>
                             </div>
                             <button onClick={async()=>{ const v=!ownEpic.show_on_profile; await epicApi.setSettings({show_on_profile:v}); setOwnEpic(p=>p?{...p,show_on_profile:v}:p); }}
                               className={`relative w-11 h-6 rounded-full transition-all ${ownEpic.show_on_profile?'bg-zinc-400':'bg-white/[0.1]'}`}>
