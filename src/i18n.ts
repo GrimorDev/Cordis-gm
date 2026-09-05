@@ -583,6 +583,32 @@ const T: Record<string, Record<Locale, string>> = {
   'voice.low':              { pl: 'mało',                        en: 'low',                     cs: 'málo',                        de: 'wenig'                     },
   'voice.high':             { pl: 'dużo',                        en: 'high',                    cs: 'hodně',                       de: 'viel'                      },
   'voice.noiseGateHint':   { pl: 'Bramka ignoruje krótkie dźwięki (klawiatura, stuki w biurko) — reaguje tylko na trwały głos', en: 'The gate ignores short sounds (keyboard, desk taps) — it only reacts to sustained voice', cs: 'Brána ignoruje krátké zvuky (klávesnice, klepání na stůl) — reaguje pouze na trvalý hlas', de: 'Das Gate ignoriert kurze Geräusche (Tastatur, Klopfen auf den Tisch) — es reagiert nur auf anhaltende Stimme' },
+
+  // ── Pinned messages panel ────────────────────────────────────────────────
+  'pins.title':            { pl: 'Przypięte',                    en: 'Pinned',                  cs: 'Připnuté',                    de: 'Angeheftet'                },
+  'pins.empty':            { pl: 'Brak przypiętych wiadomości',  en: 'No pinned messages',      cs: 'Žádné připnuté zprávy',       de: 'Keine angehefteten Nachrichten' },
+  'pins.unpin':            { pl: 'Odepnij',                      en: 'Unpin',                   cs: 'Odepnout',                    de: 'Lösen'                     },
+
+  // ── Forum channel ─────────────────────────────────────────────────────────
+  'forum.posts':           { pl: 'Posty',                        en: 'Posts',                   cs: 'Příspěvky',                   de: 'Beiträge'                  },
+  'forum.createPost':      { pl: 'Utwórz post',                  en: 'Create post',             cs: 'Vytvořit příspěvek',          de: 'Beitrag erstellen'         },
+  'forum.newPost':         { pl: 'Nowy post',                    en: 'New post',                cs: 'Nový příspěvek',              de: 'Neuer Beitrag'             },
+  'forum.titlePh':         { pl: 'Tytuł posta...',               en: 'Post title...',           cs: 'Název příspěvku...',          de: 'Beitragstitel...'          },
+  'forum.contentPh':       { pl: 'Treść posta...',               en: 'Post content...',         cs: 'Obsah příspěvku...',          de: 'Beitragsinhalt...'         },
+  'forum.imageUrlPh':      { pl: 'URL obrazka (opcjonalnie)...', en: 'Image URL (optional)...', cs: 'URL obrázku (volitelné)...', de: 'Bild-URL (optional)...'    },
+  'forum.publish':         { pl: 'Opublikuj',                    en: 'Publish',                 cs: 'Zveřejnit',                   de: 'Veröffentlichen'           },
+  'forum.noPosts':         { pl: 'Brak postów',                  en: 'No posts',                cs: 'Žádné příspěvky',             de: 'Keine Beiträge'            },
+  'forum.beFirst':         { pl: 'Bądź pierwszy i utwórz nowy post!', en: 'Be the first to create a new post!', cs: 'Buďte první a vytvořte nový příspěvek!', de: 'Sei der Erste und erstelle einen neuen Beitrag!' },
+  'forum.pinned':          { pl: 'Przypięty',                    en: 'Pinned',                  cs: 'Připnuto',                    de: 'Angeheftet'                },
+  'forum.backToList':      { pl: 'Wróć do listy',                en: 'Back to list',            cs: 'Zpět na seznam',              de: 'Zurück zur Liste'          },
+  'forum.replies':         { pl: 'Odpowiedzi',                   en: 'Replies',                 cs: 'Odpovědi',                    de: 'Antworten'                 },
+  'forum.locked':          { pl: 'Ten wątek jest zablokowany',   en: 'This thread is locked',   cs: 'Toto vlákno je uzamčeno',     de: 'Dieser Thread ist gesperrt' },
+  'forum.replyPh':         { pl: 'Napisz odpowiedź...',          en: 'Write a reply...',        cs: 'Napište odpověď...',          de: 'Schreib eine Antwort...'   },
+  'forum.reply':           { pl: 'Odpowiedz',                    en: 'Reply',                   cs: 'Odpovědět',                   de: 'Antworten'                 },
+
+  // ── Drag & drop file overlay ──────────────────────────────────────────────
+  'dnd.dropHere':          { pl: 'Upuść plik tutaj',             en: 'Drop file here',          cs: 'Přetáhněte soubor sem',       de: 'Datei hier ablegen'        },
+  'dnd.fileTypes':         { pl: 'Obrazy, audio, wideo, kod, archiwa i więcej', en: 'Images, audio, video, code, archives and more', cs: 'Obrázky, zvuk, video, kód, archivy a další', de: 'Bilder, Audio, Video, Code, Archive und mehr' },
   'settings.desktop':        { pl: 'Aplikacja',                en: 'Application',             cs: 'Aplikace',                  de: 'Anwendung'                 },
   'settings.updates':        { pl: 'Aktualizacje',             en: 'Updates',                 cs: 'Aktualizace',               de: 'Aktualisierungen'          },
   'settings.about':          { pl: 'O aplikacji',              en: 'About',                   cs: 'O aplikaci',                de: 'Über die App'              },

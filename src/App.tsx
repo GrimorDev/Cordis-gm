@@ -18023,12 +18023,12 @@ export default function App() {
                     transition={{type:'spring',stiffness:300,damping:30}}
                     className="absolute top-[57px] right-0 bottom-0 w-80 bg-[#141420] border-l border-white/[0.06] z-20 flex flex-col shadow-2xl">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
-                      <div className="flex items-center gap-2 text-white font-semibold text-sm"><Pin size={13} className="text-amber-400"/>Przypięte</div>
+                      <div className="flex items-center gap-2 text-white font-semibold text-sm"><Pin size={13} className="text-amber-400"/>{tl('pins.title')}</div>
                       <button onClick={()=>setShowPinned(false)} className="text-zinc-600 hover:text-white transition-colors"><X size={15}/></button>
                     </div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-3 flex flex-col gap-2">
                       {pinnedMsgs.length===0?(
-                        <div className="text-center text-zinc-600 text-sm py-8">Brak przypiętych wiadomości</div>
+                        <div className="text-center text-zinc-600 text-sm py-8">{tl('pins.empty')}</div>
                       ):pinnedMsgs.map(msg=>(
                         <div key={msg.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
                           <div className="flex items-center gap-2 mb-1.5">
@@ -18040,7 +18040,7 @@ export default function App() {
                           {canPinMessages&&(
                             <button onClick={()=>handlePinMessage(msg.id,false)}
                               className="mt-2 flex items-center gap-1 text-[10px] text-zinc-600 hover:text-rose-400 transition-colors">
-                              <PinOff size={10}/> Odepnij
+                              <PinOff size={10}/> {tl('pins.unpin')}
                             </button>
                           )}
                         </div>
@@ -18057,30 +18057,30 @@ export default function App() {
                     /* Post list */
                     <div className="p-4 md:p-6 max-w-3xl mx-auto">
                       <div className="flex items-center justify-between mb-5">
-                        <h2 className="text-lg font-bold text-white">Posty</h2>
+                        <h2 className="text-lg font-bold text-white">{tl('forum.posts')}</h2>
                         <button onClick={()=>setShowNewPost(v=>!v)}
                           className="flex items-center gap-2 bg-indigo-500 hover:bg-indigo-400 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-indigo-500/20">
-                          <Plus size={14}/> Utwórz post
+                          <Plus size={14}/> {tl('forum.createPost')}
                         </button>
                       </div>
 
                       {/* New post form */}
                       {showNewPost && (
                         <div className="mb-5 p-4 bg-white/[0.03] border border-white/[0.08] rounded-2xl">
-                          <h3 className="text-sm font-semibold text-white mb-3">Nowy post</h3>
+                          <h3 className="text-sm font-semibold text-white mb-3">{tl('forum.newPost')}</h3>
                           <input value={newPostTitle} onChange={e=>setNewPostTitle(e.target.value)}
-                            placeholder="Tytuł posta..." maxLength={200}
+                            placeholder={tl('forum.titlePh')} maxLength={200}
                             className="w-full bg-white/[0.06] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 transition-all mb-2"/>
                           <textarea value={newPostContent} onChange={e=>setNewPostContent(e.target.value)}
-                            placeholder="Treść posta..." rows={4}
+                            placeholder={tl('forum.contentPh')} rows={4}
                             className="w-full bg-white/[0.06] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 transition-all resize-none mb-2"/>
                           <input value={newPostImage} onChange={e=>setNewPostImage(e.target.value)}
-                            placeholder="URL obrazka (opcjonalnie)..."
+                            placeholder={tl('forum.imageUrlPh')}
                             className="w-full bg-white/[0.06] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 transition-all mb-3"/>
                           <div className="flex gap-2 justify-end">
                             <button onClick={()=>{setShowNewPost(false);setNewPostTitle('');setNewPostContent('');setNewPostImage('');}}
                               className="px-4 py-2 rounded-xl text-sm text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors">
-                              Anuluj
+                              {tl('action.cancel')}
                             </button>
                             <button disabled={!newPostTitle.trim()||!newPostContent.trim()} onClick={async()=>{
                               try {
@@ -18088,7 +18088,7 @@ export default function App() {
                                 setForumPosts(prev=>[p,...prev]); setShowNewPost(false); setNewPostTitle(''); setNewPostContent(''); setNewPostImage('');
                               } catch {}
                             }} className="px-4 py-2 rounded-xl text-sm font-semibold bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors">
-                              Opublikuj
+                              {tl('forum.publish')}
                             </button>
                           </div>
                         </div>
@@ -18100,8 +18100,8 @@ export default function App() {
                           <div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center mb-4">
                             <MessageSquare size={26} className="text-zinc-600"/>
                           </div>
-                          <h3 className="text-base font-bold text-white mb-1">Brak postów</h3>
-                          <p className="text-sm text-zinc-500">Bądź pierwszy i utwórz nowy post!</p>
+                          <h3 className="text-base font-bold text-white mb-1">{tl('forum.noPosts')}</h3>
+                          <p className="text-sm text-zinc-500">{tl('forum.beFirst')}</p>
                         </div>
                       )}
                       <div className="flex flex-col gap-3">
@@ -18118,7 +18118,7 @@ export default function App() {
                               </div>
                             )}
                             <div className="p-4">
-                              {post.pinned&&<span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 uppercase tracking-wide mb-1"><Sparkles size={9}/> Przypięty</span>}
+                              {post.pinned&&<span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 uppercase tracking-wide mb-1"><Sparkles size={9}/> {tl('forum.pinned')}</span>}
                               <h3 className="font-bold text-white text-sm mb-2 group-hover:text-indigo-300 transition-colors">{post.title}</h3>
                               <p className="text-xs text-zinc-500 line-clamp-2 mb-3">{post.content}</p>
                               <div className="flex items-center gap-3">
@@ -18140,7 +18140,7 @@ export default function App() {
                     /* Thread view */
                     <div className="p-4 md:p-6 max-w-3xl mx-auto">
                       <button onClick={()=>setForumPost(null)} className="flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-colors mb-4">
-                        <ArrowLeft size={14}/> Wróć do listy
+                        <ArrowLeft size={14}/> {tl('forum.backToList')}
                       </button>
                       {/* Post */}
                       <div className="bg-white/[0.03] border border-white/[0.08] rounded-2xl overflow-hidden mb-4">
@@ -18150,7 +18150,7 @@ export default function App() {
                           <div className="flex items-center gap-3 mb-4">
                             <img src={staticUrl(forumPost.author_avatar)||`https://ui-avatars.com/api/?name=${forumPost.author_username}&background=random`} className="w-7 h-7 rounded-full object-cover" alt=""/>
                             <span className="text-sm font-semibold text-zinc-300">{forumPost.author_username}</span>
-                            <span className="text-xs text-zinc-600">{new Date(forumPost.created_at).toLocaleString('pl-PL')}</span>
+                            <span className="text-xs text-zinc-600">{fmtDate(forumPost.created_at)}</span>
                             {(currentUser?.id===forumPost.author_id||canManageMessages)&&(
                               <button onClick={async()=>{
                                 try { await forumApi.deletePost(activeChannel,forumPost.id); setForumPost(null); setForumPosts(p=>p.filter(x=>x.id!==forumPost.id)); } catch {}
@@ -18164,15 +18164,15 @@ export default function App() {
                       </div>
                       {/* Replies */}
                       <div className="flex flex-col gap-2 mb-4">
-                        <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1">Odpowiedzi ({forumPost.replies?.length||0})</h3>
-                        {forumPost.locked&&<div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-400"><Lock size={11}/>Ten wątek jest zablokowany</div>}
+                        <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1">{tl('forum.replies')} ({forumPost.replies?.length||0})</h3>
+                        {forumPost.locked&&<div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-400"><Lock size={11}/>{tl('forum.locked')}</div>}
                         {(forumPost.replies||[]).map(r=>(
                           <div key={r.id} className="flex gap-3 bg-white/[0.02] border border-white/[0.06] rounded-xl p-3">
                             <img src={staticUrl(r.author_avatar)||`https://ui-avatars.com/api/?name=${r.author_username}&background=random`} className="w-7 h-7 rounded-full object-cover shrink-0 mt-0.5" alt=""/>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
                                 <span className="text-xs font-semibold text-zinc-300">{r.author_username}</span>
-                                <span className="text-[10px] text-zinc-600">{new Date(r.created_at).toLocaleString('pl-PL')}</span>
+                                <span className="text-[10px] text-zinc-600">{fmtDate(r.created_at)}</span>
                               </div>
                               <p className="text-sm text-zinc-400 leading-relaxed">{r.content}</p>
                             </div>
@@ -18183,7 +18183,7 @@ export default function App() {
                             <img src={staticUrl(currentUser?.avatar_url)||`https://ui-avatars.com/api/?name=${currentUser?.username||'?'}&background=random`} className="w-7 h-7 rounded-full object-cover shrink-0 mt-2" alt=""/>
                             <div className="flex-1">
                               <textarea value={replyContent} onChange={e=>setReplyContent(e.target.value)}
-                                placeholder="Napisz odpowiedź..." rows={2}
+                                placeholder={tl('forum.replyPh')} rows={2}
                                 className="w-full bg-white/[0.06] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 transition-all resize-none mb-2"/>
                               <button disabled={!replyContent.trim()||replySending} onClick={async()=>{
                                 setReplySending(true);
@@ -18194,7 +18194,7 @@ export default function App() {
                                   setReplyContent('');
                                 } catch {} finally { setReplySending(false); }
                               }} className="px-4 py-2 rounded-xl text-sm font-semibold bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors flex items-center gap-2">
-                                {replySending&&<Loader2 size={13} className="animate-spin"/>} Odpowiedz
+                                {replySending&&<Loader2 size={13} className="animate-spin"/>} {tl('forum.reply')}
                               </button>
                             </div>
                           </div>
@@ -18272,8 +18272,8 @@ export default function App() {
                       <FileCode2 size={28} className="text-emerald-400 opacity-80"/>
                       <FileArchive size={28} className="text-amber-400 opacity-80"/>
                     </div>
-                    <p className="text-base font-bold text-white">Upuść plik tutaj</p>
-                    <p className="text-xs text-zinc-400 mt-1">Obrazy, audio, wideo, kod, archiwa i więcej</p>
+                    <p className="text-base font-bold text-white">{tl('dnd.dropHere')}</p>
+                    <p className="text-xs text-zinc-400 mt-1">{tl('dnd.fileTypes')}</p>
                   </div>
                 )}
 
