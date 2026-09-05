@@ -4493,8 +4493,8 @@ function ServerSettingsPage({
                       <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">{tl('invites.validity')}</label>
                       <select value={inviteDur} onChange={e => setInviteDur(e.target.value)} className={selCls + ' w-full'}>
                         <option value="1800">{tl('invites.dur.30m')}</option>
-                        <option value="3600">{tl('invites.dur.1h')}</option>
-                        <option value="21600">{tl('invites.dur.6h')}</option>
+                        <option value="3600">{tl('channel.slowmode.1h')}</option>
+                        <option value="21600">{tl('channel.slowmode.6h')}</option>
                         <option value="86400">{tl('invites.dur.1d')}</option>
                         <option value="259200">{tl('invites.dur.3d')}</option>
                         <option value="604800">{tl('invites.dur.7d')}</option>
@@ -19481,11 +19481,11 @@ export default function App() {
                         <div className="relative shrink-0">
                           <button type="button"
                             onClick={()=>{
-                              if (!canAttachFiles) { setSendError('Nie masz uprawnień do wysyłania plików'); return; }
+                              if (!canAttachFiles) { setSendError(tl('compose.noAttachPerm')); return; }
                               setPlusMenuOpen(v=>!v);
                               setShowEmojiPicker(false); setShowGifPicker(false);
                             }}
-                            title="Dodaj załącznik"
+                            title={tl('compose.addAttachment')}
                             className={`w-7 h-7 flex items-center justify-center rounded-xl transition-all shrink-0 active:scale-90 ${plusMenuOpen?'text-indigo-400 bg-indigo-500/10':canAttachFiles?'text-zinc-600 hover:text-indigo-400 hover:bg-indigo-500/10':'text-zinc-700 cursor-not-allowed'}`}>
                             <Plus size={16}/>
                           </button>
@@ -19503,8 +19503,8 @@ export default function App() {
                                     <Paperclip size={15} className="text-indigo-400"/>
                                   </div>
                                   <div>
-                                    <p className="font-semibold text-sm leading-tight">Prześlij plik</p>
-                                    <p className="text-[10px] text-zinc-600 leading-tight">Zdjęcia, wideo, dokumenty…</p>
+                                    <p className="font-semibold text-sm leading-tight">{tl('compose.uploadFile')}</p>
+                                    <p className="text-[10px] text-zinc-600 leading-tight">{tl('compose.uploadFileDesc')}</p>
                                   </div>
                                 </button>
                                 {/* Wklej ze schowka */}
@@ -19512,7 +19512,7 @@ export default function App() {
                                   onClick={async ()=>{
                                     setPlusMenuOpen(false);
                                     if (!navigator.clipboard?.read) {
-                                      addToast('Wklej plik skrótem Ctrl+V lub przeciągnij na okno czatu', 'info'); return;
+                                      addToast(tl('compose.pasteHint'), 'info'); return;
                                     }
                                     try {
                                       const clipItems = await navigator.clipboard.read();
@@ -19531,11 +19531,11 @@ export default function App() {
                                           applyClipboardFile(new File([blob], `paste-${Date.now()}.${ext}`, { type: fileType })); return;
                                         }
                                       }
-                                      addToast('Schowek nie zawiera obrazka ani pliku', 'info');
+                                      addToast(tl('compose.clipboardEmpty'), 'info');
                                     } catch {
                                       addToast(isTauri
-                                        ? 'Brak dostępu do schowka — użyj skrótu Ctrl+V aby wkleić'
-                                        : 'Brak dostępu do schowka — zezwól w ustawieniach przeglądarki', 'error');
+                                        ? tl('compose.clipboardNoAccessTauri')
+                                        : tl('compose.clipboardNoAccessWeb'), 'error');
                                     }
                                   }}
                                   className="flex items-center gap-3 w-full px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
@@ -19543,8 +19543,8 @@ export default function App() {
                                     <Clipboard size={15} className="text-sky-400"/>
                                   </div>
                                   <div>
-                                    <p className="font-semibold text-sm leading-tight">Wklej ze schowka</p>
-                                    <p className="text-[10px] text-zinc-600 leading-tight">Obrazek, screenshot lub plik</p>
+                                    <p className="font-semibold text-sm leading-tight">{tl('compose.pasteFromClipboard')}</p>
+                                    <p className="text-[10px] text-zinc-600 leading-tight">{tl('compose.pasteFromClipboardDesc')}</p>
                                   </div>
                                 </button>
                                 {/* Utwórz ankietę — tylko na serwerach */}
@@ -19556,8 +19556,8 @@ export default function App() {
                                       <BarChart2 size={15} className="text-violet-400"/>
                                     </div>
                                     <div>
-                                      <p className="font-semibold text-sm leading-tight">Utwórz ankietę</p>
-                                      <p className="text-[10px] text-zinc-600 leading-tight">Głosowanie dla członków serwera</p>
+                                      <p className="font-semibold text-sm leading-tight">{tl('poll.create')}</p>
+                                      <p className="text-[10px] text-zinc-600 leading-tight">{tl('compose.usePollDesc')}</p>
                                     </div>
                                   </button>
                                 )}
@@ -19574,8 +19574,8 @@ export default function App() {
                                       <Zap size={15} className="text-emerald-400"/>
                                     </div>
                                     <div>
-                                      <p className="font-semibold text-sm leading-tight">Użyj aplikacji</p>
-                                      <p className="text-[10px] text-zinc-600 leading-tight">Komendy botów zaczynające się od /</p>
+                                      <p className="font-semibold text-sm leading-tight">{tl('compose.useApp')}</p>
+                                      <p className="text-[10px] text-zinc-600 leading-tight">{tl('compose.useAppDesc')}</p>
                                     </div>
                                   </button>
                                 )}
@@ -19584,7 +19584,7 @@ export default function App() {
                           </AnimatePresence>
                         </div>
                         <button type="button" onClick={()=>setShowFmtBar(v=>!v)}
-                          title="Formatowanie tekstu"
+                          title={tl('compose.textFormatting')}
                           className={`w-7 h-7 flex items-center justify-center rounded-xl transition-all shrink-0 active:scale-90 ${showFmtBar?'text-indigo-400 bg-indigo-500/10':'text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.07]'}`}>
                           <Edit3 size={14}/>
                         </button>
@@ -21319,7 +21319,7 @@ export default function App() {
 
               {/* ── Group 3: Admin actions ── */}
               {canManageChannels&&(<>
-                {ctxRow(<Settings2 size={13}/>, 'Edytuj kanał', ()=>{ openChEdit(ch); setChCtxMenu(null); })}
+                {ctxRow(<Settings2 size={13}/>, tl('channel.edit'), ()=>{ openChEdit(ch); setChCtxMenu(null); })}
                 {ctxRow(<Copy size={13}/>, 'Powiel kanał', async ()=>{
                   try {
                     await channelsApi.create({
@@ -22200,8 +22200,8 @@ export default function App() {
                           <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">{tl('invites.validity')}</label>
                           <select value={inviteDur} onChange={e=>setInviteDur(e.target.value)} className={selCls+' w-full'}>
                             <option value="1800">{tl('invites.dur.30m')}</option>
-                            <option value="3600">{tl('invites.dur.1h')}</option>
-                            <option value="21600">{tl('invites.dur.6h')}</option>
+                            <option value="3600">{tl('channel.slowmode.1h')}</option>
+                            <option value="21600">{tl('channel.slowmode.6h')}</option>
                             <option value="86400">{tl('invites.dur.1d')}</option>
                             <option value="259200">{tl('invites.dur.3d')}</option>
                             <option value="604800">{tl('invites.dur.7d')}</option>
@@ -22415,22 +22415,22 @@ export default function App() {
             <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
               onClick={e=>e.stopPropagation()} className={`${gm} p-7 w-full max-w-md`}>
               <div className="flex items-center justify-between mb-5">
-                <h2 className="text-lg font-bold text-white flex items-center gap-2"><BarChart2 size={18} className="text-indigo-400"/> Utwórz ankietę</h2>
+                <h2 className="text-lg font-bold text-white flex items-center gap-2"><BarChart2 size={18} className="text-indigo-400"/> {tl('poll.create')}</h2>
                 <button onClick={()=>setPollModal({open:false})} className="text-zinc-600 hover:text-white"><X size={17}/></button>
               </div>
               <div className="flex flex-col gap-4">
                 <div>
-                  <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Pytanie</label>
+                  <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('poll.question')}</label>
                   <input value={pollQuestion} onChange={e=>setPollQuestion(e.target.value)}
-                    placeholder="Wpisz pytanie ankiety..." className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
+                    placeholder={tl('poll.questionPh')} className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
                 </div>
                 <div>
-                  <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Opcje ({pollOptions.length})</label>
+                  <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('poll.options')} ({pollOptions.length})</label>
                   <div className="flex flex-col gap-2">
                     {pollOptions.map((opt, i) => (
                       <div key={i} className="flex items-center gap-2">
                         <input value={opt} onChange={e=>{const n=[...pollOptions];n[i]=e.target.value;setPollOptions(n);}}
-                          placeholder={`Opcja ${i+1}`} className={`flex-1 ${gi} rounded-xl px-4 py-2 text-sm`}/>
+                          placeholder={`${tl('poll.optionPh')} ${i+1}`} className={`flex-1 ${gi} rounded-xl px-4 py-2 text-sm`}/>
                         {pollOptions.length > 2 && (
                           <button onClick={()=>setPollOptions(p=>p.filter((_,j)=>j!==i))}
                             className="w-7 h-7 text-rose-400 hover:bg-rose-500/10 rounded-lg flex items-center justify-center transition-colors">
@@ -22442,15 +22442,15 @@ export default function App() {
                     {pollOptions.length < 10 && (
                       <button onClick={()=>setPollOptions(p=>[...p,''])}
                         className={`text-xs ${gb} px-3 py-2 rounded-xl flex items-center gap-1.5`}>
-                        <Plus size={11}/> Dodaj opcję
+                        <Plus size={11}/> {tl('poll.addOption')}
                       </button>
                     )}
                   </div>
                 </div>
                 <div className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-xl px-4 py-3">
                   <div>
-                    <p className="text-sm text-white font-medium">Wielokrotny wybór</p>
-                    <p className="text-xs text-zinc-600">Pozwól głosować na więcej niż jedną opcję</p>
+                    <p className="text-sm text-white font-medium">{tl('poll.multiChoice')}</p>
+                    <p className="text-xs text-zinc-600">{tl('poll.multiChoiceDesc')}</p>
                   </div>
                   <button onClick={()=>setPollMulti(p=>!p)}
                     className={`w-10 h-5 rounded-full transition-all shrink-0 relative ${pollMulti ? 'bg-indigo-500' : 'bg-zinc-700'}`}>
@@ -22474,10 +22474,10 @@ export default function App() {
                       if (activeView === 'dms' && activeDmUserId) await dmsApi.send(activeDmUserId, content, {});
                       else if (activeChannel) await messagesApi.send(activeChannel, content, {});
                       setPollModal({open:false});
-                    } catch (err: any) { addToast(err?.message || 'Błąd tworzenia ankiety', 'error'); }
+                    } catch (err: any) { addToast(err?.message || tl('poll.createError'), 'error'); }
                   }}
                   className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-colors">
-                  Utwórz ankietę
+                  {tl('poll.create')}
                 </button>
               </div>
             </motion.div>
@@ -22492,24 +22492,24 @@ export default function App() {
             className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={()=>setChEditOpen(false)}>
             <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
               onClick={e=>e.stopPropagation()} className={`${gm} rounded-3xl p-7 w-full max-w-md max-h-[90vh] flex flex-col`}>
-              <div className="flex items-center justify-between mb-5 shrink-0"><h2 className="text-lg font-bold text-white">Edytuj kanał</h2><button onClick={()=>setChEditOpen(false)} className="text-zinc-600 hover:text-white"><X size={17}/></button></div>
+              <div className="flex items-center justify-between mb-5 shrink-0"><h2 className="text-lg font-bold text-white">{tl('channel.edit')}</h2><button onClick={()=>setChEditOpen(false)} className="text-zinc-600 hover:text-white"><X size={17}/></button></div>
               <div className="flex flex-col gap-4 overflow-y-auto pr-1">
                 <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.name')}</label>
                   <input value={chForm.name} onChange={e=>setChForm(p=>({...p,name:e.target.value}))} className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/></div>
                 <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.description')}</label>
-                  <input value={chForm.description} onChange={e=>setChForm(p=>({...p,description:e.target.value}))} placeholder="Opis kanału..." className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/></div>
+                  <input value={chForm.description} onChange={e=>setChForm(p=>({...p,description:e.target.value}))} placeholder={tl('channel.descPh')} className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/></div>
                 <div className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] px-4 py-3 rounded-xl">
                   <div className="flex items-center gap-2"><Lock size={14} className="text-zinc-500"/>
-                    <div><p className="text-sm font-semibold text-white">Prywatny</p><p className="text-xs text-zinc-600">Dostępny dla wybranych ról</p></div></div>
+                    <div><p className="text-sm font-semibold text-white">{tl('channel.private')}</p><p className="text-xs text-zinc-600">{tl('channel.privateDesc')}</p></div></div>
                   <button onClick={()=>setChForm(p=>({...p,is_private:!p.is_private}))}
                     className={`w-10 h-6 rounded-full transition-all relative ${chForm.is_private?'bg-indigo-500':'bg-white/[0.08]'}`}>
                     <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${chForm.is_private?'left-5':'left-1'}`}/>
                   </button>
                 </div>
                 {chForm.is_private&&(
-                  <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Dostęp dla ról</label>
+                  <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">{tl('channel.roleAccess')}</label>
                     {roles.length===0 ? (
-                      <p className="text-xs text-zinc-600 italic">Brak ról — utwórz role w ustawieniach serwera.</p>
+                      <p className="text-xs text-zinc-600 italic">{tl('channel.noRoles')}</p>
                     ) : (
                       <div className="flex flex-col gap-2">
                         {roles.map(r=>{
@@ -22526,37 +22526,37 @@ export default function App() {
                 )}
                 {editingCh.type==='text'&&(
                   <div>
-                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Tryb wolny</label>
+                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('channel.slowmode')}</label>
                     <select value={chForm.slowmode_seconds} onChange={e=>setChForm(p=>({...p,slowmode_seconds:parseInt(e.target.value)||0}))}
                       className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}>
-                      <option value="0">Wyłączony</option>
-                      <option value="5">5 sekund</option>
-                      <option value="10">10 sekund</option>
-                      <option value="30">30 sekund</option>
-                      <option value="60">1 minuta</option>
-                      <option value="300">5 minut</option>
-                      <option value="600">10 minut</option>
-                      <option value="3600">{tl('invites.dur.1h')}</option>
-                      <option value="21600">{tl('invites.dur.6h')}</option>
+                      <option value="0">{tl('channel.slowmode.off')}</option>
+                      <option value="5">{tl('channel.slowmode.5s')}</option>
+                      <option value="10">{tl('channel.slowmode.10s')}</option>
+                      <option value="30">{tl('channel.slowmode.30s')}</option>
+                      <option value="60">{tl('channel.slowmode.1m')}</option>
+                      <option value="300">{tl('channel.slowmode.5m')}</option>
+                      <option value="600">{tl('channel.slowmode.10m')}</option>
+                      <option value="3600">{tl('channel.slowmode.1h')}</option>
+                      <option value="21600">{tl('channel.slowmode.6h')}</option>
                     </select>
-                    {chForm.slowmode_seconds>0&&<p className="text-[11px] text-zinc-600 mt-1">Użytkownicy mogą wysyłać wiadomość co {chForm.slowmode_seconds<60?`${chForm.slowmode_seconds}s`:chForm.slowmode_seconds<3600?`${chForm.slowmode_seconds/60} min`:`${chForm.slowmode_seconds/3600} godz`}</p>}
+                    {chForm.slowmode_seconds>0&&<p className="text-[11px] text-zinc-600 mt-1">{tl('channel.slowmodeDesc')} {chForm.slowmode_seconds<60?`${chForm.slowmode_seconds}s`:chForm.slowmode_seconds<3600?`${chForm.slowmode_seconds/60} min`:`${chForm.slowmode_seconds/3600} ${tl('channel.hourAbbr')}`}</p>}
                   </div>
                 )}
                 {editingCh?.type==='text'&&(
                   <div className="flex flex-col gap-3">
                     <div>
-                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Tło kanału</label>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">{tl('channel.background')}</label>
                       <div className="flex gap-2">
                         {/* Upload image */}
                         <label className="flex-1 flex items-center gap-2 cursor-pointer px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:border-indigo-500/40 hover:bg-white/[0.07] transition-all text-sm text-zinc-400 hover:text-zinc-200">
                           <ImageIcon size={14} className="shrink-0 text-indigo-400"/>
-                          <span className="truncate">{chForm.background_url ? 'Zmień zdjęcie' : 'Wgraj zdjęcie'}</span>
+                          <span className="truncate">{chForm.background_url ? tl('channel.changePhoto') : tl('channel.uploadPhoto')}</span>
                           <input type="file" accept="image/*" className="hidden" onChange={async e=>{
                             const f = e.target.files?.[0]; if (!f) return;
                             try {
                               const url = await uploadFile(f, 'attachments');
                               setChForm(p=>({...p, background_url: url}));
-                            } catch { addToast('Błąd wgrywania zdjęcia', 'error'); }
+                            } catch { addToast(tl('channel.uploadPhotoError'), 'error'); }
                             e.target.value='';
                           }}/>
                         </label>
@@ -22574,10 +22574,10 @@ export default function App() {
                       )}
                     </div>
                     <div>
-                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Gradient CSS (opcjonalnie)</label>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('channel.gradientCss')}</label>
                       <input value={chForm.background_gradient} onChange={e=>setChForm(p=>({...p,background_gradient:e.target.value}))}
                         placeholder="linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)" className={`w-full ${gi} rounded-xl px-4 py-2.5 text-xs font-mono`}/>
-                      <p className="text-[10px] text-zinc-700 mt-1">Możesz użyć samego gradientu lub w połączeniu ze zdjęciem</p>
+                      <p className="text-[10px] text-zinc-700 mt-1">{tl('channel.gradientHint')}</p>
                     </div>
                     {chForm.background_gradient && (
                       <div className="h-12 rounded-xl border border-white/[0.06]"
@@ -22586,7 +22586,7 @@ export default function App() {
                     {(chForm.background_url || chForm.background_gradient) && (
                       <button type="button" onClick={()=>setChForm(p=>({...p,background_url:'',background_gradient:''}))}
                         className="text-[11px] text-zinc-600 hover:text-rose-400 transition-colors text-left">
-                        Usuń wszystkie tła
+                        {tl('channel.removeAllBg')}
                       </button>
                     )}
                   </div>
@@ -22594,24 +22594,24 @@ export default function App() {
                 {editingCh?.type==='voice'&&(<>
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest">Limit użytkowników</label>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest">{tl('channel.userLimit')}</label>
                       <span className="text-xs text-zinc-400 font-semibold">{chForm.user_limit===0?'∞':chForm.user_limit}</span>
                     </div>
                     <input type="range" min={0} max={99} value={chForm.user_limit}
                       onChange={e=>setChForm(p=>({...p,user_limit:parseInt(e.target.value)}))}
                       className="w-full accent-indigo-500"/>
-                    <p className="text-[11px] text-zinc-600 mt-1">{chForm.user_limit===0?'Brak limitu – każdy może wejść.':'Admin może dołączyć ponad limit.'}</p>
+                    <p className="text-[11px] text-zinc-600 mt-1">{chForm.user_limit===0?tl('channel.noLimit'):tl('channel.adminOverLimit')}</p>
                   </div>
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest">Prędkość strumieniowania</label>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest">{tl('channel.streamQuality')}</label>
                       <span className="text-xs text-zinc-400 font-semibold">{chForm.bitrate} kbps</span>
                     </div>
                     <input type="range" min={8} max={96} step={8} value={chForm.bitrate}
                       onChange={e=>setChForm(p=>({...p,bitrate:parseInt(e.target.value)}))}
                       className="w-full accent-indigo-500"/>
                     <div className="flex justify-between text-[10px] text-zinc-700 mt-0.5"><span>8 kbps</span><span>64 kbps</span><span>96 kbps</span></div>
-                    {chForm.bitrate>64&&<p className="text-[11px] text-amber-500/80 mt-1">⚠ Powyżej 64 kbps może wpłynąć na słabe łącza.</p>}
+                    {chForm.bitrate>64&&<p className="text-[11px] text-amber-500/80 mt-1">{tl('channel.bitrateWarning')}</p>}
                   </div>
                 </>)}
                 <button onClick={handleSaveCh} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">{tl('action.save')}</button>
