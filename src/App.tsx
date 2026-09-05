@@ -4235,21 +4235,21 @@ function ServerSettingsPage({
           {/* ── Ogólne ── */}
           {tab === 'overview' && (
             <div className="max-w-2xl mx-auto flex flex-col gap-5">
-              <h2 className="text-base font-bold text-white">Ogólne</h2>
+              <h2 className="text-base font-bold text-white">{tl('srv.general')}</h2>
               <div>
-                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Banner</label>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">{tl('srv.banner')}</label>
                 <div className="relative h-32 rounded-2xl overflow-hidden bg-white/[0.03] border border-white/[0.06]">
                   {(srvBannerFile ? URL.createObjectURL(srvBannerFile) : srvForm.banner_url) ? (
                     <img src={srvBannerFile ? URL.createObjectURL(srvBannerFile) : staticUrl(srvForm.banner_url)} className="w-full h-full object-cover" alt=""/>
                   ) : <div className="w-full h-full flex items-center justify-center text-zinc-700"><Image size={22}/></div>}
                   <label className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 hover:opacity-100 cursor-pointer transition-opacity">
-                    <span className="text-sm text-white font-semibold flex items-center gap-1.5"><Upload size={14}/> Zmień banner</span>
+                    <span className="text-sm text-white font-semibold flex items-center gap-1.5"><Upload size={14}/> {tl('srv.changeBanner')}</span>
                     <input type="file" accept="image/*" onChange={onSelectSrvBanner} className="hidden"/>
                   </label>
                 </div>
               </div>
               <div>
-                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Ikona</label>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">{tl('srv.icon')}</label>
                 <div className="flex items-center gap-4">
                   <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-white/[0.04] border border-white/[0.06]">
                     {(srvIconFile ? URL.createObjectURL(srvIconFile) : srvForm.icon_url) ? (
@@ -4257,21 +4257,21 @@ function ServerSettingsPage({
                     ) : <div className="w-full h-full flex items-center justify-center text-xl font-bold text-zinc-600">{serverFull.name.charAt(0)}</div>}
                   </div>
                   <label className="cursor-pointer text-sm font-semibold bg-white/[0.06] hover:bg-white/[0.09] border border-white/[0.08] text-zinc-300 hover:text-white px-3 py-2 rounded-xl flex items-center gap-1.5 transition-all">
-                    <Upload size={13}/> Zmień ikonę
+                    <Upload size={13}/> {tl('srv.changeIcon')}
                     <input type="file" accept="image/*" onChange={onSelectSrvIcon} className="hidden"/>
                   </label>
                 </div>
               </div>
               <div>
-                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Nazwa</label>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.name')}</label>
                 <input value={srvForm.name} onChange={e=>setSrvForm((p:any)=>({...p,name:e.target.value}))} className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
               </div>
               <div>
-                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Opis</label>
-                <textarea value={srvForm.description} onChange={e=>setSrvForm((p:any)=>({...p,description:e.target.value}))} rows={4} placeholder="Opis serwera..." className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm resize-none`}/>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.description')}</label>
+                <textarea value={srvForm.description} onChange={e=>setSrvForm((p:any)=>({...p,description:e.target.value}))} rows={4} placeholder={tl('srv.descriptionPh')} className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm resize-none`}/>
               </div>
               <div>
-                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Kolor akcentu serwera</label>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">{tl('srv.accentColor')}</label>
                 <div className="grid grid-cols-5 gap-2">
                   {([
                     {key:'indigo', cls:'bg-indigo-500'},
@@ -4292,7 +4292,7 @@ function ServerSettingsPage({
                   ))}
                 </div>
               </div>
-              <button onClick={handleSaveSrv} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">Zapisz zmiany</button>
+              <button onClick={handleSaveSrv} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">{tl('action.saveChanges')}</button>
             </div>
           )}
 
@@ -4300,17 +4300,17 @@ function ServerSettingsPage({
           {tab === 'roles' && (
             <div className="max-w-2xl mx-auto flex flex-col gap-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-white">Role ({roles.length})</h2>
-                <button onClick={openNewRole} className="bg-indigo-500 hover:bg-indigo-400 text-white px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5"><Plus size={14}/> Nowa rola</button>
+                <h2 className="text-base font-bold text-white">{tl('srv.roles')} ({roles.length})</h2>
+                <button onClick={openNewRole} className="bg-indigo-500 hover:bg-indigo-400 text-white px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5"><Plus size={14}/> {tl('srv.newRole')}</button>
               </div>
-              {roles.length === 0 && <p className="text-sm text-zinc-700">Brak ról</p>}
+              {roles.length === 0 && <p className="text-sm text-zinc-700">{tl('srv.noRoles')}</p>}
               {roles.map(r => (
                 <div key={r.id} className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] px-4 py-3 rounded-xl group">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-3 h-3 rounded-full shrink-0" style={{background: r.color}}/>
                     <span className="text-sm font-semibold text-white truncate">{r.name}</span>
-                    {r.is_default && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 text-amber-400 bg-amber-500/10 border border-amber-500/20">Domyślny</span>}
-                    <span className="text-xs text-zinc-600 shrink-0">{(r.permissions||[]).length} uprawnień</span>
+                    {r.is_default && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 text-amber-400 bg-amber-500/10 border border-amber-500/20">{tl('srv.default')}</span>}
+                    <span className="text-xs text-zinc-600 shrink-0">{(r.permissions||[]).length} {tl('srv.permissionsCount')}</span>
                   </div>
                   <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                     <button onClick={() => openEditRole(r)} className="w-7 h-7 bg-white/[0.05] hover:bg-white/[0.09] text-zinc-400 hover:text-white rounded-lg flex items-center justify-center"><Edit3 size={12}/></button>
@@ -4325,18 +4325,18 @@ function ServerSettingsPage({
           {tab === 'members' && (
             <div className="max-w-4xl mx-auto flex flex-col gap-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-white">Członkowie ({members.length})</h2>
+                <h2 className="text-base font-bold text-white">{tl('srv.members')} ({members.length})</h2>
                 <div className="relative">
                   <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 pointer-events-none"/>
-                  <input value={memberQ} onChange={e=>setMemberQ(e.target.value)} placeholder="Szukaj członka..." className={`${gi} text-sm pl-8 pr-4 py-2 rounded-xl w-52`}/>
+                  <input value={memberQ} onChange={e=>setMemberQ(e.target.value)} placeholder={tl('srv.searchMember')} className={`${gi} text-sm pl-8 pr-4 py-2 rounded-xl w-52`}/>
                 </div>
               </div>
               <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl overflow-hidden">
                 <div className="grid grid-cols-[1fr_150px_120px_80px] gap-3 px-4 py-2.5 border-b border-white/[0.05]">
-                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Użytkownik</span>
-                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Rola</span>
-                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Dołączył</span>
-                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Akcje</span>
+                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{tl('srv.col.user')}</span>
+                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{tl('srv.col.role')}</span>
+                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{tl('srv.col.joined')}</span>
+                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{tl('srv.col.actions')}</span>
                 </div>
                 {filteredMembers.length === 0 && <div className="px-4 py-8 text-sm text-zinc-700 text-center">{tl('ui.noResults')}</div>}
                 {filteredMembers.map((m, i) => (
@@ -21986,13 +21986,13 @@ export default function App() {
                 {srvSettTab==='overview'&&(
                   <div className="flex flex-col gap-5">
                     <div>
-                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Banner</label>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">{tl('srv.banner')}</label>
                       <div className="relative h-28 rounded-2xl overflow-hidden bg-white/[0.03] border border-white/[0.06]">
                         {(srvBannerFile?URL.createObjectURL(srvBannerFile):srvForm.banner_url) ? (
                           <img src={srvBannerFile?URL.createObjectURL(srvBannerFile):staticUrl(srvForm.banner_url)} className="w-full h-full object-cover" alt=""/>
                         ) : <div className="w-full h-full flex items-center justify-center text-zinc-700"><Image size={22}/></div>}
                         <label className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 hover:opacity-100 cursor-pointer transition-opacity">
-                          <span className="text-sm text-white font-semibold flex items-center gap-1.5"><Upload size={14}/> Zmień banner</span>
+                          <span className="text-sm text-white font-semibold flex items-center gap-1.5"><Upload size={14}/> {tl('srv.changeBanner')}</span>
                           <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];(e.target as HTMLInputElement).value='';if(f)openCrop(f,3,'rect','Kadruj banner serwera',c=>{setCropPending(null);setSrvBannerFile(c);});}} className="hidden"/>
                         </label>
                       </div>
@@ -22015,18 +22015,18 @@ export default function App() {
                         <span className="text-xs text-zinc-500 mt-7">Kliknij ikonę, aby zmienić</span>
                       </div>
                     </div>
-                    <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Nazwa</label>
+                    <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.name')}</label>
                       <input value={srvForm.name} onChange={e=>setSrvForm(p=>({...p,name:e.target.value}))} className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/></div>
-                    <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Opis</label>
-                      <textarea value={srvForm.description} onChange={e=>setSrvForm(p=>({...p,description:e.target.value}))} rows={3} placeholder="Opis serwera..." className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm resize-none`}/></div>
-                    <button onClick={handleSaveSrv} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">Zapisz zmiany</button>
+                    <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.description')}</label>
+                      <textarea value={srvForm.description} onChange={e=>setSrvForm(p=>({...p,description:e.target.value}))} rows={3} placeholder={tl('srv.descriptionPh')} className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm resize-none`}/></div>
+                    <button onClick={handleSaveSrv} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">{tl('action.saveChanges')}</button>
                   </div>
                 )}
                 {srvSettTab==='roles'&&(
                   <div className="flex flex-col gap-4">
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-bold text-white">Role ({roles.length})</h3>
-                      <button onClick={openNewRole} className="bg-indigo-500 hover:bg-indigo-400 text-white px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5"><Plus size={14}/> Nowa rola</button>
+                      <button onClick={openNewRole} className="bg-indigo-500 hover:bg-indigo-400 text-white px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5"><Plus size={14}/> {tl('srv.newRole')}</button>
                     </div>
                     {roles.length===0&&<p className="text-sm text-zinc-700">Brak ról</p>}
                     {roles.map(r=>(
@@ -22039,7 +22039,7 @@ export default function App() {
                               Domyślny
                             </span>
                           )}
-                          <span className="text-xs text-zinc-600 shrink-0">{(r.permissions||[]).length} uprawnień</span>
+                          <span className="text-xs text-zinc-600 shrink-0">{(r.permissions||[]).length} {tl('srv.permissionsCount')}</span>
                         </div>
                         <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                           <button onClick={()=>openEditRole(r)} className={`w-7 h-7 ${gb} rounded-lg flex items-center justify-center`}><Edit3 size={12}/></button>
@@ -22494,9 +22494,9 @@ export default function App() {
               onClick={e=>e.stopPropagation()} className={`${gm} rounded-3xl p-7 w-full max-w-md max-h-[90vh] flex flex-col`}>
               <div className="flex items-center justify-between mb-5 shrink-0"><h2 className="text-lg font-bold text-white">Edytuj kanał</h2><button onClick={()=>setChEditOpen(false)} className="text-zinc-600 hover:text-white"><X size={17}/></button></div>
               <div className="flex flex-col gap-4 overflow-y-auto pr-1">
-                <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Nazwa</label>
+                <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.name')}</label>
                   <input value={chForm.name} onChange={e=>setChForm(p=>({...p,name:e.target.value}))} className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/></div>
-                <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Opis</label>
+                <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.description')}</label>
                   <input value={chForm.description} onChange={e=>setChForm(p=>({...p,description:e.target.value}))} placeholder="Opis kanału..." className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/></div>
                 <div className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] px-4 py-3 rounded-xl">
                   <div className="flex items-center gap-2"><Lock size={14} className="text-zinc-500"/>
@@ -22870,7 +22870,7 @@ export default function App() {
               onClick={e=>e.stopPropagation()} className={`${gm} rounded-3xl p-7 w-full max-w-md max-h-[85vh] overflow-y-auto custom-scrollbar`}>
               <div className="flex items-center justify-between mb-5"><h2 className="text-lg font-bold text-white">{editingRole?'Edytuj rolę':'Nowa rola'}</h2><button onClick={()=>setRoleModalOpen(false)} className="text-zinc-600 hover:text-white"><X size={17}/></button></div>
               <div className="flex flex-col gap-4">
-                <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Nazwa</label>
+                <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.name')}</label>
                   <input value={roleForm.name} onChange={e=>setRoleForm(p=>({...p,name:e.target.value}))} placeholder="Nazwa roli..." className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/></div>
                 <div>
                   <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Kolor</label>
