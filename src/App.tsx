@@ -26809,18 +26809,18 @@ export default function App() {
                     setGroupEditIconPreview(URL.createObjectURL(f));
                   }}/>
                 </label>
-                <p className="text-xs text-zinc-500">Kliknij, aby zmienić zdjęcie grupy</p>
+                <p className="text-xs text-zinc-500">{tl('group.changePhotoHint')}</p>
               </div>
               {/* Name */}
               <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2">Nazwa grupy</label>
+                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2">{tl('group.name')}</label>
                 <input value={groupEditName} onChange={e=>setGroupEditName(e.target.value)}
-                  placeholder="Wpisz nazwę grupy..."
+                  placeholder={tl('group.namePh')}
                   className="w-full bg-white/[0.06] border border-white/[0.1] rounded-xl px-3 py-2.5 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 transition-all"/>
               </div>
               {/* Invite member */}
               <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2">Zaproś do grupy</label>
+                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2">{tl('group.inviteToGroup')}</label>
                 {(() => {
                   const gc = groupConvs.find(g => g.id === activeGroupDm);
                   const currentMemberIds = gc?.participants.map(p => p.user_id) || [];
@@ -26832,7 +26832,7 @@ export default function App() {
                     <>
                       <div className="relative">
                         <input value={groupInviteQ} onChange={e=>setGroupInviteQ(e.target.value)}
-                          placeholder="Szukaj znajomych..."
+                          placeholder={tl('group.searchFriendsPh')}
                           className="w-full bg-white/[0.06] border border-white/[0.1] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 transition-all pr-8"/>
                         {groupInviteQ && <button onClick={()=>setGroupInviteQ('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-white"><X size={12}/></button>}
                       </div>
@@ -26848,21 +26848,21 @@ export default function App() {
                                   setGroupInviting(f.id);
                                   try {
                                     await groupDmApi.invite(activeGroupDm!, f.id);
-                                    addToast(`${f.display_name||f.username} dodany/a do grupy`, 'success');
+                                    addToast(`${f.display_name||f.username} ${tl('group.addedToGroup')}`, 'success');
                                     setGroupInviteQ('');
                                   } catch(e:any){ addToast(e?.message||tl('common.error'), 'error'); }
                                   finally { setGroupInviting(null); }
                                 }}
                                 className="px-2.5 py-1 rounded-lg bg-indigo-600/70 hover:bg-indigo-600 disabled:opacity-50 text-white text-xs font-semibold transition-all shrink-0 flex items-center gap-1">
                                 {groupInviting === f.id ? <Loader2 size={10} className="animate-spin"/> : <UserPlus size={10}/>}
-                                Dodaj
+                                {tl('action.add')}
                               </button>
                             </div>
                           ))}
                         </div>
                       )}
                       {invitableFriends.length === 0 && (
-                        <p className="text-xs text-zinc-600 mt-1">Wszyscy znajomi są już w grupie</p>
+                        <p className="text-xs text-zinc-600 mt-1">{tl('group.allFriendsInGroup')}</p>
                       )}
                     </>
                   );
@@ -26890,7 +26890,7 @@ export default function App() {
               }}
                 className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-sm transition-colors flex items-center justify-center gap-2">
                 {groupEditSaving && <Loader2 size={14} className="animate-spin"/>}
-                Zapisz
+                {tl('action.save')}
               </button>
             </motion.div>
           </motion.div>
@@ -26909,11 +26909,11 @@ export default function App() {
               {/* Header */}
               <div className="px-6 pt-6 pb-4 border-b border-white/[0.06]">
                 <div className="flex items-start justify-between mb-1">
-                  <h2 className="text-lg font-bold text-white">Nowa wiadomość</h2>
+                  <h2 className="text-lg font-bold text-white">{tl('group.newMessage')}</h2>
                   <button onClick={()=>{ setShowGroupDmModal(false); setGroupDmName(''); setGroupDmMemberIds([]); setGroupDmSearchQ(''); }}
                     className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all mt-0.5"><X size={14}/></button>
                 </div>
-                <p className="text-xs text-zinc-500">Możesz dodać jeszcze {9 - groupDmMemberIds.length} znajomych.</p>
+                <p className="text-xs text-zinc-500">{tl('group.canAddMore')} {9 - groupDmMemberIds.length} {tl('group.friends')}.</p>
                 {/* Search bar with chips */}
                 <div className="mt-3 flex flex-wrap items-center gap-1.5 min-h-[38px] bg-black/30 border border-white/[0.08] rounded-xl px-2.5 py-1.5 focus-within:border-indigo-500/50 transition-colors">
                   {groupDmMemberIds.map(id => {
@@ -26927,7 +26927,7 @@ export default function App() {
                     );
                   })}
                   <input value={groupDmSearchQ} onChange={e=>setGroupDmSearchQ(e.target.value)}
-                    placeholder={groupDmMemberIds.length===0?"Szukaj znajomych...":""}
+                    placeholder={groupDmMemberIds.length===0?tl('group.searchFriendsPh'):""}
                     className="flex-1 min-w-[80px] bg-transparent text-sm text-white placeholder-zinc-600 outline-none py-0.5"/>
                 </div>
               </div>
@@ -26953,7 +26953,7 @@ export default function App() {
                     </button>
                   );
                 })}
-                {friends.length === 0 && <p className="text-center text-xs text-zinc-600 py-6">Brak znajomych do dodania</p>}
+                {friends.length === 0 && <p className="text-center text-xs text-zinc-600 py-6">{tl('group.noFriendsToAdd')}</p>}
               </div>
               {/* Group name + create */}
               <div className="px-6 py-4 border-t border-white/[0.06] flex items-center gap-3">
@@ -26964,14 +26964,14 @@ export default function App() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <input value={groupDmName} onChange={e=>setGroupDmName(e.target.value)}
-                    placeholder={groupDmMemberIds.length>0 ? groupDmMemberIds.map(id=>friends.find(f=>f.id===id)?.username||'').join(', ') : 'Nazwa grupy (opcjonalna)'}
+                    placeholder={groupDmMemberIds.length>0 ? groupDmMemberIds.map(id=>friends.find(f=>f.id===id)?.username||'').join(', ') : tl('group.namePhOptional')}
                     className="w-full bg-black/30 border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 transition-colors"/>
                 </div>
               </div>
               <div className="px-6 pb-5 flex gap-2.5 justify-end">
                 <button onClick={()=>{ setShowGroupDmModal(false); setGroupDmName(''); setGroupDmMemberIds([]); setGroupDmSearchQ(''); }}
                   className="px-5 py-2 rounded-xl text-zinc-300 hover:text-white bg-white/[0.05] hover:bg-white/[0.08] text-sm font-semibold transition-all border border-white/[0.06]">
-                  Anuluj
+                  {tl('action.cancel')}
                 </button>
                 <button disabled={groupDmMemberIds.length < 2}
                   onClick={async()=>{
@@ -26982,11 +26982,11 @@ export default function App() {
                       setShowGroupDmModal(false);
                       setGroupDmName(''); setGroupDmMemberIds([]); setGroupDmSearchQ('');
                       setActiveView('dms');
-                      addToast('Grupa utworzona!','success');
+                      addToast(tl('group.created'),'success');
                     } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                   }}
                   className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all">
-                  Utwórz wiadomość grupową
+                  {tl('group.createGroupMessage')}
                 </button>
               </div>
             </motion.div>

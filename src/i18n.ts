@@ -687,6 +687,23 @@ const T: Record<string, Record<Locale, string>> = {
   'onboarding.consentText': { pl: 'Klikając przycisk poniżej potwierdzasz, że przeczytałeś/aś i akceptujesz powyższe zasady.', en: 'By clicking the button below you confirm that you have read and accept the rules above.', cs: 'Kliknutím na tlačítko níže potvrzujete, že jste si přečetli a souhlasíte s výše uvedenými pravidly.', de: 'Mit Klick auf die Schaltfläche unten bestätigst du, dass du die obigen Regeln gelesen hast und akzeptierst.' },
   'onboarding.rulesAccepted': { pl: 'Reguły zaakceptowane!',     en: 'Rules accepted!',         cs: 'Pravidla přijata!',           de: 'Regeln akzeptiert!'        },
   'onboarding.acceptAndJoin': { pl: 'Akceptuję zasady i dołączam', en: 'I accept the rules and join', cs: 'Přijímám pravidla a připojuji se', de: 'Ich akzeptiere die Regeln und trete bei' },
+
+  // ── Group DM settings modal ──────────────────────────────────────────────
+  'group.changePhotoHint': { pl: 'Kliknij, aby zmienić zdjęcie grupy', en: 'Click to change the group photo', cs: 'Klikněte pro změnu fotky skupiny', de: 'Klicken, um das Gruppenfoto zu ändern' },
+  'group.name':            { pl: 'Nazwa grupy',                  en: 'Group name',              cs: 'Název skupiny',               de: 'Gruppenname'               },
+  'group.namePh':          { pl: 'Wpisz nazwę grupy...',         en: 'Enter group name...',     cs: 'Zadejte název skupiny...',    de: 'Gruppenname eingeben...'   },
+  'group.inviteToGroup':   { pl: 'Zaproś do grupy',              en: 'Invite to group',         cs: 'Pozvat do skupiny',           de: 'In die Gruppe einladen'    },
+  'group.searchFriendsPh': { pl: 'Szukaj znajomych...',          en: 'Search friends...',       cs: 'Hledat přátele...',           de: 'Freunde durchsuchen...'    },
+  'group.addedToGroup':    { pl: 'dodany/a do grupy',            en: 'added to the group',      cs: 'přidán/a do skupiny',         de: 'zur Gruppe hinzugefügt'    },
+  'group.allFriendsInGroup': { pl: 'Wszyscy znajomi są już w grupie', en: 'All your friends are already in the group', cs: 'Všichni přátelé jsou už ve skupině', de: 'Alle deine Freunde sind bereits in der Gruppe' },
+
+  // ── New Message / Group DM create modal ──────────────────────────────────
+  'group.newMessage':      { pl: 'Nowa wiadomość',               en: 'New message',             cs: 'Nová zpráva',                 de: 'Neue Nachricht'            },
+  'group.canAddMore':      { pl: 'Możesz dodać jeszcze',         en: 'You can add up to',       cs: 'Můžete přidat ještě',         de: 'Du kannst noch'            },
+  'group.friends':         { pl: 'znajomych',                    en: 'more friends',            cs: 'přátel',                      de: 'weitere Freunde hinzufügen' },
+  'group.noFriendsToAdd':  { pl: 'Brak znajomych do dodania',    en: 'No friends to add',       cs: 'Žádní přátelé k přidání',     de: 'Keine Freunde zum Hinzufügen' },
+  'group.namePhOptional':  { pl: 'Nazwa grupy (opcjonalna)',     en: 'Group name (optional)',   cs: 'Název skupiny (volitelný)',   de: 'Gruppenname (optional)'    },
+  'group.createGroupMessage': { pl: 'Utwórz wiadomość grupową', en: 'Create group message',    cs: 'Vytvořit skupinovou zprávu',  de: 'Gruppennachricht erstellen' },
   'settings.desktop':        { pl: 'Aplikacja',                en: 'Application',             cs: 'Aplikace',                  de: 'Anwendung'                 },
   'settings.updates':        { pl: 'Aktualizacje',             en: 'Updates',                 cs: 'Aktualizace',               de: 'Aktualisierungen'          },
   'settings.about':          { pl: 'O aplikacji',              en: 'About',                   cs: 'O aplikaci',                de: 'Über die App'              },
