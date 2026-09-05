@@ -1034,7 +1034,7 @@ function AuthScreen({ onAuth, inviteInfo }: { onAuth: (u: UserProfile, t: string
         body: JSON.stringify({ token: resetToken, userId: resetUid, newPassword: resetPass }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Błąd');
+      if (!res.ok) throw new Error(data.error || tl('common.error'));
       setForgotView('none');
       setError('✓ Hasło zmienione! Możesz się teraz zalogować.');
       window.history.replaceState({}, '', window.location.pathname);
@@ -3287,30 +3287,30 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
   return (
     <div className="p-6 max-w-2xl mx-auto">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-xl font-bold text-white">Panel dźwięków</h2>
+        <h2 className="text-xl font-bold text-white">{tl('sounds.panelTitle')}</h2>
         {canManage && sounds.length < 10 && (
           <button onClick={()=>setUploadOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold rounded-xl transition-colors">
-            <Upload size={14}/> Prześlij dźwięk
+            <Upload size={14}/> {tl('sounds.upload')}
           </button>
         )}
       </div>
       <p className="text-sm text-zinc-500 mb-5">
-        Niestandardowe dźwięki dostępne dla wszystkich podczas rozmów głosowych. Limit: {sounds.length}/10.
+        {tl('sounds.limitDesc')} {sounds.length}/10.
       </p>
 
-      {loading && <p className="text-sm text-zinc-600 italic">Ładowanie...</p>}
+      {loading && <p className="text-sm text-zinc-600 italic">{tl('sounds.loading')}</p>}
       {!loading && sounds.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-zinc-600">
           <Music2 size={36} className="mb-3 opacity-30"/>
-          <p className="text-sm font-medium">Brak własnych dźwięków</p>
-          <p className="text-xs mt-1">Dodaj pierwszy dźwięk za pomocą przycisku powyżej</p>
+          <p className="text-sm font-medium">{tl('sounds.none')}</p>
+          <p className="text-xs mt-1">{tl('sounds.addFirst')}</p>
         </div>
       )}
       {sounds.length > 0 && (
         <div className="flex flex-col gap-2">
           <div className="grid grid-cols-[1fr_80px_100px_32px] gap-2 text-[10px] text-zinc-600 uppercase tracking-widest font-bold px-3 mb-1">
-            <span>Emoji / Nazwa</span><span className="text-center">Głośność</span><span>Dodane przez</span><span/>
+            <span>{tl('sounds.col.emojiName')}</span><span className="text-center">{tl('sounds.col.volume')}</span><span>{tl('sounds.col.addedBy')}</span><span/>
           </div>
           {sounds.map(s => (
             <div key={s.id} className="grid grid-cols-[1fr_80px_100px_32px] gap-2 items-center p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05] transition-colors">
@@ -3339,7 +3339,7 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={()=>{setUploadOpen(false);resetUpload();}}>
           <div className="bg-[#14141f] rounded-2xl border border-white/[0.1] shadow-2xl p-6 w-full max-w-lg" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-bold text-white">Prześlij dźwięk</h3>
+              <h3 className="text-lg font-bold text-white">{tl('sounds.upload')}</h3>
               <button onClick={()=>{setUploadOpen(false);resetUpload();}} className="text-zinc-600 hover:text-zinc-300 transition-colors"><X size={16}/></button>
             </div>
 
@@ -3347,7 +3347,7 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
             {!previewUrl ? (
               <label className="flex flex-col items-center justify-center gap-2 p-8 rounded-xl border-2 border-dashed border-white/[0.1] hover:border-indigo-500/50 cursor-pointer transition-colors mb-5">
                 <Music2 size={28} className="text-zinc-500"/>
-                <p className="text-sm text-zinc-400 font-medium">Kliknij aby wybrać plik audio</p>
+                <p className="text-sm text-zinc-400 font-medium">{tl('sounds.clickToPick')}</p>
                 <p className="text-[10px] text-zinc-600">MP3, OGG, WAV, FLAC · maks. 10MB</p>
                 <input type="file" accept="audio/*" className="hidden" onChange={e => { const f=e.target.files?.[0]; if(f) handleFile(f); }}/>
               </label>
@@ -3368,10 +3368,10 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
                 <div className="mb-3">
                   {/* Duration badge */}
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Zaznacz fragment</span>
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">{tl('sounds.selectClip')}</span>
                     <span className={`text-[11px] font-bold tabular-nums ${isValid ? 'text-emerald-400' : 'text-red-400'}`}>
                       {trimmedSec.toFixed(1)}s&nbsp;/&nbsp;{SB_MAX_SEC}s maks
-                      {!isValid && <span className="ml-1 text-[10px] font-normal">— za długi!</span>}
+                      {!isValid && <span className="ml-1 text-[10px] font-normal">{tl('sounds.tooLong')}</span>}
                     </span>
                   </div>
 
@@ -3444,7 +3444,7 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
                     </div>
                     <div className="flex gap-1 pt-2 border-t border-white/[0.06]">
                       <input value={emoji} onChange={e=>setEmoji(e.target.value.slice(0,4))} maxLength={4}
-                        placeholder="lub wpisz..."
+                        placeholder={tl('sounds.orType')}
                         className="flex-1 bg-black/30 border border-white/[0.08] rounded-lg px-2 py-1 text-sm text-white text-center placeholder-zinc-600 outline-none focus:border-indigo-500/40"/>
                       <button type="button" onClick={()=>setEmojiPickerOpen(false)}
                         className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold">OK</button>
@@ -3453,7 +3453,7 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
                 )}
               </div>
               <div className="flex-1">
-                <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Nazwa dźwięku *</label>
+                <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">{tl('sounds.nameLabel')}</label>
                 <input value={name} onChange={e=>setName(e.target.value)} placeholder="np. Klakson, Oklaski..." maxLength={100}
                   className={`${gi} w-full rounded-xl px-3 py-2.5 border-white/[0.08] text-white text-sm`}/>
               </div>
@@ -3462,7 +3462,7 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
             {/* Volume */}
             <div className="mb-5">
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Głośność</label>
+                <label className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">{tl('sounds.col.volume')}</label>
                 <span className="text-xs text-zinc-400 font-semibold tabular-nums">{volume}%</span>
               </div>
               <input type="range" min={10} max={200} step={5} value={volume} onChange={e=>setVolume(parseInt(e.target.value))}
@@ -3473,7 +3473,7 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
             {previewUrl && !isValid && (
               <div className="mb-4 flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30">
                 <AlertCircle size={14} className="text-red-400 shrink-0"/>
-                <p className="text-xs text-red-300">Zaznaczony fragment jest za długi ({trimmedSec.toFixed(1)}s). Przesuń uchwyty na fali dźwiękowej, aby zaznaczyć maks. {SB_MAX_SEC}s.</p>
+                <p className="text-xs text-red-300">{tl('sounds.clipTooLong')} ({trimmedSec.toFixed(1)}s). {tl('sounds.adjustHandles')} {SB_MAX_SEC}s.</p>
               </div>
             )}
 
@@ -3484,7 +3484,7 @@ function SoundsTab({ serverId, canManage, gi }: { serverId: string; canManage: b
               </button>
               <button onClick={handleUpload} disabled={!file || !name.trim() || saving || !isValid}
                 className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors ${isValid && file && name.trim() ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-zinc-700 opacity-50 cursor-not-allowed'}`}>
-                {saving ? 'Przesyłanie...' : 'Prześlij'}
+                {saving ? tl('sounds.uploading') : tl('sounds.upload')}
               </button>
             </div>
           </div>
@@ -4150,8 +4150,8 @@ function ServerSettingsPage({
     try {
       await serversApi.deleteInvite(activeServer, code);
       setInviteListLocal(p => p.filter(i => i.code !== code));
-      addToast?.('Zaproszenie usunięte', 'info');
-    } catch { addToast?.('Błąd', 'error'); }
+      addToast?.(tl('invites.deleted'), 'info');
+    } catch { addToast?.(tl('common.error'), 'error'); }
   };
 
   const copyInviteLink = (code: string) => {
@@ -4169,12 +4169,12 @@ function ServerSettingsPage({
   };
   // ─────────────────────────────────────────────────────────────────────────
   const DISC_CATS_OPT = [
-    { key:'',              label:'Brak kategorii' },
-    { key:'gaming',        label:'Gracze' },
-    { key:'music',         label:'Muzyka' },
-    { key:'entertainment', label:'Rozrywka' },
-    { key:'education',     label:'Edukacja' },
-    { key:'science',       label:'Nauka i tech' },
+    { key:'',              label:tl('srv.discovery.cat.none') },
+    { key:'gaming',        label:tl('srv.discovery.cat.gaming') },
+    { key:'music',         label:tl('srv.discovery.cat.music') },
+    { key:'entertainment', label:tl('srv.discovery.cat.entertainment') },
+    { key:'education',     label:tl('srv.discovery.cat.education') },
+    { key:'science',       label:tl('srv.discovery.cat.science') },
   ];
   const filteredMembers = memberQ.trim()
     ? members.filter(m => m.username.toLowerCase().includes(memberQ.toLowerCase()))
@@ -4235,21 +4235,21 @@ function ServerSettingsPage({
           {/* ── Ogólne ── */}
           {tab === 'overview' && (
             <div className="max-w-2xl mx-auto flex flex-col gap-5">
-              <h2 className="text-base font-bold text-white">Ogólne</h2>
+              <h2 className="text-base font-bold text-white">{tl('srv.general')}</h2>
               <div>
-                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Banner</label>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">{tl('srv.banner')}</label>
                 <div className="relative h-32 rounded-2xl overflow-hidden bg-white/[0.03] border border-white/[0.06]">
                   {(srvBannerFile ? URL.createObjectURL(srvBannerFile) : srvForm.banner_url) ? (
                     <img src={srvBannerFile ? URL.createObjectURL(srvBannerFile) : staticUrl(srvForm.banner_url)} className="w-full h-full object-cover" alt=""/>
                   ) : <div className="w-full h-full flex items-center justify-center text-zinc-700"><Image size={22}/></div>}
                   <label className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 hover:opacity-100 cursor-pointer transition-opacity">
-                    <span className="text-sm text-white font-semibold flex items-center gap-1.5"><Upload size={14}/> Zmień banner</span>
+                    <span className="text-sm text-white font-semibold flex items-center gap-1.5"><Upload size={14}/> {tl('srv.changeBanner')}</span>
                     <input type="file" accept="image/*" onChange={onSelectSrvBanner} className="hidden"/>
                   </label>
                 </div>
               </div>
               <div>
-                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Ikona</label>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">{tl('srv.icon')}</label>
                 <div className="flex items-center gap-4">
                   <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-white/[0.04] border border-white/[0.06]">
                     {(srvIconFile ? URL.createObjectURL(srvIconFile) : srvForm.icon_url) ? (
@@ -4257,21 +4257,21 @@ function ServerSettingsPage({
                     ) : <div className="w-full h-full flex items-center justify-center text-xl font-bold text-zinc-600">{serverFull.name.charAt(0)}</div>}
                   </div>
                   <label className="cursor-pointer text-sm font-semibold bg-white/[0.06] hover:bg-white/[0.09] border border-white/[0.08] text-zinc-300 hover:text-white px-3 py-2 rounded-xl flex items-center gap-1.5 transition-all">
-                    <Upload size={13}/> Zmień ikonę
+                    <Upload size={13}/> {tl('srv.changeIcon')}
                     <input type="file" accept="image/*" onChange={onSelectSrvIcon} className="hidden"/>
                   </label>
                 </div>
               </div>
               <div>
-                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Nazwa</label>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.name')}</label>
                 <input value={srvForm.name} onChange={e=>setSrvForm((p:any)=>({...p,name:e.target.value}))} className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
               </div>
               <div>
-                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Opis</label>
-                <textarea value={srvForm.description} onChange={e=>setSrvForm((p:any)=>({...p,description:e.target.value}))} rows={4} placeholder="Opis serwera..." className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm resize-none`}/>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.description')}</label>
+                <textarea value={srvForm.description} onChange={e=>setSrvForm((p:any)=>({...p,description:e.target.value}))} rows={4} placeholder={tl('srv.descriptionPh')} className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm resize-none`}/>
               </div>
               <div>
-                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Kolor akcentu serwera</label>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">{tl('srv.accentColor')}</label>
                 <div className="grid grid-cols-5 gap-2">
                   {([
                     {key:'indigo', cls:'bg-indigo-500'},
@@ -4292,7 +4292,7 @@ function ServerSettingsPage({
                   ))}
                 </div>
               </div>
-              <button onClick={handleSaveSrv} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">Zapisz zmiany</button>
+              <button onClick={handleSaveSrv} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">{tl('action.saveChanges')}</button>
             </div>
           )}
 
@@ -4300,17 +4300,17 @@ function ServerSettingsPage({
           {tab === 'roles' && (
             <div className="max-w-2xl mx-auto flex flex-col gap-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-white">Role ({roles.length})</h2>
-                <button onClick={openNewRole} className="bg-indigo-500 hover:bg-indigo-400 text-white px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5"><Plus size={14}/> Nowa rola</button>
+                <h2 className="text-base font-bold text-white">{tl('srv.roles')} ({roles.length})</h2>
+                <button onClick={openNewRole} className="bg-indigo-500 hover:bg-indigo-400 text-white px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5"><Plus size={14}/> {tl('srv.newRole')}</button>
               </div>
-              {roles.length === 0 && <p className="text-sm text-zinc-700">Brak ról</p>}
+              {roles.length === 0 && <p className="text-sm text-zinc-700">{tl('srv.noRoles')}</p>}
               {roles.map(r => (
                 <div key={r.id} className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] px-4 py-3 rounded-xl group">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-3 h-3 rounded-full shrink-0" style={{background: r.color}}/>
                     <span className="text-sm font-semibold text-white truncate">{r.name}</span>
-                    {r.is_default && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 text-amber-400 bg-amber-500/10 border border-amber-500/20">Domyślny</span>}
-                    <span className="text-xs text-zinc-600 shrink-0">{(r.permissions||[]).length} uprawnień</span>
+                    {r.is_default && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 text-amber-400 bg-amber-500/10 border border-amber-500/20">{tl('srv.default')}</span>}
+                    <span className="text-xs text-zinc-600 shrink-0">{(r.permissions||[]).length} {tl('srv.permissionsCount')}</span>
                   </div>
                   <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                     <button onClick={() => openEditRole(r)} className="w-7 h-7 bg-white/[0.05] hover:bg-white/[0.09] text-zinc-400 hover:text-white rounded-lg flex items-center justify-center"><Edit3 size={12}/></button>
@@ -4325,18 +4325,18 @@ function ServerSettingsPage({
           {tab === 'members' && (
             <div className="max-w-4xl mx-auto flex flex-col gap-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-white">Członkowie ({members.length})</h2>
+                <h2 className="text-base font-bold text-white">{tl('srv.members')} ({members.length})</h2>
                 <div className="relative">
                   <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 pointer-events-none"/>
-                  <input value={memberQ} onChange={e=>setMemberQ(e.target.value)} placeholder="Szukaj członka..." className={`${gi} text-sm pl-8 pr-4 py-2 rounded-xl w-52`}/>
+                  <input value={memberQ} onChange={e=>setMemberQ(e.target.value)} placeholder={tl('srv.searchMember')} className={`${gi} text-sm pl-8 pr-4 py-2 rounded-xl w-52`}/>
                 </div>
               </div>
               <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl overflow-hidden">
                 <div className="grid grid-cols-[1fr_150px_120px_80px] gap-3 px-4 py-2.5 border-b border-white/[0.05]">
-                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Użytkownik</span>
-                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Rola</span>
-                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Dołączył</span>
-                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Akcje</span>
+                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{tl('srv.col.user')}</span>
+                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{tl('srv.col.role')}</span>
+                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{tl('srv.col.joined')}</span>
+                  <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{tl('srv.col.actions')}</span>
                 </div>
                 {filteredMembers.length === 0 && <div className="px-4 py-8 text-sm text-zinc-700 text-center">{tl('ui.noResults')}</div>}
                 {filteredMembers.map((m, i) => (
@@ -4400,8 +4400,8 @@ function ServerSettingsPage({
           {/* ── Bany ── */}
           {tab === 'bans' && (
             <div className="max-w-2xl mx-auto flex flex-col gap-4">
-              <h2 className="text-base font-bold text-white">Zbanowani ({banList.length})</h2>
-              {banList.length === 0 && <p className="text-sm text-zinc-600">Brak zbanowanych użytkowników.</p>}
+              <h2 className="text-base font-bold text-white">{tl('srv.banned')} ({banList.length})</h2>
+              {banList.length === 0 && <p className="text-sm text-zinc-600">{tl('srv.noBanned')}</p>}
               {banList.map(b => (
                 <div key={b.user_id} className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] px-4 py-3 rounded-xl">
                   <div className="flex items-center gap-3">
@@ -4409,11 +4409,11 @@ function ServerSettingsPage({
                       className="w-9 h-9 rounded-full object-cover" alt=""/>
                     <div>
                       <p className="text-sm font-semibold text-white">{b.username}</p>
-                      {b.reason && <p className="text-xs text-zinc-600">Powód: {b.reason}</p>}
-                      {b.banned_by_username && <p className="text-xs text-zinc-700">przez {b.banned_by_username}</p>}
+                      {b.reason && <p className="text-xs text-zinc-600">{tl('srv.reason')}: {b.reason}</p>}
+                      {b.banned_by_username && <p className="text-xs text-zinc-700">{tl('srv.by')} {b.banned_by_username}</p>}
                     </div>
                   </div>
-                  <button onClick={() => handleUnban(b.user_id)} className="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors">Odbanuj</button>
+                  <button onClick={() => handleUnban(b.user_id)} className="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors">{tl('action.unban')}</button>
                 </div>
               ))}
             </div>
@@ -4427,14 +4427,14 @@ function ServerSettingsPage({
               <div className="space-y-6">
                 {/* Header */}
                 <div>
-                  <h2 className="text-xl font-bold text-white">Zaproszenia</h2>
-                  <p className="text-sm text-zinc-500 mt-0.5">Linki, kody i metody dołączania do <span className="text-zinc-300 font-medium">{serverFull?.name}</span>.</p>
+                  <h2 className="text-xl font-bold text-white">{tl('invites.title')}</h2>
+                  <p className="text-sm text-zinc-500 mt-0.5">{tl('invites.desc')} <span className="text-zinc-300 font-medium">{serverFull?.name}</span>.</p>
                 </div>
 
                 {/* Permanent invite block */}
                 <div className="rounded-2xl border border-white/[0.07] overflow-hidden">
                   <div className="px-5 py-3 bg-white/[0.025] border-b border-white/[0.05]">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Stały link zaproszenia</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{tl('invites.permanentLink')}</p>
                   </div>
                   <div className="p-5">
                     {permanentInvite ? (
@@ -4445,38 +4445,38 @@ function ServerSettingsPage({
                           </div>
                           <button onClick={() => copyInviteLink(permanentInvite.code)}
                             className="flex items-center gap-1.5 px-3.5 py-2.5 bg-zinc-800 hover:bg-zinc-700 border border-white/[0.08] rounded-xl text-sm text-zinc-200 transition-colors shrink-0">
-                            <Copy size={13}/> Kopiuj link
+                            <Copy size={13}/> {tl('invites.copyLink')}
                           </button>
                           <button onClick={() => { const url=`${APP_ORIGIN}/join/${permanentInvite.code}`; if(navigator.share){navigator.share({url}).catch(()=>copyInviteLink(permanentInvite.code));}else copyInviteLink(permanentInvite.code); }}
                             className="flex items-center gap-1.5 px-3.5 py-2.5 bg-indigo-500 hover:bg-indigo-400 rounded-xl text-sm text-white font-semibold transition-colors shrink-0">
-                            <ExternalLink size={13}/> Udostępnij
+                            <ExternalLink size={13}/> {tl('invites.share')}
                           </button>
                         </div>
                         {/* Short code */}
                         <div className="flex items-center gap-2 mb-2">
-                          <span className="text-[11px] text-zinc-500">Kod zaproszenia:</span>
+                          <span className="text-[11px] text-zinc-500">{tl('invites.code')}</span>
                           <code className="text-sm font-mono font-bold text-indigo-300 tracking-wider">{streamerMode ? '••••••••••' : permanentInvite.code}</code>
-                          <button onClick={() => { navigator.clipboard.writeText(permanentInvite.code); addToast?.('Kod skopiowany!','success'); }}
+                          <button onClick={() => { navigator.clipboard.writeText(permanentInvite.code); addToast?.(tl('invites.codeCopied'),'success'); }}
                             className="flex items-center gap-1 text-xs text-zinc-500 hover:text-indigo-400 transition-colors">
-                            <Copy size={10}/> Kopiuj kod
+                            <Copy size={10}/> {tl('invites.copyCode')}
                           </button>
                         </div>
                         <p className="text-[11px] text-zinc-600">
-                          Wygasa: <span className="text-zinc-400">nigdy</span> · Limit: <span className="text-zinc-400">brak</span> · Użyto: <span className="text-zinc-400">{permanentInvite.uses} razy</span>
-                          <button onClick={() => delInviteLocal(permanentInvite.code)} className="ml-3 text-zinc-700 hover:text-rose-400 transition-colors">Usuń</button>
+                          {tl('invites.expires')} <span className="text-zinc-400">{tl('invites.never')}</span> · {tl('invites.limit')} <span className="text-zinc-400">{tl('invites.none')}</span> · {tl('invites.usedTimes')} <span className="text-zinc-400">{permanentInvite.uses} {tl('invites.times')}</span>
+                          <button onClick={() => delInviteLocal(permanentInvite.code)} className="ml-3 text-zinc-700 hover:text-rose-400 transition-colors">{tl('action.delete')}</button>
                         </p>
                       </>
                     ) : (
                       <div className="flex items-center gap-3">
-                        <p className="text-sm text-zinc-500 flex-1">Brak stałego linku. Utwórz stały link bez daty wygaśnięcia.</p>
+                        <p className="text-sm text-zinc-500 flex-1">{tl('invites.noPermanent')}</p>
                         <button onClick={async () => {
                           if (!activeServer) return;
                           setInviteGeneratingLocal(true);
-                          try { const r = await serversApi.createInvite(activeServer,'never','unlimited'); setInviteListLocal(p=>[{...r,creator_username:currentUser?.username??''},...p]); addToast?.('Stały link utworzony!','success'); }
-                          catch { addToast?.('Błąd','error'); } finally { setInviteGeneratingLocal(false); }
+                          try { const r = await serversApi.createInvite(activeServer,'never','unlimited'); setInviteListLocal(p=>[{...r,creator_username:currentUser?.username??''},...p]); addToast?.(tl('invites.permanentCreated'),'success'); }
+                          catch { addToast?.(tl('common.error'),'error'); } finally { setInviteGeneratingLocal(false); }
                         }} disabled={inviteGeneratingLocal}
                           className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition-colors shrink-0">
-                          {inviteGeneratingLocal ? <Loader2 size={13} className="animate-spin"/> : <Plus size={13}/>} Utwórz stały link
+                          {inviteGeneratingLocal ? <Loader2 size={13} className="animate-spin"/> : <Plus size={13}/>} {tl('invites.createPermanent')}
                         </button>
                       </div>
                     )}
@@ -4486,38 +4486,38 @@ function ServerSettingsPage({
                 {/* Create new temporary invite */}
                 <div className="rounded-2xl border border-white/[0.07] overflow-hidden">
                   <div className="px-5 py-3 bg-white/[0.025] border-b border-white/[0.05]">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Nowy link tymczasowy</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{tl('invites.newTemp')}</p>
                   </div>
                   <div className="p-5 grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">Ważność</label>
+                      <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">{tl('invites.validity')}</label>
                       <select value={inviteDur} onChange={e => setInviteDur(e.target.value)} className={selCls + ' w-full'}>
-                        <option value="1800">30 minut</option>
-                        <option value="3600">1 godzina</option>
-                        <option value="21600">6 godzin</option>
-                        <option value="86400">1 dzień</option>
-                        <option value="259200">3 dni</option>
-                        <option value="604800">7 dni</option>
-                        <option value="never">Nigdy</option>
+                        <option value="1800">{tl('invites.dur.30m')}</option>
+                        <option value="3600">{tl('channel.slowmode.1h')}</option>
+                        <option value="21600">{tl('channel.slowmode.6h')}</option>
+                        <option value="86400">{tl('invites.dur.1d')}</option>
+                        <option value="259200">{tl('invites.dur.3d')}</option>
+                        <option value="604800">{tl('invites.dur.7d')}</option>
+                        <option value="never">{tl('invites.dur.never')}</option>
                       </select>
                     </div>
                     <div>
-                      <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">Limit użyć</label>
+                      <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">{tl('invites.usesLimit')}</label>
                       <select value={inviteMaxUsesLocal} onChange={e => setInviteMaxUsesLocal(e.target.value)} className={selCls + ' w-full'}>
-                        <option value="unlimited">Bez limitu</option>
-                        <option value="1">1 użycie</option>
-                        <option value="5">5 użyć</option>
-                        <option value="10">10 użyć</option>
-                        <option value="25">25 użyć</option>
-                        <option value="50">50 użyć</option>
-                        <option value="100">100 użyć</option>
+                        <option value="unlimited">{tl('invites.unlimited')}</option>
+                        <option value="1">1 {tl('invites.oneUse')}</option>
+                        <option value="5">5 {tl('invites.uses')}</option>
+                        <option value="10">10 {tl('invites.uses')}</option>
+                        <option value="25">25 {tl('invites.uses')}</option>
+                        <option value="50">50 {tl('invites.uses')}</option>
+                        <option value="100">100 {tl('invites.uses')}</option>
                       </select>
                     </div>
                     <div className="col-span-2">
                       <button onClick={handleInviteLocal} disabled={inviteGeneratingLocal}
                         className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors text-sm">
                         {inviteGeneratingLocal ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>}
-                        Generuj nowy link
+                        {tl('invites.generateNew')}
                       </button>
                     </div>
                   </div>
@@ -4525,7 +4525,7 @@ function ServerSettingsPage({
 
                 {/* Active invites list */}
                 <div>
-                  <h3 className="text-sm font-bold text-white mb-3">Aktywne linki</h3>
+                  <h3 className="text-sm font-bold text-white mb-3">{tl('invites.activeLinks')}</h3>
                   {inviteListLoadingLocal ? (
                     <div className="space-y-2">
                       {[1,2,3].map(i => <div key={i} className="h-14 rounded-xl bg-white/[0.02] animate-pulse"/>)}
@@ -4533,8 +4533,8 @@ function ServerSettingsPage({
                   ) : inviteListLocal.length === 0 ? (
                     <div className="flex flex-col items-center py-10 text-center">
                       <div className="w-12 h-12 rounded-2xl bg-zinc-800/60 flex items-center justify-center mb-3"><UserPlus size={20} className="text-zinc-600"/></div>
-                      <p className="text-sm text-zinc-500">Brak aktywnych linków zaproszeniowych.</p>
-                      <p className="text-xs text-zinc-700 mt-1">Utwórz nowy link powyżej.</p>
+                      <p className="text-sm text-zinc-500">{tl('invites.noActive')}</p>
+                      <p className="text-xs text-zinc-700 mt-1">{tl('invites.createAbove')}</p>
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-white/[0.07] overflow-hidden divide-y divide-white/[0.05]">
@@ -4548,21 +4548,21 @@ function ServerSettingsPage({
                               <span className="inline-flex items-center gap-1 bg-indigo-500/10 border border-indigo-500/20 rounded-md px-1.5 py-0.5">
                                 <span className="text-[10px] text-zinc-500">kod:</span>
                                 <code className="text-[11px] font-mono text-indigo-300">{streamerMode ? '••••••' : inv.code}</code>
-                                <button onClick={() => { navigator.clipboard.writeText(inv.code); addToast?.('Kod skopiowany!', 'success'); }}
-                                  className="text-zinc-600 hover:text-indigo-400 transition-colors ml-0.5" title="Kopiuj sam kod">
+                                <button onClick={() => { navigator.clipboard.writeText(inv.code); addToast?.(tl('invites.codeCopied'), 'success'); }}
+                                  className="text-zinc-600 hover:text-indigo-400 transition-colors ml-0.5" title={tl('invites.copyCodeOnly')}>
                                   <Copy size={9}/>
                                 </button>
                               </span>
                               <span className="text-[11px] text-zinc-600 flex items-center gap-2 flex-wrap">
-                                {!inv.expires_at ? (<span className="text-zinc-500">Stały</span>) : <span>{fmtInvExpiry(inv)}</span>}
-                                {inv.max_uses ? (<><span className="text-zinc-800">·</span><span>{inv.uses}/{inv.max_uses} użyć</span></>) : <span className="text-zinc-700">{inv.uses} użyć</span>}
+                                {!inv.expires_at ? (<span className="text-zinc-500">{tl('invites.permanent')}</span>) : <span>{fmtInvExpiry(inv)}</span>}
+                                {inv.max_uses ? (<><span className="text-zinc-800">·</span><span>{inv.uses}/{inv.max_uses} {tl('invites.uses')}</span></>) : <span className="text-zinc-700">{inv.uses} {tl('invites.uses')}</span>}
                                 {inv.creator_username && (<><span className="text-zinc-800">·</span><span>przez <span className="text-zinc-400">{inv.creator_username}</span></span></>)}
                               </span>
                             </div>
                           </div>
                           <button onClick={() => copyInviteLink(inv.code)}
                             className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.05] text-zinc-400 hover:text-white text-xs transition-all">
-                            <Copy size={11}/> Link
+                            <Copy size={11}/> {tl('invites.link')}
                           </button>
                           <button onClick={() => delInviteLocal(inv.code)}
                             className="opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all">
@@ -4821,26 +4821,26 @@ function ServerSettingsPage({
           {tab === 'events' && (
             <div className="flex flex-col gap-4 max-w-2xl mx-auto">
               <div>
-                <h3 className="text-sm font-bold text-white mb-0.5">Eventy serwera</h3>
-                <p className="text-xs text-zinc-500">Twórz i zarządzaj zaplanowanymi wydarzeniami dla członków serwera.</p>
+                <h3 className="text-sm font-bold text-white mb-0.5">{tl('srv.events.title')}</h3>
+                <p className="text-xs text-zinc-500">{tl('srv.events.desc')}</p>
               </div>
               <div className="flex flex-col gap-3 bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
                 <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">Nowy event</p>
                 <input value={newEvent?.title ?? ''} onChange={e=>setNewEvent?.({...newEvent!, title:e.target.value})}
-                  placeholder="Tytuł eventu*" className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50"/>
+                  placeholder={tl('srv.events.titlePh')} className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50"/>
                 <input value={newEvent?.description ?? ''} onChange={e=>setNewEvent?.({...newEvent!, description:e.target.value})}
-                  placeholder="Opis (opcjonalnie)" className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50"/>
+                  placeholder={tl('srv.events.descPh')} className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50"/>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1 block">Data i godzina*</label>
+                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1 block">{tl('srv.events.dateLabel')}</label>
                     <input type="datetime-local" value={newEvent?.starts_at ?? ''} onChange={e=>setNewEvent?.({...newEvent!, starts_at:e.target.value})}
                       className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-indigo-500/50"/>
                   </div>
                   <div>
-                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1 block">Kanał (opcjonalnie)</label>
+                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1 block">{tl('srv.events.channelLabel')}</label>
                     <select value={newEvent?.channel_id ?? ''} onChange={e=>setNewEvent?.({...newEvent!, channel_id:e.target.value})}
                       className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-indigo-500/50">
-                      <option value="">– brak –</option>
+                      <option value="">{tl('common.noneDash')}</option>
                       {(channels||[]).filter(c=>c.type==='voice'||c.type==='text').map(c=>(
                         <option key={c.id} value={c.id}>{c.name}</option>
                       ))}
@@ -4856,16 +4856,16 @@ function ServerSettingsPage({
                       const evs = await eventsApi.list(serverFull.id);
                       setServerEvents(evs);
                       setNewEvent({title:'',description:'',starts_at:'',channel_id:''});
-                      addToast?.('Event utworzony!','success');
-                    } catch(e:any){ addToast?.(e.message||'Błąd','error'); }
+                      addToast?.(tl('srv.events.created'),'success');
+                    } catch(e:any){ addToast?.(e.message||tl('common.error'),'error'); }
                     finally { setEventsLoading(false); }
                   }}
                   className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-2">
-                  {eventsLoading ? <Loader2 size={13} className="animate-spin"/> : <><CalendarPlus size={13}/>Utwórz event</>}
+                  {eventsLoading ? <Loader2 size={13} className="animate-spin"/> : <><CalendarPlus size={13}/>{tl('srv.events.createBtn')}</>}
                 </button>
               </div>
               <div className="flex flex-col gap-2">
-                {serverEvents.length === 0 && <p className="text-xs text-zinc-600 text-center py-4">Brak eventów. Utwórz pierwszy!</p>}
+                {serverEvents.length === 0 && <p className="text-xs text-zinc-600 text-center py-4">{tl('srv.events.emptyMain')}</p>}
                 {serverEvents.map(ev=>(
                   <div key={ev.id} className="flex items-center gap-3 p-3.5 bg-white/[0.03] border border-white/[0.05] rounded-xl hover:border-white/[0.09] transition-all">
                     <div className="w-10 h-10 rounded-xl bg-violet-500/15 flex items-center justify-center shrink-0">
@@ -4877,8 +4877,8 @@ function ServerSettingsPage({
                       {ev.description && <p className="text-xs text-zinc-600 truncate mt-0.5">{ev.description}</p>}
                     </div>
                     <button onClick={async()=>{
-                      try { await eventsApi.delete(serverFull.id,ev.id); setServerEvents?.(serverEvents.filter(e=>e.id!==ev.id)); addToast?.('Usunięto event','info'); }
-                      catch(e:any){ addToast?.(e.message||'Błąd','error'); }
+                      try { await eventsApi.delete(serverFull.id,ev.id); setServerEvents?.(serverEvents.filter(e=>e.id!==ev.id)); addToast?.(tl('srv.events.deleted'),'info'); }
+                      catch(e:any){ addToast?.(e.message||tl('common.error'),'error'); }
                     }} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all shrink-0">
                       <Trash2 size={12}/>
                     </button>
@@ -4892,8 +4892,8 @@ function ServerSettingsPage({
           {tab === 'onboarding' && (
             <div className="flex flex-col gap-4 max-w-2xl mx-auto">
               <div>
-                <h3 className="text-sm font-bold text-white mb-0.5">Onboarding nowych członków</h3>
-                <p className="text-xs text-zinc-500">Skonfiguruj ekran powitalny dla nowych osób dołączających do serwera. Możesz ustawić regulamin i automatyczne role.</p>
+                <h3 className="text-sm font-bold text-white mb-0.5">{tl('srv.onboarding.title')}</h3>
+                <p className="text-xs text-zinc-500">{tl('srv.onboarding.desc')}</p>
               </div>
               {onboardingData === undefined || onboardingData === null ? (
                 <div className="flex items-center justify-center py-8"><Loader2 size={20} className="animate-spin text-zinc-600"/></div>
@@ -4901,8 +4901,8 @@ function ServerSettingsPage({
                 <div className="flex flex-col gap-4">
                   <div className="flex items-center justify-between p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
                     <div>
-                      <p className="text-sm font-semibold text-white">Włącz onboarding</p>
-                      <p className="text-xs text-zinc-500 mt-0.5">Nowi członkowie zobaczą ekran powitalny z regulaminem</p>
+                      <p className="text-sm font-semibold text-white">{tl('srv.onboarding.enable')}</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">{tl('srv.onboarding.enableDesc')}</p>
                     </div>
                     <button onClick={async()=>{
                       const next = !onboardingData.enabled;
@@ -4913,23 +4913,23 @@ function ServerSettingsPage({
                     </button>
                   </div>
                   <div>
-                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Tekst powitalny</label>
+                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.onboarding.welcomeLabel')}</label>
                     <input defaultValue={onboardingData.welcome_text||''} id="ob-welcome-ssp"
                       className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50"
-                      placeholder="Witaj na serwerze! Zapoznaj się z regulaminem..."/>
+                      placeholder={tl('srv.onboarding.welcomePh')}/>
                   </div>
                   <div>
-                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Regulamin / zasady serwera</label>
+                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.onboarding.rulesLabel')}</label>
                     <textarea defaultValue={onboardingData.rules_text||''} id="ob-rules-ssp" rows={6}
                       className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 resize-none"
-                      placeholder="§1. Zachowuj szacunek wobec innych.&#10;§2. Zakaz spamu.&#10;§3. ..."/>
+                      placeholder={tl('srv.onboarding.rulesPh')}/>
                   </div>
                   {roles && roles.length > 0 && (
                     <div>
-                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Automatyczna rola po akceptacji regulaminu</label>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.onboarding.autoRoleLabel')}</label>
                       <select defaultValue={onboardingData.assign_role_id||''} id="ob-role-ssp"
                         className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-indigo-500/50">
-                        <option value="">– brak –</option>
+                        <option value="">{tl('common.noneDash')}</option>
                         {roles.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}
                       </select>
                     </div>
@@ -4941,10 +4941,10 @@ function ServerSettingsPage({
                     try {
                       await onboardingApi.update(serverFull.id,{welcome_text:welcome,rules_text:rules,enabled:onboardingData.enabled,assign_role_id:roleId});
                       setOnboardingData?.({...onboardingData,welcome_text:welcome,rules_text:rules,assign_role_id:roleId});
-                      addToast?.('Onboarding zapisany!','success');
-                    } catch(e:any){ addToast?.(e.message||'Błąd','error'); }
+                      addToast?.(tl('srv.onboarding.saved'),'success');
+                    } catch(e:any){ addToast?.(e.message||tl('common.error'),'error'); }
                   }} className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">
-                    Zapisz onboarding
+                    {tl('srv.onboarding.saveBtn')}
                   </button>
                 </div>
               )}
@@ -4955,29 +4955,29 @@ function ServerSettingsPage({
           {tab === 'discovery' && (
             <div className="flex flex-col gap-4 max-w-2xl mx-auto">
               <div>
-                <h3 className="text-sm font-bold text-white mb-0.5">Publiczne wyszukiwanie</h3>
-                <p className="text-xs text-zinc-500">Zdecyduj, czy Twój serwer ma być widoczny w katalogu publicznych serwerów. Domyślnie każdy serwer jest prywatny.</p>
+                <h3 className="text-sm font-bold text-white mb-0.5">{tl('srv.discovery.title')}</h3>
+                <p className="text-xs text-zinc-500">{tl('srv.discovery.desc')}</p>
               </div>
               {/* Toggle publiczny */}
               <div className="flex items-center justify-between p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
                 <div>
-                  <p className="text-sm font-semibold text-white">Serwer publiczny</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">Pojawi się w wyszukiwarce — każdy może dołączyć</p>
+                  <p className="text-sm font-semibold text-white">{tl('srv.discovery.publicLabel')}</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">{tl('srv.discovery.publicDesc')}</p>
                 </div>
                 <button onClick={async()=>{
                   const next = !isPublicLocal;
                   try {
                     await discoverApi.setDiscovery(serverFull.id,{is_public:next});
                     setIsPublicLocal(next);
-                    addToast?.(`Serwer jest teraz ${next?'publiczny':'prywatny'}!`,'success');
-                  } catch(e:any){ addToast?.(e.message||'Błąd','error'); }
+                    addToast?.(next?tl('srv.discovery.nowPublic'):tl('srv.discovery.nowPrivate'),'success');
+                  } catch(e:any){ addToast?.(e.message||tl('common.error'),'error'); }
                 }} className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${isPublicLocal?'bg-indigo-500':'bg-zinc-700'}`}>
                   <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${isPublicLocal?'translate-x-5':'translate-x-0'}`}/>
                 </button>
               </div>
               {/* Kategoria */}
               <div>
-                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Kategoria serwera</label>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.discovery.categoryLabel')}</label>
                 <div className="grid grid-cols-3 gap-2">
                   {DISC_CATS_OPT.map(opt=>(
                     <button key={opt.key} onClick={()=>setDiscCat(opt.key)}
@@ -4989,10 +4989,10 @@ function ServerSettingsPage({
               </div>
               {/* Opis */}
               <div>
-                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Opis w katalogu serwerów</label>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.discovery.descLabel')}</label>
                 <textarea defaultValue={(serverFull as any).discovery_description||''} id="disc-desc-ssp" rows={4}
                   className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 resize-none"
-                  placeholder="Opisz swój serwer dla przyszłych członków..."/>
+                  placeholder={tl('srv.discovery.descPh')}/>
               </div>
               {/* Zapis */}
               <button onClick={async()=>{
@@ -5003,10 +5003,10 @@ function ServerSettingsPage({
                     discovery_description: desc,
                     discovery_category: discCat || null,
                   });
-                  addToast?.('Ustawienia odkrywalności zapisane!','success');
-                } catch(e:any){ addToast?.(e.message||'Błąd','error'); }
+                  addToast?.(tl('srv.discovery.saved'),'success');
+                } catch(e:any){ addToast?.(e.message||tl('common.error'),'error'); }
               }} className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">
-                Zapisz ustawienia
+                {tl('srv.discovery.saveBtn')}
               </button>
             </div>
           )}
@@ -5344,7 +5344,7 @@ function StorageTab({ addToast }: { addToast: (m:string,t?:any)=>void }) {
       {storageView==='files' && stats && (
         <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl overflow-hidden">
           <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-4 py-2 border-b border-white/[0.06] text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-            <span>Plik</span><span>Rozmiar</span><span>Przez</span><span>Usuń</span>
+            <span>Plik</span><span>Rozmiar</span><span>Przez</span><span>{tl('action.delete')}</span>
           </div>
           <div className="divide-y divide-white/[0.04]">
             {stats.recent.map(f => (
@@ -5970,7 +5970,7 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                                 className="flex-1 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 text-white py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5">
                                 {editUserLoading&&<Loader2 size={11} className="animate-spin"/>} Zapisz
                               </button>
-                              <button onClick={()=>setEditUserForm(null)} className="flex-1 bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 py-2 rounded-xl text-xs transition-colors">Anuluj</button>
+                              <button onClick={()=>setEditUserForm(null)} className="flex-1 bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 py-2 rounded-xl text-xs transition-colors">{tl('action.cancel')}</button>
                             </div>
                           </div>
                         ) : (
@@ -6092,7 +6092,7 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                     </select>
                     <div className="flex gap-2">
                       <button onClick={handleAssignBadge} className="flex-1 bg-indigo-500 hover:bg-indigo-400 text-white py-2 rounded-xl text-sm font-semibold transition-colors">Przypisz</button>
-                      <button onClick={()=>setAssignUser(null)} className="flex-1 bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 py-2 rounded-xl text-sm transition-colors">Anuluj</button>
+                      <button onClick={()=>setAssignUser(null)} className="flex-1 bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 py-2 rounded-xl text-sm transition-colors">{tl('action.cancel')}</button>
                     </div>
                     {assignUser.badges?.length>0&&(
                       <div>
@@ -6162,8 +6162,8 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                     <p className="text-sm text-zinc-400">Czy na pewno chcesz usunąć serwer <span className="text-white font-semibold">{serversList.find(s=>s.id===deleteServerConfirmId)?.name}</span>? Tej operacji nie można cofnąć.</p>
                     <div className="flex gap-2">
                       <button onClick={()=>handleDeleteServer(deleteServerConfirmId)}
-                        className="flex-1 bg-rose-500 hover:bg-rose-400 text-white py-2 rounded-xl text-sm font-semibold transition-colors">Usuń</button>
-                      <button onClick={()=>setDeleteServerConfirmId(null)} className="flex-1 bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 py-2 rounded-xl text-sm transition-colors">Anuluj</button>
+                        className="flex-1 bg-rose-500 hover:bg-rose-400 text-white py-2 rounded-xl text-sm font-semibold transition-colors">{tl('action.delete')}</button>
+                      <button onClick={()=>setDeleteServerConfirmId(null)} className="flex-1 bg-white/[0.05] hover:bg-white/[0.08] text-zinc-400 py-2 rounded-xl text-sm transition-colors">{tl('action.cancel')}</button>
                     </div>
                   </div>
                 </div>
@@ -6430,14 +6430,14 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                           ))}
                         </div>
                         <p className="text-xs text-zinc-500 truncate">{a.email}</p>
-                        {a.last_active_at && <p className="text-[10px] text-zinc-600 mt-0.5">Ostatnia aktywność: {new Date(a.last_active_at).toLocaleString('pl-PL')}</p>}
+                        {a.last_active_at && <p className="text-[10px] text-zinc-600 mt-0.5">{tl('admin.lastActive')}: {fmtDateLocale(a.last_active_at,{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</p>}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[10px] text-zinc-600">od {new Date(a.created_at).toLocaleDateString('pl-PL')}</span>
+                        <span className="text-[10px] text-zinc-600">{tl('admin.since')} {fmtDateLocale(a.created_at)}</span>
                         {a.id !== currentUser?.id && a.is_admin && (
                           <button onClick={async()=>{
                             try { await adminApi.users.setAdmin(a.id, false); setAdminsList(p=>p.filter(x=>x.id!==a.id||x.badges.some(b=>b.name==='developer'))); addToast({ type:'success', message:`Cofnięto uprawnienia admina dla ${a.username}` }); }
-                            catch { addToast({ type:'error', message:'Błąd' }); }
+                            catch { addToast({ type:'error', message:tl('common.error') }); }
                           }} className="p-1.5 rounded-lg text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all" title="Cofnij uprawnienia admina">
                             <ShieldOff size={13}/>
                           </button>
@@ -13220,7 +13220,7 @@ export default function App() {
     if (!activeServer) return;
     confirmAction('Wyrzucić użytkownika?', async () => {
       try { await serversApi.kickMember(activeServer, userId); setMembers(p => p.filter(m => m.id !== userId)); }
-      catch (err: any) { alert(err?.message || 'Błąd'); }
+      catch (err: any) { alert(err?.message || tl('common.error')); }
     });
   };
   const handleBan = (userId: string, username: string) => {
@@ -13229,7 +13229,7 @@ export default function App() {
       try {
         await serversApi.bans.ban(activeServer, userId);
         setMembers(p => p.filter(m => m.id !== userId));
-      } catch (err: any) { alert(err?.message || 'Błąd'); }
+      } catch (err: any) { alert(err?.message || tl('common.error')); }
     });
   };
   const handleUnban = (userId: string) => {
@@ -13238,7 +13238,7 @@ export default function App() {
       try {
         await serversApi.bans.unban(activeServer, userId);
         setBanList(p => p.filter(b => b.user_id !== userId));
-      } catch (err: any) { alert(err?.message || 'Błąd'); }
+      } catch (err: any) { alert(err?.message || tl('common.error')); }
     });
   };
   const handlePinMessage = async (msgId: string, pinned: boolean) => {
@@ -13253,7 +13253,7 @@ export default function App() {
     } catch (err: any) {
       // Revert on error
       setChannelMsgs(p => p.map(m => m.id === msgId ? { ...m, pinned: !pinned } : m));
-      alert(err?.message || 'Błąd');
+      alert(err?.message || tl('common.error'));
     }
   };
 
@@ -15979,7 +15979,7 @@ export default function App() {
                             getSocket()?.emit('voice_dj_stopped' as any, { channel_id: activeCall.channelId });
                             setVoiceDj(p=>{const n={...p};delete n[activeCall.channelId];return n;});
                             addToast('DJ zatrzymany','info');
-                          } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                          } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                         }} title="Zatrzymaj Spotify DJ"
                           className="w-7 h-7 rounded-lg flex items-center justify-center bg-[#1DB954]/20 text-[#1DB954] hover:bg-rose-500/20 hover:text-rose-400 transition-all">
                           <SpotifyIcon size={13}/>
@@ -16010,7 +16010,7 @@ export default function App() {
                           getSocket()?.emit('voice_dj_started' as any, { channel_id: activeCall.channelId });
                           setVoiceDj(p=>({...p,[activeCall.channelId]:{id:currentUser!.id,username:currentUser!.username,avatar_url:currentUser!.avatar_url??null}}));
                           addToast('Jesteś teraz DJ-em! Wszyscy mogą słuchać Twojego Spotify.','success');
-                        } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                        } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                       }} title="Uruchom Spotify DJ"
                         className={`w-7 h-7 rounded-lg flex items-center justify-center text-zinc-600 hover:text-[#1DB954] hover:bg-[#1DB954]/10 transition-all ${gb}`}>
                         <SpotifyIcon size={13}/>
@@ -16033,8 +16033,8 @@ export default function App() {
                     <SpotifyIcon size={14} className="text-[#1DB954]"/>
                     <span className="text-xs text-[#1DB954] font-semibold">
                       {voiceDj[activeCall.channelId]?.id === currentUser?.id
-                        ? 'Jesteś DJ-em'
-                        : `${voiceDj[activeCall.channelId]?.username} jest DJ-em`}
+                        ? tl('voice.youAreDj')
+                        : `${voiceDj[activeCall.channelId]?.username} ${tl('voice.userIsDj')}`}
                     </span>
                     {voiceDjListening.has(activeCall.channelId) && voiceDj[activeCall.channelId]?.id !== currentUser?.id && (
                       <span className="text-[11px] text-zinc-500">· syncing</span>
@@ -16042,7 +16042,7 @@ export default function App() {
                   </div>
                   {voiceDj[activeCall.channelId]?.id === currentUser?.id && (
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] text-zinc-500">Głośność:</span>
+                      <span className="text-[11px] text-zinc-500">{tl('voice.volume')}</span>
                       <input type="range" min={0} max={100} value={voiceDjVolume}
                         onChange={async e=>{
                           const v=+e.target.value; setVoiceDjVolume(v);
@@ -16235,13 +16235,13 @@ export default function App() {
                           </>
                         ) : (
                           <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-[13px] font-extrabold uppercase tracking-[0.2em] text-white/15">EKRAN UDOSTĘPNIONY</span>
+                            <span className="text-[13px] font-extrabold uppercase tracking-[0.2em] text-white/15">{tl('voice.screenShared')}</span>
                           </div>
                         )}
                         {/* Live badge */}
                         <div className="absolute top-3 left-3 z-10">
                           <span className="inline-flex items-center gap-1.5 bg-[#C8FF6B] text-[#0a0e05] text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-lg shadow-[0_4px_14px_rgba(200,255,107,0.30)]">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#0a0e05]"/> NA ŻYWO
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#0a0e05]"/> {tl('connections.live')}
                           </span>
                         </div>
                         {/* PiP: own stream while watching someone else */}
@@ -16252,7 +16252,7 @@ export default function App() {
                               className="w-full h-full object-contain" autoPlay playsInline muted/>
                             <div className="absolute bottom-1 left-1.5 flex items-center gap-1">
                               <ScreenShare size={8} className="text-indigo-300"/>
-                              <span className="text-[8px] text-white font-medium">Ty</span>
+                              <span className="text-[8px] text-white font-medium">{tl('common.you')}</span>
                             </div>
                           </div>
                         )}
@@ -16260,7 +16260,7 @@ export default function App() {
                         <div className="absolute bottom-3 left-3 flex flex-col gap-1.5 max-w-[75%]">
                           <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-sm rounded-lg px-2.5 py-1 w-fit">
                             <ScreenShare size={12} className="text-[#C8FF6B]"/>
-                            <span className="text-xs text-white font-medium truncate">{screenOwner} · udostępnia ekran</span>
+                            <span className="text-xs text-white font-medium truncate">{screenOwner} · {tl('voice.isSharingScreen')}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             {vidSettings?.height && (
@@ -16270,7 +16270,7 @@ export default function App() {
                             )}
                             {watcherBadge(watchingStreamId, true)}
                             {watchers.length === 0 && (
-                              <span className="text-[10px] text-zinc-600 px-2">0 oglądających</span>
+                              <span className="text-[10px] text-zinc-600 px-2">0 {tl('voice.noViewers')}</span>
                             )}
                           </div>
                         </div>
@@ -16281,7 +16281,7 @@ export default function App() {
                             setStreamMutedByMe(p=>({...p,[watchingStreamId]:m}));
                             muteRemoteScreenStream(watchingStreamId, m);
                             if (!m) setRemoteScreenVolume(watchingStreamId, svol);
-                          }} title={isMutedStream ? 'Włącz dźwięk' : 'Wycisz'}
+                          }} title={isMutedStream ? tl('voice.unmute') : tl('voice.mute')}
                             className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${isMutedStream?'text-rose-400':'text-zinc-300 hover:text-white'}`}>
                             {isMutedStream ? <VolumeX size={13}/> : <Volume2 size={13}/>}
                           </button>
@@ -16302,7 +16302,7 @@ export default function App() {
                           <div className="flex items-center gap-2">
                             <button onClick={stopWatching}
                               className="h-7 bg-zinc-800/80 backdrop-blur-sm border border-white/10 rounded-lg flex items-center px-2.5 gap-1.5 text-xs text-zinc-300 hover:text-white transition-colors">
-                              <X size={11}/> Zatrzymaj oglądanie
+                              <X size={11}/> {tl('voice.stopWatching')}
                             </button>
                             {/* Quick-switch to other streams */}
                             {allStreamIds.filter(id => id !== watchingStreamId && id !== 'self').map(sid => (
@@ -16322,7 +16322,7 @@ export default function App() {
                           </div>
                           <button
                             onClick={()=>{const el=document.getElementById('screen-share-video') as HTMLVideoElement;el?.requestFullscreen?.();}}
-                            className="w-7 h-7 bg-black/60 backdrop-blur-sm rounded-lg flex items-center justify-center text-white" title="Pełny ekran">
+                            className="w-7 h-7 bg-black/60 backdrop-blur-sm rounded-lg flex items-center justify-center text-white" title={tl('voice.fullscreen')}>
                             <Maximize2 size={13}/>
                           </button>
                         </div>
@@ -16361,7 +16361,7 @@ export default function App() {
                                 {/* Live badge */}
                                 <div className="absolute top-2.5 left-2.5 z-10">
                                   <span className="inline-flex items-center gap-1.5 bg-[#C8FF6B] text-[#0a0e05] text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-md">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-[#0a0e05]"/> NA ŻYWO
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[#0a0e05]"/> {tl('connections.live')}
                                   </span>
                                 </div>
                                 {/* Center CTA */}
@@ -16370,7 +16370,7 @@ export default function App() {
                                     <>
                                       <div className="flex flex-col items-center gap-1">
                                         <ScreenShare size={22} className="text-indigo-400 drop-shadow"/>
-                                        <span className="text-sm font-semibold text-white drop-shadow">{ownerName} udostępnia</span>
+                                        <span className="text-sm font-semibold text-white drop-shadow">{ownerName} {tl('voice.isSharing')}</span>
                                       </div>
                                       <button onClick={() => {
                                         setWatchingStreamId(streamId);
@@ -16384,14 +16384,14 @@ export default function App() {
                                         playStreamJoin();
                                       }}
                                         className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-900/40 transition-all active:scale-95">
-                                        <Monitor size={14}/> Dołącz do oglądania
+                                        <Monitor size={14}/> {tl('voice.joinWatching')}
                                       </button>
                                     </>
                                   )}
                                   {isSelf && (
                                     <div className="flex flex-col items-center gap-1">
                                       <span className="text-xs font-semibold text-indigo-300 bg-indigo-600/30 border border-indigo-500/40 px-3 py-1 rounded-lg flex items-center gap-1.5">
-                                        <ScreenShare size={10}/> Twoja transmisja
+                                        <ScreenShare size={10}/> {tl('voice.yourStream')}
                                       </span>
                                     </div>
                                   )}
@@ -16436,37 +16436,37 @@ export default function App() {
                       <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-2xl"
                         style={{background:'rgba(12,13,24,0.92)',border:'1px solid rgba(255,255,255,0.09)',backdropFilter:'blur(12px)'}}>
                         <div>
-                          <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Mikrofon</label>
+                          <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">{tl('voice.microphone')}</label>
                           <select value={selMic} onChange={async e=>{setSelMic(e.target.value);if(localStreamRef.current)await acquireMic(e.target.value||undefined);}}
                             className="w-full appearance-none bg-zinc-800/80 border border-white/[0.07] text-white text-xs rounded-lg px-2.5 py-2 outline-none"
                             style={{backgroundColor:'#27272a',color:'#fff'}}>
-                            <option value="">Domyślny</option>
-                            {devices.filter(d=>d.kind==='audioinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`Mikrofon ${d.deviceId.slice(0,6)}`}</option>)}
+                            <option value="">{tl('device.default')}</option>
+                            {devices.filter(d=>d.kind==='audioinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`${tl('voice.microphone')} ${d.deviceId.slice(0,6)}`}</option>)}
                           </select>
                         </div>
                         <div>
-                          <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Głośnik</label>
+                          <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">{tl('voice.speaker')}</label>
                           <select value={selSpeaker} onChange={async e=>{setSelSpeaker(e.target.value);await setOutputDevice(e.target.value);}}
                             className="w-full appearance-none bg-zinc-800/80 border border-white/[0.07] text-white text-xs rounded-lg px-2.5 py-2 outline-none"
                             style={{backgroundColor:'#27272a',color:'#fff'}}>
-                            <option value="">Domyślny</option>
-                            {devices.filter(d=>d.kind==='audiooutput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`Głośnik ${d.deviceId.slice(0,6)}`}</option>)}
+                            <option value="">{tl('device.default')}</option>
+                            {devices.filter(d=>d.kind==='audiooutput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`${tl('voice.speaker')} ${d.deviceId.slice(0,6)}`}</option>)}
                           </select>
                         </div>
                         <div>
-                          <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Kamera</label>
+                          <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">{tl('voice.camera')}</label>
                           <select value={selCamera} onChange={async e=>{setSelCamera(e.target.value); await switchCameraDevice(e.target.value);}}
                             className="w-full appearance-none bg-zinc-800/80 border border-white/[0.07] text-white text-xs rounded-lg px-2.5 py-2 outline-none"
                             style={{backgroundColor:'#27272a',color:'#fff'}}>
-                            <option value="">Domyślna</option>
-                            {devices.filter(d=>d.kind==='videoinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`Kamera ${d.deviceId.slice(0,6)}`}</option>)}
+                            <option value="">{tl('device.defaultFem')}</option>
+                            {devices.filter(d=>d.kind==='videoinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`${tl('voice.camera')} ${d.deviceId.slice(0,6)}`}</option>)}
                           </select>
                         </div>
                         {/* Screen share quality */}
                         <div className="sm:col-span-3 flex items-center justify-between px-0.5 pt-1 border-t border-white/[0.05] mt-1">
                           <div className="flex flex-col">
-                            <span className="text-xs font-semibold text-white">Jakość udostępniania ekranu</span>
-                            <span className="text-[10px] text-zinc-500 mt-0.5">HD 720p/60fps — mniejsze łącze · FHD 1080p/60fps — wysoka jakość</span>
+                            <span className="text-xs font-semibold text-white">{tl('voice.screenShareQuality')}</span>
+                            <span className="text-[10px] text-zinc-500 mt-0.5">{tl('voice.screenShareQualityDesc')}</span>
                           </div>
                           <div className="flex rounded-lg overflow-hidden border border-white/10 text-[11px] font-semibold shrink-0">
                             <button onClick={() => setScreenQuality('hd')}
@@ -16482,8 +16482,8 @@ export default function App() {
                         {/* Noise cancellation toggle */}
                         <div className="sm:col-span-3 flex items-center justify-between px-0.5 pt-1 border-t border-white/[0.05] mt-1">
                           <div className="flex flex-col">
-                            <span className="text-xs font-semibold text-white">Redukcja szumów i echo</span>
-                            <span className="text-[10px] text-zinc-500 mt-0.5">Wycisza hałas tła i echa mikrofonu w czasie rzeczywistym</span>
+                            <span className="text-xs font-semibold text-white">{tl('voice.noiseReduction')}</span>
+                            <span className="text-[10px] text-zinc-500 mt-0.5">{tl('voice.noiseReductionDesc')}</span>
                           </div>
                           <button
                             onClick={async () => {
@@ -16502,18 +16502,18 @@ export default function App() {
                         {noiseCancel && isTauri && (
                           <div className="sm:col-span-3 px-0.5 pt-1">
                             <p className="text-[10px] text-zinc-500 leading-relaxed">
-                              Na aplikacji desktopowej redukcja szumów działa na poziomie systemu/przeglądarki (echo, AGC, tłumienie szumów) — dodatkowa bramka szumów jest wyłączona, by zagwarantować stabilne przesyłanie dźwięku.
+                              {tl('voice.noiseDesktopInfo')}
                             </p>
                           </div>
                         )}
                         {noiseCancel && !isTauri && (
                           <div className="sm:col-span-3 px-0.5 pt-2">
                             <div className="flex items-center justify-between mb-1.5">
-                              <span className="text-[11px] font-semibold text-white">Próg bramki szumów</span>
-                              <span className="text-[10px] text-zinc-400">{noiseGateSens < 25 ? 'luźny — prawie wszystko przechodzi' : noiseGateSens > 75 ? 'agresywny — tylko głośny głos' : 'zrównoważony'}</span>
+                              <span className="text-[11px] font-semibold text-white">{tl('voice.noiseGateThreshold')}</span>
+                              <span className="text-[10px] text-zinc-400">{noiseGateSens < 25 ? tl('voice.noiseGateLoose') : noiseGateSens > 75 ? tl('voice.noiseGateAggressive') : tl('voice.noiseGateBalanced')}</span>
                             </div>
                             <div className="flex items-center gap-2">
-                              <span className="text-[9px] text-zinc-500 w-10 text-right shrink-0">mało</span>
+                              <span className="text-[9px] text-zinc-500 w-10 text-right shrink-0">{tl('voice.low')}</span>
                               <input
                                 type="range" min={0} max={100} step={5} value={noiseGateSens}
                                 onChange={e => {
@@ -16525,9 +16525,9 @@ export default function App() {
                                 }}
                                 className="flex-1 accent-indigo-500 h-1.5 cursor-pointer"
                               />
-                              <span className="text-[9px] text-zinc-500 w-10 shrink-0">dużo</span>
+                              <span className="text-[9px] text-zinc-500 w-10 shrink-0">{tl('voice.high')}</span>
                             </div>
-                            <p className="text-[9px] text-zinc-600 mt-1">Bramka ignoruje krótkie dźwięki (klawiatura, stuki w biurko) — reaguje tylko na trwały głos</p>
+                            <p className="text-[9px] text-zinc-600 mt-1">{tl('voice.noiseGateHint')}</p>
                           </div>
                         )}
                       </div>
@@ -17287,7 +17287,7 @@ export default function App() {
                           const diffMin=Math.floor(Math.abs(diffMs)/60_000);const diffH=Math.floor(diffMin/60);const diffD=Math.floor(diffH/24);
                           const countdown=isLive?'LIVE':diffD>0?`za ${diffD}d`:diffH>0?`za ${diffH}h`:`za ${diffMin}m`;
                           const dayN=new Date(ev.starts_at).getDate();
-                          const handleSave=async()=>{try{const r=await eventsApi.rsvp(ev.server_id,ev.id,'going');setHomeEvents(p=>p.map(e=>e.id===ev.id?{...e,...r,my_rsvp:'going'}:e));addToast(`Zapisano na "${ev.title}"`, 'success');}catch{addToast('Błąd','error');}};
+                          const handleSave=async()=>{try{const r=await eventsApi.rsvp(ev.server_id,ev.id,'going');setHomeEvents(p=>p.map(e=>e.id===ev.id?{...e,...r,my_rsvp:'going'}:e));addToast(`Zapisano na "${ev.title}"`, 'success');}catch{addToast(tl('common.error'),'error');}};
                           return (
                             <div key={ev.id} style={{display:'flex',gap:14,padding:14,borderRadius:10,alignItems:'flex-start' as const,transition:'background 120ms'}}
                               onMouseEnter={e=>{(e.currentTarget as HTMLDivElement).style.background='rgba(255,255,255,0.04)';}}
@@ -17420,11 +17420,11 @@ export default function App() {
               onSpotifyConnect={async()=>{ try { const r = await spotifyApi.connect(); await openOAuth(r.url, 'spotify'); } catch(e:any){ addToast(e.message||'Błąd Spotify','error'); } }}
               onSpotifyDisconnect={async()=>{ try { await spotifyApi.disconnect(); setOwnSpotify(null); addToast('Spotify odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Spotify','error'); } }}
               onSpotifyToggle={async(v)=>{ await spotifyApi.setSettings({show_on_profile:v}); setOwnSpotify(p=>p?{...p,show_on_profile:v}:p); lastEmittedTrack.current=undefined; if(!v&&currentUser?.id){const sock=getSocket();if(sock)(sock as any).emit('spotify_update',{track:null});setUserActivities(p=>{const n=new Map(p);n.set(currentUser.id,null);return n;});} }}
-              onTwitchConnect={async()=>{ try { const r = await twitchApi.connect(); await openOAuth(r.url, 'twitch'); } catch(e:any){ addToast(e.message||'Błąd Twitch','error'); } }}
-              onTwitchDisconnect={async()=>{ try { await twitchApi.disconnect(); setOwnTwitch(null); addToast('Twitch odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Twitch','error'); } }}
+              onTwitchConnect={async()=>{ try { const r = await twitchApi.connect(); await openOAuth(r.url, 'twitch'); } catch(e:any){ addToast(e.message||`${tl('connections.error')} Twitch`,'error'); } }}
+              onTwitchDisconnect={async()=>{ try { await twitchApi.disconnect(); setOwnTwitch(null); addToast(`Twitch ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||`${tl('connections.disconnectError')} Twitch`,'error'); } }}
               onTwitchToggle={async(v)=>{ await twitchApi.setSettings({show_on_profile:v}); setOwnTwitch(p=>p?{...p,show_on_profile:v}:p); lastEmittedStream.current=undefined; if(!v&&currentUser?.id){const sock=getSocket();if(sock)(sock as any).emit('twitch_update',{stream:null});setUserTwitchActivities(p=>{const n=new Map(p);n.set(currentUser.id,null);return n;});} }}
-              onSteamConnect={async()=>{ try { const r = await steamApi.connect(); await openOAuth(r.url, 'steam'); } catch(e:any){ addToast(e.message||'Błąd Steam','error'); } }}
-              onSteamDisconnect={async()=>{ try { await steamApi.disconnect(); setOwnSteam(null); addToast('Steam odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Steam','error'); } }}
+              onSteamConnect={async()=>{ try { const r = await steamApi.connect(); await openOAuth(r.url, 'steam'); } catch(e:any){ addToast(e.message||`${tl('connections.error')} Steam`,'error'); } }}
+              onSteamDisconnect={async()=>{ try { await steamApi.disconnect(); setOwnSteam(null); addToast(`Steam ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||`${tl('connections.disconnectError')} Steam`,'error'); } }}
               onSteamToggle={async(v)=>{ await steamApi.setSettings({show_on_profile:v}); setOwnSteam(p=>p?{...p,show_on_profile:v}:p); lastEmittedGame.current=undefined; if(!v&&currentUser?.id){const sock=getSocket();if(sock)(sock as any).emit('steam_update',{game:null});setUserSteamActivities(p=>{const n=new Map(p);n.set(currentUser.id,null);return n;});} }}
               friends={friends}
               blockedUsers={blockedUsers}
@@ -17449,7 +17449,7 @@ export default function App() {
                   getSocket()?.emit('spotify_jam_ended' as any, { host_id: currentUser?.id });
                   setMyJam({ role: null, members: [] });
                   addToast('JAM zakończony','info');
-                } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                 finally { setJamLoading(false); }
               }}
               onJamJoin={async(hostId)=>{
@@ -17460,7 +17460,7 @@ export default function App() {
                   const j = await spotifyApi.jamActive();
                   setMyJam(j);
                   addToast('Dołączono do JAM! Synchronizacja Spotify...','success');
-                } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                 finally { setJamLoading(false); }
               }}
               onJamLeave={async()=>{
@@ -17470,7 +17470,7 @@ export default function App() {
                   if (!r.was_host) getSocket()?.emit('spotify_jam_left' as any, { host_id: r.host_id });
                   setMyJam({ role: null, members: [] });
                   addToast('Opuszczono JAM','info');
-                } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                 finally { setJamLoading(false); }
               }}
               mutualServers={mutualServers}
@@ -18023,12 +18023,12 @@ export default function App() {
                     transition={{type:'spring',stiffness:300,damping:30}}
                     className="absolute top-[57px] right-0 bottom-0 w-80 bg-[#141420] border-l border-white/[0.06] z-20 flex flex-col shadow-2xl">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
-                      <div className="flex items-center gap-2 text-white font-semibold text-sm"><Pin size={13} className="text-amber-400"/>Przypięte</div>
+                      <div className="flex items-center gap-2 text-white font-semibold text-sm"><Pin size={13} className="text-amber-400"/>{tl('pins.title')}</div>
                       <button onClick={()=>setShowPinned(false)} className="text-zinc-600 hover:text-white transition-colors"><X size={15}/></button>
                     </div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-3 flex flex-col gap-2">
                       {pinnedMsgs.length===0?(
-                        <div className="text-center text-zinc-600 text-sm py-8">Brak przypiętych wiadomości</div>
+                        <div className="text-center text-zinc-600 text-sm py-8">{tl('pins.empty')}</div>
                       ):pinnedMsgs.map(msg=>(
                         <div key={msg.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
                           <div className="flex items-center gap-2 mb-1.5">
@@ -18040,7 +18040,7 @@ export default function App() {
                           {canPinMessages&&(
                             <button onClick={()=>handlePinMessage(msg.id,false)}
                               className="mt-2 flex items-center gap-1 text-[10px] text-zinc-600 hover:text-rose-400 transition-colors">
-                              <PinOff size={10}/> Odepnij
+                              <PinOff size={10}/> {tl('pins.unpin')}
                             </button>
                           )}
                         </div>
@@ -18057,30 +18057,30 @@ export default function App() {
                     /* Post list */
                     <div className="p-4 md:p-6 max-w-3xl mx-auto">
                       <div className="flex items-center justify-between mb-5">
-                        <h2 className="text-lg font-bold text-white">Posty</h2>
+                        <h2 className="text-lg font-bold text-white">{tl('forum.posts')}</h2>
                         <button onClick={()=>setShowNewPost(v=>!v)}
                           className="flex items-center gap-2 bg-indigo-500 hover:bg-indigo-400 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-indigo-500/20">
-                          <Plus size={14}/> Utwórz post
+                          <Plus size={14}/> {tl('forum.createPost')}
                         </button>
                       </div>
 
                       {/* New post form */}
                       {showNewPost && (
                         <div className="mb-5 p-4 bg-white/[0.03] border border-white/[0.08] rounded-2xl">
-                          <h3 className="text-sm font-semibold text-white mb-3">Nowy post</h3>
+                          <h3 className="text-sm font-semibold text-white mb-3">{tl('forum.newPost')}</h3>
                           <input value={newPostTitle} onChange={e=>setNewPostTitle(e.target.value)}
-                            placeholder="Tytuł posta..." maxLength={200}
+                            placeholder={tl('forum.titlePh')} maxLength={200}
                             className="w-full bg-white/[0.06] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 transition-all mb-2"/>
                           <textarea value={newPostContent} onChange={e=>setNewPostContent(e.target.value)}
-                            placeholder="Treść posta..." rows={4}
+                            placeholder={tl('forum.contentPh')} rows={4}
                             className="w-full bg-white/[0.06] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 transition-all resize-none mb-2"/>
                           <input value={newPostImage} onChange={e=>setNewPostImage(e.target.value)}
-                            placeholder="URL obrazka (opcjonalnie)..."
+                            placeholder={tl('forum.imageUrlPh')}
                             className="w-full bg-white/[0.06] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 transition-all mb-3"/>
                           <div className="flex gap-2 justify-end">
                             <button onClick={()=>{setShowNewPost(false);setNewPostTitle('');setNewPostContent('');setNewPostImage('');}}
                               className="px-4 py-2 rounded-xl text-sm text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors">
-                              Anuluj
+                              {tl('action.cancel')}
                             </button>
                             <button disabled={!newPostTitle.trim()||!newPostContent.trim()} onClick={async()=>{
                               try {
@@ -18088,7 +18088,7 @@ export default function App() {
                                 setForumPosts(prev=>[p,...prev]); setShowNewPost(false); setNewPostTitle(''); setNewPostContent(''); setNewPostImage('');
                               } catch {}
                             }} className="px-4 py-2 rounded-xl text-sm font-semibold bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors">
-                              Opublikuj
+                              {tl('forum.publish')}
                             </button>
                           </div>
                         </div>
@@ -18100,8 +18100,8 @@ export default function App() {
                           <div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center mb-4">
                             <MessageSquare size={26} className="text-zinc-600"/>
                           </div>
-                          <h3 className="text-base font-bold text-white mb-1">Brak postów</h3>
-                          <p className="text-sm text-zinc-500">Bądź pierwszy i utwórz nowy post!</p>
+                          <h3 className="text-base font-bold text-white mb-1">{tl('forum.noPosts')}</h3>
+                          <p className="text-sm text-zinc-500">{tl('forum.beFirst')}</p>
                         </div>
                       )}
                       <div className="flex flex-col gap-3">
@@ -18118,7 +18118,7 @@ export default function App() {
                               </div>
                             )}
                             <div className="p-4">
-                              {post.pinned&&<span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 uppercase tracking-wide mb-1"><Sparkles size={9}/> Przypięty</span>}
+                              {post.pinned&&<span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 uppercase tracking-wide mb-1"><Sparkles size={9}/> {tl('forum.pinned')}</span>}
                               <h3 className="font-bold text-white text-sm mb-2 group-hover:text-indigo-300 transition-colors">{post.title}</h3>
                               <p className="text-xs text-zinc-500 line-clamp-2 mb-3">{post.content}</p>
                               <div className="flex items-center gap-3">
@@ -18126,7 +18126,7 @@ export default function App() {
                                   <img src={staticUrl(post.author_avatar)||`https://ui-avatars.com/api/?name=${post.author_username}&background=random`} className="w-5 h-5 rounded-full object-cover" alt=""/>
                                   <span className="text-xs text-zinc-500">{post.author_username}</span>
                                 </div>
-                                <span className="text-xs text-zinc-600">{new Date(post.created_at).toLocaleDateString('pl-PL')}</span>
+                                <span className="text-xs text-zinc-600">{fmtDate(post.created_at)}</span>
                                 <span className="ml-auto flex items-center gap-1 text-xs text-zinc-600">
                                   <Reply size={11}/> {post.reply_count}
                                 </span>
@@ -18140,7 +18140,7 @@ export default function App() {
                     /* Thread view */
                     <div className="p-4 md:p-6 max-w-3xl mx-auto">
                       <button onClick={()=>setForumPost(null)} className="flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-colors mb-4">
-                        <ArrowLeft size={14}/> Wróć do listy
+                        <ArrowLeft size={14}/> {tl('forum.backToList')}
                       </button>
                       {/* Post */}
                       <div className="bg-white/[0.03] border border-white/[0.08] rounded-2xl overflow-hidden mb-4">
@@ -18150,7 +18150,7 @@ export default function App() {
                           <div className="flex items-center gap-3 mb-4">
                             <img src={staticUrl(forumPost.author_avatar)||`https://ui-avatars.com/api/?name=${forumPost.author_username}&background=random`} className="w-7 h-7 rounded-full object-cover" alt=""/>
                             <span className="text-sm font-semibold text-zinc-300">{forumPost.author_username}</span>
-                            <span className="text-xs text-zinc-600">{new Date(forumPost.created_at).toLocaleString('pl-PL')}</span>
+                            <span className="text-xs text-zinc-600">{fmtDate(forumPost.created_at)}</span>
                             {(currentUser?.id===forumPost.author_id||canManageMessages)&&(
                               <button onClick={async()=>{
                                 try { await forumApi.deletePost(activeChannel,forumPost.id); setForumPost(null); setForumPosts(p=>p.filter(x=>x.id!==forumPost.id)); } catch {}
@@ -18164,15 +18164,15 @@ export default function App() {
                       </div>
                       {/* Replies */}
                       <div className="flex flex-col gap-2 mb-4">
-                        <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1">Odpowiedzi ({forumPost.replies?.length||0})</h3>
-                        {forumPost.locked&&<div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-400"><Lock size={11}/>Ten wątek jest zablokowany</div>}
+                        <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1">{tl('forum.replies')} ({forumPost.replies?.length||0})</h3>
+                        {forumPost.locked&&<div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-400"><Lock size={11}/>{tl('forum.locked')}</div>}
                         {(forumPost.replies||[]).map(r=>(
                           <div key={r.id} className="flex gap-3 bg-white/[0.02] border border-white/[0.06] rounded-xl p-3">
                             <img src={staticUrl(r.author_avatar)||`https://ui-avatars.com/api/?name=${r.author_username}&background=random`} className="w-7 h-7 rounded-full object-cover shrink-0 mt-0.5" alt=""/>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
                                 <span className="text-xs font-semibold text-zinc-300">{r.author_username}</span>
-                                <span className="text-[10px] text-zinc-600">{new Date(r.created_at).toLocaleString('pl-PL')}</span>
+                                <span className="text-[10px] text-zinc-600">{fmtDate(r.created_at)}</span>
                               </div>
                               <p className="text-sm text-zinc-400 leading-relaxed">{r.content}</p>
                             </div>
@@ -18183,7 +18183,7 @@ export default function App() {
                             <img src={staticUrl(currentUser?.avatar_url)||`https://ui-avatars.com/api/?name=${currentUser?.username||'?'}&background=random`} className="w-7 h-7 rounded-full object-cover shrink-0 mt-2" alt=""/>
                             <div className="flex-1">
                               <textarea value={replyContent} onChange={e=>setReplyContent(e.target.value)}
-                                placeholder="Napisz odpowiedź..." rows={2}
+                                placeholder={tl('forum.replyPh')} rows={2}
                                 className="w-full bg-white/[0.06] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-indigo-500/50 transition-all resize-none mb-2"/>
                               <button disabled={!replyContent.trim()||replySending} onClick={async()=>{
                                 setReplySending(true);
@@ -18194,7 +18194,7 @@ export default function App() {
                                   setReplyContent('');
                                 } catch {} finally { setReplySending(false); }
                               }} className="px-4 py-2 rounded-xl text-sm font-semibold bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors flex items-center gap-2">
-                                {replySending&&<Loader2 size={13} className="animate-spin"/>} Odpowiedz
+                                {replySending&&<Loader2 size={13} className="animate-spin"/>} {tl('forum.reply')}
                               </button>
                             </div>
                           </div>
@@ -18272,8 +18272,8 @@ export default function App() {
                       <FileCode2 size={28} className="text-emerald-400 opacity-80"/>
                       <FileArchive size={28} className="text-amber-400 opacity-80"/>
                     </div>
-                    <p className="text-base font-bold text-white">Upuść plik tutaj</p>
-                    <p className="text-xs text-zinc-400 mt-1">Obrazy, audio, wideo, kod, archiwa i więcej</p>
+                    <p className="text-base font-bold text-white">{tl('dnd.dropHere')}</p>
+                    <p className="text-xs text-zinc-400 mt-1">{tl('dnd.fileTypes')}</p>
                   </div>
                 )}
 
@@ -19481,11 +19481,11 @@ export default function App() {
                         <div className="relative shrink-0">
                           <button type="button"
                             onClick={()=>{
-                              if (!canAttachFiles) { setSendError('Nie masz uprawnień do wysyłania plików'); return; }
+                              if (!canAttachFiles) { setSendError(tl('compose.noAttachPerm')); return; }
                               setPlusMenuOpen(v=>!v);
                               setShowEmojiPicker(false); setShowGifPicker(false);
                             }}
-                            title="Dodaj załącznik"
+                            title={tl('compose.addAttachment')}
                             className={`w-7 h-7 flex items-center justify-center rounded-xl transition-all shrink-0 active:scale-90 ${plusMenuOpen?'text-indigo-400 bg-indigo-500/10':canAttachFiles?'text-zinc-600 hover:text-indigo-400 hover:bg-indigo-500/10':'text-zinc-700 cursor-not-allowed'}`}>
                             <Plus size={16}/>
                           </button>
@@ -19503,8 +19503,8 @@ export default function App() {
                                     <Paperclip size={15} className="text-indigo-400"/>
                                   </div>
                                   <div>
-                                    <p className="font-semibold text-sm leading-tight">Prześlij plik</p>
-                                    <p className="text-[10px] text-zinc-600 leading-tight">Zdjęcia, wideo, dokumenty…</p>
+                                    <p className="font-semibold text-sm leading-tight">{tl('compose.uploadFile')}</p>
+                                    <p className="text-[10px] text-zinc-600 leading-tight">{tl('compose.uploadFileDesc')}</p>
                                   </div>
                                 </button>
                                 {/* Wklej ze schowka */}
@@ -19512,7 +19512,7 @@ export default function App() {
                                   onClick={async ()=>{
                                     setPlusMenuOpen(false);
                                     if (!navigator.clipboard?.read) {
-                                      addToast('Wklej plik skrótem Ctrl+V lub przeciągnij na okno czatu', 'info'); return;
+                                      addToast(tl('compose.pasteHint'), 'info'); return;
                                     }
                                     try {
                                       const clipItems = await navigator.clipboard.read();
@@ -19531,11 +19531,11 @@ export default function App() {
                                           applyClipboardFile(new File([blob], `paste-${Date.now()}.${ext}`, { type: fileType })); return;
                                         }
                                       }
-                                      addToast('Schowek nie zawiera obrazka ani pliku', 'info');
+                                      addToast(tl('compose.clipboardEmpty'), 'info');
                                     } catch {
                                       addToast(isTauri
-                                        ? 'Brak dostępu do schowka — użyj skrótu Ctrl+V aby wkleić'
-                                        : 'Brak dostępu do schowka — zezwól w ustawieniach przeglądarki', 'error');
+                                        ? tl('compose.clipboardNoAccessTauri')
+                                        : tl('compose.clipboardNoAccessWeb'), 'error');
                                     }
                                   }}
                                   className="flex items-center gap-3 w-full px-3.5 py-2.5 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white transition-colors text-left">
@@ -19543,8 +19543,8 @@ export default function App() {
                                     <Clipboard size={15} className="text-sky-400"/>
                                   </div>
                                   <div>
-                                    <p className="font-semibold text-sm leading-tight">Wklej ze schowka</p>
-                                    <p className="text-[10px] text-zinc-600 leading-tight">Obrazek, screenshot lub plik</p>
+                                    <p className="font-semibold text-sm leading-tight">{tl('compose.pasteFromClipboard')}</p>
+                                    <p className="text-[10px] text-zinc-600 leading-tight">{tl('compose.pasteFromClipboardDesc')}</p>
                                   </div>
                                 </button>
                                 {/* Utwórz ankietę — tylko na serwerach */}
@@ -19556,8 +19556,8 @@ export default function App() {
                                       <BarChart2 size={15} className="text-violet-400"/>
                                     </div>
                                     <div>
-                                      <p className="font-semibold text-sm leading-tight">Utwórz ankietę</p>
-                                      <p className="text-[10px] text-zinc-600 leading-tight">Głosowanie dla członków serwera</p>
+                                      <p className="font-semibold text-sm leading-tight">{tl('poll.create')}</p>
+                                      <p className="text-[10px] text-zinc-600 leading-tight">{tl('compose.usePollDesc')}</p>
                                     </div>
                                   </button>
                                 )}
@@ -19574,8 +19574,8 @@ export default function App() {
                                       <Zap size={15} className="text-emerald-400"/>
                                     </div>
                                     <div>
-                                      <p className="font-semibold text-sm leading-tight">Użyj aplikacji</p>
-                                      <p className="text-[10px] text-zinc-600 leading-tight">Komendy botów zaczynające się od /</p>
+                                      <p className="font-semibold text-sm leading-tight">{tl('compose.useApp')}</p>
+                                      <p className="text-[10px] text-zinc-600 leading-tight">{tl('compose.useAppDesc')}</p>
                                     </div>
                                   </button>
                                 )}
@@ -19584,7 +19584,7 @@ export default function App() {
                           </AnimatePresence>
                         </div>
                         <button type="button" onClick={()=>setShowFmtBar(v=>!v)}
-                          title="Formatowanie tekstu"
+                          title={tl('compose.textFormatting')}
                           className={`w-7 h-7 flex items-center justify-center rounded-xl transition-all shrink-0 active:scale-90 ${showFmtBar?'text-indigo-400 bg-indigo-500/10':'text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.07]'}`}>
                           <Edit3 size={14}/>
                         </button>
@@ -20751,7 +20751,7 @@ export default function App() {
                     setGroupMessages(p=>{const n={...p};delete n[gc.id];return n;});
                     if (activeGroupDm===gc.id) setActiveGroupDm(null);
                     addToast('Grupa usunięta','success');
-                  } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                  } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                 }} className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2.5 transition-colors">
                   <Trash2 size={13}/>Usuń grupę
                 </button>
@@ -20765,7 +20765,7 @@ export default function App() {
                     setGroupMessages(p=>{const n={...p};delete n[gc.id];return n;});
                     if (activeGroupDm===gc.id) setActiveGroupDm(null);
                     addToast('Opuszczono grupę','success');
-                  } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                  } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                 }} className="w-full text-left px-3 py-2 text-sm text-orange-400 hover:bg-orange-500/10 flex items-center gap-2.5 transition-colors">
                   <LogOut size={13}/>Opuść grupę
                 </button>
@@ -20872,7 +20872,7 @@ export default function App() {
               {/* Friends */}
               {!isSelf&&!m.is_bot&&sep}
               {!isSelf&&!m.is_bot&&!isFriend&&!isPendingOut&&btn(<UserPlus size={13} className="text-zinc-500 shrink-0"/>,'Dodaj do znajomych', async()=>{
-                try{await friendsApi.sendRequest(m.username);addToast('Prośba o znajomość wysłana','success');}catch(e:any){addToast(e?.message||'Błąd','error');}
+                try{await friendsApi.sendRequest(m.username);addToast('Prośba o znajomość wysłana','success');}catch(e:any){addToast(e?.message||tl('common.error'),'error');}
               })}
               {!isSelf&&!m.is_bot&&!isFriend&&isPendingOut&&btn(<UserPlus size={13} className="text-zinc-500 shrink-0"/>,'Prośba wysłana…', ()=>{}, false, true)}
               {!isSelf&&!m.is_bot&&isFriend&&btn(<UserMinus size={13} className="text-zinc-500 shrink-0"/>,'Usuń ze znajomych', ()=>{if(friendEntry?.friendship_id)handleRemoveFriend(friendEntry.friendship_id,m.username);})}
@@ -21319,7 +21319,7 @@ export default function App() {
 
               {/* ── Group 3: Admin actions ── */}
               {canManageChannels&&(<>
-                {ctxRow(<Settings2 size={13}/>, 'Edytuj kanał', ()=>{ openChEdit(ch); setChCtxMenu(null); })}
+                {ctxRow(<Settings2 size={13}/>, tl('channel.edit'), ()=>{ openChEdit(ch); setChCtxMenu(null); })}
                 {ctxRow(<Copy size={13}/>, 'Powiel kanał', async ()=>{
                   try {
                     await channelsApi.create({
@@ -21899,7 +21899,7 @@ export default function App() {
                       {/* Buttons */}
                       <div className="flex gap-2.5">
                         <button onClick={()=>{ setCreateSrvOpen(false); setCreateSrvIconFile(null); setCreateSrvIconPreview(null); setCreateSrvName(''); }}
-                          className={`flex-1 ${gb} py-2.5 rounded-2xl text-sm font-semibold transition-all`}>Anuluj</button>
+                          className={`flex-1 ${gb} py-2.5 rounded-2xl text-sm font-semibold transition-all`}>{tl('action.cancel')}</button>
                         <button onClick={handleCreateServer} disabled={!createSrvName.trim()}
                           className="flex-1 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-2xl transition-all shadow-lg shadow-indigo-500/25">
                           Utwórz →
@@ -21935,7 +21935,7 @@ export default function App() {
 
                     <div className="flex gap-2.5">
                       <button onClick={()=>{ setCreateSrvOpen(false); setJoinCode(''); }}
-                        className={`flex-1 ${gb} py-2.5 rounded-2xl text-sm font-semibold transition-all`}>Anuluj</button>
+                        className={`flex-1 ${gb} py-2.5 rounded-2xl text-sm font-semibold transition-all`}>{tl('action.cancel')}</button>
                       <button onClick={handleJoinServer} disabled={!joinCode.trim()}
                         className="flex-1 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-2xl transition-all shadow-lg shadow-indigo-500/25">
                         Dołącz →
@@ -21986,13 +21986,13 @@ export default function App() {
                 {srvSettTab==='overview'&&(
                   <div className="flex flex-col gap-5">
                     <div>
-                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Banner</label>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">{tl('srv.banner')}</label>
                       <div className="relative h-28 rounded-2xl overflow-hidden bg-white/[0.03] border border-white/[0.06]">
                         {(srvBannerFile?URL.createObjectURL(srvBannerFile):srvForm.banner_url) ? (
                           <img src={srvBannerFile?URL.createObjectURL(srvBannerFile):staticUrl(srvForm.banner_url)} className="w-full h-full object-cover" alt=""/>
                         ) : <div className="w-full h-full flex items-center justify-center text-zinc-700"><Image size={22}/></div>}
                         <label className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 hover:opacity-100 cursor-pointer transition-opacity">
-                          <span className="text-sm text-white font-semibold flex items-center gap-1.5"><Upload size={14}/> Zmień banner</span>
+                          <span className="text-sm text-white font-semibold flex items-center gap-1.5"><Upload size={14}/> {tl('srv.changeBanner')}</span>
                           <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];(e.target as HTMLInputElement).value='';if(f)openCrop(f,3,'rect','Kadruj banner serwera',c=>{setCropPending(null);setSrvBannerFile(c);});}} className="hidden"/>
                         </label>
                       </div>
@@ -22015,18 +22015,18 @@ export default function App() {
                         <span className="text-xs text-zinc-500 mt-7">Kliknij ikonę, aby zmienić</span>
                       </div>
                     </div>
-                    <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Nazwa</label>
+                    <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.name')}</label>
                       <input value={srvForm.name} onChange={e=>setSrvForm(p=>({...p,name:e.target.value}))} className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/></div>
-                    <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Opis</label>
-                      <textarea value={srvForm.description} onChange={e=>setSrvForm(p=>({...p,description:e.target.value}))} rows={3} placeholder="Opis serwera..." className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm resize-none`}/></div>
-                    <button onClick={handleSaveSrv} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">Zapisz zmiany</button>
+                    <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.description')}</label>
+                      <textarea value={srvForm.description} onChange={e=>setSrvForm(p=>({...p,description:e.target.value}))} rows={3} placeholder={tl('srv.descriptionPh')} className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm resize-none`}/></div>
+                    <button onClick={handleSaveSrv} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">{tl('action.saveChanges')}</button>
                   </div>
                 )}
                 {srvSettTab==='roles'&&(
                   <div className="flex flex-col gap-4">
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-bold text-white">Role ({roles.length})</h3>
-                      <button onClick={openNewRole} className="bg-indigo-500 hover:bg-indigo-400 text-white px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5"><Plus size={14}/> Nowa rola</button>
+                      <button onClick={openNewRole} className="bg-indigo-500 hover:bg-indigo-400 text-white px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-1.5"><Plus size={14}/> {tl('srv.newRole')}</button>
                     </div>
                     {roles.length===0&&<p className="text-sm text-zinc-700">Brak ról</p>}
                     {roles.map(r=>(
@@ -22039,7 +22039,7 @@ export default function App() {
                               Domyślny
                             </span>
                           )}
-                          <span className="text-xs text-zinc-600 shrink-0">{(r.permissions||[]).length} uprawnień</span>
+                          <span className="text-xs text-zinc-600 shrink-0">{(r.permissions||[]).length} {tl('srv.permissionsCount')}</span>
                         </div>
                         <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                           <button onClick={()=>openEditRole(r)} className={`w-7 h-7 ${gb} rounded-lg flex items-center justify-center`}><Edit3 size={12}/></button>
@@ -22081,19 +22081,19 @@ export default function App() {
                 )}
                 {srvSettTab==='bans'&&(
                   <div className="flex flex-col gap-3">
-                    <h3 className="text-sm font-bold text-white">Zbanowani ({banList.length})</h3>
-                    {banList.length===0&&<p className="text-sm text-zinc-600">Brak zbanowanych użytkowników.</p>}
+                    <h3 className="text-sm font-bold text-white">{tl('srv.banned')} ({banList.length})</h3>
+                    {banList.length===0&&<p className="text-sm text-zinc-600">{tl('srv.noBanned')}</p>}
                     {banList.map(b=>(
                       <div key={b.user_id} className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] px-4 py-3 rounded-xl">
                         <div className="flex items-center gap-3">
                           <img src={b.avatar_url||`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(b.username)}&size=36`} className="w-9 h-9 rounded-full object-cover" alt=""/>
                           <div>
                             <p className="text-sm font-semibold text-white">{b.username}</p>
-                            {b.reason&&<p className="text-xs text-zinc-600">Powód: {b.reason}</p>}
-                            {b.banned_by_username&&<p className="text-xs text-zinc-700">przez {b.banned_by_username}</p>}
+                            {b.reason&&<p className="text-xs text-zinc-600">{tl('srv.reason')}: {b.reason}</p>}
+                            {b.banned_by_username&&<p className="text-xs text-zinc-700">{tl('srv.by')} {b.banned_by_username}</p>}
                           </div>
                         </div>
-                        <button onClick={()=>handleUnban(b.user_id)} className="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors">Odbanuj</button>
+                        <button onClick={()=>handleUnban(b.user_id)} className="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors">{tl('action.unban')}</button>
                       </div>
                     ))}
                   </div>
@@ -22115,8 +22115,8 @@ export default function App() {
                   const copyLink=(code:string)=>{ navigator.clipboard.writeText(`${APP_ORIGIN}/join/${code}`); addToast('Link skopiowany!','success'); };
                   const delInv=async(code:string)=>{
                     if(!activeServer) return;
-                    try{ await serversApi.deleteInvite(activeServer,code); setInviteList(p=>p.filter(i=>i.code!==code)); addToast('Zaproszenie usunięte','info'); }
-                    catch{ addToast('Błąd','error'); }
+                    try{ await serversApi.deleteInvite(activeServer,code); setInviteList(p=>p.filter(i=>i.code!==code)); addToast(tl('invites.deleted'),'info'); }
+                    catch{ addToast(tl('common.error'),'error'); }
                   };
                   const permanentInvite=inviteList.find(i=>!i.expires_at);
                   const tempInvites=inviteList.filter(i=>i.expires_at);
@@ -22125,14 +22125,14 @@ export default function App() {
                   <div className="space-y-6">
                     {/* Header */}
                     <div>
-                      <h2 className="text-xl font-bold text-white">Zaproszenia</h2>
-                      <p className="text-sm text-zinc-500 mt-0.5">Linki, kody i metody dołączania do <span className="text-zinc-300 font-medium">{serverFull?.name}</span>.</p>
+                      <h2 className="text-xl font-bold text-white">{tl('invites.title')}</h2>
+                      <p className="text-sm text-zinc-500 mt-0.5">{tl('invites.desc')} <span className="text-zinc-300 font-medium">{serverFull?.name}</span>.</p>
                     </div>
 
                     {/* Permanent invite block */}
                     <div className="rounded-2xl border border-white/[0.07] overflow-hidden">
                       <div className="px-5 py-3 bg-white/[0.025] border-b border-white/[0.05]">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Stały link zaproszenia</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{tl('invites.permanentLink')}</p>
                       </div>
                       <div className="p-5">
                         {permanentInvite ? (
@@ -22143,38 +22143,38 @@ export default function App() {
                               </div>
                               <button onClick={()=>copyLink(permanentInvite.code)}
                                 className="flex items-center gap-1.5 px-3.5 py-2.5 bg-zinc-800 hover:bg-zinc-700 border border-white/[0.08] rounded-xl text-sm text-zinc-200 transition-colors shrink-0">
-                                <Copy size={13}/> Kopiuj link
+                                <Copy size={13}/> {tl('invites.copyLink')}
                               </button>
                               <button onClick={()=>{ const url=`${APP_ORIGIN}/join/${permanentInvite.code}`; if(navigator.share){navigator.share({url}).catch(()=>copyLink(permanentInvite.code));}else copyLink(permanentInvite.code); }}
                                 className="flex items-center gap-1.5 px-3.5 py-2.5 bg-indigo-500 hover:bg-indigo-400 rounded-xl text-sm text-white font-semibold transition-colors shrink-0">
-                                <ExternalLink size={13}/> Udostępnij
+                                <ExternalLink size={13}/> {tl('invites.share')}
                               </button>
                             </div>
                             {/* Short code */}
                             <div className="flex items-center gap-2 mb-2">
-                              <span className="text-[11px] text-zinc-500">Kod zaproszenia:</span>
+                              <span className="text-[11px] text-zinc-500">{tl('invites.code')}</span>
                               <code className="text-sm font-mono font-bold text-indigo-300 tracking-wider">{streamerMode?'••••••••••':permanentInvite.code}</code>
-                              <button onClick={()=>{ navigator.clipboard.writeText(permanentInvite.code); addToast('Kod skopiowany!','success'); }}
+                              <button onClick={()=>{ navigator.clipboard.writeText(permanentInvite.code); addToast(tl('invites.codeCopied'),'success'); }}
                                 className="flex items-center gap-1 text-xs text-zinc-500 hover:text-indigo-400 transition-colors">
-                                <Copy size={10}/> Kopiuj kod
+                                <Copy size={10}/> {tl('invites.copyCode')}
                               </button>
                             </div>
                             <p className="text-[11px] text-zinc-600">
-                              Wygasa: <span className="text-zinc-400">nigdy</span> · Limit: <span className="text-zinc-400">brak</span> · Użyto: <span className="text-zinc-400">{permanentInvite.uses} razy</span>
-                              <button onClick={()=>delInv(permanentInvite.code)} className="ml-3 text-zinc-700 hover:text-rose-400 transition-colors">Usuń</button>
+                              {tl('invites.expires')} <span className="text-zinc-400">{tl('invites.never')}</span> · {tl('invites.limit')} <span className="text-zinc-400">{tl('invites.none')}</span> · {tl('invites.usedTimes')} <span className="text-zinc-400">{permanentInvite.uses} {tl('invites.times')}</span>
+                              <button onClick={()=>delInv(permanentInvite.code)} className="ml-3 text-zinc-700 hover:text-rose-400 transition-colors">{tl('action.delete')}</button>
                             </p>
                           </>
                         ) : (
                           <div className="flex items-center gap-3">
-                            <p className="text-sm text-zinc-500 flex-1">Brak stałego linku. Utwórz stały link bez daty wygaśnięcia.</p>
+                            <p className="text-sm text-zinc-500 flex-1">{tl('invites.noPermanent')}</p>
                             <button onClick={async()=>{
                               if(!activeServer) return;
                               setInviteGenerating(true);
-                              try{ const r=await serversApi.createInvite(activeServer,'never','unlimited'); setInviteList(p=>[{...r,creator_username:currentUser?.username??''},  ...p]); addToast('Stały link utworzony!','success'); }
-                              catch{ addToast('Błąd','error'); } finally{ setInviteGenerating(false); }
+                              try{ const r=await serversApi.createInvite(activeServer,'never','unlimited'); setInviteList(p=>[{...r,creator_username:currentUser?.username??''},  ...p]); addToast(tl('invites.permanentCreated'),'success'); }
+                              catch{ addToast(tl('common.error'),'error'); } finally{ setInviteGenerating(false); }
                             }} disabled={inviteGenerating}
                               className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition-colors shrink-0">
-                              {inviteGenerating?<Loader2 size={13} className="animate-spin"/>:<Plus size={13}/>} Utwórz stały link
+                              {inviteGenerating?<Loader2 size={13} className="animate-spin"/>:<Plus size={13}/>} {tl('invites.createPermanent')}
                             </button>
                           </div>
                         )}
@@ -22193,38 +22193,38 @@ export default function App() {
                     {/* Create new invite */}
                     <div className="rounded-2xl border border-white/[0.07] overflow-hidden">
                       <div className="px-5 py-3 bg-white/[0.025] border-b border-white/[0.05]">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Nowy link tymczasowy</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{tl('invites.newTemp')}</p>
                       </div>
                       <div className="p-5 grid grid-cols-2 gap-3">
                         <div>
-                          <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">Ważność</label>
+                          <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">{tl('invites.validity')}</label>
                           <select value={inviteDur} onChange={e=>setInviteDur(e.target.value)} className={selCls+' w-full'}>
-                            <option value="1800">30 minut</option>
-                            <option value="3600">1 godzina</option>
-                            <option value="21600">6 godzin</option>
-                            <option value="86400">1 dzień</option>
-                            <option value="259200">3 dni</option>
-                            <option value="604800">7 dni</option>
-                            <option value="never">Nigdy</option>
+                            <option value="1800">{tl('invites.dur.30m')}</option>
+                            <option value="3600">{tl('channel.slowmode.1h')}</option>
+                            <option value="21600">{tl('channel.slowmode.6h')}</option>
+                            <option value="86400">{tl('invites.dur.1d')}</option>
+                            <option value="259200">{tl('invites.dur.3d')}</option>
+                            <option value="604800">{tl('invites.dur.7d')}</option>
+                            <option value="never">{tl('invites.dur.never')}</option>
                           </select>
                         </div>
                         <div>
-                          <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">Limit użyć</label>
+                          <label className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5 block">{tl('invites.usesLimit')}</label>
                           <select value={inviteMaxUses} onChange={e=>setInviteMaxUses(e.target.value)} className={selCls+' w-full'}>
-                            <option value="unlimited">Bez limitu</option>
-                            <option value="1">1 użycie</option>
-                            <option value="5">5 użyć</option>
-                            <option value="10">10 użyć</option>
-                            <option value="25">25 użyć</option>
-                            <option value="50">50 użyć</option>
-                            <option value="100">100 użyć</option>
+                            <option value="unlimited">{tl('invites.unlimited')}</option>
+                            <option value="1">1 {tl('invites.oneUse')}</option>
+                            <option value="5">5 {tl('invites.uses')}</option>
+                            <option value="10">10 {tl('invites.uses')}</option>
+                            <option value="25">25 {tl('invites.uses')}</option>
+                            <option value="50">50 {tl('invites.uses')}</option>
+                            <option value="100">100 {tl('invites.uses')}</option>
                           </select>
                         </div>
                         <div className="col-span-2">
                           <button onClick={handleInvite} disabled={inviteGenerating}
                             className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors text-sm">
                             {inviteGenerating?<Loader2 size={14} className="animate-spin"/>:<Plus size={14}/>}
-                            Generuj nowy link
+                            {tl('invites.generateNew')}
                           </button>
                         </div>
                       </div>
@@ -22232,7 +22232,7 @@ export default function App() {
 
                     {/* Active links list */}
                     <div>
-                      <h3 className="text-sm font-bold text-white mb-3">Aktywne linki</h3>
+                      <h3 className="text-sm font-bold text-white mb-3">{tl('invites.activeLinks')}</h3>
                       {inviteListLoading?(
                         <div className="space-y-2">
                           {[1,2,3].map(i=><div key={i} className="h-14 rounded-xl bg-white/[0.02] animate-pulse"/>)}
@@ -22240,8 +22240,8 @@ export default function App() {
                       ):inviteList.length===0?(
                         <div className="flex flex-col items-center py-10 text-center">
                           <div className="w-12 h-12 rounded-2xl bg-zinc-800/60 flex items-center justify-center mb-3"><UserPlus size={20} className="text-zinc-600"/></div>
-                          <p className="text-sm text-zinc-500">Brak aktywnych linków zaproszeniowych.</p>
-                          <p className="text-xs text-zinc-700 mt-1">Utwórz nowy link powyżej.</p>
+                          <p className="text-sm text-zinc-500">{tl('invites.noActive')}</p>
+                          <p className="text-xs text-zinc-700 mt-1">{tl('invites.createAbove')}</p>
                         </div>
                       ):(
                         <div className="rounded-2xl border border-white/[0.07] overflow-hidden divide-y divide-white/[0.05]">
@@ -22253,21 +22253,21 @@ export default function App() {
                                   <span className="inline-flex items-center gap-1 bg-indigo-500/10 border border-indigo-500/20 rounded-md px-1.5 py-0.5">
                                     <span className="text-[10px] text-zinc-500">kod:</span>
                                     <code className="text-[11px] font-mono text-indigo-300">{streamerMode?'••••••':inv.code}</code>
-                                    <button onClick={()=>{ navigator.clipboard.writeText(inv.code); addToast('Kod skopiowany!','success'); }}
-                                      className="text-zinc-600 hover:text-indigo-400 transition-colors ml-0.5" title="Kopiuj sam kod">
+                                    <button onClick={()=>{ navigator.clipboard.writeText(inv.code); addToast(tl('invites.codeCopied'),'success'); }}
+                                      className="text-zinc-600 hover:text-indigo-400 transition-colors ml-0.5" title={tl('invites.copyCodeOnly')}>
                                       <Copy size={9}/>
                                     </button>
                                   </span>
                                   <span className="text-[11px] text-zinc-600 flex items-center gap-2 flex-wrap">
-                                    {!inv.expires_at?(<span className="text-zinc-500">Stały</span>):<span>{fmtExpiry(inv)}</span>}
-                                    {inv.max_uses?(<><span className="text-zinc-800">·</span><span>{inv.uses}/{inv.max_uses} użyć</span></>):<span className="text-zinc-700">{inv.uses} użyć</span>}
+                                    {!inv.expires_at?(<span className="text-zinc-500">{tl('invites.permanent')}</span>):<span>{fmtExpiry(inv)}</span>}
+                                    {inv.max_uses?(<><span className="text-zinc-800">·</span><span>{inv.uses}/{inv.max_uses} {tl('invites.uses')}</span></>):<span className="text-zinc-700">{inv.uses} {tl('invites.uses')}</span>}
                                     {inv.creator_username&&(<><span className="text-zinc-800">·</span><span>przez <span className="text-zinc-400">{inv.creator_username}</span></span></>)}
                                   </span>
                                 </div>
                               </div>
                               <button onClick={()=>copyLink(inv.code)}
                                 className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.05] text-zinc-400 hover:text-white text-xs transition-all">
-                                <Copy size={11}/> Link
+                                <Copy size={11}/> {tl('invites.link')}
                               </button>
                               <button onClick={()=>delInv(inv.code)}
                                 className="opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all">
@@ -22283,13 +22283,13 @@ export default function App() {
                 })()}
                 {srvSettTab==='events'&&(
                   <div className="flex flex-col gap-4">
-                    <p className="text-xs text-zinc-500">Zarządzaj eventami serwera. Utwórz, edytuj lub usuń zaplanowane wydarzenia.</p>
+                    <p className="text-xs text-zinc-500">{tl('srv.events.descCompact')}</p>
                     <div className="flex flex-col gap-2.5 bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
                       <p className="text-xs font-semibold text-zinc-400 uppercase tracking-widest">Nowy event</p>
                       <input value={newEvent.title} onChange={e=>setNewEvent(p=>({...p,title:e.target.value}))}
-                        placeholder="Tytuł*" className={`${gi} px-3 py-2 text-sm w-full`}/>
+                        placeholder={tl('srv.events.titlePhShort')} className={`${gi} px-3 py-2 text-sm w-full`}/>
                       <input value={newEvent.description} onChange={e=>setNewEvent(p=>({...p,description:e.target.value}))}
-                        placeholder="Opis" className={`${gi} px-3 py-2 text-sm w-full`}/>
+                        placeholder={tl('srv.events.descPhShort')} className={`${gi} px-3 py-2 text-sm w-full`}/>
                       <input type="datetime-local" value={newEvent.starts_at} onChange={e=>setNewEvent(p=>({...p,starts_at:e.target.value}))}
                         className={`${gi} px-3 py-2 text-sm w-full`}/>
                       <button disabled={!newEvent.title.trim()||!newEvent.starts_at||eventsLoading}
@@ -22300,12 +22300,12 @@ export default function App() {
                             const evs = await eventsApi.list(activeServer!);
                             setServerEvents(evs);
                             setNewEvent({title:'',description:'',starts_at:'',channel_id:''});
-                            addToast('Event utworzony!','success');
-                          } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                            addToast(tl('srv.events.created'),'success');
+                          } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                           finally { setEventsLoading(false); }
                         }}
                         className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 text-white font-semibold py-2 rounded-xl transition-colors text-sm">
-                        {eventsLoading?<Loader2 size={13} className="animate-spin mx-auto"/>:'Utwórz'}
+                        {eventsLoading?<Loader2 size={13} className="animate-spin mx-auto"/>:tl('action.create')}
                       </button>
                     </div>
                     <div className="flex flex-col gap-2">
@@ -22317,23 +22317,23 @@ export default function App() {
                           </div>
                           <button onClick={async()=>{
                             try { await eventsApi.delete(activeServer!,ev.id); setServerEvents(p=>p.filter(e=>e.id!==ev.id)); addToast('Usunięto event','info'); }
-                            catch(e:any){ addToast(e.message||'Błąd','error'); }
+                            catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                           }} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all">
                             <Trash2 size={12}/>
                           </button>
                         </div>
                       ))}
-                      {serverEvents.length===0&&<p className="text-xs text-zinc-600 text-center py-4">Brak eventów</p>}
+                      {serverEvents.length===0&&<p className="text-xs text-zinc-600 text-center py-4">{tl('srv.events.emptyCompact')}</p>}
                     </div>
                   </div>
                 )}
                 {srvSettTab==='onboarding'&&(
                   <div className="flex flex-col gap-4">
-                    <p className="text-xs text-zinc-500">Skonfiguruj powitanie dla nowych członków serwera. Możesz ustawić regulamin i automatyczne przypisanie roli.</p>
+                    <p className="text-xs text-zinc-500">{tl('srv.onboarding.descCompact')}</p>
                     {onboardingData ? (
                       <div className="flex flex-col gap-3">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm text-zinc-300">Włącz onboarding</span>
+                          <span className="text-sm text-zinc-300">{tl('srv.onboarding.enable')}</span>
                           <button onClick={async()=>{
                             const next = !onboardingData.enabled;
                             await onboardingApi.update(activeServer!,{enabled:next}).catch(()=>{});
@@ -22343,14 +22343,14 @@ export default function App() {
                           </button>
                         </div>
                         <div>
-                          <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Tekst powitalny</label>
+                          <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.onboarding.welcomeLabel')}</label>
                           <input defaultValue={onboardingData.welcome_text||''} id="ob-welcome"
-                            className={`${gi} px-3 py-2 text-sm w-full`} placeholder="Witaj na serwerze!"/>
+                            className={`${gi} px-3 py-2 text-sm w-full`} placeholder={tl('srv.onboarding.welcomePhShort')}/>
                         </div>
                         <div>
-                          <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Regulamin (tekst zasad)</label>
+                          <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.onboarding.rulesLabelCompact')}</label>
                           <textarea defaultValue={onboardingData.rules_text||''} id="ob-rules" rows={5}
-                            className={`${gi} px-3 py-2 text-sm w-full resize-none`} placeholder="Wpisz zasady serwera..."/>
+                            className={`${gi} px-3 py-2 text-sm w-full resize-none`} placeholder={tl('srv.onboarding.rulesPhCompact')}/>
                         </div>
                         <button onClick={async()=>{
                           const welcome = (document.getElementById('ob-welcome') as HTMLInputElement)?.value;
@@ -22359,8 +22359,8 @@ export default function App() {
                             await onboardingApi.update(activeServer!,{welcome_text:welcome, rules_text:rules, enabled:onboardingData.enabled});
                             setOnboardingData(p=>p?{...p,welcome_text:welcome,rules_text:rules}:p);
                             addToast('Onboarding zapisany!','success');
-                          } catch(e:any){ addToast(e.message||'Błąd','error'); }
-                        }} className="bg-indigo-500 hover:bg-indigo-400 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm">Zapisz</button>
+                          } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
+                        }} className="bg-indigo-500 hover:bg-indigo-400 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm">{tl('action.save')}</button>
                       </div>
                     ) : (
                       <div className="flex items-center justify-center py-8"><Loader2 size={20} className="animate-spin text-zinc-600"/></div>
@@ -22369,35 +22369,35 @@ export default function App() {
                 )}
                 {srvSettTab==='discovery'&&(
                   <div className="flex flex-col gap-4">
-                    <p className="text-xs text-zinc-500">Zdecyduj, czy Twój serwer ma być widoczny w publicznej liście serwerów.</p>
+                    <p className="text-xs text-zinc-500">{tl('srv.discovery.descCompact')}</p>
                     <div className="flex items-center justify-between p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
                       <div>
-                        <p className="text-sm font-semibold text-white">Publiczny serwer</p>
-                        <p className="text-xs text-zinc-500 mt-0.5">Każdy może znaleźć ten serwer przez wyszukiwarkę</p>
+                        <p className="text-sm font-semibold text-white">{tl('srv.discovery.publicLabelCompact')}</p>
+                        <p className="text-xs text-zinc-500 mt-0.5">{tl('srv.discovery.publicDescCompact')}</p>
                       </div>
                       <button onClick={async()=>{
                         const next = !serverFull?.is_public;
                         try {
                           await discoverApi.setDiscovery(activeServer!,{is_public:next});
                           setServerFull((p:any)=>p?{...p,is_public:next}:p);
-                          addToast(`Serwer jest teraz ${next?'publiczny':'prywatny'}!`,'success');
-                        } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                          addToast(next?tl('srv.discovery.nowPublic'):tl('srv.discovery.nowPrivate'),'success');
+                        } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                       }} className={`relative w-10 h-5 rounded-full transition-colors ${(serverFull as any)?.is_public?'bg-indigo-500':'bg-zinc-700'}`}>
                         <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${(serverFull as any)?.is_public?'translate-x-5':'translate-x-0.5'}`}/>
                       </button>
                     </div>
                     <div>
-                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Opis w katalogu</label>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.discovery.descLabelCompact')}</label>
                       <textarea defaultValue={(serverFull as any)?.discovery_description||''} id="disc-desc" rows={3}
-                        className={`${gi} px-3 py-2 text-sm w-full resize-none`} placeholder="Opisz swój serwer dla nowych użytkowników..."/>
+                        className={`${gi} px-3 py-2 text-sm w-full resize-none`} placeholder={tl('srv.discovery.descPhCompact')}/>
                       <button onClick={async()=>{
                         const desc = (document.getElementById('disc-desc') as HTMLTextAreaElement)?.value;
                         try {
                           await discoverApi.setDiscovery(activeServer!,{is_public:!!(serverFull as any)?.is_public, discovery_description:desc});
                           setServerFull((p:any)=>p?{...p,discovery_description:desc}:p);
-                          addToast('Opis zapisany!','success');
-                        } catch(e:any){ addToast(e.message||'Błąd','error'); }
-                      }} className="mt-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">Zapisz</button>
+                          addToast(tl('srv.discovery.savedCompact'),'success');
+                        } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
+                      }} className="mt-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">{tl('action.save')}</button>
                     </div>
                   </div>
                 )}
@@ -22415,22 +22415,22 @@ export default function App() {
             <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
               onClick={e=>e.stopPropagation()} className={`${gm} p-7 w-full max-w-md`}>
               <div className="flex items-center justify-between mb-5">
-                <h2 className="text-lg font-bold text-white flex items-center gap-2"><BarChart2 size={18} className="text-indigo-400"/> Utwórz ankietę</h2>
+                <h2 className="text-lg font-bold text-white flex items-center gap-2"><BarChart2 size={18} className="text-indigo-400"/> {tl('poll.create')}</h2>
                 <button onClick={()=>setPollModal({open:false})} className="text-zinc-600 hover:text-white"><X size={17}/></button>
               </div>
               <div className="flex flex-col gap-4">
                 <div>
-                  <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Pytanie</label>
+                  <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('poll.question')}</label>
                   <input value={pollQuestion} onChange={e=>setPollQuestion(e.target.value)}
-                    placeholder="Wpisz pytanie ankiety..." className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
+                    placeholder={tl('poll.questionPh')} className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/>
                 </div>
                 <div>
-                  <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Opcje ({pollOptions.length})</label>
+                  <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('poll.options')} ({pollOptions.length})</label>
                   <div className="flex flex-col gap-2">
                     {pollOptions.map((opt, i) => (
                       <div key={i} className="flex items-center gap-2">
                         <input value={opt} onChange={e=>{const n=[...pollOptions];n[i]=e.target.value;setPollOptions(n);}}
-                          placeholder={`Opcja ${i+1}`} className={`flex-1 ${gi} rounded-xl px-4 py-2 text-sm`}/>
+                          placeholder={`${tl('poll.optionPh')} ${i+1}`} className={`flex-1 ${gi} rounded-xl px-4 py-2 text-sm`}/>
                         {pollOptions.length > 2 && (
                           <button onClick={()=>setPollOptions(p=>p.filter((_,j)=>j!==i))}
                             className="w-7 h-7 text-rose-400 hover:bg-rose-500/10 rounded-lg flex items-center justify-center transition-colors">
@@ -22442,15 +22442,15 @@ export default function App() {
                     {pollOptions.length < 10 && (
                       <button onClick={()=>setPollOptions(p=>[...p,''])}
                         className={`text-xs ${gb} px-3 py-2 rounded-xl flex items-center gap-1.5`}>
-                        <Plus size={11}/> Dodaj opcję
+                        <Plus size={11}/> {tl('poll.addOption')}
                       </button>
                     )}
                   </div>
                 </div>
                 <div className="flex items-center justify-between bg-white/[0.02] border border-white/[0.05] rounded-xl px-4 py-3">
                   <div>
-                    <p className="text-sm text-white font-medium">Wielokrotny wybór</p>
-                    <p className="text-xs text-zinc-600">Pozwól głosować na więcej niż jedną opcję</p>
+                    <p className="text-sm text-white font-medium">{tl('poll.multiChoice')}</p>
+                    <p className="text-xs text-zinc-600">{tl('poll.multiChoiceDesc')}</p>
                   </div>
                   <button onClick={()=>setPollMulti(p=>!p)}
                     className={`w-10 h-5 rounded-full transition-all shrink-0 relative ${pollMulti ? 'bg-indigo-500' : 'bg-zinc-700'}`}>
@@ -22474,10 +22474,10 @@ export default function App() {
                       if (activeView === 'dms' && activeDmUserId) await dmsApi.send(activeDmUserId, content, {});
                       else if (activeChannel) await messagesApi.send(activeChannel, content, {});
                       setPollModal({open:false});
-                    } catch (err: any) { addToast(err?.message || 'Błąd tworzenia ankiety', 'error'); }
+                    } catch (err: any) { addToast(err?.message || tl('poll.createError'), 'error'); }
                   }}
                   className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-colors">
-                  Utwórz ankietę
+                  {tl('poll.create')}
                 </button>
               </div>
             </motion.div>
@@ -22492,24 +22492,24 @@ export default function App() {
             className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={()=>setChEditOpen(false)}>
             <motion.div initial={{scale:0.95,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0.95,opacity:0}}
               onClick={e=>e.stopPropagation()} className={`${gm} rounded-3xl p-7 w-full max-w-md max-h-[90vh] flex flex-col`}>
-              <div className="flex items-center justify-between mb-5 shrink-0"><h2 className="text-lg font-bold text-white">Edytuj kanał</h2><button onClick={()=>setChEditOpen(false)} className="text-zinc-600 hover:text-white"><X size={17}/></button></div>
+              <div className="flex items-center justify-between mb-5 shrink-0"><h2 className="text-lg font-bold text-white">{tl('channel.edit')}</h2><button onClick={()=>setChEditOpen(false)} className="text-zinc-600 hover:text-white"><X size={17}/></button></div>
               <div className="flex flex-col gap-4 overflow-y-auto pr-1">
-                <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Nazwa</label>
+                <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.name')}</label>
                   <input value={chForm.name} onChange={e=>setChForm(p=>({...p,name:e.target.value}))} className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/></div>
-                <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Opis</label>
-                  <input value={chForm.description} onChange={e=>setChForm(p=>({...p,description:e.target.value}))} placeholder="Opis kanału..." className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/></div>
+                <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.description')}</label>
+                  <input value={chForm.description} onChange={e=>setChForm(p=>({...p,description:e.target.value}))} placeholder={tl('channel.descPh')} className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/></div>
                 <div className="flex items-center justify-between bg-white/[0.03] border border-white/[0.05] px-4 py-3 rounded-xl">
                   <div className="flex items-center gap-2"><Lock size={14} className="text-zinc-500"/>
-                    <div><p className="text-sm font-semibold text-white">Prywatny</p><p className="text-xs text-zinc-600">Dostępny dla wybranych ról</p></div></div>
+                    <div><p className="text-sm font-semibold text-white">{tl('channel.private')}</p><p className="text-xs text-zinc-600">{tl('channel.privateDesc')}</p></div></div>
                   <button onClick={()=>setChForm(p=>({...p,is_private:!p.is_private}))}
                     className={`w-10 h-6 rounded-full transition-all relative ${chForm.is_private?'bg-indigo-500':'bg-white/[0.08]'}`}>
                     <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${chForm.is_private?'left-5':'left-1'}`}/>
                   </button>
                 </div>
                 {chForm.is_private&&(
-                  <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Dostęp dla ról</label>
+                  <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">{tl('channel.roleAccess')}</label>
                     {roles.length===0 ? (
-                      <p className="text-xs text-zinc-600 italic">Brak ról — utwórz role w ustawieniach serwera.</p>
+                      <p className="text-xs text-zinc-600 italic">{tl('channel.noRoles')}</p>
                     ) : (
                       <div className="flex flex-col gap-2">
                         {roles.map(r=>{
@@ -22526,37 +22526,37 @@ export default function App() {
                 )}
                 {editingCh.type==='text'&&(
                   <div>
-                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Tryb wolny</label>
+                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('channel.slowmode')}</label>
                     <select value={chForm.slowmode_seconds} onChange={e=>setChForm(p=>({...p,slowmode_seconds:parseInt(e.target.value)||0}))}
                       className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}>
-                      <option value="0">Wyłączony</option>
-                      <option value="5">5 sekund</option>
-                      <option value="10">10 sekund</option>
-                      <option value="30">30 sekund</option>
-                      <option value="60">1 minuta</option>
-                      <option value="300">5 minut</option>
-                      <option value="600">10 minut</option>
-                      <option value="3600">1 godzina</option>
-                      <option value="21600">6 godzin</option>
+                      <option value="0">{tl('channel.slowmode.off')}</option>
+                      <option value="5">{tl('channel.slowmode.5s')}</option>
+                      <option value="10">{tl('channel.slowmode.10s')}</option>
+                      <option value="30">{tl('channel.slowmode.30s')}</option>
+                      <option value="60">{tl('channel.slowmode.1m')}</option>
+                      <option value="300">{tl('channel.slowmode.5m')}</option>
+                      <option value="600">{tl('channel.slowmode.10m')}</option>
+                      <option value="3600">{tl('channel.slowmode.1h')}</option>
+                      <option value="21600">{tl('channel.slowmode.6h')}</option>
                     </select>
-                    {chForm.slowmode_seconds>0&&<p className="text-[11px] text-zinc-600 mt-1">Użytkownicy mogą wysyłać wiadomość co {chForm.slowmode_seconds<60?`${chForm.slowmode_seconds}s`:chForm.slowmode_seconds<3600?`${chForm.slowmode_seconds/60} min`:`${chForm.slowmode_seconds/3600} godz`}</p>}
+                    {chForm.slowmode_seconds>0&&<p className="text-[11px] text-zinc-600 mt-1">{tl('channel.slowmodeDesc')} {chForm.slowmode_seconds<60?`${chForm.slowmode_seconds}s`:chForm.slowmode_seconds<3600?`${chForm.slowmode_seconds/60} min`:`${chForm.slowmode_seconds/3600} ${tl('channel.hourAbbr')}`}</p>}
                   </div>
                 )}
                 {editingCh?.type==='text'&&(
                   <div className="flex flex-col gap-3">
                     <div>
-                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Tło kanału</label>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">{tl('channel.background')}</label>
                       <div className="flex gap-2">
                         {/* Upload image */}
                         <label className="flex-1 flex items-center gap-2 cursor-pointer px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:border-indigo-500/40 hover:bg-white/[0.07] transition-all text-sm text-zinc-400 hover:text-zinc-200">
                           <ImageIcon size={14} className="shrink-0 text-indigo-400"/>
-                          <span className="truncate">{chForm.background_url ? 'Zmień zdjęcie' : 'Wgraj zdjęcie'}</span>
+                          <span className="truncate">{chForm.background_url ? tl('channel.changePhoto') : tl('channel.uploadPhoto')}</span>
                           <input type="file" accept="image/*" className="hidden" onChange={async e=>{
                             const f = e.target.files?.[0]; if (!f) return;
                             try {
                               const url = await uploadFile(f, 'attachments');
                               setChForm(p=>({...p, background_url: url}));
-                            } catch { addToast('Błąd wgrywania zdjęcia', 'error'); }
+                            } catch { addToast(tl('channel.uploadPhotoError'), 'error'); }
                             e.target.value='';
                           }}/>
                         </label>
@@ -22574,10 +22574,10 @@ export default function App() {
                       )}
                     </div>
                     <div>
-                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Gradient CSS (opcjonalnie)</label>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('channel.gradientCss')}</label>
                       <input value={chForm.background_gradient} onChange={e=>setChForm(p=>({...p,background_gradient:e.target.value}))}
                         placeholder="linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)" className={`w-full ${gi} rounded-xl px-4 py-2.5 text-xs font-mono`}/>
-                      <p className="text-[10px] text-zinc-700 mt-1">Możesz użyć samego gradientu lub w połączeniu ze zdjęciem</p>
+                      <p className="text-[10px] text-zinc-700 mt-1">{tl('channel.gradientHint')}</p>
                     </div>
                     {chForm.background_gradient && (
                       <div className="h-12 rounded-xl border border-white/[0.06]"
@@ -22586,7 +22586,7 @@ export default function App() {
                     {(chForm.background_url || chForm.background_gradient) && (
                       <button type="button" onClick={()=>setChForm(p=>({...p,background_url:'',background_gradient:''}))}
                         className="text-[11px] text-zinc-600 hover:text-rose-400 transition-colors text-left">
-                        Usuń wszystkie tła
+                        {tl('channel.removeAllBg')}
                       </button>
                     )}
                   </div>
@@ -22594,27 +22594,27 @@ export default function App() {
                 {editingCh?.type==='voice'&&(<>
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest">Limit użytkowników</label>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest">{tl('channel.userLimit')}</label>
                       <span className="text-xs text-zinc-400 font-semibold">{chForm.user_limit===0?'∞':chForm.user_limit}</span>
                     </div>
                     <input type="range" min={0} max={99} value={chForm.user_limit}
                       onChange={e=>setChForm(p=>({...p,user_limit:parseInt(e.target.value)}))}
                       className="w-full accent-indigo-500"/>
-                    <p className="text-[11px] text-zinc-600 mt-1">{chForm.user_limit===0?'Brak limitu – każdy może wejść.':'Admin może dołączyć ponad limit.'}</p>
+                    <p className="text-[11px] text-zinc-600 mt-1">{chForm.user_limit===0?tl('channel.noLimit'):tl('channel.adminOverLimit')}</p>
                   </div>
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest">Prędkość strumieniowania</label>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest">{tl('channel.streamQuality')}</label>
                       <span className="text-xs text-zinc-400 font-semibold">{chForm.bitrate} kbps</span>
                     </div>
                     <input type="range" min={8} max={96} step={8} value={chForm.bitrate}
                       onChange={e=>setChForm(p=>({...p,bitrate:parseInt(e.target.value)}))}
                       className="w-full accent-indigo-500"/>
                     <div className="flex justify-between text-[10px] text-zinc-700 mt-0.5"><span>8 kbps</span><span>64 kbps</span><span>96 kbps</span></div>
-                    {chForm.bitrate>64&&<p className="text-[11px] text-amber-500/80 mt-1">⚠ Powyżej 64 kbps może wpłynąć na słabe łącza.</p>}
+                    {chForm.bitrate>64&&<p className="text-[11px] text-amber-500/80 mt-1">{tl('channel.bitrateWarning')}</p>}
                   </div>
                 </>)}
-                <button onClick={handleSaveCh} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">Zapisz</button>
+                <button onClick={handleSaveCh} className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors">{tl('action.save')}</button>
               </div>
             </motion.div>
           </motion.div>
@@ -22711,7 +22711,7 @@ export default function App() {
               )}
 
               <div className="flex gap-2">
-                <button onClick={()=>setChCreateOpen(false)} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold ${gb} transition-all`}>Anuluj</button>
+                <button onClick={()=>setChCreateOpen(false)} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold ${gb} transition-all`}>{tl('action.cancel')}</button>
                 <button onClick={handleCreateCh} disabled={!newChName.trim()}
                   className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all">
                   Utwórz kanał
@@ -22775,7 +22775,7 @@ export default function App() {
                   </div>
                 )}
                 <div className="flex gap-2">
-                  <button onClick={()=>setCatCreateOpen(false)} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold ${gb} transition-all`}>Anuluj</button>
+                  <button onClick={()=>setCatCreateOpen(false)} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold ${gb} transition-all`}>{tl('action.cancel')}</button>
                   <button onClick={handleCreateCat} disabled={!newCatName.trim()}
                     className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all">
                     Utwórz kategorię
@@ -22870,7 +22870,7 @@ export default function App() {
               onClick={e=>e.stopPropagation()} className={`${gm} rounded-3xl p-7 w-full max-w-md max-h-[85vh] overflow-y-auto custom-scrollbar`}>
               <div className="flex items-center justify-between mb-5"><h2 className="text-lg font-bold text-white">{editingRole?'Edytuj rolę':'Nowa rola'}</h2><button onClick={()=>setRoleModalOpen(false)} className="text-zinc-600 hover:text-white"><X size={17}/></button></div>
               <div className="flex flex-col gap-4">
-                <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Nazwa</label>
+                <div><label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.name')}</label>
                   <input value={roleForm.name} onChange={e=>setRoleForm(p=>({...p,name:e.target.value}))} placeholder="Nazwa roli..." className={`w-full ${gi} rounded-xl px-4 py-2.5 text-sm`}/></div>
                 <div>
                   <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-2 block">Kolor</label>
@@ -22970,11 +22970,11 @@ export default function App() {
                         sections:[{id:'s-profil',label:tl('settings.section.profile')},{id:'s-info',label:tl('settings.section.info')},{id:'s-password',label:tl('settings.section.password')},{id:'s-sessions',label:tl('settings.section.sessions')}]},
                       {id:'appearance',  label:t('settings.appearance'), icon:<Image size={14}/>,
                         sections:[{id:'s-chat',label:tl('settings.section.chat')},{id:'s-accessibility',label:tl('settings.section.profileEffects')},{id:'s-card-effect',label:tl('settings.section.cardEffect')}]},
-                      {id:'notifications', label:'Powiadomienia', icon:<Bell size={14}/>,
-                        sections:[{id:'s-quiet',label:'Godziny ciszy'}]},
+                      {id:'notifications', label:tl('settings.notifications'), icon:<Bell size={14}/>,
+                        sections:[{id:'s-quiet',label:tl('settings.section.quietHours')}]},
                       {id:'theme',       label:tl('settings.theme'),     icon:<Palette size={14}/>, sections:[]},
                       {id:'connections', label:tl('settings.connections'),icon:<Link2 size={14}/>, sections:[]},
-                      {id:'stats',       label:'Statystyki',              icon:<BarChart2 size={14}/>, sections:[]},
+                      {id:'stats',       label:tl('settings.stats'),      icon:<BarChart2 size={14}/>, sections:[]},
                     ]},
                     { group: tl('settings.group.app'), items: [
                       {id:'devices',  label:t('settings.devices'),  icon:<Mic size={14}/>,    sections:[{id:'s-input',label:tl('settings.section.input')},{id:'s-output',label:tl('settings.section.output')}]},
@@ -23171,7 +23171,7 @@ export default function App() {
                               : diffMin < 60 ? tl('sessions.lessThanHour')
                               : diffMin < 1440 ? `${Math.floor(diffMin/60)} ${tl('sessions.hoursAgo')}`
                               : diffMin < 10080 ? `${Math.floor(diffMin/1440)} ${tl('sessions.daysAgo')}`
-                              : lastSeen.toLocaleDateString('pl-PL');
+                              : fmtDate(s.last_seen_at);
                             const DevIcon = isApp ? Monitor : isMobile ? Smartphone : Globe;
                             return { label, ago, DevIcon };
                           };
@@ -23450,7 +23450,7 @@ export default function App() {
                                         setActiveTagServerId(null);
                                         setCurrentUser(p => p ? {...p, active_tag_server_id: null, active_tag: null} : p);
                                         addToast('Tag zdjęty', 'success');
-                                      } catch { addToast('Błąd', 'error'); }
+                                      } catch { addToast(tl('common.error'), 'error'); }
                                     }}
                                     className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${!activeTagServerId ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]'}`}>
                                     <div className="w-7 h-7 bg-zinc-700/80 rounded-lg flex items-center justify-center shrink-0">
@@ -24039,7 +24039,7 @@ export default function App() {
                                   setTwoFaSetupData(data);
                                   setTwoFaInputCode('');
                                   setTwoFaModal('setup');
-                                } catch(e:any) { setTwoFaError(e?.message || 'Błąd'); }
+                                } catch(e:any) { setTwoFaError(e?.message || tl('common.error')); }
                                 finally { setTwoFaLoading(false); }
                               }}
                               disabled={twoFaLoading}
@@ -24070,7 +24070,7 @@ export default function App() {
                               setPushSubscribed(false);
                               addToast('Powiadomienia push wyłączone', 'info');
                             } catch (e: any) {
-                              addToast(e?.message || 'Błąd', 'error');
+                              addToast(e?.message || tl('common.error'), 'error');
                             }
                           }}
                             className="text-sm font-semibold text-zinc-300 hover:text-white bg-zinc-700/50 hover:bg-zinc-700 border border-zinc-600/30 px-4 py-2 rounded-xl transition-all flex items-center gap-2">
@@ -24149,13 +24149,12 @@ export default function App() {
                               </div>
                               <div>
                                 <p className="text-sm font-bold text-zinc-300">Zablokowane konta</p>
-                                <p className="text-xs text-zinc-500">{blockedList.length} {blockedList.length === 1 ? 'konto' : blockedList.length < 5 ? 'konta' : 'kont'}</p>
+                                <p className="text-xs text-zinc-500">{blockedList.length} {blockedList.length === 1 ? tl('accounts.one') : blockedList.length < 5 ? tl('accounts.few') : tl('accounts.many')}</p>
                               </div>
                             </div>
                             <div className="flex flex-col">
                               {blockedList.map((b, i) => {
-                                const blockedDate = new Date(b.blocked_at);
-                                const dateStr = blockedDate.toLocaleDateString('pl-PL', { day:'numeric', month:'long', year:'numeric' });
+                                const dateStr = fmtDate(b.blocked_at, { day:'numeric', month:'long', year:'numeric' });
                                 return (
                                 <div key={b.id} className={`flex items-center gap-3 py-3 ${i > 0 ? 'border-t border-white/[0.05]' : ''}`}>
                                   <img src={b.avatar_url ? staticUrl(b.avatar_url) : `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(b.username)}&size=40`}
@@ -24385,18 +24384,18 @@ export default function App() {
                           <div className="flex-1">
                             <p className="text-sm font-semibold text-white">Spotify</p>
                             {ownSpotify?.connected
-                              ? <p className="text-xs text-zinc-500">Połączono jako {ownSpotify.display_name}</p>
-                              : <p className="text-xs text-zinc-500">Nie połączono</p>}
+                              ? <p className="text-xs text-zinc-500">{tl('connections.connectedAs')} {ownSpotify.display_name}</p>
+                              : <p className="text-xs text-zinc-500">{tl('connections.notConnected')}</p>}
                           </div>
                           {ownSpotify?.connected
-                            ? <button onClick={async()=>{ try { await spotifyApi.disconnect(); setOwnSpotify(null); addToast('Spotify odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Spotify','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
-                            : <button onClick={async()=>{ try { const r = await spotifyApi.connect(); await openOAuth(r.url, 'spotify'); } catch(e:any){ addToast(e.message||'Błąd Spotify','error'); } }} className="text-xs text-[#1DB954] flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-[#1DB954]/30 hover:bg-[#1DB954]/10">Połącz</button>}
+                            ? <button onClick={async()=>{ try { await spotifyApi.disconnect(); setOwnSpotify(null); addToast(`Spotify ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||`${tl('connections.disconnectError')} Spotify`,'error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> {tl('connections.disconnect')}</button>
+                            : <button onClick={async()=>{ try { const r = await spotifyApi.connect(); await openOAuth(r.url, 'spotify'); } catch(e:any){ addToast(e.message||`${tl('connections.error')} Spotify`,'error'); } }} className="text-xs text-[#1DB954] flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-[#1DB954]/30 hover:bg-[#1DB954]/10">{tl('connections.connect')}</button>}
                         </div>
                         {ownSpotify?.connected && (
                           <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
                             <div>
-                              <p className="text-sm text-white">Wyświetlaj w profilu</p>
-                              <p className="text-xs text-zinc-500 mt-0.5">Inni widzą co teraz grasz</p>
+                              <p className="text-sm text-white">{tl('connections.showOnProfile')}</p>
+                              <p className="text-xs text-zinc-500 mt-0.5">{tl('connections.spotify.desc')}</p>
                             </div>
                             <button onClick={async()=>{ const v=!ownSpotify.show_on_profile; await spotifyApi.setSettings({show_on_profile:v}); setOwnSpotify(p=>p?{...p,show_on_profile:v}:p); }}
                               className={`relative w-11 h-6 rounded-full transition-all ${ownSpotify.show_on_profile?'bg-[#1DB954]':'bg-white/[0.1]'}`}>
@@ -24416,18 +24415,18 @@ export default function App() {
                           <div className="flex-1">
                             <p className="text-sm font-semibold text-white">Twitch</p>
                             {ownTwitch?.connected
-                              ? <p className="text-xs text-zinc-500">Połączono jako {ownTwitch.display_name || ownTwitch.login}</p>
-                              : <p className="text-xs text-zinc-500">Nie połączono</p>}
+                              ? <p className="text-xs text-zinc-500">{tl('connections.connectedAs')} {ownTwitch.display_name || ownTwitch.login}</p>
+                              : <p className="text-xs text-zinc-500">{tl('connections.notConnected')}</p>}
                           </div>
                           {ownTwitch?.connected
-                            ? <button onClick={async()=>{ try { await twitchApi.disconnect(); setOwnTwitch(null); addToast('Twitch odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Twitch','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
-                            : <button onClick={async()=>{ try { const r = await twitchApi.connect(); await openOAuth(r.url, 'twitch'); } catch(e:any){ addToast(e.message||'Błąd Twitch','error'); } }} className="text-xs text-purple-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-purple-500/30 hover:bg-purple-500/10">Połącz</button>}
+                            ? <button onClick={async()=>{ try { await twitchApi.disconnect(); setOwnTwitch(null); addToast(`Twitch ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||`${tl('connections.disconnectError')} Twitch`,'error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> {tl('connections.disconnect')}</button>
+                            : <button onClick={async()=>{ try { const r = await twitchApi.connect(); await openOAuth(r.url, 'twitch'); } catch(e:any){ addToast(e.message||`${tl('connections.error')} Twitch`,'error'); } }} className="text-xs text-purple-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-purple-500/30 hover:bg-purple-500/10">{tl('connections.connect')}</button>}
                         </div>
                         {ownTwitch?.connected && (
                           <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
                             <div>
-                              <p className="text-sm text-white">Wyświetlaj w profilu</p>
-                              <p className="text-xs text-zinc-500 mt-0.5">Inni widzą kiedy streamujesz</p>
+                              <p className="text-sm text-white">{tl('connections.showOnProfile')}</p>
+                              <p className="text-xs text-zinc-500 mt-0.5">{tl('connections.twitch.desc')}</p>
                             </div>
                             <button onClick={async()=>{ const v=!ownTwitch.show_on_profile; await twitchApi.setSettings({show_on_profile:v}); setOwnTwitch(p=>p?{...p,show_on_profile:v}:p); }}
                               className={`relative w-11 h-6 rounded-full transition-all ${ownTwitch.show_on_profile?'bg-purple-500':'bg-white/[0.1]'}`}>
@@ -24446,18 +24445,18 @@ export default function App() {
                           <div className="flex-1">
                             <p className="text-sm font-semibold text-white">Steam</p>
                             {ownSteam?.connected
-                              ? <p className="text-xs text-zinc-500">Połączono jako {ownSteam.display_name}</p>
-                              : <p className="text-xs text-zinc-500">Nie połączono</p>}
+                              ? <p className="text-xs text-zinc-500">{tl('connections.connectedAs')} {ownSteam.display_name}</p>
+                              : <p className="text-xs text-zinc-500">{tl('connections.notConnected')}</p>}
                           </div>
                           {ownSteam?.connected
-                            ? <button onClick={async()=>{ try { await steamApi.disconnect(); setOwnSteam(null); addToast('Steam odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd odłączania Steam','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
-                            : <button onClick={async()=>{ try { const r = await steamApi.connect(); await openOAuth(r.url, 'steam'); } catch(e:any){ addToast(e.message||'Błąd Steam','error'); } }} className="text-xs text-blue-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-blue-500/30 hover:bg-blue-500/10">Połącz</button>}
+                            ? <button onClick={async()=>{ try { await steamApi.disconnect(); setOwnSteam(null); addToast(`Steam ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||`${tl('connections.disconnectError')} Steam`,'error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> {tl('connections.disconnect')}</button>
+                            : <button onClick={async()=>{ try { const r = await steamApi.connect(); await openOAuth(r.url, 'steam'); } catch(e:any){ addToast(e.message||`${tl('connections.error')} Steam`,'error'); } }} className="text-xs text-blue-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-blue-500/30 hover:bg-blue-500/10">{tl('connections.connect')}</button>}
                         </div>
                         {ownSteam?.connected && (
                           <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
                             <div>
-                              <p className="text-sm text-white">Wyświetlaj w profilu</p>
-                              <p className="text-xs text-zinc-500 mt-0.5">Inni widzą co grasz na Steam</p>
+                              <p className="text-sm text-white">{tl('connections.showOnProfile')}</p>
+                              <p className="text-xs text-zinc-500 mt-0.5">{tl('connections.steam.desc')}</p>
                             </div>
                             <button onClick={async()=>{ const v=!ownSteam.show_on_profile; await steamApi.setSettings({show_on_profile:v}); setOwnSteam(p=>p?{...p,show_on_profile:v}:p); }}
                               className={`relative w-11 h-6 rounded-full transition-all ${ownSteam.show_on_profile?'bg-blue-500':'bg-white/[0.1]'}`}>
@@ -24477,17 +24476,17 @@ export default function App() {
                             <p className="text-sm font-semibold text-white">YouTube</p>
                             {ownYoutube?.connected
                               ? <p className="text-xs text-zinc-500">{ownYoutube.display_name}{ownYoutube.subscriber_count != null ? ` · ${fmtSubsConn(ownYoutube.subscriber_count)} sub.` : ''}</p>
-                              : <p className="text-xs text-zinc-500">Nie połączono</p>}
+                              : <p className="text-xs text-zinc-500">{tl('connections.notConnected')}</p>}
                           </div>
                           {ownYoutube?.connected
-                            ? <button onClick={async()=>{ try { await youtubeApi.disconnect(); setOwnYoutube(null); addToast('YouTube odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
-                            : <button onClick={async()=>{ try { const r = await youtubeApi.connect(); await openOAuth(r.url, 'youtube'); } catch(e:any){ addToast(e.message||'Błąd YouTube','error'); } }} className="text-xs text-[#FF0000] flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-red-500/30 hover:bg-red-500/10">Połącz</button>}
+                            ? <button onClick={async()=>{ try { await youtubeApi.disconnect(); setOwnYoutube(null); addToast(`YouTube ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||tl('common.error'),'error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> {tl('connections.disconnect')}</button>
+                            : <button onClick={async()=>{ try { const r = await youtubeApi.connect(); await openOAuth(r.url, 'youtube'); } catch(e:any){ addToast(e.message||`${tl('connections.error')} YouTube`,'error'); } }} className="text-xs text-[#FF0000] flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-red-500/30 hover:bg-red-500/10">{tl('connections.connect')}</button>}
                         </div>
                         {ownYoutube?.connected && (
                           <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
                             <div>
-                              <p className="text-sm text-white">Wyświetlaj w profilu</p>
-                              <p className="text-xs text-zinc-500 mt-0.5">Inni widzą Twój kanał YouTube</p>
+                              <p className="text-sm text-white">{tl('connections.showOnProfile')}</p>
+                              <p className="text-xs text-zinc-500 mt-0.5">{tl('connections.youtube.desc')}</p>
                             </div>
                             <button onClick={async()=>{ const v=!ownYoutube.show_on_profile; await youtubeApi.setSettings({show_on_profile:v}); setOwnYoutube(p=>p?{...p,show_on_profile:v}:p); }}
                               className={`relative w-11 h-6 rounded-full transition-all ${ownYoutube.show_on_profile?'bg-[#FF0000]':'bg-white/[0.1]'}`}>
@@ -24506,18 +24505,18 @@ export default function App() {
                           <div className="flex-1">
                             <p className="text-sm font-semibold text-white">Kick</p>
                             {ownKick?.connected
-                              ? <p className="text-xs text-zinc-500">Połączono jako {ownKick.display_name || ownKick.username}{ownKick.is_live ? ' · 🔴 NA ŻYWO' : ''}</p>
-                              : <p className="text-xs text-zinc-500">Nie połączono</p>}
+                              ? <p className="text-xs text-zinc-500">{tl('connections.connectedAs')} {ownKick.display_name || ownKick.username}{ownKick.is_live ? ` · 🔴 ${tl('connections.live')}` : ''}</p>
+                              : <p className="text-xs text-zinc-500">{tl('connections.notConnected')}</p>}
                           </div>
                           {ownKick?.connected
-                            ? <button onClick={async()=>{ try { await kickApi.disconnect(); setOwnKick(null); addToast('Kick odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
-                            : <button onClick={async()=>{ try { const r = await kickApi.connect(); await openOAuth(r.url, 'kick'); } catch(e:any){ addToast(e.message||'Błąd Kick','error'); } }} className="text-xs text-[#53fc18] flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-[#53fc18]/30 hover:bg-[#53fc18]/10">Połącz</button>}
+                            ? <button onClick={async()=>{ try { await kickApi.disconnect(); setOwnKick(null); addToast(`Kick ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||tl('common.error'),'error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> {tl('connections.disconnect')}</button>
+                            : <button onClick={async()=>{ try { const r = await kickApi.connect(); await openOAuth(r.url, 'kick'); } catch(e:any){ addToast(e.message||`${tl('connections.error')} Kick`,'error'); } }} className="text-xs text-[#53fc18] flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-[#53fc18]/30 hover:bg-[#53fc18]/10">{tl('connections.connect')}</button>}
                         </div>
                         {ownKick?.connected && (
                           <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
                             <div>
-                              <p className="text-sm text-white">Wyświetlaj w profilu</p>
-                              <p className="text-xs text-zinc-500 mt-0.5">Inni widzą kiedy streamujesz na Kick</p>
+                              <p className="text-sm text-white">{tl('connections.showOnProfile')}</p>
+                              <p className="text-xs text-zinc-500 mt-0.5">{tl('connections.kick.desc')}</p>
                             </div>
                             <button onClick={async()=>{ const v=!ownKick.show_on_profile; await kickApi.setSettings({show_on_profile:v}); setOwnKick(p=>p?{...p,show_on_profile:v}:p); }}
                               className={`relative w-11 h-6 rounded-full transition-all ${ownKick.show_on_profile?'bg-[#53fc18]':'bg-white/[0.1]'}`}>
@@ -24536,11 +24535,11 @@ export default function App() {
                           <div className="flex-1">
                             <p className="text-sm font-semibold text-white">Epic Games</p>
                             {ownEpic?.connected
-                              ? <p className="text-xs text-zinc-500">Połączono jako {ownEpic.display_name}{(ownEpic.fortnite_matches ?? 0) > 0 ? ` · ${(ownEpic.fortnite_wins??0)} wygranych` : ''}</p>
-                              : <p className="text-xs text-zinc-500">Nie połączono</p>}
+                              ? <p className="text-xs text-zinc-500">{tl('connections.connectedAs')} {ownEpic.display_name}{(ownEpic.fortnite_matches ?? 0) > 0 ? ` · ${(ownEpic.fortnite_wins??0)} ${tl('connections.epic.wins')}` : ''}</p>
+                              : <p className="text-xs text-zinc-500">{tl('connections.notConnected')}</p>}
                           </div>
                           {ownEpic?.connected && (
-                            <button onClick={async()=>{ try { await epicApi.disconnect(); setOwnEpic(null); addToast('Epic Games odłączono','info'); } catch(e:any){ addToast(e.message||'Błąd','error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> Odłącz</button>
+                            <button onClick={async()=>{ try { await epicApi.disconnect(); setOwnEpic(null); addToast(`Epic Games ${tl('connections.disconnectedToast')}`,'info'); } catch(e:any){ addToast(e.message||tl('common.error'),'error'); } }} className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-all px-3 py-1.5 rounded-lg border border-white/[0.08] hover:border-rose-500/30"><Link2Off size={12}/> {tl('connections.disconnect')}</button>
                           )}
                         </div>
                         {!ownEpic?.connected && (
@@ -24550,16 +24549,16 @@ export default function App() {
                               onChange={e=>setEpicConnectName(e.target.value)}
                               placeholder="Epic display name"
                               className="flex-1 bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-white/20 transition-all"
-                              onKeyDown={async e=>{ if(e.key==='Enter' && epicConnectName.trim()){ try { const r=await epicApi.connect(epicConnectName.trim()); setOwnEpic(r); setEpicConnectName(''); addToast('Epic Games połączono','success'); } catch(err:any){ addToast(err.message||'Błąd Epic','error'); } } }}
+                              onKeyDown={async e=>{ if(e.key==='Enter' && epicConnectName.trim()){ try { const r=await epicApi.connect(epicConnectName.trim()); setOwnEpic(r); setEpicConnectName(''); addToast(`Epic Games ${tl('connections.connectedToast')}`,'success'); } catch(err:any){ addToast(err.message||`${tl('connections.error')} Epic`,'error'); } } }}
                             />
-                            <button onClick={async()=>{ if(!epicConnectName.trim())return; try { const r=await epicApi.connect(epicConnectName.trim()); setOwnEpic(r); setEpicConnectName(''); addToast('Epic Games połączono','success'); } catch(err:any){ addToast(err.message||'Błąd Epic','error'); } }} className="text-xs text-zinc-300 px-3 py-2 rounded-xl border border-white/[0.1] hover:bg-white/[0.06] transition-all">Połącz</button>
+                            <button onClick={async()=>{ if(!epicConnectName.trim())return; try { const r=await epicApi.connect(epicConnectName.trim()); setOwnEpic(r); setEpicConnectName(''); addToast(`Epic Games ${tl('connections.connectedToast')}`,'success'); } catch(err:any){ addToast(err.message||`${tl('connections.error')} Epic`,'error'); } }} className="text-xs text-zinc-300 px-3 py-2 rounded-xl border border-white/[0.1] hover:bg-white/[0.06] transition-all">{tl('connections.connect')}</button>
                           </div>
                         )}
                         {ownEpic?.connected && (
                           <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
                             <div>
-                              <p className="text-sm text-white">Wyświetlaj w profilu</p>
-                              <p className="text-xs text-zinc-500 mt-0.5">Inni widzą Twoje konto Epic / statystyki Fortnite</p>
+                              <p className="text-sm text-white">{tl('connections.showOnProfile')}</p>
+                              <p className="text-xs text-zinc-500 mt-0.5">{tl('connections.epic.desc')}</p>
                             </div>
                             <button onClick={async()=>{ const v=!ownEpic.show_on_profile; await epicApi.setSettings({show_on_profile:v}); setOwnEpic(p=>p?{...p,show_on_profile:v}:p); }}
                               className={`relative w-11 h-6 rounded-full transition-all ${ownEpic.show_on_profile?'bg-zinc-400':'bg-white/[0.1]'}`}>
@@ -24825,8 +24824,8 @@ export default function App() {
                     <motion.div key="stats" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
                       className="flex flex-col gap-6">
                       <div>
-                        <h3 className="text-sm font-bold text-white mb-0.5">Statystyki</h3>
-                        <p className="text-xs text-zinc-500">Twoja aktywność na platformie Cordyn.</p>
+                        <h3 className="text-sm font-bold text-white mb-0.5">{tl('settings.stats')}</h3>
+                        <p className="text-xs text-zinc-500">{tl('stats.subtitle')}</p>
                       </div>
                       {statsLoading&&<div className="flex items-center justify-center py-12"><Loader2 size={20} className="animate-spin text-zinc-600"/></div>}
                       {!statsLoading&&userStats&&(()=>{
@@ -24841,26 +24840,26 @@ export default function App() {
                         );
                         return(<>
                           <div>
-                            <p className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest mb-3">Wiadomości</p>
+                            <p className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest mb-3">{tl('stats.section.messages')}</p>
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                              <StatCard label="Łącznie wysłanych" value={fmt(userStats.messages_sent)}/>
-                              <StatCard label="W tym miesiącu"    value={fmt(userStats.messages_this_month)} sub={`${userStats.messages_sent>0?Math.round(userStats.messages_this_month/Math.max(userStats.messages_sent,1)*100):0}% całości`}/>
-                              <StatCard label="Wiadomości DM"     value={fmt(userStats.dms_sent)}/>
+                              <StatCard label={tl('stats.messages.total')} value={fmt(userStats.messages_sent)}/>
+                              <StatCard label={tl('stats.messages.thisMonth')} value={fmt(userStats.messages_this_month)} sub={`${userStats.messages_sent>0?Math.round(userStats.messages_this_month/Math.max(userStats.messages_sent,1)*100):0}${tl('stats.messages.ofTotal')}`}/>
+                              <StatCard label={tl('stats.messages.dm')}     value={fmt(userStats.dms_sent)}/>
                             </div>
                           </div>
                           <div>
-                            <p className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest mb-3">Reakcje</p>
+                            <p className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest mb-3">{tl('stats.section.reactions')}</p>
                             <div className="grid grid-cols-2 gap-3">
-                              <StatCard label="Dodane przez Ciebie" value={fmt(userStats.reactions_given)}/>
-                              <StatCard label="Otrzymane"           value={fmt(userStats.reactions_received)}/>
+                              <StatCard label={tl('stats.reactions.given')} value={fmt(userStats.reactions_given)}/>
+                              <StatCard label={tl('stats.reactions.received')} value={fmt(userStats.reactions_received)}/>
                             </div>
                           </div>
                           <div>
-                            <p className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest mb-3">Twoje konto</p>
+                            <p className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest mb-3">{tl('stats.section.account')}</p>
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                              <StatCard label="Serwery"    value={fmt(userStats.servers_joined)}/>
-                              <StatCard label="Znajomi"    value={fmt(userStats.friends_count)}/>
-                              <StatCard label="Na Cordyn od" value={`${daysSince} dni`} sub={new Date(userStats.account_created).toLocaleDateString('pl-PL',{year:'numeric',month:'long',day:'numeric'})}/>
+                              <StatCard label={tl('stats.servers')}    value={fmt(userStats.servers_joined)}/>
+                              <StatCard label={tl('stats.friends')}    value={fmt(userStats.friends_count)}/>
+                              <StatCard label={tl('stats.memberSince')} value={`${daysSince} ${tl('stats.days')}`} sub={fmtDate(userStats.account_created,{year:'numeric',month:'long',day:'numeric'})}/>
                             </div>
                           </div>
                         </>);
@@ -26063,8 +26062,8 @@ export default function App() {
                           <Bookmark size={24} className="text-zinc-700"/>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-zinc-400">Brak zapisanych wiadomości</p>
-                          <p className="text-xs text-zinc-600 mt-1">Kliknij prawym przyciskiem na wiadomość i wybierz „Zapisz wiadomość"</p>
+                          <p className="text-sm font-medium text-zinc-400">{tl('bookmarks.empty')}</p>
+                          <p className="text-xs text-zinc-600 mt-1">{tl('bookmarks.emptyHint')}</p>
                         </div>
                       </div>
                     );
@@ -26080,7 +26079,7 @@ export default function App() {
                               <span className="text-[10px] text-zinc-600">{bm.created_at ? fmtTime(bm.created_at) : ''}</span>
                             </div>
                             <p className="text-sm text-zinc-300 break-words line-clamp-3 leading-relaxed">
-                              {bm.message?.content || (bm.message?.attachment_url ? '📎 Załącznik' : '—')}
+                              {bm.message?.content || (bm.message?.attachment_url ? `📎 ${tl('bookmarks.attachment')}` : '—')}
                             </p>
                           </div>
                           <button onClick={async () => {
@@ -26125,8 +26124,8 @@ export default function App() {
             <div className="flex items-center justify-between px-4 py-3.5 border-b border-white/[0.07] shrink-0">
               <div className="flex items-center gap-2">
                 <MessageSquare size={15} className="text-indigo-400"/>
-                <h3 className="text-sm font-bold text-white">Wątek</h3>
-                <span className="text-xs text-zinc-600">{threadMessages.length} odpowiedzi</span>
+                <h3 className="text-sm font-bold text-white">{tl('thread.title')}</h3>
+                <span className="text-xs text-zinc-600">{threadMessages.length} {tl('thread.repliesCount')}</span>
               </div>
               <button onClick={()=>setThreadRootId(null)} className="text-zinc-600 hover:text-white"><X size={15}/></button>
             </div>
@@ -26134,7 +26133,7 @@ export default function App() {
               {threadMessages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center flex-1 gap-3 py-12">
                   <MessageSquare size={32} className="text-zinc-700"/>
-                  <p className="text-sm text-zinc-600 text-center">Brak odpowiedzi.<br/>Zacznij wątek poniżej.</p>
+                  <p className="text-sm text-zinc-600 text-center">{tl('thread.noReplies')}<br/>{tl('thread.startBelow')}</p>
                 </div>
               ) : threadMessages.map((m: any) => (
                 <div key={m.id} className="flex gap-2.5 py-1.5 hover:bg-white/[0.02] rounded-xl px-2 transition-colors">
@@ -26143,7 +26142,7 @@ export default function App() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2 mb-0.5">
                       <span className="text-xs font-semibold text-white">{m.sender_username}</span>
-                      <span className="text-[10px] text-zinc-600">{new Date(m.created_at).toLocaleTimeString('pl-PL', {hour:'2-digit',minute:'2-digit'})}</span>
+                      <span className="text-[10px] text-zinc-600">{fmtTime(m.created_at)}</span>
                     </div>
                     <p className="text-xs text-zinc-300 leading-relaxed break-words">{m.content}</p>
                   </div>
@@ -26170,7 +26169,7 @@ export default function App() {
                 } finally { setThreadSending(false); }
               }} className="flex gap-2">
                 <input value={threadInput} onChange={e=>setThreadInput(e.target.value)}
-                  placeholder="Odpowiedz w wątku…"
+                  placeholder={tl('thread.replyPh')}
                   className="flex-1 bg-white/[0.06] border border-white/[0.1] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500/50 min-w-0"/>
                 <button type="submit" disabled={!threadInput.trim()||threadSending}
                   className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 transition-colors text-white shrink-0">
@@ -26192,17 +26191,17 @@ export default function App() {
               className={`${gm} p-6 w-full max-w-md`}
               onClick={e=>e.stopPropagation()}>
               <div className="flex items-center justify-between mb-5">
-                <h2 className="text-base font-bold text-white flex items-center gap-2"><Keyboard size={16} className="text-indigo-400"/>Skróty klawiszowe</h2>
+                <h2 className="text-base font-bold text-white flex items-center gap-2"><Keyboard size={16} className="text-indigo-400"/>{tl('shortcuts.title')}</h2>
                 <button onClick={()=>setShowShortcuts(false)} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all"><X size={14}/></button>
               </div>
               <div className="flex flex-col gap-1.5 text-sm">
                 {[
-                  ['?', 'Otwórz/zamknij skróty'],
-                  ['Ctrl + K', 'Szybkie przełączanie (Quick Switcher)'],
-                  ['Escape', 'Zamknij modal / panel'],
-                  ['Alt + ↑ / ↓', 'Nawigacja między kanałami'],
-                  ['Ctrl + /', 'Szybka pomoc'],
-                  ...(canQAReport ? [['Ctrl + Shift + Z', '🐞 Zgłoś błąd (QA)']] : []),
+                  ['?', tl('shortcuts.toggle')],
+                  ['Ctrl + K', tl('shortcuts.quickSwitcher')],
+                  ['Escape', tl('shortcuts.closeModal')],
+                  ['Alt + ↑ / ↓', tl('shortcuts.navChannels')],
+                  ['Ctrl + /', tl('shortcuts.quickHelp')],
+                  ...(canQAReport ? [['Ctrl + Shift + Z', tl('shortcuts.reportBug')]] : []),
                 ].map(([key, desc]) => (
                   <div key={key} className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                     <span className="text-zinc-400">{desc}</span>
@@ -26234,32 +26233,32 @@ export default function App() {
                 }
               }}>
               <div className="flex items-center justify-between mb-5">
-                <h2 className="text-base font-bold text-white flex items-center gap-2"><FlaskConical size={16} className="text-violet-400"/>Zgłoszenie QA</h2>
+                <h2 className="text-base font-bold text-white flex items-center gap-2"><FlaskConical size={16} className="text-violet-400"/>{tl('qa.title')}</h2>
                 <button onClick={()=>setShowQAReportModal(false)} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all"><X size={14}/></button>
               </div>
 
               <div className="flex flex-col gap-4">
                 <div>
-                  <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Tytuł błędu *</label>
+                  <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">{tl('qa.bugTitle')}</label>
                   <input value={qaTitle} onChange={e=>setQaTitle(e.target.value.slice(0,150))} maxLength={150}
-                    placeholder="np. Awatar nie wczytuje się po odświeżeniu"
+                    placeholder={tl('qa.bugTitlePh')}
                     className={`${gi} w-full rounded-xl px-3 py-2.5 border-white/[0.08] text-white text-sm`}/>
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Opis *</label>
+                  <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">{tl('qa.desc')}</label>
                   <textarea value={qaDesc} onChange={e=>setQaDesc(e.target.value.slice(0,3000))} maxLength={3000} rows={5}
-                    placeholder="Co się stało, jak to odtworzyć, czego się oczekiwało..."
+                    placeholder={tl('qa.descPh')}
                     className={`${gi} w-full rounded-xl px-3 py-2.5 border-white/[0.08] text-white text-sm resize-none`}/>
                 </div>
 
                 <div className="flex items-center gap-2 text-[11px] text-zinc-500">
                   <CalendarDays size={13}/>
-                  <span>{new Date().toLocaleString('pl-PL', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}</span>
+                  <span>{fmtDate(new Date().toISOString(), { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })}</span>
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">Screenshot (opcjonalnie)</label>
+                  <label className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1.5 block font-bold">{tl('qa.screenshot')}</label>
                   {!qaScreenshotPreview ? (
                     <label className="flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 border-dashed border-white/[0.1] hover:border-indigo-500/50 cursor-pointer transition-colors"
                       onDragOver={e=>e.preventDefault()}
@@ -26269,7 +26268,7 @@ export default function App() {
                         if (f && f.type.startsWith('image/')) { setQaScreenshot(f); setQaScreenshotPreview(URL.createObjectURL(f)); }
                       }}>
                       <ImageIcon size={22} className="text-zinc-500"/>
-                      <p className="text-xs text-zinc-400 font-medium">Kliknij, upuść lub wklej (Ctrl+V) obrazek</p>
+                      <p className="text-xs text-zinc-400 font-medium">{tl('qa.screenshotHint')}</p>
                       <p className="text-[10px] text-zinc-600">PNG, JPG, GIF · maks. 8MB</p>
                       <input type="file" accept="image/*" className="hidden" onChange={e=>{
                         const f = e.target.files?.[0];
@@ -26295,18 +26294,18 @@ export default function App() {
                     setQaTitle(''); setQaDesc(''); setQaScreenshot(null); setQaScreenshotPreview(null);
                   }}
                   className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-zinc-400 bg-white/[0.05] hover:bg-white/[0.08] transition-colors">
-                  Anuluj
+                  {tl('action.cancel')}
                 </button>
                 <button onClick={async ()=>{
                     if (!qaTitle.trim() || !qaDesc.trim() || qaSending) return;
                     setQaSending(true);
                     try {
                       await feedbackApi.sendQAReport(qaTitle.trim(), qaDesc.trim(), qaScreenshot);
-                      addToast('Zgłoszenie wysłane ✅', 'success');
+                      addToast(tl('qa.sent'), 'success');
                       setShowQAReportModal(false);
                       setQaTitle(''); setQaDesc(''); setQaScreenshot(null); setQaScreenshotPreview(null);
                     } catch (err: any) {
-                      addToast(err?.message || 'Nie udało się wysłać zgłoszenia', 'error');
+                      addToast(err?.message || tl('qa.sendError'), 'error');
                     } finally {
                       setQaSending(false);
                     }
@@ -26314,7 +26313,7 @@ export default function App() {
                   disabled={!qaTitle.trim() || !qaDesc.trim() || qaSending}
                   className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors flex items-center justify-center gap-2 ${qaTitle.trim() && qaDesc.trim() && !qaSending ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-zinc-700 opacity-50 cursor-not-allowed'}`}>
                   {qaSending ? <Loader2 size={14} className="animate-spin"/> : <Send size={14}/>}
-                  {qaSending ? 'Wysyłanie...' : 'Wyślij log'}
+                  {qaSending ? tl('qa.sending') : tl('qa.sendLog')}
                 </button>
               </div>
             </motion.div>
@@ -26344,8 +26343,8 @@ export default function App() {
                     const sM  = serverList.filter(s=>!q2||s.name.toLowerCase().includes(q2));
                     const fM  = friends.filter(f=>(f.username?.toLowerCase().includes(q2)||f.display_name?.toLowerCase().includes(q2))&&q2);
                     const sttM= [
-                      {label:'Ustawienia konta',k:'account'},{label:'Wygląd i motywy',k:'appearance'},
-                      {label:'Urządzenia',k:'devices'},{label:'Prywatność',k:'privacy'},
+                      {label:tl('quickswitch.accountSettings'),k:'account'},{label:tl('quickswitch.appearanceSettings'),k:'appearance'},
+                      {label:tl('settings.devices'),k:'devices'},{label:tl('settings.privacy'),k:'privacy'},
                     ].filter(s=>!q2||s.label.toLowerCase().includes(q2));
                     const total = Math.min(chM.length,5)+Math.min(sM.length,5)+Math.min(fM.length,5)+Math.min(sttM.length,4);
                     if (e.key === 'ArrowDown') { e.preventDefault(); setQuickIdx(i=>(i+1)%Math.max(total,1)); }
@@ -26364,7 +26363,7 @@ export default function App() {
                         || fire(sttM, s=>{ setAppSettTab(s.k as any); setAppSettOpen(true); });
                     }
                   }}
-                  placeholder="Szukaj kanałów, serwerów, znajomych, ustawień..."
+                  placeholder={tl('quickswitch.searchPh')}
                   className="flex-1 bg-transparent outline-none text-white placeholder-zinc-600 text-sm"/>
                 <kbd className="px-2 py-1 bg-white/[0.05] border border-white/[0.08] rounded-md text-[10px] font-mono text-zinc-600 shrink-0">ESC</kbd>
               </div>
@@ -26376,24 +26375,24 @@ export default function App() {
                 const serverMatches  = serverList.filter(s=>!q||s.name.toLowerCase().includes(q));
                 const friendMatches  = friends.filter(f=>(f.username?.toLowerCase().includes(q)||f.display_name?.toLowerCase().includes(q))&&q);
                 const settingsItems  = ([
-                  {label:'Ustawienia konta',  icon:<Users size={12}/>,  k:'account'   as const},
-                  {label:'Wygląd i motywy',   icon:<Palette size={12}/>,k:'appearance' as const},
-                  {label:'Urządzenia',         icon:<Mic size={12}/>,    k:'devices'    as const},
-                  {label:'Prywatność',         icon:<Shield size={12}/>, k:'privacy'    as const},
+                  {label:tl('quickswitch.accountSettings'),  icon:<Users size={12}/>,  k:'account'   as const},
+                  {label:tl('quickswitch.appearanceSettings'),   icon:<Palette size={12}/>,k:'appearance' as const},
+                  {label:tl('settings.devices'),         icon:<Mic size={12}/>,    k:'devices'    as const},
+                  {label:tl('settings.privacy'),         icon:<Shield size={12}/>, k:'privacy'    as const},
                 ] as const).filter(s=>!q||s.label.toLowerCase().includes(q));
 
                 const totalResults = channelMatches.length+serverMatches.length+friendMatches.length+settingsItems.length;
                 if (totalResults===0 && q) return (
                   <div className="px-4 py-8 text-center">
                     <Search size={22} className="text-zinc-700 mx-auto mb-2"/>
-                    <p className="text-sm text-zinc-600">Brak wyników dla „{quickQ}"</p>
+                    <p className="text-sm text-zinc-600">{tl('search.noResultsFor')} „{quickQ}"</p>
                   </div>
                 );
                 if (!q) return (
                   <div className="px-4 py-5 text-center">
-                    <p className="text-xs text-zinc-600">Wpisz aby wyszukać kanały, serwery, znajomych lub ustawienia</p>
+                    <p className="text-xs text-zinc-600">{tl('quickswitch.typeToSearch')}</p>
                     <div className="flex items-center justify-center gap-4 mt-3">
-                      {[['↑↓','nawigacja'],['↵','otwórz'],['ESC','zamknij']].map(([key,desc])=>(
+                      {[['↑↓',tl('quickswitch.navigate')],['↵',tl('quickswitch.open')],['ESC',tl('quickswitch.close')]].map(([key,desc])=>(
                         <span key={key} className="flex items-center gap-1.5 text-[10px] text-zinc-700">
                           <kbd className="px-1.5 py-0.5 bg-white/[0.05] border border-white/[0.08] rounded text-zinc-500 font-mono">{key}</kbd>
                           {desc}
@@ -26417,7 +26416,7 @@ export default function App() {
                 return (
                   <div className="max-h-[380px] overflow-y-auto custom-scrollbar py-1">
                     {channelMatches.length>0&&<>
-                      <SectionLabel label="Kanały"/>
+                      <SectionLabel label={tl('quickswitch.channels')}/>
                       {channelMatches.slice(0,5).map(c => {
                         const idx = globalIdx++;
                         return <Row key={c.id} idx={idx} onClick={()=>setActiveChannel(c.id)}>
@@ -26430,7 +26429,7 @@ export default function App() {
                       })}
                     </>}
                     {serverMatches.length>0&&<>
-                      <SectionLabel label="Serwery"/>
+                      <SectionLabel label={tl('quickswitch.servers')}/>
                       {serverMatches.slice(0,5).map(s => {
                         const idx = globalIdx++;
                         return <Row key={s.id} idx={idx} onClick={()=>{ const same=activeServer===s.id; setActiveServer(s.id); setActiveView('servers'); setServerFull(null); setActiveChannel(''); setSrvRingActivity(prev=>{const n={...prev};delete n[s.id];return n;}); if(same)setServerReloadKey(k=>k+1); }}>
@@ -26443,24 +26442,24 @@ export default function App() {
                       })}
                     </>}
                     {friendMatches.length>0&&<>
-                      <SectionLabel label="Znajomi"/>
+                      <SectionLabel label={tl('quickswitch.friends')}/>
                       {friendMatches.slice(0,5).map(f => {
                         const idx = globalIdx++;
                         return <Row key={f.id} idx={idx} onClick={()=>openDm(f.id)}>
                           <GifAvatar src={ava(f)} alt={f.username} className="w-6 h-6 rounded-full object-cover shrink-0"/>
                           <span className="text-sm flex-1 truncate">{f.display_name||f.username}</span>
-                          <span className="text-[10px] text-zinc-600 shrink-0">wiadomość</span>
+                          <span className="text-[10px] text-zinc-600 shrink-0">{tl('quickswitch.message')}</span>
                         </Row>;
                       })}
                     </>}
                     {settingsItems.length>0&&<>
-                      <SectionLabel label="Ustawienia"/>
+                      <SectionLabel label={tl('quickswitch.settings')}/>
                       {settingsItems.slice(0,4).map(s => {
                         const idx = globalIdx++;
                         return <Row key={s.k} idx={idx} onClick={()=>{ setAppSettTab(s.k); setAppSettOpen(true); }}>
                           <div className="w-6 h-6 rounded-lg bg-white/[0.05] flex items-center justify-center shrink-0 text-zinc-500">{s.icon}</div>
                           <span className="text-sm flex-1 truncate">{s.label}</span>
-                          <span className="text-[10px] text-zinc-600 shrink-0">ustawienia</span>
+                          <span className="text-[10px] text-zinc-600 shrink-0">{tl('quickswitch.settingsHint')}</span>
                         </Row>;
                       })}
                     </>}
@@ -26528,18 +26527,18 @@ export default function App() {
                     );
                   })}
                 {serverList.filter(s=>!srvListSearch||s.name.toLowerCase().includes(srvListSearch.toLowerCase())).length===0&&(
-                  <div className="text-center py-8 text-zinc-600 text-sm">Brak wyników</div>
+                  <div className="text-center py-8 text-zinc-600 text-sm">{tl('search.noResults')}</div>
                 )}
               </div>
               {/* Footer */}
               <div className="px-3 py-2.5 border-t border-white/[0.05] shrink-0 flex items-center gap-2">
                 <button onClick={()=>{ setShowSrvListModal(false); setCreateSrvOpen(true); }}
                   className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-emerald-400 transition-colors px-2 py-1.5 rounded-lg hover:bg-emerald-500/10">
-                  <Plus size={12}/>Utwórz serwer
+                  <Plus size={12}/>{tl('server.create')}
                 </button>
                 <button onClick={()=>{ setShowSrvListModal(false); setDiscoveryCategory('all'); setDiscoveryQ(''); setDiscoveryLoading(true); discoverApi.list('').then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false)); setShowDiscovery(true); }}
                   className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-violet-400 transition-colors px-2 py-1.5 rounded-lg hover:bg-violet-500/10">
-                  <Compass size={12}/>Odkryj serwery
+                  <Compass size={12}/>{tl('discovery.exploreServers')}
                 </button>
               </div>
             </motion.div>
@@ -26551,13 +26550,13 @@ export default function App() {
       <AnimatePresence>
         {showDiscovery && (()=>{
           const DISC_CATS = [
-            { key:'all',          label:'Strona główna',   icon:<Home size={15}/> },
-            { key:'gaming',       label:'Gracze',          icon:<Gamepad2 size={15}/> },
-            { key:'music',        label:'Muzyka',          icon:<Music size={15}/> },
-            { key:'entertainment',label:'Rozrywka',        icon:<Film size={15}/> },
-            { key:'education',    label:'Edukacja',        icon:<BookOpen size={15}/> },
-            { key:'science',      label:'Nauka i tech',    icon:<FlaskConical size={15}/> },
-            { key:'trending',     label:'Na czasie',       icon:<TrendingUp size={15}/> },
+            { key:'all',          label:tl('discovery.cat.home'),   icon:<Home size={15}/> },
+            { key:'gaming',       label:tl('srv.discovery.cat.gaming'),          icon:<Gamepad2 size={15}/> },
+            { key:'music',        label:tl('srv.discovery.cat.music'),          icon:<Music size={15}/> },
+            { key:'entertainment',label:tl('srv.discovery.cat.entertainment'),        icon:<Film size={15}/> },
+            { key:'education',    label:tl('srv.discovery.cat.education'),        icon:<BookOpen size={15}/> },
+            { key:'science',      label:tl('srv.discovery.cat.science'),    icon:<FlaskConical size={15}/> },
+            { key:'trending',     label:tl('discovery.cat.trending'),       icon:<TrendingUp size={15}/> },
           ];
           // Backend filters by category (except 'all' and 'trending' which are client-side)
           const filtered = discoveryCategory==='trending'
@@ -26575,10 +26574,10 @@ export default function App() {
             <div className="h-[52px] shrink-0 border-b border-white/[0.06] flex items-center px-5 gap-4 bg-[#0d0d18]/95 backdrop-blur-md">
               <button onClick={()=>setShowDiscovery(false)}
                 className="flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors text-sm font-medium shrink-0">
-                <ChevronLeft size={16}/> Wróć
+                <ChevronLeft size={16}/> {tl('action.back')}
               </button>
               <div className="flex items-center gap-2 text-white font-bold text-sm shrink-0">
-                <Compass size={15} className="text-indigo-400"/> Odkryj serwery
+                <Compass size={15} className="text-indigo-400"/> {tl('discovery.exploreServers')}
               </div>
               {/* Search */}
               <div className="flex-1 max-w-lg mx-auto">
@@ -26587,7 +26586,7 @@ export default function App() {
                   <input value={discoveryQ}
                     onChange={e=>setDiscoveryQ(e.target.value)}
                     onKeyDown={e=>{ if(e.key==='Enter') doSearch(discoveryQ); }}
-                    placeholder="Szukaj publicznych serwerów…"
+                    placeholder={tl('discovery.searchPh')}
                     className="flex-1 bg-transparent outline-none text-sm text-white placeholder-zinc-600"/>
                   {discoveryQ && (
                     <button onClick={()=>{ setDiscoveryQ(''); doSearch(''); }} className="text-zinc-600 hover:text-zinc-300 transition-colors"><X size={12}/></button>
@@ -26596,7 +26595,7 @@ export default function App() {
               </div>
               <button onClick={()=>doSearch(discoveryQ)}
                 className="px-4 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white font-medium transition-colors shrink-0">
-                Szukaj
+                {tl('action.search')}
               </button>
             </div>
 
@@ -26604,7 +26603,7 @@ export default function App() {
             <div className="flex flex-1 overflow-hidden">
               {/* Left sidebar */}
               <div className="w-52 shrink-0 border-r border-white/[0.05] p-3 flex flex-col gap-0.5 overflow-y-auto custom-scrollbar">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 px-3 py-2">Kategorie</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 px-3 py-2">{tl('discovery.categories')}</p>
                 {DISC_CATS.map(cat=>(
                   <button key={cat.key}
                     onClick={()=>{ setDiscoveryCategory(cat.key); doSearch(discoveryQ, cat.key); }}
@@ -26623,8 +26622,8 @@ export default function App() {
                     <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-purple-900 to-[#0d0d18]"/>
                     <div className="absolute inset-0" style={{backgroundImage:'radial-gradient(ellipse at 20% 50%,rgba(99,102,241,0.25) 0%,transparent 60%),radial-gradient(ellipse at 80% 50%,rgba(139,92,246,0.20) 0%,transparent 60%)'}}/>
                     <div className="relative z-10 flex flex-col items-center justify-center h-full text-center px-6">
-                      <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight">Znajdź swoją społeczność</h1>
-                      <p className="text-zinc-300 text-sm max-w-md">Przeglądaj tysiące publicznych serwerów — gry, muzyka, nauka i nie tylko.</p>
+                      <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight">{tl('discovery.heroTitle')}</h1>
+                      <p className="text-zinc-300 text-sm max-w-md">{tl('discovery.heroDesc')}</p>
                     </div>
                   </div>
                 )}
@@ -26633,22 +26632,22 @@ export default function App() {
                   {/* Section label */}
                   <div className="flex items-center justify-between mb-5">
                     <h2 className="text-base font-bold text-white">
-                      {discoveryQ ? `Wyniki dla „${discoveryQ}"` : DISC_CATS.find(c=>c.key===discoveryCategory)?.label ?? 'Serwery'}
+                      {discoveryQ ? `${tl('discovery.resultsFor')} „${discoveryQ}"` : DISC_CATS.find(c=>c.key===discoveryCategory)?.label ?? tl('quickswitch.servers')}
                     </h2>
-                    {!discoveryLoading && <span className="text-xs text-zinc-600">{filtered.length} {filtered.length===1?'serwer':filtered.length<5?'serwery':'serwerów'}</span>}
+                    {!discoveryLoading && <span className="text-xs text-zinc-600">{filtered.length} {filtered.length===1?tl('discovery.server.one'):filtered.length<5?tl('discovery.server.few'):tl('discovery.server.many')}</span>}
                   </div>
 
                   {/* States */}
                   {discoveryLoading ? (
                     <div className="flex flex-col items-center justify-center py-24 gap-3">
                       <Loader2 size={28} className="animate-spin text-indigo-500"/>
-                      <p className="text-sm text-zinc-500">Ładowanie serwerów…</p>
+                      <p className="text-sm text-zinc-500">{tl('discovery.loading')}</p>
                     </div>
                   ) : filtered.length===0 ? (
                     <div className="flex flex-col items-center justify-center py-24 gap-3 text-zinc-600">
                       <Compass size={40} className="opacity-25"/>
-                      <p className="text-sm font-medium">{discoveryQ ? `Brak wyników dla „${discoveryQ}"` : 'Brak serwerów w tej kategorii'}</p>
-                      {discoveryQ && <button onClick={()=>{setDiscoveryQ('');doSearch('');}} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">Wyczyść wyszukiwanie</button>}
+                      <p className="text-sm font-medium">{discoveryQ ? `${tl('search.noResultsFor')} „${discoveryQ}"` : tl('discovery.noServersInCategory')}</p>
+                      {discoveryQ && <button onClick={()=>{setDiscoveryQ('');doSearch('');}} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">{tl('discovery.clearSearch')}</button>}
                     </div>
                   ) : (
                     /* Server cards grid */
@@ -26681,7 +26680,7 @@ export default function App() {
                               {s.is_official && (
                                 <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/55 backdrop-blur-sm rounded-full px-2 py-0.5 border border-amber-400/20">
                                   <BadgeCheck size={9} className="text-amber-400"/>
-                                  <span className="text-[9px] font-bold text-amber-300 uppercase tracking-wide">Oficjalny</span>
+                                  <span className="text-[9px] font-bold text-amber-300 uppercase tracking-wide">{tl('discovery.official')}</span>
                                 </div>
                               )}
                             </div>
@@ -26702,7 +26701,7 @@ export default function App() {
                             <div className="flex-1 flex flex-col px-4 pb-4 pt-8">
                               <h3 className="font-bold text-white text-sm leading-tight truncate mb-1 group-hover:text-indigo-200 transition-colors duration-200">{s.name}</h3>
                               <p className="text-[11px] text-zinc-500 leading-relaxed line-clamp-2 flex-1 mb-3">
-                                {s.discovery_description || s.description || 'Brak opisu'}
+                                {s.discovery_description || s.description || tl('discovery.noDescription')}
                               </p>
                               {/* Stats */}
                               <div className="flex items-center gap-3 mb-3">
@@ -26714,7 +26713,7 @@ export default function App() {
                                 )}
                                 <div className="flex items-center gap-1.5">
                                   <Users size={10} className="text-zinc-600 shrink-0"/>
-                                  <span className="text-[11px] text-zinc-500">{s.member_count.toLocaleString()} członków</span>
+                                  <span className="text-[11px] text-zinc-500">{s.member_count.toLocaleString()} {tl('discovery.members')}</span>
                                 </div>
                               </div>
                               {/* Join button */}
@@ -26722,16 +26721,16 @@ export default function App() {
                                 <motion.button whileTap={{scale:0.96}}
                                   onClick={()=>{ setActiveServer(s.id); setActiveView('servers'); setServerFull(null); setActiveChannel(''); setShowDiscovery(false); if(activeServer===s.id) setServerReloadKey(k=>k+1); }}
                                   className="w-full py-2 text-xs font-semibold rounded-xl bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/25 hover:border-emerald-400/50 transition-all duration-200">
-                                  Jesteś na serwerze →
+                                  {tl('discovery.alreadyJoined')}
                                 </motion.button>
                               ) : (
                                 <motion.button whileTap={{scale:0.96}}
                                   onClick={async()=>{
-                                    try { await serversApi.joinPublic(s.id); await loadServers(); setShowDiscovery(false); setActiveServer(s.id); setActiveView('servers'); addToast(`Dołączono do ${s.name}!`,'success'); }
-                                    catch(ex:any){ addToast(ex.message||'Błąd','error'); }
+                                    try { await serversApi.joinPublic(s.id); await loadServers(); setShowDiscovery(false); setActiveServer(s.id); setActiveView('servers'); addToast(`${tl('discovery.joinedToast')} ${s.name}!`,'success'); }
+                                    catch(ex:any){ addToast(ex.message||tl('common.error'),'error'); }
                                   }}
                                   className="w-full py-2 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white transition-all duration-200 shadow-[0_2px_12px_rgba(99,102,241,0.3)] hover:shadow-[0_4px_20px_rgba(99,102,241,0.5)]">
-                                  Dołącz
+                                  {tl('discovery.join')}
                                 </motion.button>
                               )}
                             </div>
@@ -26757,23 +26756,23 @@ export default function App() {
               className={`${gm} p-6 w-full max-w-md`}>
               <h2 className="text-base font-bold text-white mb-2 flex items-center gap-2">
                 <PartyPopper size={16} className="text-indigo-400"/>
-                {onboardingData.welcome_text || 'Witaj na serwerze!'}
+                {onboardingData.welcome_text || tl('srv.onboarding.welcomePhShort')}
               </h2>
               {onboardingData.rules_text && (
                 <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl p-4 mb-4 text-sm text-zinc-300 whitespace-pre-wrap max-h-60 overflow-y-auto custom-scrollbar">
                   {onboardingData.rules_text}
                 </div>
               )}
-              <p className="text-xs text-zinc-500 mb-5">Klikając przycisk poniżej potwierdzasz, że przeczytałeś/aś i akceptujesz powyższe zasady.</p>
+              <p className="text-xs text-zinc-500 mb-5">{tl('onboarding.consentText')}</p>
               <button onClick={async()=>{
                 try {
                   await onboardingApi.complete(activeServer!);
                   setShowOnboarding(false);
                   setOnboardingData(p=>p?{...p,completed:true}:p);
-                  addToast('Reguły zaakceptowane!','success');
-                } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                  addToast(tl('onboarding.rulesAccepted'),'success');
+                } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
               }} className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">
-                Akceptuję zasady i dołączam
+                {tl('onboarding.acceptAndJoin')}
               </button>
             </motion.div>
           </motion.div>
@@ -26810,18 +26809,18 @@ export default function App() {
                     setGroupEditIconPreview(URL.createObjectURL(f));
                   }}/>
                 </label>
-                <p className="text-xs text-zinc-500">Kliknij, aby zmienić zdjęcie grupy</p>
+                <p className="text-xs text-zinc-500">{tl('group.changePhotoHint')}</p>
               </div>
               {/* Name */}
               <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2">Nazwa grupy</label>
+                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2">{tl('group.name')}</label>
                 <input value={groupEditName} onChange={e=>setGroupEditName(e.target.value)}
-                  placeholder="Wpisz nazwę grupy..."
+                  placeholder={tl('group.namePh')}
                   className="w-full bg-white/[0.06] border border-white/[0.1] rounded-xl px-3 py-2.5 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 transition-all"/>
               </div>
               {/* Invite member */}
               <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2">Zaproś do grupy</label>
+                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2">{tl('group.inviteToGroup')}</label>
                 {(() => {
                   const gc = groupConvs.find(g => g.id === activeGroupDm);
                   const currentMemberIds = gc?.participants.map(p => p.user_id) || [];
@@ -26833,7 +26832,7 @@ export default function App() {
                     <>
                       <div className="relative">
                         <input value={groupInviteQ} onChange={e=>setGroupInviteQ(e.target.value)}
-                          placeholder="Szukaj znajomych..."
+                          placeholder={tl('group.searchFriendsPh')}
                           className="w-full bg-white/[0.06] border border-white/[0.1] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 transition-all pr-8"/>
                         {groupInviteQ && <button onClick={()=>setGroupInviteQ('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-white"><X size={12}/></button>}
                       </div>
@@ -26849,21 +26848,21 @@ export default function App() {
                                   setGroupInviting(f.id);
                                   try {
                                     await groupDmApi.invite(activeGroupDm!, f.id);
-                                    addToast(`${f.display_name||f.username} dodany/a do grupy`, 'success');
+                                    addToast(`${f.display_name||f.username} ${tl('group.addedToGroup')}`, 'success');
                                     setGroupInviteQ('');
-                                  } catch(e:any){ addToast(e?.message||'Błąd', 'error'); }
+                                  } catch(e:any){ addToast(e?.message||tl('common.error'), 'error'); }
                                   finally { setGroupInviting(null); }
                                 }}
                                 className="px-2.5 py-1 rounded-lg bg-indigo-600/70 hover:bg-indigo-600 disabled:opacity-50 text-white text-xs font-semibold transition-all shrink-0 flex items-center gap-1">
                                 {groupInviting === f.id ? <Loader2 size={10} className="animate-spin"/> : <UserPlus size={10}/>}
-                                Dodaj
+                                {tl('action.add')}
                               </button>
                             </div>
                           ))}
                         </div>
                       )}
                       {invitableFriends.length === 0 && (
-                        <p className="text-xs text-zinc-600 mt-1">Wszyscy znajomi są już w grupie</p>
+                        <p className="text-xs text-zinc-600 mt-1">{tl('group.allFriendsInGroup')}</p>
                       )}
                     </>
                   );
@@ -26891,7 +26890,7 @@ export default function App() {
               }}
                 className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-sm transition-colors flex items-center justify-center gap-2">
                 {groupEditSaving && <Loader2 size={14} className="animate-spin"/>}
-                Zapisz
+                {tl('action.save')}
               </button>
             </motion.div>
           </motion.div>
@@ -26910,11 +26909,11 @@ export default function App() {
               {/* Header */}
               <div className="px-6 pt-6 pb-4 border-b border-white/[0.06]">
                 <div className="flex items-start justify-between mb-1">
-                  <h2 className="text-lg font-bold text-white">Nowa wiadomość</h2>
+                  <h2 className="text-lg font-bold text-white">{tl('group.newMessage')}</h2>
                   <button onClick={()=>{ setShowGroupDmModal(false); setGroupDmName(''); setGroupDmMemberIds([]); setGroupDmSearchQ(''); }}
                     className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-all mt-0.5"><X size={14}/></button>
                 </div>
-                <p className="text-xs text-zinc-500">Możesz dodać jeszcze {9 - groupDmMemberIds.length} znajomych.</p>
+                <p className="text-xs text-zinc-500">{tl('group.canAddMore')} {9 - groupDmMemberIds.length} {tl('group.friends')}.</p>
                 {/* Search bar with chips */}
                 <div className="mt-3 flex flex-wrap items-center gap-1.5 min-h-[38px] bg-black/30 border border-white/[0.08] rounded-xl px-2.5 py-1.5 focus-within:border-indigo-500/50 transition-colors">
                   {groupDmMemberIds.map(id => {
@@ -26928,7 +26927,7 @@ export default function App() {
                     );
                   })}
                   <input value={groupDmSearchQ} onChange={e=>setGroupDmSearchQ(e.target.value)}
-                    placeholder={groupDmMemberIds.length===0?"Szukaj znajomych...":""}
+                    placeholder={groupDmMemberIds.length===0?tl('group.searchFriendsPh'):""}
                     className="flex-1 min-w-[80px] bg-transparent text-sm text-white placeholder-zinc-600 outline-none py-0.5"/>
                 </div>
               </div>
@@ -26954,7 +26953,7 @@ export default function App() {
                     </button>
                   );
                 })}
-                {friends.length === 0 && <p className="text-center text-xs text-zinc-600 py-6">Brak znajomych do dodania</p>}
+                {friends.length === 0 && <p className="text-center text-xs text-zinc-600 py-6">{tl('group.noFriendsToAdd')}</p>}
               </div>
               {/* Group name + create */}
               <div className="px-6 py-4 border-t border-white/[0.06] flex items-center gap-3">
@@ -26965,14 +26964,14 @@ export default function App() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <input value={groupDmName} onChange={e=>setGroupDmName(e.target.value)}
-                    placeholder={groupDmMemberIds.length>0 ? groupDmMemberIds.map(id=>friends.find(f=>f.id===id)?.username||'').join(', ') : 'Nazwa grupy (opcjonalna)'}
+                    placeholder={groupDmMemberIds.length>0 ? groupDmMemberIds.map(id=>friends.find(f=>f.id===id)?.username||'').join(', ') : tl('group.namePhOptional')}
                     className="w-full bg-black/30 border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 transition-colors"/>
                 </div>
               </div>
               <div className="px-6 pb-5 flex gap-2.5 justify-end">
                 <button onClick={()=>{ setShowGroupDmModal(false); setGroupDmName(''); setGroupDmMemberIds([]); setGroupDmSearchQ(''); }}
                   className="px-5 py-2 rounded-xl text-zinc-300 hover:text-white bg-white/[0.05] hover:bg-white/[0.08] text-sm font-semibold transition-all border border-white/[0.06]">
-                  Anuluj
+                  {tl('action.cancel')}
                 </button>
                 <button disabled={groupDmMemberIds.length < 2}
                   onClick={async()=>{
@@ -26983,11 +26982,11 @@ export default function App() {
                       setShowGroupDmModal(false);
                       setGroupDmName(''); setGroupDmMemberIds([]); setGroupDmSearchQ('');
                       setActiveView('dms');
-                      addToast('Grupa utworzona!','success');
-                    } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                      addToast(tl('group.created'),'success');
+                    } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                   }}
                   className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all">
-                  Utwórz wiadomość grupową
+                  {tl('group.createGroupMessage')}
                 </button>
               </div>
             </motion.div>
@@ -27005,7 +27004,7 @@ export default function App() {
               className={`${gm} p-6 w-full max-w-lg max-h-[80vh] flex flex-col`}
               onClick={e=>e.stopPropagation()}>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-bold text-white flex items-center gap-2"><CalendarDays size={16} className="text-indigo-400"/>Eventy serwera</h2>
+                <h2 className="text-base font-bold text-white flex items-center gap-2"><CalendarDays size={16} className="text-indigo-400"/>{tl('srv.events.title')}</h2>
                 <div className="flex items-center gap-2">
                   {serverFull?.roles && (() => {
                     const myMember = serverFull.members?.find((m: any)=>m.user_id===currentUser?.id);
@@ -27014,18 +27013,18 @@ export default function App() {
                     if (!isAdmin) return null;
                     return (
                       <button onClick={async()=>{
-                        if (!newEvent.title.trim()||!newEvent.starts_at) return addToast('Wypełnij tytuł i datę','error');
+                        if (!newEvent.title.trim()||!newEvent.starts_at) return addToast(tl('srv.events.fillRequired'),'error');
                         try {
                           setEventsLoading(true);
                           await eventsApi.create(activeServer!, { title:newEvent.title, description:newEvent.description, starts_at:newEvent.starts_at, channel_id:newEvent.channel_id||undefined });
                           setNewEvent({title:'',description:'',starts_at:'',channel_id:''});
                           const evs = await eventsApi.list(activeServer!);
                           setServerEvents(evs);
-                          addToast('Event utworzony!','success');
-                        } catch(e:any){ addToast(e.message||'Błąd','error'); }
+                          addToast(tl('srv.events.created'),'success');
+                        } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                         finally { setEventsLoading(false); }
                       }} className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white transition-colors flex items-center gap-1.5">
-                        <CalendarPlus size={11}/>Nowy event
+                        <CalendarPlus size={11}/>{tl('srv.events.new')}
                       </button>
                     );
                   })()}
@@ -27040,11 +27039,11 @@ export default function App() {
                 if (!isAdmin) return null;
                 return (
                   <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 mb-4 flex flex-col gap-2.5">
-                    <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-1">Utwórz nowy event</p>
+                    <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-1">{tl('srv.events.createNewLabel')}</p>
                     <input value={newEvent.title} onChange={e=>setNewEvent(p=>({...p,title:e.target.value}))}
-                      placeholder="Tytuł eventu*" className={`${gi} px-3 py-2 text-sm w-full`}/>
+                      placeholder={tl('srv.events.titlePh')} className={`${gi} px-3 py-2 text-sm w-full`}/>
                     <input value={newEvent.description} onChange={e=>setNewEvent(p=>({...p,description:e.target.value}))}
-                      placeholder="Opis (opcjonalnie)" className={`${gi} px-3 py-2 text-sm w-full`}/>
+                      placeholder={tl('srv.events.descPh')} className={`${gi} px-3 py-2 text-sm w-full`}/>
                     <input type="datetime-local" value={newEvent.starts_at} onChange={e=>setNewEvent(p=>({...p,starts_at:e.target.value}))}
                       className={`${gi} px-3 py-2 text-sm w-full`}/>
                   </div>
@@ -27055,7 +27054,7 @@ export default function App() {
                 {serverEvents.length === 0 ? (
                   <div className="flex flex-col items-center justify-center gap-2 text-zinc-600 py-8">
                     <CalendarDays size={28} className="opacity-30"/>
-                    <p className="text-sm">Brak zaplanowanych eventów</p>
+                    <p className="text-sm">{tl('srv.events.emptyModal')}</p>
                   </div>
                 ) : serverEvents.map(ev => {
                   const now2 = Date.now();
@@ -27065,7 +27064,7 @@ export default function App() {
                   const diffMin2 = Math.floor(Math.abs(diffMs2) / 60000);
                   const diffH2   = Math.floor(diffMin2 / 60);
                   const diffD2   = Math.floor(diffH2 / 24);
-                  const countdown2 = isLive2 ? '🔴 NA ŻYWO' : diffD2 > 0 ? `za ${diffD2}d ${diffH2%24}h` : diffH2 > 0 ? `za ${diffH2}h ${diffMin2%60}m` : diffMs2 < 0 ? 'minęło' : `za ${diffMin2}m`;
+                  const countdown2 = isLive2 ? `🔴 ${tl('connections.live')}` : diffD2 > 0 ? `${tl('srv.events.timeIn')} ${diffD2}d ${diffH2%24}h` : diffH2 > 0 ? `${tl('srv.events.timeIn')} ${diffH2}h ${diffMin2%60}m` : diffMs2 < 0 ? tl('srv.events.timePassed') : `${tl('srv.events.timeIn')} ${diffMin2}m`;
                   const handleRsvp2 = async (type: 'going'|'interested'|null) => {
                     try {
                       if (type === null || ev.my_rsvp === type) {
@@ -27075,7 +27074,7 @@ export default function App() {
                         const r = await eventsApi.rsvp(activeServer!, ev.id, type);
                         setServerEvents(p => p.map(e => e.id===ev.id ? {...e, ...r, my_rsvp: type} : e));
                       }
-                    } catch { addToast('Błąd RSVP', 'error'); }
+                    } catch { addToast(tl('srv.events.rsvpError'), 'error'); }
                   };
                   return (
                   <div key={ev.id} className={`p-4 border rounded-2xl transition-all ${isLive2 ? 'bg-amber-500/5 border-amber-500/30' : 'bg-white/[0.03] border-white/[0.06]'}`}>
@@ -27101,24 +27100,24 @@ export default function App() {
                             <img key={u.id} src={ava({avatar_url:u.avatar_url,username:u.username})} className="w-4 h-4 rounded-full object-cover border border-black/40" alt=""/>
                           ))}
                         </div>
-                        <span className="text-[10px] text-zinc-500">{ev.going_count ?? 0} jedzie{(ev.interested_count??0)>0?` · ${ev.interested_count} zainteresowanych`:''}</span>
+                        <span className="text-[10px] text-zinc-500">{ev.going_count ?? 0} {tl('srv.events.going')}{(ev.interested_count??0)>0?` · ${ev.interested_count} ${tl('srv.events.interestedCount')}`:''}</span>
                       </div>
                     )}
                     {/* RSVP + delete */}
                     <div className="flex gap-1.5 items-center">
                       <button onClick={()=>handleRsvp2('going')}
                         className={`flex-1 py-1 rounded-xl text-[11px] font-semibold transition-all ${ev.my_rsvp==='going'?'bg-green-500/25 text-green-300 border border-green-500/35':'bg-white/[0.06] text-zinc-400 border border-white/[0.08] hover:text-green-400 hover:bg-green-500/15'}`}>
-                        ✓ Idę
+                        ✓ {tl('srv.events.rsvpGoing')}
                       </button>
                       <button onClick={()=>handleRsvp2('interested')}
                         className={`flex-1 py-1 rounded-xl text-[11px] font-semibold transition-all ${ev.my_rsvp==='interested'?'bg-amber-500/25 text-amber-300 border border-amber-500/35':'bg-white/[0.06] text-zinc-400 border border-white/[0.08] hover:text-amber-400 hover:bg-amber-500/15'}`}>
-                        ★ Interesuję
+                        ★ {tl('srv.events.rsvpInterested')}
                       </button>
                       {ev.creator_id===currentUser?.id&&(
                         <button onClick={async()=>{
-                          confirmAction('Usunąć event?', async()=>{
-                            try{ await eventsApi.delete(activeServer!,ev.id); setServerEvents(p=>p.filter(e=>e.id!==ev.id)); addToast('Event usunięty','info'); }
-                            catch(e:any){ addToast(e.message||'Błąd','error'); }
+                          confirmAction(tl('srv.events.confirmDelete'), async()=>{
+                            try{ await eventsApi.delete(activeServer!,ev.id); setServerEvents(p=>p.filter(e=>e.id!==ev.id)); addToast(tl('srv.events.deletedModal'),'info'); }
+                            catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                           });
                         }} className="w-7 h-7 flex items-center justify-center rounded-xl text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0">
                           <Trash2 size={12}/>
@@ -27162,8 +27161,8 @@ export default function App() {
               className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
               <div className="bg-[#0f1218]/90 backdrop-blur-xl rounded-3xl border border-amber-400/20 px-10 py-8 shadow-2xl">
                 <div className="text-5xl mb-3">🎉</div>
-                <h2 className="text-xl font-bold text-white mb-1">Serwer gotowy!</h2>
-                <p className="text-sm text-zinc-400">Wszystkie pierwsze kroki ukończone.</p>
+                <h2 className="text-xl font-bold text-white mb-1">{tl('onboarding.serverReady')}</h2>
+                <p className="text-sm text-zinc-400">{tl('onboarding.allStepsDone')}</p>
               </div>
             </motion.div>
           </motion.div>
@@ -27203,7 +27202,7 @@ export default function App() {
                     <div className="flex items-baseline gap-1.5 mb-0.5">
                       <span className="text-[11px] font-semibold text-white">{preview.username}</span>
                       <span className="text-[9px] text-zinc-600">
-                        {new Date(preview.ts).toLocaleDateString('pl-PL', { hour: '2-digit', minute: '2-digit' })}
+                        {fmtDateLocale(preview.ts, { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
                     <p className="text-[11px] text-zinc-400 leading-relaxed line-clamp-3">
