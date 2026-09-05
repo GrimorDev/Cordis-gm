@@ -4169,12 +4169,12 @@ function ServerSettingsPage({
   };
   // ─────────────────────────────────────────────────────────────────────────
   const DISC_CATS_OPT = [
-    { key:'',              label:'Brak kategorii' },
-    { key:'gaming',        label:'Gracze' },
-    { key:'music',         label:'Muzyka' },
-    { key:'entertainment', label:'Rozrywka' },
-    { key:'education',     label:'Edukacja' },
-    { key:'science',       label:'Nauka i tech' },
+    { key:'',              label:tl('srv.discovery.cat.none') },
+    { key:'gaming',        label:tl('srv.discovery.cat.gaming') },
+    { key:'music',         label:tl('srv.discovery.cat.music') },
+    { key:'entertainment', label:tl('srv.discovery.cat.entertainment') },
+    { key:'education',     label:tl('srv.discovery.cat.education') },
+    { key:'science',       label:tl('srv.discovery.cat.science') },
   ];
   const filteredMembers = memberQ.trim()
     ? members.filter(m => m.username.toLowerCase().includes(memberQ.toLowerCase()))
@@ -4821,26 +4821,26 @@ function ServerSettingsPage({
           {tab === 'events' && (
             <div className="flex flex-col gap-4 max-w-2xl mx-auto">
               <div>
-                <h3 className="text-sm font-bold text-white mb-0.5">Eventy serwera</h3>
-                <p className="text-xs text-zinc-500">Twórz i zarządzaj zaplanowanymi wydarzeniami dla członków serwera.</p>
+                <h3 className="text-sm font-bold text-white mb-0.5">{tl('srv.events.title')}</h3>
+                <p className="text-xs text-zinc-500">{tl('srv.events.desc')}</p>
               </div>
               <div className="flex flex-col gap-3 bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
                 <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">Nowy event</p>
                 <input value={newEvent?.title ?? ''} onChange={e=>setNewEvent?.({...newEvent!, title:e.target.value})}
-                  placeholder="Tytuł eventu*" className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50"/>
+                  placeholder={tl('srv.events.titlePh')} className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50"/>
                 <input value={newEvent?.description ?? ''} onChange={e=>setNewEvent?.({...newEvent!, description:e.target.value})}
-                  placeholder="Opis (opcjonalnie)" className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50"/>
+                  placeholder={tl('srv.events.descPh')} className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50"/>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1 block">Data i godzina*</label>
+                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1 block">{tl('srv.events.dateLabel')}</label>
                     <input type="datetime-local" value={newEvent?.starts_at ?? ''} onChange={e=>setNewEvent?.({...newEvent!, starts_at:e.target.value})}
                       className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-indigo-500/50"/>
                   </div>
                   <div>
-                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1 block">Kanał (opcjonalnie)</label>
+                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1 block">{tl('srv.events.channelLabel')}</label>
                     <select value={newEvent?.channel_id ?? ''} onChange={e=>setNewEvent?.({...newEvent!, channel_id:e.target.value})}
                       className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-indigo-500/50">
-                      <option value="">– brak –</option>
+                      <option value="">{tl('common.noneDash')}</option>
                       {(channels||[]).filter(c=>c.type==='voice'||c.type==='text').map(c=>(
                         <option key={c.id} value={c.id}>{c.name}</option>
                       ))}
@@ -4856,16 +4856,16 @@ function ServerSettingsPage({
                       const evs = await eventsApi.list(serverFull.id);
                       setServerEvents(evs);
                       setNewEvent({title:'',description:'',starts_at:'',channel_id:''});
-                      addToast?.('Event utworzony!','success');
+                      addToast?.(tl('srv.events.created'),'success');
                     } catch(e:any){ addToast?.(e.message||tl('common.error'),'error'); }
                     finally { setEventsLoading(false); }
                   }}
                   className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-2">
-                  {eventsLoading ? <Loader2 size={13} className="animate-spin"/> : <><CalendarPlus size={13}/>Utwórz event</>}
+                  {eventsLoading ? <Loader2 size={13} className="animate-spin"/> : <><CalendarPlus size={13}/>{tl('srv.events.createBtn')}</>}
                 </button>
               </div>
               <div className="flex flex-col gap-2">
-                {serverEvents.length === 0 && <p className="text-xs text-zinc-600 text-center py-4">Brak eventów. Utwórz pierwszy!</p>}
+                {serverEvents.length === 0 && <p className="text-xs text-zinc-600 text-center py-4">{tl('srv.events.emptyMain')}</p>}
                 {serverEvents.map(ev=>(
                   <div key={ev.id} className="flex items-center gap-3 p-3.5 bg-white/[0.03] border border-white/[0.05] rounded-xl hover:border-white/[0.09] transition-all">
                     <div className="w-10 h-10 rounded-xl bg-violet-500/15 flex items-center justify-center shrink-0">
@@ -4877,7 +4877,7 @@ function ServerSettingsPage({
                       {ev.description && <p className="text-xs text-zinc-600 truncate mt-0.5">{ev.description}</p>}
                     </div>
                     <button onClick={async()=>{
-                      try { await eventsApi.delete(serverFull.id,ev.id); setServerEvents?.(serverEvents.filter(e=>e.id!==ev.id)); addToast?.('Usunięto event','info'); }
+                      try { await eventsApi.delete(serverFull.id,ev.id); setServerEvents?.(serverEvents.filter(e=>e.id!==ev.id)); addToast?.(tl('srv.events.deleted'),'info'); }
                       catch(e:any){ addToast?.(e.message||tl('common.error'),'error'); }
                     }} className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-all shrink-0">
                       <Trash2 size={12}/>
@@ -4892,8 +4892,8 @@ function ServerSettingsPage({
           {tab === 'onboarding' && (
             <div className="flex flex-col gap-4 max-w-2xl mx-auto">
               <div>
-                <h3 className="text-sm font-bold text-white mb-0.5">Onboarding nowych członków</h3>
-                <p className="text-xs text-zinc-500">Skonfiguruj ekran powitalny dla nowych osób dołączających do serwera. Możesz ustawić regulamin i automatyczne role.</p>
+                <h3 className="text-sm font-bold text-white mb-0.5">{tl('srv.onboarding.title')}</h3>
+                <p className="text-xs text-zinc-500">{tl('srv.onboarding.desc')}</p>
               </div>
               {onboardingData === undefined || onboardingData === null ? (
                 <div className="flex items-center justify-center py-8"><Loader2 size={20} className="animate-spin text-zinc-600"/></div>
@@ -4901,8 +4901,8 @@ function ServerSettingsPage({
                 <div className="flex flex-col gap-4">
                   <div className="flex items-center justify-between p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
                     <div>
-                      <p className="text-sm font-semibold text-white">Włącz onboarding</p>
-                      <p className="text-xs text-zinc-500 mt-0.5">Nowi członkowie zobaczą ekran powitalny z regulaminem</p>
+                      <p className="text-sm font-semibold text-white">{tl('srv.onboarding.enable')}</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">{tl('srv.onboarding.enableDesc')}</p>
                     </div>
                     <button onClick={async()=>{
                       const next = !onboardingData.enabled;
@@ -4913,23 +4913,23 @@ function ServerSettingsPage({
                     </button>
                   </div>
                   <div>
-                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Tekst powitalny</label>
+                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.onboarding.welcomeLabel')}</label>
                     <input defaultValue={onboardingData.welcome_text||''} id="ob-welcome-ssp"
                       className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50"
-                      placeholder="Witaj na serwerze! Zapoznaj się z regulaminem..."/>
+                      placeholder={tl('srv.onboarding.welcomePh')}/>
                   </div>
                   <div>
-                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Regulamin / zasady serwera</label>
+                    <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.onboarding.rulesLabel')}</label>
                     <textarea defaultValue={onboardingData.rules_text||''} id="ob-rules-ssp" rows={6}
                       className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 resize-none"
-                      placeholder="§1. Zachowuj szacunek wobec innych.&#10;§2. Zakaz spamu.&#10;§3. ..."/>
+                      placeholder={tl('srv.onboarding.rulesPh')}/>
                   </div>
                   {roles && roles.length > 0 && (
                     <div>
-                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Automatyczna rola po akceptacji regulaminu</label>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.onboarding.autoRoleLabel')}</label>
                       <select defaultValue={onboardingData.assign_role_id||''} id="ob-role-ssp"
                         className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-indigo-500/50">
-                        <option value="">– brak –</option>
+                        <option value="">{tl('common.noneDash')}</option>
                         {roles.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}
                       </select>
                     </div>
@@ -4941,10 +4941,10 @@ function ServerSettingsPage({
                     try {
                       await onboardingApi.update(serverFull.id,{welcome_text:welcome,rules_text:rules,enabled:onboardingData.enabled,assign_role_id:roleId});
                       setOnboardingData?.({...onboardingData,welcome_text:welcome,rules_text:rules,assign_role_id:roleId});
-                      addToast?.('Onboarding zapisany!','success');
+                      addToast?.(tl('srv.onboarding.saved'),'success');
                     } catch(e:any){ addToast?.(e.message||tl('common.error'),'error'); }
                   }} className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">
-                    Zapisz onboarding
+                    {tl('srv.onboarding.saveBtn')}
                   </button>
                 </div>
               )}
@@ -4955,21 +4955,21 @@ function ServerSettingsPage({
           {tab === 'discovery' && (
             <div className="flex flex-col gap-4 max-w-2xl mx-auto">
               <div>
-                <h3 className="text-sm font-bold text-white mb-0.5">Publiczne wyszukiwanie</h3>
-                <p className="text-xs text-zinc-500">Zdecyduj, czy Twój serwer ma być widoczny w katalogu publicznych serwerów. Domyślnie każdy serwer jest prywatny.</p>
+                <h3 className="text-sm font-bold text-white mb-0.5">{tl('srv.discovery.title')}</h3>
+                <p className="text-xs text-zinc-500">{tl('srv.discovery.desc')}</p>
               </div>
               {/* Toggle publiczny */}
               <div className="flex items-center justify-between p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
                 <div>
-                  <p className="text-sm font-semibold text-white">Serwer publiczny</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">Pojawi się w wyszukiwarce — każdy może dołączyć</p>
+                  <p className="text-sm font-semibold text-white">{tl('srv.discovery.publicLabel')}</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">{tl('srv.discovery.publicDesc')}</p>
                 </div>
                 <button onClick={async()=>{
                   const next = !isPublicLocal;
                   try {
                     await discoverApi.setDiscovery(serverFull.id,{is_public:next});
                     setIsPublicLocal(next);
-                    addToast?.(`Serwer jest teraz ${next?'publiczny':'prywatny'}!`,'success');
+                    addToast?.(next?tl('srv.discovery.nowPublic'):tl('srv.discovery.nowPrivate'),'success');
                   } catch(e:any){ addToast?.(e.message||tl('common.error'),'error'); }
                 }} className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${isPublicLocal?'bg-indigo-500':'bg-zinc-700'}`}>
                   <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${isPublicLocal?'translate-x-5':'translate-x-0'}`}/>
@@ -4977,7 +4977,7 @@ function ServerSettingsPage({
               </div>
               {/* Kategoria */}
               <div>
-                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Kategoria serwera</label>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.discovery.categoryLabel')}</label>
                 <div className="grid grid-cols-3 gap-2">
                   {DISC_CATS_OPT.map(opt=>(
                     <button key={opt.key} onClick={()=>setDiscCat(opt.key)}
@@ -4989,10 +4989,10 @@ function ServerSettingsPage({
               </div>
               {/* Opis */}
               <div>
-                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Opis w katalogu serwerów</label>
+                <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.discovery.descLabel')}</label>
                 <textarea defaultValue={(serverFull as any).discovery_description||''} id="disc-desc-ssp" rows={4}
                   className="w-full bg-white/[0.05] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-indigo-500/50 resize-none"
-                  placeholder="Opisz swój serwer dla przyszłych członków..."/>
+                  placeholder={tl('srv.discovery.descPh')}/>
               </div>
               {/* Zapis */}
               <button onClick={async()=>{
@@ -5003,10 +5003,10 @@ function ServerSettingsPage({
                     discovery_description: desc,
                     discovery_category: discCat || null,
                   });
-                  addToast?.('Ustawienia odkrywalności zapisane!','success');
+                  addToast?.(tl('srv.discovery.saved'),'success');
                 } catch(e:any){ addToast?.(e.message||tl('common.error'),'error'); }
               }} className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">
-                Zapisz ustawienia
+                {tl('srv.discovery.saveBtn')}
               </button>
             </div>
           )}
@@ -22283,13 +22283,13 @@ export default function App() {
                 })()}
                 {srvSettTab==='events'&&(
                   <div className="flex flex-col gap-4">
-                    <p className="text-xs text-zinc-500">Zarządzaj eventami serwera. Utwórz, edytuj lub usuń zaplanowane wydarzenia.</p>
+                    <p className="text-xs text-zinc-500">{tl('srv.events.descCompact')}</p>
                     <div className="flex flex-col gap-2.5 bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4">
                       <p className="text-xs font-semibold text-zinc-400 uppercase tracking-widest">Nowy event</p>
                       <input value={newEvent.title} onChange={e=>setNewEvent(p=>({...p,title:e.target.value}))}
-                        placeholder="Tytuł*" className={`${gi} px-3 py-2 text-sm w-full`}/>
+                        placeholder={tl('srv.events.titlePhShort')} className={`${gi} px-3 py-2 text-sm w-full`}/>
                       <input value={newEvent.description} onChange={e=>setNewEvent(p=>({...p,description:e.target.value}))}
-                        placeholder="Opis" className={`${gi} px-3 py-2 text-sm w-full`}/>
+                        placeholder={tl('srv.events.descPhShort')} className={`${gi} px-3 py-2 text-sm w-full`}/>
                       <input type="datetime-local" value={newEvent.starts_at} onChange={e=>setNewEvent(p=>({...p,starts_at:e.target.value}))}
                         className={`${gi} px-3 py-2 text-sm w-full`}/>
                       <button disabled={!newEvent.title.trim()||!newEvent.starts_at||eventsLoading}
@@ -22300,12 +22300,12 @@ export default function App() {
                             const evs = await eventsApi.list(activeServer!);
                             setServerEvents(evs);
                             setNewEvent({title:'',description:'',starts_at:'',channel_id:''});
-                            addToast('Event utworzony!','success');
+                            addToast(tl('srv.events.created'),'success');
                           } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                           finally { setEventsLoading(false); }
                         }}
                         className="bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 text-white font-semibold py-2 rounded-xl transition-colors text-sm">
-                        {eventsLoading?<Loader2 size={13} className="animate-spin mx-auto"/>:'Utwórz'}
+                        {eventsLoading?<Loader2 size={13} className="animate-spin mx-auto"/>:tl('action.create')}
                       </button>
                     </div>
                     <div className="flex flex-col gap-2">
@@ -22323,17 +22323,17 @@ export default function App() {
                           </button>
                         </div>
                       ))}
-                      {serverEvents.length===0&&<p className="text-xs text-zinc-600 text-center py-4">Brak eventów</p>}
+                      {serverEvents.length===0&&<p className="text-xs text-zinc-600 text-center py-4">{tl('srv.events.emptyCompact')}</p>}
                     </div>
                   </div>
                 )}
                 {srvSettTab==='onboarding'&&(
                   <div className="flex flex-col gap-4">
-                    <p className="text-xs text-zinc-500">Skonfiguruj powitanie dla nowych członków serwera. Możesz ustawić regulamin i automatyczne przypisanie roli.</p>
+                    <p className="text-xs text-zinc-500">{tl('srv.onboarding.descCompact')}</p>
                     {onboardingData ? (
                       <div className="flex flex-col gap-3">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm text-zinc-300">Włącz onboarding</span>
+                          <span className="text-sm text-zinc-300">{tl('srv.onboarding.enable')}</span>
                           <button onClick={async()=>{
                             const next = !onboardingData.enabled;
                             await onboardingApi.update(activeServer!,{enabled:next}).catch(()=>{});
@@ -22343,14 +22343,14 @@ export default function App() {
                           </button>
                         </div>
                         <div>
-                          <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Tekst powitalny</label>
+                          <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.onboarding.welcomeLabel')}</label>
                           <input defaultValue={onboardingData.welcome_text||''} id="ob-welcome"
-                            className={`${gi} px-3 py-2 text-sm w-full`} placeholder="Witaj na serwerze!"/>
+                            className={`${gi} px-3 py-2 text-sm w-full`} placeholder={tl('srv.onboarding.welcomePhShort')}/>
                         </div>
                         <div>
-                          <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Regulamin (tekst zasad)</label>
+                          <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.onboarding.rulesLabelCompact')}</label>
                           <textarea defaultValue={onboardingData.rules_text||''} id="ob-rules" rows={5}
-                            className={`${gi} px-3 py-2 text-sm w-full resize-none`} placeholder="Wpisz zasady serwera..."/>
+                            className={`${gi} px-3 py-2 text-sm w-full resize-none`} placeholder={tl('srv.onboarding.rulesPhCompact')}/>
                         </div>
                         <button onClick={async()=>{
                           const welcome = (document.getElementById('ob-welcome') as HTMLInputElement)?.value;
@@ -22369,33 +22369,33 @@ export default function App() {
                 )}
                 {srvSettTab==='discovery'&&(
                   <div className="flex flex-col gap-4">
-                    <p className="text-xs text-zinc-500">Zdecyduj, czy Twój serwer ma być widoczny w publicznej liście serwerów.</p>
+                    <p className="text-xs text-zinc-500">{tl('srv.discovery.descCompact')}</p>
                     <div className="flex items-center justify-between p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
                       <div>
-                        <p className="text-sm font-semibold text-white">Publiczny serwer</p>
-                        <p className="text-xs text-zinc-500 mt-0.5">Każdy może znaleźć ten serwer przez wyszukiwarkę</p>
+                        <p className="text-sm font-semibold text-white">{tl('srv.discovery.publicLabelCompact')}</p>
+                        <p className="text-xs text-zinc-500 mt-0.5">{tl('srv.discovery.publicDescCompact')}</p>
                       </div>
                       <button onClick={async()=>{
                         const next = !serverFull?.is_public;
                         try {
                           await discoverApi.setDiscovery(activeServer!,{is_public:next});
                           setServerFull((p:any)=>p?{...p,is_public:next}:p);
-                          addToast(`Serwer jest teraz ${next?'publiczny':'prywatny'}!`,'success');
+                          addToast(next?tl('srv.discovery.nowPublic'):tl('srv.discovery.nowPrivate'),'success');
                         } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                       }} className={`relative w-10 h-5 rounded-full transition-colors ${(serverFull as any)?.is_public?'bg-indigo-500':'bg-zinc-700'}`}>
                         <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${(serverFull as any)?.is_public?'translate-x-5':'translate-x-0.5'}`}/>
                       </button>
                     </div>
                     <div>
-                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">Opis w katalogu</label>
+                      <label className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5 block">{tl('srv.discovery.descLabelCompact')}</label>
                       <textarea defaultValue={(serverFull as any)?.discovery_description||''} id="disc-desc" rows={3}
-                        className={`${gi} px-3 py-2 text-sm w-full resize-none`} placeholder="Opisz swój serwer dla nowych użytkowników..."/>
+                        className={`${gi} px-3 py-2 text-sm w-full resize-none`} placeholder={tl('srv.discovery.descPhCompact')}/>
                       <button onClick={async()=>{
                         const desc = (document.getElementById('disc-desc') as HTMLTextAreaElement)?.value;
                         try {
                           await discoverApi.setDiscovery(activeServer!,{is_public:!!(serverFull as any)?.is_public, discovery_description:desc});
                           setServerFull((p:any)=>p?{...p,discovery_description:desc}:p);
-                          addToast('Opis zapisany!','success');
+                          addToast(tl('srv.discovery.savedCompact'),'success');
                         } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                       }} className="mt-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">{tl('action.save')}</button>
                     </div>
@@ -27004,7 +27004,7 @@ export default function App() {
               className={`${gm} p-6 w-full max-w-lg max-h-[80vh] flex flex-col`}
               onClick={e=>e.stopPropagation()}>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-bold text-white flex items-center gap-2"><CalendarDays size={16} className="text-indigo-400"/>Eventy serwera</h2>
+                <h2 className="text-base font-bold text-white flex items-center gap-2"><CalendarDays size={16} className="text-indigo-400"/>{tl('srv.events.title')}</h2>
                 <div className="flex items-center gap-2">
                   {serverFull?.roles && (() => {
                     const myMember = serverFull.members?.find((m: any)=>m.user_id===currentUser?.id);
@@ -27013,18 +27013,18 @@ export default function App() {
                     if (!isAdmin) return null;
                     return (
                       <button onClick={async()=>{
-                        if (!newEvent.title.trim()||!newEvent.starts_at) return addToast('Wypełnij tytuł i datę','error');
+                        if (!newEvent.title.trim()||!newEvent.starts_at) return addToast(tl('srv.events.fillRequired'),'error');
                         try {
                           setEventsLoading(true);
                           await eventsApi.create(activeServer!, { title:newEvent.title, description:newEvent.description, starts_at:newEvent.starts_at, channel_id:newEvent.channel_id||undefined });
                           setNewEvent({title:'',description:'',starts_at:'',channel_id:''});
                           const evs = await eventsApi.list(activeServer!);
                           setServerEvents(evs);
-                          addToast('Event utworzony!','success');
+                          addToast(tl('srv.events.created'),'success');
                         } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                         finally { setEventsLoading(false); }
                       }} className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white transition-colors flex items-center gap-1.5">
-                        <CalendarPlus size={11}/>Nowy event
+                        <CalendarPlus size={11}/>{tl('srv.events.new')}
                       </button>
                     );
                   })()}
@@ -27039,11 +27039,11 @@ export default function App() {
                 if (!isAdmin) return null;
                 return (
                   <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 mb-4 flex flex-col gap-2.5">
-                    <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-1">Utwórz nowy event</p>
+                    <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-1">{tl('srv.events.createNewLabel')}</p>
                     <input value={newEvent.title} onChange={e=>setNewEvent(p=>({...p,title:e.target.value}))}
-                      placeholder="Tytuł eventu*" className={`${gi} px-3 py-2 text-sm w-full`}/>
+                      placeholder={tl('srv.events.titlePh')} className={`${gi} px-3 py-2 text-sm w-full`}/>
                     <input value={newEvent.description} onChange={e=>setNewEvent(p=>({...p,description:e.target.value}))}
-                      placeholder="Opis (opcjonalnie)" className={`${gi} px-3 py-2 text-sm w-full`}/>
+                      placeholder={tl('srv.events.descPh')} className={`${gi} px-3 py-2 text-sm w-full`}/>
                     <input type="datetime-local" value={newEvent.starts_at} onChange={e=>setNewEvent(p=>({...p,starts_at:e.target.value}))}
                       className={`${gi} px-3 py-2 text-sm w-full`}/>
                   </div>
@@ -27054,7 +27054,7 @@ export default function App() {
                 {serverEvents.length === 0 ? (
                   <div className="flex flex-col items-center justify-center gap-2 text-zinc-600 py-8">
                     <CalendarDays size={28} className="opacity-30"/>
-                    <p className="text-sm">Brak zaplanowanych eventów</p>
+                    <p className="text-sm">{tl('srv.events.emptyModal')}</p>
                   </div>
                 ) : serverEvents.map(ev => {
                   const now2 = Date.now();
@@ -27064,7 +27064,7 @@ export default function App() {
                   const diffMin2 = Math.floor(Math.abs(diffMs2) / 60000);
                   const diffH2   = Math.floor(diffMin2 / 60);
                   const diffD2   = Math.floor(diffH2 / 24);
-                  const countdown2 = isLive2 ? '🔴 NA ŻYWO' : diffD2 > 0 ? `za ${diffD2}d ${diffH2%24}h` : diffH2 > 0 ? `za ${diffH2}h ${diffMin2%60}m` : diffMs2 < 0 ? 'minęło' : `za ${diffMin2}m`;
+                  const countdown2 = isLive2 ? `🔴 ${tl('connections.live')}` : diffD2 > 0 ? `${tl('srv.events.timeIn')} ${diffD2}d ${diffH2%24}h` : diffH2 > 0 ? `${tl('srv.events.timeIn')} ${diffH2}h ${diffMin2%60}m` : diffMs2 < 0 ? tl('srv.events.timePassed') : `${tl('srv.events.timeIn')} ${diffMin2}m`;
                   const handleRsvp2 = async (type: 'going'|'interested'|null) => {
                     try {
                       if (type === null || ev.my_rsvp === type) {
@@ -27074,7 +27074,7 @@ export default function App() {
                         const r = await eventsApi.rsvp(activeServer!, ev.id, type);
                         setServerEvents(p => p.map(e => e.id===ev.id ? {...e, ...r, my_rsvp: type} : e));
                       }
-                    } catch { addToast('Błąd RSVP', 'error'); }
+                    } catch { addToast(tl('srv.events.rsvpError'), 'error'); }
                   };
                   return (
                   <div key={ev.id} className={`p-4 border rounded-2xl transition-all ${isLive2 ? 'bg-amber-500/5 border-amber-500/30' : 'bg-white/[0.03] border-white/[0.06]'}`}>
@@ -27100,23 +27100,23 @@ export default function App() {
                             <img key={u.id} src={ava({avatar_url:u.avatar_url,username:u.username})} className="w-4 h-4 rounded-full object-cover border border-black/40" alt=""/>
                           ))}
                         </div>
-                        <span className="text-[10px] text-zinc-500">{ev.going_count ?? 0} jedzie{(ev.interested_count??0)>0?` · ${ev.interested_count} zainteresowanych`:''}</span>
+                        <span className="text-[10px] text-zinc-500">{ev.going_count ?? 0} {tl('srv.events.going')}{(ev.interested_count??0)>0?` · ${ev.interested_count} ${tl('srv.events.interestedCount')}`:''}</span>
                       </div>
                     )}
                     {/* RSVP + delete */}
                     <div className="flex gap-1.5 items-center">
                       <button onClick={()=>handleRsvp2('going')}
                         className={`flex-1 py-1 rounded-xl text-[11px] font-semibold transition-all ${ev.my_rsvp==='going'?'bg-green-500/25 text-green-300 border border-green-500/35':'bg-white/[0.06] text-zinc-400 border border-white/[0.08] hover:text-green-400 hover:bg-green-500/15'}`}>
-                        ✓ Idę
+                        ✓ {tl('srv.events.rsvpGoing')}
                       </button>
                       <button onClick={()=>handleRsvp2('interested')}
                         className={`flex-1 py-1 rounded-xl text-[11px] font-semibold transition-all ${ev.my_rsvp==='interested'?'bg-amber-500/25 text-amber-300 border border-amber-500/35':'bg-white/[0.06] text-zinc-400 border border-white/[0.08] hover:text-amber-400 hover:bg-amber-500/15'}`}>
-                        ★ Interesuję
+                        ★ {tl('srv.events.rsvpInterested')}
                       </button>
                       {ev.creator_id===currentUser?.id&&(
                         <button onClick={async()=>{
-                          confirmAction('Usunąć event?', async()=>{
-                            try{ await eventsApi.delete(activeServer!,ev.id); setServerEvents(p=>p.filter(e=>e.id!==ev.id)); addToast('Event usunięty','info'); }
+                          confirmAction(tl('srv.events.confirmDelete'), async()=>{
+                            try{ await eventsApi.delete(activeServer!,ev.id); setServerEvents(p=>p.filter(e=>e.id!==ev.id)); addToast(tl('srv.events.deletedModal'),'info'); }
                             catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
                           });
                         }} className="w-7 h-7 flex items-center justify-center rounded-xl text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0">
@@ -27161,8 +27161,8 @@ export default function App() {
               className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
               <div className="bg-[#0f1218]/90 backdrop-blur-xl rounded-3xl border border-amber-400/20 px-10 py-8 shadow-2xl">
                 <div className="text-5xl mb-3">🎉</div>
-                <h2 className="text-xl font-bold text-white mb-1">Serwer gotowy!</h2>
-                <p className="text-sm text-zinc-400">Wszystkie pierwsze kroki ukończone.</p>
+                <h2 className="text-xl font-bold text-white mb-1">{tl('onboarding.serverReady')}</h2>
+                <p className="text-sm text-zinc-400">{tl('onboarding.allStepsDone')}</p>
               </div>
             </motion.div>
           </motion.div>
