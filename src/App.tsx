@@ -16033,8 +16033,8 @@ export default function App() {
                     <SpotifyIcon size={14} className="text-[#1DB954]"/>
                     <span className="text-xs text-[#1DB954] font-semibold">
                       {voiceDj[activeCall.channelId]?.id === currentUser?.id
-                        ? 'Jesteś DJ-em'
-                        : `${voiceDj[activeCall.channelId]?.username} jest DJ-em`}
+                        ? tl('voice.youAreDj')
+                        : `${voiceDj[activeCall.channelId]?.username} ${tl('voice.userIsDj')}`}
                     </span>
                     {voiceDjListening.has(activeCall.channelId) && voiceDj[activeCall.channelId]?.id !== currentUser?.id && (
                       <span className="text-[11px] text-zinc-500">· syncing</span>
@@ -16042,7 +16042,7 @@ export default function App() {
                   </div>
                   {voiceDj[activeCall.channelId]?.id === currentUser?.id && (
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] text-zinc-500">Głośność:</span>
+                      <span className="text-[11px] text-zinc-500">{tl('voice.volume')}</span>
                       <input type="range" min={0} max={100} value={voiceDjVolume}
                         onChange={async e=>{
                           const v=+e.target.value; setVoiceDjVolume(v);
@@ -16235,13 +16235,13 @@ export default function App() {
                           </>
                         ) : (
                           <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-[13px] font-extrabold uppercase tracking-[0.2em] text-white/15">EKRAN UDOSTĘPNIONY</span>
+                            <span className="text-[13px] font-extrabold uppercase tracking-[0.2em] text-white/15">{tl('voice.screenShared')}</span>
                           </div>
                         )}
                         {/* Live badge */}
                         <div className="absolute top-3 left-3 z-10">
                           <span className="inline-flex items-center gap-1.5 bg-[#C8FF6B] text-[#0a0e05] text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-lg shadow-[0_4px_14px_rgba(200,255,107,0.30)]">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#0a0e05]"/> NA ŻYWO
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#0a0e05]"/> {tl('connections.live')}
                           </span>
                         </div>
                         {/* PiP: own stream while watching someone else */}
@@ -16252,7 +16252,7 @@ export default function App() {
                               className="w-full h-full object-contain" autoPlay playsInline muted/>
                             <div className="absolute bottom-1 left-1.5 flex items-center gap-1">
                               <ScreenShare size={8} className="text-indigo-300"/>
-                              <span className="text-[8px] text-white font-medium">Ty</span>
+                              <span className="text-[8px] text-white font-medium">{tl('common.you')}</span>
                             </div>
                           </div>
                         )}
@@ -16260,7 +16260,7 @@ export default function App() {
                         <div className="absolute bottom-3 left-3 flex flex-col gap-1.5 max-w-[75%]">
                           <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-sm rounded-lg px-2.5 py-1 w-fit">
                             <ScreenShare size={12} className="text-[#C8FF6B]"/>
-                            <span className="text-xs text-white font-medium truncate">{screenOwner} · udostępnia ekran</span>
+                            <span className="text-xs text-white font-medium truncate">{screenOwner} · {tl('voice.isSharingScreen')}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             {vidSettings?.height && (
@@ -16270,7 +16270,7 @@ export default function App() {
                             )}
                             {watcherBadge(watchingStreamId, true)}
                             {watchers.length === 0 && (
-                              <span className="text-[10px] text-zinc-600 px-2">0 oglądających</span>
+                              <span className="text-[10px] text-zinc-600 px-2">0 {tl('voice.noViewers')}</span>
                             )}
                           </div>
                         </div>
@@ -16281,7 +16281,7 @@ export default function App() {
                             setStreamMutedByMe(p=>({...p,[watchingStreamId]:m}));
                             muteRemoteScreenStream(watchingStreamId, m);
                             if (!m) setRemoteScreenVolume(watchingStreamId, svol);
-                          }} title={isMutedStream ? 'Włącz dźwięk' : 'Wycisz'}
+                          }} title={isMutedStream ? tl('voice.unmute') : tl('voice.mute')}
                             className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${isMutedStream?'text-rose-400':'text-zinc-300 hover:text-white'}`}>
                             {isMutedStream ? <VolumeX size={13}/> : <Volume2 size={13}/>}
                           </button>
@@ -16302,7 +16302,7 @@ export default function App() {
                           <div className="flex items-center gap-2">
                             <button onClick={stopWatching}
                               className="h-7 bg-zinc-800/80 backdrop-blur-sm border border-white/10 rounded-lg flex items-center px-2.5 gap-1.5 text-xs text-zinc-300 hover:text-white transition-colors">
-                              <X size={11}/> Zatrzymaj oglądanie
+                              <X size={11}/> {tl('voice.stopWatching')}
                             </button>
                             {/* Quick-switch to other streams */}
                             {allStreamIds.filter(id => id !== watchingStreamId && id !== 'self').map(sid => (
@@ -16322,7 +16322,7 @@ export default function App() {
                           </div>
                           <button
                             onClick={()=>{const el=document.getElementById('screen-share-video') as HTMLVideoElement;el?.requestFullscreen?.();}}
-                            className="w-7 h-7 bg-black/60 backdrop-blur-sm rounded-lg flex items-center justify-center text-white" title="Pełny ekran">
+                            className="w-7 h-7 bg-black/60 backdrop-blur-sm rounded-lg flex items-center justify-center text-white" title={tl('voice.fullscreen')}>
                             <Maximize2 size={13}/>
                           </button>
                         </div>
@@ -16361,7 +16361,7 @@ export default function App() {
                                 {/* Live badge */}
                                 <div className="absolute top-2.5 left-2.5 z-10">
                                   <span className="inline-flex items-center gap-1.5 bg-[#C8FF6B] text-[#0a0e05] text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-md">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-[#0a0e05]"/> NA ŻYWO
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[#0a0e05]"/> {tl('connections.live')}
                                   </span>
                                 </div>
                                 {/* Center CTA */}
@@ -16370,7 +16370,7 @@ export default function App() {
                                     <>
                                       <div className="flex flex-col items-center gap-1">
                                         <ScreenShare size={22} className="text-indigo-400 drop-shadow"/>
-                                        <span className="text-sm font-semibold text-white drop-shadow">{ownerName} udostępnia</span>
+                                        <span className="text-sm font-semibold text-white drop-shadow">{ownerName} {tl('voice.isSharing')}</span>
                                       </div>
                                       <button onClick={() => {
                                         setWatchingStreamId(streamId);
@@ -16384,14 +16384,14 @@ export default function App() {
                                         playStreamJoin();
                                       }}
                                         className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-900/40 transition-all active:scale-95">
-                                        <Monitor size={14}/> Dołącz do oglądania
+                                        <Monitor size={14}/> {tl('voice.joinWatching')}
                                       </button>
                                     </>
                                   )}
                                   {isSelf && (
                                     <div className="flex flex-col items-center gap-1">
                                       <span className="text-xs font-semibold text-indigo-300 bg-indigo-600/30 border border-indigo-500/40 px-3 py-1 rounded-lg flex items-center gap-1.5">
-                                        <ScreenShare size={10}/> Twoja transmisja
+                                        <ScreenShare size={10}/> {tl('voice.yourStream')}
                                       </span>
                                     </div>
                                   )}
@@ -16436,37 +16436,37 @@ export default function App() {
                       <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-2xl"
                         style={{background:'rgba(12,13,24,0.92)',border:'1px solid rgba(255,255,255,0.09)',backdropFilter:'blur(12px)'}}>
                         <div>
-                          <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Mikrofon</label>
+                          <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">{tl('voice.microphone')}</label>
                           <select value={selMic} onChange={async e=>{setSelMic(e.target.value);if(localStreamRef.current)await acquireMic(e.target.value||undefined);}}
                             className="w-full appearance-none bg-zinc-800/80 border border-white/[0.07] text-white text-xs rounded-lg px-2.5 py-2 outline-none"
                             style={{backgroundColor:'#27272a',color:'#fff'}}>
-                            <option value="">Domyślny</option>
-                            {devices.filter(d=>d.kind==='audioinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`Mikrofon ${d.deviceId.slice(0,6)}`}</option>)}
+                            <option value="">{tl('device.default')}</option>
+                            {devices.filter(d=>d.kind==='audioinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`${tl('voice.microphone')} ${d.deviceId.slice(0,6)}`}</option>)}
                           </select>
                         </div>
                         <div>
-                          <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Głośnik</label>
+                          <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">{tl('voice.speaker')}</label>
                           <select value={selSpeaker} onChange={async e=>{setSelSpeaker(e.target.value);await setOutputDevice(e.target.value);}}
                             className="w-full appearance-none bg-zinc-800/80 border border-white/[0.07] text-white text-xs rounded-lg px-2.5 py-2 outline-none"
                             style={{backgroundColor:'#27272a',color:'#fff'}}>
-                            <option value="">Domyślny</option>
-                            {devices.filter(d=>d.kind==='audiooutput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`Głośnik ${d.deviceId.slice(0,6)}`}</option>)}
+                            <option value="">{tl('device.default')}</option>
+                            {devices.filter(d=>d.kind==='audiooutput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`${tl('voice.speaker')} ${d.deviceId.slice(0,6)}`}</option>)}
                           </select>
                         </div>
                         <div>
-                          <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Kamera</label>
+                          <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">{tl('voice.camera')}</label>
                           <select value={selCamera} onChange={async e=>{setSelCamera(e.target.value); await switchCameraDevice(e.target.value);}}
                             className="w-full appearance-none bg-zinc-800/80 border border-white/[0.07] text-white text-xs rounded-lg px-2.5 py-2 outline-none"
                             style={{backgroundColor:'#27272a',color:'#fff'}}>
-                            <option value="">Domyślna</option>
-                            {devices.filter(d=>d.kind==='videoinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`Kamera ${d.deviceId.slice(0,6)}`}</option>)}
+                            <option value="">{tl('device.defaultFem')}</option>
+                            {devices.filter(d=>d.kind==='videoinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label||`${tl('voice.camera')} ${d.deviceId.slice(0,6)}`}</option>)}
                           </select>
                         </div>
                         {/* Screen share quality */}
                         <div className="sm:col-span-3 flex items-center justify-between px-0.5 pt-1 border-t border-white/[0.05] mt-1">
                           <div className="flex flex-col">
-                            <span className="text-xs font-semibold text-white">Jakość udostępniania ekranu</span>
-                            <span className="text-[10px] text-zinc-500 mt-0.5">HD 720p/60fps — mniejsze łącze · FHD 1080p/60fps — wysoka jakość</span>
+                            <span className="text-xs font-semibold text-white">{tl('voice.screenShareQuality')}</span>
+                            <span className="text-[10px] text-zinc-500 mt-0.5">{tl('voice.screenShareQualityDesc')}</span>
                           </div>
                           <div className="flex rounded-lg overflow-hidden border border-white/10 text-[11px] font-semibold shrink-0">
                             <button onClick={() => setScreenQuality('hd')}
@@ -16482,8 +16482,8 @@ export default function App() {
                         {/* Noise cancellation toggle */}
                         <div className="sm:col-span-3 flex items-center justify-between px-0.5 pt-1 border-t border-white/[0.05] mt-1">
                           <div className="flex flex-col">
-                            <span className="text-xs font-semibold text-white">Redukcja szumów i echo</span>
-                            <span className="text-[10px] text-zinc-500 mt-0.5">Wycisza hałas tła i echa mikrofonu w czasie rzeczywistym</span>
+                            <span className="text-xs font-semibold text-white">{tl('voice.noiseReduction')}</span>
+                            <span className="text-[10px] text-zinc-500 mt-0.5">{tl('voice.noiseReductionDesc')}</span>
                           </div>
                           <button
                             onClick={async () => {
@@ -16502,18 +16502,18 @@ export default function App() {
                         {noiseCancel && isTauri && (
                           <div className="sm:col-span-3 px-0.5 pt-1">
                             <p className="text-[10px] text-zinc-500 leading-relaxed">
-                              Na aplikacji desktopowej redukcja szumów działa na poziomie systemu/przeglądarki (echo, AGC, tłumienie szumów) — dodatkowa bramka szumów jest wyłączona, by zagwarantować stabilne przesyłanie dźwięku.
+                              {tl('voice.noiseDesktopInfo')}
                             </p>
                           </div>
                         )}
                         {noiseCancel && !isTauri && (
                           <div className="sm:col-span-3 px-0.5 pt-2">
                             <div className="flex items-center justify-between mb-1.5">
-                              <span className="text-[11px] font-semibold text-white">Próg bramki szumów</span>
-                              <span className="text-[10px] text-zinc-400">{noiseGateSens < 25 ? 'luźny — prawie wszystko przechodzi' : noiseGateSens > 75 ? 'agresywny — tylko głośny głos' : 'zrównoważony'}</span>
+                              <span className="text-[11px] font-semibold text-white">{tl('voice.noiseGateThreshold')}</span>
+                              <span className="text-[10px] text-zinc-400">{noiseGateSens < 25 ? tl('voice.noiseGateLoose') : noiseGateSens > 75 ? tl('voice.noiseGateAggressive') : tl('voice.noiseGateBalanced')}</span>
                             </div>
                             <div className="flex items-center gap-2">
-                              <span className="text-[9px] text-zinc-500 w-10 text-right shrink-0">mało</span>
+                              <span className="text-[9px] text-zinc-500 w-10 text-right shrink-0">{tl('voice.low')}</span>
                               <input
                                 type="range" min={0} max={100} step={5} value={noiseGateSens}
                                 onChange={e => {
@@ -16525,9 +16525,9 @@ export default function App() {
                                 }}
                                 className="flex-1 accent-indigo-500 h-1.5 cursor-pointer"
                               />
-                              <span className="text-[9px] text-zinc-500 w-10 shrink-0">dużo</span>
+                              <span className="text-[9px] text-zinc-500 w-10 shrink-0">{tl('voice.high')}</span>
                             </div>
-                            <p className="text-[9px] text-zinc-600 mt-1">Bramka ignoruje krótkie dźwięki (klawiatura, stuki w biurko) — reaguje tylko na trwały głos</p>
+                            <p className="text-[9px] text-zinc-600 mt-1">{tl('voice.noiseGateHint')}</p>
                           </div>
                         )}
                       </div>
