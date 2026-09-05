@@ -26527,18 +26527,18 @@ export default function App() {
                     );
                   })}
                 {serverList.filter(s=>!srvListSearch||s.name.toLowerCase().includes(srvListSearch.toLowerCase())).length===0&&(
-                  <div className="text-center py-8 text-zinc-600 text-sm">Brak wyników</div>
+                  <div className="text-center py-8 text-zinc-600 text-sm">{tl('search.noResults')}</div>
                 )}
               </div>
               {/* Footer */}
               <div className="px-3 py-2.5 border-t border-white/[0.05] shrink-0 flex items-center gap-2">
                 <button onClick={()=>{ setShowSrvListModal(false); setCreateSrvOpen(true); }}
                   className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-emerald-400 transition-colors px-2 py-1.5 rounded-lg hover:bg-emerald-500/10">
-                  <Plus size={12}/>Utwórz serwer
+                  <Plus size={12}/>{tl('server.create')}
                 </button>
                 <button onClick={()=>{ setShowSrvListModal(false); setDiscoveryCategory('all'); setDiscoveryQ(''); setDiscoveryLoading(true); discoverApi.list('').then(setDiscoveryList).catch(()=>{}).finally(()=>setDiscoveryLoading(false)); setShowDiscovery(true); }}
                   className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-violet-400 transition-colors px-2 py-1.5 rounded-lg hover:bg-violet-500/10">
-                  <Compass size={12}/>Odkryj serwery
+                  <Compass size={12}/>{tl('discovery.exploreServers')}
                 </button>
               </div>
             </motion.div>
@@ -26550,13 +26550,13 @@ export default function App() {
       <AnimatePresence>
         {showDiscovery && (()=>{
           const DISC_CATS = [
-            { key:'all',          label:'Strona główna',   icon:<Home size={15}/> },
-            { key:'gaming',       label:'Gracze',          icon:<Gamepad2 size={15}/> },
-            { key:'music',        label:'Muzyka',          icon:<Music size={15}/> },
-            { key:'entertainment',label:'Rozrywka',        icon:<Film size={15}/> },
-            { key:'education',    label:'Edukacja',        icon:<BookOpen size={15}/> },
-            { key:'science',      label:'Nauka i tech',    icon:<FlaskConical size={15}/> },
-            { key:'trending',     label:'Na czasie',       icon:<TrendingUp size={15}/> },
+            { key:'all',          label:tl('discovery.cat.home'),   icon:<Home size={15}/> },
+            { key:'gaming',       label:tl('srv.discovery.cat.gaming'),          icon:<Gamepad2 size={15}/> },
+            { key:'music',        label:tl('srv.discovery.cat.music'),          icon:<Music size={15}/> },
+            { key:'entertainment',label:tl('srv.discovery.cat.entertainment'),        icon:<Film size={15}/> },
+            { key:'education',    label:tl('srv.discovery.cat.education'),        icon:<BookOpen size={15}/> },
+            { key:'science',      label:tl('srv.discovery.cat.science'),    icon:<FlaskConical size={15}/> },
+            { key:'trending',     label:tl('discovery.cat.trending'),       icon:<TrendingUp size={15}/> },
           ];
           // Backend filters by category (except 'all' and 'trending' which are client-side)
           const filtered = discoveryCategory==='trending'
@@ -26574,10 +26574,10 @@ export default function App() {
             <div className="h-[52px] shrink-0 border-b border-white/[0.06] flex items-center px-5 gap-4 bg-[#0d0d18]/95 backdrop-blur-md">
               <button onClick={()=>setShowDiscovery(false)}
                 className="flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors text-sm font-medium shrink-0">
-                <ChevronLeft size={16}/> Wróć
+                <ChevronLeft size={16}/> {tl('action.back')}
               </button>
               <div className="flex items-center gap-2 text-white font-bold text-sm shrink-0">
-                <Compass size={15} className="text-indigo-400"/> Odkryj serwery
+                <Compass size={15} className="text-indigo-400"/> {tl('discovery.exploreServers')}
               </div>
               {/* Search */}
               <div className="flex-1 max-w-lg mx-auto">
@@ -26586,7 +26586,7 @@ export default function App() {
                   <input value={discoveryQ}
                     onChange={e=>setDiscoveryQ(e.target.value)}
                     onKeyDown={e=>{ if(e.key==='Enter') doSearch(discoveryQ); }}
-                    placeholder="Szukaj publicznych serwerów…"
+                    placeholder={tl('discovery.searchPh')}
                     className="flex-1 bg-transparent outline-none text-sm text-white placeholder-zinc-600"/>
                   {discoveryQ && (
                     <button onClick={()=>{ setDiscoveryQ(''); doSearch(''); }} className="text-zinc-600 hover:text-zinc-300 transition-colors"><X size={12}/></button>
@@ -26595,7 +26595,7 @@ export default function App() {
               </div>
               <button onClick={()=>doSearch(discoveryQ)}
                 className="px-4 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white font-medium transition-colors shrink-0">
-                Szukaj
+                {tl('action.search')}
               </button>
             </div>
 
@@ -26603,7 +26603,7 @@ export default function App() {
             <div className="flex flex-1 overflow-hidden">
               {/* Left sidebar */}
               <div className="w-52 shrink-0 border-r border-white/[0.05] p-3 flex flex-col gap-0.5 overflow-y-auto custom-scrollbar">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 px-3 py-2">Kategorie</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 px-3 py-2">{tl('discovery.categories')}</p>
                 {DISC_CATS.map(cat=>(
                   <button key={cat.key}
                     onClick={()=>{ setDiscoveryCategory(cat.key); doSearch(discoveryQ, cat.key); }}
@@ -26622,8 +26622,8 @@ export default function App() {
                     <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-purple-900 to-[#0d0d18]"/>
                     <div className="absolute inset-0" style={{backgroundImage:'radial-gradient(ellipse at 20% 50%,rgba(99,102,241,0.25) 0%,transparent 60%),radial-gradient(ellipse at 80% 50%,rgba(139,92,246,0.20) 0%,transparent 60%)'}}/>
                     <div className="relative z-10 flex flex-col items-center justify-center h-full text-center px-6">
-                      <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight">Znajdź swoją społeczność</h1>
-                      <p className="text-zinc-300 text-sm max-w-md">Przeglądaj tysiące publicznych serwerów — gry, muzyka, nauka i nie tylko.</p>
+                      <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight">{tl('discovery.heroTitle')}</h1>
+                      <p className="text-zinc-300 text-sm max-w-md">{tl('discovery.heroDesc')}</p>
                     </div>
                   </div>
                 )}
@@ -26632,22 +26632,22 @@ export default function App() {
                   {/* Section label */}
                   <div className="flex items-center justify-between mb-5">
                     <h2 className="text-base font-bold text-white">
-                      {discoveryQ ? `Wyniki dla „${discoveryQ}"` : DISC_CATS.find(c=>c.key===discoveryCategory)?.label ?? 'Serwery'}
+                      {discoveryQ ? `${tl('discovery.resultsFor')} „${discoveryQ}"` : DISC_CATS.find(c=>c.key===discoveryCategory)?.label ?? tl('quickswitch.servers')}
                     </h2>
-                    {!discoveryLoading && <span className="text-xs text-zinc-600">{filtered.length} {filtered.length===1?'serwer':filtered.length<5?'serwery':'serwerów'}</span>}
+                    {!discoveryLoading && <span className="text-xs text-zinc-600">{filtered.length} {filtered.length===1?tl('discovery.server.one'):filtered.length<5?tl('discovery.server.few'):tl('discovery.server.many')}</span>}
                   </div>
 
                   {/* States */}
                   {discoveryLoading ? (
                     <div className="flex flex-col items-center justify-center py-24 gap-3">
                       <Loader2 size={28} className="animate-spin text-indigo-500"/>
-                      <p className="text-sm text-zinc-500">Ładowanie serwerów…</p>
+                      <p className="text-sm text-zinc-500">{tl('discovery.loading')}</p>
                     </div>
                   ) : filtered.length===0 ? (
                     <div className="flex flex-col items-center justify-center py-24 gap-3 text-zinc-600">
                       <Compass size={40} className="opacity-25"/>
-                      <p className="text-sm font-medium">{discoveryQ ? `Brak wyników dla „${discoveryQ}"` : 'Brak serwerów w tej kategorii'}</p>
-                      {discoveryQ && <button onClick={()=>{setDiscoveryQ('');doSearch('');}} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">Wyczyść wyszukiwanie</button>}
+                      <p className="text-sm font-medium">{discoveryQ ? `${tl('search.noResultsFor')} „${discoveryQ}"` : tl('discovery.noServersInCategory')}</p>
+                      {discoveryQ && <button onClick={()=>{setDiscoveryQ('');doSearch('');}} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">{tl('discovery.clearSearch')}</button>}
                     </div>
                   ) : (
                     /* Server cards grid */
@@ -26680,7 +26680,7 @@ export default function App() {
                               {s.is_official && (
                                 <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/55 backdrop-blur-sm rounded-full px-2 py-0.5 border border-amber-400/20">
                                   <BadgeCheck size={9} className="text-amber-400"/>
-                                  <span className="text-[9px] font-bold text-amber-300 uppercase tracking-wide">Oficjalny</span>
+                                  <span className="text-[9px] font-bold text-amber-300 uppercase tracking-wide">{tl('discovery.official')}</span>
                                 </div>
                               )}
                             </div>
@@ -26701,7 +26701,7 @@ export default function App() {
                             <div className="flex-1 flex flex-col px-4 pb-4 pt-8">
                               <h3 className="font-bold text-white text-sm leading-tight truncate mb-1 group-hover:text-indigo-200 transition-colors duration-200">{s.name}</h3>
                               <p className="text-[11px] text-zinc-500 leading-relaxed line-clamp-2 flex-1 mb-3">
-                                {s.discovery_description || s.description || 'Brak opisu'}
+                                {s.discovery_description || s.description || tl('discovery.noDescription')}
                               </p>
                               {/* Stats */}
                               <div className="flex items-center gap-3 mb-3">
@@ -26713,7 +26713,7 @@ export default function App() {
                                 )}
                                 <div className="flex items-center gap-1.5">
                                   <Users size={10} className="text-zinc-600 shrink-0"/>
-                                  <span className="text-[11px] text-zinc-500">{s.member_count.toLocaleString()} członków</span>
+                                  <span className="text-[11px] text-zinc-500">{s.member_count.toLocaleString()} {tl('discovery.members')}</span>
                                 </div>
                               </div>
                               {/* Join button */}
@@ -26721,16 +26721,16 @@ export default function App() {
                                 <motion.button whileTap={{scale:0.96}}
                                   onClick={()=>{ setActiveServer(s.id); setActiveView('servers'); setServerFull(null); setActiveChannel(''); setShowDiscovery(false); if(activeServer===s.id) setServerReloadKey(k=>k+1); }}
                                   className="w-full py-2 text-xs font-semibold rounded-xl bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/25 hover:border-emerald-400/50 transition-all duration-200">
-                                  Jesteś na serwerze →
+                                  {tl('discovery.alreadyJoined')}
                                 </motion.button>
                               ) : (
                                 <motion.button whileTap={{scale:0.96}}
                                   onClick={async()=>{
-                                    try { await serversApi.joinPublic(s.id); await loadServers(); setShowDiscovery(false); setActiveServer(s.id); setActiveView('servers'); addToast(`Dołączono do ${s.name}!`,'success'); }
+                                    try { await serversApi.joinPublic(s.id); await loadServers(); setShowDiscovery(false); setActiveServer(s.id); setActiveView('servers'); addToast(`${tl('discovery.joinedToast')} ${s.name}!`,'success'); }
                                     catch(ex:any){ addToast(ex.message||tl('common.error'),'error'); }
                                   }}
                                   className="w-full py-2 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white transition-all duration-200 shadow-[0_2px_12px_rgba(99,102,241,0.3)] hover:shadow-[0_4px_20px_rgba(99,102,241,0.5)]">
-                                  Dołącz
+                                  {tl('discovery.join')}
                                 </motion.button>
                               )}
                             </div>
@@ -26756,23 +26756,23 @@ export default function App() {
               className={`${gm} p-6 w-full max-w-md`}>
               <h2 className="text-base font-bold text-white mb-2 flex items-center gap-2">
                 <PartyPopper size={16} className="text-indigo-400"/>
-                {onboardingData.welcome_text || 'Witaj na serwerze!'}
+                {onboardingData.welcome_text || tl('srv.onboarding.welcomePhShort')}
               </h2>
               {onboardingData.rules_text && (
                 <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl p-4 mb-4 text-sm text-zinc-300 whitespace-pre-wrap max-h-60 overflow-y-auto custom-scrollbar">
                   {onboardingData.rules_text}
                 </div>
               )}
-              <p className="text-xs text-zinc-500 mb-5">Klikając przycisk poniżej potwierdzasz, że przeczytałeś/aś i akceptujesz powyższe zasady.</p>
+              <p className="text-xs text-zinc-500 mb-5">{tl('onboarding.consentText')}</p>
               <button onClick={async()=>{
                 try {
                   await onboardingApi.complete(activeServer!);
                   setShowOnboarding(false);
                   setOnboardingData(p=>p?{...p,completed:true}:p);
-                  addToast('Reguły zaakceptowane!','success');
+                  addToast(tl('onboarding.rulesAccepted'),'success');
                 } catch(e:any){ addToast(e.message||tl('common.error'),'error'); }
               }} className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">
-                Akceptuję zasady i dołączam
+                {tl('onboarding.acceptAndJoin')}
               </button>
             </motion.div>
           </motion.div>
