@@ -6430,10 +6430,10 @@ function AdminPanel({ currentUser, overview, setOverview, tab, setTab, badges, s
                           ))}
                         </div>
                         <p className="text-xs text-zinc-500 truncate">{a.email}</p>
-                        {a.last_active_at && <p className="text-[10px] text-zinc-600 mt-0.5">Ostatnia aktywność: {new Date(a.last_active_at).toLocaleString('pl-PL')}</p>}
+                        {a.last_active_at && <p className="text-[10px] text-zinc-600 mt-0.5">{tl('admin.lastActive')}: {fmtDateLocale(a.last_active_at,{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</p>}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[10px] text-zinc-600">od {new Date(a.created_at).toLocaleDateString('pl-PL')}</span>
+                        <span className="text-[10px] text-zinc-600">{tl('admin.since')} {fmtDateLocale(a.created_at)}</span>
                         {a.id !== currentUser?.id && a.is_admin && (
                           <button onClick={async()=>{
                             try { await adminApi.users.setAdmin(a.id, false); setAdminsList(p=>p.filter(x=>x.id!==a.id||x.badges.some(b=>b.name==='developer'))); addToast({ type:'success', message:`Cofnięto uprawnienia admina dla ${a.username}` }); }
@@ -18126,7 +18126,7 @@ export default function App() {
                                   <img src={staticUrl(post.author_avatar)||`https://ui-avatars.com/api/?name=${post.author_username}&background=random`} className="w-5 h-5 rounded-full object-cover" alt=""/>
                                   <span className="text-xs text-zinc-500">{post.author_username}</span>
                                 </div>
-                                <span className="text-xs text-zinc-600">{new Date(post.created_at).toLocaleDateString('pl-PL')}</span>
+                                <span className="text-xs text-zinc-600">{fmtDate(post.created_at)}</span>
                                 <span className="ml-auto flex items-center gap-1 text-xs text-zinc-600">
                                   <Reply size={11}/> {post.reply_count}
                                 </span>
@@ -22970,11 +22970,11 @@ export default function App() {
                         sections:[{id:'s-profil',label:tl('settings.section.profile')},{id:'s-info',label:tl('settings.section.info')},{id:'s-password',label:tl('settings.section.password')},{id:'s-sessions',label:tl('settings.section.sessions')}]},
                       {id:'appearance',  label:t('settings.appearance'), icon:<Image size={14}/>,
                         sections:[{id:'s-chat',label:tl('settings.section.chat')},{id:'s-accessibility',label:tl('settings.section.profileEffects')},{id:'s-card-effect',label:tl('settings.section.cardEffect')}]},
-                      {id:'notifications', label:'Powiadomienia', icon:<Bell size={14}/>,
-                        sections:[{id:'s-quiet',label:'Godziny ciszy'}]},
+                      {id:'notifications', label:tl('settings.notifications'), icon:<Bell size={14}/>,
+                        sections:[{id:'s-quiet',label:tl('settings.section.quietHours')}]},
                       {id:'theme',       label:tl('settings.theme'),     icon:<Palette size={14}/>, sections:[]},
                       {id:'connections', label:tl('settings.connections'),icon:<Link2 size={14}/>, sections:[]},
-                      {id:'stats',       label:'Statystyki',              icon:<BarChart2 size={14}/>, sections:[]},
+                      {id:'stats',       label:tl('settings.stats'),      icon:<BarChart2 size={14}/>, sections:[]},
                     ]},
                     { group: tl('settings.group.app'), items: [
                       {id:'devices',  label:t('settings.devices'),  icon:<Mic size={14}/>,    sections:[{id:'s-input',label:tl('settings.section.input')},{id:'s-output',label:tl('settings.section.output')}]},
@@ -23171,7 +23171,7 @@ export default function App() {
                               : diffMin < 60 ? tl('sessions.lessThanHour')
                               : diffMin < 1440 ? `${Math.floor(diffMin/60)} ${tl('sessions.hoursAgo')}`
                               : diffMin < 10080 ? `${Math.floor(diffMin/1440)} ${tl('sessions.daysAgo')}`
-                              : lastSeen.toLocaleDateString('pl-PL');
+                              : fmtDate(s.last_seen_at);
                             const DevIcon = isApp ? Monitor : isMobile ? Smartphone : Globe;
                             return { label, ago, DevIcon };
                           };
@@ -24149,13 +24149,12 @@ export default function App() {
                               </div>
                               <div>
                                 <p className="text-sm font-bold text-zinc-300">Zablokowane konta</p>
-                                <p className="text-xs text-zinc-500">{blockedList.length} {blockedList.length === 1 ? 'konto' : blockedList.length < 5 ? 'konta' : 'kont'}</p>
+                                <p className="text-xs text-zinc-500">{blockedList.length} {blockedList.length === 1 ? tl('accounts.one') : blockedList.length < 5 ? tl('accounts.few') : tl('accounts.many')}</p>
                               </div>
                             </div>
                             <div className="flex flex-col">
                               {blockedList.map((b, i) => {
-                                const blockedDate = new Date(b.blocked_at);
-                                const dateStr = blockedDate.toLocaleDateString('pl-PL', { day:'numeric', month:'long', year:'numeric' });
+                                const dateStr = fmtDate(b.blocked_at, { day:'numeric', month:'long', year:'numeric' });
                                 return (
                                 <div key={b.id} className={`flex items-center gap-3 py-3 ${i > 0 ? 'border-t border-white/[0.05]' : ''}`}>
                                   <img src={b.avatar_url ? staticUrl(b.avatar_url) : `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(b.username)}&size=40`}
@@ -24825,8 +24824,8 @@ export default function App() {
                     <motion.div key="stats" initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-10}} transition={{duration:0.15}}
                       className="flex flex-col gap-6">
                       <div>
-                        <h3 className="text-sm font-bold text-white mb-0.5">Statystyki</h3>
-                        <p className="text-xs text-zinc-500">Twoja aktywność na platformie Cordyn.</p>
+                        <h3 className="text-sm font-bold text-white mb-0.5">{tl('settings.stats')}</h3>
+                        <p className="text-xs text-zinc-500">{tl('stats.subtitle')}</p>
                       </div>
                       {statsLoading&&<div className="flex items-center justify-center py-12"><Loader2 size={20} className="animate-spin text-zinc-600"/></div>}
                       {!statsLoading&&userStats&&(()=>{
@@ -24841,26 +24840,26 @@ export default function App() {
                         );
                         return(<>
                           <div>
-                            <p className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest mb-3">Wiadomości</p>
+                            <p className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest mb-3">{tl('stats.section.messages')}</p>
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                              <StatCard label="Łącznie wysłanych" value={fmt(userStats.messages_sent)}/>
-                              <StatCard label="W tym miesiącu"    value={fmt(userStats.messages_this_month)} sub={`${userStats.messages_sent>0?Math.round(userStats.messages_this_month/Math.max(userStats.messages_sent,1)*100):0}% całości`}/>
-                              <StatCard label="Wiadomości DM"     value={fmt(userStats.dms_sent)}/>
+                              <StatCard label={tl('stats.messages.total')} value={fmt(userStats.messages_sent)}/>
+                              <StatCard label={tl('stats.messages.thisMonth')} value={fmt(userStats.messages_this_month)} sub={`${userStats.messages_sent>0?Math.round(userStats.messages_this_month/Math.max(userStats.messages_sent,1)*100):0}${tl('stats.messages.ofTotal')}`}/>
+                              <StatCard label={tl('stats.messages.dm')}     value={fmt(userStats.dms_sent)}/>
                             </div>
                           </div>
                           <div>
-                            <p className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest mb-3">Reakcje</p>
+                            <p className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest mb-3">{tl('stats.section.reactions')}</p>
                             <div className="grid grid-cols-2 gap-3">
-                              <StatCard label="Dodane przez Ciebie" value={fmt(userStats.reactions_given)}/>
-                              <StatCard label="Otrzymane"           value={fmt(userStats.reactions_received)}/>
+                              <StatCard label={tl('stats.reactions.given')} value={fmt(userStats.reactions_given)}/>
+                              <StatCard label={tl('stats.reactions.received')} value={fmt(userStats.reactions_received)}/>
                             </div>
                           </div>
                           <div>
-                            <p className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest mb-3">Twoje konto</p>
+                            <p className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest mb-3">{tl('stats.section.account')}</p>
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                              <StatCard label="Serwery"    value={fmt(userStats.servers_joined)}/>
-                              <StatCard label="Znajomi"    value={fmt(userStats.friends_count)}/>
-                              <StatCard label="Na Cordyn od" value={`${daysSince} dni`} sub={new Date(userStats.account_created).toLocaleDateString('pl-PL',{year:'numeric',month:'long',day:'numeric'})}/>
+                              <StatCard label={tl('stats.servers')}    value={fmt(userStats.servers_joined)}/>
+                              <StatCard label={tl('stats.friends')}    value={fmt(userStats.friends_count)}/>
+                              <StatCard label={tl('stats.memberSince')} value={`${daysSince} ${tl('stats.days')}`} sub={fmtDate(userStats.account_created,{year:'numeric',month:'long',day:'numeric'})}/>
                             </div>
                           </div>
                         </>);
@@ -27203,7 +27202,7 @@ export default function App() {
                     <div className="flex items-baseline gap-1.5 mb-0.5">
                       <span className="text-[11px] font-semibold text-white">{preview.username}</span>
                       <span className="text-[9px] text-zinc-600">
-                        {new Date(preview.ts).toLocaleDateString('pl-PL', { hour: '2-digit', minute: '2-digit' })}
+                        {fmtDateLocale(preview.ts, { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
                     <p className="text-[11px] text-zinc-400 leading-relaxed line-clamp-3">
